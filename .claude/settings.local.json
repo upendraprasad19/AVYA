@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version)",
+      "Bash(flutter create:*)",
+      "Bash(cp -r _flutter_temp/* .)",
+      "Bash(cp -r _flutter_temp/.* .)",
+      "Bash(rm -rf _flutter_temp)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)"
+    ]
+  }
+}
