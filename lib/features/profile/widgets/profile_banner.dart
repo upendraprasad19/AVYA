@@ -1,0 +1,105 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+
+/// Full-width banner section with gradient background.
+///
+/// Shows "Add Cover Photo" when no banner image is set.
+/// Tapping opens image picker (TODO: wire to image_picker).
+class ProfileBanner extends StatelessWidget {
+  final VoidCallback onTapBanner;
+  final VoidCallback onTapEdit;
+
+  const ProfileBanner({
+    super.key,
+    required this.onTapBanner,
+    required this.onTapEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTapBanner,
+      child: Container(
+        height: 110,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0a1628),
+              Color(0xFF061220),
+              Color(0xFF001a0a),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // "Add Cover Photo" overlay
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.image_outlined,
+                    size: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Add Cover Photo',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Edit pill button (bottom right)
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: onTapEdit,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit,
+                        size: 10,
+                        color: AppColors.textPrimary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Edit',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

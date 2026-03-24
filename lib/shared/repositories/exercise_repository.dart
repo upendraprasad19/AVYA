@@ -1,0 +1,154 @@
+import 'package:icanbefitter/core/services/hive_service.dart';
+
+/// Queries the exerciseBox (seeded from bundled JSON).
+///
+/// All reads are local Hive lookups — zero network latency.
+class ExerciseRepository {
+  ExerciseRepository._();
+  static final ExerciseRepository _instance = ExerciseRepository._();
+  static ExerciseRepository get instance => _instance;
+
+  final HiveService _hive = HiveService.instance;
+
+  /// Returns all exercises as a list of maps.
+  List<Map<String, dynamic>> getAll() {
+    final box = _hive.exerciseBox;
+    return box.values
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// Returns a single exercise by its [id], or null.
+  Map<String, dynamic>? getById(String id) {
+    final raw = _hive.exerciseBox.get(id);
+    if (raw == null) return null;
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  /// Returns exercises filtered by [category].
+  ///
+  /// Categories: Push, Pull, Legs, Core, Cardio, Flexibility,
+  /// Calisthenics, Indian Traditional.
+  List<Map<String, dynamic>> getByCategory(String category) {
+    return getAll()
+        .where((e) =>
+            (e['category'] as String?)?.toLowerCase() ==
+            category.toLowerCase())
+        .toList();
+  }
+
+  /// Full-text search across exercise name and name_aliases.
+  ///
+  /// Case-insensitive substring match.
+  List<Map<String, dynamic>> search(String query) {
+    if (query.isEmpty) return getAll();
+
+    final q = query.toLowerCase();
+    return getAll().where((e) {
+      final name = (e['name'] as String?)?.toLowerCase() ?? '';
+      if (name.contains(q)) return true;
+
+      final aliases = e['name_aliases'];
+      if (aliases is List) {
+        for (final alias in aliases) {
+          if (alias.toString().toLowerCase().contains(q)) return true;
+        }
+      }
+      return false;
+    }).toList();
+  }
+
+  /// Returns exercises matching the given filters.
+  ///
+  /// Used by [PlanGenerator] to select exercises for workout plans.
+  ///
+  /// - [category] — exercise category (Push, Pull, Legs, etc.)
+  /// - [equipment] — user's available equipment
+  /// - [difficulty] — max difficulty level
+  /// - [suitableFor] — experience level the exercise is suitable for
+  /// - [limit] — max results to return
+  List<Map<String, dynamic>> query({
+    String? category,
+    List<String>? equipment,
+    String? difficulty,
+    String? suitableFor,
+    int? limit,
+  }) {
+    var results = getAll();
+
+    if (category != null) {
+      results = results
+          .where((e) =>
+              (e['category'] as String?)?.toLowerCase() ==
+              category.toLowerCase())
+          .toList();
+    }
+
+    if (equipment != null && equipment.isNotEmpty) {
+      results = results.where((e) {
+        final needed = e['equipment_needed'];
+        if (needed == null) return true; // bodyweight
+        if (needed is List) {
+          // Exercise is usable if ALL its required equipment is in user's set.
+          return needed.every((item) =>
+              equipment.contains(item.toString().toLowerCase()) ||
+              item.toString().toLowerCase() == 'none' ||
+              item.toString().toLowerCase() == 'bodyweight');
+        }
+        return true;
+      }).toList();
+    }
+
+    if (suitableFor != null) {
+      results = results.where((e) {
+        final suitable = e['suitable_for'];
+        if (suitable == null) return true;
+        if (suitable is List) {
+          return suitable.any(
+            (s) => s.toString().toLowerCase() == suitableFor.toLowerCase(),
+          );
+        }
+        return true;
+      }).toList();
+    }
+
+    // Sort compounds first.
+    results.sort((a, b) {
+      final aType = a['exercise_type']?.toString().toLowerCase() ?? '';
+      final bType = b['exercise_type']?.toString().toLowerCase() ?? '';
+      if (aType == 'compound' && bType != 'compound') return -1;
+      if (aType != 'compound' && bType == 'compound') return 1;
+      return 0;
+    });
+
+    if (limit != null && results.length > limit) {
+      results = results.sublist(0, limit);
+    }
+
+    return results;
+  }
+
+  /// Returns all user-created custom exercises from the customBox.
+  List<Map<String, dynamic>> getCustomExercises() {
+    final customBox = _hive.customBox;
+    final results = <Map<String, dynamic>>[];
+    for (final raw in customBox.values) {
+      if (raw is! Map) continue;
+      final ex = Map<String, dynamic>.from(raw);
+      if (ex['type'] == 'exercise' || ex['name'] != null) {
+        results.add(ex);
+      }
+    }
+    return results;
+  }
+
+  /// Returns all distinct categories present in the exercise library.
+  List<String> getCategories() {
+    final categories = <String>{};
+    for (final e in getAll()) {
+      final cat = e['category'] as String?;
+      if (cat != null) categories.add(cat);
+    }
+    return categories.toList()..sort();
+  }
+}

@@ -54,7 +54,7 @@ class AppTheme {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
         textStyle: GoogleFonts.getFont(
-          'Switzer',
+          'DM Sans',
           fontSize: 15,
           fontWeight: FontWeight.w900,
         ),
@@ -69,7 +69,7 @@ class AppTheme {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
         textStyle: GoogleFonts.getFont(
-          'Switzer',
+          'DM Sans',
           fontSize: 15,
           fontWeight: FontWeight.w800,
         ),
@@ -88,21 +88,21 @@ class AppTheme {
 
   static TextTheme _buildTextTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      displayMedium: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      displaySmall: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      headlineLarge: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      headlineMedium: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      headlineSmall: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      titleLarge: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      titleMedium: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      titleSmall: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      bodyLarge: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      bodyMedium: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      bodySmall: GoogleFonts.getFont('Switzer', color: AppColors.textSecondary),
-      labelLarge: GoogleFonts.getFont('Switzer', color: AppColors.textPrimary),
-      labelMedium: GoogleFonts.getFont('Switzer', color: AppColors.textSecondary),
-      labelSmall: GoogleFonts.getFont('Switzer', color: AppColors.textSecondary),
+      displayLarge: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      displayMedium: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      displaySmall: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      headlineLarge: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      headlineMedium: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      headlineSmall: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      titleLarge: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      titleMedium: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      titleSmall: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      bodyLarge: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      bodyMedium: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      bodySmall: GoogleFonts.getFont('DM Sans', color: AppColors.textSecondary),
+      labelLarge: GoogleFonts.getFont('DM Sans', color: AppColors.textPrimary),
+      labelMedium: GoogleFonts.getFont('DM Sans', color: AppColors.textSecondary),
+      labelSmall: GoogleFonts.getFont('DM Sans', color: AppColors.textSecondary),
     );
   }
 }

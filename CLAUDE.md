@@ -6,7 +6,7 @@
 ## 1. PROJECT IDENTITY
 
 **App:** ICANBEFITTER — personalised fitness & nutrition platform for young professionals (22-35) in India.
-**Model:** Freemium. ₹249/month or ₹2,499/year for PRO.
+**Model:** Freemium. ₹349/month or ₹2,999/year for PRO.
 **Architecture:** Offline-first. Hive = primary. Supabase = backup + AI + community growth.
 
 ---
@@ -21,8 +21,8 @@
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (21 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI Coach Free | Edge Function → OpenRouter → Cerebras Llama 3.1 8B → Groq Llama 4 → Gemini 2.0 Flash Lite |
-| AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function) |
+| AI Coach Free | Edge Function → Cerebras Llama 3.1 8B free tier (30-day trial, 15 msg/day) |
+| AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function, ~₹1.80/user/month) |
 | AI Reasoning PRO | GLM-4.7 on Cerebras |
 | Food AI | Gemini Flash (PRO only) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
@@ -171,10 +171,7 @@ assets/
     exercise_library.json               # 200+ exercises, bundled in APK
     food_database.json                  # 5,000 Indian-first foods, bundled in APK
   fonts/
-    Switzer-Regular.ttf
-    Switzer-Medium.ttf
-    Switzer-Bold.ttf
-    Switzer-Black.ttf
+    # DM Sans font loaded via google_fonts package (runtime download)
 
 supabase/
   migrations/                           # SQL migration files
@@ -198,7 +195,7 @@ supabase/
 7. **PaywallSheet** is the ONLY paywall UI. Never create custom paywall modals.
 8. **Plan generator = local Dart.** Queries Hive exerciseBox. Never calls any API.
 9. **Never expose API keys client-side.** All AI calls go through Supabase Edge Functions.
-10. **Switzer font everywhere.** No system fonts. Use `google_fonts` package.
+10. **DM Sans font everywhere.** No system fonts. Use `GoogleFonts.getFont('DM Sans', ...)`.
 11. **Electric Cyan #00D4FF** for all accent/CTA. Never use green (#00e5a0) — that's the old spec.
 12. **Dark theme only.** Background hierarchy: `#07090e` (bg) > `#0e1219` (card) > `#161d28` (input).
 13. **All screens must handle:** loading state (skeleton), error state (retry), empty state.
@@ -386,7 +383,7 @@ class AppColors {
 }
 ```
 
-### Typography (Switzer)
+### Typography (DM Sans via GoogleFonts)
 ```
 Display XL    40px / w900 / tracking +1
 Display L     32px / w900 / tracking +0.5
@@ -437,11 +434,29 @@ PROGRESS BAR:     track #161d28, fill #00D4FF, height 6, radius 3
 
 ### PRO Feature Keys
 ```
-phases_2_to_12, active_workout_mode, ai_food_analysis,
-ai_coach_unlimited, reasoning_tab, weekly_ai_report,
-progress_photos, adjustable_portions, pro_tips,
-scan_meal, diet_plan_pdf
+phases_2_to_12         → auto-generate new 4-week plan after Week 4
+active_workout_mode    → active workout logging screen
+ai_coach_unlimited     → unlimited AI messages (free = 15/day for 30 days)
+reasoning_tab          → deep coaching tab (GLM-4.7 on Cerebras)
+weekly_ai_report       → weekly nutrition report ongoing (free = first report only)
+progress_photos        → full photo timeline
+scan_meal_pro          → 3 scans/day (free = 3/month)
+cart_auditor_pro       → 3 scans/day (free = 1/month)
+ai_text_log_pro        → 10 text logs/day (free = 3/day)
+voice_notes            → push-to-talk voice input to AI coach
+morning_alert_pro      → AI-personalised morning message (free = generic push)
+prediction_monthly     → fresh prediction card every month (free = once at onboarding)
+adaptive_workouts      → AI workout adjustments from biometrics (Phase 2)
 ```
+
+### Shareable Cards (ALL FREE — growth engine)
+```
+workout_receipt        → PNG after every completed workout
+future_prediction      → AI forecast card (once free, monthly PRO)
+beat_my_coach          → HIIT challenge card (1 per 2 weeks, all users)
+```
+All shareable cards include: ICANBEFITTER wordmark + QR code → www.icanbefitter.com
+Packages: share_plus (native share sheet) + qr_flutter (client-side QR, zero server cost)
 
 ### Correct Usage (ALWAYS use this)
 ```dart
@@ -563,26 +578,39 @@ Phase {
 ## 14. BUSINESS RULES
 
 ### FREE Forever
-- Phase 1 workout plan (4 weeks, generated locally)
+- Phase 1 workout plan (4 weeks, auto-generated locally — workout + nutrition split)
 - Workout template builder + copy week to week
 - Food database logging (5,000 items, standard portions)
+- Adjustable food portions
+- AI food text analysis — 3 text logs/day
+- Scan meal camera — 3 scans/month
+- Cart Auditor (grocery screenshot) — 1 scan/month
 - Weight + body measurements tracking
 - Streak counter + water tracking
-- AI Coach — 30 days free (15 msg/day)
+- Steps + sleep sync (Google Fit / Health Connect)
+- AI Coach — 30 days free (15 msg/day, Cerebras Llama 3.1 8B)
 - Telegram bot — 30 days free
-- Weekly report (local, in-app)
-- Diet plan generator (from food DB, zero API)
+- Morning alert — generic push notification
+- Weekly nutrition report — first report free (after Week 1)
+- Future Prediction card — one card post-onboarding
+- Beat My Coach HIIT challenge — 1 per 2 weeks
+- Diet plan PDF — preview + swap + download (generated from food DB, no AI)
+- Exercise coaching cues, common mistakes, pro tips — all visible
+- Workout Receipt PNG (shareable) — after every completed workout
 
-### PRO — ₹249/month or ₹2,499/year
-- Generate new plans after Week 4 (phases 2-12)
-- AI food text analysis + scan meal (camera)
-- Adjustable food portions
-- Weekly AI nutrition report + Telegram push
-- Progress photos
-- Unlimited AI coach
-- Reasoning tab (deep personalised coaching)
-- PRO Tip on every exercise
-- Diet plan PDF download
+### PRO — ₹349/month or ₹2,999/year
+- Auto-generate new plans after Week 4 (phases 2-12)
+- AI food text analysis — 10 text logs/day
+- Scan meal camera — 3 scans/day (soft cap warning at 2/3)
+- Cart Auditor — 3 scans/day (soft cap warning at 2/3)
+- Weekly AI nutrition report + Telegram push (ongoing)
+- Future Prediction card — fresh AI prediction every month
+- Progress photos (full timeline)
+- Unlimited AI coach (Cerebras gpt-oss-120B)
+- Reasoning tab (deep personalised coaching — GLM-4.7 on Cerebras)
+- Audio-First UI (voice notes to AI coach)
+- Morning alert — AI-personalised message with yesterday's data
+- Adaptive workout recommendations from biometric data (Phase 2)
 
 ### Phase Unlock Formula
 ```
@@ -670,4 +698,4 @@ See `.claude/agents/` for full definitions:
 | isPro inline check | ALWAYS use subscription.gate() |
 | API key in client | ALL AI calls through Edge Functions |
 | Water not resetting | Check date on app launch, reset if new day |
-| Font fallback | Always use GoogleFonts.switzer(), never default font |
+| Font fallback | Always use GoogleFonts.getFont('DM Sans', ...), never default font |

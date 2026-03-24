@@ -1,0 +1,460 @@
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FCM_SERVER_KEY = Deno.env.get("FCM_SERVER_KEY") ?? "";
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+
+const PRO_MODEL = "cerebras/gpt-oss-120b";
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+const TIMEOUT_MS = 8000;
+
+/**
+ * Returns today's date string in IST (UTC+5:30) as YYYY-MM-DD.
+ */
+function getTodayIST(): string {
+  const now = new Date();
+  const istOffset = 330 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  return istDate.toISOString().split("T")[0];
+}
+
+/**
+ * Returns yesterday's date string in IST.
+ */
+function getYesterdayIST(): string {
+  const now = new Date();
+  const istOffset = 330 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  istDate.setDate(istDate.getDate() - 1);
+  return istDate.toISOString().split("T")[0];
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate a FREE template-based morning alert (no AI cost).
+ */
+function generateFreeAlert(
+  name: string,
+  snapshotJson: Record<string, unknown> | null,
+): string {
+  const firstName = name?.split(" ")[0] ?? "Champion";
+  const streak = snapshotJson?.current_streak_weeks ?? 0;
+  const todayWorkout = snapshotJson?.today_workout_name ?? null;
+
+  let message = `Good morning ${firstName}!`;
+
+  if (todayWorkout) {
+    message += ` ${todayWorkout} is scheduled today.`;
+  } else {
+    message += ` Ready to crush your goals today?`;
+  }
+
+  if (typeof streak === "number" && streak > 0) {
+    message += ` ${streak} week streak going strong!`;
+  }
+
+  // Add a rotating motivational line based on day of week
+  const dayOfWeek = new Date().getDay();
+  const motivationalLines = [
+    "Make today count!",
+    "Consistency beats perfection.",
+    "One workout at a time.",
+    "Your future self will thank you.",
+    "Small steps, big results.",
+    "Show up for yourself today.",
+    "Every rep matters.",
+  ];
+  message += ` ${motivationalLines[dayOfWeek]}`;
+
+  return message;
+}
+
+/**
+ * Generate a PRO personalised morning alert using Cerebras 120B.
+ * Retries on failure up to MAX_RETRIES times.
+ */
+async function generateProAlert(
+  name: string,
+  snapshotJson: Record<string, unknown>,
+): Promise<string | null> {
+  const systemPrompt =
+    "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
+    "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
+    "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
+    "Be encouraging, specific, and actionable. Use the user's first name. " +
+    "Output ONLY the alert message, no preamble or formatting.";
+
+  const userPrompt =
+    `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://icanbefitter.app",
+            "X-Title": "ICANBEFITTER Morning Alert",
+          },
+          body: JSON.stringify({
+            model: PRO_MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            max_tokens: 150,
+          }),
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok) {
+        console.error(
+          `PRO alert attempt ${attempt + 1} failed:`,
+          response.status,
+        );
+        if (attempt < MAX_RETRIES) {
+          await sleep(RETRY_DELAY_MS * (attempt + 1));
+          continue;
+        }
+        return null;
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content && typeof content === "string") {
+        return content.trim();
+      }
+
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+      return null;
+    } catch (err) {
+      console.error(`PRO alert attempt ${attempt + 1} error:`, err);
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Send push notification via FCM (if server key is configured).
+ */
+async function sendFCMNotification(
+  _userId: string,
+  _title: string,
+  _body: string,
+): Promise<boolean> {
+  // TODO: Implement FCM push delivery.
+  // Requires storing user FCM tokens in a user_devices table.
+  // For now, alerts are stored in snapshots and delivered on app open.
+  if (!FCM_SERVER_KEY) return false;
+
+  // Placeholder for FCM implementation:
+  // 1. Fetch user's FCM token from user_devices table
+  // 2. POST to https://fcm.googleapis.com/fcm/send
+  // 3. Handle token refresh / invalid tokens
+  console.log(`FCM: Would send to user ${_userId}: ${_title} - ${_body}`);
+  return false;
+}
+
+/**
+ * Send Telegram message (if bot token is configured and user is connected).
+ */
+async function sendTelegramMessage(
+  chatId: string,
+  message: string,
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN || !chatId) return false;
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: "HTML",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Telegram send failed for ${chatId}:`, errorBody);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`Telegram error for ${chatId}:`, err);
+    return false;
+  }
+}
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Parse request to determine mode: "generate" (2AM) or "deliver" (7AM)
+    let mode = "generate";
+    try {
+      const body = await req.json();
+      if (body?.mode === "deliver") mode = "deliver";
+    } catch {
+      // No body — default to generate
+    }
+
+    const todayIST = getTodayIST();
+    const yesterdayIST = getYesterdayIST();
+
+    if (mode === "deliver") {
+      // ── DELIVERY MODE (7AM IST) ──────────────────────────────
+      // Read stored alerts and deliver via FCM + Telegram
+
+      const { data: snapshots, error: snapError } = await supabaseClient
+        .from("user_daily_snapshots")
+        .select("user_id, snapshot_json")
+        .eq("snapshot_date", todayIST)
+        .not("snapshot_json->morning_alert", "is", null);
+
+      if (snapError || !snapshots) {
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch alerts for delivery" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      let fcmSent = 0;
+      let telegramSent = 0;
+
+      for (const snap of snapshots) {
+        const alertMsg = snap.snapshot_json?.morning_alert;
+        if (!alertMsg) continue;
+
+        // Try FCM push
+        const fcmOk = await sendFCMNotification(
+          snap.user_id,
+          "ICANBEFITTER",
+          alertMsg,
+        );
+        if (fcmOk) fcmSent++;
+
+        // Try Telegram if connected
+        const { data: tgConn } = await supabaseClient
+          .from("telegram_connections")
+          .select("chat_id")
+          .eq("user_id", snap.user_id)
+          .eq("is_active", true)
+          .single();
+
+        if (tgConn?.chat_id) {
+          const tgOk = await sendTelegramMessage(
+            tgConn.chat_id,
+            `🌅 <b>Good Morning!</b>\n\n${alertMsg}`,
+          );
+          if (tgOk) telegramSent++;
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          mode: "deliver",
+          total_alerts: snapshots.length,
+          fcm_sent: fcmSent,
+          telegram_sent: telegramSent,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // ── GENERATION MODE (2AM IST) ────────────────────────────
+    // Find active users (active in last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data: activeUsers, error: usersError } = await supabaseClient
+      .from("users")
+      .select("id, full_name, subscription_status")
+      .gte("last_active_at", sevenDaysAgo.toISOString());
+
+    if (usersError || !activeUsers) {
+      console.error("Failed to fetch active users:", usersError);
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch active users" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (activeUsers.length === 0) {
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          mode: "generate",
+          users_processed: 0,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    let processed = 0;
+    let proAlerts = 0;
+    let freeAlerts = 0;
+    let errors = 0;
+
+    for (const user of activeUsers) {
+      try {
+        const isPro = user.subscription_status === "pro";
+        const userName = user.full_name ?? "Champion";
+
+        // Fetch yesterday's snapshot for context
+        const { data: yesterdaySnap } = await supabaseClient
+          .from("user_daily_snapshots")
+          .select("snapshot_json")
+          .eq("user_id", user.id)
+          .eq("snapshot_date", yesterdayIST)
+          .single();
+
+        const snapshotJson = yesterdaySnap?.snapshot_json ?? null;
+
+        let alertMessage: string;
+
+        if (isPro && snapshotJson) {
+          // PRO: AI-personalised message
+          const proMsg = await generateProAlert(userName, snapshotJson);
+          if (proMsg) {
+            alertMessage = proMsg;
+            proAlerts++;
+          } else {
+            // Fallback to free template if AI fails
+            alertMessage = generateFreeAlert(userName, snapshotJson);
+            freeAlerts++;
+          }
+        } else {
+          // FREE: template message (no AI cost)
+          alertMessage = generateFreeAlert(userName, snapshotJson);
+          freeAlerts++;
+        }
+
+        // Store alert in today's snapshot
+        const { data: existingSnapshot } = await supabaseClient
+          .from("user_daily_snapshots")
+          .select("id, snapshot_json")
+          .eq("user_id", user.id)
+          .eq("snapshot_date", todayIST)
+          .single();
+
+        const updatedJson = {
+          ...(existingSnapshot?.snapshot_json ?? {}),
+          morning_alert: alertMessage,
+          morning_alert_type: isPro && snapshotJson ? "pro" : "free",
+          morning_alert_generated_at: new Date().toISOString(),
+        };
+
+        const { error: upsertError } = await supabaseClient
+          .from("user_daily_snapshots")
+          .upsert(
+            {
+              user_id: user.id,
+              snapshot_date: todayIST,
+              snapshot_json: updatedJson,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,snapshot_date" },
+          );
+
+        if (upsertError) {
+          console.error(
+            `Failed to store alert for user ${user.id}:`,
+            upsertError,
+          );
+          errors++;
+          continue;
+        }
+
+        processed++;
+      } catch (userErr) {
+        console.error(`Error generating alert for user ${user.id}:`, userErr);
+        errors++;
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        status: "success",
+        mode: "generate",
+        users_processed: processed,
+        pro_alerts: proAlerts,
+        free_alerts: freeAlerts,
+        errors,
+        total_active: activeUsers.length,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("Morning alert error:", message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

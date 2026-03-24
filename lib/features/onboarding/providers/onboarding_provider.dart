@@ -1,0 +1,324 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+
+// ── Onboarding Step Definitions ──────────────────────────────────
+
+class OnboardingStep {
+  final String key;
+  final String question;
+  final OnboardingInputType inputType;
+  final List<String>? options;
+
+  const OnboardingStep({
+    required this.key,
+    required this.question,
+    required this.inputType,
+    this.options,
+  });
+}
+
+enum OnboardingInputType {
+  text,
+  datePicker,
+  chips,
+  number,
+  selector,
+}
+
+const List<OnboardingStep> onboardingSteps = [
+  OnboardingStep(
+    key: 'full_name',
+    question: "Hey there! I'm your AI fitness coach. What's your name?",
+    inputType: OnboardingInputType.text,
+  ),
+  OnboardingStep(
+    key: 'date_of_birth',
+    question: "Nice to meet you! When's your birthday?",
+    inputType: OnboardingInputType.datePicker,
+  ),
+  OnboardingStep(
+    key: 'gender',
+    question:
+        "What's your gender? This helps me calculate your nutrition targets accurately.",
+    inputType: OnboardingInputType.chips,
+    options: ['male', 'female', 'other'],
+  ),
+  OnboardingStep(
+    key: 'height_cm',
+    question: "How tall are you? (in cm)",
+    inputType: OnboardingInputType.number,
+  ),
+  OnboardingStep(
+    key: 'current_weight_kg',
+    question: "What's your current weight? (in kg)",
+    inputType: OnboardingInputType.number,
+  ),
+  OnboardingStep(
+    key: 'target_weight_kg',
+    question: "What's your target weight? (in kg)",
+    inputType: OnboardingInputType.number,
+  ),
+  OnboardingStep(
+    key: 'primary_goal',
+    question: "What's your primary fitness goal?",
+    inputType: OnboardingInputType.chips,
+    options: ['build_muscle', 'lose_fat', 'general_fitness', 'strength'],
+  ),
+  OnboardingStep(
+    key: 'fitness_experience',
+    question: "How would you describe your fitness experience?",
+    inputType: OnboardingInputType.chips,
+    options: ['beginner', 'intermediate', 'advanced'],
+  ),
+  OnboardingStep(
+    key: 'days_per_week',
+    question: "How many days per week can you train?",
+    inputType: OnboardingInputType.selector,
+    options: ['3', '4', '5', '6'],
+  ),
+  OnboardingStep(
+    key: 'equipment_access',
+    question: "What equipment do you have access to?",
+    inputType: OnboardingInputType.chips,
+    options: ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'],
+  ),
+  OnboardingStep(
+    key: 'start_date',
+    question: "When do you want to start your first workout?",
+    inputType: OnboardingInputType.chips,
+    options: ['start_today', 'this_monday', 'next_monday'],
+  ),
+];
+
+// ── Onboarding State ─────────────────────────────────────────────
+
+class OnboardingState {
+  final int currentStep;
+  final Map<String, dynamic> answers;
+  final bool isCompleting;
+  final String? error;
+
+  const OnboardingState({
+    this.currentStep = 0,
+    this.answers = const {},
+    this.isCompleting = false,
+    this.error,
+  });
+
+  int get totalSteps => onboardingSteps.length;
+
+  double get progress =>
+      totalSteps > 0 ? (currentStep + 1) / totalSteps : 0;
+
+  OnboardingStep get currentStepData => onboardingSteps[currentStep];
+
+  bool get isFirstStep => currentStep == 0;
+  bool get isLastStep => currentStep == totalSteps - 1;
+
+  bool get currentStepAnswered {
+    final key = currentStepData.key;
+    final value = answers[key];
+    if (value == null) return false;
+    if (value is String && value.trim().isEmpty) return false;
+    return true;
+  }
+
+  OnboardingState copyWith({
+    int? currentStep,
+    Map<String, dynamic>? answers,
+    bool? isCompleting,
+    String? error,
+  }) {
+    return OnboardingState(
+      currentStep: currentStep ?? this.currentStep,
+      answers: answers ?? this.answers,
+      isCompleting: isCompleting ?? this.isCompleting,
+      error: error,
+    );
+  }
+}
+
+// ── Onboarding Notifier ──────────────────────────────────────────
+
+class OnboardingNotifier extends Notifier<OnboardingState> {
+  @override
+  OnboardingState build() => const OnboardingState();
+
+  UserRepository get _userRepo => UserRepository.instance;
+  HiveService get _hive => HiveService.instance;
+
+  void setAnswer(String key, dynamic value) {
+    final updated = Map<String, dynamic>.from(state.answers);
+    updated[key] = value;
+    state = state.copyWith(answers: updated);
+  }
+
+  void nextStep() {
+    if (state.currentStep < state.totalSteps - 1) {
+      state = state.copyWith(currentStep: state.currentStep + 1);
+    }
+  }
+
+  void previousStep() {
+    if (state.currentStep > 0) {
+      state = state.copyWith(currentStep: state.currentStep - 1);
+    }
+  }
+
+  void goToStep(int step) {
+    if (step >= 0 && step < state.totalSteps) {
+      state = state.copyWith(currentStep: step);
+    }
+  }
+
+  /// Resolves the start date from the user's selection.
+  DateTime resolveStartDate() {
+    final choice = state.answers['start_date'] as String? ?? 'this_monday';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    switch (choice) {
+      case 'start_today':
+        return today;
+      case 'next_monday':
+        final daysUntilNextMonday = (8 - now.weekday) % 7;
+        return today.add(Duration(days: daysUntilNextMonday == 0 ? 7 : daysUntilNextMonday));
+      case 'this_monday':
+      default:
+        // If today IS Monday, start today. Otherwise next Monday.
+        if (now.weekday == 1) return today;
+        final daysUntilMonday = (8 - now.weekday) % 7;
+        return today.add(Duration(days: daysUntilMonday == 0 ? 7 : daysUntilMonday));
+    }
+  }
+
+  /// Saves profile, generates plan, schedules workouts to calendar dates.
+  ///
+  /// Returns the generated [Phase] for the animation screen to display,
+  /// or null on failure.
+  Future<Phase?> completeOnboarding() async {
+    state = state.copyWith(isCompleting: true, error: null);
+
+    try {
+      final a = state.answers;
+
+      final fullName = a['full_name'] as String? ?? '';
+      final dobString = a['date_of_birth'] as String? ?? '';
+      final gender = a['gender'] as String? ?? 'male';
+      final heightCm = _parseDouble(a['height_cm']);
+      final currentWeightKg = _parseDouble(a['current_weight_kg']);
+      final targetWeightKg = _parseDouble(a['target_weight_kg']);
+      final primaryGoal = a['primary_goal'] as String? ?? 'general_fitness';
+      final fitnessExperience =
+          a['fitness_experience'] as String? ?? 'beginner';
+      final daysPerWeek = _parseInt(a['days_per_week'], fallback: 4);
+      final equipmentAccess =
+          a['equipment_access'] as String? ?? 'bodyweight';
+
+      final dob = DateTime.tryParse(dobString);
+      int age = 25;
+      if (dob != null) {
+        final now = DateTime.now();
+        age = now.year - dob.year;
+        if (now.month < dob.month ||
+            (now.month == dob.month && now.day < dob.day)) {
+          age--;
+        }
+      }
+
+      const activityLevel = 'moderate';
+
+      final targets = BmrCalculator.calculateTargets(
+        weightKg: currentWeightKg,
+        heightCm: heightCm,
+        age: age,
+        gender: gender,
+        activityLevel: activityLevel,
+        goal: primaryGoal,
+      );
+
+      final profile = {
+        'full_name': fullName,
+        'date_of_birth': dobString,
+        'gender': gender,
+        'height_cm': heightCm,
+        'current_weight_kg': currentWeightKg,
+        'target_weight_kg': targetWeightKg,
+        'primary_goal': primaryGoal,
+        'fitness_experience': fitnessExperience,
+        'days_per_week': daysPerWeek,
+        'equipment_access': equipmentAccess,
+        'activity_level': activityLevel,
+        'bmr': targets.bmr,
+        'tdee': targets.tdee,
+        'daily_calories': targets.dailyCalories,
+        'protein_grams': targets.proteinGrams,
+        'carb_grams': targets.carbGrams,
+        'fat_grams': targets.fatGrams,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      await _userRepo.updateProfileFields(profile);
+
+      // Generate plan AND schedule to calendar dates via WorkoutScheduleService
+      final startDate = resolveStartDate();
+      final phase = await WorkoutScheduleService.instance.generateAndSchedule(
+        goal: primaryGoal,
+        equipment: equipmentAccess,
+        daysPerWeek: daysPerWeek,
+        startDate: startDate,
+        experienceLevel: fitnessExperience,
+        phase: 1,
+      );
+
+      await _userRepo.saveProgress({
+        'current_phase': 1,
+        'current_week': 1,
+        'total_workouts_done': 0,
+        'current_streak_weeks': 0,
+        'phase_started_at': startDate.toIso8601String(),
+        'plan_generated_at': DateTime.now().toIso8601String(),
+      });
+
+      await _userRepo.setOnboarded();
+
+      await _hive.configBox.put(
+        'ai_chat_started_at',
+        DateTime.now().toIso8601String(),
+      );
+
+      state = state.copyWith(isCompleting: false);
+      return phase;
+    } catch (e) {
+      state = state.copyWith(
+        isCompleting: false,
+        error: 'Something went wrong. Please try again.',
+      );
+      return null;
+    }
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  int _parseInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
+  }
+}
+
+// ── Provider ─────────────────────────────────────────────────────
+
+final onboardingProvider =
+    NotifierProvider<OnboardingNotifier, OnboardingState>(
+        OnboardingNotifier.new);

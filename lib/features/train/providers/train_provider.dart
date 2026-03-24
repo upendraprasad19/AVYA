@@ -1,0 +1,720 @@
+import 'dart:async';
+import 'dart:ui';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import '../repositories/workout_repository.dart';
+
+// ── Data Classes ────────────────────────────────────────────────
+
+/// Exercise data used within a workout day.
+class ExerciseData {
+  final String name;
+  final String sets;
+  final String reps;
+  final String weight;
+  final String rest;
+  final String loggingType;
+
+  const ExerciseData({
+    required this.name,
+    this.sets = '3',
+    this.reps = '10',
+    this.weight = '0kg',
+    this.rest = '90s',
+    this.loggingType = 'weight_reps',
+  });
+}
+
+/// A single day in the workout plan.
+class WorkoutDayData {
+  final int dayNumber;
+  final String name;
+  final String subtitle;
+  final String? dateLabel; // e.g. "Mon, Mar 24"
+  final DateTime? date; // actual calendar date
+  final bool isRest;
+  final bool isDone;
+  final List<ExerciseData> exercises;
+
+  const WorkoutDayData({
+    required this.dayNumber,
+    required this.name,
+    this.subtitle = '',
+    this.dateLabel,
+    this.date,
+    this.isRest = false,
+    this.isDone = false,
+    this.exercises = const [],
+  });
+
+  int get exerciseCount => exercises.length;
+  String get estimatedDuration {
+    if (isRest) return '';
+    final totalSets =
+        exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
+    return '${(totalSets * 2.5).round()} min';
+  }
+}
+
+// ── Swap exercise data ──────────────────────────────────────────
+
+class SwapExerciseData {
+  final String name;
+  final String detail;
+  final String emoji;
+
+  const SwapExerciseData({
+    required this.name,
+    required this.detail,
+    this.emoji = '',
+  });
+}
+
+const List<SwapExerciseData> sampleSwapExercises = [
+  SwapExerciseData(
+      name: 'Dumbbell Bench Press',
+      detail: 'Chest \u00b7 weight_reps \u00b7 Beginner+',
+      emoji: '\u{1f3cb}'),
+  SwapExerciseData(
+      name: 'Incline DB Press',
+      detail: 'Upper Chest \u00b7 weight_reps',
+      emoji: '\u{1f4d0}'),
+  SwapExerciseData(
+      name: 'Cable Fly',
+      detail: 'Chest \u00b7 weight_reps \u00b7 Intermediate',
+      emoji: '\u26a1'),
+  SwapExerciseData(
+      name: 'Push Up',
+      detail: 'Chest \u00b7 bodyweight \u00b7 All levels',
+      emoji: '\u{1f4aa}'),
+  SwapExerciseData(
+      name: 'Machine Chest Press',
+      detail: 'Chest \u00b7 weight_reps \u00b7 Beginner',
+      emoji: '\u{1f916}'),
+  SwapExerciseData(
+      name: 'Svend Press',
+      detail: 'Inner Chest \u00b7 weight_reps',
+      emoji: '\u{1f3af}'),
+];
+
+// ── Current Plan ─────────────────────────────────────────────────
+
+class CurrentPlanData {
+  final int phase;
+  final String phaseName;
+  final int currentWeek;
+  final String focus;
+  final List<List<WorkoutDayData>> weeks;
+  final bool hasPlan;
+
+  const CurrentPlanData({
+    this.phase = 1,
+    this.phaseName = 'Foundation',
+    this.currentWeek = 1,
+    this.focus = 'Movement patterns & baseline strength',
+    this.weeks = const [],
+    this.hasPlan = false,
+  });
+
+  /// Get workouts for a specific week (1-indexed).
+  List<WorkoutDayData> getWeek(int weekNumber) {
+    final index = weekNumber - 1;
+    if (index < 0 || index >= weeks.length) return [];
+    return weeks[index];
+  }
+
+  /// Get today's workout (first non-rest, non-done workout in current week).
+  WorkoutDayData? get todayWorkout {
+    final weekDays = getWeek(currentWeek);
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    // First, try to find the workout for today's actual date.
+    for (final day in weekDays) {
+      if (day.date != null) {
+        final dayStr =
+            '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+        if (dayStr == todayStr && !day.isRest && !day.isDone) return day;
+      }
+    }
+
+    // Fallback: first non-rest, non-done workout in current week.
+    for (final day in weekDays) {
+      if (!day.isRest && !day.isDone) return day;
+    }
+    return null;
+  }
+}
+
+class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
+  @override
+  CurrentPlanData build() {
+    final repo = WorkoutRepository.instance;
+    final progress = UserRepository.instance.getProgress();
+    final phase = (progress?['current_phase'] as int?) ?? 1;
+    final week = (progress?['current_week'] as int?) ?? 1;
+
+    final planExists = repo.hasPlan();
+    if (!planExists) {
+      // No plan generated yet — return empty state.
+      return CurrentPlanData(
+        phase: phase,
+        phaseName: 'No Plan',
+        currentWeek: week,
+        focus: 'Complete onboarding to generate your plan',
+        weeks: const [],
+        hasPlan: false,
+      );
+    }
+
+    // Read plan metadata for phase name/focus.
+    final planMap = repo.getCurrentPlanMap();
+    final phaseName = planMap?['name'] as String? ?? 'Foundation';
+    final focus =
+        planMap?['focus'] as String? ?? 'Movement patterns & baseline strength';
+
+    // Build weeks from Hive schedule data.
+    final weeks = <List<WorkoutDayData>>[];
+    for (int w = 1; w <= 4; w++) {
+      final weekDays = repo.getWeek(w);
+      final dayDataList = <WorkoutDayData>[];
+
+      for (final dayMap in weekDays) {
+        final type = dayMap['type'] as String? ?? 'rest';
+        final isRest = type != 'workout';
+        final status = dayMap['status'] as String? ?? 'planned';
+        final exerciseMaps = dayMap['exercises'] as List? ?? [];
+
+        final exercises = exerciseMaps
+            .map((e) {
+              final m =
+                  e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+              return ExerciseData(
+                name: m['exercise_name'] as String? ?? 'Unknown',
+                sets: '${m['sets'] ?? 3}',
+                reps: m['reps'] as String? ?? '${m['reps'] ?? 10}',
+                weight: '0kg',
+                rest: '${m['rest_seconds'] ?? 60}s',
+                loggingType: m['logging_type'] as String? ?? 'weight_reps',
+              );
+            })
+            .toList();
+
+        // Parse date for label and actual DateTime.
+        final dateStr = dayMap['date'] as String?;
+        String? dateLabel;
+        DateTime? parsedDate;
+        if (dateStr != null) {
+          parsedDate = DateTime.tryParse(dateStr);
+          if (parsedDate != null) {
+            const dayNames = [
+              'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+            ];
+            const monthNames = [
+              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+            ];
+            dateLabel =
+                '${dayNames[parsedDate.weekday - 1]}, ${monthNames[parsedDate.month - 1]} ${parsedDate.day}';
+          }
+        }
+
+        dayDataList.add(WorkoutDayData(
+          dayNumber:
+              (w - 1) * 7 + (dayMap['day_of_week'] as int? ?? 0) + 1,
+          name: (dayMap['workout_name'] as String? ?? 'Rest Day')
+              .toUpperCase(),
+          subtitle: isRest
+              ? 'Recovery & mobility'
+              : '${dayMap['workout_focus'] ?? ''} \u00b7 ${exercises.length} exercises',
+          dateLabel: dateLabel,
+          date: parsedDate,
+          isRest: isRest,
+          isDone: status == 'completed',
+          exercises: exercises,
+        ));
+      }
+
+      // If no schedule data for this week, add placeholder days.
+      if (dayDataList.isEmpty) {
+        for (int d = 0; d < 7; d++) {
+          dayDataList.add(WorkoutDayData(
+            dayNumber: (w - 1) * 7 + d + 1,
+            name: 'NO PLAN',
+            subtitle: 'Generate a plan first',
+            isRest: true,
+          ));
+        }
+      }
+
+      weeks.add(dayDataList);
+    }
+
+    return CurrentPlanData(
+      phase: phase,
+      phaseName: phaseName,
+      currentWeek: week,
+      focus: focus,
+      weeks: weeks,
+      hasPlan: true,
+    );
+  }
+
+  /// Refresh plan data (e.g. after onboarding or workout completion).
+  void refresh() {
+    ref.invalidateSelf();
+  }
+}
+
+final currentPlanProvider =
+    NotifierProvider<CurrentPlanNotifier, CurrentPlanData>(
+        CurrentPlanNotifier.new);
+
+// ── Selected Week ────────────────────────────────────────────────
+
+class SelectedWeekNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final progress = UserRepository.instance.getProgress();
+    return (progress?['current_week'] as int?) ?? 1;
+  }
+
+  void select(int week) {
+    state = week;
+  }
+}
+
+final selectedWeekProvider =
+    NotifierProvider<SelectedWeekNotifier, int>(SelectedWeekNotifier.new);
+
+// ── Expanded Day ────────────────────────────────────────────────
+
+class ExpandedDayNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void toggle(int dayIndex) {
+    state = state == dayIndex ? null : dayIndex;
+  }
+
+  void collapse() {
+    state = null;
+  }
+}
+
+final expandedDayProvider =
+    NotifierProvider<ExpandedDayNotifier, int?>(ExpandedDayNotifier.new);
+
+// ── Active Workout State ─────────────────────────────────────────
+
+class ActiveWorkoutData {
+  final WorkoutDayData? workoutDay;
+  final List<ExerciseData> exercises;
+  final int elapsedSeconds;
+  final Map<String, bool> checkedSets; // "exerciseIndex-setIndex" -> true
+  final bool isComplete;
+  final List<String> detectedPRs; // PR descriptions detected on save
+
+  const ActiveWorkoutData({
+    this.workoutDay,
+    this.exercises = const [],
+    this.elapsedSeconds = 0,
+    this.checkedSets = const {},
+    this.isComplete = false,
+    this.detectedPRs = const [],
+  });
+
+  ActiveWorkoutData copyWith({
+    WorkoutDayData? workoutDay,
+    List<ExerciseData>? exercises,
+    int? elapsedSeconds,
+    Map<String, bool>? checkedSets,
+    bool? isComplete,
+    List<String>? detectedPRs,
+  }) {
+    return ActiveWorkoutData(
+      workoutDay: workoutDay ?? this.workoutDay,
+      exercises: exercises ?? this.exercises,
+      elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+      checkedSets: checkedSets ?? this.checkedSets,
+      isComplete: isComplete ?? this.isComplete,
+      detectedPRs: detectedPRs ?? this.detectedPRs,
+    );
+  }
+
+  int get totalSets =>
+      exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
+
+  int get completedSets => checkedSets.length;
+
+  double get progressPercent =>
+      totalSets > 0 ? completedSets / totalSets : 0.0;
+
+  String get timerFormatted {
+    final mins = (elapsedSeconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (elapsedSeconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
+  bool isSetChecked(int exerciseIndex, int setIndex) {
+    return checkedSets.containsKey('$exerciseIndex-$setIndex');
+  }
+
+  bool isExerciseDone(int exerciseIndex) {
+    final exercise = exercises[exerciseIndex];
+    final numSets = int.tryParse(exercise.sets) ?? 3;
+    for (int i = 0; i < numSets; i++) {
+      if (!isSetChecked(exerciseIndex, i)) return false;
+    }
+    return true;
+  }
+}
+
+class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
+  Timer? _timer;
+
+  @override
+  ActiveWorkoutData build() {
+    ref.onDispose(() => _timer?.cancel());
+    return const ActiveWorkoutData();
+  }
+
+  void startWorkout(WorkoutDayData day) {
+    _timer?.cancel();
+    state = ActiveWorkoutData(
+      workoutDay: day,
+      exercises: List.from(day.exercises),
+      elapsedSeconds: 0,
+      checkedSets: {},
+    );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+    });
+  }
+
+  void toggleSet(int exerciseIndex, int setIndex) {
+    final key = '$exerciseIndex-$setIndex';
+    final newChecked = Map<String, bool>.from(state.checkedSets);
+    if (newChecked.containsKey(key)) {
+      newChecked.remove(key);
+    } else {
+      newChecked[key] = true;
+    }
+    state = state.copyWith(checkedSets: newChecked);
+  }
+
+  void swapExercise(int exerciseIndex, ExerciseData newExercise) {
+    final newExercises = List<ExerciseData>.from(state.exercises);
+    newExercises[exerciseIndex] = newExercise;
+    state = state.copyWith(exercises: newExercises);
+  }
+
+  void addExercise(ExerciseData exercise) {
+    state = state.copyWith(
+      exercises: [...state.exercises, exercise],
+    );
+  }
+
+  Future<void> completeWorkout() async {
+    _timer?.cancel();
+    _timer = null;
+
+    final repo = WorkoutRepository.instance;
+    final hive = HiveService.instance;
+    final now = DateTime.now();
+
+    // PR detection: compare each exercise's weight to best previous log
+    final prDescriptions = <String>[];
+    for (final exercise in state.exercises) {
+      if (exercise.loggingType != 'weight_reps' &&
+          exercise.loggingType != 'weighted_bodyweight') {
+        continue;
+      }
+      final currentWeight =
+          double.tryParse(exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+              0;
+      if (currentWeight <= 0) continue;
+
+      // Find best previous weight for this exercise
+      double bestPrevious = 0;
+      for (final raw in hive.workoutBox.values) {
+        if (raw is! Map) continue;
+        final log = Map<String, dynamic>.from(raw);
+        final name =
+            (log['exercise_name'] as String? ?? '').toLowerCase();
+        if (name == exercise.name.toLowerCase()) {
+          final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+          if (w > bestPrevious) bestPrevious = w;
+        }
+      }
+
+      if (currentWeight > bestPrevious && bestPrevious > 0) {
+        prDescriptions.add(
+            '${exercise.name}: ${currentWeight.toStringAsFixed(1)}kg (was ${bestPrevious.toStringAsFixed(1)}kg)');
+      }
+    }
+
+    // Save workout log via repository.
+    await repo.saveWorkoutLog(
+      workoutName: state.workoutDay?.name ?? 'Workout',
+      setsCompleted: state.completedSets,
+      durationSeconds: state.elapsedSeconds,
+      completedAt: now,
+    );
+
+    // Save individual exercise logs with is_pr flag
+    for (final exercise in state.exercises) {
+      final isPr = prDescriptions
+          .any((pr) => pr.startsWith(exercise.name));
+      final logId =
+          'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
+      final weight = double.tryParse(
+              exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+          0;
+      await hive.workoutBox.put(logId, {
+        'id': logId,
+        'type': 'exercise_log',
+        'exercise_name': exercise.name,
+        'date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+        'sets_completed': int.tryParse(exercise.sets) ?? 3,
+        'reps_completed': int.tryParse(exercise.reps) ?? 10,
+        'weight_kg': weight,
+        'logging_type': exercise.loggingType,
+        'is_pr': isPr,
+        'created_at': now.toIso8601String(),
+      });
+    }
+
+    // Mark the scheduled day as completed in the calendar.
+    final workoutDate = state.workoutDay?.date ?? now;
+    await repo.markWorkoutCompleted(workoutDate);
+
+    // Update user progress.
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
+    await UserRepository.instance.updateProgress({
+      'total_workouts_done': totalDone,
+    });
+
+    state = state.copyWith(isComplete: true, detectedPRs: prDescriptions);
+
+    // Refresh the plan provider so the UI reflects the completed workout.
+    ref.invalidate(currentPlanProvider);
+  }
+
+  void cancelWorkout() {
+    _timer?.cancel();
+    _timer = null;
+    state = const ActiveWorkoutData();
+  }
+}
+
+final activeWorkoutProvider =
+    NotifierProvider<ActiveWorkoutNotifier, ActiveWorkoutData>(
+        ActiveWorkoutNotifier.new);
+
+// ── Rest Timer State ─────────────────────────────────────────────
+
+class RestTimerData {
+  final bool isActive;
+  final int secondsRemaining;
+  final int totalSeconds;
+  final String nextExerciseName;
+
+  const RestTimerData({
+    this.isActive = false,
+    this.secondsRemaining = 0,
+    this.totalSeconds = 90,
+    this.nextExerciseName = '',
+  });
+
+  RestTimerData copyWith({
+    bool? isActive,
+    int? secondsRemaining,
+    int? totalSeconds,
+    String? nextExerciseName,
+  }) {
+    return RestTimerData(
+      isActive: isActive ?? this.isActive,
+      secondsRemaining: secondsRemaining ?? this.secondsRemaining,
+      totalSeconds: totalSeconds ?? this.totalSeconds,
+      nextExerciseName: nextExerciseName ?? this.nextExerciseName,
+    );
+  }
+
+  double get progress =>
+      totalSeconds > 0 ? secondsRemaining / totalSeconds : 0.0;
+
+  Color get timerColor {
+    if (secondsRemaining > 30) return const Color(0xFF00D4FF);
+    if (secondsRemaining > 10) return const Color(0xFFF59E0B);
+    return const Color(0xFFef4444);
+  }
+}
+
+class RestTimerNotifier extends Notifier<RestTimerData> {
+  Timer? _timer;
+
+  @override
+  RestTimerData build() {
+    ref.onDispose(() => _timer?.cancel());
+    return const RestTimerData();
+  }
+
+  void start(int seconds, String nextExercise) {
+    _timer?.cancel();
+    state = RestTimerData(
+      isActive: true,
+      secondsRemaining: seconds,
+      totalSeconds: seconds,
+      nextExerciseName: nextExercise,
+    );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (state.secondsRemaining <= 1) {
+        skip();
+      } else {
+        state =
+            state.copyWith(secondsRemaining: state.secondsRemaining - 1);
+      }
+    });
+  }
+
+  void skip() {
+    _timer?.cancel();
+    _timer = null;
+    state = const RestTimerData();
+  }
+
+  void addTime(int seconds) {
+    state = state.copyWith(
+      secondsRemaining: state.secondsRemaining + seconds,
+      totalSeconds: state.totalSeconds + seconds,
+    );
+  }
+}
+
+final restTimerProvider =
+    NotifierProvider<RestTimerNotifier, RestTimerData>(RestTimerNotifier.new);
+
+// ── Templates ────────────────────────────────────────────────────
+
+class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
+  @override
+  List<Map<String, dynamic>> build() {
+    final box = HiveService.instance.workoutBox;
+    final templates = <Map<String, dynamic>>[];
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+      final w = Map<String, dynamic>.from(raw);
+      if (w['type'] == 'template') {
+        templates.add(w);
+      }
+    }
+
+    return templates;
+  }
+
+  Future<void> saveTemplate(Map<String, dynamic> template) async {
+    final hive = HiveService.instance;
+    final id =
+        template['id'] ?? 'tmpl_${DateTime.now().millisecondsSinceEpoch}';
+    template['id'] = id;
+    template['type'] = 'template';
+    template['created_at'] = DateTime.now().toIso8601String();
+    await hive.workoutBox.put(id, template);
+    ref.invalidateSelf();
+  }
+}
+
+final templatesProvider =
+    NotifierProvider<TemplatesNotifier, List<Map<String, dynamic>>>(
+        TemplatesNotifier.new);
+
+// ── Graduation Stats ────────────────────────────────────────────
+
+/// PR record for graduation display.
+class PrRecord {
+  final String exerciseName;
+  final String value;
+  const PrRecord({required this.exerciseName, required this.value});
+}
+
+class GraduationStatsData {
+  final int totalWorkouts;
+  final int streakWeeks;
+  final int totalSets;
+  final int personalRecords;
+  final List<PrRecord> topPrs;
+
+  const GraduationStatsData({
+    this.totalWorkouts = 0,
+    this.streakWeeks = 0,
+    this.totalSets = 0,
+    this.personalRecords = 0,
+    this.topPrs = const [],
+  });
+}
+
+final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
+  final hive = HiveService.instance;
+  final progress = UserRepository.instance.getProgress() ?? {};
+
+  final totalWorkouts = (progress['total_workouts_done'] as int?) ?? 0;
+  final streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
+
+  // Calculate total sets and PRs from workout box
+  int totalSets = 0;
+  int prCount = 0;
+  final prMap = <String, double>{}; // exerciseName -> best weight
+
+  for (final raw in hive.workoutBox.values) {
+    if (raw is! Map) continue;
+    final log = Map<String, dynamic>.from(raw);
+
+    if (log['type'] == 'exercise_log') {
+      final sets = (log['sets_completed'] as int?) ?? 0;
+      totalSets += sets;
+
+      final isPr = (log['is_pr'] as bool?) ?? false;
+      if (isPr) prCount++;
+
+      final name = log['exercise_name'] as String? ?? '';
+      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      if (name.isNotEmpty && weight > 0) {
+        final best = prMap[name] ?? 0;
+        if (weight > best) prMap[name] = weight;
+      }
+    }
+
+    if (log['type'] == 'workout_log') {
+      final s = (log['sets_completed'] as int?) ?? 0;
+      if (s > 0 && totalSets == 0) totalSets += s;
+    }
+  }
+
+  // Build top PRs list sorted by weight descending
+  final topPrs = prMap.entries
+      .map((e) => PrRecord(
+            exerciseName: e.key,
+            value: '${e.value.toStringAsFixed(1)}kg',
+          ))
+      .toList()
+    ..sort((a, b) {
+      final aW = double.tryParse(a.value.replaceAll('kg', '')) ?? 0;
+      final bW = double.tryParse(b.value.replaceAll('kg', '')) ?? 0;
+      return bW.compareTo(aW);
+    });
+
+  return GraduationStatsData(
+    totalWorkouts: totalWorkouts,
+    streakWeeks: streakWeeks,
+    totalSets: totalSets,
+    personalRecords: prCount,
+    topPrs: topPrs,
+  );
+});

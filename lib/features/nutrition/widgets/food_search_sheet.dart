@@ -1,0 +1,597 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import '../providers/nutrition_provider.dart';
+
+/// Bottom sheet for searching the food database (5K items) and logging
+/// with adjustable portions. FREE for all users.
+void showFoodSearchSheet(BuildContext context, {String? mealType}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _FoodSearchSheet(initialMealType: mealType),
+  );
+}
+
+class _FoodSearchSheet extends ConsumerStatefulWidget {
+  final String? initialMealType;
+
+  const _FoodSearchSheet({this.initialMealType});
+
+  @override
+  ConsumerState<_FoodSearchSheet> createState() => _FoodSearchSheetState();
+}
+
+class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
+  final _searchController = TextEditingController();
+  Map<String, dynamic>? _selectedFood;
+  double _quantityG = 100;
+  String _mealType = 'snacks';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialMealType != null) {
+      _mealType = widget.initialMealType!;
+    } else {
+      final hour = DateTime.now().hour;
+      if (hour < 11) {
+        _mealType = 'breakfast';
+      } else if (hour < 15) {
+        _mealType = 'lunch';
+      } else if (hour < 19) {
+        _mealType = 'dinner';
+      } else {
+        _mealType = 'snacks';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final searchResults = ref.watch(foodSearchProvider);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: AppColors.bg,
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.cardL)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textDisabled,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+
+          // Title
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding),
+            child: Row(
+              children: [
+                Text(
+                  'Search Food',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close,
+                      color: AppColors.textSecondary, size: 22),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+
+          // Search field
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.input,
+                borderRadius: BorderRadius.circular(AppRadius.row),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                onChanged: (q) =>
+                    ref.read(foodSearchProvider.notifier).search(q),
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search foods (e.g. paneer tikka, idli)...',
+                  hintStyle: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  border: InputBorder.none,
+                  icon: const Icon(Icons.search,
+                      color: AppColors.textSecondary, size: 20),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Content area
+          Expanded(
+            child: _selectedFood != null
+                ? _buildFoodDetail()
+                : _buildSearchResults(searchResults),
+          ),
+
+          SizedBox(height: bottomInset),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(List<Map<String, dynamic>> results) {
+    if (_searchController.text.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search, color: AppColors.textDisabled, size: 40),
+            const SizedBox(height: 8),
+            Text(
+              'Search from 5,000+ foods',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (results.isEmpty) {
+      return Center(
+        child: Text(
+          'No foods found for "${_searchController.text}"',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding),
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final food = results[index];
+        final name = food['name'] as String? ?? 'Unknown';
+        final cals =
+            (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
+        final protein =
+            (food['protein_per_100g'] as num?)?.toDouble() ?? 0;
+        final servingDesc =
+            food['standard_serving_desc'] as String? ?? '100g';
+        final servingCals =
+            (food['calories_std'] as num?)?.toDouble() ?? cals;
+
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedFood = food;
+              _quantityG =
+                  (food['standard_serving_g'] as num?)?.toDouble() ?? 100;
+            });
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.row),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$servingDesc \u00B7 P ${protein.round()}g/100g',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${servingCals.round()} kcal',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.orange,
+                      ),
+                    ),
+                    Text(
+                      'per serving',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 9,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right,
+                    color: AppColors.textSecondary, size: 18),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFoodDetail() {
+    final food = _selectedFood!;
+    final name = food['name'] as String? ?? 'Unknown';
+    final caloriesPer100 =
+        (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
+    final proteinPer100 =
+        (food['protein_per_100g'] as num?)?.toDouble() ?? 0;
+    final carbsPer100 =
+        (food['carbs_per_100g'] as num?)?.toDouble() ?? 0;
+    final fatPer100 = (food['fat_per_100g'] as num?)?.toDouble() ?? 0;
+    final fiberPer100 = (food['fiber_per_100g'] as num?)?.toDouble() ?? 0;
+    final servingDesc =
+        food['standard_serving_desc'] as String? ?? '100g';
+    final servingG =
+        (food['standard_serving_g'] as num?)?.toDouble() ?? 100;
+
+    final factor = _quantityG / 100.0;
+    final adjustedCals = (caloriesPer100 * factor).round();
+    final adjustedProtein = (proteinPer100 * factor).round();
+    final adjustedCarbs = (carbsPer100 * factor).round();
+    final adjustedFat = (fatPer100 * factor).round();
+    final adjustedFiber = (fiberPer100 * factor).round();
+
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Back button + food name
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _selectedFood = null),
+                child: const Icon(Icons.arrow_back,
+                    color: AppColors.textSecondary, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  name,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Macro summary card
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.cardPadding),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.cardM),
+              border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              children: [
+                // Calories
+                Text(
+                  '$adjustedCals kcal',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _macroColumn('Protein', '$adjustedProtein g', AppColors.orange),
+                    _macroColumn('Carbs', '$adjustedCarbs g', AppColors.blue),
+                    _macroColumn('Fat', '$adjustedFat g', AppColors.purple),
+                    _macroColumn('Fiber', '$adjustedFiber g', AppColors.green),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Quantity slider (adjustable portions - FREE for all)
+          Text(
+            'PORTION SIZE',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Quick portion buttons
+          Row(
+            children: [
+              _portionButton(servingDesc, servingG),
+              const SizedBox(width: 6),
+              _portionButton('50g', 50),
+              const SizedBox(width: 6),
+              _portionButton('100g', 100),
+              const SizedBox(width: 6),
+              _portionButton('150g', 150),
+              const SizedBox(width: 6),
+              _portionButton('200g', 200),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Slider
+          Row(
+            children: [
+              Text(
+                '${_quantityG.round()}g',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Expanded(
+                child: Slider(
+                  value: _quantityG,
+                  min: 10,
+                  max: 500,
+                  divisions: 49,
+                  activeColor: AppColors.accent,
+                  inactiveColor: AppColors.input,
+                  onChanged: (val) => setState(() => _quantityG = val),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Meal type selector
+          Text(
+            'MEAL TYPE',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _mealTypeChip('breakfast', 'Breakfast'),
+              const SizedBox(width: 6),
+              _mealTypeChip('lunch', 'Lunch'),
+              const SizedBox(width: 6),
+              _mealTypeChip('dinner', 'Dinner'),
+              const SizedBox(width: 6),
+              _mealTypeChip('snacks', 'Snack'),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Log button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                ref.read(foodLogProvider.notifier).logFood(
+                      food: food,
+                      mealType: _mealType,
+                      quantityG: _quantityG,
+                    );
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Logged $name ($adjustedCals kcal)',
+                      style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                    ),
+                    backgroundColor: AppColors.card,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+              ),
+              child: Text(
+                '\u2713 Log $name \u2014 $adjustedCals kcal',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _macroColumn(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 10,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _portionButton(String label, double grams) {
+    final isSelected = (_quantityG - grams).abs() < 1;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _quantityG = grams),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.accentTint : AppColors.input,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.accent.withValues(alpha: 0.3)
+                  : AppColors.border,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? AppColors.accent : AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mealTypeChip(String value, String label) {
+    final isSelected = _mealType == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _mealType = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.accentTint : AppColors.input,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.accent.withValues(alpha: 0.3)
+                  : AppColors.border,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? AppColors.accent : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

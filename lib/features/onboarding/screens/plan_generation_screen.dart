@@ -1,0 +1,299 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+
+/// Animated plan generation screen shown at end of onboarding.
+///
+/// Steps animate in one by one, then a reveal card slides up with the
+/// generated plan summary. The actual generation has already happened
+/// before this screen is shown — this is pure UX theatre.
+class PlanGenerationScreen extends StatefulWidget {
+  final Phase? phase;
+  final int daysPerWeek;
+  final int dailyCalories;
+  final int proteinGrams;
+
+  const PlanGenerationScreen({
+    super.key,
+    required this.phase,
+    required this.daysPerWeek,
+    required this.dailyCalories,
+    required this.proteinGrams,
+  });
+
+  @override
+  State<PlanGenerationScreen> createState() => _PlanGenerationScreenState();
+}
+
+class _PlanGenerationScreenState extends State<PlanGenerationScreen>
+    with TickerProviderStateMixin {
+  final _steps = <_GenStep>[
+    _GenStep('Analysing your profile', Icons.person_search),
+    _GenStep('Calculating BMR & TDEE', Icons.calculate_outlined),
+    _GenStep('Building your workout split', Icons.fitness_center),
+    _GenStep('Selecting exercises from library', Icons.library_books_outlined),
+    _GenStep('Scheduling your 4 weeks', Icons.calendar_month),
+    _GenStep('Setting progressive overload', Icons.trending_up),
+  ];
+
+  int _completedSteps = 0;
+  bool _showReveal = false;
+  late AnimationController _revealController;
+  late Animation<Offset> _revealSlide;
+  late Animation<double> _revealFade;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _revealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _revealSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _revealController,
+      curve: Curves.easeOutCubic,
+    ));
+    _revealFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
+      parent: _revealController,
+      curve: Curves.easeIn,
+    ));
+
+    _animateSteps();
+  }
+
+  Future<void> _animateSteps() async {
+    for (int i = 0; i < _steps.length; i++) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      setState(() => _completedSteps = i + 1);
+    }
+
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    setState(() => _showReveal = true);
+    _revealController.forward();
+  }
+
+  @override
+  void dispose() {
+    _revealController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Spacer(flex: 1),
+                  // Title
+                  Text(
+                    'BUILDING YOUR PLAN',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Steps list
+                  ...List.generate(_steps.length, (i) {
+                    final done = i < _completedSteps;
+                    final active = i == _completedSteps;
+                    return _buildStepRow(_steps[i], done: done, active: active);
+                  }),
+                  const SizedBox(height: 32),
+                  // Reveal card
+                  if (_showReveal) _buildRevealCard(),
+                  const Spacer(flex: 2),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepRow(_GenStep step, {required bool done, required bool active}) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: done || active ? 1.0 : 0.2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: done
+                  ? const Icon(Icons.check_circle, color: AppColors.accent, size: 20, key: ValueKey('done'))
+                  : active
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          key: ValueKey('loading'),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(AppColors.accent),
+                          ),
+                        )
+                      : Icon(step.icon, color: AppColors.textSecondary, size: 20, key: const ValueKey('pending')),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${step.label}${done ? '' : '...'}',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 14,
+                  fontWeight: done ? FontWeight.w700 : FontWeight.w400,
+                  color: done ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+            ),
+            if (done)
+              Text(
+                '\u2713',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.accent),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRevealCard() {
+    final phase = widget.phase;
+    final splitNames = phase?.workouts.map((w) => w.name).join(' / ') ?? 'Custom Plan';
+
+    return SlideTransition(
+      position: _revealSlide,
+      child: FadeTransition(
+        opacity: _revealFade,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.cardL),
+            border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: 0.1),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Text(
+                'YOUR PLAN IS READY \u{1F389}',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                splitNames,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${widget.daysPerWeek} days \u00B7 4 weeks \u00B7 Phase 1',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _statChip('\u{1F525}', '${widget.dailyCalories} kcal'),
+                  const SizedBox(width: 16),
+                  _statChip('\u{1F4AA}', '${widget.proteinGrams}g protein'),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () => context.go('/home'),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    "LET'S GO \u2192",
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statChip(String emoji, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.input,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        '$emoji $text',
+        style: GoogleFonts.getFont(
+          'DM Sans',
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+class _GenStep {
+  final String label;
+  final IconData icon;
+  const _GenStep(this.label, this.icon);
+}
