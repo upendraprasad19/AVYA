@@ -31,6 +31,7 @@ class AiService {
       body: {
         'message': message,
         'context': context,
+        'snapshot_json': context,
       },
     );
 
