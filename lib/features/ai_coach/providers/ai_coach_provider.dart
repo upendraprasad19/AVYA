@@ -3,7 +3,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import '../repositories/ai_coach_repository.dart';
 
 // ── Chat Message Model ───────────────────────────────────────────
 
@@ -96,21 +96,8 @@ final chatHistoryProvider =
 class MessageLimitNotifier extends Notifier<int> {
   @override
   int build() {
-    final coachBox = HiveService.instance.coachBox;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    int count = 0;
-    for (final raw in coachBox.values) {
-      if (raw is! Map) continue;
-      final interaction = Map<String, dynamic>.from(raw);
-      final createdAt = interaction['created_at'] as String? ?? '';
-      if (createdAt.startsWith(todayStr)) {
-        count++;
-      }
-    }
-    return count;
+    // Use repository to count only USER messages (not AI responses)
+    return AiCoachRepository.instance.getTodayUserMessageCount();
   }
 
   void increment() => state = state + 1;
@@ -187,6 +174,10 @@ class SendMessageNotifier extends Notifier<bool> {
   @override
   bool build() => false; // isLoading
 
+  /// Optional context chip filter (set via context chip selection).
+  String? _contextFilter;
+  void setContextFilter(String? chipLabel) => _contextFilter = chipLabel;
+
   Future<void> send(String message, {String mode = 'quick'}) async {
     if (message.trim().isEmpty) return;
     if (state) return; // Already sending
@@ -218,13 +209,17 @@ class SendMessageNotifier extends Notifier<bool> {
     state = true;
 
     try {
-      // Build context from daily snapshot
-      final profile = UserRepository.instance.getProfile() ?? {};
-      final progress = UserRepository.instance.getProgress() ?? {};
-      final context = {
-        'profile': profile,
-        'progress': progress,
-      };
+      // Build FULL context from all Hive boxes via repository
+      final repo = AiCoachRepository.instance;
+      final context = _contextFilter != null
+          ? repo.buildFilteredContext(_contextFilter!)
+          : repo.buildAiContext();
+
+      final modelUsed = mode == 'deep'
+          ? 'glm-4.7'
+          : isPro
+              ? 'cerebras-120b'
+              : 'llama-3.1-8b';
 
       String response;
       if (mode == 'deep' && isPro) {
@@ -243,20 +238,13 @@ class SendMessageNotifier extends Notifier<bool> {
         mode: mode,
       ));
 
-      // Save to coachBox
-      final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
-      await HiveService.instance.coachBox.put(id, {
-        'id': id,
-        'user_message': message,
-        'ai_response': response,
-        'model_used': mode == 'deep'
-            ? 'glm-4.7'
-            : isPro
-                ? 'cerebras-120b'
-                : 'llama-3.1-8b',
-        'mode': mode,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      // Save to coachBox via repository
+      await repo.saveInteraction(
+        userMessage: message,
+        aiResponse: response,
+        modelUsed: modelUsed,
+        mode: mode,
+      );
 
       limitNotifier.increment();
     } catch (e) {
@@ -353,3 +341,17 @@ class PredictionNotifier extends Notifier<PredictionData> {
 final predictionProvider =
     NotifierProvider<PredictionNotifier, PredictionData>(
         PredictionNotifier.new);
+
+// ── Contextual Quick Prompts ────────────────────────────────────
+
+final contextualPromptsProvider = Provider<List<String>>((ref) {
+  return AiCoachRepository.instance.getContextualPrompts();
+});
+
+// ── Coach Insight ───────────────────────────────────────────────
+
+final coachInsightProvider = Provider<String>((ref) {
+  final insight = AiCoachRepository.instance.getLatestInsight();
+  if (insight.isNotEmpty) return insight;
+  return 'Start chatting with your AI coach to get personalised fitness insights and tips!';
+});

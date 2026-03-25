@@ -15,6 +15,8 @@ class ExerciseData {
   final String weight;
   final String rest;
   final String loggingType;
+  final String? category;
+  final List<String>? equipmentNeeded;
 
   const ExerciseData({
     required this.name,
@@ -23,6 +25,8 @@ class ExerciseData {
     this.weight = '0kg',
     this.rest = '90s',
     this.loggingType = 'weight_reps',
+    this.category,
+    this.equipmentNeeded,
   });
 }
 
@@ -71,32 +75,8 @@ class SwapExerciseData {
   });
 }
 
-const List<SwapExerciseData> sampleSwapExercises = [
-  SwapExerciseData(
-      name: 'Dumbbell Bench Press',
-      detail: 'Chest \u00b7 weight_reps \u00b7 Beginner+',
-      emoji: '\u{1f3cb}'),
-  SwapExerciseData(
-      name: 'Incline DB Press',
-      detail: 'Upper Chest \u00b7 weight_reps',
-      emoji: '\u{1f4d0}'),
-  SwapExerciseData(
-      name: 'Cable Fly',
-      detail: 'Chest \u00b7 weight_reps \u00b7 Intermediate',
-      emoji: '\u26a1'),
-  SwapExerciseData(
-      name: 'Push Up',
-      detail: 'Chest \u00b7 bodyweight \u00b7 All levels',
-      emoji: '\u{1f4aa}'),
-  SwapExerciseData(
-      name: 'Machine Chest Press',
-      detail: 'Chest \u00b7 weight_reps \u00b7 Beginner',
-      emoji: '\u{1f916}'),
-  SwapExerciseData(
-      name: 'Svend Press',
-      detail: 'Inner Chest \u00b7 weight_reps',
-      emoji: '\u{1f3af}'),
-];
+// sampleSwapExercises removed — ExerciseSwapSheet queries Hive exerciseBox
+// via ExerciseRepository.instance directly.
 
 // ── Current Plan ─────────────────────────────────────────────────
 
@@ -191,6 +171,10 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
             .map((e) {
               final m =
                   e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+              final equipRaw = m['equipment_needed'];
+              final equipList = equipRaw is List
+                  ? equipRaw.map((e) => e.toString()).toList()
+                  : <String>[];
               return ExerciseData(
                 name: m['exercise_name'] as String? ?? 'Unknown',
                 sets: '${m['sets'] ?? 3}',
@@ -198,6 +182,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
                 weight: '0kg',
                 rest: '${m['rest_seconds'] ?? 60}s',
                 loggingType: m['logging_type'] as String? ?? 'weight_reps',
+                category: m['category'] as String?,
+                equipmentNeeded: equipList,
               );
             })
             .toList();
@@ -266,6 +252,56 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
   void refresh() {
     ref.invalidateSelf();
   }
+
+  /// Copy one week's scheduled workouts to another week in Hive workoutBox.
+  ///
+  /// Duplicates workout entries from [sourceWeek] to [targetWeek],
+  /// preserving exercise data but resetting status to 'planned'.
+  Future<void> copyWeek(int sourceWeek, int targetWeek) async {
+    if (sourceWeek == targetWeek) return;
+    if (sourceWeek < 1 || sourceWeek > 4) return;
+    if (targetWeek < 1 || targetWeek > 4) return;
+
+    final hive = HiveService.instance;
+    final startStr = hive.configBox.get('plan_start_date') as String?;
+    if (startStr == null) return;
+
+    final planStart = DateTime.parse(startStr);
+    final sourceWeekStart =
+        planStart.add(Duration(days: (sourceWeek - 1) * 7));
+    final targetWeekStart =
+        planStart.add(Duration(days: (targetWeek - 1) * 7));
+
+    for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+      final sourceDate = sourceWeekStart.add(Duration(days: dayOfWeek));
+      final targetDate = targetWeekStart.add(Duration(days: dayOfWeek));
+
+      final sourceDateKey =
+          '${sourceDate.year}-${sourceDate.month.toString().padLeft(2, '0')}-${sourceDate.day.toString().padLeft(2, '0')}';
+      final targetDateKey =
+          '${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')}';
+
+      final sourceEntry = hive.workoutBox.get('schedule_$sourceDateKey');
+      if (sourceEntry == null) continue;
+
+      final sourceMap = Map<String, dynamic>.from(sourceEntry as Map);
+
+      // Duplicate with updated date, week, and reset status
+      final newEntry = Map<String, dynamic>.from(sourceMap);
+      newEntry['date'] = targetDateKey;
+      newEntry['week'] = targetWeek;
+      newEntry['status'] =
+          sourceMap['type'] == 'rest' ? 'rest' : 'planned';
+      newEntry['completed_at'] = null;
+      newEntry['is_swapped'] = false;
+      newEntry['original_date'] = null;
+
+      await hive.workoutBox.put('schedule_$targetDateKey', newEntry);
+    }
+
+    // Refresh the plan so the UI reflects the copied week
+    ref.invalidateSelf();
+  }
 }
 
 final currentPlanProvider =
@@ -309,11 +345,22 @@ final expandedDayProvider =
 
 // ── Active Workout State ─────────────────────────────────────────
 
+/// Input values captured for a single set.
+class SetInputValues {
+  final double? weight;
+  final int? reps;
+  final int? durationSeconds;
+  final double? distanceKm;
+
+  const SetInputValues({this.weight, this.reps, this.durationSeconds, this.distanceKm});
+}
+
 class ActiveWorkoutData {
   final WorkoutDayData? workoutDay;
   final List<ExerciseData> exercises;
   final int elapsedSeconds;
   final Map<String, bool> checkedSets; // "exerciseIndex-setIndex" -> true
+  final Map<String, SetInputValues> setInputValues; // "exerciseIndex-setIndex" -> values
   final bool isComplete;
   final List<String> detectedPRs; // PR descriptions detected on save
 
@@ -322,6 +369,7 @@ class ActiveWorkoutData {
     this.exercises = const [],
     this.elapsedSeconds = 0,
     this.checkedSets = const {},
+    this.setInputValues = const {},
     this.isComplete = false,
     this.detectedPRs = const [],
   });
@@ -331,6 +379,7 @@ class ActiveWorkoutData {
     List<ExerciseData>? exercises,
     int? elapsedSeconds,
     Map<String, bool>? checkedSets,
+    Map<String, SetInputValues>? setInputValues,
     bool? isComplete,
     List<String>? detectedPRs,
   }) {
@@ -339,6 +388,7 @@ class ActiveWorkoutData {
       exercises: exercises ?? this.exercises,
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       checkedSets: checkedSets ?? this.checkedSets,
+      setInputValues: setInputValues ?? this.setInputValues,
       isComplete: isComplete ?? this.isComplete,
       detectedPRs: detectedPRs ?? this.detectedPRs,
     );
@@ -406,6 +456,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     state = state.copyWith(checkedSets: newChecked);
   }
 
+  /// Record input values for a specific set (called from UI controllers).
+  void recordSetValues(int exerciseIndex, int setIndex, SetInputValues values) {
+    final key = '$exerciseIndex-$setIndex';
+    final newValues = Map<String, SetInputValues>.from(state.setInputValues);
+    newValues[key] = values;
+    state = state.copyWith(setInputValues: newValues);
+  }
+
   void swapExercise(int exerciseIndex, ExerciseData newExercise) {
     final newExercises = List<ExerciseData>.from(state.exercises);
     newExercises[exerciseIndex] = newExercise;
@@ -465,27 +523,95 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       completedAt: now,
     );
 
-    // Save individual exercise logs with is_pr flag
-    for (final exercise in state.exercises) {
+    // Save individual exercise logs with is_pr flag, respecting logging type
+    for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
+      final exercise = state.exercises[exIdx];
       final isPr = prDescriptions
           .any((pr) => pr.startsWith(exercise.name));
       final logId =
           'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
-      final weight = double.tryParse(
-              exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
-          0;
-      await hive.workoutBox.put(logId, {
+      final dateStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // Aggregate values from per-set input data
+      final numSets = int.tryParse(exercise.sets) ?? 3;
+      double totalWeight = 0;
+      int totalReps = 0;
+      int totalDuration = 0;
+      double totalDistance = 0;
+      int completedSets = 0;
+
+      for (int s = 0; s < numSets; s++) {
+        final key = '$exIdx-$s';
+        if (state.checkedSets.containsKey(key)) {
+          completedSets++;
+          final vals = state.setInputValues[key];
+          if (vals != null) {
+            if (vals.weight != null && vals.weight! > totalWeight) {
+              totalWeight = vals.weight!; // best weight across sets
+            }
+            totalReps += vals.reps ?? 0;
+            totalDuration += vals.durationSeconds ?? 0;
+            totalDistance += vals.distanceKm ?? 0;
+          }
+        }
+      }
+
+      // Fallback to exercise defaults if no input captured
+      if (totalWeight == 0) {
+        totalWeight = double.tryParse(
+                exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+            0;
+      }
+      if (totalReps == 0) {
+        totalReps = (int.tryParse(exercise.reps) ?? 10) * completedSets;
+      }
+
+      // Build log map based on logging type
+      final logMap = <String, dynamic>{
         'id': logId,
         'type': 'exercise_log',
         'exercise_name': exercise.name,
-        'date': '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
-        'sets_completed': int.tryParse(exercise.sets) ?? 3,
-        'reps_completed': int.tryParse(exercise.reps) ?? 10,
-        'weight_kg': weight,
+        'date': dateStr,
         'logging_type': exercise.loggingType,
         'is_pr': isPr,
         'created_at': now.toIso8601String(),
-      });
+      };
+
+      switch (exercise.loggingType) {
+        case 'weight_reps':
+          logMap['weight_kg'] = totalWeight;
+          logMap['reps_completed'] = totalReps;
+          logMap['sets_completed'] = completedSets;
+          break;
+        case 'bodyweight_reps':
+          logMap['reps_completed'] = totalReps;
+          logMap['sets_completed'] = completedSets;
+          break;
+        case 'weighted_bodyweight':
+          logMap['weight_kg'] = totalWeight;
+          logMap['reps_completed'] = totalReps;
+          logMap['sets_completed'] = completedSets;
+          break;
+        case 'timed':
+          logMap['duration_seconds'] = totalDuration;
+          logMap['sets_completed'] = completedSets;
+          break;
+        case 'cardio':
+          logMap['duration_seconds'] = totalDuration;
+          logMap['distance_km'] = totalDistance;
+          break;
+        case 'distance':
+          logMap['distance_km'] = totalDistance;
+          logMap['weight_kg'] = totalWeight;
+          break;
+        default:
+          logMap['weight_kg'] = totalWeight;
+          logMap['reps_completed'] = totalReps;
+          logMap['sets_completed'] = completedSets;
+      }
+
+      await hive.workoutBox.put(logId, logMap);
     }
 
     // Mark the scheduled day as completed in the calendar.

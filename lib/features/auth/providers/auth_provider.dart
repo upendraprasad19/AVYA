@@ -225,15 +225,75 @@ class AuthNotifier extends Notifier<AuthState2> {
 
   // ── Private ───────────────────────────────────────────────────
 
+  /// Ensures local Hive state is correct after sign-in.
+  ///
+  /// If the user previously completed onboarding (has a profile in Supabase),
+  /// restores the onboarding flag so they skip onboarding on re-login.
   Future<void> _ensureLocalUser(User user) async {
     final userBox = _hive.userBox;
+    final configBox = _hive.configBox;
     final existing = userBox.get('profile');
+
     if (existing == null) {
-      await userBox.put('profile', {
-        'id': user.id,
-        'email': user.email,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      // No local profile — could be first login OR re-login after sign-out.
+      // Check Supabase for existing user data.
+      try {
+        final supabase = _supabase.client;
+        final profileRows = await supabase
+            .from('user_profile')
+            .select()
+            .eq('user_id', user.id)
+            .limit(1);
+
+        if (profileRows.isNotEmpty) {
+          // Returning user — restore profile and onboarding flag.
+          final remoteProfile = Map<String, dynamic>.from(profileRows.first);
+          remoteProfile['id'] = user.id;
+          remoteProfile['email'] = user.email;
+          await userBox.put('profile', remoteProfile);
+          await configBox.put('onboarding_completed', true);
+
+          // Also try to restore progress data.
+          final progressRows = await supabase
+              .from('user_progress')
+              .select()
+              .eq('user_id', user.id)
+              .limit(1);
+          if (progressRows.isNotEmpty) {
+            await userBox.put(
+                'progress', Map<String, dynamic>.from(progressRows.first));
+          }
+
+          return;
+        }
+
+        // Also check users table for onboarding flag.
+        final userRows = await supabase
+            .from('users')
+            .select('onboarding_completed')
+            .eq('id', user.id)
+            .limit(1);
+
+        if (userRows.isNotEmpty) {
+          final onboarded =
+              (userRows.first['onboarding_completed'] as bool?) ?? false;
+          if (onboarded) {
+            await configBox.put('onboarding_completed', true);
+          }
+        }
+      } catch (_) {
+        // Supabase query failed (offline or table doesn't exist yet).
+        // Fall through to create minimal local profile.
+      }
+
+      // Create minimal local profile if nothing was restored.
+      if (userBox.get('profile') == null) {
+        await userBox.put('profile', {
+          'id': user.id,
+          'email': user.email,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
     }
   }
 }

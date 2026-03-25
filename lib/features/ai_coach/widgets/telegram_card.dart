@@ -73,7 +73,7 @@ class TelegramCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Connect @ICanbeFitterBot',
+                      'Connect @AVYACoachBot',
                       style: GoogleFonts.getFont(
                         'DM Sans',
                         fontSize: 11,

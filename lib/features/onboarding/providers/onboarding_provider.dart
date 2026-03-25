@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
@@ -291,6 +292,9 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         DateTime.now().toIso8601String(),
       );
 
+      // Sync onboarding flag + profile to Supabase (background, don't block).
+      _syncOnboardingToSupabase(profile);
+
       state = state.copyWith(isCompleting: false);
       return phase;
     } catch (e) {
@@ -314,6 +318,31 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     if (value is double) return value.toInt();
     if (value is String) return int.tryParse(value) ?? fallback;
     return fallback;
+  }
+
+  /// Syncs onboarding completion flag + profile to Supabase (fire-and-forget).
+  Future<void> _syncOnboardingToSupabase(Map<String, dynamic> profile) async {
+    try {
+      final supabase = SupabaseService.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Mark user as onboarded in users table.
+      await supabase.from('users').upsert({
+        'id': userId,
+        'email': supabase.auth.currentUser?.email,
+        'onboarding_completed': true,
+        'last_active_at': DateTime.now().toIso8601String(),
+      });
+
+      // Sync profile to user_profile table.
+      await supabase.from('user_profile').upsert({
+        'user_id': userId,
+        ...profile,
+      });
+    } catch (_) {
+      // Offline or table not ready — will sync later via SyncService.
+    }
   }
 }
 

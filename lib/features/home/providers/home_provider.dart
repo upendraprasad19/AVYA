@@ -439,3 +439,28 @@ class DailyQuoteNotifier extends Notifier<DailyQuoteData> {
 final dailyQuoteProvider =
     NotifierProvider<DailyQuoteNotifier, DailyQuoteData>(
         DailyQuoteNotifier.new);
+
+// ── Today's Steps ─────────────────────────────────────────────────
+
+class TodayStepsNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final hive = HiveService.instance;
+    final healthBox = hive.healthBox;
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    for (final raw in healthBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] == 'step_log' && log['date'] == todayStr) {
+        return (log['steps'] as num?)?.toInt() ?? 0;
+      }
+    }
+    return 0;
+  }
+}
+
+final todayStepsProvider =
+    NotifierProvider<TodayStepsNotifier, int>(TodayStepsNotifier.new);

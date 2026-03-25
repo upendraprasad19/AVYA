@@ -18,6 +18,7 @@ class AppConstants {
   static const String morningAlertFunction = 'morning-alert';
   static const String beatMyCoachFunction = 'beat-my-coach';
   static const String futurePredictionFunction = 'future-prediction';
+  static const String weeklyReportFunction = 'weekly-report';
 
   // ── Subscription ──────────────────────────────────────────
 

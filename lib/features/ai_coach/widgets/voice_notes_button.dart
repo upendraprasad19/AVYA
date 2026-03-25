@@ -71,6 +71,7 @@ class VoiceNotesButton extends StatelessWidget {
     }
 
     return GestureDetector(
+      onTap: isRecording ? onStopRecording : onStartRecording,
       onLongPressStart: (_) => onStartRecording(),
       onLongPressEnd: (_) => onStopRecording(),
       child: AnimatedContainer(

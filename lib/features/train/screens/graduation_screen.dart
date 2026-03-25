@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import '../providers/train_provider.dart';
 
@@ -469,10 +471,31 @@ class GraduationScreen extends ConsumerWidget {
         onPressed: () {
           SubscriptionService.instance.gate(
             AppConstants.featurePhases2To12,
-            onPro: () {
-              // PRO user — generate Phase 2 plan
-              // TODO: Call plan generator for Phase 2
-              context.go('/train');
+            onPro: () async {
+              // PRO user — generate next phase plan
+              final profile = UserRepository.instance.getProfile() ?? {};
+              final progress = UserRepository.instance.getProgress() ?? {};
+              final currentPhase = (progress['current_phase'] as int?) ?? 1;
+              final nextPhase = currentPhase + 1;
+
+              // Generate next phase plan and write schedule to Hive
+              await WorkoutScheduleService.instance.generateAndSchedule(
+                goal: profile['primary_goal'] as String? ?? 'general_fitness',
+                equipment: profile['equipment_access'] as String? ?? 'basic_gym',
+                daysPerWeek: (profile['days_per_week'] as int?) ?? 4,
+                startDate: DateTime.now(),
+                phase: nextPhase,
+                experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',
+              );
+
+              // Update user progress
+              await UserRepository.instance.updateProgress({
+                'current_phase': nextPhase,
+                'current_week': 1,
+                'phase_started_at': DateTime.now().toIso8601String(),
+              });
+
+              if (context.mounted) context.go('/train');
             },
             onFree: () => showPaywallSheet(context, feature: 'Phases 2-12'),
           );

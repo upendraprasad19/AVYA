@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -185,7 +186,7 @@ class CartAuditorSection extends ConsumerWidget {
     );
   }
 
-  void _handleUpload(BuildContext context, WidgetRef ref, int remaining) {
+  Future<void> _handleUpload(BuildContext context, WidgetRef ref, int remaining) async {
     if (remaining <= 0) {
       SubscriptionService.instance.gate(
         AppConstants.featureCartAuditorPro,
@@ -206,19 +207,14 @@ class CartAuditorSection extends ConsumerWidget {
       return;
     }
 
-    // TODO: Open image picker, get bytes, then call:
-    // ref.read(cartAuditorProvider.notifier).analyseCart(imageBytes);
-    // await UsageCounterService.instance.increment(AppConstants.featureCartAuditorPro, isPro);
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image == null) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Image picker will be available in next update.',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-        ),
-        backgroundColor: AppColors.card,
-      ),
-    );
+    final imageBytes = await image.readAsBytes();
+    final isPro = SubscriptionService.instance.isPro();
+    ref.read(cartAuditorProvider.notifier).analyseCart(imageBytes);
+    await UsageCounterService.instance.increment(AppConstants.featureCartAuditorPro, isPro);
   }
 
   Widget _buildError(String error, WidgetRef ref) {

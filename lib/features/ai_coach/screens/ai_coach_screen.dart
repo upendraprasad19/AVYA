@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -30,6 +31,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   int _selectedChipIndex = 0;
   bool _isRecording = false;
 
+  // Speech-to-text
+  final SpeechToText _speech = SpeechToText();
+  bool _speechAvailable = false;
+  String _recognizedText = '';
+
   static const _contextChips = [
     'Current Plan',
     'Injuries',
@@ -38,15 +44,58 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     'Goals',
   ];
 
-  static const _quickPrompts = [
-    'How did I do?',
-    'What to eat?',
-    'Am I ready?',
-    'Analyse progress',
-  ];
+  // Quick prompts now come from contextualPromptsProvider (dynamic)
+
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onError: (error) => setState(() => _isRecording = false),
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          setState(() => _isRecording = false);
+          if (_recognizedText.isNotEmpty) {
+            _sendMessage(_recognizedText);
+            _recognizedText = '';
+          }
+        }
+      },
+    );
+    setState(() {});
+  }
+
+  void _startListening() {
+    if (!_speechAvailable) return;
+    setState(() {
+      _isRecording = true;
+      _recognizedText = '';
+    });
+    _speech.listen(
+      onResult: (result) {
+        setState(() => _recognizedText = result.recognizedWords);
+      },
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 3),
+      localeId: 'en_IN',
+    );
+  }
+
+  void _stopListening() {
+    _speech.stop();
+    setState(() => _isRecording = false);
+    if (_recognizedText.isNotEmpty) {
+      _sendMessage(_recognizedText);
+      _recognizedText = '';
+    }
+  }
 
   @override
   void dispose() {
+    _speech.stop();
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -509,8 +558,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 label: _contextChips[index],
                 isActive: isActive,
                 onTap: () {
-                  setState(() => _selectedChipIndex = index);
-                  // TODO: Filter chat context based on selected chip
+                  setState(() {
+                    // Toggle off if same chip tapped again
+                    if (_selectedChipIndex == index) {
+                      _selectedChipIndex = -1;
+                      ref.read(sendMessageProvider.notifier).setContextFilter(null);
+                    } else {
+                      _selectedChipIndex = index;
+                      ref.read(sendMessageProvider.notifier).setContextFilter(_contextChips[index]);
+                    }
+                  });
                 },
               ),
             );
@@ -817,15 +874,20 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               ),
             ),
             const SizedBox(height: 5),
-            Text(
-              'To maximise muscle growth, ensure you\'re eating enough protein and getting 7-8 hours of sleep. Recovery is when you grow.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
-                height: 1.65,
-              ),
+            Consumer(
+              builder: (context, ref, _) {
+                final insight = ref.watch(coachInsightProvider);
+                return Text(
+                  insight,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textPrimary,
+                    height: 1.65,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -838,6 +900,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildQuickPrompts() {
+    final prompts = ref.watch(contextualPromptsProvider);
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -846,7 +909,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 8),
         child: Row(
-          children: _quickPrompts.map((prompt) {
+          children: prompts.map((prompt) {
             return Padding(
               padding: const EdgeInsets.only(right: 6),
               child: PromptChip(
@@ -929,7 +992,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 child: Text(
                   telegramConnected
                       ? 'Open Telegram'
-                      : 'Connect @ICanbeFitterBot',
+                      : 'Connect @AVYACoachBot',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 14,
@@ -980,14 +1043,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     showPaywallSheet(context, feature: 'Voice Notes'),
               );
             },
-            onStartRecording: () {
-              setState(() => _isRecording = true);
-              // TODO: Start audio recording
-            },
-            onStopRecording: () {
-              setState(() => _isRecording = false);
-              // TODO: Stop recording, transcribe, send as text
-            },
+            onStartRecording: () => _startListening(),
+            onStopRecording: () => _stopListening(),
           ),
           const SizedBox(width: 8),
 
@@ -1006,13 +1063,19 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 color: AppColors.textPrimary,
               ),
               decoration: InputDecoration(
-                hintText: isLimitReached
-                    ? 'Daily limit reached. Upgrade to PRO!'
-                    : 'Ask your coach...',
+                hintText: _isRecording && _recognizedText.isNotEmpty
+                    ? _recognizedText
+                    : _isRecording
+                        ? 'Listening...'
+                        : isLimitReached
+                            ? 'Daily limit reached. Upgrade to PRO!'
+                            : 'Ask your coach...',
                 hintStyle: GoogleFonts.getFont(
                   'DM Sans',
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: _isRecording
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
                 ),
                 filled: true,
                 fillColor: AppColors.input,
@@ -1077,7 +1140,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // ── Helpers ────────────────────────────────────────────────────
 
   Future<void> _openTelegramBot() async {
-    final uri = Uri.parse('https://t.me/ICanbeFitterBot');
+    final uri = Uri.parse('https://t.me/AVYACoachBot');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }

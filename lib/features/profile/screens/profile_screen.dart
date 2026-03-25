@@ -178,8 +178,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       expiresAt: subInfo.expiresAt,
                       onUpgradeTap: () =>
                           showPaywallSheet(context, feature: 'PRO'),
-                      onManageTap: () =>
-                          _showTodoSnackbar('Manage Subscription'),
+                      onManageTap: () {
+                        if (subInfo.isPro) {
+                          // Show subscription details dialog
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: AppColors.card,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppRadius.cardM),
+                              ),
+                              title: Text(
+                                'Your Subscription',
+                                style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Plan: ${(subInfo.plan ?? 'free').toUpperCase()}', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.proGold)),
+                                  const SizedBox(height: 8),
+                                  Text('Expires: ${subInfo.expiresAt ?? 'N/A'}', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary)),
+                                  const SizedBox(height: 12),
+                                  Text('To cancel or modify, contact support@icanbefitter.com', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary)),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          showPaywallSheet(context, feature: 'PRO');
+                        }
+                      },
                     ),
                     const SizedBox(height: 8),
 
@@ -189,11 +224,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       stepsToday: biometric.stepsToday,
                       sleepHours: biometric.sleepHours,
                       isSyncEnabled: biometric.isSyncEnabled,
-                      onToggleSync: () {
-                        ref
-                            .read(biometricProvider.notifier)
-                            .toggleSync(!biometric.isSyncEnabled);
-                        // TODO: Request Health Connect permissions
+                      onToggleSync: () async {
+                        final newValue = !biometric.isSyncEnabled;
+                        ref.read(biometricProvider.notifier).toggleSync(newValue);
+                        if (newValue) {
+                          // Notify user that Health Connect integration is being set up
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Health Connect sync enabled. Steps and sleep will be synced automatically.',
+                                  style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                                ),
+                                backgroundColor: AppColors.card,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
                     const SizedBox(height: 8),
@@ -334,8 +382,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         title: 'Privacy & Permissions',
                         showBorder: false,
                         trailing: const ProfileRowChevron(),
-                        onTap: () =>
-                            _showTodoSnackbar('Privacy & Permissions'),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: AppColors.card,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.cardM)),
+                              title: Text('Privacy & Permissions', style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Your data is stored locally on your device (Hive). Supabase is used only for backups, AI, and community features.', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
+                                  const SizedBox(height: 12),
+                                  Text('Permissions:', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                  const SizedBox(height: 6),
+                                  Text('\u2022 Camera: Meal scanning (optional)\n\u2022 Health Connect: Steps & sleep sync (optional)\n\u2022 Storage: Progress photos (optional)', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ]),
                     const SizedBox(height: 12),
@@ -421,7 +494,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '$feature — coming soon',
+          '$feature — Coming in Phase 2',
           style: GoogleFonts.getFont('DM Sans', fontSize: 13),
         ),
         backgroundColor: AppColors.card,
@@ -550,19 +623,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              // TODO: Implement actual account deletion via Supabase
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Account deletion — coming soon',
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+              try {
+                // Clear all local Hive data
+                await UserRepository.instance.clearAllData();
+                // Attempt to delete from Supabase (soft delete — marks account inactive)
+                try {
+                  final supabase = SupabaseService.instance.client;
+                  final userId = supabase.auth.currentUser?.id;
+                  if (userId != null) {
+                    await supabase.from('users').update({
+                      'is_deleted': true,
+                      'deleted_at': DateTime.now().toIso8601String(),
+                    }).eq('id', userId);
+                  }
+                  await supabase.auth.signOut();
+                } catch (_) {
+                  // Offline — local data already cleared
+                }
+                if (mounted) context.go('/sign-in');
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Failed to delete account. Please try again.',
+                        style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                      ),
+                      backgroundColor: AppColors.red,
                     ),
-                    backgroundColor: AppColors.card,
-                  ),
-                );
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +7,7 @@ import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import '../providers/train_provider.dart';
 import '../widgets/rest_timer_modal.dart';
 import '../widgets/exercise_swap_sheet.dart';
+import '../widgets/set_input_row.dart';
 import '../widgets/workout_receipt_card.dart';
 
 class ActiveWorkoutScreen extends ConsumerStatefulWidget {
@@ -559,6 +559,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       isScrollControlled: true,
       builder: (ctx) => ExerciseSwapSheet(
         currentExerciseName: currentExercise.name,
+        category: currentExercise.category,
+        equipment: currentExercise.equipmentNeeded,
         onSelect: (swapEx) {
           ref.read(activeWorkoutProvider.notifier).swapExercise(
                 exerciseIndex,
@@ -569,6 +571,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   weight: currentExercise.weight,
                   rest: currentExercise.rest,
                   loggingType: currentExercise.loggingType,
+                  category: currentExercise.category,
+                  equipmentNeeded: currentExercise.equipmentNeeded,
                 ),
               );
           Navigator.of(ctx).pop();
@@ -718,7 +722,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 // Supports all 6 logging types: weight_reps, bodyweight_reps,
 // weighted_bodyweight, timed, cardio, distance
 
-class _ExerciseCard extends StatelessWidget {
+class _ExerciseCard extends ConsumerStatefulWidget {
   final int exerciseIndex;
   final ExerciseData exercise;
   final bool isDone;
@@ -737,27 +741,95 @@ class _ExerciseCard extends StatelessWidget {
     required this.onSwap,
   });
 
+  @override
+  ConsumerState<_ExerciseCard> createState() => _ExerciseCardState();
+}
+
+class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
+  // Per-set controllers: index by set number
+  late List<TextEditingController> _weightControllers;
+  late List<TextEditingController> _repsControllers;
+  late List<TextEditingController> _durationControllers;
+  late List<TextEditingController> _distanceControllers;
+
+  int get _numSets => int.tryParse(widget.exercise.sets) ?? 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _initControllers();
+  }
+
+  void _initControllers() {
+    final n = _numSets;
+    final weightDefault =
+        widget.exercise.weight.replaceAll('kg', '').replaceAll('BW', '');
+    final repsDefault = widget.exercise.reps;
+
+    _weightControllers = List.generate(n, (_) => TextEditingController(text: weightDefault != '0' ? weightDefault : ''));
+    _repsControllers = List.generate(n, (_) => TextEditingController(text: repsDefault));
+    _durationControllers = List.generate(n, (_) => TextEditingController(text: repsDefault));
+    _distanceControllers = List.generate(n, (_) => TextEditingController());
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExerciseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newNumSets = int.tryParse(widget.exercise.sets) ?? 3;
+    if (newNumSets != _weightControllers.length ||
+        oldWidget.exercise.name != widget.exercise.name) {
+      _disposeControllers();
+      _initControllers();
+    }
+  }
+
+  void _disposeControllers() {
+    for (final c in _weightControllers) { c.dispose(); }
+    for (final c in _repsControllers) { c.dispose(); }
+    for (final c in _durationControllers) { c.dispose(); }
+    for (final c in _distanceControllers) { c.dispose(); }
+  }
+
+  @override
+  void dispose() {
+    _disposeControllers();
+    super.dispose();
+  }
+
+  /// Capture current input values and record them into the provider.
+  void _captureSetValues(int setIdx) {
+    ref.read(activeWorkoutProvider.notifier).recordSetValues(
+      widget.exerciseIndex,
+      setIdx,
+      SetInputValues(
+        weight: double.tryParse(_weightControllers[setIdx].text),
+        reps: int.tryParse(_repsControllers[setIdx].text),
+        durationSeconds: int.tryParse(_durationControllers[setIdx].text),
+        distanceKm: double.tryParse(_distanceControllers[setIdx].text),
+      ),
+    );
+  }
+
   String _metaText() {
-    switch (exercise.loggingType) {
+    switch (widget.exercise.loggingType) {
       case 'timed':
-        return '${exercise.sets} sets \u00b7 ${exercise.reps}s \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.sets} sets \u00b7 ${widget.exercise.reps}s \u00b7 ${widget.exercise.rest} rest';
       case 'cardio':
-        return '${exercise.reps} min \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.reps} min \u00b7 ${widget.exercise.rest} rest';
       case 'distance':
-        return '${exercise.reps} \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.reps} \u00b7 ${widget.exercise.rest} rest';
       case 'bodyweight_reps':
-        return '${exercise.sets} sets \u00b7 ${exercise.reps} reps \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.sets} sets \u00b7 ${widget.exercise.reps} reps \u00b7 ${widget.exercise.rest} rest';
       case 'weighted_bodyweight':
-        return '${exercise.sets} sets \u00b7 ${exercise.reps} reps \u00b7 +${exercise.weight} \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.sets} sets \u00b7 ${widget.exercise.reps} reps \u00b7 +${widget.exercise.weight} \u00b7 ${widget.exercise.rest} rest';
       default: // weight_reps
-        return '${exercise.sets} sets \u00b7 ${exercise.reps} reps \u00b7 ${exercise.weight} \u00b7 ${exercise.rest} rest';
+        return '${widget.exercise.sets} sets \u00b7 ${widget.exercise.reps} reps \u00b7 ${widget.exercise.weight} \u00b7 ${widget.exercise.rest} rest';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final numSets = int.tryParse(exercise.sets) ?? 3;
-    final weightStr = exercise.weight.replaceAll('kg', '').replaceAll('BW', '');
+    final numSets = _numSets;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 5),
@@ -766,7 +838,7 @@ class _ExerciseCard extends StatelessWidget {
           color: const Color(0xFF0e1219),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isActive
+            color: widget.isActive
                 ? AppColors.accent.withValues(alpha: 0.35)
                 : const Color(0xFF1c2535),
           ),
@@ -783,19 +855,19 @@ class _ExerciseCard extends StatelessWidget {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: isActive
+                      color: widget.isActive
                           ? AppColors.accent.withValues(alpha: 0.15)
                           : const Color(0xFF161d28),
                       borderRadius: BorderRadius.circular(7),
                     ),
                     child: Center(
                       child: Text(
-                        '${exerciseIndex + 1}',
+                        '${widget.exerciseIndex + 1}',
                         style: GoogleFonts.getFont(
                           'DM Sans',
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isActive
+                          color: widget.isActive
                               ? AppColors.accent
                               : AppColors.textSecondary,
                         ),
@@ -810,7 +882,7 @@ class _ExerciseCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          exercise.name,
+                          widget.exercise.name,
                           style: GoogleFonts.getFont(
                             'DM Sans',
                             fontSize: 12,
@@ -834,7 +906,7 @@ class _ExerciseCard extends StatelessWidget {
                   ),
 
                   // Swap or Done badge
-                  if (isDone)
+                  if (widget.isDone)
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 9, vertical: 5),
@@ -857,7 +929,7 @@ class _ExerciseCard extends StatelessWidget {
                     )
                   else
                     GestureDetector(
-                      onTap: onSwap,
+                      onTap: widget.onSwap,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
@@ -882,25 +954,67 @@ class _ExerciseCard extends StatelessWidget {
               ),
             ),
 
-            // Sets table — driven by logging_type
+            // Sets with SetInputRow + checkbox — driven by logging_type
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Column(
-                children: [
-                  _SetsTableHeader(loggingType: exercise.loggingType),
-                  ...List.generate(numSets, (setIdx) {
-                    final isChecked =
-                        data.isSetChecked(exerciseIndex, setIdx);
-                    return _SetRow(
-                      setIndex: setIdx,
-                      loggingType: exercise.loggingType,
-                      defaultWeight: weightStr,
-                      defaultReps: exercise.reps,
-                      isChecked: isChecked,
-                      onToggle: () => onToggleSet(setIdx),
-                    );
-                  }),
-                ],
+                children: List.generate(numSets, (setIdx) {
+                  final isChecked =
+                      widget.data.isSetChecked(widget.exerciseIndex, setIdx);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // SetInputRow from set_input_row.dart
+                        Expanded(
+                          child: SetInputRow(
+                            loggingType: widget.exercise.loggingType,
+                            weightController: _weightControllers[setIdx],
+                            repsController: _repsControllers[setIdx],
+                            durationController: _durationControllers[setIdx],
+                            distanceController: _distanceControllers[setIdx],
+                            setNumber: setIdx + 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Checkbox to mark set done
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: GestureDetector(
+                            onTap: () {
+                              _captureSetValues(setIdx);
+                              widget.onToggleSet(setIdx);
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isChecked
+                                    ? AppColors.green.withValues(alpha: 0.15)
+                                    : const Color(0xFF161d28),
+                                border: Border.all(
+                                  color: isChecked
+                                      ? AppColors.green.withValues(alpha: 0.4)
+                                      : const Color(0xFF1c2535),
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.check,
+                                size: 16,
+                                color: isChecked
+                                    ? AppColors.green
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ),
             ),
           ],
@@ -910,238 +1024,9 @@ class _ExerciseCard extends StatelessWidget {
   }
 }
 
-// ── Sets Table Header ────────────────────────────────────────────
-// Adapts columns based on logging_type
-
-class _SetsTableHeader extends StatelessWidget {
-  final String loggingType;
-
-  const _SetsTableHeader({required this.loggingType});
-
-  @override
-  Widget build(BuildContext context) {
-    final columns = _columnsForType(loggingType);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF161d28))),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 38,
-            child: Text('SET', style: _headerStyle()),
-          ),
-          for (int i = 0; i < columns.length; i++) ...[
-            if (i > 0) const SizedBox(width: 14),
-            Expanded(child: Center(child: Text(columns[i], style: _headerStyle()))),
-          ],
-          const SizedBox(width: 28),
-        ],
-      ),
-    );
-  }
-
-  List<String> _columnsForType(String type) {
-    switch (type) {
-      case 'bodyweight_reps':
-        return ['REPS'];
-      case 'weighted_bodyweight':
-        return ['+KG', 'REPS'];
-      case 'timed':
-        return ['SECS'];
-      case 'cardio':
-        return ['MIN', 'KM'];
-      case 'distance':
-        return ['KM', 'KG'];
-      default: // weight_reps
-        return ['KG', 'REPS'];
-    }
-  }
-
-  TextStyle _headerStyle() {
-    return GoogleFonts.getFont(
-      'DM Sans',
-      fontSize: 8,
-      fontWeight: FontWeight.w700,
-      color: AppColors.textSecondary,
-      letterSpacing: 0.5,
-    );
-  }
-}
-
-// ── Set Row ──────────────────────────────────────────────────────
-// Adapts inputs based on logging_type
-
-class _SetRow extends StatelessWidget {
-  final int setIndex;
-  final String loggingType;
-  final String defaultWeight;
-  final String defaultReps;
-  final bool isChecked;
-  final VoidCallback onToggle;
-
-  const _SetRow({
-    required this.setIndex,
-    required this.loggingType,
-    required this.defaultWeight,
-    required this.defaultReps,
-    required this.isChecked,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF0d1117))),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 38,
-            child: Text(
-              'SET ${setIndex + 1}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          ..._buildInputsForType(),
-          const SizedBox(width: 6),
-          // Check button
-          GestureDetector(
-            onTap: onToggle,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: isChecked
-                    ? AppColors.green.withValues(alpha: 0.15)
-                    : const Color(0xFF161d28),
-                border: Border.all(
-                  color: isChecked
-                      ? AppColors.green.withValues(alpha: 0.4)
-                      : const Color(0xFF1c2535),
-                  width: 1.5,
-                ),
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Icon(
-                Icons.check,
-                size: 11,
-                color: isChecked ? AppColors.green : AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildInputsForType() {
-    switch (loggingType) {
-      case 'bodyweight_reps':
-        return [
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-        ];
-      case 'weighted_bodyweight':
-        return [
-          Expanded(child: _SetInput(placeholder: defaultWeight)),
-          _separator(),
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-        ];
-      case 'timed':
-        return [
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-        ];
-      case 'cardio':
-        return [
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-          _separator(),
-          Expanded(child: _SetInput(placeholder: '0')),
-        ];
-      case 'distance':
-        return [
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-          _separator(),
-          Expanded(child: _SetInput(placeholder: defaultWeight)),
-        ];
-      default: // weight_reps
-        return [
-          Expanded(child: _SetInput(placeholder: defaultWeight)),
-          _separator(),
-          Expanded(child: _SetInput(placeholder: defaultReps)),
-        ];
-    }
-  }
-
-  Widget _separator() {
-    return SizedBox(
-      width: 14,
-      child: Center(
-        child: Text(
-          '\u00d7',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SetInput extends StatelessWidget {
-  final String placeholder;
-
-  const _SetInput({required this.placeholder});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        color: const Color(0xFF161d28),
-        border: Border.all(color: const Color(0xFF1c2535)),
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: TextField(
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
-        ],
-        textAlign: TextAlign.center,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textPrimary,
-        ),
-        decoration: InputDecoration(
-          hintText: placeholder,
-          hintStyle: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textDisabled,
-          ),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          isDense: true,
-        ),
-      ),
-    );
-  }
-}
+// Old _SetsTableHeader, _SetRow, and _SetInput removed.
+// Set inputs are now handled by SetInputRow from set_input_row.dart
+// with TextEditingControllers managed by _ExerciseCardState.
 
 // ── Workout Receipt Bottom Sheet ─────────────────────────────────
 

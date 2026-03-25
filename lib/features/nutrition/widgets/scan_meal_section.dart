@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -188,7 +189,7 @@ class ScanMealSection extends ConsumerWidget {
     );
   }
 
-  void _handleScan(BuildContext context, WidgetRef ref, int remaining) {
+  Future<void> _handleScan(BuildContext context, WidgetRef ref, int remaining) async {
     if (remaining <= 0) {
       SubscriptionService.instance.gate(
         AppConstants.featureScanMealPro,
@@ -209,19 +210,14 @@ class ScanMealSection extends ConsumerWidget {
       return;
     }
 
-    // TODO: Open camera picker, get image bytes, then call:
-    // ref.read(scanMealProvider.notifier).scanImage(imageBytes);
-    // await UsageCounterService.instance.increment(AppConstants.featureScanMealPro, isPro);
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.camera);
+    if (image == null) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Camera will be available in next update.',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-        ),
-        backgroundColor: AppColors.card,
-      ),
-    );
+    final imageBytes = await image.readAsBytes();
+    final isPro = SubscriptionService.instance.isPro();
+    ref.read(scanMealProvider.notifier).scanImage(imageBytes);
+    await UsageCounterService.instance.increment(AppConstants.featureScanMealPro, isPro);
   }
 
   Widget _buildError(String error, WidgetRef ref) {

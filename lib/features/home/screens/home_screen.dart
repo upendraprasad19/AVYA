@@ -54,6 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.invalidate(aiInsightProvider);
     ref.invalidate(recentFoodLogsProvider);
     ref.invalidate(dailyQuoteProvider);
+    ref.invalidate(todayStepsProvider);
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
     });
@@ -307,12 +308,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(width: 7),
           QuickActionButton(
-            icon: Icons.monitor_weight_outlined,
-            label: 'Weight',
-            onTap: () {},
-          ),
-          const SizedBox(width: 7),
-          QuickActionButton(
             icon: Icons.restaurant,
             label: 'Meals',
             onTap: () => context.go('/nutrition'),
@@ -385,7 +380,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         caloriesTarget: nutrition.calorieTarget,
         proteinCurrent: nutrition.protein,
         proteinTarget: nutrition.proteinTarget,
-        steps: 0,
+        steps: ref.watch(todayStepsProvider),
         stepsGoal: 10000,
       );
     }
@@ -413,7 +408,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       caloriesTarget: nutrition.calorieTarget,
       proteinCurrent: nutrition.protein,
       proteinTarget: nutrition.proteinTarget,
-      steps: 0,
+      steps: ref.watch(todayStepsProvider),
       stepsGoal: 10000,
     );
   }
