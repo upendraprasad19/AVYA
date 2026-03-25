@@ -16,6 +16,8 @@ class SetInputRow extends StatelessWidget {
   final TextEditingController distanceController;
   final int setNumber;
   final String? previousPerformance;
+  final bool isWarmUp;
+  final VoidCallback? onToggleWarmUp;
 
   const SetInputRow({
     super.key,
@@ -26,56 +28,92 @@ class SetInputRow extends StatelessWidget {
     required this.distanceController,
     required this.setNumber,
     this.previousPerformance,
+    this.isWarmUp = false,
+    this.onToggleWarmUp,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.accentTint,
-                  borderRadius: BorderRadius.circular(AppRadius.badge),
-                ),
-                child: Text(
-                  'Set $setNumber',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ),
-              if (previousPerformance != null) ...[
-                const Spacer(),
-                Text(
-                  'Prev: $previousPerformance',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ],
+    return Opacity(
+      opacity: isWarmUp ? 0.6 : 1.0,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: isWarmUp
+              ? AppColors.card.withValues(alpha: 0.7)
+              : AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          border: Border.all(
+            color: isWarmUp
+                ? const Color(0xFFf97316).withValues(alpha: 0.25)
+                : AppColors.border,
           ),
-          const SizedBox(height: 14),
-          _buildInputFields(),
-        ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                GestureDetector(
+                  onLongPress: onToggleWarmUp,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isWarmUp
+                          ? const Color(0xFFf97316).withValues(alpha: 0.12)
+                          : AppColors.accentTint,
+                      borderRadius: BorderRadius.circular(AppRadius.badge),
+                      border: isWarmUp
+                          ? Border.all(
+                              color: const Color(0xFFf97316).withValues(alpha: 0.3),
+                            )
+                          : null,
+                    ),
+                    child: Text(
+                      isWarmUp ? 'W' : 'Set $setNumber',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isWarmUp
+                            ? const Color(0xFFf97316)
+                            : AppColors.accent,
+                      ),
+                    ),
+                  ),
+                ),
+                if (isWarmUp) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    'WARM-UP',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                      color: const Color(0xFFf97316).withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+                if (previousPerformance != null) ...[
+                  const Spacer(),
+                  Text(
+                    'Prev: $previousPerformance',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildInputFields(),
+          ],
+        ),
       ),
     );
   }

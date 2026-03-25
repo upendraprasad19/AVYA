@@ -321,6 +321,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   /// Syncs onboarding completion flag + profile to Supabase (fire-and-forget).
+  ///
+  /// Only sends columns that exist in the Supabase tables — the local profile
+  /// map contains computed fields (daily_calories, protein_grams, etc.) that
+  /// are stored in Hive but do NOT have corresponding Postgres columns.
   Future<void> _syncOnboardingToSupabase(Map<String, dynamic> profile) async {
     try {
       final supabase = SupabaseService.instance.client;
@@ -331,14 +335,37 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       await supabase.from('users').upsert({
         'id': userId,
         'email': supabase.auth.currentUser?.email,
+        'full_name': profile['full_name'],
         'onboarding_completed': true,
         'last_active_at': DateTime.now().toIso8601String(),
       });
 
-      // Sync profile to user_profile table.
+      // Sync profile — only columns that exist in user_profile table.
       await supabase.from('user_profile').upsert({
         'user_id': userId,
-        ...profile,
+        'date_of_birth': profile['date_of_birth'],
+        'gender': profile['gender'],
+        'height_cm': profile['height_cm'],
+        'current_weight_kg': profile['current_weight_kg'],
+        'target_weight_kg': profile['target_weight_kg'],
+        'primary_goal': profile['primary_goal'],
+        'fitness_experience': profile['fitness_experience'],
+        'days_per_week': profile['days_per_week'],
+        'equipment_access': profile['equipment_access'],
+        'activity_level': profile['activity_level'],
+        'bmr': profile['bmr'],
+        'tdee': profile['tdee'],
+      });
+
+      // Sync progress.
+      await supabase.from('user_progress').upsert({
+        'user_id': userId,
+        'current_phase': 1,
+        'current_week': 1,
+        'total_workouts_done': 0,
+        'current_streak_weeks': 0,
+        'phase_started_at': DateTime.now().toIso8601String(),
+        'plan_generated_at': DateTime.now().toIso8601String(),
       });
     } catch (_) {
       // Offline or table not ready — will sync later via SyncService.

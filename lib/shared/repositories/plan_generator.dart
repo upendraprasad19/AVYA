@@ -70,6 +70,33 @@ class PlanGenerator {
       ));
     }
 
+    // Auto-pair exercises as supersets within each workout day.
+    // Skip the first 2 exercises (main compounds — done solo), then pair
+    // exercises at indices [2,3] as superset group 0, and [4,5] as group 1.
+    for (int dayIndex = 0; dayIndex < workoutDays.length; dayIndex++) {
+      final day = workoutDays[dayIndex];
+      final exercises = day.exercises;
+      if (exercises.length >= 4) {
+        // Pair exercise[2] with exercise[3] as superset group 0
+        final updatedExercises = List<PlannedExercise>.from(exercises);
+        updatedExercises[2] = updatedExercises[2].copyWith(supersetGroup: () => 0);
+        updatedExercises[3] = updatedExercises[3].copyWith(supersetGroup: () => 0);
+
+        // Pair exercise[4] with exercise[5] as superset group 1 (if they exist)
+        if (exercises.length >= 6) {
+          updatedExercises[4] = updatedExercises[4].copyWith(supersetGroup: () => 1);
+          updatedExercises[5] = updatedExercises[5].copyWith(supersetGroup: () => 1);
+        }
+
+        workoutDays[dayIndex] = WorkoutDay(
+          dayNumber: day.dayNumber,
+          name: day.name,
+          focus: day.focus,
+          exercises: updatedExercises,
+        );
+      }
+    }
+
     // Build 4 weeks with progressive overload.
     final weeks = _buildWeeks(workoutDays, phase);
 
@@ -226,6 +253,7 @@ class PlanGenerator {
       restSeconds: rest,
       durationSeconds: defaultDuration,
       notes: _generateNotes(exercise, experienceLevel),
+      exerciseType: exercise['exercise_type'] as String?,
     );
   }
 
@@ -479,6 +507,8 @@ class PlannedExercise {
   final int restSeconds;
   final int? durationSeconds;
   final String? notes;
+  final String? exerciseType; // 'compound' or 'isolation'
+  final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
 
   const PlannedExercise({
     required this.exerciseId,
@@ -489,7 +519,24 @@ class PlannedExercise {
     required this.restSeconds,
     this.durationSeconds,
     this.notes,
+    this.exerciseType,
+    this.supersetGroup,
   });
+
+  PlannedExercise copyWith({int? Function()? supersetGroup}) {
+    return PlannedExercise(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+      loggingType: loggingType,
+      sets: sets,
+      reps: reps,
+      restSeconds: restSeconds,
+      durationSeconds: durationSeconds,
+      notes: notes,
+      exerciseType: exerciseType,
+      supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'exercise_id': exerciseId,
@@ -500,6 +547,8 @@ class PlannedExercise {
         'rest_seconds': restSeconds,
         if (durationSeconds != null) 'duration_seconds': durationSeconds,
         if (notes != null) 'notes': notes,
+        if (exerciseType != null) 'exercise_type': exerciseType,
+        if (supersetGroup != null) 'superset_group': supersetGroup,
       };
 }
 

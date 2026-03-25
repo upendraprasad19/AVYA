@@ -10,12 +10,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import '../providers/ai_coach_provider.dart';
 import '../widgets/chat_bubble.dart';
-import '../widgets/context_chip.dart';
-import '../widgets/deep_analysis_card.dart';
-import '../widgets/telegram_card.dart';
 import '../widgets/prompt_chip.dart';
 import '../widgets/voice_notes_button.dart';
-import '../widgets/prediction_card.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
   const AiCoachScreen({super.key});
@@ -28,23 +24,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _inputFocusNode = FocusNode();
-  int _selectedChipIndex = 0;
   bool _isRecording = false;
 
   // Speech-to-text
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
   String _recognizedText = '';
-
-  static const _contextChips = [
-    'Current Plan',
-    'Injuries',
-    'Diet Plan',
-    'Progress',
-    'Goals',
-  ];
-
-  // Quick prompts now come from contextualPromptsProvider (dynamic)
 
   @override
   void initState() {
@@ -175,7 +160,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final channel = ref.watch(channelProvider);
     final reasoningMode = ref.watch(reasoningModeProvider);
     final trialInfo = ref.watch(trialInfoProvider);
-    final prediction = ref.watch(predictionProvider);
 
     // Scroll when messages change
     ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
@@ -188,40 +172,21 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // ── Header ──
-                _buildHeader(isPro),
-
-                // ── Channel Toggle ──
-                _buildChannelToggle(channel),
-
-                // ── Reasoning Mode Toggle ──
-                if (channel == 'in_app') _buildReasoningToggle(reasoningMode, isPro),
-
-                // ── Context Chips ──
-                if (channel == 'in_app') _buildContextChips(),
-
-                // ── Message limit bar + trial info (free users) ──
-                if (!isPro && channel == 'in_app')
-                  _buildMessageLimitBar(messageCount, trialInfo),
+                // ── Compact Header (avatar + title + mode badge + menu) ──
+                _buildCompactHeader(isPro, reasoningMode, channel, telegramConnected),
 
                 // ── Chat Area or Telegram View ──
                 Expanded(
                   child: channel == 'in_app'
-                      ? _buildChatArea(
-                          messages,
-                          isSending,
-                          isPro,
-                          telegramConnected,
-                          prediction,
-                        )
+                      ? _buildChatArea(messages, isSending)
                       : _buildTelegramView(telegramConnected),
                 ),
 
-                // ── Quick Prompt Chips ──
-                if (channel == 'in_app' && !isSending)
+                // ── Quick Prompts (only when chat is empty/welcome only) ──
+                if (channel == 'in_app' && !isSending && messages.length <= 1)
                   _buildQuickPrompts(),
 
-                // ── Input Bar ──
+                // ── Input Bar with inline message counter ──
                 if (channel == 'in_app')
                   _buildInputBar(isSending, messageCount, isPro, trialInfo),
               ],
@@ -233,17 +198,17 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // HEADER
+  // COMPACT HEADER — single row replaces old header + channel + reasoning
   // ────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(bool isPro) {
+  Widget _buildCompactHeader(
+      bool isPro, String reasoningMode, String channel, bool telegramConnected) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 11),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding, vertical: 10),
       decoration: const BoxDecoration(
         color: AppColors.header,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
@@ -251,19 +216,19 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           Stack(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: AppColors.accentTint,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.accent, width: 2),
+                  border: Border.all(color: AppColors.accent, width: 1.5),
                 ),
                 child: Center(
                   child: Text(
                     'AI',
                     style: GoogleFonts.getFont(
                       'DM Sans',
-                      fontSize: 13,
+                      fontSize: 11,
                       fontWeight: FontWeight.w900,
                       color: AppColors.accent,
                     ),
@@ -274,617 +239,319 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 bottom: 0,
                 right: 0,
                 child: Container(
-                  width: 10,
-                  height: 10,
+                  width: 9,
+                  height: 9,
                   decoration: BoxDecoration(
                     color: AppColors.green,
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.header, width: 2),
+                    border: Border.all(color: AppColors.header, width: 1.5),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
 
-          // Title + subtitle
+          // Title
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ICANBEFITTER COACH',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  isPro ? 'LIVE \u00B7 PRO' : 'LIVE \u00B7 FREE TIER',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+            child: Text(
+              'ICANBEFITTER COACH',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
 
-          // Menu icon
+          // Mode badge — tap to toggle Quick / Deep
           GestureDetector(
             onTap: () {
-              // TODO: Show coach menu (clear chat, export, etc.)
+              if (reasoningMode == 'quick') {
+                // Switch to deep — requires PRO
+                SubscriptionService.instance.gate(
+                  AppConstants.featureReasoningTab,
+                  onPro: () => ref
+                      .read(reasoningModeProvider.notifier)
+                      .setMode('deep'),
+                  onFree: () =>
+                      showPaywallSheet(context, feature: 'Deep Analysis'),
+                );
+              } else {
+                ref.read(reasoningModeProvider.notifier).setMode('quick');
+              }
             },
-            child: const Icon(
-              Icons.more_horiz,
-              color: AppColors.textSecondary,
-              size: 20,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // CHANNEL TOGGLE
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildChannelToggle(String channel) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 8),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () =>
-                  ref.read(channelProvider.notifier).setChannel('in_app'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: channel == 'in_app'
-                      ? AppColors.accentTint
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: channel == 'in_app'
-                        ? AppColors.accent.withValues(alpha: 0.3)
-                        : AppColors.border,
-                  ),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: reasoningMode == 'deep'
+                    ? AppColors.proGold.withValues(alpha: 0.15)
+                    : AppColors.accentTint,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(
+                  color: reasoningMode == 'deep'
+                      ? AppColors.proGold.withValues(alpha: 0.3)
+                      : AppColors.accent.withValues(alpha: 0.3),
                 ),
-                child: Center(
-                  child: Text(
-                    'In-App Chat',
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    reasoningMode == 'deep' ? '\u{1F9E0}' : '\u{26A1}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    reasoningMode == 'deep' ? 'Deep' : 'Quick',
                     style: GoogleFonts.getFont(
                       'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: channel == 'in_app'
-                          ? AppColors.accent
-                          : AppColors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: reasoningMode == 'deep'
+                          ? AppColors.proGold
+                          : AppColors.accent,
                     ),
                   ),
-                ),
+                  if (reasoningMode == 'deep' && !isPro) ...[
+                    const SizedBox(width: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.proGold.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        'PRO',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 7,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.proGold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () =>
-                  ref.read(channelProvider.notifier).setChannel('telegram'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: channel == 'telegram'
-                      ? AppColors.accentTint
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: channel == 'telegram'
-                        ? AppColors.accent.withValues(alpha: 0.3)
-                        : AppColors.border,
-                  ),
+
+          // Overflow menu — channel switch, telegram, clear, upgrade
+          PopupMenuButton<String>(
+            icon: const Icon(
+              Icons.more_vert,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
+            color: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            onSelected: (value) {
+              switch (value) {
+                case 'switch_channel':
+                  final newChannel =
+                      channel == 'in_app' ? 'telegram' : 'in_app';
+                  ref
+                      .read(channelProvider.notifier)
+                      .setChannel(newChannel);
+                  break;
+                case 'telegram':
+                  _openTelegramBot();
+                  break;
+                case 'clear':
+                  ref.invalidate(chatHistoryProvider);
+                  break;
+                case 'upgrade':
+                  showPaywallSheet(context, feature: 'Unlimited AI Coach');
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'switch_channel',
+                child: Row(
+                  children: [
+                    Icon(
+                      channel == 'in_app' ? Icons.send : Icons.chat,
+                      size: 16,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      channel == 'in_app'
+                          ? 'Switch to Telegram'
+                          : 'Switch to In-App Chat',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
-                child: Center(
+              ),
+              if (!telegramConnected)
+                PopupMenuItem(
+                  value: 'telegram',
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.send, size: 13, color: AppColors.blue),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.link, size: 16, color: AppColors.blue),
+                      const SizedBox(width: 10),
                       Text(
-                        'Telegram',
+                        'Connect @AVYACoachBot',
                         style: GoogleFonts.getFont(
                           'DM Sans',
-                          fontSize: 12,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              PopupMenuItem(
+                value: 'clear',
+                child: Row(
+                  children: [
+                    const Icon(Icons.delete_outline,
+                        size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Clear conversation',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isPro)
+                PopupMenuItem(
+                  value: 'upgrade',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star,
+                          size: 16, color: AppColors.proGold),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Upgrade to PRO',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: channel == 'telegram'
-                              ? AppColors.accent
-                              : AppColors.textSecondary,
+                          color: AppColors.proGold,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // REASONING MODE TOGGLE
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildReasoningToggle(String mode, bool isPro) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 6),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () =>
-                  ref.read(reasoningModeProvider.notifier).setMode('quick'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: mode == 'quick'
-                      ? AppColors.accent
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Center(
-                  child: Text(
-                    'Quick',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: mode == 'quick'
-                          ? Colors.black
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (!isPro) {
-                  SubscriptionService.instance.gate(
-                    AppConstants.featureReasoningTab,
-                    onPro: () => ref
-                        .read(reasoningModeProvider.notifier)
-                        .setMode('deep'),
-                    onFree: () => showPaywallSheet(context,
-                        feature: 'Deep Analysis'),
-                  );
-                  return;
-                }
-                ref.read(reasoningModeProvider.notifier).setMode('deep');
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: mode == 'deep'
-                      ? AppColors.proGold
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Deep Analyse',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: mode == 'deep'
-                              ? Colors.black
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                      if (!isPro) ...[
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: AppColors.proGold.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'PRO',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.proGold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // CONTEXT CHIPS
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildContextChips() {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
-        ),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 10),
-        child: Row(
-          children: List.generate(_contextChips.length, (index) {
-            final isActive = _selectedChipIndex == index;
-            return Padding(
-              padding: EdgeInsets.only(
-                right: index < _contextChips.length - 1 ? 6 : 0,
-              ),
-              child: ContextChip(
-                label: _contextChips[index],
-                isActive: isActive,
-                onTap: () {
-                  setState(() {
-                    // Toggle off if same chip tapped again
-                    if (_selectedChipIndex == index) {
-                      _selectedChipIndex = -1;
-                      ref.read(sendMessageProvider.notifier).setContextFilter(null);
-                    } else {
-                      _selectedChipIndex = index;
-                      ref.read(sendMessageProvider.notifier).setContextFilter(_contextChips[index]);
-                    }
-                  });
-                },
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // MESSAGE LIMIT BAR + TRIAL INFO
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildMessageLimitBar(int messageCount, TrialInfoData trialInfo) {
-    final isWarning =
-        messageCount >= AppConstants.freeAiMessagesPerDay - 3;
-    final isLimitReached =
-        messageCount >= AppConstants.freeAiMessagesPerDay;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
-      color: AppColors.card,
-      child: Column(
-        children: [
-          // Daily message counter
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isLimitReached
-                    ? Icons.warning_amber
-                    : Icons.chat_bubble_outline,
-                size: 14,
-                color: isWarning ? AppColors.orange : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$messageCount of ${AppConstants.freeAiMessagesPerDay} messages used today',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color:
-                      isWarning ? AppColors.orange : AppColors.textSecondary,
-                ),
-              ),
-              if (isWarning) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => showPaywallSheet(context,
-                      feature: 'Unlimited AI Coach'),
-                  child: Text(
-                    'Go PRO',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.proGold,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
-
-          // Trial expiry info
-          if (trialInfo.isTrialActive && !trialInfo.isTrialExpired) ...[
-            const SizedBox(height: 2),
-            Text(
-              '${trialInfo.daysRemaining} days remaining in your AI trial',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w400,
-                color: trialInfo.daysRemaining <= 7
-                    ? AppColors.orange
-                    : AppColors.textSecondary,
-              ),
-            ),
-          ],
-          if (trialInfo.isTrialExpired) ...[
-            const SizedBox(height: 2),
-            GestureDetector(
-              onTap: () => showPaywallSheet(context,
-                  feature: 'Unlimited AI Coach'),
-              child: Text(
-                'Trial expired \u2014 Upgrade to PRO for unlimited access',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.proGold,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
   // ────────────────────────────────────────────────────────────────
-  // CHAT AREA
+  // CHAT AREA — clean, messages only
   // ────────────────────────────────────────────────────────────────
 
-  Widget _buildChatArea(
-    List<ChatMessage> messages,
-    bool isSending,
-    bool isPro,
-    bool telegramConnected,
-    PredictionData prediction,
-  ) {
+  Widget _buildChatArea(List<ChatMessage> messages, bool isSending) {
+    // If no messages yet, show welcome
+    if (messages.isEmpty) {
+      return _buildWelcomeView();
+    }
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
-      itemCount: _chatItemCount(messages, telegramConnected),
+      itemCount: messages.length,
       itemBuilder: (context, index) {
-        // Chat messages
-        if (index < messages.length) {
-          final message = messages[index];
-          final time =
-              '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
+        final message = messages[index];
+        final time =
+            '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: ChatBubble(
-              text: message.text,
-              isUser: message.isUser,
-              isLoading: message.isLoading,
-              isError: message.isError,
-              timestamp: time,
-            ),
-          );
-        }
-
-        // Items after messages
-        final extraIndex = index - messages.length;
-
-        // Action buttons (after first AI response, only if not sending)
-        if (extraIndex == 0 && messages.isNotEmpty && !isSending) {
-          return _buildActionButtons();
-        }
-
-        // Coach Insight card
-        if (extraIndex == 1) {
-          return _buildCoachInsight();
-        }
-
-        // Deep Analysis PRO card
-        if (extraIndex == 2) {
-          return DeepAnalysisCard(
-            isPro: isPro,
-            onUpgradeTap: () {
-              SubscriptionService.instance.gate(
-                AppConstants.featureReasoningTab,
-                onPro: () {
-                  // PRO user — show deep analysis content
-                  ref.read(reasoningModeProvider.notifier).setMode('deep');
-                },
-                onFree: () =>
-                    showPaywallSheet(context, feature: 'Deep Analysis'),
-              );
-            },
-          );
-        }
-
-        // Prediction card
-        if (extraIndex == 3) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: PredictionCard(
-              predictionText: prediction.predictionText,
-              generatedAt: prediction.generatedAt,
-              isPro: isPro,
-              canRefresh: prediction.canRefresh,
-              onRefreshTap: () {
-                SubscriptionService.instance.gate(
-                  AppConstants.featurePredictionMonthly,
-                  onPro: () {
-                    // TODO: Call AI to generate updated prediction
-                  },
-                  onFree: () => showPaywallSheet(context,
-                      feature: 'Monthly Prediction'),
-                );
-              },
-            ),
-          );
-        }
-
-        // Telegram link section
-        if (extraIndex == 4) {
-          return TelegramCard(
-            isConnected: telegramConnected,
-            onConnect: () => _openTelegramBot(),
-          );
-        }
-
-        return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: ChatBubble(
+            text: message.text,
+            isUser: message.isUser,
+            isLoading: message.isLoading,
+            isError: message.isError,
+            timestamp: time,
+          ),
+        );
       },
     );
   }
 
-  int _chatItemCount(List<ChatMessage> messages, bool telegramConnected) {
-    // messages + action buttons + coach insight + deep analysis + prediction + telegram
-    return messages.length + 5;
-  }
-
   // ────────────────────────────────────────────────────────────────
-  // ACTION BUTTONS
+  // WELCOME VIEW — shown when chat is empty
   // ────────────────────────────────────────────────────────────────
 
-  Widget _buildActionButtons() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _sendMessage('Sounds good, update my session!'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Text(
-                    'SOUNDS GOOD',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () =>
-                  _sendMessage('Not today, keep the original session.'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.red.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    'NOT TODAY',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.red,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // COACH INSIGHT
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildCoachInsight() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(11),
-        decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(14),
-          ),
-          border: Border.all(color: AppColors.border),
-        ),
+  Widget _buildWelcomeView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Large coach avatar
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.accentTint,
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.3), width: 2),
+              ),
+              child: Center(
+                child: Text(
+                  'AI',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
-              'COACH INSIGHT',
+              'Your AI Fitness Coach',
               style: GoogleFonts.getFont(
                 'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: AppColors.textSecondary,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 8),
             Consumer(
               builder: (context, ref, _) {
                 final insight = ref.watch(coachInsightProvider);
                 return Text(
                   insight,
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.getFont(
                     'DM Sans',
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: FontWeight.w400,
-                    color: AppColors.textPrimary,
-                    height: 1.65,
+                    color: AppColors.textSecondary,
+                    height: 1.6,
                   ),
                 );
               },
@@ -896,7 +563,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // QUICK PROMPT CHIPS
+  // QUICK PROMPT CHIPS — only shown when chat is empty/welcome
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildQuickPrompts() {
@@ -907,7 +574,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenPadding, vertical: 8),
         child: Row(
           children: prompts.map((prompt) {
             return Padding(
@@ -1010,7 +678,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // INPUT BAR
+  // INPUT BAR — with inline message counter
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildInputBar(
@@ -1019,119 +687,177 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         (messageCount >= AppConstants.freeAiMessagesPerDay ||
             trialInfo.isTrialExpired);
 
+    final isWarning =
+        !isPro && messageCount >= AppConstants.freeAiMessagesPerDay - 3;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 10, AppSpacing.screenPadding, 10),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenPadding, 8, AppSpacing.screenPadding, 6),
       decoration: const BoxDecoration(
         color: AppColors.header,
-        border: Border(
-          top: BorderSide(color: AppColors.border),
-        ),
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Voice notes button
-          VoiceNotesButton(
-            isPro: isPro,
-            isRecording: _isRecording,
-            onLockedTap: () {
-              SubscriptionService.instance.gate(
-                AppConstants.featureVoiceNotes,
-                onPro: () {
-                  // Should not reach here since isPro is false
+          // Main input row
+          Row(
+            children: [
+              // Voice notes button
+              VoiceNotesButton(
+                isPro: isPro,
+                isRecording: _isRecording,
+                onLockedTap: () {
+                  SubscriptionService.instance.gate(
+                    AppConstants.featureVoiceNotes,
+                    onPro: () {},
+                    onFree: () =>
+                        showPaywallSheet(context, feature: 'Voice Notes'),
+                  );
                 },
-                onFree: () =>
-                    showPaywallSheet(context, feature: 'Voice Notes'),
-              );
-            },
-            onStartRecording: () => _startListening(),
-            onStopRecording: () => _stopListening(),
-          ),
-          const SizedBox(width: 8),
-
-          // Text input
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              focusNode: _inputFocusNode,
-              enabled: !isLimitReached && !isSending,
-              maxLines: 3,
-              minLines: 1,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
+                onStartRecording: () => _startListening(),
+                onStopRecording: () => _stopListening(),
               ),
-              decoration: InputDecoration(
-                hintText: _isRecording && _recognizedText.isNotEmpty
-                    ? _recognizedText
-                    : _isRecording
-                        ? 'Listening...'
-                        : isLimitReached
-                            ? 'Daily limit reached. Upgrade to PRO!'
-                            : 'Ask your coach...',
-                hintStyle: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  color: _isRecording
-                      ? AppColors.accent
-                      : AppColors.textSecondary,
+              const SizedBox(width: 8),
+
+              // Text input
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  focusNode: _inputFocusNode,
+                  enabled: !isLimitReached && !isSending,
+                  maxLines: 3,
+                  minLines: 1,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _isRecording && _recognizedText.isNotEmpty
+                        ? _recognizedText
+                        : _isRecording
+                            ? 'Listening...'
+                            : isLimitReached
+                                ? 'Daily limit reached \u2014 Go PRO'
+                                : 'Ask your coach...',
+                    hintStyle: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      color: _isRecording
+                          ? AppColors.accent
+                          : isLimitReached
+                              ? AppColors.proGold
+                              : AppColors.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.input,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(
+                        color: AppColors.accent.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                  ),
+                  onSubmitted: (text) => _sendMessage(text),
                 ),
-                filled: true,
-                fillColor: AppColors.input,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(
-                    color: AppColors.accent.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 8),
+
+              // Send button
+              GestureDetector(
+                onTap: isSending || isLimitReached
+                    ? null
+                    : () => _sendMessage(_messageController.text),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: isSending || isLimitReached
+                        ? AppColors.textDisabled
+                        : AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isSending ? Icons.hourglass_top : Icons.send,
+                      color: isSending || isLimitReached
+                          ? AppColors.textSecondary
+                          : Colors.black,
+                      size: 15,
+                    ),
                   ),
                 ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
               ),
-              onSubmitted: (text) => _sendMessage(text),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
 
-          // Send button
-          GestureDetector(
-            onTap: isSending || isLimitReached
-                ? null
-                : () => _sendMessage(_messageController.text),
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isSending || isLimitReached
-                    ? AppColors.textDisabled
-                    : AppColors.accent,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(
-                  isSending ? Icons.hourglass_top : Icons.send,
-                  color: isSending || isLimitReached
-                      ? AppColors.textSecondary
-                      : Colors.black,
-                  size: 15,
+          // Inline message counter (free users only)
+          if (!isPro) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$messageCount/${AppConstants.freeAiMessagesPerDay} today',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                    color: isWarning
+                        ? AppColors.orange
+                        : AppColors.textSecondary,
+                  ),
                 ),
-              ),
+                if (trialInfo.isTrialActive &&
+                    !trialInfo.isTrialExpired &&
+                    trialInfo.daysRemaining <= 7) ...[
+                  Text(
+                    '  \u00B7  ${trialInfo.daysRemaining}d trial left',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.orange,
+                    ),
+                  ),
+                ],
+                if (isWarning && !isLimitReached) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => showPaywallSheet(context,
+                        feature: 'Unlimited AI Coach'),
+                    child: Text(
+                      'Go PRO',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.proGold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
+          ],
         ],
       ),
     );

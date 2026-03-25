@@ -265,6 +265,7 @@ class _DayNumberBadge extends StatelessWidget {
 }
 
 /// Single exercise row inside expanded day card.
+/// Uses Consumer to access lastPerformanceProvider for ghost line.
 class _ExerciseRow extends StatelessWidget {
   final int index;
   final ExerciseData exercise;
@@ -273,91 +274,110 @@ class _ExerciseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161d28),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          // Number badge
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Center(
-              child: Text(
-                '${index + 1}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
+    return Consumer(
+      builder: (context, ref, _) {
+        final lastPerf = ref.watch(lastPerformanceProvider(exercise.name));
 
-          // Exercise info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  exercise.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Rest: ${exercise.rest}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161d28),
+            borderRadius: BorderRadius.circular(10),
           ),
-
-          // Sets x Reps + Weight
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Row(
             children: [
-              Text(
-                '${exercise.sets} \u00d7 ${exercise.reps}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
+              // Number badge
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 1),
-              Text(
-                exercise.weight,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+              const SizedBox(width: 10),
+
+              // Exercise info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exercise.name,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    // Last performance ghost line
+                    if (lastPerf.hasData && lastPerf.lastWeight != null && lastPerf.lastWeight! > 0) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        'Last: ${lastPerf.lastWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? 0}',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Rest: ${exercise.rest}',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+
+              // Sets x Reps + Weight
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${exercise.sets} \u00d7 ${exercise.reps}',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    exercise.weight,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

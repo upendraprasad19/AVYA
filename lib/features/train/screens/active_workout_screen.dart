@@ -19,6 +19,29 @@ class ActiveWorkoutScreen extends ConsumerStatefulWidget {
 }
 
 class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _exerciseKeys = {};
+  bool _hasShownWarmUpHint = false;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Scroll to the exercise at [exerciseIndex] with animation.
+  void _scrollToExercise(int exerciseIndex) {
+    final key = _exerciseKeys[exerciseIndex];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(activeWorkoutProvider);
@@ -92,9 +115,55 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               // Progress bar
               _buildProgressBar(data.progressPercent, pctInt),
 
+              // Superset group mode floating chip
+              if (data.isSupersetGroupMode)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: AppColors.accent.withValues(alpha: 0.1),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link, size: 14, color: AppColors.accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Tap another exercise to create superset',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => ref.read(activeWorkoutProvider.notifier).cancelSupersetGrouping(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.red,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Exercise cards list
               Expanded(
                 child: ListView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.only(top: 6, bottom: 10),
                   children: [
                     ...data.exercises.asMap().entries.map((entry) {
@@ -109,31 +178,137 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                               .where((e) => e.key < exIdx)
                               .any((e) => !data.isExerciseDone(e.key));
 
-                      return _ExerciseCard(
-                        exerciseIndex: exIdx,
-                        exercise: exercise,
-                        isDone: isDone,
-                        isActive: isActive || exIdx == 0,
-                        data: data,
-                        onToggleSet: (setIdx) {
-                          final wasChecked =
-                              data.isSetChecked(exIdx, setIdx);
-                          ref
-                              .read(activeWorkoutProvider.notifier)
-                              .toggleSet(exIdx, setIdx);
+                      // Ensure a GlobalKey exists for this exercise
+                      _exerciseKeys.putIfAbsent(exIdx, () => GlobalKey());
 
-                          // If checking (not unchecking), show rest timer
-                          if (!wasChecked) {
-                            final nextExName = exIdx + 1 < data.exercises.length
-                                ? data.exercises[exIdx + 1].name
-                                : 'Last exercise!';
-                            final restSecs = _parseRestSeconds(exercise.rest);
-                            ref
-                                .read(restTimerProvider.notifier)
-                                .start(restSecs, nextExName);
-                          }
-                        },
-                        onSwap: () => _showSwapSheet(context, ref, exIdx),
+                      // Superset grouping visual logic
+                      final supersetGroup = exercise.supersetGroup;
+                      final isInSuperset = supersetGroup != null;
+                      final isFirstInGroup = isInSuperset &&
+                          (exIdx == 0 || data.exercises[exIdx - 1].supersetGroup != supersetGroup);
+                      final isLastInGroup = isInSuperset &&
+                          (exIdx == data.exercises.length - 1 ||
+                              data.exercises[exIdx + 1].supersetGroup != supersetGroup);
+
+                      // Build superset label between paired exercises
+                      Widget? supersetLabel;
+                      if (isInSuperset && !isFirstInGroup) {
+                        final groupColor = ActiveWorkoutData.supersetColor(supersetGroup);
+                        supersetLabel = Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 4),
+                              Container(
+                                width: 3,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: groupColor,
+                                  borderRadius: BorderRadius.circular(1.5),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'SUPERSET',
+                                style: GoogleFonts.getFont(
+                                  'DM Sans',
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                  color: groupColor.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        key: _exerciseKeys[exIdx],
+                        children: [
+                          if (supersetLabel != null) supersetLabel,
+                          _ExerciseCard(
+                            exerciseIndex: exIdx,
+                            exercise: exercise,
+                            isDone: isDone,
+                            isActive: isActive || exIdx == 0,
+                            data: data,
+                            supersetGroup: supersetGroup,
+                            isFirstInSupersetGroup: isFirstInGroup,
+                            isLastInSupersetGroup: isLastInGroup,
+                            isInSupersetGroupMode: data.isSupersetGroupMode,
+                            isGroupModeSource: data.supersetGroupingSourceIndex == exIdx,
+                            onToggleSet: (setIdx) {
+                              final wasChecked =
+                                  data.isSetChecked(exIdx, setIdx);
+                              ref
+                                  .read(activeWorkoutProvider.notifier)
+                                  .toggleSet(exIdx, setIdx);
+
+                              // If checking (not unchecking)
+                              if (!wasChecked) {
+                                // Smart scroll: if superset partner exists and current exercise is now done
+                                final updatedData = ref.read(activeWorkoutProvider);
+                                if (updatedData.isExerciseDone(exIdx) && isInSuperset) {
+                                  final partners = updatedData.getSupersetPartners(exIdx);
+                                  for (final partnerIdx in partners) {
+                                    if (!updatedData.isExerciseDone(partnerIdx)) {
+                                      // Delay scroll slightly for state to settle
+                                      Future.delayed(const Duration(milliseconds: 200), () {
+                                        _scrollToExercise(partnerIdx);
+                                      });
+                                      // Only start rest timer after ALL superset exercises are done
+                                      return;
+                                    }
+                                  }
+                                }
+
+                                // Normal rest timer behavior
+                                final nextExName = exIdx + 1 < data.exercises.length
+                                    ? data.exercises[exIdx + 1].name
+                                    : 'Last exercise!';
+                                final restSecs = _parseRestSeconds(exercise.rest);
+                                ref
+                                    .read(restTimerProvider.notifier)
+                                    .start(restSecs, nextExName);
+                              }
+                            },
+                            onToggleWarmUp: (setIdx) {
+                              ref.read(activeWorkoutProvider.notifier).toggleWarmUp(exIdx, setIdx);
+                              if (!_hasShownWarmUpHint) {
+                                _hasShownWarmUpHint = true;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: AppColors.card,
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: const Duration(seconds: 3),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      side: BorderSide(color: const Color(0xFFf97316).withValues(alpha: 0.3)),
+                                    ),
+                                    content: Text(
+                                      'Warm-up set \u2014 not counted in volume',
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFf97316),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            onSwap: () => _showSwapSheet(context, ref, exIdx),
+                            onLongPressHeader: () {
+                              if (data.isSupersetGroupMode) {
+                                ref.read(activeWorkoutProvider.notifier).pairSuperset(exIdx);
+                              } else {
+                                ref.read(activeWorkoutProvider.notifier).startSupersetGrouping(exIdx);
+                              }
+                            },
+                          ),
+                        ],
                       );
                     }),
 
@@ -728,8 +903,15 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   final bool isDone;
   final bool isActive;
   final ActiveWorkoutData data;
+  final int? supersetGroup;
+  final bool isFirstInSupersetGroup;
+  final bool isLastInSupersetGroup;
+  final bool isInSupersetGroupMode;
+  final bool isGroupModeSource;
   final ValueChanged<int> onToggleSet;
+  final ValueChanged<int> onToggleWarmUp;
   final VoidCallback onSwap;
+  final VoidCallback onLongPressHeader;
 
   const _ExerciseCard({
     required this.exerciseIndex,
@@ -737,8 +919,15 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.isDone,
     required this.isActive,
     required this.data,
+    this.supersetGroup,
+    this.isFirstInSupersetGroup = false,
+    this.isLastInSupersetGroup = false,
+    this.isInSupersetGroupMode = false,
+    this.isGroupModeSource = false,
     required this.onToggleSet,
+    required this.onToggleWarmUp,
     required this.onSwap,
+    required this.onLongPressHeader,
   });
 
   @override
@@ -830,194 +1019,273 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   @override
   Widget build(BuildContext context) {
     final numSets = _numSets;
+    final isInSuperset = widget.supersetGroup != null;
+    final supersetColor = isInSuperset
+        ? ActiveWorkoutData.supersetColor(widget.supersetGroup!)
+        : null;
+    // Reduce spacing between superset partners
+    final bottomPadding = isInSuperset && !widget.isLastInSupersetGroup ? 2.0 : 5.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 5),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF0e1219),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: widget.isActive
-                ? AppColors.accent.withValues(alpha: 0.35)
-                : const Color(0xFF1c2535),
-          ),
-        ),
-        child: Column(
-          children: [
-            // Exercise header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 9, 12, 0),
-              child: Row(
-                children: [
-                  // Number badge
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: widget.isActive
-                          ? AppColors.accent.withValues(alpha: 0.15)
-                          : const Color(0xFF161d28),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${widget.exerciseIndex + 1}',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: widget.isActive
-                              ? AppColors.accent
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-
-                  // Name + meta
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.exercise.name,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          _metaText(),
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Swap or Done badge
-                  if (widget.isDone)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppColors.green.withValues(alpha: 0.1),
-                        border: Border.all(
-                          color: AppColors.green.withValues(alpha: 0.25),
-                        ),
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Text(
-                        '\u2713 Done',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.green,
-                        ),
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      onTap: widget.onSwap,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF161d28),
-                          border:
-                              Border.all(color: const Color(0xFF1c2535)),
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Text(
-                          '\u21c4 Swap',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
+      child: GestureDetector(
+        onTap: widget.isInSupersetGroupMode ? widget.onLongPressHeader : null,
+        child: Container(
+          decoration: BoxDecoration(
+            color: widget.isGroupModeSource
+                ? AppColors.accent.withValues(alpha: 0.08)
+                : widget.isInSupersetGroupMode
+                    ? AppColors.accent.withValues(alpha: 0.03)
+                    : const Color(0xFF0e1219),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: widget.isGroupModeSource
+                  ? AppColors.accent.withValues(alpha: 0.5)
+                  : widget.isInSupersetGroupMode
+                      ? AppColors.accent.withValues(alpha: 0.2)
+                      : widget.isActive
+                          ? AppColors.accent.withValues(alpha: 0.35)
+                          : const Color(0xFF1c2535),
             ),
-
-            // Sets with SetInputRow + checkbox — driven by logging_type
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-              child: Column(
-                children: List.generate(numSets, (setIdx) {
-                  final isChecked =
-                      widget.data.isSetChecked(widget.exerciseIndex, setIdx);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // SetInputRow from set_input_row.dart
-                        Expanded(
-                          child: SetInputRow(
-                            loggingType: widget.exercise.loggingType,
-                            weightController: _weightControllers[setIdx],
-                            repsController: _repsControllers[setIdx],
-                            durationController: _durationControllers[setIdx],
-                            distanceController: _distanceControllers[setIdx],
-                            setNumber: setIdx + 1,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Checkbox to mark set done
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: GestureDetector(
-                            onTap: () {
-                              _captureSetValues(setIdx);
-                              widget.onToggleSet(setIdx);
-                            },
-                            child: Container(
-                              width: 32,
-                              height: 32,
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Superset colored left bar
+                if (isInSuperset)
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: supersetColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                    ),
+                  ),
+                // Main card content
+                Expanded(
+                  child: Column(
+                  children: [
+                    // Exercise header
+                    GestureDetector(
+                      onLongPress: widget.onLongPressHeader,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 9, 12, 0),
+                        child: Row(
+                          children: [
+                            // Number badge
+                            Container(
+                              width: 24,
+                              height: 24,
                               decoration: BoxDecoration(
-                                color: isChecked
-                                    ? AppColors.green.withValues(alpha: 0.15)
+                                color: widget.isActive
+                                    ? AppColors.accent.withValues(alpha: 0.15)
                                     : const Color(0xFF161d28),
-                                border: Border.all(
-                                  color: isChecked
-                                      ? AppColors.green.withValues(alpha: 0.4)
-                                      : const Color(0xFF1c2535),
-                                  width: 1.5,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(7),
                               ),
-                              child: Icon(
-                                Icons.check,
-                                size: 16,
-                                color: isChecked
-                                    ? AppColors.green
-                                    : AppColors.textSecondary,
+                              child: Center(
+                                child: Text(
+                                  '${widget.exerciseIndex + 1}',
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: widget.isActive
+                                        ? AppColors.accent
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 9),
+
+                            // Name + meta
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.exercise.name,
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    _metaText(),
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w400,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Swap or Done badge
+                            if (widget.isDone)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.green.withValues(alpha: 0.1),
+                                  border: Border.all(
+                                    color: AppColors.green.withValues(alpha: 0.25),
+                                  ),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Text(
+                                  '\u2713 Done',
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.green,
+                                  ),
+                                ),
+                              )
+                            else
+                              GestureDetector(
+                                onTap: widget.onSwap,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF161d28),
+                                    border:
+                                        Border.all(color: const Color(0xFF1c2535)),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(
+                                    '\u21c4 Swap',
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  );
-                }),
+
+            // Suggested weight line (above sets)
+            Builder(builder: (_) {
+              final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
+              if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
+                      const SizedBox(width: 3),
+                      Text(
+                        'Suggested: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
+
+                    // Sets with SetInputRow + checkbox — driven by logging_type
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                      child: Column(
+                        children: List.generate(numSets, (setIdx) {
+                          final isChecked =
+                              widget.data.isSetChecked(widget.exerciseIndex, setIdx);
+                          final isWarmUp =
+                              widget.data.isSetWarmUp(widget.exerciseIndex, setIdx);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // SetInputRow from set_input_row.dart
+                                Expanded(
+                                  child: SetInputRow(
+                                    loggingType: widget.exercise.loggingType,
+                                    weightController: _weightControllers[setIdx],
+                                    repsController: _repsControllers[setIdx],
+                                    durationController: _durationControllers[setIdx],
+                                    distanceController: _distanceControllers[setIdx],
+                                    setNumber: setIdx + 1,
+                                    isWarmUp: isWarmUp,
+                                    onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                // Overload indicator (only shows when set is checked)
+                                if (isChecked)
+                                  _OverloadIndicator(
+                                    exerciseName: widget.exercise.name,
+                                    currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
+                                  ),
+                                const SizedBox(width: 4),
+                                // Checkbox to mark set done
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 14),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      _captureSetValues(setIdx);
+                                      widget.onToggleSet(setIdx);
+                                    },
+                                    child: Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: isChecked
+                                            ? AppColors.green.withValues(alpha: 0.15)
+                                            : const Color(0xFF161d28),
+                                        border: Border.all(
+                                          color: isChecked
+                                              ? AppColors.green.withValues(alpha: 0.4)
+                                              : const Color(0xFF1c2535),
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.check,
+                                        size: 16,
+                                        color: isChecked
+                                            ? AppColors.green
+                                            : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          ),
         ),
       ),
     );
@@ -1027,6 +1295,78 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 // Old _SetsTableHeader, _SetRow, and _SetInput removed.
 // Set inputs are now handled by SetInputRow from set_input_row.dart
 // with TextEditingControllers managed by _ExerciseCardState.
+
+// ── Overload Indicator ───────────────────────────────────────────
+/// Shows a small indicator comparing current weight to last performance.
+/// Green "PR!" if higher, orange arrow if same, red "Recovery" if lower.
+class _OverloadIndicator extends ConsumerWidget {
+  final String exerciseName;
+  final double currentWeight;
+
+  const _OverloadIndicator({
+    required this.exerciseName,
+    required this.currentWeight,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lastPerf = ref.watch(lastPerformanceProvider(exerciseName));
+    final lastWeight = lastPerf.lastWeight;
+
+    // No history or no weight entered — don't show indicator
+    if (lastWeight == null || lastWeight <= 0 || currentWeight <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final Color color;
+    final String icon;
+    final String? label;
+
+    if (currentWeight > lastWeight) {
+      color = AppColors.green;
+      icon = '\u2191'; // up arrow
+      label = 'PR!';
+    } else if (currentWeight == lastWeight) {
+      color = AppColors.orange;
+      icon = '\u2192'; // right arrow
+      label = null;
+    } else {
+      color = AppColors.red;
+      icon = '\u2193'; // down arrow
+      label = 'Recovery';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            icon,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          if (label != null) ...[
+            const SizedBox(width: 2),
+            Text(
+              label,
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 // ── Workout Receipt Bottom Sheet ─────────────────────────────────
 

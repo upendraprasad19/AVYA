@@ -3,7 +3,116 @@ import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
+
+// ── Last Performance Data ────────────────────────────────────────
+
+class LastPerformanceData {
+  final double? lastWeight;
+  final int? lastReps;
+  final int? lastSets;
+  final DateTime? lastDate;
+  final double? suggestedWeight; // lastWeight + 2.5 (or null for bodyweight/timed/cardio)
+
+  const LastPerformanceData({
+    this.lastWeight,
+    this.lastReps,
+    this.lastSets,
+    this.lastDate,
+    this.suggestedWeight,
+  });
+
+  bool get hasData => lastWeight != null || lastReps != null;
+}
+
+LastPerformanceData _getLastPerformance(String exerciseName) {
+  final hive = HiveService.instance;
+  final nameLower = exerciseName.toLowerCase();
+
+  DateTime? latestDate;
+  double? lastWeight;
+  int? lastReps;
+  int? lastSets;
+  String? loggingType;
+
+  for (final raw in hive.workoutBox.values) {
+    if (raw is! Map) continue;
+    final log = Map<String, dynamic>.from(raw);
+    if (log['type'] != 'exercise_log') continue;
+
+    final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
+    if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
+    if (logName.isEmpty) continue;
+
+    final dateStr = log['date'] as String?;
+    if (dateStr == null) continue;
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) continue;
+
+    if (latestDate == null || date.isAfter(latestDate)) {
+      latestDate = date;
+      lastWeight = (log['weight_kg'] as num?)?.toDouble();
+      lastReps = (log['reps_completed'] as int?);
+      lastSets = (log['sets_completed'] as int?);
+      loggingType = log['logging_type'] as String?;
+    }
+  }
+
+  double? suggested;
+  if (lastWeight != null &&
+      lastWeight > 0 &&
+      (loggingType == 'weight_reps' || loggingType == 'weighted_bodyweight')) {
+    suggested = lastWeight + 2.5;
+  }
+
+  return LastPerformanceData(
+    lastWeight: lastWeight,
+    lastReps: lastReps,
+    lastSets: lastSets,
+    lastDate: latestDate,
+    suggestedWeight: suggested,
+  );
+}
+
+final lastPerformanceProvider =
+    Provider.family<LastPerformanceData, String>((ref, exerciseName) {
+  return _getLastPerformance(exerciseName);
+});
+
+final exerciseHistoryProvider =
+    Provider.family<List<double>, String>((ref, exerciseName) {
+  final hive = HiveService.instance;
+  final nameLower = exerciseName.toLowerCase();
+  final entries = <MapEntry<DateTime, double>>[];
+
+  for (final raw in hive.workoutBox.values) {
+    if (raw is! Map) continue;
+    final log = Map<String, dynamic>.from(raw);
+    if (log['type'] != 'exercise_log') continue;
+
+    final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
+    if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
+    if (logName.isEmpty) continue;
+
+    final weight = (log['weight_kg'] as num?)?.toDouble();
+    if (weight == null || weight <= 0) continue;
+
+    final dateStr = log['date'] as String?;
+    final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
+    if (date == null) continue;
+
+    entries.add(MapEntry(date, weight));
+  }
+
+  entries.sort((a, b) => a.key.compareTo(b.key));
+
+  final weights = entries.map((e) => e.value).toList();
+  if (weights.length > 8) {
+    return weights.sublist(weights.length - 8);
+  }
+  return weights;
+});
 
 // ── Data Classes ────────────────────────────────────────────────
 
@@ -17,6 +126,8 @@ class ExerciseData {
   final String loggingType;
   final String? category;
   final List<String>? equipmentNeeded;
+  final String? exerciseType; // 'compound' or 'isolation'
+  final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
 
   const ExerciseData({
     required this.name,
@@ -27,7 +138,48 @@ class ExerciseData {
     this.loggingType = 'weight_reps',
     this.category,
     this.equipmentNeeded,
+    this.exerciseType,
+    this.supersetGroup,
   });
+
+  ExerciseData copyWith({
+    String? name,
+    String? sets,
+    String? reps,
+    String? weight,
+    String? rest,
+    String? loggingType,
+    String? category,
+    List<String>? equipmentNeeded,
+    String? exerciseType,
+    int? Function()? supersetGroup,
+  }) {
+    return ExerciseData(
+      name: name ?? this.name,
+      sets: sets ?? this.sets,
+      reps: reps ?? this.reps,
+      weight: weight ?? this.weight,
+      rest: rest ?? this.rest,
+      loggingType: loggingType ?? this.loggingType,
+      category: category ?? this.category,
+      equipmentNeeded: equipmentNeeded ?? this.equipmentNeeded,
+      exerciseType: exerciseType ?? this.exerciseType,
+      supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
+    );
+  }
+
+  /// Whether this exercise is a compound movement (for warm-up auto-suggest).
+  bool get isCompound {
+    if (exerciseType?.toLowerCase() == 'compound') return true;
+    final nameLower = name.toLowerCase();
+    return nameLower.contains('bench') ||
+        nameLower.contains('squat') ||
+        nameLower.contains('deadlift') ||
+        nameLower.contains('overhead press') ||
+        nameLower.contains('barbell row') ||
+        nameLower.contains('pull-up') ||
+        nameLower.contains('dip');
+  }
 }
 
 /// A single day in the workout plan.
@@ -129,6 +281,26 @@ class CurrentPlanData {
 }
 
 class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
+  /// Auto-generates a workout plan from local Hive profile data.
+  /// Called when plan is missing or schedule entries are corrupt.
+  void _autoGeneratePlan(
+      Map<String, dynamic> profile, Map<String, dynamic>? progress) {
+    final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+    final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+    final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+    final experience = profile['fitness_experience'] as String? ?? 'beginner';
+    final phase = (progress?['current_phase'] as int?) ?? 1;
+
+    WorkoutScheduleService.instance.generateAndSchedule(
+      goal: goal,
+      equipment: equipment,
+      daysPerWeek: daysPerWeek,
+      startDate: DateTime.now(),
+      experienceLevel: experience,
+      phase: phase,
+    );
+  }
+
   @override
   CurrentPlanData build() {
     final repo = WorkoutRepository.instance;
@@ -138,15 +310,36 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
     final planExists = repo.hasPlan();
     if (!planExists) {
-      // No plan generated yet — return empty state.
+      // No plan generated yet — try to auto-generate from local profile.
+      final profile = UserRepository.instance.getProfile();
+      if (profile != null && profile['primary_goal'] != null) {
+        // Profile exists locally — generate plan silently.
+        _autoGeneratePlan(profile, progress);
+        // Re-read after generation.
+        if (repo.hasPlan()) {
+          return build(); // Recurse once to load the generated plan.
+        }
+      }
       return CurrentPlanData(
         phase: phase,
         phaseName: 'No Plan',
         currentWeek: week,
-        focus: 'Complete onboarding to generate your plan',
+        focus: 'Complete onboarding to generate your personalised plan.',
         weeks: const [],
         hasPlan: false,
       );
+    }
+
+    // Check if schedule entries are intact (plan metadata exists but
+    // schedule_* entries were lost — e.g., partial Hive/IndexedDB clear).
+    final week1Days = repo.getWeek(1);
+    final hasWorkoutDays = week1Days.any((d) => d['type'] == 'workout');
+    if (!hasWorkoutDays) {
+      // Plan metadata exists but schedule is empty — regenerate.
+      final profile = UserRepository.instance.getProfile();
+      if (profile != null) {
+        _autoGeneratePlan(profile, progress);
+      }
     }
 
     // Read plan metadata for phase name/focus.
@@ -184,6 +377,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
                 loggingType: m['logging_type'] as String? ?? 'weight_reps',
                 category: m['category'] as String?,
                 equipmentNeeded: equipList,
+                exerciseType: m['exercise_type'] as String?,
+                supersetGroup: m['superset_group'] as int?,
               );
             })
             .toList();
@@ -361,8 +556,12 @@ class ActiveWorkoutData {
   final int elapsedSeconds;
   final Map<String, bool> checkedSets; // "exerciseIndex-setIndex" -> true
   final Map<String, SetInputValues> setInputValues; // "exerciseIndex-setIndex" -> values
+  final Map<String, bool> warmUpSets; // "exerciseIndex-setIndex" -> true if warm-up
   final bool isComplete;
   final List<String> detectedPRs; // PR descriptions detected on save
+  // Superset manual grouping (session-only override, not persisted)
+  final int? supersetGroupingSourceIndex; // exercise index being grouped
+  final bool isSupersetGroupMode; // true when user is picking a partner
 
   const ActiveWorkoutData({
     this.workoutDay,
@@ -370,8 +569,11 @@ class ActiveWorkoutData {
     this.elapsedSeconds = 0,
     this.checkedSets = const {},
     this.setInputValues = const {},
+    this.warmUpSets = const {},
     this.isComplete = false,
     this.detectedPRs = const [],
+    this.supersetGroupingSourceIndex,
+    this.isSupersetGroupMode = false,
   });
 
   ActiveWorkoutData copyWith({
@@ -380,8 +582,11 @@ class ActiveWorkoutData {
     int? elapsedSeconds,
     Map<String, bool>? checkedSets,
     Map<String, SetInputValues>? setInputValues,
+    Map<String, bool>? warmUpSets,
     bool? isComplete,
     List<String>? detectedPRs,
+    int? Function()? supersetGroupingSourceIndex,
+    bool? isSupersetGroupMode,
   }) {
     return ActiveWorkoutData(
       workoutDay: workoutDay ?? this.workoutDay,
@@ -389,8 +594,13 @@ class ActiveWorkoutData {
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       checkedSets: checkedSets ?? this.checkedSets,
       setInputValues: setInputValues ?? this.setInputValues,
+      warmUpSets: warmUpSets ?? this.warmUpSets,
       isComplete: isComplete ?? this.isComplete,
       detectedPRs: detectedPRs ?? this.detectedPRs,
+      supersetGroupingSourceIndex: supersetGroupingSourceIndex != null
+          ? supersetGroupingSourceIndex()
+          : this.supersetGroupingSourceIndex,
+      isSupersetGroupMode: isSupersetGroupMode ?? this.isSupersetGroupMode,
     );
   }
 
@@ -412,6 +622,10 @@ class ActiveWorkoutData {
     return checkedSets.containsKey('$exerciseIndex-$setIndex');
   }
 
+  bool isSetWarmUp(int exerciseIndex, int setIndex) {
+    return warmUpSets.containsKey('$exerciseIndex-$setIndex');
+  }
+
   bool isExerciseDone(int exerciseIndex) {
     final exercise = exercises[exerciseIndex];
     final numSets = int.tryParse(exercise.sets) ?? 3;
@@ -419,6 +633,31 @@ class ActiveWorkoutData {
       if (!isSetChecked(exerciseIndex, i)) return false;
     }
     return true;
+  }
+
+  /// Get all exercise indices in the same superset group as [exerciseIndex].
+  List<int> getSupersetPartners(int exerciseIndex) {
+    final group = exercises[exerciseIndex].supersetGroup;
+    if (group == null) return [];
+    final partners = <int>[];
+    for (int i = 0; i < exercises.length; i++) {
+      if (i != exerciseIndex && exercises[i].supersetGroup == group) {
+        partners.add(i);
+      }
+    }
+    return partners;
+  }
+
+  /// Color for a superset group index.
+  static Color supersetColor(int groupIndex) {
+    const colors = [
+      Color(0xFF00D4FF), // accent
+      Color(0xFFa855f7), // purple
+      Color(0xFFf97316), // orange
+      Color(0xFF4ade80), // green
+      Color(0xFF38bdf8), // blue
+    ];
+    return colors[groupIndex % colors.length];
   }
 }
 
@@ -433,11 +672,21 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
   void startWorkout(WorkoutDayData day) {
     _timer?.cancel();
+
+    // Auto-mark first set of compound exercises as warm-up
+    final warmUps = <String, bool>{};
+    for (int i = 0; i < day.exercises.length; i++) {
+      if (day.exercises[i].isCompound) {
+        warmUps['$i-0'] = true; // first set is warm-up
+      }
+    }
+
     state = ActiveWorkoutData(
       workoutDay: day,
       exercises: List.from(day.exercises),
       elapsedSeconds: 0,
       checkedSets: {},
+      warmUpSets: warmUps,
     );
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -473,6 +722,69 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   void addExercise(ExerciseData exercise) {
     state = state.copyWith(
       exercises: [...state.exercises, exercise],
+    );
+  }
+
+  /// Toggle warm-up flag for a specific set.
+  void toggleWarmUp(int exerciseIndex, int setIndex) {
+    final key = '$exerciseIndex-$setIndex';
+    final newWarmUps = Map<String, bool>.from(state.warmUpSets);
+    if (newWarmUps.containsKey(key)) {
+      newWarmUps.remove(key);
+    } else {
+      newWarmUps[key] = true;
+    }
+    state = state.copyWith(warmUpSets: newWarmUps);
+  }
+
+  /// Enter superset group mode: user long-pressed on exercise [exerciseIndex].
+  void startSupersetGrouping(int exerciseIndex) {
+    state = state.copyWith(
+      isSupersetGroupMode: true,
+      supersetGroupingSourceIndex: () => exerciseIndex,
+    );
+  }
+
+  /// Cancel superset group mode.
+  void cancelSupersetGrouping() {
+    state = state.copyWith(
+      isSupersetGroupMode: false,
+      supersetGroupingSourceIndex: () => null,
+    );
+  }
+
+  /// Pair [targetIndex] with the source exercise in a superset.
+  void pairSuperset(int targetIndex) {
+    final sourceIndex = state.supersetGroupingSourceIndex;
+    if (sourceIndex == null || sourceIndex == targetIndex) {
+      cancelSupersetGrouping();
+      return;
+    }
+
+    // Find the next available group index
+    int maxGroup = -1;
+    for (final ex in state.exercises) {
+      if (ex.supersetGroup != null && ex.supersetGroup! > maxGroup) {
+        maxGroup = ex.supersetGroup!;
+      }
+    }
+
+    // If source already has a group, add target to same group (triset)
+    final sourceGroup = state.exercises[sourceIndex].supersetGroup;
+    final newGroupIndex = sourceGroup ?? (maxGroup + 1);
+
+    final newExercises = List<ExerciseData>.from(state.exercises);
+    newExercises[sourceIndex] = newExercises[sourceIndex].copyWith(
+      supersetGroup: () => newGroupIndex,
+    );
+    newExercises[targetIndex] = newExercises[targetIndex].copyWith(
+      supersetGroup: () => newGroupIndex,
+    );
+
+    state = state.copyWith(
+      exercises: newExercises,
+      isSupersetGroupMode: false,
+      supersetGroupingSourceIndex: () => null,
     );
   }
 
@@ -544,6 +856,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       for (int s = 0; s < numSets; s++) {
         final key = '$exIdx-$s';
         if (state.checkedSets.containsKey(key)) {
+          // Skip warm-up sets in volume calculations
+          final isWarmUp = state.warmUpSets.containsKey(key);
+          if (isWarmUp) continue;
+
           completedSets++;
           final vals = state.setInputValues[key];
           if (vals != null) {
@@ -567,6 +883,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         totalReps = (int.tryParse(exercise.reps) ?? 10) * completedSets;
       }
 
+      // Check if any sets for this exercise were warm-up
+      final hasWarmUpSets = List.generate(numSets, (s) => '$exIdx-$s')
+          .any((key) => state.warmUpSets.containsKey(key));
+
       // Build log map based on logging type
       final logMap = <String, dynamic>{
         'id': logId,
@@ -575,6 +895,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         'date': dateStr,
         'logging_type': exercise.loggingType,
         'is_pr': isPr,
+        'has_warmup_sets': hasWarmUpSets,
         'created_at': now.toIso8601String(),
       };
 

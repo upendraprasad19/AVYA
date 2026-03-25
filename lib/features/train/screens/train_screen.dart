@@ -11,9 +11,7 @@ import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/train_provider.dart';
-import '../widgets/today_workout_card.dart';
 import '../widgets/week_selector.dart';
-import '../widgets/expandable_day_card.dart';
 import '../widgets/stats_grid.dart';
 
 
@@ -80,136 +78,615 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          _buildHeader(plan, selectedWeek),
+      body: SafeArea(
+        bottom: false,
+        child: !plan.hasPlan
+            ? Padding(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: EmptyState(
+                  icon: Icons.fitness_center,
+                  title: 'No workout plan yet',
+                  subtitle:
+                      'Complete onboarding to generate your personalised plan.',
+                ),
+              )
+            : SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. Plan header with progress bar
+                    _buildPlanHeader(plan, selectedWeek, weekDays),
 
-          // Scrollable content
-          Expanded(
-            child: !plan.hasPlan
-                ? Padding(
-                    padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                    child: EmptyState(
-                      icon: Icons.fitness_center,
-                      title: 'No workout plan yet',
-                      subtitle: 'Complete onboarding to generate your personalised plan.',
+                    const SizedBox(height: 14),
+
+                    // 2. Today's workout hero card
+                    _buildTodayHeroCard(context, plan, todayWorkout, weekDays),
+
+                    const SizedBox(height: 14),
+
+                    // 3. This Week section label
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenPadding),
+                      child: Text(
+                        'THIS WEEK',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ),
-                  )
-                : ListView(
-                    padding: EdgeInsets.zero,
-                    children: [
-                      // Today's workout preview card
-                      if (todayWorkout != null)
-                        TodayWorkoutCard(
-                          workout: todayWorkout,
-                          onStart: () {
-                            ref
-                                .read(activeWorkoutProvider.notifier)
-                                .startWorkout(todayWorkout);
-                            context.go('/train/active-workout');
-                          },
-                        ),
+                    const SizedBox(height: 8),
 
-                      const SizedBox(height: 12),
+                    // Week selector tabs
+                    WeekSelector(
+                      totalWeeks: 4,
+                      selectedWeek: selectedWeek,
+                      onSelect: (week) =>
+                          ref.read(selectedWeekProvider.notifier).select(week),
+                    ),
+                    const SizedBox(height: 10),
 
-                      // SCHEDULE section label
-                      Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 18, vertical: 0),
-                        child: Text(
-                          'SCHEDULE',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 1.2,
-                          ),
+                    // Compact week rows
+                    if (weekDays.isEmpty)
+                      _buildEmptyWeek()
+                    else
+                      _buildCompactWeekRows(context, weekDays),
+
+                    const SizedBox(height: 14),
+
+                    // Phase unlock card -- show after week 4
+                    if (plan.phase == 1 && plan.hasPlan)
+                      _buildPhaseUnlockCard(context, plan, ref),
+
+                    const SizedBox(height: 14),
+
+                    // YOUR PRs section
+                    const StatsGrid(),
+
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  // ── 1. Plan Header with Progress Bar ──────────────────────────
+
+  Widget _buildPlanHeader(
+      CurrentPlanData plan, int selectedWeek, List<WorkoutDayData> weekDays) {
+    // Calculate week completion
+    int totalWorkoutDays = 0;
+    int completedDays = 0;
+    for (final day in weekDays) {
+      if (!day.isRest) {
+        totalWorkoutDays++;
+        if (day.isDone) completedDays++;
+      }
+    }
+    final progress =
+        totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
+    final progressPercent = (progress * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.header,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Phase title
+          Text(
+            'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 3),
+
+          // Subtitle with completion count
+          Text(
+            'Week $selectedWeek of 4 \u00b7 $completedDays/$totalWorkoutDays workouts done',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Progress bar
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161d28),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: progress,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                      const SizedBox(height: 8),
-
-                      // Week selector tabs
-                      WeekSelector(
-                        totalWeeks: 4,
-                        selectedWeek: selectedWeek,
-                        onSelect: (week) =>
-                            ref.read(selectedWeekProvider.notifier).select(week),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Expandable day cards
-                      if (weekDays.isEmpty)
-                        _buildEmptyWeek()
-                      else
-                        ...weekDays.asMap().entries.map((entry) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 5),
-                            child: ExpandableDayCard(
-                              dayData: entry.value,
-                              dayIndex: entry.key,
-                              onStartWorkout: () {
-                                ref
-                                    .read(activeWorkoutProvider.notifier)
-                                    .startWorkout(entry.value);
-                                context.go('/train/active-workout');
-                              },
-                            ),
-                          );
-                        }),
-
-                      const SizedBox(height: 12),
-
-                      // Phase unlock card -- show after week 4
-                      if (plan.phase == 1 && plan.hasPlan)
-                        _buildPhaseUnlockCard(context, plan, ref),
-
-                      const SizedBox(height: 12),
-
-                      // YOUR STATS section
-                      const StatsGrid(),
-
-                      const SizedBox(height: 20),
-                    ],
+                    ),
                   ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '$progressPercent%',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(CurrentPlanData plan, int selectedWeek) {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-        decoration: const BoxDecoration(
-          color: AppColors.header,
-          border: Border(
-            bottom: BorderSide(color: AppColors.border),
+  // ── 2. Today's Workout Hero Card ──────────────────────────────
+
+  Widget _buildTodayHeroCard(BuildContext context, CurrentPlanData plan,
+      WorkoutDayData? todayWorkout, List<WorkoutDayData> weekDays) {
+    // Determine if today is a rest day by checking actual date
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    WorkoutDayData? todayDay;
+    for (final day in weekDays) {
+      if (day.date != null) {
+        final dayStr =
+            '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+        if (dayStr == todayStr) {
+          todayDay = day;
+          break;
+        }
+      }
+    }
+
+    final isRestDay = todayDay?.isRest ?? (todayWorkout == null);
+    final isDoneToday = todayDay?.isDone ?? false;
+
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "TODAY'S WORKOUT",
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 1.2,
+            ),
           ),
+          const SizedBox(height: 8),
+          if (isDoneToday)
+            _buildDoneHeroCard(todayDay!)
+          else if (isRestDay)
+            _buildRestHeroCard()
+          else if (todayWorkout != null)
+            _buildWorkoutHeroCard(context, todayWorkout),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkoutHeroCard(
+      BuildContext context, WorkoutDayData workout) {
+    // Extract focus/muscles from subtitle
+    final subtitleParts = workout.subtitle.split('\u00b7');
+    final focusText =
+        subtitleParts.isNotEmpty ? subtitleParts[0].trim() : '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(
+          color: AppColors.accent.withValues(alpha: 0.3),
+          width: 1.5,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            workout.name,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          if (focusText.isNotEmpty) ...[
+            const SizedBox(height: 4),
             Text(
-              'WORKOUT',
-              textAlign: TextAlign.left,
+              focusText,
               style: GoogleFonts.getFont(
                 'DM Sans',
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
-                letterSpacing: 0.5,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 2),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            '${workout.exerciseCount} exercises \u00b7 ~${workout.estimatedDuration}',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () {
+              ref
+                  .read(activeWorkoutProvider.notifier)
+                  .startWorkout(workout);
+              context.go('/train/active-workout');
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  'START WORKOUT \u2192',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestHeroCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(
+          color: AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'REST DAY',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Recovery & mobility \u2014 stretch, walk, foam roll',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDoneHeroCard(WorkoutDayData workout) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(
+          color: AppColors.green.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: AppColors.green, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  workout.name,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Completed today \u2014 great work!',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 3. Compact Week Rows ──────────────────────────────────────
+
+  Widget _buildCompactWeekRows(
+      BuildContext context, List<WorkoutDayData> weekDays) {
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            for (int i = 0; i < weekDays.length; i++) ...[
+              _buildCompactRow(context, weekDays[i], todayStr),
+              if (i < weekDays.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.border,
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactRow(
+      BuildContext context, WorkoutDayData day, String todayStr) {
+    // Determine if this is today
+    bool isToday = false;
+    if (day.date != null) {
+      final dayStr =
+          '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+      isToday = dayStr == todayStr;
+    }
+
+    // 3-letter day name
+    String dayLabel = '';
+    if (day.date != null) {
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      dayLabel = dayNames[day.date!.weekday - 1];
+    } else {
+      dayLabel = 'D${day.dayNumber}';
+    }
+
+    // Status
+    _RowStatus status;
+    if (day.isRest) {
+      status = _RowStatus.rest;
+    } else if (day.isDone) {
+      status = _RowStatus.done;
+    } else if (isToday) {
+      status = _RowStatus.today;
+    } else {
+      status = _RowStatus.planned;
+    }
+
+    final isTappable = !day.isRest;
+
+    return GestureDetector(
+      onTap: isTappable
+          ? () {
+              ref
+                  .read(activeWorkoutProvider.notifier)
+                  .startWorkout(day);
+              context.go('/train/active-workout');
+            }
+          : null,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: isToday
+            ? BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: AppColors.accent,
+                    width: 2,
+                  ),
+                ),
+              )
+            : null,
+        child: Row(
+          children: [
+            // Day name
+            SizedBox(
+              width: 36,
+              child: Text(
+                dayLabel,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: day.isRest
+                      ? AppColors.textSecondary.withValues(alpha: 0.5)
+                      : AppColors.textSecondary,
+                ),
+              ),
+            ),
+
+            // Workout name
+            Expanded(
+              child: Text(
+                day.isRest ? 'Rest' : day.name,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 13,
+                  fontWeight: day.isRest ? FontWeight.w400 : FontWeight.w700,
+                  color: day.isRest
+                      ? AppColors.textSecondary.withValues(alpha: 0.5)
+                      : AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            // Exercise count (only for workout days)
+            if (!day.isRest) ...[
+              Text(
+                '${day.exerciseCount} ex',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+
+            // Status indicator
+            _buildStatusIndicator(status),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator(_RowStatus status) {
+    switch (status) {
+      case _RowStatus.done:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: AppColors.green, size: 14),
+            const SizedBox(width: 4),
             Text(
-              'Phase ${plan.phase} \u00b7 Week $selectedWeek of 4',
-              textAlign: TextAlign.left,
+              'Done',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.green,
+              ),
+            ),
+          ],
+        );
+      case _RowStatus.today:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Today',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+          ],
+        );
+      case _RowStatus.planned:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.textSecondary.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Planned',
               style: GoogleFonts.getFont(
                 'DM Sans',
                 fontSize: 11,
@@ -218,21 +695,27 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
+        );
+      case _RowStatus.rest:
+        return const SizedBox.shrink();
+    }
   }
 
-  Widget _buildPhaseUnlockCard(BuildContext context, CurrentPlanData plan, WidgetRef ref) {
+  // ── Phase Unlock Card ─────────────────────────────────────────
+
+  Widget _buildPhaseUnlockCard(
+      BuildContext context, CurrentPlanData plan, WidgetRef ref) {
     // Only show if user has reached week 4
     if (plan.currentWeek < 4) return const SizedBox.shrink();
 
     // Check completion rate for Phase 1 graduation
     final completionRate = _computePhaseCompletionRate(plan);
-    final canGraduate = completionRate >= AppConstants.phaseUnlockCompletionRate;
+    final canGraduate =
+        completionRate >= AppConstants.phaseUnlockCompletionRate;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.cardPadding),
         decoration: BoxDecoration(
@@ -349,7 +832,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
   Widget _buildEmptyWeek() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: const EmptyState(
         icon: Icons.fitness_center,
         title: 'No workouts scheduled',
@@ -358,3 +842,5 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     );
   }
 }
+
+enum _RowStatus { done, today, planned, rest }

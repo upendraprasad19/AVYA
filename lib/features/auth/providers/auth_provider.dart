@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 
 // ── Auth State Stream ───────────────────────────────────────────
 
@@ -262,6 +263,40 @@ class AuthNotifier extends Notifier<AuthState2> {
           if (progressRows.isNotEmpty) {
             await userBox.put(
                 'progress', Map<String, dynamic>.from(progressRows.first));
+          }
+
+          // Regenerate workout schedule locally if plan is missing from Hive.
+          // This handles re-login / new device where Hive is empty but
+          // Supabase has the user's profile data.
+          if (!WorkoutScheduleService.instance.hasPlan()) {
+            final goal = remoteProfile['primary_goal'] as String? ?? 'general_fitness';
+            final equipment = remoteProfile['equipment_access'] as String? ?? 'basic_gym';
+            final daysPerWeek = (remoteProfile['days_per_week'] as int?) ?? 4;
+            final experience = remoteProfile['fitness_experience'] as String? ?? 'beginner';
+            final phase = progressRows.isNotEmpty
+                ? ((progressRows.first['current_phase'] as int?) ?? 1)
+                : 1;
+
+            // Determine start date: use plan_generated_at from progress if
+            // available, otherwise start from this Monday.
+            DateTime startDate;
+            if (progressRows.isNotEmpty) {
+              final genStr = progressRows.first['phase_started_at'] as String?;
+              startDate = genStr != null
+                  ? DateTime.tryParse(genStr) ?? DateTime.now()
+                  : DateTime.now();
+            } else {
+              startDate = DateTime.now();
+            }
+
+            await WorkoutScheduleService.instance.generateAndSchedule(
+              goal: goal,
+              equipment: equipment,
+              daysPerWeek: daysPerWeek,
+              startDate: startDate,
+              experienceLevel: experience,
+              phase: phase,
+            );
           }
 
           return;
