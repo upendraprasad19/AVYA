@@ -255,8 +255,13 @@ class SendMessageNotifier extends Notifier<bool> {
 
       limitNotifier.increment();
     } catch (e) {
+      final errorMsg = e.toString().contains('FunctionException') ||
+              e.toString().contains('404') ||
+              e.toString().contains('Failed host lookup')
+          ? 'AI service is not available yet. The Edge Functions need to be deployed to Supabase. Check supabase/functions/ for deployment instructions.'
+          : 'Sorry, I couldn\'t process that: ${e.toString().length > 100 ? e.toString().substring(0, 100) : e}';
       chatNotifier.replaceLastMessage(ChatMessage(
-        text: 'Sorry, I couldn\'t process that. Please try again.',
+        text: errorMsg,
         isUser: false,
         timestamp: DateTime.now(),
         isError: true,

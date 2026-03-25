@@ -44,10 +44,10 @@ class AiService {
     final data = response.data;
     if (data is String) {
       final parsed = json.decode(data) as Map<String, dynamic>;
-      return parsed['response'] as String? ?? '';
+      return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
     }
     if (data is Map) {
-      return (data['response'] as String?) ?? '';
+      return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
     }
 
     throw AiServiceException('Unexpected AI response format');
@@ -78,10 +78,10 @@ class AiService {
     final data = response.data;
     if (data is String) {
       final parsed = json.decode(data) as Map<String, dynamic>;
-      return parsed['response'] as String? ?? '';
+      return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
     }
     if (data is Map) {
-      return (data['response'] as String?) ?? '';
+      return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
     }
 
     throw AiServiceException('Unexpected PRO AI response format');
@@ -110,10 +110,10 @@ class AiService {
     final data = response.data;
     if (data is String) {
       final parsed = json.decode(data) as Map<String, dynamic>;
-      return parsed['response'] as String? ?? '';
+      return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
     }
     if (data is Map) {
-      return (data['response'] as String?) ?? '';
+      return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
     }
 
     throw AiServiceException('Unexpected reasoning response format');
