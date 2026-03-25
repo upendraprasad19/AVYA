@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import '../providers/train_provider.dart';
 import '../widgets/rest_timer_modal.dart';
 import '../widgets/exercise_swap_sheet.dart';
@@ -316,18 +317,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 5),
                       child: GestureDetector(
-                        onTap: () {
-                          // Add a placeholder exercise
-                          ref
-                              .read(activeWorkoutProvider.notifier)
-                              .addExercise(const ExerciseData(
-                                name: 'New Exercise',
-                                sets: '3',
-                                reps: '10',
-                                weight: '0kg',
-                                rest: '60s',
-                              ));
-                        },
+                        onTap: () => _showExercisePickerSheet(context, ref),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
@@ -725,6 +715,36 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     return secs ?? 90;
   }
 
+  void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ExercisePickerSheet(
+        onSelect: (exerciseData) {
+          ref.read(activeWorkoutProvider.notifier).addExercise(
+                ExerciseData(
+                  name: exerciseData['name'] as String? ?? 'Exercise',
+                  sets: '${exerciseData['default_sets'] ?? 3}',
+                  reps: '${exerciseData['default_reps'] ?? '10'}',
+                  weight: '0kg',
+                  rest: '${exerciseData['default_rest_secs'] ?? 60}s',
+                  loggingType:
+                      exerciseData['logging_type'] as String? ?? 'weight_reps',
+                  exerciseType:
+                      exerciseData['exercise_type'] as String? ?? 'isolation',
+                  category: exerciseData['category'] as String? ?? '',
+                  equipmentNeeded: (exerciseData['equipment_needed'] as List?)
+                          ?.cast<String>() ??
+                      [],
+                ),
+              );
+          Navigator.of(ctx).pop();
+        },
+      ),
+    );
+  }
+
   void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
     final currentExercise =
         ref.read(activeWorkoutProvider).exercises[exerciseIndex];
@@ -951,14 +971,45 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
   void _initControllers() {
     final n = _numSets;
-    final weightDefault =
-        widget.exercise.weight.replaceAll('kg', '').replaceAll('BW', '');
-    final repsDefault = widget.exercise.reps;
+    final exercise = widget.exercise;
+    final lastPerf = ref.read(lastPerformanceProvider(exercise.name));
 
-    _weightControllers = List.generate(n, (_) => TextEditingController(text: weightDefault != '0' ? weightDefault : ''));
-    _repsControllers = List.generate(n, (_) => TextEditingController(text: repsDefault));
-    _durationControllers = List.generate(n, (_) => TextEditingController(text: repsDefault));
+    // Reps: prefer last session's reps, then parse range to midpoint, then default 8
+    final String repsValue;
+    if (lastPerf.lastReps != null && lastPerf.lastReps! > 0) {
+      repsValue = lastPerf.lastReps.toString();
+    } else {
+      repsValue = _parseRepsMidpoint(exercise.reps).toString();
+    }
+
+    // Weight: prefer last session's weight for weight-based exercises
+    final String weightValue;
+    if (['weight_reps', 'weighted_bodyweight'].contains(exercise.loggingType) &&
+        lastPerf.lastWeight != null &&
+        lastPerf.lastWeight! > 0) {
+      // Show clean number: strip trailing .0
+      final w = lastPerf.lastWeight!;
+      weightValue = w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+    } else {
+      final raw = exercise.weight.replaceAll('kg', '').replaceAll('BW', '').trim();
+      weightValue = (raw != '0' && raw.isNotEmpty) ? raw : '';
+    }
+
+    _weightControllers = List.generate(n, (_) => TextEditingController(text: weightValue));
+    _repsControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
+    _durationControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
     _distanceControllers = List.generate(n, (_) => TextEditingController());
+  }
+
+  /// Parse a reps string like "6-10" to its midpoint (8), or "10" to 10.
+  static int _parseRepsMidpoint(String repsStr) {
+    if (repsStr.contains('-')) {
+      final parts = repsStr.split('-');
+      final low = int.tryParse(parts[0].trim()) ?? 8;
+      final high = int.tryParse(parts[1].trim()) ?? 12;
+      return ((low + high) / 2).round();
+    }
+    return int.tryParse(repsStr) ?? 8;
   }
 
   @override
@@ -997,6 +1048,41 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         distanceKm: double.tryParse(_distanceControllers[setIdx].text),
       ),
     );
+  }
+
+  /// Returns an error message if required fields are empty, or null if valid.
+  String? _validateSetInputs(int setIdx) {
+    switch (widget.exercise.loggingType) {
+      case 'weight_reps':
+        final weight = double.tryParse(_weightControllers[setIdx].text) ?? 0;
+        final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
+        if (weight <= 0 || reps <= 0) {
+          return 'Enter weight and reps before marking complete';
+        }
+        return null;
+      case 'bodyweight_reps':
+        final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
+        if (reps <= 0) return 'Enter reps before marking complete';
+        return null;
+      case 'weighted_bodyweight':
+        final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
+        if (reps <= 0) return 'Enter reps before marking complete';
+        return null;
+      case 'timed':
+        final duration = int.tryParse(_durationControllers[setIdx].text) ?? 0;
+        if (duration <= 0) return 'Enter duration before marking complete';
+        return null;
+      case 'cardio':
+        final duration = int.tryParse(_durationControllers[setIdx].text) ?? 0;
+        if (duration <= 0) return 'Enter duration before marking complete';
+        return null;
+      case 'distance':
+        final distance = double.tryParse(_distanceControllers[setIdx].text) ?? 0;
+        if (distance <= 0) return 'Enter distance before marking complete';
+        return null;
+      default:
+        return null;
+    }
   }
 
   String _metaText() {
@@ -1288,6 +1374,43 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     isChecked: isChecked,
                                     onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
                                     onCheck: () {
+                                      // If unchecking, allow without validation
+                                      final alreadyChecked = widget.data.isSetChecked(
+                                          widget.exerciseIndex, setIdx);
+                                      if (alreadyChecked) {
+                                        _captureSetValues(setIdx);
+                                        widget.onToggleSet(setIdx);
+                                        return;
+                                      }
+
+                                      // Validate required fields before marking complete
+                                      final validationError = _validateSetInputs(setIdx);
+                                      if (validationError != null) {
+                                        ScaffoldMessenger.of(context).clearSnackBars();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: AppColors.card,
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: const Duration(milliseconds: 1500),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              side: BorderSide(
+                                                  color: AppColors.red.withValues(alpha: 0.3)),
+                                            ),
+                                            content: Text(
+                                              validationError,
+                                              style: GoogleFonts.getFont(
+                                                'DM Sans',
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.red,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
                                       _captureSetValues(setIdx);
                                       widget.onToggleSet(setIdx);
                                     },
@@ -1368,6 +1491,329 @@ class _OverloadIndicator extends ConsumerWidget {
         fontSize: 14,
         fontWeight: FontWeight.w900,
         color: color,
+      ),
+    );
+  }
+}
+
+// ── Exercise Picker Bottom Sheet ─────────────────────────────────
+
+class _ExercisePickerSheet extends StatefulWidget {
+  final void Function(Map<String, dynamic> exerciseData) onSelect;
+
+  const _ExercisePickerSheet({required this.onSelect});
+
+  @override
+  State<_ExercisePickerSheet> createState() => _ExercisePickerSheetState();
+}
+
+class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedCategory = 'All';
+  List<Map<String, dynamic>> _allExercises = [];
+  List<Map<String, dynamic>> _filtered = [];
+
+  static const _categoryFilters = [
+    'All', 'Push', 'Pull', 'Legs', 'Core', 'Cardio', 'Flexibility',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _allExercises = ExerciseRepository.instance.getAll();
+    _filtered = _allExercises;
+    _searchController.addListener(_applyFilter);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _applyFilter() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filtered = _allExercises.where((e) {
+        // Category filter
+        if (_selectedCategory != 'All') {
+          final cat = (e['category'] as String?)?.toLowerCase() ?? '';
+          if (cat != _selectedCategory.toLowerCase()) return false;
+        }
+        // Search filter
+        if (query.isNotEmpty) {
+          final name = (e['name'] as String?)?.toLowerCase() ?? '';
+          if (!name.contains(query)) {
+            final aliases = e['name_aliases'];
+            if (aliases is List) {
+              final aliasMatch = aliases.any(
+                  (a) => a.toString().toLowerCase().contains(query));
+              if (!aliasMatch) return false;
+            } else {
+              return false;
+            }
+          }
+        }
+        return true;
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        border: Border(
+          top: BorderSide(color: AppColors.border),
+          left: BorderSide(color: AppColors.border),
+          right: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 6),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textDisabled,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Title
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'ADD EXERCISE',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+
+          // Search field
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _searchController,
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search exercises...',
+                hintStyle: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textSecondary,
+                ),
+                prefixIcon: const Icon(Icons.search,
+                    color: AppColors.textSecondary, size: 18),
+                filled: true,
+                fillColor: AppColors.input,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                      color: AppColors.accent.withValues(alpha: 0.5)),
+                ),
+              ),
+            ),
+          ),
+
+          // Category filter chips
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              itemCount: _categoryFilters.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final cat = _categoryFilters[i];
+                final isSelected = cat == _selectedCategory;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedCategory = cat);
+                    _applyFilter();
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.accent.withValues(alpha: 0.15)
+                          : AppColors.input,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.accent.withValues(alpha: 0.4)
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: Text(
+                      cat,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected
+                            ? AppColors.accent
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          // Exercise list
+          Flexible(
+            child: _filtered.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        'No exercises found',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    itemCount: _filtered.length,
+                    itemBuilder: (_, i) {
+                      final ex = _filtered[i];
+                      final name = ex['name'] as String? ?? 'Unknown';
+                      final category = ex['category'] as String? ?? '';
+                      final muscles =
+                          (ex['primary_muscles'] as List?)?.join(', ') ?? '';
+                      final loggingType =
+                          ex['logging_type'] as String? ?? 'weight_reps';
+
+                      return InkWell(
+                        onTap: () => widget.onSelect(ex),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom:
+                                  BorderSide(color: AppColors.border, width: 0.5),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    if (muscles.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          muscles,
+                                          style: GoogleFonts.getFont(
+                                            'DM Sans',
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w400,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Category badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(100),
+                                  border: Border.all(
+                                    color:
+                                        AppColors.accent.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Text(
+                                  category,
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Logging type icon
+                              Icon(
+                                loggingType == 'timed'
+                                    ? Icons.timer_outlined
+                                    : loggingType == 'cardio'
+                                        ? Icons.directions_run
+                                        : Icons.fitness_center,
+                                size: 14,
+                                color: AppColors.textDisabled,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
