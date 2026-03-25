@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Calls Supabase Edge Functions for AI chat.
@@ -18,6 +20,7 @@ class AiService {
   static AiService get instance => _instance;
 
   final SupabaseService _supabase = SupabaseService.instance;
+  final http.Client _httpClient = http.Client();
 
   /// Send a message to the free-tier AI coach.
   ///
@@ -26,32 +29,68 @@ class AiService {
   ///
   /// Returns the AI response text, or throws on failure.
   Future<String> chat(String message, Map<String, dynamic> context) async {
-    final response = await _supabase.callFunction(
-      'ai-proxy',
-      body: {
+    try {
+      final response = await _supabase.callFunction(
+        'ai-proxy',
+        body: {
+          'message': message,
+          'context': context,
+          'snapshot_json': context,
+        },
+      );
+
+      if (response.status != 200) {
+        throw AiServiceException(
+          'AI chat failed with status ${response.status}',
+          statusCode: response.status,
+        );
+      }
+
+      final data = response.data;
+      if (data is String) {
+        final parsed = json.decode(data) as Map<String, dynamic>;
+        return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
+      }
+      if (data is Map) {
+        return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
+      }
+
+      throw AiServiceException('Unexpected AI response format');
+    } catch (e) {
+      // Fallback: direct HTTP call if Supabase client fails on web
+      if (e.toString().contains('Failed to fetch') || e.toString().contains('ClientException')) {
+        return _directHttpCall('ai-proxy', message, context);
+      }
+      rethrow;
+    }
+  }
+
+  /// Direct HTTP fallback for web when Supabase client fails.
+  Future<String> _directHttpCall(String functionName, String message, Map<String, dynamic> context) async {
+    final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
+    final session = _supabase.client.auth.currentSession;
+    final token = session?.accessToken ?? AppConstants.supabaseAnonKey;
+
+    final response = await _httpClient.post(
+      Uri.parse(url),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+        'apikey': AppConstants.supabaseAnonKey,
+      },
+      body: json.encode({
         'message': message,
         'context': context,
         'snapshot_json': context,
-      },
+      }),
     );
 
-    if (response.status != 200) {
-      throw AiServiceException(
-        'AI chat failed with status ${response.status}',
-        statusCode: response.status,
-      );
+    if (response.statusCode != 200) {
+      throw AiServiceException('Direct call failed: ${response.statusCode} ${response.body}');
     }
 
-    final data = response.data;
-    if (data is String) {
-      final parsed = json.decode(data) as Map<String, dynamic>;
-      return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
-    }
-    if (data is Map) {
-      return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
-    }
-
-    throw AiServiceException('Unexpected AI response format');
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    return data['reply'] as String? ?? data['response'] as String? ?? '';
   }
 
   /// Send a message to the PRO-tier AI coach (Cerebras gpt-oss-120B).
@@ -61,31 +100,39 @@ class AiService {
   ///
   /// Returns the AI response text, or throws on failure.
   Future<String> chatPro(String message, Map<String, dynamic> context) async {
-    final response = await _supabase.callFunction(
-      'ai-proxy-pro',
-      body: {
-        'message': message,
-        'context': context,
-      },
-    );
-
-    if (response.status != 200) {
-      throw AiServiceException(
-        'PRO AI chat failed with status ${response.status}',
-        statusCode: response.status,
+    try {
+      final response = await _supabase.callFunction(
+        'ai-proxy-pro',
+        body: {
+          'message': message,
+          'context': context,
+          'snapshot_json': context,
+        },
       );
-    }
 
-    final data = response.data;
-    if (data is String) {
-      final parsed = json.decode(data) as Map<String, dynamic>;
-      return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
-    }
-    if (data is Map) {
-      return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
-    }
+      if (response.status != 200) {
+        throw AiServiceException(
+          'PRO AI chat failed with status ${response.status}',
+          statusCode: response.status,
+        );
+      }
 
-    throw AiServiceException('Unexpected PRO AI response format');
+      final data = response.data;
+      if (data is String) {
+        final parsed = json.decode(data) as Map<String, dynamic>;
+        return parsed['reply'] as String? ?? parsed['response'] as String? ?? '';
+      }
+      if (data is Map) {
+        return (data['reply'] as String?) ?? (data['response'] as String?) ?? '';
+      }
+
+      throw AiServiceException('Unexpected PRO AI response format');
+    } catch (e) {
+      if (e.toString().contains('Failed to fetch') || e.toString().contains('ClientException')) {
+        return _directHttpCall('ai-proxy-pro', message, context);
+      }
+      rethrow;
+    }
   }
 
   /// Send a message to the PRO reasoning engine (GLM-4.7 on Cerebras).
