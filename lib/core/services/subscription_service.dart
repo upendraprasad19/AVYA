@@ -57,7 +57,10 @@ class SubscriptionService {
     if (!pro) return false;
 
     final expiresAtRaw = configBox.get(_expiresAtKey);
-    if (expiresAtRaw == null) return false;
+    if (expiresAtRaw == null) {
+      // isPro flag is set but no expiry — treat as PRO (test/dev mode).
+      return true;
+    }
 
     final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
     if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {

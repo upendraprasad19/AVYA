@@ -1016,6 +1016,58 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     }
   }
 
+  /// Build the table header labels based on logging type.
+  List<Widget> _tableHeaderLabels() {
+    switch (widget.exercise.loggingType) {
+      case 'bodyweight_reps':
+        return [
+          const SizedBox(width: 28), // set badge
+          const SizedBox(width: 8),
+          Expanded(child: Center(child: Text('REPS', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          const SizedBox(width: 28), // checkbox
+        ];
+      case 'timed':
+        return [
+          const SizedBox(width: 28),
+          const SizedBox(width: 8),
+          Expanded(child: Center(child: Text('SEC', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          const SizedBox(width: 28),
+        ];
+      case 'cardio':
+        return [
+          const SizedBox(width: 28),
+          const SizedBox(width: 8),
+          Expanded(child: Center(child: Text('MIN', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          Expanded(child: Center(child: Text('KM', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          const SizedBox(width: 28),
+        ];
+      case 'distance':
+        return [
+          const SizedBox(width: 28),
+          const SizedBox(width: 8),
+          Expanded(child: Center(child: Text('KM', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          Expanded(child: Center(child: Text('KG', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          const SizedBox(width: 28),
+        ];
+      default: // weight_reps, weighted_bodyweight
+        return [
+          const SizedBox(width: 28),
+          const SizedBox(width: 8),
+          Expanded(child: Center(child: Text('KG', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          Expanded(child: Center(child: Text('REPS', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          const SizedBox(width: 6),
+          SizedBox(width: 28, child: Center(child: Text('\u2713', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary)))),
+        ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final numSets = _numSets;
@@ -1024,7 +1076,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         ? ActiveWorkoutData.supersetColor(widget.supersetGroup!)
         : null;
     // Reduce spacing between superset partners
-    final bottomPadding = isInSuperset && !widget.isLastInSupersetGroup ? 2.0 : 5.0;
+    final bottomPadding = isInSuperset && !widget.isLastInSupersetGroup ? 2.0 : 4.0;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
@@ -1037,7 +1089,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                 : widget.isInSupersetGroupMode
                     ? AppColors.accent.withValues(alpha: 0.03)
                     : const Color(0xFF0e1219),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: widget.isGroupModeSource
                   ? AppColors.accent.withValues(alpha: 0.5)
@@ -1059,168 +1111,170 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                     decoration: BoxDecoration(
                       color: supersetColor,
                       borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        bottomLeft: Radius.circular(12),
+                        topLeft: Radius.circular(14),
+                        bottomLeft: Radius.circular(14),
                       ),
                     ),
                   ),
                 // Main card content
                 Expanded(
-                  child: Column(
-                  children: [
-                    // Exercise header
-                    GestureDetector(
-                      onLongPress: widget.onLongPressHeader,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 9, 12, 0),
-                        child: Row(
-                          children: [
-                            // Number badge
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: widget.isActive
-                                    ? AppColors.accent.withValues(alpha: 0.15)
-                                    : const Color(0xFF161d28),
-                                borderRadius: BorderRadius.circular(7),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '${widget.exerciseIndex + 1}',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: widget.isActive
-                                        ? AppColors.accent
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 9),
-
-                            // Name + meta
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.exercise.name,
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    _metaText(),
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w400,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Swap or Done badge
-                            if (widget.isDone)
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Exercise header row
+                        GestureDetector(
+                          onLongPress: widget.onLongPressHeader,
+                          child: Row(
+                            children: [
+                              // Number badge circle
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 9, vertical: 5),
+                                width: 24,
+                                height: 24,
                                 decoration: BoxDecoration(
-                                  color: AppColors.green.withValues(alpha: 0.1),
-                                  border: Border.all(
-                                    color: AppColors.green.withValues(alpha: 0.25),
-                                  ),
-                                  borderRadius: BorderRadius.circular(7),
+                                  color: widget.isActive
+                                      ? AppColors.accent.withValues(alpha: 0.15)
+                                      : const Color(0xFF161d28),
+                                  shape: BoxShape.circle,
                                 ),
-                                child: Text(
-                                  '\u2713 Done',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.green,
-                                  ),
-                                ),
-                              )
-                            else
-                              GestureDetector(
-                                onTap: widget.onSwap,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF161d28),
-                                    border:
-                                        Border.all(color: const Color(0xFF1c2535)),
-                                    borderRadius: BorderRadius.circular(7),
-                                  ),
+                                child: Center(
                                   child: Text(
-                                    '\u21c4 Swap',
+                                    '${widget.exerciseIndex + 1}',
                                     style: GoogleFonts.getFont(
                                       'DM Sans',
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color: AppColors.textSecondary,
+                                      color: widget.isActive
+                                          ? AppColors.accent
+                                          : AppColors.textSecondary,
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                    ),
+                              const SizedBox(width: 10),
 
-            // Suggested weight line (above sets)
-            Builder(builder: (_) {
-              final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
-              if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                  child: Row(
-                    children: [
-                      Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
-                      const SizedBox(width: 3),
-                      Text(
-                        'Suggested: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            }),
+                              // Name + subtitle
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.exercise.name,
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      _metaText(),
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w400,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
 
-                    // Sets with SetInputRow + checkbox — driven by logging_type
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                      child: Column(
-                        children: List.generate(numSets, (setIdx) {
+                              // Swap or Done badge
+                              if (widget.isDone)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.green.withValues(alpha: 0.1),
+                                    border: Border.all(
+                                      color: AppColors.green.withValues(alpha: 0.25),
+                                    ),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(
+                                    '\u2713 Done',
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.green,
+                                    ),
+                                  ),
+                                )
+                              else
+                                GestureDetector(
+                                  onTap: widget.onSwap,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF161d28),
+                                      border:
+                                          Border.all(color: const Color(0xFF1c2535)),
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Text(
+                                      '\u21c4 Swap',
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+
+                        // Suggested weight line
+                        Builder(builder: (_) {
+                          final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
+                          if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Suggested: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.accent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        }),
+
+                        const SizedBox(height: 8),
+
+                        // Table header row
+                        Row(children: _tableHeaderLabels()),
+
+                        const SizedBox(height: 4),
+
+                        // Compact set rows
+                        ...List.generate(numSets, (setIdx) {
                           final isChecked =
                               widget.data.isSetChecked(widget.exerciseIndex, setIdx);
                           final isWarmUp =
                               widget.data.isSetWarmUp(widget.exerciseIndex, setIdx);
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.only(bottom: 4),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // SetInputRow from set_input_row.dart
                                 Expanded(
                                   child: SetInputRow(
                                     loggingType: widget.exercise.loggingType,
@@ -1231,61 +1285,35 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     setNumber: setIdx + 1,
                                     isWarmUp: isWarmUp,
                                     isCompleted: isChecked,
+                                    isChecked: isChecked,
                                     onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                // Overload indicator (only shows when set is checked)
-                                if (isChecked)
-                                  _OverloadIndicator(
-                                    exerciseName: widget.exercise.name,
-                                    currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
-                                  ),
-                                const SizedBox(width: 4),
-                                // Checkbox to mark set done
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 14),
-                                  child: GestureDetector(
-                                    onTap: () {
+                                    onCheck: () {
                                       _captureSetValues(setIdx);
                                       widget.onToggleSet(setIdx);
                                     },
-                                    child: Container(
-                                      width: 32,
-                                      height: 32,
-                                      decoration: BoxDecoration(
-                                        color: isChecked
-                                            ? AppColors.green.withValues(alpha: 0.15)
-                                            : const Color(0xFF161d28),
-                                        border: Border.all(
-                                          color: isChecked
-                                              ? AppColors.green.withValues(alpha: 0.4)
-                                              : const Color(0xFF1c2535),
-                                          width: 1.5,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        Icons.check,
-                                        size: 16,
-                                        color: isChecked
-                                            ? AppColors.green
-                                            : AppColors.textSecondary,
-                                      ),
-                                    ),
                                   ),
                                 ),
+                                // Inline overload indicator after checkbox
+                                if (isChecked)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: _OverloadIndicator(
+                                      exerciseName: widget.exercise.name,
+                                      currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
+                                    ),
+                                  ),
+                                if (!isChecked)
+                                  const SizedBox(width: 18), // placeholder for alignment
                               ],
                             ),
                           );
                         }),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1321,49 +1349,25 @@ class _OverloadIndicator extends ConsumerWidget {
 
     final Color color;
     final String icon;
-    final String? label;
 
     if (currentWeight > lastWeight) {
       color = AppColors.green;
       icon = '\u2191'; // up arrow
-      label = 'PR!';
     } else if (currentWeight == lastWeight) {
       color = AppColors.orange;
       icon = '\u2192'; // right arrow
-      label = null;
     } else {
       color = AppColors.red;
       icon = '\u2193'; // down arrow
-      label = 'Recovery';
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            icon,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-          ),
-          if (label != null) ...[
-            const SizedBox(width: 2),
-            Text(
-              label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ],
-        ],
+    return Text(
+      icon,
+      style: GoogleFonts.getFont(
+        'DM Sans',
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+        color: color,
       ),
     );
   }

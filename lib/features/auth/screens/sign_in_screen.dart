@@ -526,7 +526,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Widget _buildLogo() {
     return Image.asset(
-      'assets/App Main logo_AVYA.png',
+      'assets/avya_logo.png',
       width: 160,
       fit: BoxFit.contain,
     );

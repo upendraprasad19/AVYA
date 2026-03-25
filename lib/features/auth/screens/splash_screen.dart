@@ -96,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
             FadeTransition(
               opacity: _logoFade,
               child: Image.asset(
-                'assets/App Main logo_AVYA.png',
+                'assets/avya_logo.png',
                 width: 200,
                 fit: BoxFit.contain,
               ),

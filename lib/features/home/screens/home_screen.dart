@@ -18,6 +18,8 @@ import '../widgets/today_workout_card.dart';
 import '../widgets/pr_snapshot.dart';
 import '../widgets/recent_food_logs.dart';
 import '../widgets/swap_sheet.dart';
+import '../widgets/water_quick_sheet.dart';
+import '../widgets/weight_log_sheet.dart';
 import '../widgets/weight_sparkline.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -48,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.invalidate(userFirstNameProvider);
     ref.invalidate(userInitialProvider);
     ref.invalidate(streakProvider);
+    ref.invalidate(calendarWeekProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(nutritionSummaryProvider);
     ref.invalidate(weightHistoryProvider);
@@ -127,20 +130,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: _buildQuote(ref),
-        ),
-        const SizedBox(height: 10),
-        _buildQuickActions(context),
-        const SizedBox(height: 10),
         _buildSectionLabel('TODAY'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           child: _buildTodayRow(context, ref),
         ),
         const SizedBox(height: 10),
-        // AI Coach insight -- compact, below TODAY
+        _buildQuickActions(context),
+        const SizedBox(height: 10),
+        // AI Coach insight
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           child: _buildAiInsight(ref),
@@ -162,6 +160,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           child: _buildRecentFoodLogs(ref),
+        ),
+        const SizedBox(height: 10),
+        // Daily quote moved to bottom
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+          child: _buildQuote(ref),
         ),
         const SizedBox(height: 20),
       ],
@@ -316,13 +320,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           QuickActionButton(
             icon: Icons.water_drop_outlined,
             label: 'Water',
-            onTap: () {},
+            onTap: () => showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const WaterQuickSheet(),
+            ),
           ),
           const SizedBox(width: 7),
           QuickActionButton(
-            icon: Icons.nightlight_round,
-            label: 'Sleep',
-            onTap: () {},
+            icon: Icons.monitor_weight_outlined,
+            label: 'Weight',
+            onTap: () => showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              isScrollControlled: true,
+              builder: (_) => const WeightLogSheet(),
+            ),
           ),
         ],
       ),

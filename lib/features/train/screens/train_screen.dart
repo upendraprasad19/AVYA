@@ -83,12 +83,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         child: !plan.hasPlan
             ? Padding(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                child: EmptyState(
-                  icon: Icons.fitness_center,
-                  title: 'No workout plan yet',
-                  subtitle:
-                      'Complete onboarding to generate your personalised plan.',
-                ),
+                child: plan.isGenerating
+                    ? _buildGeneratingState()
+                    : EmptyState(
+                        icon: Icons.fitness_center,
+                        title: 'No workout plan yet',
+                        subtitle:
+                            'Complete onboarding to generate your personalised plan.',
+                      ),
               )
             : SingleChildScrollView(
                 padding: EdgeInsets.zero,
@@ -570,7 +572,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       status = _RowStatus.planned;
     }
 
-    final isTappable = !day.isRest;
+    // Only today's workout is tappable — other days are read-only
+    final isTappable = isToday && !day.isRest && !day.isDone;
 
     return GestureDetector(
       onTap: isTappable
@@ -853,6 +856,47 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
     if (totalWorkoutDays == 0) return 0.0;
     return completedDays / totalWorkoutDays;
+  }
+
+  Widget _buildGeneratingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 80),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Generating your plan...',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Building a personalised workout schedule\nbased on your profile',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyWeek() {

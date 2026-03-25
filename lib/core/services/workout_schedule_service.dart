@@ -1,4 +1,5 @@
 import '../services/hive_service.dart';
+import '../services/seed_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 
 /// Maps generated plan days to real calendar dates and persists to Hive.
@@ -40,6 +41,13 @@ class WorkoutScheduleService {
     String experienceLevel = 'beginner',
     int phase = 1,
   }) async {
+    // Guard: ensure exercise data is seeded before generation.
+    // If exerciseBox is empty, PlanGenerator will produce 0-exercise workouts.
+    final exerciseBox = _hive.exerciseBox;
+    if (exerciseBox.isEmpty) {
+      await SeedService.instance.seedIfNeeded();
+    }
+
     // 1. Generate the plan
     final plan = PlanGenerator.instance.generate(
       goal: goal,

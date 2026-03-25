@@ -464,3 +464,32 @@ class TodayStepsNotifier extends Notifier<int> {
 
 final todayStepsProvider =
     NotifierProvider<TodayStepsNotifier, int>(TodayStepsNotifier.new);
+
+// ── Weight Log ────────────────────────────────────────────────────
+
+class WeightLogNotifier extends Notifier<void> {
+  @override
+  void build() {}
+
+  void logWeight(double weightKg) {
+    final today = DateTime.now();
+    final dateStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final healthBox = HiveService.instance.healthBox;
+    healthBox.put('weight_$dateStr', {
+      'type': 'weight_log',
+      'date': dateStr,
+      'weight_kg': weightKg,
+      'created_at': today.toIso8601String(),
+    });
+    // Also update profile current_weight_kg
+    final userBox = HiveService.instance.userBox;
+    final profile =
+        Map<String, dynamic>.from(userBox.get('profile') as Map? ?? {});
+    profile['current_weight_kg'] = weightKg;
+    userBox.put('profile', profile);
+  }
+}
+
+final weightLogNotifierProvider =
+    NotifierProvider<WeightLogNotifier, void>(WeightLogNotifier.new);

@@ -11,13 +11,10 @@ import '../widgets/calorie_ring_painter.dart';
 import '../widgets/food_logger_section.dart';
 import '../widgets/ai_breakdown_card.dart';
 import '../widgets/todays_meals_card.dart';
-import '../widgets/hydration_section.dart';
 import '../widgets/weekly_chart_card.dart';
 import '../widgets/scan_meal_section.dart';
-import '../widgets/cart_auditor_section.dart';
 import '../widgets/saved_meals_section.dart';
 import '../widgets/food_search_sheet.dart';
-import '../widgets/custom_food_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -26,29 +23,22 @@ class NutritionScreen extends ConsumerStatefulWidget {
   ConsumerState<NutritionScreen> createState() => _NutritionScreenState();
 }
 
-class _NutritionScreenState extends ConsumerState<NutritionScreen>
-    with SingleTickerProviderStateMixin {
+class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   static const _months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
-  late TabController _tabController;
   bool _isLoading = true;
+  bool _isInsightsExpanded = false;
+  bool _isWaterExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   void _retry() {
@@ -77,20 +67,11 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
                 // -- Header --
                 _buildHeader(now),
 
-                // -- Tabs --
-                _buildTabBar(),
-
-                // -- Tab Content --
+                // -- Content --
                 Expanded(
                   child: _isLoading
                       ? const ScreenLoadingSkeleton(cardCount: 4)
-                      : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildMealsTabSafe(),
-                            _buildWaterTab(),
-                          ],
-                        ),
+                      : _buildMealsTabSafe(),
                 ),
               ],
             ),
@@ -159,11 +140,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
           ),
           const SizedBox(width: 6),
           _headerAction(
-            icon: Icons.add,
-            onTap: () => showCustomFoodSheet(context),
-          ),
-          const SizedBox(width: 6),
-          _headerAction(
             icon: Icons.restaurant_menu,
             onTap: () => context.go('/nutrition/diet-plan'),
           ),
@@ -188,65 +164,36 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     );
   }
 
-  // ── Tab Bar ────────────────────────────────────────────────────
-
-  Widget _buildTabBar() {
-    return Container(
-      color: AppColors.header,
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: AppColors.accent,
-        indicatorWeight: 2,
-        labelColor: AppColors.accent,
-        unselectedLabelColor: AppColors.textSecondary,
-        labelStyle: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelStyle: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 13,
-          fontWeight: FontWeight.w400,
-        ),
-        tabs: const [
-          Tab(text: 'Meals'),
-          Tab(text: 'Water'),
-        ],
-      ),
-    );
-  }
-
-  // ── Meals Tab ──────────────────────────────────────────────────
+  // ── Meals Content ─────────────────────────────────────────────
 
   Widget _buildMealsTab() {
     final nutrition = ref.watch(dailyNutritionProvider);
     final breakdown = ref.watch(aiBreakdownProvider);
     final targets = ref.watch(macroTargetsProvider);
     final weeklyData = ref.watch(weeklyNutritionProvider);
+    final savedMeals = ref.watch(savedMealsProvider);
 
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // ── BMR/TDEE Snapshot ──
-        _sectionLabel('BMR / TDEE', topPadding: 10),
+        // ── 1. Today's Summary (calorie ring + macro bars + TDEE tooltip) ──
+        _sectionLabel('TODAY\'S SUMMARY', topPadding: 10),
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildBmrTdeeRow(targets),
+          child: _buildCalorieCard(nutrition, targets: targets),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
 
-        // ── Today's Summary ──
-        _sectionLabel('TODAY\'S SUMMARY'),
+        // ── Compact macro summary text ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildCalorieCard(nutrition),
+          child: _buildMacroSummaryRow(nutrition),
         ),
         const SizedBox(height: 10),
 
-        // ── Log Meal ──
+        // ── 2. Log Meal ──
         _sectionLabel('LOG MEAL'),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -255,39 +202,13 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 10),
 
-        // ── AI Breakdown Card ──
+        // ── 3. AI Breakdown (conditional) ──
         if (breakdown != null) ...[
           const AiBreakdownCard(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
         ],
 
-        // ── Quick Log Buttons ──
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: Row(
-            children: [
-              Expanded(
-                child: _quickLogButton(
-                  icon: Icons.search,
-                  label: 'Search Food',
-                  onTap: () => showFoodSearchSheet(context),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _quickLogButton(
-                  icon: Icons.add_circle_outline,
-                  label: 'Custom Food',
-                  onTap: () => showCustomFoodSheet(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // ── Scan Meal ──
+        // ── 4. Scan Meal ──
         _sectionLabel('AI SCAN'),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -296,16 +217,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 10),
 
-        // ── Cart Auditor ──
-        _sectionLabel('CART AUDITOR'),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: const CartAuditorSection(),
-        ),
-        const SizedBox(height: 10),
-
-        // ── Today's Meals ──
+        // ── 5. Today's Meals ──
         _sectionLabel('TODAY\'S MEALS'),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -314,60 +226,30 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         ),
         const SizedBox(height: 10),
 
-        // ── Saved Meals ──
-        _sectionLabel('SAVED MEALS'),
+        // ── 5b. Inline Water Tracker ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: const SavedMealsSection(),
+          child: _buildInlineWaterTracker(),
         ),
         const SizedBox(height: 10),
 
-        // ── Insights & Trends ──
-        _sectionLabel('INSIGHTS & TRENDS'),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: WeeklyChartCard(
-            title: 'This Week \u2014 Calories',
-            emoji: '\u{1F4CA}',
-            data: weeklyData.calories,
-            barColor: AppColors.accent,
-            avgLabel: 'Avg: ${weeklyData.avgCalories.round()} kcal/day',
-            targetLabel: 'Target: ${weeklyData.calorieTarget.round()}',
-            targetColor: AppColors.accent,
+        // ── 6. Saved Meals (hidden if empty) ──
+        if (savedMeals.isNotEmpty) ...[
+          _sectionLabel('SAVED MEALS'),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding),
+            child: const SavedMealsSection(),
           ),
-        ),
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
+        ],
+
+        // ── 7. Insights & Trends (collapsed by default) ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: WeeklyChartCard(
-            title: 'This Week \u2014 Protein',
-            emoji: '\u{1F4AA}',
-            data: weeklyData.protein,
-            barColor: AppColors.orange,
-            avgLabel: 'Avg: ${weeklyData.avgProtein.round()}g/day',
-            targetLabel: 'Target: ${weeklyData.proteinTarget.round()}g',
-            targetColor: AppColors.orange,
-          ),
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  // ── Water Tab ──────────────────────────────────────────────────
-
-  Widget _buildWaterTab() {
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        _sectionLabel('HYDRATION', topPadding: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: const HydrationSection(),
+          child: _buildInsightsSection(weeklyData),
         ),
         const SizedBox(height: 24),
       ],
@@ -393,68 +275,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     );
   }
 
-  // ── BMR/TDEE Row ───────────────────────────────────────────────
-
-  Widget _buildBmrTdeeRow(Map<String, double> targets) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _miniStat('BMR', '${targets['bmr']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 30, color: AppColors.border),
-          _miniStat('TDEE', '${targets['tdee']?.round() ?? 0}', 'kcal'),
-          Container(width: 1, height: 30, color: AppColors.border),
-          _miniStat(
-              'TARGET', '${targets['calories']?.round() ?? 0}', 'kcal'),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, String value, String unit) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.0,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        Text(
-          unit,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 9,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
   // ── Calorie Ring + Macro Bars Card ─────────────────────────────
 
-  Widget _buildCalorieCard(DailyNutritionData nutrition) {
+  Widget _buildCalorieCard(DailyNutritionData nutrition,
+      {Map<String, double> targets = const {}}) {
     final consumed = nutrition.calories.round();
     final target = nutrition.calorieTarget.round();
     final remaining = (target - consumed).clamp(0, target);
@@ -469,105 +293,131 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         border:
             Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Calorie ring
-          SizedBox(
-            width: 120,
-            height: 120,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CustomPaint(
-                  size: const Size(120, 120),
-                  painter: CalorieRingPainter(
-                    progress: progress.clamp(0.0, 1.0),
-                    trackColor: AppColors.input,
-                    fillColor: AppColors.accent,
-                    strokeWidth: 11,
+          // Title row with BMR/TDEE info icon
+          Row(
+            children: [
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _showBmrTdeeInfo(targets),
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: AppColors.input,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: AppColors.border),
                   ),
+                  child: const Icon(Icons.info_outline,
+                      color: AppColors.textSecondary, size: 12),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              // Calorie ring
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      '$consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                        height: 1,
+                    CustomPaint(
+                      size: const Size(120, 120),
+                      painter: CalorieRingPainter(
+                        progress: progress.clamp(0.0, 1.0),
+                        trackColor: AppColors.input,
+                        fillColor: AppColors.accent,
+                        strokeWidth: 11,
                       ),
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.accent,
-                        height: 1,
-                      ),
-                    ),
-                    Text(
-                      'remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$consumed',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textPrimary,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          'consumed',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 8,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$remaining',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.accent,
+                            height: 1,
+                          ),
+                        ),
+                        Text(
+                          'remaining',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 8,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
+              ),
+              const SizedBox(width: 16),
 
-          // Macro bars
-          Expanded(
-            child: Column(
-              children: [
-                _macroRow(
-                  label: 'PROTEIN',
-                  current: nutrition.protein.round(),
-                  target: nutrition.proteinTarget.round(),
-                  color: AppColors.orange,
+              // Macro bars
+              Expanded(
+                child: Column(
+                  children: [
+                    _macroRow(
+                      label: 'PROTEIN',
+                      current: nutrition.protein.round(),
+                      target: nutrition.proteinTarget.round(),
+                      color: AppColors.orange,
+                    ),
+                    const SizedBox(height: 8),
+                    _macroRow(
+                      label: 'CARBS',
+                      current: nutrition.carbs.round(),
+                      target: nutrition.carbTarget.round(),
+                      color: AppColors.blue,
+                    ),
+                    const SizedBox(height: 8),
+                    _macroRow(
+                      label: 'FAT',
+                      current: nutrition.fat.round(),
+                      target: nutrition.fatTarget.round(),
+                      color: AppColors.purple,
+                    ),
+                    const SizedBox(height: 8),
+                    _macroRow(
+                      label: 'FIBER',
+                      current: nutrition.fiber.round(),
+                      target: nutrition.fiberTarget.round(),
+                      color: AppColors.green,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                _macroRow(
-                  label: 'CARBS',
-                  current: nutrition.carbs.round(),
-                  target: nutrition.carbTarget.round(),
-                  color: AppColors.blue,
-                ),
-                const SizedBox(height: 8),
-                _macroRow(
-                  label: 'FAT',
-                  current: nutrition.fat.round(),
-                  target: nutrition.fatTarget.round(),
-                  color: AppColors.purple,
-                ),
-                const SizedBox(height: 8),
-                _macroRow(
-                  label: 'FIBER',
-                  current: nutrition.fiber.round(),
-                  target: nutrition.fiberTarget.round(),
-                  color: AppColors.green,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -631,38 +481,404 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     );
   }
 
-  // ── Quick Log Button ───────────────────────────────────────────
+  // ── Macro Summary Row (compact text) ──────────────────────────
 
-  Widget _quickLogButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          border: Border.all(color: AppColors.border),
+  Widget _buildMacroSummaryRow(DailyNutritionData nutrition) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _macroMiniText(
+            'P', nutrition.protein.round(), nutrition.proteinTarget.round(),
+            AppColors.orange),
+        Text(
+          '  \u00B7  ',
+          style: GoogleFonts.getFont('DM Sans',
+              fontSize: 11, color: AppColors.textSecondary),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: AppColors.accent, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+        _macroMiniText(
+            'C', nutrition.carbs.round(), nutrition.carbTarget.round(),
+            AppColors.blue),
+        Text(
+          '  \u00B7  ',
+          style: GoogleFonts.getFont('DM Sans',
+              fontSize: 11, color: AppColors.textSecondary),
+        ),
+        _macroMiniText(
+            'F', nutrition.fat.round(), nutrition.fatTarget.round(),
+            AppColors.purple),
+      ],
+    );
+  }
+
+  Widget _macroMiniText(String label, int current, int target, Color color) {
+    return RichText(
+      text: TextSpan(
+        style: GoogleFonts.getFont('DM Sans',
+            fontSize: 11, fontWeight: FontWeight.w700),
+        children: [
+          TextSpan(text: '$label: ', style: TextStyle(color: color)),
+          TextSpan(
+            text: '${current}g/${target}g',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── BMR/TDEE Info Dialog ─────────────────────────────────────
+
+  void _showBmrTdeeInfo(Map<String, double> targets) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'YOUR TARGETS',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _bmrInfoRow(
+                  'BMR', '${targets['bmr']?.round() ?? 0} kcal'),
+              const SizedBox(height: 8),
+              _bmrInfoRow(
+                  'TDEE', '${targets['tdee']?.round() ?? 0} kcal'),
+              const SizedBox(height: 8),
+              _bmrInfoRow(
+                  'Target', '${targets['calories']?.round() ?? 0} kcal'),
+              const SizedBox(height: 16),
+              Text(
+                'BMR = Basal Metabolic Rate\nTDEE = Total Daily Energy Expenditure',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                        color: AppColors.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    'Got it',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bmrInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Inline Water Tracker ──────────────────────────────────────
+
+  static const _urineColors = [
+    (color: Color(0xFFFFF9C4), status: 'Excellent', tip: 'Pale straw — optimal', statusColor: AppColors.green),
+    (color: Color(0xFFFFF176), status: 'Good', tip: 'Clear yellow — well hydrated', statusColor: AppColors.green),
+    (color: Color(0xFFFFD600), status: 'Adequate', tip: 'Yellow — drink more soon', statusColor: Color(0xFFF59E0B)),
+    (color: Color(0xFFFFB300), status: 'Low', tip: 'Dark yellow — drink now', statusColor: Color(0xFFF59E0B)),
+    (color: Color(0xFFE65100), status: 'Very low', tip: 'Amber — significantly dehydrated', statusColor: AppColors.red),
+    (color: Color(0xFFBF360C), status: 'Critical', tip: 'Brown — consult a doctor', statusColor: AppColors.red),
+    (color: Color(0xFF4E342E), status: 'Doctor!', tip: 'Dark brown — medical attention', statusColor: AppColors.red),
+  ];
+
+  Widget _buildInlineWaterTracker() {
+    final waterMl = ref.watch(waterIntakeProvider);
+    const waterTarget = 3000;
+    final progress = (waterMl / waterTarget).clamp(0.0, 1.0);
+    final selectedUrine = ref.watch(urineColorProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          // -- Top row: label + amount + expand toggle --
+          GestureDetector(
+            onTap: () => setState(() => _isWaterExpanded = !_isWaterExpanded),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Text(
+                  '\u{1F4A7} WATER',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.blue,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${waterMl.toStringAsFixed(0)} / $waterTarget ml',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  _isWaterExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: AppColors.textSecondary,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // -- Progress bar --
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 3,
+              backgroundColor: const Color(0xFF161d28),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // -- Quick-add buttons --
+          Row(
+            children: [150, 250, 500, 750].map((amount) {
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: amount == 750 ? 0 : 6,
+                  ),
+                  child: GestureDetector(
+                    onTap: () =>
+                        ref.read(waterIntakeProvider.notifier).addWater(amount),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.input,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '+${amount}ml',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.blue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          // -- Expanded section: urine color picker --
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: _isWaterExpanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'How\'s your hydration?',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(_urineColors.length, (i) {
+                            final isSelected = selectedUrine == i;
+                            return GestureDetector(
+                              onTap: () => ref
+                                  .read(urineColorProvider.notifier)
+                                  .select(i),
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: _urineColors[i].color,
+                                  shape: BoxShape.circle,
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: Colors.white, width: 2)
+                                      : null,
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        if (selectedUrine >= 0 &&
+                            selectedUrine < _urineColors.length) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            '${_urineColors[selectedUrine].status} — ${_urineColors[selectedUrine].tip}',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _urineColors[selectedUrine].statusColor,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Insights Section (collapsed by default) ──────────────────
+
+  Widget _buildInsightsSection(WeeklyNutritionData weeklyData) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => setState(() =>
+                _isInsightsExpanded = !_isInsightsExpanded),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Text(
+                    'INSIGHTS & TRENDS',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _isInsightsExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondary,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isInsightsExpanded) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: WeeklyChartCard(
+                title: 'This Week \u2014 Calories',
+                emoji: '\u{1F4CA}',
+                data: weeklyData.calories,
+                barColor: AppColors.accent,
+                avgLabel:
+                    'Avg: ${weeklyData.avgCalories.round()} kcal/day',
+                targetLabel:
+                    'Target: ${weeklyData.calorieTarget.round()}',
+                targetColor: AppColors.accent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: WeeklyChartCard(
+                title: 'This Week \u2014 Protein',
+                emoji: '\u{1F4AA}',
+                data: weeklyData.protein,
+                barColor: AppColors.orange,
+                avgLabel:
+                    'Avg: ${weeklyData.avgProtein.round()}g/day',
+                targetLabel:
+                    'Target: ${weeklyData.proteinTarget.round()}g',
+                targetColor: AppColors.orange,
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }

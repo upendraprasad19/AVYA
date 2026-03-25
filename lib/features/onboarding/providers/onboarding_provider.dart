@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -190,10 +191,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         return today.add(Duration(days: daysUntilNextMonday == 0 ? 7 : daysUntilNextMonday));
       case 'this_monday':
       default:
-        // If today IS Monday, start today. Otherwise next Monday.
-        if (now.weekday == 1) return today;
-        final daysUntilMonday = (8 - now.weekday) % 7;
-        return today.add(Duration(days: daysUntilMonday == 0 ? 7 : daysUntilMonday));
+        // Return THIS week's Monday (today or most recent Monday).
+        // This ensures the plan covers the current week so the calendar
+        // shows workout/rest status for this week immediately.
+        final daysSinceMonday = now.weekday - 1; // Mon=0, Tue=1, ..., Sun=6
+        return today.subtract(Duration(days: daysSinceMonday));
     }
   }
 
@@ -279,6 +281,13 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       };
 
       await _userRepo.updateProfileFields(profile);
+
+      // Ensure exercise data is seeded before plan generation.
+      // Without exercises, PlanGenerator produces 0-exercise (all-rest) workouts.
+      final exerciseBox = _hive.exerciseBox;
+      if (exerciseBox.isEmpty) {
+        await SeedService.instance.seedIfNeeded();
+      }
 
       // Generate plan AND schedule to calendar dates via WorkoutScheduleService
       final startDate = resolveStartDate();

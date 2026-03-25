@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import '../providers/home_provider.dart';
 
 /// Horizontal 7-day calendar strip synced with workout plan from Hive.
 ///
 /// Reads scheduled_workouts via [WorkoutScheduleService] so Dashboard
-/// and Workout screen always show the same data.
+/// and Workout screen always show the same data. Uses [calendarWeekProvider]
+/// to rebuild automatically when schedule data changes.
 ///
 /// States:
 ///   - completed: cyan tint bg, check icon
@@ -15,14 +18,19 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 ///   - rest: gray, no indicator
 ///   - travel: amber tint, suitcase icon
 ///   - swapped: has 🔄 indicator
-class WeeklyCalendar extends StatelessWidget {
+class WeeklyCalendar extends ConsumerWidget {
   final void Function(DateTime date, Map<String, dynamic>? schedule)? onDayTap;
   final void Function(DateTime date, Map<String, dynamic>? schedule)? onDayLongPress;
 
   const WeeklyCalendar({super.key, this.onDayTap, this.onDayLongPress});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the calendar provider so this widget rebuilds when schedule changes.
+    // We don't use the provider's data directly — we read full schedule maps
+    // from the service for tap callbacks — but watching ensures rebuilds.
+    ref.watch(calendarWeekProvider);
+
     final now = DateTime.now();
     final todayDate = DateTime(now.year, now.month, now.day);
     final weekStart = todayDate.subtract(Duration(days: now.weekday - 1));

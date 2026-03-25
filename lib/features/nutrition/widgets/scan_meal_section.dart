@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:image_picker/image_picker.dart';
@@ -323,8 +324,40 @@ class ScanMealSection extends ConsumerWidget {
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  // TODO: Save scanned result to nutrition log
+                  final result = ref.read(scanMealProvider).result;
+                  if (result != null) {
+                    final now = DateTime.now();
+                    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                    final id = 'nlog_${now.millisecondsSinceEpoch}';
+                    final items = result['items'] as List<dynamic>? ?? [];
+                    int totalProtein = 0, totalCarbs = 0, totalFat = 0;
+                    for (final item in items) {
+                      if (item is Map) {
+                        totalProtein += (item['protein'] as num?)?.toInt() ?? 0;
+                        totalCarbs += (item['carbs'] as num?)?.toInt() ?? 0;
+                        totalFat += (item['fat'] as num?)?.toInt() ?? 0;
+                      }
+                    }
+                    HiveService.instance.nutritionBox.put(id, {
+                      'id': id,
+                      'date': dateStr,
+                      'meal_type': 'snacks',
+                      'food_name': result['meal_name'] ?? 'Scanned Meal',
+                      'total_calories': (result['total_calories'] as num?)?.toInt() ?? 0,
+                      'total_protein': totalProtein,
+                      'total_carbs': totalCarbs,
+                      'total_fat': totalFat,
+                      'created_at': now.toIso8601String(),
+                      'source': 'scan_meal',
+                    });
+                    ref.invalidate(dailyNutritionProvider);
+                  }
                   ref.read(scanMealProvider.notifier).clear();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Meal saved ✓'), duration: Duration(seconds: 1)),
+                    );
+                  }
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),

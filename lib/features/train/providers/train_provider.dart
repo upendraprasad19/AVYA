@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
@@ -239,6 +240,7 @@ class CurrentPlanData {
   final String focus;
   final List<List<WorkoutDayData>> weeks;
   final bool hasPlan;
+  final bool isGenerating; // true when plan generation is in progress
 
   const CurrentPlanData({
     this.phase = 1,
@@ -247,6 +249,7 @@ class CurrentPlanData {
     this.focus = 'Movement patterns & baseline strength',
     this.weeks = const [],
     this.hasPlan = false,
+    this.isGenerating = false,
   });
 
   /// Get workouts for a specific week (1-indexed).
@@ -282,8 +285,10 @@ class CurrentPlanData {
 
 class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
   /// Auto-generates a workout plan from local Hive profile data.
-  /// Called synchronously when plan is missing or schedule entries are corrupt.
-  /// Uses PlanGenerator.generate() (synchronous) and writes to Hive directly.
+  ///
+  /// Fire-and-forget async: after the plan is written to Hive,
+  /// [ref.invalidateSelf()] triggers a rebuild so the UI picks up the new data.
+  /// Also ensures exerciseBox is seeded before generation.
   void _autoGeneratePlan(
       Map<String, dynamic> profile, Map<String, dynamic>? progress) {
     final goal = profile['primary_goal'] as String? ?? 'general_fitness';
@@ -292,17 +297,35 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final experience = profile['fitness_experience'] as String? ?? 'beginner';
     final phase = (progress?['current_phase'] as int?) ?? 1;
 
-    // Fire-and-forget: schedule generation is async (Hive writes) but
-    // we don't await it here. The build() method will fall through to
-    // read whatever data is available — no recursive build() call.
-    WorkoutScheduleService.instance.generateAndSchedule(
-      goal: goal,
-      equipment: equipment,
-      daysPerWeek: daysPerWeek,
-      startDate: DateTime.now(),
-      experienceLevel: experience,
-      phase: phase,
-    );
+    // Fire-and-forget async: generation writes to Hive, then invalidateSelf
+    // triggers build() to re-run with the newly written plan data.
+    () async {
+      try {
+        // Guard: ensure exercise data is seeded before generation.
+        final exerciseBox = HiveService.instance.exerciseBox;
+        if (exerciseBox.isEmpty) {
+          await SeedService.instance.seedIfNeeded();
+          // If still empty after seeding, abort — no exercises to build a plan from.
+          if (exerciseBox.isEmpty) return;
+        }
+
+        await WorkoutScheduleService.instance.generateAndSchedule(
+          goal: goal,
+          equipment: equipment,
+          daysPerWeek: daysPerWeek,
+          startDate: DateTime.now(),
+          experienceLevel: experience,
+          phase: phase,
+        );
+
+        // KEY FIX: Invalidate self AFTER generation completes so build()
+        // re-runs and reads the freshly written plan from Hive.
+        ref.invalidateSelf();
+      } catch (e) {
+        // Log but don't crash — plan generation failure is non-fatal.
+        // User will see empty state and can retry via pull-to-refresh.
+      }
+    }();
   }
 
   @override
@@ -317,10 +340,18 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
       // No plan generated yet — try to auto-generate from local profile.
       final profile = UserRepository.instance.getProfile();
       if (profile != null && profile['primary_goal'] != null) {
-        // Profile exists locally — generate plan silently (async, fire-and-forget).
+        // Profile exists locally — generate plan silently (async).
+        // After generation completes, ref.invalidateSelf() triggers rebuild.
         _autoGeneratePlan(profile, progress);
-        // Plan generation is async — fall through and show empty state for now.
-        // The provider will be invalidated once generation completes on next access.
+        return CurrentPlanData(
+          phase: phase,
+          phaseName: 'Generating',
+          currentWeek: week,
+          focus: 'Generating your personalised workout plan...',
+          weeks: const [],
+          hasPlan: false,
+          isGenerating: true,
+        );
       }
       return CurrentPlanData(
         phase: phase,
@@ -341,6 +372,16 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
       final profile = UserRepository.instance.getProfile();
       if (profile != null) {
         _autoGeneratePlan(profile, progress);
+        // Return generating state while async regeneration runs.
+        return CurrentPlanData(
+          phase: phase,
+          phaseName: 'Regenerating',
+          currentWeek: week,
+          focus: 'Rebuilding your workout schedule...',
+          weeks: const [],
+          hasPlan: false,
+          isGenerating: true,
+        );
       }
     }
 

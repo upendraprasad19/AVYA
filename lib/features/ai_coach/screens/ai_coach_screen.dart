@@ -107,37 +107,27 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final messageCount = ref.read(messageLimitProvider);
     final reasoningMode = ref.read(reasoningModeProvider);
 
+    // PRO users bypass all limits — send directly
+    if (isPro) {
+      _doSend(text, mode: reasoningMode);
+      return;
+    }
+
     // If trial expired and not PRO, gate
-    if (!isPro && trialInfo.isTrialExpired) {
-      SubscriptionService.instance.gate(
-        AppConstants.featureAiCoachUnlimited,
-        onPro: () => _doSend(text, mode: reasoningMode),
-        onFree: () =>
-            showPaywallSheet(context, feature: 'Unlimited AI Coach'),
-      );
+    if (trialInfo.isTrialExpired) {
+      showPaywallSheet(context, feature: 'Unlimited AI Coach');
       return;
     }
 
     // If daily limit reached and not PRO
-    if (!isPro &&
-        messageCount >= AppConstants.freeAiMessagesPerDay) {
-      SubscriptionService.instance.gate(
-        AppConstants.featureAiCoachUnlimited,
-        onPro: () => _doSend(text, mode: reasoningMode),
-        onFree: () =>
-            showPaywallSheet(context, feature: 'Unlimited AI Coach'),
-      );
+    if (messageCount >= AppConstants.freeAiMessagesPerDay) {
+      showPaywallSheet(context, feature: 'Unlimited AI Coach');
       return;
     }
 
-    // Deep mode requires PRO
+    // Deep mode requires PRO (free users)
     if (reasoningMode == 'deep') {
-      SubscriptionService.instance.gate(
-        AppConstants.featureReasoningTab,
-        onPro: () => _doSend(text, mode: 'deep'),
-        onFree: () =>
-            showPaywallSheet(context, feature: 'Deep Analysis'),
-      );
+      showPaywallSheet(context, feature: 'Deep Analysis');
       return;
     }
 

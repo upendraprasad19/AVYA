@@ -123,6 +123,15 @@ class TrialInfoData {
 class TrialInfoNotifier extends Notifier<TrialInfoData> {
   @override
   TrialInfoData build() {
+    // PRO users are never trial-limited
+    if (SubscriptionService.instance.isPro()) {
+      return const TrialInfoData(
+        daysRemaining: 0,
+        isTrialActive: false,
+        isTrialExpired: false,
+      );
+    }
+
     final configBox = HiveService.instance.configBox;
     final trialStartRaw = configBox.get('ai_trial_start') as String?;
 
