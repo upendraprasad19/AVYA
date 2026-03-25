@@ -24,11 +24,13 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
   @override
   void initState() {
     super.initState();
-    _loadLastWeight();
+    _loadLastWeightData();
     _controller = TextEditingController(text: _weight.toStringAsFixed(1));
   }
 
-  void _loadLastWeight() {
+  /// Read last weight from Hive — sets _weight, _lastWeight, _lastDate
+  /// but does NOT touch _controller (not yet initialized).
+  void _loadLastWeightData() {
     final healthBox = HiveService.instance.healthBox;
     String latestDate = '';
     double? latestWeight;
@@ -46,7 +48,6 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
       }
     }
 
-    // Also check profile for current_weight_kg
     final userBox = HiveService.instance.userBox;
     final profile = userBox.get('profile');
     if (profile is Map) {
@@ -61,9 +62,9 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
       _weight = latestWeight;
       _lastWeight = latestWeight;
       _lastDate = latestDate.isNotEmpty ? latestDate : null;
-      _controller.text = _weight.toStringAsFixed(1);
     }
   }
+
 
   @override
   void dispose() {

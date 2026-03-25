@@ -560,6 +560,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       dayLabel = 'D${day.dayNumber}';
     }
 
+    // Determine if this day is in the past
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final isPast = day.date != null && day.date!.isBefore(todayDate);
+
     // Status
     _RowStatus status;
     if (day.isRest) {
@@ -568,87 +573,96 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       status = _RowStatus.done;
     } else if (isToday) {
       status = _RowStatus.today;
+    } else if (isPast) {
+      status = _RowStatus.missed;
     } else {
       status = _RowStatus.planned;
     }
 
-    // Only today's workout is tappable — other days are read-only
-    final isTappable = isToday && !day.isRest && !day.isDone;
+    // Today's incomplete workout navigates to active workout; other non-rest days show preview
+    final isTappable = (!day.isRest && (isToday && !day.isDone)) || (!day.isRest && !isToday);
 
     return GestureDetector(
       onTap: isTappable
           ? () {
-              ref
-                  .read(activeWorkoutProvider.notifier)
-                  .startWorkout(day);
-              context.go('/train/active-workout');
+              if (isToday && !day.isDone) {
+                ref
+                    .read(activeWorkoutProvider.notifier)
+                    .startWorkout(day);
+                context.go('/train/active-workout');
+              } else if (!day.isRest) {
+                _showExercisePreviewSheet(context, day);
+              }
             }
           : null,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: isToday
-            ? BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: AppColors.accent,
-                    width: 2,
+      child: Opacity(
+        opacity: status == _RowStatus.missed ? 0.6 : 1.0,
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: isToday
+              ? BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: AppColors.accent,
+                      width: 2,
+                    ),
+                  ),
+                )
+              : null,
+          child: Row(
+            children: [
+              // Day name
+              SizedBox(
+                width: 36,
+                child: Text(
+                  dayLabel,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: day.isRest
+                        ? AppColors.textSecondary.withValues(alpha: 0.5)
+                        : AppColors.textSecondary,
                   ),
                 ),
-              )
-            : null,
-        child: Row(
-          children: [
-            // Day name
-            SizedBox(
-              width: 36,
-              child: Text(
-                dayLabel,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: day.isRest
-                      ? AppColors.textSecondary.withValues(alpha: 0.5)
-                      : AppColors.textSecondary,
-                ),
               ),
-            ),
 
-            // Workout name
-            Expanded(
-              child: Text(
-                day.isRest ? 'Rest' : day.name,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: day.isRest ? FontWeight.w400 : FontWeight.w700,
-                  color: day.isRest
-                      ? AppColors.textSecondary.withValues(alpha: 0.5)
-                      : AppColors.textPrimary,
+              // Workout name
+              Expanded(
+                child: Text(
+                  day.isRest ? 'Rest' : day.name,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: day.isRest ? FontWeight.w400 : FontWeight.w700,
+                    color: day.isRest
+                        ? AppColors.textSecondary.withValues(alpha: 0.5)
+                        : AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
 
-            // Exercise count (only for workout days)
-            if (!day.isRest) ...[
-              Text(
-                '${day.exerciseCount} ex',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+              // Exercise count (only for workout days)
+              if (!day.isRest) ...[
+                Text(
+                  '${day.exerciseCount} ex',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ],
+
+              // Status indicator
+              _buildStatusIndicator(status),
             ],
-
-            // Status indicator
-            _buildStatusIndicator(status),
-          ],
+          ),
         ),
       ),
     );
@@ -724,9 +738,209 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ),
           ],
         );
+      case _RowStatus.missed:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '\u2014',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Missed',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        );
       case _RowStatus.rest:
         return const SizedBox.shrink();
     }
+  }
+
+  // ── Exercise Preview Bottom Sheet ────────────────────────────
+
+  void _showExercisePreviewSheet(BuildContext context, WorkoutDayData day) {
+    // Format the date label
+    String dateLabel = '';
+    if (day.date != null) {
+      const dayNames = [
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+      ];
+      const monthNames = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      dateLabel =
+          '${dayNames[day.date!.weekday - 1]}, ${monthNames[day.date!.month - 1]} ${day.date!.day}';
+    }
+
+    // Determine if this is a past completed day
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    final isPastCompleted =
+        day.isDone && day.date != null && day.date!.isBefore(todayDate);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Title: workout name
+              Text(
+                day.name.toUpperCase(),
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (dateLabel.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  dateLabel,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+
+              // Exercise list
+              if (day.exercises.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'No exercises scheduled',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                )
+              else
+                ...List.generate(day.exercises.length, (index) {
+                  final ex = day.exercises[index];
+                  final restSecs = ex.rest.replaceAll('s', '');
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        // Number circle
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${index + 1}',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Exercise info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ex.name,
+                                style: GoogleFonts.getFont(
+                                  'DM Sans',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                '${ex.sets} sets \u00b7 ${ex.reps} reps \u00b7 ${restSecs}s rest',
+                                style: GoogleFonts.getFont(
+                                  'DM Sans',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w400,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+              // Completed badge for past completed days
+              if (isPastCompleted) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: AppColors.green, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Completed',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // ── Phase Unlock Card ─────────────────────────────────────────
@@ -912,4 +1126,4 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   }
 }
 
-enum _RowStatus { done, today, planned, rest }
+enum _RowStatus { done, today, planned, missed, rest }
