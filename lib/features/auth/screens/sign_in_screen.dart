@@ -9,6 +9,9 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 
 import '../providers/auth_provider.dart';
 
+/// Enum for the current sign-in view.
+enum _SignInView { main, email, phone }
+
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -24,8 +27,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
 
   bool _isSignUp = false;
-  bool _showPhoneInput = false;
   bool _obscurePassword = true;
+  _SignInView _currentView = _SignInView.main;
 
   @override
   void dispose() {
@@ -74,205 +77,402 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
             ),
-            child: Column(
+            child: _currentView == _SignInView.main
+                ? _buildMainView(authNotifier, isLoading)
+                : _currentView == _SignInView.email
+                    ? _buildEmailView(authNotifier, isLoading)
+                    : _buildPhoneView(authState, authNotifier, isLoading),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Main View ──────────────────────────────────────────────────
+
+  Widget _buildMainView(AuthNotifier authNotifier, bool isLoading) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(height: 60),
+
+        // AVYA logo
+        _buildLogo(),
+        const SizedBox(height: 12),
+
+        // Tagline
+        Text(
+          'AI-powered fitness & nutrition',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          'built for Indian lifestyles',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 40),
+
+        // ── Continue with Google — PRIMARY ──────────────────
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : () => authNotifier.signInWithGoogle(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              disabledBackgroundColor: Colors.white.withAlpha(150),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              elevation: 2,
+              shadowColor: Colors.black.withAlpha(40),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.g_mobiledata,
+                        size: 28,
+                        color: Colors.black87,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Continue with Google',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Continue with Phone — SECONDARY ─────────────────
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton(
+            onPressed: isLoading
+                ? null
+                : () => setState(() => _currentView = _SignInView.phone),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: AppColors.card,
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.border, width: 1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+            ),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40),
-
-                // ── Logo / App Name ─────────────────────────────
-                _buildLogo(),
-                const SizedBox(height: 8),
+                const Icon(
+                  Icons.phone_outlined,
+                  size: 20,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(width: 10),
                 Text(
-                  'Your AI Fitness Coach',
-                  style: AppTypography.bodyL.copyWith(
-                    color: AppColors.textSecondary,
+                  'Continue with Phone',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 48),
-
-                // ── Phone OTP flow OR Email flow ────────────────
-                if (_showPhoneInput) ...[
-                  _buildPhoneSection(authState, authNotifier, isLoading),
-                ] else ...[
-                  _buildEmailSection(authNotifier, isLoading),
-                ],
-
-                const SizedBox(height: 40),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
+        const SizedBox(height: 20),
 
-  // ── Logo ────────────────────────────────────────────────────────
+        // ── Divider ─────────────────────────────────────────
+        _buildDivider(),
+        const SizedBox(height: 20),
 
-  Widget _buildLogo() {
-    return Column(
-      children: [
-        // Icon placeholder
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppColors.accentTint,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.accent.withAlpha(77),
-              width: 1.5,
+        // ── Continue with Email — TERTIARY ──────────────────
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton(
+            onPressed: isLoading
+                ? null
+                : () => setState(() => _currentView = _SignInView.email),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: AppColors.accent,
+              side: BorderSide(
+                color: AppColors.accent.withAlpha(77),
+                width: 1,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.email_outlined,
+                  size: 20,
+                  color: AppColors.accent,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Continue with Email',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
             ),
           ),
-          child: const Icon(
-            Icons.fitness_center,
-            color: AppColors.accent,
-            size: 40,
-          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 32),
+
+        // ── Social proof ────────────────────────────────────
         Text(
-          'ICANBEFITTER',
-          style: AppTypography.displayL.copyWith(
-            color: AppColors.accent,
-            letterSpacing: 2,
+          'Join 10,000+ Indians on their fitness journey',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+
+        // ── Legal text ──────────────────────────────────────
+        RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w400,
+              color: AppColors.textSecondary.withAlpha(128),
+            ),
+            children: [
+              const TextSpan(text: 'By continuing, you agree to our '),
+              TextSpan(
+                text: 'Terms of Service',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.accent,
+                ),
+              ),
+              const TextSpan(text: ' & '),
+              TextSpan(
+                text: 'Privacy Policy',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
           ),
         ),
+        const SizedBox(height: 40),
       ],
     );
   }
 
-  // ── Email Section ───────────────────────────────────────────────
+  // ── Email Sub-View ─────────────────────────────────────────────
 
-  Widget _buildEmailSection(AuthNotifier authNotifier, bool isLoading) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          // Email field
-          _buildTextField(
-            controller: _emailController,
-            hintText: 'Email address',
-            keyboardType: TextInputType.emailAddress,
-            prefixIcon: Icons.email_outlined,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value.trim())) {
-                return 'Please enter a valid email';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: AppSpacing.sectionGap),
+  Widget _buildEmailView(AuthNotifier authNotifier, bool isLoading) {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
 
-          // Password field
-          _buildTextField(
-            controller: _passwordController,
-            hintText: 'Password',
-            obscureText: _obscurePassword,
-            prefixIcon: Icons.lock_outline,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textSecondary,
-                size: 20,
-              ),
-              onPressed: () {
-                setState(() => _obscurePassword = !_obscurePassword);
-              },
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your password';
-              }
-              if (value.length < 6) {
-                return 'Password must be at least 6 characters';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 24),
-
-          // Sign In / Sign Up button
-          _buildPrimaryButton(
-            label: _isSignUp ? 'Create Account' : 'Sign In with Email',
-            isLoading: isLoading,
-            onPressed: () {
-              if (!_formKey.currentState!.validate()) return;
-              final email = _emailController.text.trim();
-              final password = _passwordController.text;
-              if (_isSignUp) {
-                authNotifier.signUpWithEmail(email, password);
-              } else {
-                authNotifier.signInWithEmail(email, password);
-              }
-            },
-          ),
-          const SizedBox(height: 12),
-
-          // Toggle sign-in / sign-up
-          TextButton(
+        // Back button
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
             onPressed: isLoading
                 ? null
-                : () => setState(() => _isSignUp = !_isSignUp),
-            child: Text(
-              _isSignUp
-                  ? 'Already have an account? Sign In'
-                  : "Don't have an account? Sign Up",
-              style: AppTypography.bodyM.copyWith(
-                color: AppColors.accent,
+                : () => setState(() {
+                      _currentView = _SignInView.main;
+                      _isSignUp = false;
+                    }),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Logo (smaller)
+        _buildLogo(),
+        const SizedBox(height: 32),
+
+        // Email form
+        Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // Email field
+              _buildTextField(
+                controller: _emailController,
+                hintText: 'Email address',
+                keyboardType: TextInputType.emailAddress,
+                prefixIcon: Icons.email_outlined,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$')
+                      .hasMatch(value.trim())) {
+                    return 'Please enter a valid email';
+                  }
+                  return null;
+                },
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.sectionGap),
 
-          // ── Divider ─────────────────────────────────────────
-          _buildDivider(),
-          const SizedBox(height: 24),
-
-          // ── Continue with Google ────────────────────────────
-          _buildSecondaryButton(
-            label: 'Continue with Google',
-            icon: Icons.g_mobiledata,
-            isLoading: isLoading,
-            onPressed: () => authNotifier.signInWithGoogle(),
-          ),
-          const SizedBox(height: AppSpacing.sectionGap),
-
-          // ── Sign in with Phone ─────────────────────────────
-          TextButton.icon(
-            onPressed: isLoading
-                ? null
-                : () => setState(() => _showPhoneInput = true),
-            icon: Icon(
-              Icons.phone_outlined,
-              color: AppColors.textSecondary,
-              size: 18,
-            ),
-            label: Text(
-              'Sign in with Phone',
-              style: AppTypography.bodyM.copyWith(
-                color: AppColors.textSecondary,
+              // Password field
+              _buildTextField(
+                controller: _passwordController,
+                hintText: 'Password',
+                obscureText: _obscurePassword,
+                prefixIcon: Icons.lock_outline,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
               ),
-            ),
+              const SizedBox(height: 24),
+
+              // Sign In / Sign Up button
+              _buildPrimaryButton(
+                label: _isSignUp ? 'Create Account' : 'Sign In with Email',
+                isLoading: isLoading,
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  final email = _emailController.text.trim();
+                  final password = _passwordController.text;
+                  if (_isSignUp) {
+                    authNotifier.signUpWithEmail(email, password);
+                  } else {
+                    authNotifier.signInWithEmail(email, password);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Toggle sign-in / sign-up
+              TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () => setState(() => _isSignUp = !_isSignUp),
+                child: Text(
+                  _isSignUp
+                      ? 'Already have an account? Sign In'
+                      : "Don't have an account? Sign Up",
+                  style: AppTypography.bodyM.copyWith(
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 40),
+      ],
     );
   }
 
-  // ── Phone Section ───────────────────────────────────────────────
+  // ── Phone Sub-View ─────────────────────────────────────────────
 
-  Widget _buildPhoneSection(
+  Widget _buildPhoneView(
     AuthState2 authState,
     AuthNotifier authNotifier,
     bool isLoading,
   ) {
     return Column(
       children: [
+        const SizedBox(height: 20),
+
+        // Back button
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            onPressed: isLoading
+                ? null
+                : () => setState(() {
+                      _currentView = _SignInView.main;
+                      _otpController.clear();
+                      authNotifier.resetState();
+                    }),
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Logo (smaller)
+        _buildLogo(),
+        const SizedBox(height: 32),
+
+        // Phone input / OTP section
         if (!authState.otpSent) ...[
           _buildTextField(
             controller: _phoneController,
@@ -317,23 +517,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             },
           ),
         ],
-        const SizedBox(height: 16),
-        TextButton(
-          onPressed: isLoading
-              ? null
-              : () => setState(() {
-                    _showPhoneInput = false;
-                    _otpController.clear();
-                    ref.read(authNotifierProvider.notifier).resetState();
-                  }),
-          child: Text(
-            'Back to Email sign in',
-            style: AppTypography.bodyM.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
+        const SizedBox(height: 40),
       ],
+    );
+  }
+
+  // ── Logo ────────────────────────────────────────────────────────
+
+  Widget _buildLogo() {
+    return Image.asset(
+      'assets/App Main logo_AVYA.png',
+      width: 160,
+      fit: BoxFit.contain,
     );
   }
 
@@ -434,43 +629,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   color: Colors.black,
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildSecondaryButton({
-    required String label,
-    required IconData icon,
-    required bool isLoading,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: OutlinedButton.icon(
-        onPressed: isLoading ? null : onPressed,
-        icon: Icon(icon, size: 24),
-        label: Text(
-          label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: AppColors.accent,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.accent,
-          backgroundColor: AppColors.accentTint,
-          side: BorderSide(
-            color: AppColors.accent.withAlpha(77),
-            width: 1.5,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-        ),
       ),
     );
   }

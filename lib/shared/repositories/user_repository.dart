@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 
 /// User CRUD operations via Hive userBox (offline-first).
 ///
@@ -108,6 +109,65 @@ class UserRepository {
   /// Saves the user's unit preference.
   Future<void> setUnitsMetric(bool metric) async {
     await _hive.configBox.put('units_metric', metric);
+  }
+
+  // ── Computed Targets ─────────────────────────────────────────
+
+  /// Ensures computed nutrition fields (daily_calories, protein_grams, etc.)
+  /// exist in the profile. If missing but BMR/TDEE inputs are available,
+  /// recalculates them using BmrCalculator.
+  Future<void> ensureComputedTargets() async {
+    final profile = getProfile();
+    if (profile == null) return;
+
+    // Already has computed targets — nothing to do.
+    if (profile['daily_calories'] != null &&
+        profile['protein_grams'] != null &&
+        profile['carb_grams'] != null &&
+        profile['fat_grams'] != null) {
+      return;
+    }
+
+    // Need enough data to recalculate.
+    final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
+    final heightCm = (profile['height_cm'] as num?)?.toDouble();
+    final gender = profile['gender'] as String?;
+    final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+    final activityLevel = profile['activity_level'] as String? ?? 'moderate';
+    final dob = profile['date_of_birth'] as String?;
+
+    if (weightKg == null ||
+        weightKg <= 0 ||
+        heightCm == null ||
+        heightCm <= 0 ||
+        gender == null) {
+      return;
+    }
+
+    int age = 25; // fallback
+    if (dob != null) {
+      final birthDate = DateTime.tryParse(dob);
+      if (birthDate != null) {
+        final now = DateTime.now();
+        age = now.year - birthDate.year;
+        if (now.month < birthDate.month ||
+            (now.month == birthDate.month && now.day < birthDate.day)) {
+          age--;
+        }
+        if (age <= 0) age = 25;
+      }
+    }
+
+    final targets = BmrCalculator.calculateTargets(
+      weightKg: weightKg,
+      heightCm: heightCm,
+      age: age,
+      gender: gender,
+      activityLevel: activityLevel,
+      goal: goal,
+    );
+
+    await updateProfileFields(targets.toMap());
   }
 
   // ── Diet Plan ─────────────────────────────────────────────────

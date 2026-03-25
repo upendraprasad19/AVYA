@@ -174,10 +174,6 @@ class SendMessageNotifier extends Notifier<bool> {
   @override
   bool build() => false; // isLoading
 
-  /// Optional context chip filter (set via context chip selection).
-  String? _contextFilter;
-  void setContextFilter(String? chipLabel) => _contextFilter = chipLabel;
-
   Future<void> send(String message, {String mode = 'quick'}) async {
     if (message.trim().isEmpty) return;
     if (state) return; // Already sending
@@ -211,9 +207,7 @@ class SendMessageNotifier extends Notifier<bool> {
     try {
       // Build FULL context from all Hive boxes via repository
       final repo = AiCoachRepository.instance;
-      final context = _contextFilter != null
-          ? repo.buildFilteredContext(_contextFilter!)
-          : repo.buildAiContext();
+      final context = repo.buildAiContext();
 
       final modelUsed = mode == 'deep'
           ? 'glm-4.7'
@@ -245,6 +239,10 @@ class SendMessageNotifier extends Notifier<bool> {
         modelUsed: modelUsed,
         mode: mode,
       );
+
+      // Extract coaching notes after every AI response (C4)
+      await repo.extractCoachingNotes();
+      ref.invalidate(coachInsightProvider);
 
       limitNotifier.increment();
     } catch (e) {
@@ -281,9 +279,15 @@ final telegramConnectionProvider =
 
 class ChannelNotifier extends Notifier<String> {
   @override
-  String build() => 'in_app'; // 'in_app' or 'telegram'
+  String build() {
+    return HiveService.instance.configBox
+        .get('coach_channel', defaultValue: 'in_app') as String;
+  }
 
-  void setChannel(String channel) => state = channel;
+  void setChannel(String channel) {
+    HiveService.instance.configBox.put('coach_channel', channel);
+    state = channel;
+  }
 }
 
 final channelProvider =
@@ -345,6 +349,8 @@ final predictionProvider =
 // ── Contextual Quick Prompts ────────────────────────────────────
 
 final contextualPromptsProvider = Provider<List<String>>((ref) {
+  // Watch chatHistory so prompts refresh after user sends a message (C5)
+  ref.watch(chatHistoryProvider);
   return AiCoachRepository.instance.getContextualPrompts();
 });
 

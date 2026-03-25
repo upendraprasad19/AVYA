@@ -71,6 +71,7 @@ class UserStatsData {
   final double bmi;
   final int currentStreak;
   final int currentPhase;
+  final int currentWeek;
   final String primaryGoal;
   final bool isPro;
 
@@ -80,6 +81,7 @@ class UserStatsData {
     this.bmi = 0,
     this.currentStreak = 0,
     this.currentPhase = 1,
+    this.currentWeek = 1,
     this.primaryGoal = '',
     this.isPro = false,
   });
@@ -106,6 +108,7 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
       currentStreak:
           (progress['current_streak_weeks'] as int?) ?? 0,
       currentPhase: (progress['current_phase'] as int?) ?? 1,
+      currentWeek: (progress['current_week'] as int?) ?? 1,
       primaryGoal:
           (profile['primary_goal'] as String?) ?? 'Not set',
       isPro: SubscriptionService.instance.isPro(),

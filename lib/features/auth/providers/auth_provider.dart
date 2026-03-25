@@ -265,10 +265,12 @@ class AuthNotifier extends Notifier<AuthState2> {
                 'progress', Map<String, dynamic>.from(progressRows.first));
           }
 
-          // Regenerate workout schedule locally if plan is missing from Hive.
-          // This handles re-login / new device where Hive is empty but
-          // Supabase has the user's profile data.
-          if (!WorkoutScheduleService.instance.hasPlan()) {
+          // Regenerate workout schedule locally only if plan is missing AND
+          // user has completed onboarding. This avoids overwriting progress
+          // for returning users and avoids generating before onboarding
+          // for new users (onboarding_provider handles that case).
+          if (!WorkoutScheduleService.instance.hasPlan() &&
+              configBox.get('onboarding_completed') == true) {
             final goal = remoteProfile['primary_goal'] as String? ?? 'general_fitness';
             final equipment = remoteProfile['equipment_access'] as String? ?? 'basic_gym';
             final daysPerWeek = (remoteProfile['days_per_week'] as int?) ?? 4;

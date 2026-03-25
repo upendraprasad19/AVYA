@@ -100,8 +100,33 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 14),
 
-                    // 2. Today's workout hero card
-                    _buildTodayHeroCard(context, plan, todayWorkout, weekDays),
+                    // 2. Today's workout hero card (guarded for empty weeks)
+                    if (weekDays.isNotEmpty)
+                      _buildTodayHeroCard(context, plan, todayWorkout, weekDays)
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.screenPadding),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                          decoration: BoxDecoration(
+                            color: AppColors.card,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.cardM),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Text(
+                            'No workouts scheduled for this week',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
 
                     const SizedBox(height: 14),
 
@@ -124,7 +149,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     // Week selector tabs
                     WeekSelector(
-                      totalWeeks: 4,
+                      totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
                       onSelect: (week) =>
                           ref.read(selectedWeekProvider.notifier).select(week),
@@ -199,7 +224,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
           // Subtitle with completion count
           Text(
-            'Week $selectedWeek of 4 \u00b7 $completedDays/$totalWorkoutDays workouts done',
+            'Week $selectedWeek of ${plan.weeks.length} \u00b7 $completedDays/$totalWorkoutDays workouts done',
             style: GoogleFonts.getFont(
               'DM Sans',
               fontSize: 12,
@@ -816,7 +841,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     int totalWorkoutDays = 0;
     int completedDays = 0;
 
-    for (int w = 1; w <= 4; w++) {
+    for (int w = 1; w <= plan.weeks.length; w++) {
       final weekDays = plan.getWeek(w);
       for (final day in weekDays) {
         if (!day.isRest) {

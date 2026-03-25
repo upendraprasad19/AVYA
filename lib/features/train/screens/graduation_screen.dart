@@ -473,29 +473,54 @@ class GraduationScreen extends ConsumerWidget {
             AppConstants.featurePhases2To12,
             onPro: () async {
               // PRO user — generate next phase plan
-              final profile = UserRepository.instance.getProfile() ?? {};
-              final progress = UserRepository.instance.getProgress() ?? {};
-              final currentPhase = (progress['current_phase'] as int?) ?? 1;
-              final nextPhase = currentPhase + 1;
+              try {
+                final profile = UserRepository.instance.getProfile() ?? {};
+                final progress = UserRepository.instance.getProgress() ?? {};
+                final currentPhase = (progress['current_phase'] as int?) ?? 1;
+                final nextPhase = currentPhase + 1;
 
-              // Generate next phase plan and write schedule to Hive
-              await WorkoutScheduleService.instance.generateAndSchedule(
-                goal: profile['primary_goal'] as String? ?? 'general_fitness',
-                equipment: profile['equipment_access'] as String? ?? 'basic_gym',
-                daysPerWeek: (profile['days_per_week'] as int?) ?? 4,
-                startDate: DateTime.now(),
-                phase: nextPhase,
-                experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',
-              );
+                // Generate next phase plan and write schedule to Hive
+                await WorkoutScheduleService.instance.generateAndSchedule(
+                  goal: profile['primary_goal'] as String? ?? 'general_fitness',
+                  equipment: profile['equipment_access'] as String? ?? 'basic_gym',
+                  daysPerWeek: (profile['days_per_week'] as int?) ?? 4,
+                  startDate: DateTime.now(),
+                  phase: nextPhase,
+                  experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',
+                );
 
-              // Update user progress
-              await UserRepository.instance.updateProgress({
-                'current_phase': nextPhase,
-                'current_week': 1,
-                'phase_started_at': DateTime.now().toIso8601String(),
-              });
+                // Update user progress
+                await UserRepository.instance.updateProgress({
+                  'current_phase': nextPhase,
+                  'current_week': 1,
+                  'phase_started_at': DateTime.now().toIso8601String(),
+                });
 
-              if (context.mounted) context.go('/train');
+                if (context.mounted) context.go('/train');
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppColors.card,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                            color: AppColors.red.withValues(alpha: 0.3)),
+                      ),
+                      content: Text(
+                        'Failed to generate Phase 2: $e',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.red,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              }
             },
             onFree: () => showPaywallSheet(context, feature: 'Phases 2-12'),
           );

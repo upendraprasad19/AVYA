@@ -8,7 +8,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 ///
 /// Wraps [child] in a RepaintBoundary (for screenshot capture) with a
 /// consistent dark-mode background and a branded bottom strip containing
-/// the ICANBEFITTER wordmark and a QR code pointing to [AppConstants.appUrl].
+/// the AVYA wordmark and a QR code pointing to [AppConstants.appUrl].
 class ShareableCard extends StatelessWidget {
   /// The card content above the branding strip.
   final Widget child;

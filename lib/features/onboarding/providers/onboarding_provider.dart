@@ -231,7 +231,22 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         }
       }
 
-      const activityLevel = 'moderate';
+      final String activityLevel;
+      switch (daysPerWeek) {
+        case 3:
+          activityLevel = 'light';
+          break;
+        case 5:
+          activityLevel = 'active';
+          break;
+        case 6:
+          activityLevel = 'very_active';
+          break;
+        case 4:
+        default:
+          activityLevel = 'moderate';
+          break;
+      }
 
       final targets = BmrCalculator.calculateTargets(
         weightKg: currentWeightKg,

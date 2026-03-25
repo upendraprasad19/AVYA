@@ -255,7 +255,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           // Title
           Expanded(
             child: Text(
-              'ICANBEFITTER COACH',
+              'AVYA COACH',
               style: GoogleFonts.getFont(
                 'DM Sans',
                 fontSize: 14,

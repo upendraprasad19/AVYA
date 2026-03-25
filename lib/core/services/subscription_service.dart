@@ -153,6 +153,23 @@ class SubscriptionService {
     return DateTime.tryParse(raw.toString());
   }
 
+  /// Returns the number of days until subscription expires.
+  /// Returns -1 if not a PRO user or no expiry date is set.
+  int daysUntilExpiry() {
+    final expiry = expiresAt;
+    if (expiry == null) return -1;
+    final diff = expiry.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
+  /// Returns true if the subscription expires within 7 days.
+  /// Returns false if the user is not PRO or has no expiry date.
+  bool get isExpiringSoon {
+    if (!isPro()) return false;
+    final days = daysUntilExpiry();
+    return days >= 0 && days < 7;
+  }
+
   // ── Private ─────────────────────────────────────────────────
 
   /// Soft-lock: set isPro = false. All data is kept; PRO features

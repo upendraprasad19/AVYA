@@ -121,7 +121,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final activityStr = _formatActivityLevel(activityLevel);
 
     final subtitle =
-        'Phase ${stats.currentPhase} \u00B7 Week ${(profile['current_week'] as int?) ?? 1} \u00B7 ${_formatGoal(stats.primaryGoal)}';
+        'Phase ${stats.currentPhase} \u00B7 Week ${stats.currentWeek} \u00B7 ${_formatGoal(stats.primaryGoal)}';
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -135,9 +135,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               SizedBox(height: MediaQuery.of(context).padding.top),
 
               // 1. Banner
-              ProfileBanner(
-                onTapBanner: () => _showTodoSnackbar('Banner photo'),
-                onTapEdit: () => _showTodoSnackbar('Banner photo'),
+              Opacity(
+                opacity: 0.5,
+                child: Stack(
+                  children: [
+                    ProfileBanner(
+                      onTapBanner: () => _showTodoSnackbar('Banner photo'),
+                      onTapEdit: () => _showTodoSnackbar('Banner photo'),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 26,
+                      child: _phase2Badge(),
+                    ),
+                  ],
+                ),
               ),
 
               // 2. Profile identity (overlaps banner by 30px)
@@ -259,22 +271,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ]),
                     const SizedBox(height: 8),
 
-                    // 7. Progress Photos (PRO gated)
-                    ProgressPhotosCard(
-                      isPro: subInfo.isPro,
-                      photoCount: photos.photoCount,
-                      onTap: () {
-                        // TODO: Navigate to progress photos gallery
-                        _showTodoSnackbar('Progress Photos Gallery');
-                      },
-                      onUpgradeTap: () {
-                        SubscriptionService.instance.gate(
-                          AppConstants.featureProgressPhotos,
-                          onPro: () {},
-                          onFree: () => showPaywallSheet(context,
-                              feature: 'Progress Photos'),
-                        );
-                      },
+                    // 7. Progress Photos (PRO gated — gallery coming Phase 2)
+                    Opacity(
+                      opacity: 0.5,
+                      child: Stack(
+                        children: [
+                          ProgressPhotosCard(
+                            isPro: subInfo.isPro,
+                            photoCount: photos.photoCount,
+                            onTap: () {
+                              _showTodoSnackbar('Progress Photos Gallery');
+                            },
+                            onUpgradeTap: () {
+                              SubscriptionService.instance.gate(
+                                AppConstants.featureProgressPhotos,
+                                onPro: () {},
+                                onFree: () => showPaywallSheet(context,
+                                    feature: 'Progress Photos'),
+                              );
+                            },
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 26,
+                            child: _phase2Badge(),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 8),
 
@@ -310,7 +333,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         icon: Icons.wb_sunny_outlined,
                         title: 'AI Morning Alert',
                         subtitle: subInfo.isPro
-                            ? 'Personalised daily motivation'
+                            ? 'Settings coming in Phase 2'
                             : 'Generic reminders (PRO for AI)',
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -486,6 +509,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         border: Border.all(color: AppColors.border),
       ),
       child: Column(children: children),
+    );
+  }
+
+  Widget _phase2Badge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.textSecondary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'PHASE 2',
+        style: GoogleFonts.getFont(
+          'DM Sans',
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: AppColors.textSecondary,
+        ),
+      ),
     );
   }
 

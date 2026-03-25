@@ -9,7 +9,7 @@ class ICanBeFitterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'ICANBEFITTER',
+      title: 'AVYA',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       routerConfig: AppRouter.router,

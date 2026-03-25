@@ -110,7 +110,7 @@ class AppConstants {
   // ── Misc ──────────────────────────────────────────────────
 
   /// App display name.
-  static const String appName = 'ICANBEFITTER';
+  static const String appName = 'AVYA';
 
   /// App tagline — used on splash, shareable cards, marketing materials.
   static const String appTagline = 'Your AI Fitness Coach';

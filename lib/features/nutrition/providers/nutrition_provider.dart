@@ -6,8 +6,119 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+/// Resolves nutrition targets from profile, falling back to BmrCalculator
+/// when computed fields are missing. Only uses hardcoded defaults as a
+/// last resort when even BMR inputs are unavailable.
+Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
+  if (profile != null &&
+      profile['daily_calories'] != null &&
+      profile['protein_grams'] != null &&
+      profile['carb_grams'] != null &&
+      profile['fat_grams'] != null) {
+    return {
+      'daily_calories': (profile['daily_calories'] as num).toDouble(),
+      'protein_grams': (profile['protein_grams'] as num).toDouble(),
+      'carb_grams': (profile['carb_grams'] as num).toDouble(),
+      'fat_grams': (profile['fat_grams'] as num).toDouble(),
+    };
+  }
+
+  // Try to recalculate from profile inputs.
+  if (profile != null) {
+    final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
+    final heightCm = (profile['height_cm'] as num?)?.toDouble();
+    final gender = profile['gender'] as String?;
+    if (weightKg != null && weightKg > 0 && heightCm != null && heightCm > 0 && gender != null) {
+      final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+      final activityLevel = profile['activity_level'] as String? ?? 'moderate';
+      final dob = profile['date_of_birth'] as String?;
+      int age = 25;
+      if (dob != null) {
+        final birthDate = DateTime.tryParse(dob);
+        if (birthDate != null) {
+          final now = DateTime.now();
+          age = now.year - birthDate.year;
+          if (now.month < birthDate.month || (now.month == birthDate.month && now.day < birthDate.day)) {
+            age--;
+          }
+          if (age <= 0) age = 25;
+        }
+      }
+      final targets = BmrCalculator.calculateTargets(
+        weightKg: weightKg,
+        heightCm: heightCm,
+        age: age,
+        gender: gender,
+        activityLevel: activityLevel,
+        goal: goal,
+      );
+      return {
+        'daily_calories': targets.dailyCalories.toDouble(),
+        'protein_grams': targets.proteinGrams.toDouble(),
+        'carb_grams': targets.carbGrams.toDouble(),
+        'fat_grams': targets.fatGrams.toDouble(),
+      };
+    }
+  }
+
+  // Last resort hardcoded defaults.
+  return {
+    'daily_calories': 2400,
+    'protein_grams': 184,
+    'carb_grams': 280,
+    'fat_grams': 80,
+  };
+}
+
+/// Estimates nutrition for a meal description when AI analysis fails.
+/// Uses simple keyword matching to classify meal type.
+AiBreakdownData _estimateMealNutrition(String text) {
+  final lower = text.toLowerCase();
+
+  int kcal;
+  int protein;
+  int carbs;
+  int fat;
+
+  if (_containsAny(lower, ['breakfast', 'morning', 'oats', 'cereal', 'paratha', 'poha', 'idli', 'dosa', 'upma', 'toast'])) {
+    kcal = 400; protein = 20; carbs = 50; fat = 15;
+  } else if (_containsAny(lower, ['lunch', 'afternoon', 'thali', 'rice', 'roti', 'dal', 'sabzi'])) {
+    kcal = 600; protein = 30; carbs = 70; fat = 20;
+  } else if (_containsAny(lower, ['dinner', 'night', 'chapati', 'paneer', 'chicken', 'fish', 'curry'])) {
+    kcal = 700; protein = 35; carbs = 80; fat = 25;
+  } else {
+    // Default snack estimate.
+    kcal = 250; protein = 10; carbs = 30; fat = 8;
+  }
+
+  return AiBreakdownData(
+    mealName: text,
+    totalKcal: kcal,
+    items: [
+      AiFoodItem(
+        name: text,
+        quantity: '1 serving (estimated)',
+        calories: kcal,
+        protein: '${protein}g',
+        carbs: '${carbs}g',
+        fat: '${fat}g',
+      ),
+    ],
+  );
+}
+
+bool _containsAny(String text, List<String> keywords) {
+  for (final kw in keywords) {
+    if (text.contains(kw)) return true;
+  }
+  return false;
+}
 
 // ── Selected Date ────────────────────────────────────────────────
 
@@ -110,12 +221,11 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
     }
 
     final profile = UserRepository.instance.getProfile();
-    final calorieTarget =
-        (profile?['daily_calories'] as num?)?.toDouble() ?? 2400;
-    final proteinTarget =
-        (profile?['protein_grams'] as num?)?.toDouble() ?? 184;
-    final carbTarget = (profile?['carb_grams'] as num?)?.toDouble() ?? 280;
-    final fatTarget = (profile?['fat_grams'] as num?)?.toDouble() ?? 80;
+    final targets = _resolveNutritionTargets(profile);
+    final calorieTarget = targets['daily_calories']!;
+    final proteinTarget = targets['protein_grams']!;
+    final carbTarget = targets['carb_grams']!;
+    final fatTarget = targets['fat_grams']!;
     final fiberTarget = (profile?['fiber_grams'] as num?)?.toDouble() ?? 30;
 
     return DailyNutritionData(
@@ -144,13 +254,14 @@ class MacroTargetsNotifier extends Notifier<Map<String, double>> {
   @override
   Map<String, double> build() {
     final profile = UserRepository.instance.getProfile();
+    final targets = _resolveNutritionTargets(profile);
     return {
       'bmr': (profile?['bmr'] as num?)?.toDouble() ?? 0,
       'tdee': (profile?['tdee'] as num?)?.toDouble() ?? 0,
-      'calories': (profile?['daily_calories'] as num?)?.toDouble() ?? 2400,
-      'protein': (profile?['protein_grams'] as num?)?.toDouble() ?? 184,
-      'carbs': (profile?['carb_grams'] as num?)?.toDouble() ?? 280,
-      'fat': (profile?['fat_grams'] as num?)?.toDouble() ?? 80,
+      'calories': targets['daily_calories']!,
+      'protein': targets['protein_grams']!,
+      'carbs': targets['carb_grams']!,
+      'fat': targets['fat_grams']!,
     };
   }
 }
@@ -351,22 +462,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       // Edge Function unreachable — use local estimation below.
     }
 
-    // Local fallback: estimate from text (basic heuristic)
+    // Local fallback: estimate by meal type keywords
     await Future.delayed(const Duration(milliseconds: 500));
-    state = AiBreakdownData(
-      mealName: text,
-      totalKcal: 350,
-      items: [
-        AiFoodItem(
-          name: text,
-          quantity: '1 serving (estimated)',
-          calories: 350,
-          protein: '15g',
-          carbs: '40g',
-          fat: '12g',
-        ),
-      ],
-    );
+    state = _estimateMealNutrition(text);
   }
 
   void clear() => state = null;
@@ -393,7 +491,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     await HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
-      'meal_type': mealType,
+      'meal_type': mealType.toLowerCase(),
       'food_name': data.mealName,
       'total_calories': data.totalKcal,
       'total_protein': totalProtein,
@@ -453,7 +551,7 @@ class FoodLogNotifier extends Notifier<void> {
     await HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
-      'meal_type': mealType,
+      'meal_type': mealType.toLowerCase(),
       'food_id': food['id'],
       'food_name': food['name'] ?? 'Unknown',
       'quantity_g': quantityG,
@@ -537,7 +635,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     await HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
-      'meal_type': mealType,
+      'meal_type': mealType.toLowerCase(),
       'food_name': savedMeal['name'] ?? 'Saved Meal',
       'total_calories': savedMeal['total_calories'] ?? 0,
       'total_protein': savedMeal['total_protein'] ?? 0,
@@ -853,6 +951,8 @@ class WeeklyNutritionData {
   final double avgProtein;
   final double calorieTarget;
   final double proteinTarget;
+  /// True if the current week is incomplete (today is not Sunday).
+  final bool isPartialWeek;
 
   const WeeklyNutritionData({
     this.calories = const [0, 0, 0, 0, 0, 0, 0],
@@ -861,6 +961,7 @@ class WeeklyNutritionData {
     this.avgProtein = 0,
     this.calorieTarget = 2400,
     this.proteinTarget = 184,
+    this.isPartialWeek = true,
   });
 }
 
@@ -869,10 +970,9 @@ class WeeklyNutritionNotifier extends Notifier<WeeklyNutritionData> {
   WeeklyNutritionData build() {
     final nutritionBox = HiveService.instance.nutritionBox;
     final profile = UserRepository.instance.getProfile();
-    final calorieTarget =
-        (profile?['daily_calories'] as num?)?.toDouble() ?? 2400;
-    final proteinTarget =
-        (profile?['protein_grams'] as num?)?.toDouble() ?? 184;
+    final targets = _resolveNutritionTargets(profile);
+    final calorieTarget = targets['daily_calories']!;
+    final proteinTarget = targets['protein_grams']!;
 
     final now = DateTime.now();
     // Start of the week (Monday)
@@ -921,6 +1021,7 @@ class WeeklyNutritionNotifier extends Notifier<WeeklyNutritionData> {
       avgProtein: avgProt,
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
+      isPartialWeek: now.weekday != DateTime.sunday,
     );
   }
 }

@@ -17,6 +17,7 @@ class SetInputRow extends StatelessWidget {
   final int setNumber;
   final String? previousPerformance;
   final bool isWarmUp;
+  final bool isCompleted;
   final VoidCallback? onToggleWarmUp;
 
   const SetInputRow({
@@ -29,6 +30,7 @@ class SetInputRow extends StatelessWidget {
     required this.setNumber,
     this.previousPerformance,
     this.isWarmUp = false,
+    this.isCompleted = false,
     this.onToggleWarmUp,
   });
 
@@ -55,7 +57,7 @@ class SetInputRow extends StatelessWidget {
             Row(
               children: [
                 GestureDetector(
-                  onLongPress: onToggleWarmUp,
+                  onLongPress: isCompleted ? null : onToggleWarmUp,
                   child: Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

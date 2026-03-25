@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -78,12 +80,20 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final items = <_PlanFoodItem>[];
     int totalCals = 0;
 
-    for (final category in categories) {
+    // Use date + meal name as seed for daily consistency with variety.
+    final now = DateTime.now();
+    final mealIndex = _mealPlans.length;
+    final seed = DateTime(now.year, now.month, now.day).hashCode + mealIndex;
+
+    for (int catIdx = 0; catIdx < categories.length; catIdx++) {
+      final category = categories[catIdx];
       final foods =
-          FoodRepository.instance.getByCategory(category).take(10).toList();
+          FoodRepository.instance.getByCategory(category).take(20).toList();
       if (foods.isEmpty) continue;
 
-      final food = foods[items.length % foods.length];
+      // Shuffle with deterministic seed for this meal + category.
+      foods.shuffle(Random(seed + catIdx));
+      final food = foods.first;
       final cals =
           (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
       final protein =

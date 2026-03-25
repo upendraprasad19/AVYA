@@ -117,6 +117,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       await configBox.put(
           _reportCacheDateKey, DateTime.now().toIso8601String());
 
+      // Mark first report as generated (for free user gating).
+      await configBox.put('first_report_generated', true);
+
       if (mounted) {
         setState(() {
           _aiReport = report;
@@ -556,11 +559,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onPressed: _isGeneratingReport
                   ? null
                   : () {
+                      final isPro = SubscriptionService.instance.isPro();
+                      if (!isPro) {
+                        // Free users: first report is free, subsequent ones are gated.
+                        final alreadyGenerated = HiveService.instance.configBox
+                            .get('first_report_generated', defaultValue: false) as bool;
+                        if (alreadyGenerated) {
+                          showPaywallSheet(context,
+                              feature: 'AI Weekly Report');
+                          return;
+                        }
+                      }
                       SubscriptionService.instance.gate(
                         AppConstants.featureWeeklyAiReport,
                         onPro: () => _generateReport(),
-                        onFree: () => showPaywallSheet(context,
-                            feature: 'AI Weekly Report'),
+                        onFree: () => _generateReport(),
                       );
                     },
               style: ElevatedButton.styleFrom(

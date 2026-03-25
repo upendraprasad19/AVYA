@@ -282,7 +282,8 @@ class CurrentPlanData {
 
 class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
   /// Auto-generates a workout plan from local Hive profile data.
-  /// Called when plan is missing or schedule entries are corrupt.
+  /// Called synchronously when plan is missing or schedule entries are corrupt.
+  /// Uses PlanGenerator.generate() (synchronous) and writes to Hive directly.
   void _autoGeneratePlan(
       Map<String, dynamic> profile, Map<String, dynamic>? progress) {
     final goal = profile['primary_goal'] as String? ?? 'general_fitness';
@@ -291,6 +292,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final experience = profile['fitness_experience'] as String? ?? 'beginner';
     final phase = (progress?['current_phase'] as int?) ?? 1;
 
+    // Fire-and-forget: schedule generation is async (Hive writes) but
+    // we don't await it here. The build() method will fall through to
+    // read whatever data is available — no recursive build() call.
     WorkoutScheduleService.instance.generateAndSchedule(
       goal: goal,
       equipment: equipment,
@@ -313,12 +317,10 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
       // No plan generated yet — try to auto-generate from local profile.
       final profile = UserRepository.instance.getProfile();
       if (profile != null && profile['primary_goal'] != null) {
-        // Profile exists locally — generate plan silently.
+        // Profile exists locally — generate plan silently (async, fire-and-forget).
         _autoGeneratePlan(profile, progress);
-        // Re-read after generation.
-        if (repo.hasPlan()) {
-          return build(); // Recurse once to load the generated plan.
-        }
+        // Plan generation is async — fall through and show empty state for now.
+        // The provider will be invalidated once generation completes on next access.
       }
       return CurrentPlanData(
         phase: phase,
@@ -348,9 +350,18 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final focus =
         planMap?['focus'] as String? ?? 'Movement patterns & baseline strength';
 
+    // Determine the actual number of weeks in the plan.
+    // Default to 4, but scan Hive for the maximum week present.
+    int totalWeeks = 4;
+    for (int w = 5; w <= 12; w++) {
+      final weekDaysCheck = repo.getWeek(w);
+      if (weekDaysCheck.isEmpty) break;
+      totalWeeks = w;
+    }
+
     // Build weeks from Hive schedule data.
     final weeks = <List<WorkoutDayData>>[];
-    for (int w = 1; w <= 4; w++) {
+    for (int w = 1; w <= totalWeeks; w++) {
       final weekDays = repo.getWeek(w);
       final dayDataList = <WorkoutDayData>[];
 
@@ -754,6 +765,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   }
 
   /// Pair [targetIndex] with the source exercise in a superset.
+  /// Persists the superset_group changes to Hive workoutBox schedule entry.
   void pairSuperset(int targetIndex) {
     final sourceIndex = state.supersetGroupingSourceIndex;
     if (sourceIndex == null || sourceIndex == targetIndex) {
@@ -786,6 +798,40 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       isSupersetGroupMode: false,
       supersetGroupingSourceIndex: () => null,
     );
+
+    // Persist superset_group changes to Hive schedule entry
+    _persistSupersetGroups(newExercises);
+  }
+
+  /// Write superset_group values back to the Hive schedule entry for the
+  /// current workout day so they survive app restarts.
+  void _persistSupersetGroups(List<ExerciseData> exercises) {
+    final workoutDate = state.workoutDay?.date;
+    if (workoutDate == null) return;
+
+    final hive = HiveService.instance;
+    final dateKey =
+        '${workoutDate.year}-${workoutDate.month.toString().padLeft(2, '0')}-${workoutDate.day.toString().padLeft(2, '0')}';
+    final scheduleKey = 'schedule_$dateKey';
+    final entry = hive.workoutBox.get(scheduleKey);
+    if (entry == null || entry is! Map) return;
+
+    final entryMap = Map<String, dynamic>.from(entry);
+    final storedExercises = entryMap['exercises'] as List?;
+    if (storedExercises == null) return;
+
+    // Update superset_group for each exercise in the stored schedule
+    for (int i = 0; i < storedExercises.length && i < exercises.length; i++) {
+      final exMap = storedExercises[i];
+      if (exMap is Map) {
+        final mutable = Map<String, dynamic>.from(exMap);
+        mutable['superset_group'] = exercises[i].supersetGroup;
+        storedExercises[i] = mutable;
+      }
+    }
+
+    entryMap['exercises'] = storedExercises;
+    hive.workoutBox.put(scheduleKey, entryMap);
   }
 
   Future<void> completeWorkout() async {
@@ -887,19 +933,32 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       final hasWarmUpSets = List.generate(numSets, (s) => '$exIdx-$s')
           .any((key) => state.warmUpSets.containsKey(key));
 
+      // Validate loggingType — treat unknown types as 'weight_reps'
+      const validLoggingTypes = {
+        'weight_reps',
+        'bodyweight_reps',
+        'weighted_bodyweight',
+        'timed',
+        'cardio',
+        'distance',
+      };
+      final effectiveLoggingType = validLoggingTypes.contains(exercise.loggingType)
+          ? exercise.loggingType
+          : 'weight_reps';
+
       // Build log map based on logging type
       final logMap = <String, dynamic>{
         'id': logId,
         'type': 'exercise_log',
         'exercise_name': exercise.name,
         'date': dateStr,
-        'logging_type': exercise.loggingType,
+        'logging_type': effectiveLoggingType,
         'is_pr': isPr,
         'has_warmup_sets': hasWarmUpSets,
         'created_at': now.toIso8601String(),
       };
 
-      switch (exercise.loggingType) {
+      switch (effectiveLoggingType) {
         case 'weight_reps':
           logMap['weight_kg'] = totalWeight;
           logMap['reps_completed'] = totalReps;

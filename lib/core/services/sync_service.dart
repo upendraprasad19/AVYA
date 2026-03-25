@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
 /// Handles background data sync between Hive (local) and Supabase (cloud).
 ///
@@ -54,27 +55,16 @@ class SyncService {
   /// The snapshot contains ~300 tokens of user context:
   /// profile, this week's workouts, today's nutrition, weight, streak,
   /// PRs, detected experience, coaching_notes.
+  ///
+  /// Uses AiCoachRepository.buildAiContext() which already aggregates
+  /// data from all Hive boxes via proper repository methods.
   Map<String, dynamic> compileDailySnapshot() {
-    final userBox = _hive.userBox;
-    final workoutBox = _hive.workoutBox;
-    final nutritionBox = _hive.nutritionBox;
-    final healthBox = _hive.healthBox;
-    final coachBox = _hive.coachBox;
-
     final today = DateTime.now().toIso8601String().substring(0, 10);
+    final aiContext = AiCoachRepository.instance.buildAiContext();
 
     return {
       'snapshot_date': today,
-      'profile': userBox.get('profile'),
-      'preferences': userBox.get('preferences'),
-      'progress': userBox.get('progress'),
-      'this_week_workouts': workoutBox.get('this_week_workouts'),
-      'today_nutrition': nutritionBox.get('nutrition_$today'),
-      'recent_weight': healthBox.get('latest_weight'),
-      'current_streak': healthBox.get('current_streak'),
-      'personal_records': workoutBox.get('personal_records'),
-      'detected_experience': userBox.get('detected_experience'),
-      'coaching_notes': coachBox.get('coaching_notes'),
+      ...aiContext,
     };
   }
 

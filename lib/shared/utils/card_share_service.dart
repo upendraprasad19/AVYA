@@ -20,7 +20,7 @@ class CardShareService {
 
   /// Capture the widget behind [repaintKey] as a PNG and open the share sheet.
   ///
-  /// [filename] defaults to `icanbefitter_card_<timestamp>.png`.
+  /// [filename] defaults to `avya_card_<timestamp>.png`.
   /// Fire-and-forget — errors are silently swallowed so the UI never blocks.
   static Future<void> captureAndShare(
     GlobalKey repaintKey, {
@@ -38,11 +38,11 @@ class CardShareService {
       final Uint8List pngBytes = byteData.buffer.asUint8List();
 
       final name =
-          filename ?? 'icanbefitter_card_${DateTime.now().millisecondsSinceEpoch}.png';
+          filename ?? 'avya_card_${DateTime.now().millisecondsSinceEpoch}.png';
 
       await Share.shareXFiles(
         [XFile.fromData(pngBytes, name: name, mimeType: 'image/png')],
-        text: 'Shared from ICANBEFITTER',
+        text: 'Shared from AVYA',
       );
     } catch (_) {
       // Fire-and-forget — never block the UI.

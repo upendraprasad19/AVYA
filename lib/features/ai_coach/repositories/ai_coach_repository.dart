@@ -54,56 +54,6 @@ class AiCoachRepository {
     };
   }
 
-  /// Returns context focused on a specific topic (for context chip filtering).
-  Map<String, dynamic> buildFilteredContext(String chipLabel) {
-    final full = buildAiContext();
-    switch (chipLabel) {
-      case 'Current Plan':
-        return {
-          'profile': full['profile'],
-          'progress': full['progress'],
-          'this_week_workouts': full['this_week_workouts'],
-        };
-      case 'Injuries':
-        return {
-          'profile': {
-            'injuries': (full['profile'] as Map)['injuries'],
-            'fitness_experience': (full['profile'] as Map)['fitness_experience'],
-          },
-          'progress': full['progress'],
-        };
-      case 'Diet Plan':
-        return {
-          'profile': {
-            'diet_preference': (full['profile'] as Map)['diet_preference'],
-            'bmr': (full['profile'] as Map)['bmr'],
-            'tdee': (full['profile'] as Map)['tdee'],
-            'target_weight_kg': (full['profile'] as Map)['target_weight_kg'],
-          },
-          'today_nutrition': full['today_nutrition'],
-        };
-      case 'Progress':
-        return {
-          'progress': full['progress'],
-          'latest_weight': full['latest_weight'],
-          'personal_records': full['personal_records'],
-          'this_week_workouts': full['this_week_workouts'],
-        };
-      case 'Goals':
-        return {
-          'profile': {
-            'primary_goal': (full['profile'] as Map)['primary_goal'],
-            'target_weight_kg': (full['profile'] as Map)['target_weight_kg'],
-            'current_weight_kg': (full['profile'] as Map)['current_weight_kg'],
-          },
-          'progress': full['progress'],
-          'coaching_notes': full['coaching_notes'],
-        };
-      default:
-        return full;
-    }
-  }
-
   /// Saves an AI interaction to coachBox.
   Future<String> saveInteraction({
     required String userMessage,

@@ -1230,6 +1230,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     distanceController: _distanceControllers[setIdx],
                                     setNumber: setIdx + 1,
                                     isWarmUp: isWarmUp,
+                                    isCompleted: isChecked,
                                     onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
                                   ),
                                 ),
