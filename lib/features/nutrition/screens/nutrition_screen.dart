@@ -32,6 +32,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   bool _isLoading = true;
   bool _isInsightsExpanded = false;
   bool _isWaterExpanded = false;
+  int _logTabIndex = 0;
 
   @override
   void initState() {
@@ -183,22 +184,13 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               horizontal: AppSpacing.screenPadding),
           child: _buildCalorieCard(nutrition, targets: targets),
         ),
-        const SizedBox(height: 6),
-
-        // ── Compact macro summary text ──
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: _buildMacroSummaryRow(nutrition),
-        ),
         const SizedBox(height: 10),
 
-        // ── 2. Log Meal ──
-        _sectionLabel('LOG MEAL'),
+        // ── 2. Unified Log Food Card (AI + Scan + Search) ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: const FoodLoggerSection(),
+          child: _buildUnifiedLogCard(),
         ),
         const SizedBox(height: 10),
 
@@ -208,16 +200,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           const SizedBox(height: 10),
         ],
 
-        // ── 4. Scan Meal ──
-        _sectionLabel('AI SCAN'),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: const ScanMealSection(),
-        ),
-        const SizedBox(height: 10),
-
-        // ── 5. Today's Meals ──
+        // ── 4. Today's Meals ──
         _sectionLabel('TODAY\'S MEALS'),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -481,48 +464,128 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     );
   }
 
-  // ── Macro Summary Row (compact text) ──────────────────────────
+  // ── Unified Log Food Card ────────────────────────────────────
 
-  Widget _buildMacroSummaryRow(DailyNutritionData nutrition) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _macroMiniText(
-            'P', nutrition.protein.round(), nutrition.proteinTarget.round(),
-            AppColors.orange),
-        Text(
-          '  \u00B7  ',
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 11, color: AppColors.textSecondary),
-        ),
-        _macroMiniText(
-            'C', nutrition.carbs.round(), nutrition.carbTarget.round(),
-            AppColors.blue),
-        Text(
-          '  \u00B7  ',
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 11, color: AppColors.textSecondary),
-        ),
-        _macroMiniText(
-            'F', nutrition.fat.round(), nutrition.fatTarget.round(),
-            AppColors.purple),
-      ],
+  Widget _buildUnifiedLogCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'LOG FOOD',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Tab bar — 3 pill buttons
+          Row(
+            children: [
+              _logTab(0, '\u2728 AI'),
+              const SizedBox(width: 6),
+              _logTab(1, '\uD83D\uDCF7 Scan'),
+              const SizedBox(width: 6),
+              _logTab(2, '\uD83D\uDD0D Search'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Tab content
+          if (_logTabIndex == 0)
+            const FoodLoggerSection()
+          else if (_logTabIndex == 1)
+            const ScanMealSection()
+          else
+            _buildSearchTab(context),
+        ],
+      ),
     );
   }
 
-  Widget _macroMiniText(String label, int current, int target, Color color) {
-    return RichText(
-      text: TextSpan(
-        style: GoogleFonts.getFont('DM Sans',
-            fontSize: 11, fontWeight: FontWeight.w700),
-        children: [
-          TextSpan(text: '$label: ', style: TextStyle(color: color)),
-          TextSpan(
-            text: '${current}g/${target}g',
-            style: const TextStyle(color: AppColors.textSecondary),
+  Widget _logTab(int index, String label) {
+    final isActive = index == _logTabIndex;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _logTabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive
+                ? AppColors.accent.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: isActive
+                  ? AppColors.accent.withValues(alpha: 0.3)
+                  : AppColors.border,
+            ),
           ),
-        ],
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: isActive ? AppColors.accent : AppColors.textSecondary,
+            ),
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildSearchTab(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => showFoodSearchSheet(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.input,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search,
+                    color: AppColors.textSecondary, size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  'Search 5,000+ foods...',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'FREE \u00B7 No daily limit \u00B7 Indian foods database',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: AppColors.green,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
     );
   }
 
