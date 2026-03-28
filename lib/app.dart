@@ -62,23 +62,30 @@ class _MobileFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final size = MediaQuery.of(context).size;
 
     // If screen is narrow enough to be a real phone, no frame needed
-    if (screenWidth <= 500) return child;
+    if (size.width <= 500) return child;
+
+    // Clamp frame height to fit within the viewport (minus 24px margin).
+    // Width maintains the 390:844 aspect ratio.
+    const maxH = 844.0;
+    const maxW = 390.0;
+    final frameH = (size.height - 24).clamp(400.0, maxH);
+    final frameW = (frameH / maxH * maxW).clamp(300.0, maxW);
 
     return Container(
       color: const Color(0xFF020305),
       child: Center(
         child: Container(
-          width: 400,
-          height: 860,
+          width: frameW,
+          height: frameH,
           decoration: BoxDecoration(
             color: AppColors.bg,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
               color: const Color(0xFF1a1f2e),
-              width: 3,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
@@ -94,33 +101,29 @@ class _MobileFrame extends StatelessWidget {
             children: [
               // Notch / status bar
               Container(
-                height: 44,
+                height: 36,
                 color: AppColors.bg,
                 child: Center(
                   child: Container(
-                    width: 120,
-                    height: 28,
+                    width: 110,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: const Color(0xFF0a0f18),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
               ),
               // App content
-              Expanded(
-                child: ClipRRect(
-                  child: child,
-                ),
-              ),
+              Expanded(child: ClipRect(child: child)),
               // Home indicator bar
               Container(
                 height: 8,
                 color: AppColors.bg,
                 child: Center(
                   child: Container(
-                    width: 134,
-                    height: 4,
+                    width: 120,
+                    height: 3.5,
                     decoration: BoxDecoration(
                       color: AppColors.textSecondary.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(2),

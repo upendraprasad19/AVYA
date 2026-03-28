@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -197,6 +198,9 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
   }
 
   Widget _buildScanner() {
+    if (kIsWeb) {
+      return _buildWebFallback();
+    }
     return Column(
       children: [
         // Camera viewfinder
@@ -279,6 +283,62 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWebFallback() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.accentTint,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.phone_android_rounded,
+                color: AppColors.accent, size: 36),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Barcode scanning requires\nthe mobile app',
+            style: GoogleFonts.getFont('DM Sans',
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Download ICANBEFITTER on Android to scan\nproduct barcodes with your camera.',
+            style: GoogleFonts.getFont('DM Sans',
+                fontSize: 13, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                'Got it',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

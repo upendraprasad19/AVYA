@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -212,7 +213,9 @@ class ScanMealSection extends ConsumerWidget {
     }
 
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.camera);
+    final image = await picker.pickImage(
+      source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+    );
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();

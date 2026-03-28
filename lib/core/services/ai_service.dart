@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -57,8 +56,6 @@ class AiService {
       }
 
       throw AiServiceException('Unexpected AI response format');
-    } on SocketException {
-      return _directHttpCall('ai-proxy', message, context);
     } on http.ClientException {
       return _directHttpCall('ai-proxy', message, context);
     } catch (e) {
@@ -132,8 +129,6 @@ class AiService {
       }
 
       throw AiServiceException('Unexpected PRO AI response format');
-    } on SocketException {
-      return _directHttpCall('ai-proxy-pro', message, context);
     } on http.ClientException {
       return _directHttpCall('ai-proxy-pro', message, context);
     } catch (e) {
