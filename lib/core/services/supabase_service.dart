@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Singleton wrapper around the Supabase client.
@@ -17,17 +18,13 @@ class SupabaseService {
 
   bool _initialized = false;
 
-  // TODO: Move to environment variables before production release.
-  static const String _supabaseUrl = 'https://dedsavbjuwgarrhphgnl.supabase.co';
-  static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZHNhdmJqdXdnYXJyaHBoZ25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNTM4NTIsImV4cCI6MjA4OTgyOTg1Mn0.GkJvQOzApnImjaKfFLbbuwTao3ud1so52DpZrbQsfc8';
-
   /// Initialize the Supabase client. Call once in main() before runApp().
   Future<void> initialize() async {
     if (_initialized) return;
 
     await Supabase.initialize(
-      url: _supabaseUrl,
-      anonKey: _supabaseAnonKey,
+      url: dotenv.env['SUPABASE_URL']!,
+      anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     );
 
     _initialized = true;

@@ -51,11 +51,26 @@ class HiveService {
     //   Hive.registerAdapter(UserProfileAdapter());
 
     // Open all boxes in parallel for fastest startup.
+    // Uses safe open — if a box is corrupted, it is deleted and recreated
+    // rather than crashing the app in an irrecoverable loop.
     await Future.wait(
-      _allBoxNames.map((name) => Hive.openBox(name)),
+      _allBoxNames.map((name) => _safeOpenBox(name)),
     );
 
     _initialized = true;
+  }
+
+  /// Opens a Hive box safely.
+  ///
+  /// If the box is corrupted (e.g. app was killed mid-write), deletes it
+  /// and opens a fresh empty box rather than crashing the app permanently.
+  Future<Box> _safeOpenBox(String name) async {
+    try {
+      return await Hive.openBox(name);
+    } catch (_) {
+      await Hive.deleteBoxFromDisk(name);
+      return await Hive.openBox(name);
+    }
   }
 
   /// Returns a previously opened Hive box by name.

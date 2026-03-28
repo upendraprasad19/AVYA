@@ -165,6 +165,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // ── Compact Header (avatar + title + mode badge + menu) ──
                 _buildCompactHeader(isPro, reasoningMode, channel, telegramConnected),
 
+                // ── Trial countdown bar (free users only) ──
+                if (!isPro && trialInfo.isTrialActive)
+                  _buildTrialCountdown(messageCount, trialInfo.daysRemaining),
+
                 // ── Chat Area or Telegram View ──
                 Expanded(
                   child: channel == 'in_app'
@@ -183,6 +187,48 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // TRIAL COUNTDOWN BAR
+  // ────────────────────────────────────────────────────────────────
+
+  Widget _buildTrialCountdown(int messageCount, int daysRemaining) {
+    final remaining = AppConstants.freeAiMessagesPerDay - messageCount;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+      color: const Color(0xFF07090e),
+      child: Row(
+        children: [
+          Icon(Icons.timer_outlined, size: 12, color: const Color(0xFF6b7a8d)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '$remaining msg${remaining == 1 ? "" : "s"} left today  •  $daysRemaining day${daysRemaining == 1 ? "" : "s"} remaining in trial',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                color: daysRemaining <= 3
+                    ? const Color(0xFFef4444)
+                    : const Color(0xFF6b7a8d),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => showPaywallSheet(context, feature: 'Unlimited AI Coach'),
+            child: Text(
+              'Upgrade',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF00D4FF),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

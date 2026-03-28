@@ -15,6 +15,7 @@ import '../widgets/weekly_chart_card.dart';
 import '../widgets/scan_meal_section.dart';
 import '../widgets/saved_meals_section.dart';
 import '../widgets/food_search_sheet.dart';
+import '../widgets/barcode_scan_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -547,6 +548,49 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   Widget _buildSearchTab(BuildContext context) {
     return Column(
       children: [
+        // Barcode scan button
+        GestureDetector(
+          onTap: () => showBarcodeScanSheet(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.accentTint,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_scanner,
+                    color: AppColors.accent, size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  'Scan product barcode',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'FREE',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Search button
         GestureDetector(
           onTap: () => showFoodSearchSheet(context),
           child: Container(

@@ -21,6 +21,7 @@ import '../widgets/swap_sheet.dart';
 import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
 import '../widgets/weight_sparkline.dart';
+import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -114,6 +115,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         _buildHeader(ref),
         _buildDateDisplay(),
+        _buildStreakWarning(ref),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           child: WeeklyCalendar(
@@ -238,6 +240,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           StreakBadge(weeks: streak),
         ],
       ),
+    );
+  }
+
+  // -- Streak Warning -------------------------------------------------
+
+  Widget _buildStreakWarning(WidgetRef ref) {
+    final streak = ref.watch(streakProvider);
+    // Only show on day 6-7 of week when streak is active
+    // Use a simple heuristic: if streak > 0 and it's Sat/Sun
+    final dayOfWeek = DateTime.now().weekday;
+    if (streak == 0 || dayOfWeek < 6) return const SizedBox.shrink();
+
+    return StreakWarningBanner(
+      streakWeeks: streak,
+      workoutsRemaining: 1,
+      onTrainNow: () => context.go('/train'),
     );
   }
 

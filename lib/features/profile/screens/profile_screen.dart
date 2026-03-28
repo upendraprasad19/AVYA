@@ -21,6 +21,7 @@ import '../widgets/biometric_sync_card.dart';
 import '../widgets/subscription_card.dart';
 import '../widgets/progress_photos_card.dart';
 import '../widgets/weekly_report_card.dart';
+import '../widgets/badges_grid.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -182,7 +183,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // 4. Subscription Card
+                    // 4. Achievements
+                    const SectionHeader('ACHIEVEMENTS'),
+                    const BadgesGrid(),
+                    const SizedBox(height: 8),
+
+                    // 5. Subscription Card
                     const SectionHeader('SUBSCRIPTION'),
                     SubscriptionCard(
                       isPro: subInfo.isPro,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
@@ -8,6 +9,9 @@ import 'app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 0. Load environment variables (.env bundled as Flutter asset).
+  await dotenv.load(fileName: '.env');
 
   // 1. Initialize Hive — registers adapters and opens all 10 boxes.
   await HiveService.instance.init();

@@ -1,12 +1,13 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 /// App-wide constants: API URLs, feature keys, limits, and thresholds.
 class AppConstants {
   AppConstants._();
 
-  // ── API URLs (Supabase Edge Functions) ────────────────────
+  // ── API URLs (Supabase — loaded from .env) ────────────────────
 
-  // TODO: Move to environment variables before production release.
-  static const String supabaseUrl = 'https://dedsavbjuwgarrhphgnl.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZHNhdmJqdXdnYXJyaHBoZ25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNTM4NTIsImV4cCI6MjA4OTgyOTg1Mn0.GkJvQOzApnImjaKfFLbbuwTao3ud1so52DpZrbQsfc8';
+  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
+  static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
   // Edge Function names (invoked via Supabase client).
   static const String aiProxyFunction = 'ai-proxy';
@@ -123,7 +124,6 @@ class AppConstants {
   /// - share_plus: native OS share sheet
   /// - qr_flutter: client-side QR code generation (zero server cost)
 
-  /// Razorpay key (public, safe for client).
-  // TODO: Replace with actual Razorpay key ID.
-  static const String razorpayKeyId = 'rzp_test_XXXXXXXXXX';
+  /// Razorpay key (public, safe for client) — loaded from .env.
+  static String get razorpayKeyId => dotenv.env['RAZORPAY_KEY_ID'] ?? '';
 }
