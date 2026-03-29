@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/widgets/video_share_button.dart';
 import '../providers/train_provider.dart';
+import '../providers/video_render_provider.dart';
 import '../widgets/rest_timer_modal.dart';
 import '../widgets/exercise_swap_sheet.dart';
 import '../widgets/set_input_row.dart';
@@ -667,7 +671,12 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: AppSpacing.inlineGap),
+
+                // Share as Video — triggers Remotion render pipeline
+                _buildVideoShareRow(data),
+                const SizedBox(height: AppSpacing.inlineGap),
+
                 GestureDetector(
                   onTap: () => context.go('/home'),
                   child: Container(
@@ -695,6 +704,67 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Builds the "Share as Video" row — triggers Remotion render pipeline.
+  Widget _buildVideoShareRow(ActiveWorkoutData data) {
+    final renderState = ref.watch(videoRenderNotifierProvider);
+
+    if (renderState.status == VideoRenderStatus.idle) {
+      return GestureDetector(
+        onTap: () {
+          final receiptData = WorkoutReceiptData.fromActiveWorkout(data);
+          final userName = UserRepository.instance.getProfile()?['full_name']
+                  as String? ??
+              'Athlete';
+          final progress = UserRepository.instance.getProgress() ?? {};
+          ref.read(videoRenderNotifierProvider.notifier).triggerWorkoutVideo(
+            compositionId: 'WorkoutCompletion',
+            inputProps: {
+              'userName': userName,
+              'workoutName': receiptData.workoutName,
+              'totalVolume': receiptData.totalVolumeKg,
+              'durationSeconds': data.elapsedSeconds,
+              'streakWeeks': (progress['current_streak_weeks'] as int?) ?? 0,
+              'newPrs': data.detectedPRs,
+            },
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0e1219),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.video_library_rounded,
+                    color: AppColors.textSecondary, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Share as Video',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: Center(child: VideoShareButton()),
     );
   }
 

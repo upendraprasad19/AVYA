@@ -300,6 +300,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         phase: 1,
       );
 
+      // Guard: if the plan generated with zero workout days, the exercise
+      // library either failed to seed or no exercises matched the filters.
+      if (phase.workouts.isEmpty) {
+        throw Exception(
+          'No exercises found for your equipment. Please try a different equipment option.',
+        );
+      }
+
       await _userRepo.saveProgress({
         'current_phase': 1,
         'current_week': 1,

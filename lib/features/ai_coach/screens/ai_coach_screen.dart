@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,19 +27,22 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _inputFocusNode = FocusNode();
   bool _isRecording = false;
 
-  // Speech-to-text
-  final SpeechToText _speech = SpeechToText();
+  // Speech-to-text — null on web (plugin not supported)
+  SpeechToText? _speech;
   bool _speechAvailable = false;
   String _recognizedText = '';
 
   @override
   void initState() {
     super.initState();
-    _initSpeech();
+    if (!kIsWeb) {
+      _speech = SpeechToText();
+      _initSpeech();
+    }
   }
 
   Future<void> _initSpeech() async {
-    _speechAvailable = await _speech.initialize(
+    _speechAvailable = await _speech!.initialize(
       onError: (error) => setState(() => _isRecording = false),
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
@@ -54,12 +58,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   void _startListening() {
-    if (!_speechAvailable) return;
+    if (!_speechAvailable || _speech == null) return;
     setState(() {
       _isRecording = true;
       _recognizedText = '';
     });
-    _speech.listen(
+    _speech!.listen(
       onResult: (result) {
         setState(() => _recognizedText = result.recognizedWords);
       },
@@ -70,7 +74,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   void _stopListening() {
-    _speech.stop();
+    _speech?.stop();
     setState(() => _isRecording = false);
     if (_recognizedText.isNotEmpty) {
       _sendMessage(_recognizedText);
@@ -80,7 +84,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   @override
   void dispose() {
-    _speech.stop();
+    _speech?.stop();
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();

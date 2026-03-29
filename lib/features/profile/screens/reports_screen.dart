@@ -13,11 +13,14 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/pro_badge.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
+import 'package:icanbefitter/shared/widgets/video_share_button.dart';
+import 'package:icanbefitter/features/train/providers/video_render_provider.dart';
 import '../providers/profile_provider.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -856,6 +859,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         const SizedBox(height: AppSpacing.sectionGap),
 
+        // Share as Video — Remotion weekly recap render
+        _buildWeeklyVideoShareRow(report),
+        const SizedBox(height: AppSpacing.inlineGap),
+
         // Regenerate button
         SizedBox(
           width: double.infinity,
@@ -891,6 +898,60 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWeeklyVideoShareRow(Map<String, dynamic> report) {
+    final renderState = ref.watch(videoRenderNotifierProvider);
+
+    if (renderState.isLoading ||
+        renderState.status == VideoRenderStatus.ready ||
+        renderState.status == VideoRenderStatus.failed) {
+      return SizedBox(
+          width: double.infinity,
+          child: Center(child: VideoShareButton()));
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          final userName =
+              UserRepository.instance.getProfile()?['full_name'] as String? ??
+                  'Athlete';
+          final workoutSummary =
+              report['workout_summary'] as Map<String, dynamic>? ?? {};
+          ref.read(videoRenderNotifierProvider.notifier).triggerWorkoutVideo(
+            compositionId: 'WeeklyRecap',
+            inputProps: {
+              'userName': userName,
+              'weekNumber': WorkoutRepository.instance.getCurrentWeekNumber(),
+              'totalVolume': workoutSummary['total_volume_kg'] ?? 0,
+              'totalWorkouts': workoutSummary['workouts_completed'] ?? 0,
+              'totalPrs': workoutSummary['prs_hit'] ?? 0,
+              'aiTagline': report['summary'] ?? '',
+            },
+          );
+        },
+        icon: const Icon(Icons.video_library_rounded, size: 16),
+        label: Text(
+          'Share as Video',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textSecondary,
+          side: const BorderSide(color: AppColors.border),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+        ),
+      ),
     );
   }
 

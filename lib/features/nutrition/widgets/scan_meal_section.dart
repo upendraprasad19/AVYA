@@ -15,11 +15,18 @@ import '../providers/nutrition_provider.dart';
 /// Camera-based meal scanning card with usage counter.
 ///
 /// FREE: 3 scans/month. PRO: 3 scans/day with soft cap warning at 2/3.
-class ScanMealSection extends ConsumerWidget {
+class ScanMealSection extends ConsumerStatefulWidget {
   const ScanMealSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScanMealSection> createState() => _ScanMealSectionState();
+}
+
+class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
     final scanState = ref.watch(scanMealProvider);
     final remaining = ref.watch(scanMealRemainingProvider);
     final isPro = SubscriptionService.instance.isPro();
@@ -146,22 +153,21 @@ class ScanMealSection extends ConsumerWidget {
               ),
             )
           else if (scanState.error != null)
-            _buildError(scanState.error!, ref)
+            _buildError(scanState.error!)
           else if (scanState.result != null)
-            _buildResult(context, scanState.result!, ref)
+            _buildResult(context, scanState.result!)
           else
-            _buildScanButton(context, ref, remaining),
+            _buildScanButton(context, remaining),
         ],
       ),
     );
   }
 
-  Widget _buildScanButton(
-      BuildContext context, WidgetRef ref, int remaining) {
+  Widget _buildScanButton(BuildContext context, int remaining) {
     return SizedBox(
       width: double.infinity,
       child: GestureDetector(
-        onTap: () => _handleScan(context, ref, remaining),
+        onTap: () => _handleScan(context, remaining),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
@@ -191,7 +197,7 @@ class ScanMealSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleScan(BuildContext context, WidgetRef ref, int remaining) async {
+  Future<void> _handleScan(BuildContext context, int remaining) async {
     if (remaining <= 0) {
       SubscriptionService.instance.gate(
         AppConstants.featureScanMealPro,
@@ -224,7 +230,7 @@ class ScanMealSection extends ConsumerWidget {
     await UsageCounterService.instance.increment(AppConstants.featureScanMealPro, isPro);
   }
 
-  Widget _buildError(String error, WidgetRef ref) {
+  Widget _buildError(String error) {
     return Column(
       children: [
         Text(
@@ -253,8 +259,7 @@ class ScanMealSection extends ConsumerWidget {
     );
   }
 
-  Widget _buildResult(
-      BuildContext context, Map<String, dynamic> result, WidgetRef ref) {
+  Widget _buildResult(BuildContext context, Map<String, dynamic> result) {
     final items = (result['items'] as List<dynamic>?) ?? [];
     final totalKcal = (result['total_calories'] as num?)?.toInt() ?? 0;
 
@@ -326,7 +331,9 @@ class ScanMealSection extends ConsumerWidget {
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () {
+                onTap: _saving ? null : () {
+                  if (_saving) return;
+                  setState(() => _saving = true);
                   final result = ref.read(scanMealProvider).result;
                   if (result != null) {
                     final now = DateTime.now();
@@ -356,6 +363,7 @@ class ScanMealSection extends ConsumerWidget {
                     ref.invalidate(dailyNutritionProvider);
                   }
                   ref.read(scanMealProvider.notifier).clear();
+                  if (mounted) setState(() => _saving = false);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Meal saved ✓'), duration: Duration(seconds: 1)),

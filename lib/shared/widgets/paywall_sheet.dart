@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -83,6 +84,22 @@ class _PaywallSheetState extends State<PaywallSheet> {
 
   void _handleUpgrade() {
     if (_isProcessing) return;
+
+    if (kIsWeb) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payments are only available in the mobile app. Download ICANBEFITTER to upgrade.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: const Color(0xFF0e1219),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     Navigator.of(context).pop();

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -16,7 +17,7 @@ class RazorpayService {
   static final RazorpayService _instance = RazorpayService._();
   static RazorpayService get instance => _instance;
 
-  late Razorpay _razorpay;
+  Razorpay? _razorpay;
   VoidCallback? _onSuccess;
   VoidCallback? _onFailure;
   String? _pendingPlan;
@@ -25,14 +26,16 @@ class RazorpayService {
   static GlobalKey<NavigatorState>? navigatorKey;
 
   void initialize() {
+    if (kIsWeb) return;
     _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
   }
 
   void dispose() {
-    _razorpay.clear();
+    if (kIsWeb) return;
+    _razorpay?.clear();
   }
 
   /// Opens the Razorpay checkout for the given [plan] ("monthly" or "yearly").
@@ -71,7 +74,8 @@ class RazorpayService {
       },
     };
 
-    _razorpay.open(options);
+    if (kIsWeb) return;
+    _razorpay?.open(options);
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {

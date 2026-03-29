@@ -919,7 +919,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       workoutName: state.workoutDay?.name ?? 'Workout',
       setsCompleted: state.completedSets,
       durationSeconds: state.elapsedSeconds,
-      completedAt: now,
+      completedAt: state.workoutDay?.date ?? now,
     );
 
     // Save individual exercise logs with is_pr flag, respecting logging type
@@ -1039,11 +1039,28 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final workoutDate = state.workoutDay?.date ?? now;
     await repo.markWorkoutCompleted(workoutDate);
 
-    // Update user progress.
+    // Update user progress + streak.
     final progress = UserRepository.instance.getProgress() ?? {};
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
+
+    // Streak: check if this week has now hit the ≥80% completion threshold.
+    // markWorkoutCompleted already ran above, so the status is up-to-date.
+    final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
+    final weekDays = repo.getWeek(currentWeekNum);
+    final planned = weekDays.where((d) => d['type'] == 'workout').length;
+    final completed = weekDays.where((d) => d['status'] == 'completed').length;
+    int streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
+    final lastStreakWeek = (progress['last_streak_week'] as int?) ?? -1;
+    if (planned > 0 &&
+        completed >= (planned * 0.8).ceil() &&
+        currentWeekNum != lastStreakWeek) {
+      streakWeeks += 1;
+    }
+
     await UserRepository.instance.updateProgress({
       'total_workouts_done': totalDone,
+      'current_streak_weeks': streakWeeks,
+      'last_streak_week': currentWeekNum,
     });
 
     state = state.copyWith(isComplete: true, detectedPRs: prDescriptions);
