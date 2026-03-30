@@ -14,6 +14,8 @@ class ChatMessage {
   final bool isLoading;
   final bool isError;
   final String? mode; // 'quick' or 'deep' for reasoning tab
+  final String? mediaUrl; // URL of attached photo (Supabase Storage)
+  final String? mediaType; // 'image'
 
   const ChatMessage({
     required this.text,
@@ -22,6 +24,8 @@ class ChatMessage {
     this.isLoading = false,
     this.isError = false,
     this.mode,
+    this.mediaUrl,
+    this.mediaType,
   });
 }
 
@@ -183,6 +187,87 @@ class SendMessageNotifier extends Notifier<bool> {
   @override
   bool build() => false; // isLoading
 
+  /// Send a message with an attached media URL (PRO photo analysis).
+  Future<void> sendWithMedia(
+    String message, {
+    required String mediaUrl,
+    String mediaType = 'image',
+  }) async {
+    if (state) return; // Already sending
+
+    final chatNotifier = ref.read(chatHistoryProvider.notifier);
+    final limitNotifier = ref.read(messageLimitProvider.notifier);
+
+    // Add user message with media thumbnail
+    chatNotifier.addMessage(ChatMessage(
+      text: message.isEmpty ? 'Analyse this photo' : message,
+      isUser: true,
+      timestamp: DateTime.now(),
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+    ));
+
+    // Add loading placeholder
+    chatNotifier.addMessage(ChatMessage(
+      text: '',
+      isUser: false,
+      timestamp: DateTime.now(),
+      isLoading: true,
+    ));
+
+    state = true;
+
+    try {
+      final repo = AiCoachRepository.instance;
+      final context = repo.buildAiContext();
+
+      final aiResponse = await AiService.instance.chatWithMedia(
+        message.isEmpty ? 'Analyse this photo' : message,
+        mediaUrl,
+        mediaType,
+        context,
+      );
+
+      chatNotifier.replaceLastMessage(ChatMessage(
+        text: aiResponse.reply,
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+
+      await repo.saveInteraction(
+        userMessage: '[Photo] ${message.isEmpty ? "Analyse this photo" : message}',
+        aiResponse: aiResponse.reply,
+        modelUsed: aiResponse.modelUsed,
+        mode: 'media',
+      );
+
+      await repo.extractCoachingNotes();
+      ref.invalidate(coachInsightProvider);
+      limitNotifier.increment();
+
+      if (aiResponse.actions.isNotEmpty) {
+        ref.read(pendingLogActionsProvider.notifier).addActions(
+              aiResponse.actions,
+              ref,
+            );
+      }
+    } catch (e) {
+      final errorMsg = e.toString().contains('FunctionException') ||
+              e.toString().contains('404') ||
+              e.toString().contains('Failed host lookup')
+          ? 'AI media analysis is not available yet. The Edge Function needs to be deployed to Supabase.'
+          : 'Sorry, I couldn\'t analyse that photo: ${e.toString().length > 100 ? e.toString().substring(0, 100) : e}';
+      chatNotifier.replaceLastMessage(ChatMessage(
+        text: errorMsg,
+        isUser: false,
+        timestamp: DateTime.now(),
+        isError: true,
+      ));
+    } finally {
+      state = false;
+    }
+  }
+
   Future<void> send(String message, {String mode = 'quick'}) async {
     if (message.trim().isEmpty) return;
     if (state) return; // Already sending
@@ -214,9 +299,11 @@ class SendMessageNotifier extends Notifier<bool> {
     state = true;
 
     try {
-      // Build FULL context from all Hive boxes via repository
+      // Build FULL context from all Hive boxes via repository,
+      // then enrich with historical data if the message is a historical query.
       final repo = AiCoachRepository.instance;
-      final context = repo.buildAiContext();
+      final baseContext = repo.buildAiContext();
+      final context = repo.enrichContextForQuery(message, baseContext);
 
       final modelUsed = mode == 'deep'
           ? 'glm-4.7'
@@ -224,18 +311,18 @@ class SendMessageNotifier extends Notifier<bool> {
               ? 'cerebras-120b'
               : 'llama-3.1-8b';
 
-      String response;
+      AiChatResponse aiResponse;
       if (mode == 'deep' && isPro) {
-        response = await AiService.instance.reason(message, context);
+        aiResponse = await AiService.instance.reason(message, context);
       } else if (isPro) {
-        response = await AiService.instance.chatPro(message, context);
+        aiResponse = await AiService.instance.chatPro(message, context);
       } else {
-        response = await AiService.instance.chat(message, context);
+        aiResponse = await AiService.instance.chat(message, context);
       }
 
       // Replace loading with actual response
       chatNotifier.replaceLastMessage(ChatMessage(
-        text: response,
+        text: aiResponse.reply,
         isUser: false,
         timestamp: DateTime.now(),
         mode: mode,
@@ -244,16 +331,24 @@ class SendMessageNotifier extends Notifier<bool> {
       // Save to coachBox via repository
       await repo.saveInteraction(
         userMessage: message,
-        aiResponse: response,
-        modelUsed: modelUsed,
+        aiResponse: aiResponse.reply,
+        modelUsed: aiResponse.modelUsed,
         mode: mode,
       );
 
-      // Extract coaching notes after every AI response (C4)
+      // Extract coaching notes after every AI response
       await repo.extractCoachingNotes();
       ref.invalidate(coachInsightProvider);
 
       limitNotifier.increment();
+
+      // Dispatch any structured log actions from AI response
+      if (aiResponse.actions.isNotEmpty) {
+        ref.read(pendingLogActionsProvider.notifier).addActions(
+              aiResponse.actions,
+              ref,
+            );
+      }
     } catch (e) {
       final errorMsg = e.toString().contains('FunctionException') ||
               e.toString().contains('404') ||
@@ -375,3 +470,265 @@ final coachInsightProvider = Provider<String>((ref) {
   if (insight.isNotEmpty) return insight;
   return 'Start chatting with your AI coach to get personalised fitness insights and tips!';
 });
+
+// ── Conversational Logging: Pending Actions ─────────────────────
+
+/// Types of instant log actions the AI can trigger.
+enum LogActionType { water, weight, food, sleep, measurement }
+
+/// A pending log action detected by the AI, awaiting user confirmation.
+class PendingLogAction {
+  final String id;
+  final LogActionType type;
+  final Map<String, dynamic> data;
+  final String displayText;
+  bool isLogged;
+  bool isDismissed;
+
+  PendingLogAction({
+    required this.id,
+    required this.type,
+    required this.data,
+    required this.displayText,
+    this.isLogged = false,
+    this.isDismissed = false,
+  });
+}
+
+class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
+  @override
+  List<PendingLogAction> build() => [];
+
+  /// Parse raw actions from AI response and add to pending list.
+  /// Routes `confirm_workout_log` to [WorkoutDraftNotifier] instead.
+  void addActions(List<Map<String, dynamic>> rawActions, Ref ref) {
+    for (final raw in rawActions) {
+      if (raw['action'] == 'confirm_workout_log') {
+        final data = raw['data'];
+        if (data is Map<String, dynamic>) {
+          ref.read(workoutDraftProvider.notifier).setDraft(data);
+        }
+        continue;
+      }
+      final action = _parse(raw);
+      if (action != null) {
+        state = [...state, action];
+      }
+    }
+  }
+
+  void markLogged(String id) {
+    state = state.map((a) => a.id == id ? (a..isLogged = true) : a).toList();
+  }
+
+  void dismiss(String id) {
+    state =
+        state.map((a) => a.id == id ? (a..isDismissed = true) : a).toList();
+  }
+
+  void removeSettled() {
+    state = state.where((a) => !a.isLogged && !a.isDismissed).toList();
+  }
+
+  PendingLogAction? _parse(Map<String, dynamic> raw) {
+    final action = raw['action'] as String?;
+    final data = raw['data'];
+    if (action == null || data is! Map<String, dynamic>) return null;
+
+    final id = '${DateTime.now().millisecondsSinceEpoch}_$action';
+
+    switch (action) {
+      case 'log_water':
+        final ml = (data['ml'] as num?)?.toInt() ?? 0;
+        if (ml <= 0 || ml > 5000) return null;
+        return PendingLogAction(
+          id: id,
+          type: LogActionType.water,
+          data: data,
+          displayText: '${ml}ml water',
+        );
+
+      case 'log_weight':
+        final kg = (data['weight_kg'] as num?)?.toDouble() ?? 0;
+        if (kg < 20 || kg > 300) return null;
+        return PendingLogAction(
+          id: id,
+          type: LogActionType.weight,
+          data: data,
+          displayText: '${kg.toStringAsFixed(1)} kg',
+        );
+
+      case 'log_food':
+        final name = data['food_name'] as String? ?? 'Food';
+        final meal = data['meal_type'] as String? ?? 'snacks';
+        final cap =
+            meal.isEmpty ? meal : meal[0].toUpperCase() + meal.substring(1);
+        return PendingLogAction(
+          id: id,
+          type: LogActionType.food,
+          data: data,
+          displayText: '$name — $cap',
+        );
+
+      case 'log_sleep':
+        final hrs = (data['duration_hrs'] as num?)?.toDouble() ?? 0;
+        if (hrs <= 0 || hrs > 24) return null;
+        return PendingLogAction(
+          id: id,
+          type: LogActionType.sleep,
+          data: data,
+          displayText: '${hrs.toStringAsFixed(1)}h sleep',
+        );
+
+      case 'log_measurement':
+        final type = data['type'] as String? ?? '';
+        final valueCm = (data['value_cm'] as num?)?.toDouble() ?? 0;
+        if (!['waist', 'chest', 'hips', 'arms'].contains(type) ||
+            valueCm <= 0) {
+          return null;
+        }
+        final cap =
+            type.isEmpty ? type : type[0].toUpperCase() + type.substring(1);
+        return PendingLogAction(
+          id: id,
+          type: LogActionType.measurement,
+          data: data,
+          displayText: '$cap: ${valueCm.toStringAsFixed(1)}cm',
+        );
+
+      default:
+        return null;
+    }
+  }
+}
+
+final pendingLogActionsProvider =
+    NotifierProvider<PendingLogActionsNotifier, List<PendingLogAction>>(
+        PendingLogActionsNotifier.new);
+
+// ── Conversational Logging: Workout Draft ───────────────────────
+
+/// A single set in a draft workout exercise.
+class DraftSet {
+  double? weightKg;
+  int? reps;
+  int? durationSecs;
+  double? distanceKm;
+
+  DraftSet({this.weightKg, this.reps, this.durationSecs, this.distanceKm});
+}
+
+/// A single exercise in a draft workout.
+class DraftExercise {
+  String name;
+  String loggingType; // weight_reps, bodyweight_reps, timed, cardio
+  List<DraftSet> sets;
+  int? durationMins; // cardio only
+  double? distanceKm; // cardio only
+
+  DraftExercise({
+    required this.name,
+    required this.loggingType,
+    required this.sets,
+    this.durationMins,
+    this.distanceKm,
+  });
+}
+
+/// A complete workout draft awaiting user confirmation.
+class WorkoutDraft {
+  final String id;
+  final List<DraftExercise> exercises;
+  final DateTime date;
+  bool isSubmitted;
+  bool isCancelled;
+
+  WorkoutDraft({
+    required this.id,
+    required this.exercises,
+    required this.date,
+    this.isSubmitted = false,
+    this.isCancelled = false,
+  });
+}
+
+class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
+  @override
+  WorkoutDraft? build() => null;
+
+  void setDraft(Map<String, dynamic> data) {
+    final rawExercises = data['exercises'] as List? ?? [];
+    final exercises =
+        rawExercises.map(_parseExercise).whereType<DraftExercise>().toList();
+    if (exercises.isEmpty) return;
+
+    state = WorkoutDraft(
+      id: 'wdraft_${DateTime.now().millisecondsSinceEpoch}',
+      exercises: exercises,
+      date: DateTime.now(),
+    );
+  }
+
+  void updateSet(int exerciseIndex, int setIndex, DraftSet updated) {
+    if (state == null) return;
+    final exercises = List<DraftExercise>.from(state!.exercises);
+    if (exerciseIndex >= exercises.length) return;
+    final sets = List<DraftSet>.from(exercises[exerciseIndex].sets);
+    if (setIndex >= sets.length) return;
+    sets[setIndex] = updated;
+    exercises[exerciseIndex] = DraftExercise(
+      name: exercises[exerciseIndex].name,
+      loggingType: exercises[exerciseIndex].loggingType,
+      sets: sets,
+      durationMins: exercises[exerciseIndex].durationMins,
+      distanceKm: exercises[exerciseIndex].distanceKm,
+    );
+    state = WorkoutDraft(
+      id: state!.id,
+      exercises: exercises,
+      date: state!.date,
+    );
+  }
+
+  void clearDraft() => state = null;
+
+  DraftExercise? _parseExercise(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw);
+    final name = map['name'] as String?;
+    final loggingType = map['logging_type'] as String? ?? 'weight_reps';
+    if (name == null || name.isEmpty) return null;
+
+    if (loggingType == 'cardio') {
+      return DraftExercise(
+        name: name,
+        loggingType: loggingType,
+        sets: [],
+        durationMins: (map['duration_mins'] as num?)?.toInt(),
+        distanceKm: (map['distance_km'] as num?)?.toDouble(),
+      );
+    }
+
+    final rawSets = map['sets'] as List? ?? [];
+    final sets = rawSets.map((s) {
+      if (s is! Map) return DraftSet();
+      final sm = Map<String, dynamic>.from(s);
+      return DraftSet(
+        weightKg: (sm['weight_kg'] as num?)?.toDouble(),
+        reps: (sm['reps'] as num?)?.toInt(),
+        durationSecs: (sm['duration_secs'] as num?)?.toInt(),
+        distanceKm: (sm['distance_km'] as num?)?.toDouble(),
+      );
+    }).toList();
+
+    return DraftExercise(
+      name: name,
+      loggingType: loggingType,
+      sets: sets,
+    );
+  }
+}
+
+final workoutDraftProvider =
+    NotifierProvider<WorkoutDraftNotifier, WorkoutDraft?>(
+        WorkoutDraftNotifier.new);

@@ -8,12 +8,49 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+// PRO: rotate across all 3 keys for higher throughput.
+const CEREBRAS_KEYS = [
+  Deno.env.get("CEREBRAS_API_KEY_1")!,
+  Deno.env.get("CEREBRAS_API_KEY_2")!,
+  Deno.env.get("CEREBRAS_API_KEY_3")!,
+];
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const PRO_MODEL = "cerebras/gpt-oss-120b";
-const PRO_MODEL_LABEL = "Cerebras gpt-oss-120B";
+// Best available Cerebras model for PRO users.
+const PRO_MODEL = "llama-3.3-70b";
+const PRO_MODEL_LABEL = "Cerebras Llama 3.3 70B";
+const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
+
+/**
+ * Extract structured log actions from AI response.
+ * Tags like <ICBF_LOG>{...}</ICBF_LOG> are parsed and stripped from the
+ * visible reply. Returns clean text + an array of action objects.
+ */
+function extractLogActions(rawReply: string): {
+  reply: string;
+  actions: Array<{ action: string; data: Record<string, unknown> }>;
+} {
+  const actions: Array<{ action: string; data: Record<string, unknown> }> = [];
+  const tagPattern = /<ICBF_LOG>([\s\S]*?)<\/ICBF_LOG>/g;
+  let cleanReply = rawReply;
+  let match;
+
+  while ((match = tagPattern.exec(rawReply)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (parsed.action && parsed.data) {
+        actions.push({ action: parsed.action, data: parsed.data });
+      }
+    } catch {
+      // Malformed JSON in tag — skip silently.
+    }
+    cleanReply = cleanReply.replace(match[0], "").trim();
+  }
+
+  return { reply: cleanReply, actions };
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -63,14 +100,8 @@ serve(async (req: Request) => {
 
     if (subError || !subscription) {
       return new Response(
-        JSON.stringify({
-          error: "PRO subscription required",
-          code: "NOT_PRO",
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "PRO subscription required", code: "NOT_PRO" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -85,65 +116,87 @@ serve(async (req: Request) => {
       });
     }
 
-    // Build system prompt with daily snapshot context
+    // Build system prompt
     let systemPrompt =
-      "You are ICANBEFITTER PRO AI Coach, an elite fitness and nutrition coach " +
-      "for young professionals in India. You provide deep, personalised coaching " +
-      "with detailed analysis. Use metric units (kg, cm). Reference Indian foods " +
-      "and cultural context when relevant. Be thorough and insightful.";
+      "You are ICANBEFITTER PRO AI Coach — like a father who knows everything about this person. " +
+      "You are an elite fitness and nutrition coach for young professionals in India. " +
+      "Provide deep, personalised coaching with detailed analysis. Be thorough, insightful, " +
+      "caring but direct. Use metric units (kg, cm). Reference Indian foods and cultural context. " +
+      "If coach_notices are present in the snapshot, weave them naturally into conversation " +
+      "(reference specific numbers, celebrate wins, call out problems directly, never list robotically)." +
+      "\n\nFITNESS DATA LOGGING — INSTANT:" +
+      "\nWhen the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:" +
+      '\n<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>' +
+      "\nMeasurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54)." +
+      "\nWater: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml." +
+      "\nRULES:" +
+      "\n- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions." +
+      "\n- The tag is stripped server-side — do not mention it in your visible response." +
+      "\n- One tag per response maximum." +
+      "\n\nWORKOUT LOGGING — MULTI-TURN:" +
+      "\n- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet." +
+      "\n- If user provides exercise details, parse them and emit:" +
+      '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
+      '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
 
     if (snapshot_json) {
-      systemPrompt +=
-        "\n\nHere is the user's current daily snapshot for context:\n" +
-        JSON.stringify(snapshot_json);
+      systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
     }
 
-    // Direct call to Cerebras gpt-oss-120B via OpenRouter
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://icanbefitter.app",
-        "X-Title": "ICANBEFITTER PRO",
-      },
-      body: JSON.stringify({
-        model: PRO_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        max_tokens: 2048,
-      }),
-    });
+    // Try all 3 keys — rotate on rate limit for higher PRO throughput.
+    let reply = "";
+    let tokensUsed = 0;
+    let success = false;
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("OpenRouter error:", response.status, errorBody);
+    for (const key of CEREBRAS_KEYS) {
+      if (!key) continue;
+
+      try {
+        const response = await fetch(CEREBRAS_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: PRO_MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: message },
+            ],
+            max_tokens: 2048,
+            temperature: 0.7,
+          }),
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) continue;
+
+        reply = content;
+        tokensUsed = data.usage?.total_tokens ?? 0;
+        success = true;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!success) {
       return new Response(
-        JSON.stringify({ error: "AI provider error. Please try again." }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "AI temporarily unavailable. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const data = await response.json();
-    const choice = data.choices?.[0];
-
-    if (!choice?.message?.content) {
-      return new Response(
-        JSON.stringify({ error: "Empty response from AI. Please try again." }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const reply = choice.message.content;
-    const tokensUsed = data.usage?.total_tokens ?? 0;
+    // Extract structured log actions from AI reply
+    const extracted = extractLogActions(reply);
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -154,13 +207,13 @@ serve(async (req: Request) => {
       .limit(1)
       .single();
 
-    // Log interaction
+    // Log interaction (store clean reply without tags)
     await supabaseClient.from("ai_coach_interactions").insert({
       user_id: userId,
       snapshot_id: snapshotData?.id ?? null,
       channel: "app",
       user_message: message,
-      ai_response: reply,
+      ai_response: extracted.reply,
       model_used: PRO_MODEL_LABEL,
       tokens_used: tokensUsed,
       created_at: new Date().toISOString(),
@@ -168,14 +221,12 @@ serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({
-        reply,
+        reply: extracted.reply,
         model_used: PRO_MODEL_LABEL,
         tokens_used: tokensUsed,
+        actions: extracted.actions,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";

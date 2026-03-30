@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -342,6 +344,15 @@ class AuthNotifier extends Notifier<AuthState2> {
           'email': user.email,
           'created_at': DateTime.now().toIso8601String(),
         });
+      }
+    }
+
+    // Bind OneSignal external_id to Supabase user UUID for push targeting.
+    if (!kIsWeb) {
+      try {
+        await OneSignal.login(user.id);
+      } catch (_) {
+        // Non-critical — push notifications will still work on next launch.
       }
     }
   }

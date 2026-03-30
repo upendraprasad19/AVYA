@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -503,6 +504,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
 
     state = null;
     ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
   }
 }
 
@@ -565,6 +569,9 @@ class FoodLogNotifier extends Notifier<void> {
     });
 
     ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
   }
 }
 
@@ -657,6 +664,9 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     }
 
     ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
     ref.invalidateSelf();
   }
 

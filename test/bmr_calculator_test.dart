@@ -1,0 +1,198 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+
+void main() {
+  group('BmrCalculator.calculateBmr', () {
+    test('male — standard values', () {
+      // 80kg, 175cm, 30yo male
+      // BMR = (10*80) + (6.25*175) - (5*30) + 5
+      //     = 800 + 1093.75 - 150 + 5 = 1748.75 → 1749
+      final result = BmrCalculator.calculateBmr(
+        weightKg: 80,
+        heightCm: 175,
+        age: 30,
+        gender: 'male',
+      );
+      expect(result, 1749.0);
+    });
+
+    test('female — standard values', () {
+      // 60kg, 165cm, 28yo female
+      // BMR = (10*60) + (6.25*165) - (5*28) - 161
+      //     = 600 + 1031.25 - 140 - 161 = 1330.25 → 1330
+      final result = BmrCalculator.calculateBmr(
+        weightKg: 60,
+        heightCm: 165,
+        age: 28,
+        gender: 'female',
+      );
+      expect(result, 1330.0);
+    });
+
+    test('gender check is case-insensitive', () {
+      final lower = BmrCalculator.calculateBmr(
+        weightKg: 75, heightCm: 170, age: 25, gender: 'male',
+      );
+      final upper = BmrCalculator.calculateBmr(
+        weightKg: 75, heightCm: 170, age: 25, gender: 'Male',
+      );
+      expect(lower, upper);
+    });
+
+    test('female BMR is always lower than male BMR (same stats)', () {
+      final male = BmrCalculator.calculateBmr(
+        weightKg: 70, heightCm: 170, age: 25, gender: 'male',
+      );
+      final female = BmrCalculator.calculateBmr(
+        weightKg: 70, heightCm: 170, age: 25, gender: 'female',
+      );
+      // Difference should be 166 (male +5, female -161)
+      expect(male - female, 166.0);
+    });
+
+    test('older age reduces BMR', () {
+      final young = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 25, gender: 'male',
+      );
+      final older = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 45, gender: 'male',
+      );
+      expect(older, lessThan(young));
+    });
+  });
+
+  group('BmrCalculator.calculateTdee', () {
+    const weightKg = 75.0;
+    const heightCm = 175.0;
+    const age = 30;
+    const gender = 'male';
+
+    test('sedentary multiplier (1.2)', () {
+      final bmr = BmrCalculator.calculateBmr(
+        weightKg: weightKg, heightCm: heightCm, age: age, gender: gender,
+      );
+      final tdee = BmrCalculator.calculateTdee(
+        weightKg: weightKg, heightCm: heightCm, age: age,
+        gender: gender, activityLevel: 'sedentary',
+      );
+      expect(tdee, (bmr * 1.2).roundToDouble());
+    });
+
+    test('active multiplier (1.725)', () {
+      final bmr = BmrCalculator.calculateBmr(
+        weightKg: weightKg, heightCm: heightCm, age: age, gender: gender,
+      );
+      final tdee = BmrCalculator.calculateTdee(
+        weightKg: weightKg, heightCm: heightCm, age: age,
+        gender: gender, activityLevel: 'active',
+      );
+      expect(tdee, (bmr * 1.725).roundToDouble());
+    });
+
+    test('unknown activity level defaults to sedentary (1.2)', () {
+      final sedentary = BmrCalculator.calculateTdee(
+        weightKg: weightKg, heightCm: heightCm, age: age,
+        gender: gender, activityLevel: 'sedentary',
+      );
+      final unknown = BmrCalculator.calculateTdee(
+        weightKg: weightKg, heightCm: heightCm, age: age,
+        gender: gender, activityLevel: 'invalid_level',
+      );
+      expect(unknown, sedentary);
+    });
+
+    test('all 5 activity levels produce ascending TDEE', () {
+      const levels = ['sedentary', 'light', 'moderate', 'active', 'very_active'];
+      final results = levels.map((l) => BmrCalculator.calculateTdee(
+        weightKg: weightKg, heightCm: heightCm, age: age,
+        gender: gender, activityLevel: l,
+      )).toList();
+      for (int i = 1; i < results.length; i++) {
+        expect(results[i], greaterThan(results[i - 1]));
+      }
+    });
+  });
+
+  group('BmrCalculator.calculateTargets', () {
+    const baseParams = (
+      weightKg: 75.0,
+      heightCm: 175.0,
+      age: 30,
+      gender: 'male',
+      activityLevel: 'moderate',
+    );
+
+    test('build_muscle adds 300 calorie surplus', () {
+      final muscle = BmrCalculator.calculateTargets(
+        weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
+        age: baseParams.age, gender: baseParams.gender,
+        activityLevel: baseParams.activityLevel, goal: 'build_muscle',
+      );
+      final general = BmrCalculator.calculateTargets(
+        weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
+        age: baseParams.age, gender: baseParams.gender,
+        activityLevel: baseParams.activityLevel, goal: 'general_fitness',
+      );
+      // build_muscle = TDEE + 300, general_fitness = TDEE (maintenance)
+      expect(muscle.dailyCalories, closeTo(general.dailyCalories + 300, 1));
+    });
+
+    test('lose_fat subtracts 500 calorie deficit', () {
+      final fat = BmrCalculator.calculateTargets(
+        weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
+        age: baseParams.age, gender: baseParams.gender,
+        activityLevel: baseParams.activityLevel, goal: 'lose_fat',
+      );
+      final general = BmrCalculator.calculateTargets(
+        weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
+        age: baseParams.age, gender: baseParams.gender,
+        activityLevel: baseParams.activityLevel, goal: 'general_fitness',
+      );
+      expect(fat.dailyCalories, closeTo(general.dailyCalories - 500, 1));
+    });
+
+    test('calories are always clamped between 1200 and 5000', () {
+      // Extreme low: tiny person, lose_fat
+      final low = BmrCalculator.calculateTargets(
+        weightKg: 30, heightCm: 140, age: 70,
+        gender: 'female', activityLevel: 'sedentary', goal: 'lose_fat',
+      );
+      expect(low.dailyCalories, greaterThanOrEqualTo(1200));
+
+      // Extreme high: large person, build_muscle, very active
+      final high = BmrCalculator.calculateTargets(
+        weightKg: 200, heightCm: 220, age: 20,
+        gender: 'male', activityLevel: 'very_active', goal: 'build_muscle',
+      );
+      expect(high.dailyCalories, lessThanOrEqualTo(5000));
+    });
+
+    test('output contains all required fields with positive values', () {
+      final targets = BmrCalculator.calculateTargets(
+        weightKg: 70, heightCm: 170, age: 28,
+        gender: 'male', activityLevel: 'moderate', goal: 'general_fitness',
+      );
+      expect(targets.bmr, greaterThan(0));
+      expect(targets.tdee, greaterThan(0));
+      expect(targets.dailyCalories, greaterThan(0));
+      expect(targets.proteinGrams, greaterThan(0));
+      expect(targets.carbGrams, greaterThan(0));
+      expect(targets.fatGrams, greaterThan(0));
+      expect(targets.tdee, greaterThanOrEqualTo(targets.bmr));
+    });
+
+    test('toMap() returns all 6 keys', () {
+      final targets = BmrCalculator.calculateTargets(
+        weightKg: 70, heightCm: 170, age: 28,
+        gender: 'male', activityLevel: 'moderate', goal: 'general_fitness',
+      );
+      final map = targets.toMap();
+      expect(map.containsKey('bmr'), isTrue);
+      expect(map.containsKey('tdee'), isTrue);
+      expect(map.containsKey('daily_calories'), isTrue);
+      expect(map.containsKey('protein_grams'), isTrue);
+      expect(map.containsKey('carb_grams'), isTrue);
+      expect(map.containsKey('fat_grams'), isTrue);
+    });
+  });
+}

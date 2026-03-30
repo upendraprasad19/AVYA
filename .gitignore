@@ -46,7 +46,10 @@ app.*.map.json
 
 # Environment
 .env
+.env.dev
+.env.prod
 .env.local
+supabase/.env
 
 # Knowledgebase (reference docs, not source code)
 Knowledgebase/

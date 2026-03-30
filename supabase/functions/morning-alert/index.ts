@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { sendPushNotification } from "../_shared/send_notification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,6 @@ const corsHeaders = {
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FCM_SERVER_KEY = Deno.env.get("FCM_SERVER_KEY") ?? "";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 
 const PRO_MODEL = "cerebras/gpt-oss-120b";
@@ -167,24 +167,19 @@ async function generateProAlert(
 }
 
 /**
- * Send push notification via FCM (if server key is configured).
+ * Send push notification via OneSignal.
  */
-async function sendFCMNotification(
-  _userId: string,
-  _title: string,
-  _body: string,
+async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
 ): Promise<boolean> {
-  // TODO: Implement FCM push delivery.
-  // Requires storing user FCM tokens in a user_devices table.
-  // For now, alerts are stored in snapshots and delivered on app open.
-  if (!FCM_SERVER_KEY) return false;
-
-  // Placeholder for FCM implementation:
-  // 1. Fetch user's FCM token from user_devices table
-  // 2. POST to https://fcm.googleapis.com/fcm/send
-  // 3. Handle token refresh / invalid tokens
-  console.log(`FCM: Would send to user ${_userId}: ${_title} - ${_body}`);
-  return false;
+  return sendPushNotification({
+    userId,
+    title,
+    message: body,
+    screen: "/home",
+  });
 }
 
 /**
@@ -270,20 +265,24 @@ serve(async (req: Request) => {
         );
       }
 
-      let fcmSent = 0;
+      let pushSent = 0;
       let telegramSent = 0;
 
       for (const snap of snapshots) {
         const alertMsg = snap.snapshot_json?.morning_alert;
         if (!alertMsg) continue;
 
-        // Try FCM push
-        const fcmOk = await sendFCMNotification(
+        // Check notification preferences for morning_checkin.
+        const prefs = snap.snapshot_json?.notification_preferences;
+        if (prefs?.morning_checkin?.enabled === false) continue;
+
+        // Send push via OneSignal
+        const pushOk = await sendPushToUser(
           snap.user_id,
           "ICANBEFITTER",
           alertMsg,
         );
-        if (fcmOk) fcmSent++;
+        if (pushOk) pushSent++;
 
         // Try Telegram if connected
         const { data: tgConn } = await supabaseClient
@@ -307,7 +306,7 @@ serve(async (req: Request) => {
           status: "success",
           mode: "deliver",
           total_alerts: snapshots.length,
-          fcm_sent: fcmSent,
+          push_sent: pushSent,
           telegram_sent: telegramSent,
         }),
         {

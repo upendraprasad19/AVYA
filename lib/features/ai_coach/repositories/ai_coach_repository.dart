@@ -1,5 +1,8 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 
 /// Repository for AI Coach data access.
 ///
@@ -51,7 +54,138 @@ class AiCoachRepository {
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
+      'coach_notices': _getCoachNotices(),
     };
+  }
+
+  /// Enriches the base AI context with historical data when the user's
+  /// message contains historical queries.
+  ///
+  /// Detects keywords like "last month", "history", "how has my", "best",
+  /// "average", "since I started" etc. Then queries relevant repositories
+  /// and appends the data to the context map.
+  ///
+  /// All queries are local Hive reads — zero network cost.
+  Map<String, dynamic> enrichContextForQuery(
+      String message, Map<String, dynamic> context) {
+    final lower = message.toLowerCase();
+
+    try {
+      // Exercise history query (PR, progress for specific lift)
+      final exerciseName = _detectExerciseName(lower);
+      if (exerciseName != null && _isHistoricalQuery(lower)) {
+        try {
+          final history =
+              WorkoutRepository.instance.getExercisePRHistory(exerciseName);
+          if (history.isNotEmpty) {
+            context['exercise_history'] = {
+              'exercise': exerciseName,
+              'records': history.take(20).toList(),
+            };
+          }
+        } catch (_) {}
+      }
+
+      // Nutrition trend query
+      if (_containsAny(
+              lower, ['protein', 'calories', 'carbs', 'macros', 'nutrition']) &&
+          _isHistoricalQuery(lower)) {
+        try {
+          final trends = NutritionRepository.instance.getWeeklyAverages(weeks: 8);
+          if (trends.isNotEmpty) {
+            context['nutrition_trend'] = trends;
+          }
+        } catch (_) {}
+      }
+
+      // Weight trend query
+      if (_containsAny(lower, ['weight', 'scale', 'kg', 'lost', 'gained']) &&
+          _isHistoricalQuery(lower)) {
+        try {
+          final weights = NutritionRepository.instance.getWeightHistory(days: 90);
+          if (weights.isNotEmpty) {
+            context['weight_trend'] = weights;
+          }
+        } catch (_) {}
+      }
+
+      // Progress / "how am I doing" query
+      if (_containsAny(lower,
+          ['progress', 'how am i', 'improvement', 'transformation', 'results'])) {
+        try {
+          context['workout_adherence'] =
+              WorkoutRepository.instance.getWorkoutAdherence(days: 90);
+        } catch (_) {}
+        try {
+          context['nutrition_trend'] =
+              NutritionRepository.instance.getWeeklyAverages(weeks: 12);
+        } catch (_) {}
+      }
+
+      // 7-day summary (always add if available)
+      try {
+        final dailyMacros = NutritionRepository.instance.getDailyMacros(days: 7);
+        if (dailyMacros.isNotEmpty) {
+          final avgCal = dailyMacros
+              .map((d) => (d['calories'] as num?)?.toDouble() ?? 0)
+              .reduce((a, b) => a + b) / dailyMacros.length;
+          final avgPro = dailyMacros
+              .map((d) => (d['protein'] as num?)?.toDouble() ?? 0)
+              .reduce((a, b) => a + b) / dailyMacros.length;
+          context['seven_day_nutrition'] = {
+            'avg_calories': avgCal.round(),
+            'avg_protein': avgPro.round(),
+            'days_logged': dailyMacros.length,
+          };
+        }
+      } catch (_) {}
+    } catch (_) {
+      // Enrichment is best-effort — never fail the AI call
+    }
+
+    return context;
+  }
+
+  bool _isHistoricalQuery(String text) {
+    return _containsAny(text, [
+      'last month',
+      'last week',
+      'past',
+      'history',
+      'trend',
+      'how has',
+      'how was',
+      'over time',
+      'january',
+      'february',
+      'march',
+      'april',
+      'since i started',
+      'last 30',
+      'last 90',
+      'best',
+      'worst',
+      'average',
+      'compared',
+    ]);
+  }
+
+  bool _containsAny(String text, List<String> keywords) {
+    return keywords.any((k) => text.contains(k));
+  }
+
+  /// Detect exercise name from the message by scanning known exercises.
+  String? _detectExerciseName(String text) {
+    const knownExercises = [
+      'bench press', 'squat', 'deadlift', 'overhead press',
+      'barbell row', 'pull up', 'push up', 'lat pulldown',
+      'leg press', 'shoulder press', 'bicep curl', 'tricep',
+      'plank', 'lunge', 'dips', 'chest fly',
+    ];
+    for (final ex in knownExercises) {
+      if (text.contains(ex)) return ex;
+    }
+    return null;
   }
 
   /// Saves an AI interaction to coachBox.
@@ -387,6 +521,50 @@ class AiCoachRepository {
       top[entry.key] = entry.value;
     }
     return top;
+  }
+
+  /// Runs PatternDetector and returns coach notices for AI injection.
+  /// Only medium+ severity insights are included to keep context compact.
+  List<String> _getCoachNotices() {
+    try {
+      final insights = PatternDetector.instance.analyze();
+      return insights
+          .where((i) => i.severity != InsightSeverity.low)
+          .map((i) => i.coachNotice)
+          .take(5) // max 5 to not bloat context
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Returns true if the user hasn't sent a message today yet.
+  /// Used to trigger proactive first-message-of-day AI greeting.
+  bool isFirstMessageToday() {
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final lastGreeting =
+        _hive.configBox.get('last_ai_greeting_date') as String?;
+    return lastGreeting != todayStr;
+  }
+
+  /// Marks that the AI has greeted the user today.
+  Future<void> markGreetedToday() async {
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await _hive.configBox.put('last_ai_greeting_date', todayStr);
+  }
+
+  /// Returns the top insight for the dashboard card (highest severity).
+  CoachingInsight? getTopInsight() {
+    try {
+      final insights = PatternDetector.instance.analyze();
+      return insights.isNotEmpty ? insights.first : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   List<String> _getCoachingNotes() {

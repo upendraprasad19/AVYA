@@ -237,9 +237,340 @@ class WorkoutRepository {
     return weekCounts;
   }
 
+  // ── Exercise PR History ────────────────────────────────────────
+
+  /// PR history for a specific exercise over time.
+  ///
+  /// Scans workoutBox for exercise_log entries matching [exerciseName]
+  /// within [days] and returns each unique max weight+reps by date.
+  /// Returns `[{date, weight_kg, reps, sets}]` ordered by date ascending.
+  List<Map<String, dynamic>> getExercisePRHistory(
+    String exerciseName, {
+    int days = 90,
+  }) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(days: days));
+    final nameLC = exerciseName.toLowerCase();
+
+    // Group by date, track max weight per date.
+    final dateMap = <String, Map<String, dynamic>>{};
+
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+
+      // Match exercise_log entries or workout_log exercise sub-entries
+      final logName =
+          (log['exercise_name'] as String? ?? '').toLowerCase();
+      if (!logName.contains(nameLC)) continue;
+
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+
+      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      if (weight <= 0) continue;
+
+      final existing = dateMap[dateStr];
+      if (existing == null ||
+          weight > (existing['weight_kg'] as double)) {
+        dateMap[dateStr] = {
+          'date': dateStr,
+          'weight_kg': weight,
+          'reps': (log['reps_completed'] as num?)?.toInt() ?? 0,
+          'sets': (log['sets_completed'] as num?)?.toInt() ?? 0,
+        };
+      }
+    }
+
+    // Also scan exercise_logs embedded in workout_log entries.
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final wlog = Map<String, dynamic>.from(raw);
+      if (wlog['type'] != 'workout_log') continue;
+      final exerciseLogs = wlog['exercise_logs'];
+      if (exerciseLogs is! List) continue;
+
+      final dateStr = wlog['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+
+      for (final eRaw in exerciseLogs) {
+        if (eRaw is! Map) continue;
+        final elog = Map<String, dynamic>.from(eRaw);
+        final eName =
+            (elog['exercise_name'] as String? ?? '').toLowerCase();
+        if (!eName.contains(nameLC)) continue;
+
+        final weight = (elog['weight_kg'] as num?)?.toDouble() ?? 0;
+        if (weight <= 0) continue;
+
+        final existing = dateMap[dateStr];
+        if (existing == null ||
+            weight > (existing['weight_kg'] as double)) {
+          dateMap[dateStr] = {
+            'date': dateStr,
+            'weight_kg': weight,
+            'reps': (elog['reps_completed'] as num?)?.toInt() ??
+                (elog['reps'] as num?)?.toInt() ??
+                0,
+            'sets': (elog['sets_completed'] as num?)?.toInt() ??
+                (elog['sets'] as num?)?.toInt() ??
+                0,
+          };
+        }
+      }
+    }
+
+    final results = dateMap.values.toList()
+      ..sort((a, b) =>
+          (a['date'] as String).compareTo(b['date'] as String));
+    return results;
+  }
+
+  // ── Weekly Volume ────────────────────────────────────────────────
+
+  /// Weekly volume totals (sum of weight x reps across all exercises).
+  ///
+  /// Returns `{weekStartDate: totalVolumeKg}` for the last [weeks] weeks.
+  /// Only counts `weight_reps` type entries.
+  Map<String, double> getWeeklyVolume({int weeks = 8}) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(days: weeks * 7));
+    final volumeMap = <String, double>{};
+
+    // Initialize week buckets.
+    for (int w = 0; w < weeks; w++) {
+      final weekStart = _getWeekStart(
+        now.subtract(Duration(days: w * 7)),
+      );
+      volumeMap[_formatDate(weekStart)] = 0;
+    }
+
+    // Scan all exercise-level data.
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+
+      // Direct exercise entries.
+      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
+      if (weight > 0 && reps > 0) {
+        final weekKey = _formatDate(_getWeekStart(date));
+        volumeMap[weekKey] =
+            (volumeMap[weekKey] ?? 0) + (weight * reps);
+      }
+
+      // Embedded exercise_logs in workout_log entries.
+      if (log['type'] == 'workout_log') {
+        final exerciseLogs = log['exercise_logs'];
+        if (exerciseLogs is List) {
+          for (final eRaw in exerciseLogs) {
+            if (eRaw is! Map) continue;
+            final elog = Map<String, dynamic>.from(eRaw);
+            final eWeight =
+                (elog['weight_kg'] as num?)?.toDouble() ?? 0;
+            final eReps = (elog['reps_completed'] as num?)?.toInt() ??
+                (elog['reps'] as num?)?.toInt() ??
+                0;
+            if (eWeight > 0 && eReps > 0) {
+              final weekKey = _formatDate(_getWeekStart(date));
+              volumeMap[weekKey] =
+                  (volumeMap[weekKey] ?? 0) + (eWeight * eReps);
+            }
+          }
+        }
+      }
+    }
+
+    return volumeMap;
+  }
+
+  // ── Workout Adherence ────────────────────────────────────────────
+
+  /// Workout adherence stats for a date range.
+  ///
+  /// Counts schedule entries (planned, completed, skipped/missed).
+  /// Returns `{planned: X, completed: Y, missed: Z, rate_percent: N}`.
+  Map<String, int> getWorkoutAdherence({int days = 30}) {
+    final now = DateTime.now();
+    int planned = 0;
+    int completed = 0;
+    int missed = 0;
+
+    for (int i = 0; i < days; i++) {
+      final date = now.subtract(Duration(days: i));
+      final schedule = _schedule.getScheduleForDate(date);
+      if (schedule == null) continue;
+      if (schedule['type'] != 'workout') continue;
+
+      planned++;
+      final status = schedule['status'] as String? ?? 'planned';
+      if (status == 'completed') {
+        completed++;
+      } else if (date.isBefore(DateTime(now.year, now.month, now.day))) {
+        // Past workout days that are not completed count as missed.
+        missed++;
+      }
+    }
+
+    final rate = planned > 0 ? (completed * 100 ~/ planned) : 0;
+    return {
+      'planned': planned,
+      'completed': completed,
+      'missed': missed,
+      'rate_percent': rate,
+    };
+  }
+
+  // ── Extended Weekly Workout Counts ───────────────────────────────
+
+  /// Returns the number of workouts logged per week for the last [weeks] weeks.
+  ///
+  /// Index 0 = this week, 1 = last week, etc.
+  /// Supports configurable range (default 12, overriding the original 4).
+  List<int> getExtendedWeeklyWorkoutCounts({int weeks = 12}) {
+    final now = DateTime.now();
+    final weekCounts = List<int>.filled(weeks, 0);
+
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'workout_log') continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      final daysAgo = now.difference(date).inDays;
+      final weekIndex = daysAgo ~/ 7;
+      if (weekIndex >= 0 && weekIndex < weeks) {
+        weekCounts[weekIndex]++;
+      }
+    }
+
+    return weekCounts;
+  }
+
+  // ── Day-of-Week Completion Rates ─────────────────────────────────
+
+  /// Day-of-week completion rates over last [weeks] weeks.
+  ///
+  /// For each day of the week, counts total scheduled workouts vs completed.
+  /// Returns `{Monday: 0.85, Friday: 0.40, ...}`.
+  Map<String, double> getDayOfWeekCompletionRates({int weeks = 8}) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(days: weeks * 7));
+    final dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    final scheduled = <String, int>{};
+    final completedMap = <String, int>{};
+    for (final name in dayNames) {
+      scheduled[name] = 0;
+      completedMap[name] = 0;
+    }
+
+    // Walk each day in the range.
+    for (int i = 0; i < weeks * 7; i++) {
+      final date = now.subtract(Duration(days: i));
+      if (date.isBefore(cutoff)) break;
+
+      final schedule = _schedule.getScheduleForDate(date);
+      if (schedule == null) continue;
+      if (schedule['type'] != 'workout') continue;
+
+      final dayName = dayNames[date.weekday - 1]; // weekday: 1=Mon
+      scheduled[dayName] = (scheduled[dayName] ?? 0) + 1;
+
+      if (schedule['status'] == 'completed') {
+        completedMap[dayName] = (completedMap[dayName] ?? 0) + 1;
+      }
+    }
+
+    final rates = <String, double>{};
+    for (final name in dayNames) {
+      final total = scheduled[name] ?? 0;
+      final done = completedMap[name] ?? 0;
+      rates[name] = total > 0 ? done / total : 0;
+    }
+
+    return rates;
+  }
+
+  // ── Days Since Last Workout ──────────────────────────────────────
+
+  /// Returns the number of days since the last logged workout.
+  ///
+  /// Returns -1 if no workouts have been logged.
+  int getDaysSinceLastWorkout() {
+    final now = DateTime.now();
+    DateTime? lastDate;
+
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'workout_log') continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      if (lastDate == null || date.isAfter(lastDate)) {
+        lastDate = date;
+      }
+    }
+
+    if (lastDate == null) return -1;
+    return now.difference(lastDate).inDays;
+  }
+
+  // ── Workouts in Last N Days ──────────────────────────────────────
+
+  /// Counts workouts logged within the last [days] days.
+  int getWorkoutsInLastDays({int days = 7}) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(days: days));
+    int count = 0;
+
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'workout_log') continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      if (!date.isBefore(cutoff)) count++;
+    }
+
+    return count;
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Returns the Monday of the week containing [date].
+  DateTime _getWeekStart(DateTime date) {
+    final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
+    return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
 }

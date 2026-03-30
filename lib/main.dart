@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'app.dart';
 
 Future<void> main() async {
@@ -24,6 +27,12 @@ Future<void> main() async {
 
   // 4. Initialize Supabase.
   await SupabaseService.instance.initialize();
+
+  // 5. Initialize OneSignal push notifications (mobile only).
+  if (!kIsWeb) {
+    OneSignal.initialize(AppConstants.oneSignalAppId);
+    await OneSignal.Notifications.requestPermission(true);
+  }
 
   runApp(
     const ProviderScope(

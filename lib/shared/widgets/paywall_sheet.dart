@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Shows the single, reusable paywall bottom sheet.
 ///
@@ -39,6 +40,13 @@ class PaywallSheet extends StatefulWidget {
 class _PaywallSheetState extends State<PaywallSheet> {
   String _selectedPlan = 'yearly';
   bool _isProcessing = false;
+
+  // Promo code state
+  final TextEditingController _promoController = TextEditingController();
+  bool _promoValidating = false;
+  bool _promoApplied = false;
+  int _promoDiscountPct = 0;
+  String? _promoError;
 
   static const List<String> _proBenefits = [
     'Unlimited AI Coach with deep personalised coaching',
@@ -77,9 +85,70 @@ class _PaywallSheetState extends State<PaywallSheet> {
         return 'Track your body transformation with a visual photo timeline.';
       case 'Morning Alert':
         return 'Wake up to AI-personalised motivation and daily plan reminders.';
+      case 'Photo Analysis':
+        return 'Send photos to your AI coach for instant meal analysis, form checks, and more.';
       default:
         return 'Upgrade to PRO and unlock your full potential.';
     }
+  }
+
+  @override
+  void dispose() {
+    _promoController.dispose();
+    super.dispose();
+  }
+
+  /// Validate promo code via the validate-promo Edge Function.
+  Future<void> _validatePromoCode() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+
+    setState(() {
+      _promoValidating = true;
+      _promoError = null;
+      _promoApplied = false;
+      _promoDiscountPct = 0;
+    });
+
+    try {
+      final response = await SupabaseService.instance.client.functions
+          .invoke('validate-promo', body: {'code': code});
+
+      final data = response.data as Map<String, dynamic>?;
+      if (data == null) {
+        setState(() {
+          _promoError = 'Unable to validate code';
+          _promoValidating = false;
+        });
+        return;
+      }
+
+      if (data['valid'] == true) {
+        setState(() {
+          _promoApplied = true;
+          _promoDiscountPct = (data['discount_pct'] as num).toInt();
+          _promoError = null;
+          _promoValidating = false;
+        });
+      } else {
+        setState(() {
+          _promoError = data['reason'] as String? ?? 'Invalid code';
+          _promoApplied = false;
+          _promoValidating = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _promoError = 'Network error. Try again.';
+        _promoValidating = false;
+      });
+    }
+  }
+
+  /// Get the discounted price for a given base price.
+  int _discountedPrice(int basePrice) {
+    if (!_promoApplied || _promoDiscountPct <= 0) return basePrice;
+    return (basePrice * (100 - _promoDiscountPct) / 100).round();
   }
 
   void _handleUpgrade() {
@@ -105,6 +174,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
     Navigator.of(context).pop();
     RazorpayService.instance.openCheckout(
       plan: _selectedPlan,
+      promoCode: _promoApplied ? _promoController.text.trim() : null,
+      discountPct: _promoApplied ? _promoDiscountPct : null,
       onSuccess: () {
         // PRO activated via RazorpayService polling
       },
@@ -117,13 +188,16 @@ class _PaywallSheetState extends State<PaywallSheet> {
   @override
   Widget build(BuildContext context) {
     // Format prices from AppConstants (never hardcode)
-    final monthlyPrice = _formatPrice(AppConstants.monthlyPriceInr);
-    final yearlyPrice = _formatPrice(AppConstants.yearlyPriceInr);
-    final monthlyCostOfYearly =
-        (AppConstants.yearlyPriceInr / 12).round();
-    final savingsPercent = (((AppConstants.monthlyPriceInr * 12 -
-                    AppConstants.yearlyPriceInr) /
-                (AppConstants.monthlyPriceInr * 12)) *
+    final monthlyBase = AppConstants.monthlyPriceInr;
+    final yearlyBase = AppConstants.yearlyPriceInr;
+    final monthlyFinal = _discountedPrice(monthlyBase);
+    final yearlyFinal = _discountedPrice(yearlyBase);
+
+    final monthlyPrice = _formatPrice(monthlyFinal);
+    final yearlyPrice = _formatPrice(yearlyFinal);
+    final monthlyCostOfYearly = (yearlyFinal / 12).round();
+    final savingsPercent = (((monthlyFinal * 12 - yearlyFinal) /
+                (monthlyFinal * 12)) *
             100)
         .round();
 
@@ -250,6 +324,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
                       price: monthlyPrice,
                       period: '/month',
                       isSelected: _selectedPlan == 'monthly',
+                      originalPrice: _promoApplied
+                          ? _formatPrice(monthlyBase)
+                          : null,
                     ),
                   ),
                 ),
@@ -263,15 +340,22 @@ class _PaywallSheetState extends State<PaywallSheet> {
                       period: '/year',
                       isSelected: _selectedPlan == 'yearly',
                       savings: 'Save $savingsPercent%',
-                      subtitle:
-                          '\u20B9$monthlyCostOfYearly/mo',
+                      subtitle: '\u20B9$monthlyCostOfYearly/mo',
+                      originalPrice: _promoApplied
+                          ? _formatPrice(yearlyBase)
+                          : null,
                     ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // Promo code input
+            _buildPromoCodeSection(),
+
+            const SizedBox(height: 14),
 
             // CTA button
             SizedBox(
@@ -330,6 +414,134 @@ class _PaywallSheetState extends State<PaywallSheet> {
     );
   }
 
+  /// Builds the promo code input field with Apply button + status.
+  Widget _buildPromoCodeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.row),
+                  border: Border.all(
+                    color: _promoApplied
+                        ? AppColors.green.withValues(alpha: 0.3)
+                        : _promoError != null
+                            ? AppColors.red.withValues(alpha: 0.3)
+                            : AppColors.border,
+                  ),
+                ),
+                child: TextField(
+                  controller: _promoController,
+                  enabled: !_promoApplied,
+                  textCapitalization: TextCapitalization.characters,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 1.0,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Have a promo code?',
+                    hintStyle: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 40,
+              child: ElevatedButton(
+                onPressed: _promoValidating || _promoApplied
+                    ? null
+                    : _validatePromoCode,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _promoApplied
+                      ? AppColors.green
+                      : AppColors.accent,
+                  foregroundColor: Colors.black,
+                  disabledBackgroundColor: AppColors.textDisabled,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.row),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                child: _promoValidating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
+                      )
+                    : Text(
+                        _promoApplied ? 'Applied' : 'Apply',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+
+        // Status message
+        if (_promoApplied)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, size: 14, color: AppColors.green),
+                const SizedBox(width: 4),
+                Text(
+                  '$_promoDiscountPct% off applied',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_promoError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              _promoError!,
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppColors.red,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   /// Format price with thousands separator for Indian rupees.
   static String _formatPrice(int price) {
     if (price >= 1000) {
@@ -349,6 +561,7 @@ class _PricingCard extends StatelessWidget {
   final bool isSelected;
   final String? savings;
   final String? subtitle;
+  final String? originalPrice;
 
   const _PricingCard({
     required this.label,
@@ -357,6 +570,7 @@ class _PricingCard extends StatelessWidget {
     required this.isSelected,
     this.savings,
     this.subtitle,
+    this.originalPrice,
   });
 
   @override
@@ -405,6 +619,20 @@ class _PricingCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
+          if (originalPrice != null) ...[
+            Text(
+              '\u20B9$originalPrice',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+                decoration: TextDecoration.lineThrough,
+                decorationColor: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -416,7 +644,9 @@ class _PricingCard extends StatelessWidget {
                   'DM Sans',
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                  color: originalPrice != null
+                      ? AppColors.green
+                      : AppColors.textPrimary,
                 ),
               ),
               Text(
@@ -425,7 +655,9 @@ class _PricingCard extends StatelessWidget {
                   'DM Sans',
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
+                  color: originalPrice != null
+                      ? AppColors.green
+                      : AppColors.textPrimary,
                 ),
               ),
               Text(

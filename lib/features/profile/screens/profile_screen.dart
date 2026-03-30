@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -31,17 +32,91 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _notificationsEnabled = true;
   late bool _isMetric;
   bool _isLoading = true;
+
+  // Notification preferences (loaded from Hive configBox)
+  late Map<String, dynamic> _notifPrefs;
 
   @override
   void initState() {
     super.initState();
     _isMetric = UserRepository.instance.getUnitsMetric();
+    _notifPrefs = _loadNotificationPreferences();
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
     });
+  }
+
+  Map<String, dynamic> _loadNotificationPreferences() {
+    final configBox = HiveService.instance.configBox;
+    final stored = configBox.get('notification_preferences');
+    if (stored != null && stored is Map) {
+      return Map<String, dynamic>.from(stored);
+    }
+    // Default preferences
+    return {
+      'morning_checkin': {'enabled': true, 'time': '07:00'},
+      'workout_reminder': {'enabled': true, 'time': '18:30'},
+      'streak_alerts': {'enabled': true},
+      'weekly_recap': {'enabled': true, 'day': 'sunday'},
+      'subscription_reminders': {'enabled': true},
+    };
+  }
+
+  Future<void> _saveNotificationPreferences() async {
+    await HiveService.instance.configBox.put('notification_preferences', _notifPrefs);
+  }
+
+  bool _getNotifEnabled(String key) {
+    final pref = _notifPrefs[key];
+    if (pref is Map) return pref['enabled'] == true;
+    return true;
+  }
+
+  String _getNotifTime(String key) {
+    final pref = _notifPrefs[key];
+    if (pref is Map && pref['time'] is String) return pref['time'] as String;
+    return '07:00';
+  }
+
+  String _getNotifDay(String key) {
+    final pref = _notifPrefs[key];
+    if (pref is Map && pref['day'] is String) return pref['day'] as String;
+    return 'sunday';
+  }
+
+  void _toggleNotif(String key, bool value) {
+    setState(() {
+      final pref = Map<String, dynamic>.from(
+        (_notifPrefs[key] as Map?) ?? {},
+      );
+      pref['enabled'] = value;
+      _notifPrefs[key] = pref;
+    });
+    _saveNotificationPreferences();
+  }
+
+  void _setNotifTime(String key, String time) {
+    setState(() {
+      final pref = Map<String, dynamic>.from(
+        (_notifPrefs[key] as Map?) ?? {},
+      );
+      pref['time'] = time;
+      _notifPrefs[key] = pref;
+    });
+    _saveNotificationPreferences();
+  }
+
+  void _setNotifDay(String key, String day) {
+    setState(() {
+      final pref = Map<String, dynamic>.from(
+        (_notifPrefs[key] as Map?) ?? {},
+      );
+      pref['day'] = day;
+      _notifPrefs[key] = pref;
+    });
+    _saveNotificationPreferences();
   }
 
   void _retry() {
@@ -380,21 +455,56 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ]),
                     const SizedBox(height: 8),
 
-                    // 10. Settings
+                    // 10. Notifications
+                    const SectionHeader('NOTIFICATIONS'),
+                    _buildCard([
+                      _NotificationRow(
+                        icon: Icons.wb_sunny_outlined,
+                        title: 'Morning check-in',
+                        isPro: !subInfo.isPro,
+                        enabled: _getNotifEnabled('morning_checkin'),
+                        onToggle: (v) => _toggleNotif('morning_checkin', v),
+                        timeValue: _getNotifTime('morning_checkin'),
+                        timeOptions: const ['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00'],
+                        onTimeChanged: (t) => _setNotifTime('morning_checkin', t),
+                      ),
+                      _NotificationRow(
+                        icon: Icons.fitness_center,
+                        title: 'Workout reminder',
+                        enabled: _getNotifEnabled('workout_reminder'),
+                        onToggle: (v) => _toggleNotif('workout_reminder', v),
+                        timeValue: _getNotifTime('workout_reminder'),
+                        timeOptions: const ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'],
+                        onTimeChanged: (t) => _setNotifTime('workout_reminder', t),
+                      ),
+                      _NotificationRow(
+                        icon: Icons.local_fire_department_outlined,
+                        title: 'Streak alerts',
+                        enabled: _getNotifEnabled('streak_alerts'),
+                        onToggle: (v) => _toggleNotif('streak_alerts', v),
+                      ),
+                      _NotificationRow(
+                        icon: Icons.bar_chart_rounded,
+                        title: 'Weekly recap',
+                        enabled: _getNotifEnabled('weekly_recap'),
+                        onToggle: (v) => _toggleNotif('weekly_recap', v),
+                        dayValue: _getNotifDay('weekly_recap'),
+                        dayOptions: const ['sunday', 'monday', 'saturday'],
+                        onDayChanged: (d) => _setNotifDay('weekly_recap', d),
+                      ),
+                      _NotificationRow(
+                        icon: Icons.credit_card_outlined,
+                        title: 'Subscription reminders',
+                        enabled: _getNotifEnabled('subscription_reminders'),
+                        onToggle: (v) => _toggleNotif('subscription_reminders', v),
+                        showBorder: false,
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+
+                    // 11. Settings
                     const SectionHeader('SETTINGS'),
                     _buildCard([
-                      ProfileRow(
-                        icon: Icons.notifications_outlined,
-                        title: 'Notifications',
-                        subtitle: 'Reminders & alerts',
-                        trailing: ProfileToggle(
-                          value: _notificationsEnabled,
-                          onChanged: (val) {
-                            setState(() => _notificationsEnabled = val);
-                            // TODO: Wire to notification service
-                          },
-                        ),
-                      ),
                       ProfileRow(
                         icon: Icons.tune,
                         title: 'Units',
@@ -442,7 +552,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ]),
                     const SizedBox(height: 12),
 
-                    // 11. Sign Out button
+                    // 12. Sign Out button
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
                       child: SizedBox(
@@ -475,7 +585,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // 12. Delete Account
+                    // 13. Delete Account
                     Center(
                       child: GestureDetector(
                         onTap: () => _showDeleteAccountDialog(),
@@ -762,5 +872,266 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         return level[0].toUpperCase() +
             level.substring(1).replaceAll('_', ' ');
     }
+  }
+}
+
+/// A notification preference row with toggle, optional time/day picker, and PRO badge.
+class _NotificationRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool enabled;
+  final ValueChanged<bool> onToggle;
+  final bool isPro;
+  final bool showBorder;
+
+  // Time picker
+  final String? timeValue;
+  final List<String>? timeOptions;
+  final ValueChanged<String>? onTimeChanged;
+
+  // Day picker
+  final String? dayValue;
+  final List<String>? dayOptions;
+  final ValueChanged<String>? onDayChanged;
+
+  const _NotificationRow({
+    required this.icon,
+    required this.title,
+    required this.enabled,
+    required this.onToggle,
+    this.isPro = false,
+    this.showBorder = true,
+    this.timeValue,
+    this.timeOptions,
+    this.onTimeChanged,
+    this.dayValue,
+    this.dayOptions,
+    this.onDayChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        border: showBorder
+            ? const Border(
+                bottom: BorderSide(color: AppColors.border, width: 1),
+              )
+            : null,
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.input,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 15, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 12),
+
+          // Title + PRO badge
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isPro) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.proGold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'PRO',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.proGold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Time or Day picker (if applicable)
+          if (timeOptions != null && timeValue != null && enabled)
+            _TimePicker(
+              value: timeValue!,
+              options: timeOptions!,
+              onChanged: onTimeChanged!,
+            ),
+          if (dayOptions != null && dayValue != null && enabled)
+            _DayPicker(
+              value: dayValue!,
+              options: dayOptions!,
+              onChanged: onDayChanged!,
+            ),
+
+          const SizedBox(width: 8),
+
+          // Toggle
+          ProfileToggle(value: enabled, onChanged: onToggle),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact time picker dropdown.
+class _TimePicker extends StatelessWidget {
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  const _TimePicker({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  String _formatTime(String time24) {
+    final parts = time24.split(':');
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts.length > 1 ? parts[1] : '00';
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: onChanged,
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      itemBuilder: (ctx) => options
+          .map((t) => PopupMenuItem(
+                value: t,
+                child: Text(
+                  _formatTime(t),
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: t == value ? FontWeight.w700 : FontWeight.w400,
+                    color: t == value ? AppColors.accent : AppColors.textPrimary,
+                  ),
+                ),
+              ))
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _formatTime(value),
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact day picker dropdown.
+class _DayPicker extends StatelessWidget {
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  const _DayPicker({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  String _formatDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      onSelected: onChanged,
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      itemBuilder: (ctx) => options
+          .map((d) => PopupMenuItem(
+                value: d,
+                child: Text(
+                  _formatDay(d),
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: d == value ? FontWeight.w700 : FontWeight.w400,
+                    color: d == value ? AppColors.accent : AppColors.textPrimary,
+                  ),
+                ),
+              ))
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _formatDay(value),
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),
+          ],
+        ),
+      ),
+    );
   }
 }

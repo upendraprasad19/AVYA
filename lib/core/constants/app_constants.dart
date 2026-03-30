@@ -20,6 +20,7 @@ class AppConstants {
   static const String beatMyCoachFunction = 'beat-my-coach';
   static const String futurePredictionFunction = 'future-prediction';
   static const String weeklyReportFunction = 'weekly-report';
+  static const String aiMediaProxyFunction = 'ai-media-proxy';
 
   // ── Subscription ──────────────────────────────────────────
 
@@ -42,6 +43,7 @@ class AppConstants {
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
   static const String featureAdaptiveWorkouts = 'adaptive_workouts'; // Phase 2
   static const String featureDietPlanPdf = 'diet_plan_pdf';        // PDF export
+  static const String featurePhotoAnalysis = 'photo_analysis';     // Photo in chat (PRO)
 
   // ── Free Tier Limits ──────────────────────────────────────
 
@@ -73,10 +75,15 @@ class AppConstants {
   static const int beatMyCoachIntervalDays = 14;
 
   /// Free users can restore up to this many days of data.
-  static const int freeRestoreDays = 30;
+  /// Updated from 30 → 90 for better AI personalisation and user retention.
+  static const int freeRestoreDays = 90;
 
-  /// PRO users can restore up to this many days of data.
-  static const int proRestoreDays = 90;
+  /// PRO users can restore ALL data (effectively unlimited).
+  /// The value is set high (3650 = ~10 years) as a practical "forever".
+  static const int proRestoreDays = 3650;
+
+  /// OneSignal App ID for push notifications.
+  static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';
 
   // ── Phase Unlock ──────────────────────────────────────────
 

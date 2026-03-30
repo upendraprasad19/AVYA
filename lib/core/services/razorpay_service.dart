@@ -41,8 +41,11 @@ class RazorpayService {
   /// Opens the Razorpay checkout for the given [plan] ("monthly" or "yearly").
   ///
   /// Annual plan is pre-selected in PaywallSheet, showing "Save 28%".
+  /// Optional [promoCode] and [discountPct] apply a discount to the amount.
   void openCheckout({
     required String plan,
+    String? promoCode,
+    int? discountPct,
     VoidCallback? onSuccess,
     VoidCallback? onFailure,
   }) {
@@ -50,11 +53,27 @@ class RazorpayService {
     _onFailure = onFailure;
     _pendingPlan = plan;
 
-    final amount = plan == 'yearly'
-        ? AppConstants.yearlyPriceInr * 100
-        : AppConstants.monthlyPriceInr * 100;
+    int baseAmount = plan == 'yearly'
+        ? AppConstants.yearlyPriceInr
+        : AppConstants.monthlyPriceInr;
+
+    // Apply promo discount if provided.
+    if (promoCode != null && discountPct != null && discountPct > 0) {
+      baseAmount = (baseAmount * (100 - discountPct) / 100).round();
+    }
+
+    final amount = baseAmount * 100; // Razorpay expects paise
 
     final user = SupabaseService.instance.currentUser;
+
+    final notes = <String, String>{
+      'user_id': user?.id ?? '',
+      'plan': plan,
+    };
+
+    if (promoCode != null) {
+      notes['promo_code'] = promoCode;
+    }
 
     final options = {
       'key': AppConstants.razorpayKeyId,
@@ -65,10 +84,7 @@ class RazorpayService {
       'prefill': {
         'email': user?.email ?? '',
       },
-      'notes': {
-        'user_id': user?.id ?? '',
-        'plan': plan,
-      },
+      'notes': notes,
       'theme': {
         'color': '#00D4FF',
       },

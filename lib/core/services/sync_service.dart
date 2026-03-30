@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
 /// Handles background data sync between Hive (local) and Supabase (cloud).
@@ -28,6 +30,9 @@ class SyncService {
 
   // ── Public API ──────────────────────────────────────────────
 
+  /// Active realtime subscription (PRO only, for Telegram cross-channel).
+  StreamSubscription? _realtimeSubscription;
+
   /// Called on every app launch. Determines what needs syncing and
   /// triggers the appropriate operations in the background.
   ///
@@ -35,6 +40,9 @@ class SyncService {
   Future<void> checkAndSync() async {
     try {
       if (!_supabase.isAuthenticated) return;
+
+      // Pull recent cross-channel logs (Telegram → Hive, last 24h).
+      await pullRecentCrossChannelLogs();
 
       // Check if a weekly full sync is needed.
       final lastFull = _getTimestamp(_lastFullSyncKey);
@@ -45,6 +53,11 @@ class SyncService {
 
       // Push any pending custom items immediately.
       await _syncCustomItems();
+
+      // PRO users: subscribe to realtime for instant Telegram sync.
+      if (SubscriptionService.instance.isPro()) {
+        subscribeToRealtimeSync();
+      }
     } catch (_) {
       // Offline or error — silently skip.
     }
@@ -112,6 +125,150 @@ class SyncService {
     } catch (_) {
       // Partial sync failure — next launch will retry.
     }
+  }
+
+  // ── Cross-Channel Sync (Telegram → Hive) ────────────────────
+
+  /// Pulls logs from Supabase that were created in the last 24 hours
+  /// from other channels (e.g. Telegram bot). Merges into local Hive
+  /// without overwriting existing entries.
+  ///
+  /// Called on every app launch for ALL users (free + PRO).
+  /// Lightweight: one query per table, last 24h only.
+  Future<void> pullRecentCrossChannelLogs() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+
+      final since =
+          DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+
+      await Future.wait([
+        _pullWeightLogs(userId, since),
+        _pullNutritionLogs(userId, since),
+        _pullMeasurements(userId, since),
+      ]);
+    } catch (_) {
+      // Offline or error — silently skip.
+    }
+  }
+
+  Future<void> _pullWeightLogs(String userId, String since) async {
+    final res = await _supabase.client
+        .from('weight_logs')
+        .select()
+        .eq('user_id', userId)
+        .gte('created_at', since);
+
+    final rows = res as List;
+    final healthBox = _hive.healthBox;
+    for (final row in rows) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final date = map['date'] as String? ?? '';
+      final key = 'weight_$date';
+      // Skip if already exists locally (Hive-first wins)
+      if (healthBox.get(key) != null) continue;
+      await healthBox.put(key, {
+        'type': 'weight_log',
+        'date': date,
+        'weight_kg': map['weight_kg'],
+        'created_at': map['created_at'],
+        'source': 'telegram',
+      });
+    }
+  }
+
+  Future<void> _pullNutritionLogs(String userId, String since) async {
+    final res = await _supabase.client
+        .from('nutrition_logs')
+        .select()
+        .eq('user_id', userId)
+        .gte('created_at', since);
+
+    final rows = res as List;
+    final nutritionBox = _hive.nutritionBox;
+    for (final row in rows) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final id = map['id'] as String? ?? '';
+      // Skip if already exists locally
+      if (nutritionBox.get(id) != null) continue;
+      await nutritionBox.put(id, {
+        ...map,
+        'source': map['source'] ?? 'telegram',
+      });
+    }
+  }
+
+  Future<void> _pullMeasurements(String userId, String since) async {
+    final res = await _supabase.client
+        .from('body_measurements')
+        .select()
+        .eq('user_id', userId)
+        .gte('created_at', since);
+
+    final rows = res as List;
+    final healthBox = _hive.healthBox;
+    for (final row in rows) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final date = map['date'] as String? ?? '';
+      final key = 'measurement_$date';
+      // Merge — don't overwrite if exists (individual fields may differ)
+      final existing = healthBox.get(key);
+      if (existing is Map) {
+        final merged = Map<String, dynamic>.from(existing);
+        // Only fill in fields that are null locally
+        for (final field in ['waist', 'chest', 'hips', 'arms']) {
+          if (merged[field] == null && map[field] != null) {
+            merged[field] = map[field];
+          }
+        }
+        await healthBox.put(key, merged);
+      } else {
+        await healthBox.put(key, {
+          ...map,
+          'source': 'telegram',
+        });
+      }
+    }
+  }
+
+  // ── PRO Realtime Sync ──────────────────────────────────────
+
+  /// Subscribes to Supabase realtime channels for instant cross-device
+  /// sync. PRO only — enables Telegram-logged data to appear in the
+  /// app immediately without waiting for the 24h batch pull.
+  void subscribeToRealtimeSync() {
+    if (_realtimeSubscription != null) return; // Already subscribed
+
+    final userId = _supabase.currentUser?.id;
+    if (userId == null) return;
+
+    // Subscribe to weight_logs inserts for this user
+    _supabase.client
+        .from('weight_logs')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .listen((rows) {
+          for (final row in rows) {
+            final date = row['date'] as String? ?? '';
+            final key = 'weight_$date';
+            if (_hive.healthBox.get(key) == null) {
+              _hive.healthBox.put(key, {
+                'type': 'weight_log',
+                'date': date,
+                'weight_kg': row['weight_kg'],
+                'created_at': row['created_at'],
+                'source': 'realtime',
+              });
+            }
+          }
+        });
+  }
+
+  /// Cancels realtime subscriptions (call on app background or logout).
+  void unsubscribeRealtime() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
   }
 
   // ── Private sync helpers ────────────────────────────────────

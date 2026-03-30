@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 
-/// Push-to-talk voice notes button (PRO only).
+/// Push-to-talk voice notes button — available to all users.
 ///
-/// Free users see the button locked — tapping triggers [onLockedTap]
-/// which should call subscription.gate('voice_notes').
-/// PRO users see an active mic button — long press records.
+/// Tap toggles recording on/off. Long press also starts/stops recording.
 class VoiceNotesButton extends StatelessWidget {
   final bool isPro;
   final bool isRecording;
@@ -15,7 +13,7 @@ class VoiceNotesButton extends StatelessWidget {
 
   const VoiceNotesButton({
     super.key,
-    required this.isPro,
+    this.isPro = true,
     this.isRecording = false,
     required this.onLockedTap,
     required this.onStartRecording,
@@ -24,52 +22,6 @@ class VoiceNotesButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isPro) {
-      return GestureDetector(
-        onTap: onLockedTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.proGoldTint,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.proGold.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Stack(
-            children: [
-              const Center(
-                child: Icon(
-                  Icons.mic,
-                  color: AppColors.proGold,
-                  size: 16,
-                ),
-              ),
-              Positioned(
-                bottom: 2,
-                right: 2,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: AppColors.proGold,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.header, width: 1.5),
-                  ),
-                  child: const Icon(
-                    Icons.lock,
-                    size: 6,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return GestureDetector(
       onTap: isRecording ? onStopRecording : onStartRecording,
       onLongPressStart: (_) => onStartRecording(),

@@ -32,6 +32,59 @@
 
 ---
 
+## 2a. SUPABASE PROJECT — CONFIRMED IDENTITY
+
+> ⚠️ CRITICAL: There are TWO Supabase projects on this account. ALWAYS use the one below. NEVER guess.
+
+| Field | Value |
+|---|---|
+| **Project ID** | `dedsavbjuwgarrhphgnl` |
+| **Project name** | myfitnessjourney1988@gmail.com's Project |
+| **Region** | ap-southeast-1 |
+| **DB host** | `db.dedsavbjuwgarrhphgnl.supabase.co` |
+| **Confirmed by** | Querying actual tables — `users`, `exercise_library`, `food_database`, `workout_logs`, `ai_coach_interactions`, `subscriptions` etc. all present |
+
+**The OTHER project** (`krcrkntuwutvnmdnkfqf`, named "icanbefitter") is a **different app entirely** (blog/content platform — `posts`, `members`, `media` tables). Never touch it.
+
+**Rule: Before ANY Supabase operation, confirm project_id = `dedsavbjuwgarrhphgnl`.**
+
+### Supabase Access — TWO SEPARATE ACCOUNTS
+
+The user has **two Supabase accounts** with different logins. These are NOT the same account.
+
+| Account | Org ID | Org Name | Projects | Access via |
+|---|---|---|---|---|
+| **myfitnessjourney1988@gmail.com** | `hwwukmntixflgbxkwavm` | (default) | `dedsavbjuwgarrhphgnl` ✅ FITNESS APP, `krcrkntuwutvnmdnkfqf` (blog) | **MCP only** (auto-authenticated) |
+| **Upendra's personal account** | `dsvxqvpitnpumftnsnwe` | ICANBEFITTER Supabase | `tjjmtscmwzvlzpbvgtbv` (Upendra-Prasad's Project), `zvwepplqqflhgubwalee` (ICANBEFITTER AI V1) | **CLI only** (`supabase login`) |
+
+⚠️ The Supabase CLI (`supabase` command) is logged into the **personal account**, NOT the fitness app account. CLI commands like `supabase secrets set` will NOT work against the fitness app project unless re-authenticated.
+
+**For Edge Function secrets / admin operations:** Use MCP tools (auto-authenticated to the correct account) or the Supabase Dashboard logged in as `myfitnessjourney1988@gmail.com`.
+
+### Credentials (Edge Function Secrets)
+
+| Secret Key | Value | Status |
+|---|---|---|
+| `ONESIGNAL_APP_ID` | `fd37a411-121e-4022-9929-2af68c2371f5` | ✅ Set |
+| `ONESIGNAL_REST_API_KEY` | *(set in dashboard, not committed to code)* | ✅ Set |
+| `GEMINI_API_KEY` | *(set in dashboard, not committed to code)* | ✅ Set |
+| `CEREBRAS_API_KEY_1` | *(already set)* | ✅ |
+| `CEREBRAS_API_KEY_2` | *(already set)* | ✅ |
+| `CEREBRAS_API_KEY_3` | *(already set)* | ✅ |
+| `RAZORPAY_KEY_SECRET` | *(already set)* | ✅ |
+
+### Firebase / OneSignal
+
+| Field | Value |
+|---|---|
+| Firebase project | AVYA |
+| Firebase Sender ID | `194342788570` |
+| OneSignal App ID | `fd37a411-121e-4022-9929-2af68c2371f5` |
+| `google-services.json` | ✅ In `android/app/google-services.json` |
+| Google Services Gradle plugin | ✅ Configured in `settings.gradle.kts` + `app/build.gradle.kts` |
+
+---
+
 ## 3. SCREENS (5 Tabs)
 
 | Tab | Screen | Key Features |

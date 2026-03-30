@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
 // ── Last Performance Data ────────────────────────────────────────
 
@@ -1067,6 +1068,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     // Refresh the plan provider so the UI reflects the completed workout.
     ref.invalidate(currentPlanProvider);
+
+    // Cross-screen: refresh home dashboard so calendar, streak, and workout
+    // card reflect the completion immediately.
+    ref.invalidate(calendarWeekProvider);
+    ref.invalidate(streakProvider);
+    ref.invalidate(todayWorkoutProvider);
+    ref.invalidate(weightHistoryProvider);
   }
 
   void cancelWorkout() {

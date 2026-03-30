@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "194342788570",
+    "project_id": "avya-de35a",
+    "storage_bucket": "avya-de35a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194342788570:android:dd0a77d4e5ccd0343e34e3",
+        "android_client_info": {
+          "package_name": "com.icanbefitter.avya"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcRmXZq3F1aH4aOZ3WF3xl8dHJhopSvas"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 
-/// Deep Analysis PRO card with blur overlay for free users.
+/// Deep Analysis PRO card with real computed data.
 ///
-/// PRO users see the actual deep analysis content.
+/// PRO users see actual pattern analysis from PatternDetector.
 /// Free users see blurred content with a PRO overlay + upgrade button.
 ///
 /// The [onUpgradeTap] callback should call `subscription.gate('reasoning_tab')`
@@ -33,8 +34,28 @@ class DeepAnalysisCard extends StatelessWidget {
     );
   }
 
+  /// Builds real analysis text from PatternDetector results.
+  String _buildAnalysisText() {
+    try {
+      final insights = PatternDetector.instance.analyze();
+      if (insights.isEmpty) {
+        return 'No significant patterns detected yet. Keep logging your workouts and nutrition — I\'ll have insights for you soon.';
+      }
+      // Combine top 3 insights into natural prose
+      final messages = insights
+          .take(3)
+          .map((i) => i.userMessage)
+          .toList();
+      return messages.join(' ');
+    } catch (_) {
+      return 'Keep logging consistently — your deep analysis will appear here once I have enough data to spot patterns.';
+    }
+  }
+
   /// Full deep analysis content shown to PRO users.
   Widget _buildProContent() {
+    final analysisText = _buildAnalysisText();
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -57,7 +78,7 @@ class DeepAnalysisCard extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            'Your training volume increased 23% this week. Given 6.1hr avg sleep, I recommend reducing volume by one set per exercise to avoid overreaching. Your protein intake has been consistent at 140g/day which supports recovery.',
+            analysisText,
             style: GoogleFonts.getFont(
               'DM Sans',
               fontSize: 12,
@@ -100,7 +121,7 @@ class DeepAnalysisCard extends StatelessWidget {
               ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
                 child: Text(
-                  'Your training volume increased 23% this week. Given 6.1hr avg sleep, I recommend reducing volume by one set per exercise to avoid overreaching...',
+                  _buildAnalysisText(),
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 12,

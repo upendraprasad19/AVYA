@@ -8,27 +8,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
+// 3 Cerebras keys → rotate on rate limit → triples effective free quota.
+const CEREBRAS_KEYS = [
+  Deno.env.get("CEREBRAS_API_KEY_1")!,
+  Deno.env.get("CEREBRAS_API_KEY_2")!,
+  Deno.env.get("CEREBRAS_API_KEY_3")!,
+];
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const FREE_MODEL = "llama3.1-8b";
+const FREE_MODEL_LABEL = "Cerebras Llama 3.1 8B";
+const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
+
 const FREE_DAILY_LIMIT = 15;
 const FREE_TRIAL_DAYS = 30;
-const TIMEOUT_MS = 3000;
+const TIMEOUT_MS = 8000;
 
-interface FallbackModel {
-  id: string;
-  label: string;
-}
-
-const FALLBACK_CHAIN: FallbackModel[] = [
-  { id: "cerebras/llama-3.1-8b", label: "Cerebras Llama 3.1 8B" },
-  { id: "groq/llama-4", label: "Groq Llama 4" },
-  { id: "google/gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite" },
-];
-
-async function callOpenRouter(
-  model: string,
+async function callCerebras(
+  apiKey: string,
   systemPrompt: string,
   userMessage: string,
   timeoutMs: number,
@@ -37,33 +36,33 @@ async function callOpenRouter(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch(CEREBRAS_URL, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://icanbefitter.app",
-        "X-Title": "ICANBEFITTER",
       },
       body: JSON.stringify({
-        model,
+        model: FREE_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
         max_tokens: 1024,
+        temperature: 0.7,
       }),
       signal: controller.signal,
     });
 
+    // 429 = rate limited on this key — caller will try next key.
     if (!response.ok) return null;
 
     const data = await response.json();
-    const choice = data.choices?.[0];
-    if (!choice?.message?.content) return null;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
 
     return {
-      reply: choice.message.content,
+      reply: content,
       tokens_used: data.usage?.total_tokens ?? 0,
     };
   } catch {
@@ -71,6 +70,35 @@ async function callOpenRouter(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Extract structured log actions from AI response.
+ * Tags like <ICBF_LOG>{...}</ICBF_LOG> are parsed and stripped from the
+ * visible reply. Returns clean text + an array of action objects.
+ */
+function extractLogActions(rawReply: string): {
+  reply: string;
+  actions: Array<{ action: string; data: Record<string, unknown> }>;
+} {
+  const actions: Array<{ action: string; data: Record<string, unknown> }> = [];
+  const tagPattern = /<ICBF_LOG>([\s\S]*?)<\/ICBF_LOG>/g;
+  let cleanReply = rawReply;
+  let match;
+
+  while ((match = tagPattern.exec(rawReply)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (parsed.action && parsed.data) {
+        actions.push({ action: parsed.action, data: parsed.data });
+      }
+    } catch {
+      // Malformed JSON in tag — skip silently.
+    }
+    cleanReply = cleanReply.replace(match[0], "").trim();
+  }
+
+  return { reply: cleanReply, actions };
 }
 
 serve(async (req: Request) => {
@@ -124,7 +152,6 @@ serve(async (req: Request) => {
 
     let aiChatStartedAt = userData.ai_chat_started_at;
     if (!aiChatStartedAt) {
-      // First AI chat — set start date
       const now = new Date().toISOString();
       await supabaseClient
         .from("users")
@@ -133,23 +160,14 @@ serve(async (req: Request) => {
       aiChatStartedAt = now;
     }
 
-    const trialStart = new Date(aiChatStartedAt);
-    const now = new Date();
     const daysSinceStart = Math.floor(
-      (now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24),
+      (Date.now() - new Date(aiChatStartedAt).getTime()) / (1000 * 60 * 60 * 24),
     );
 
     if (daysSinceStart > FREE_TRIAL_DAYS) {
       return new Response(
-        JSON.stringify({
-          error: "Free AI trial expired",
-          code: "TRIAL_EXPIRED",
-          days_used: daysSinceStart,
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "Free AI trial expired", code: "TRIAL_EXPIRED", days_used: daysSinceStart }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -173,16 +191,8 @@ serve(async (req: Request) => {
 
     if ((msgCount ?? 0) >= FREE_DAILY_LIMIT) {
       return new Response(
-        JSON.stringify({
-          error: "Daily message limit reached",
-          code: "RATE_LIMITED",
-          limit: FREE_DAILY_LIMIT,
-          messages_used: msgCount,
-        }),
-        {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "Daily message limit reached", code: "RATE_LIMITED", limit: FREE_DAILY_LIMIT }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -197,39 +207,55 @@ serve(async (req: Request) => {
       });
     }
 
-    // Build system prompt with daily snapshot context
+    // Build system prompt
     let systemPrompt =
-      "You are ICANBEFITTER AI Coach, a friendly and knowledgeable fitness and nutrition coach " +
-      "for young professionals in India. Keep responses concise, actionable, and motivating. " +
-      "Use metric units (kg, cm). Reference Indian foods and context when relevant.";
+      "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
+      "for young professionals in India — like a father who has been watching closely. " +
+      "Keep responses concise, actionable, and direct. Be caring but honest. " +
+      "Use metric units (kg, cm). Reference Indian foods and context when relevant. " +
+      "If coach_notices are present in the snapshot, weave them naturally into your response " +
+      "(do NOT list them robotically). Reference specific numbers. Celebrate wins. Call out problems directly." +
+      "\n\nFITNESS DATA LOGGING — INSTANT:" +
+      "\nWhen the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:" +
+      '\n<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>' +
+      '\n<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>' +
+      "\nMeasurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54)." +
+      "\nWater: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml." +
+      "\nRULES:" +
+      "\n- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions." +
+      "\n- The tag is stripped server-side — do not mention it in your visible response." +
+      "\n- One tag per response maximum." +
+      "\n\nWORKOUT LOGGING — MULTI-TURN:" +
+      "\n- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet." +
+      "\n- If user provides exercise details, parse them and emit:" +
+      '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
+      '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
 
     if (snapshot_json) {
-      systemPrompt +=
-        "\n\nHere is the user's current daily snapshot for context:\n" +
-        JSON.stringify(snapshot_json);
+      systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
     }
 
-    // 3-tier fallback
+    // Try all 3 Cerebras keys in order — rotate on rate limit.
     let result: { reply: string; tokens_used: number } | null = null;
-    let modelUsed = "";
 
-    for (const model of FALLBACK_CHAIN) {
-      result = await callOpenRouter(model.id, systemPrompt, message, TIMEOUT_MS);
-      if (result) {
-        modelUsed = model.label;
-        break;
-      }
+    for (const key of CEREBRAS_KEYS) {
+      if (!key) continue;
+      result = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
+      if (result) break;
     }
 
     if (!result) {
       return new Response(
-        JSON.stringify({ error: "All AI providers failed. Please try again later." }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "AI temporarily unavailable. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // Extract structured log actions from AI reply
+    const extracted = extractLogActions(result.reply);
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -240,28 +266,26 @@ serve(async (req: Request) => {
       .limit(1)
       .single();
 
-    // Log interaction
+    // Log interaction (store clean reply without tags)
     await supabaseClient.from("ai_coach_interactions").insert({
       user_id: userId,
       snapshot_id: snapshotData?.id ?? null,
       channel: "app",
       user_message: message,
-      ai_response: result.reply,
-      model_used: modelUsed,
+      ai_response: extracted.reply,
+      model_used: FREE_MODEL_LABEL,
       tokens_used: result.tokens_used,
       created_at: new Date().toISOString(),
     });
 
     return new Response(
       JSON.stringify({
-        reply: result.reply,
-        model_used: modelUsed,
+        reply: extracted.reply,
+        model_used: FREE_MODEL_LABEL,
         tokens_used: result.tokens_used,
+        actions: extracted.actions,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
