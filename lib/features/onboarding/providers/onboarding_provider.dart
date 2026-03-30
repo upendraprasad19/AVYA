@@ -83,6 +83,13 @@ const List<OnboardingStep> onboardingSteps = [
     options: ['3', '4', '5', '6'],
   ),
   OnboardingStep(
+    key: 'lifestyle_activity',
+    question:
+        'Outside the gym, how active is your daily life? This helps me calculate your calories accurately.',
+    inputType: OnboardingInputType.chips,
+    options: ['desk_job', 'lightly_active', 'very_active_job'],
+  ),
+  OnboardingStep(
     key: 'equipment_access',
     question: "What equipment do you have access to?",
     inputType: OnboardingInputType.chips,
@@ -103,12 +110,14 @@ class OnboardingState {
   final Map<String, dynamic> answers;
   final bool isCompleting;
   final String? error;
+  final NutritionTargets? lastComputedTargets;
 
   const OnboardingState({
     this.currentStep = 0,
     this.answers = const {},
     this.isCompleting = false,
     this.error,
+    this.lastComputedTargets,
   });
 
   int get totalSteps => onboardingSteps.length;
@@ -134,12 +143,14 @@ class OnboardingState {
     Map<String, dynamic>? answers,
     bool? isCompleting,
     String? error,
+    NutritionTargets? lastComputedTargets,
   }) {
     return OnboardingState(
       currentStep: currentStep ?? this.currentStep,
       answers: answers ?? this.answers,
       isCompleting: isCompleting ?? this.isCompleting,
       error: error,
+      lastComputedTargets: lastComputedTargets ?? this.lastComputedTargets,
     );
   }
 }
@@ -233,22 +244,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         }
       }
 
-      final String activityLevel;
-      switch (daysPerWeek) {
-        case 3:
-          activityLevel = 'light';
-          break;
-        case 5:
-          activityLevel = 'active';
-          break;
-        case 6:
-          activityLevel = 'very_active';
-          break;
-        case 4:
-        default:
-          activityLevel = 'moderate';
-          break;
-      }
+      final lifestyleActivity =
+          a['lifestyle_activity'] as String? ?? 'desk_job';
+      final activityLevel =
+          BmrCalculator.resolveActivityLevel(lifestyleActivity, daysPerWeek);
 
       final targets = BmrCalculator.calculateTargets(
         weightKg: currentWeightKg,
@@ -257,6 +256,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         gender: gender,
         activityLevel: activityLevel,
         goal: primaryGoal,
+        targetWeightKg: targetWeightKg > 0 ? targetWeightKg : null,
       );
 
       final profile = {
@@ -270,6 +270,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'fitness_experience': fitnessExperience,
         'days_per_week': daysPerWeek,
         'equipment_access': equipmentAccess,
+        'lifestyle_activity': lifestyleActivity,
         'activity_level': activityLevel,
         'bmr': targets.bmr,
         'tdee': targets.tdee,
@@ -327,7 +328,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // Sync onboarding flag + profile to Supabase (background, don't block).
       _syncOnboardingToSupabase(profile);
 
-      state = state.copyWith(isCompleting: false);
+      state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
     } catch (e) {
       state = state.copyWith(

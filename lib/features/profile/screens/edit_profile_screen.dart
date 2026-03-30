@@ -1,10 +1,18 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import '../providers/profile_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -25,8 +33,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _gender = 'male';
   String _goal = 'general_fitness';
   String _equipment = 'full_gym';
-  String _activityLevel = 'moderate';
+  String _activityLevel = 'moderate'; // kept for backwards-compat read; derived on save
   int _daysPerWeek = 4;
+  String _lifestyleActivity = 'desk_job';
+  String _dietPreference = 'non_veg';
+  List<String> _injuries = ['none'];
+  late final TextEditingController _bodyFatController;
+  String? _bodyFatAssessedAt;
+  bool _isAssessingBf = false;
   bool _isSaving = false;
 
   static const _goals = {
@@ -72,6 +86,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
     _activityLevel = (profile['activity_level'] as String?) ?? 'moderate';
     _daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+    _lifestyleActivity =
+        (profile['lifestyle_activity'] as String?) ?? 'desk_job';
+    _dietPreference = (profile['diet_preference'] as String?) ?? 'non_veg';
+    final rawInjuries = profile['injuries'];
+    if (rawInjuries is List && rawInjuries.isNotEmpty) {
+      _injuries = rawInjuries.map((e) => e.toString()).toList();
+    } else {
+      _injuries = ['none'];
+    }
+    final bfPercent = profile['body_fat_percent'];
+    _bodyFatController = TextEditingController(
+      text: bfPercent != null ? bfPercent.toString() : '',
+    );
+    _bodyFatAssessedAt = profile['body_fat_assessed_at'] as String?;
   }
 
   @override
@@ -81,6 +109,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _weightController.dispose();
     _targetWeightController.dispose();
     _cityController.dispose();
+    _bodyFatController.dispose();
     super.dispose();
   }
 
@@ -183,14 +212,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 onChanged: (v) => setState(() => _equipment = v!),
               ),
               const SizedBox(height: AppSpacing.gridGap),
-              _buildDropdown(
-                label: 'Activity Level',
-                value: _activityLevel,
-                options: _activityLevels,
-                onChanged: (v) => setState(() => _activityLevel = v!),
-              ),
-              const SizedBox(height: AppSpacing.gridGap),
               _buildDaysSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildLifestyleSelector(),
+              const SizedBox(height: AppSpacing.sectionGap),
+
+              _sectionHeader('Diet & Health'),
+              const SizedBox(height: 10),
+              _buildDietPreferenceChips(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildInjuriesChips(),
+              const SizedBox(height: AppSpacing.sectionGap),
+
+              _sectionHeader('Body Composition'),
+              const SizedBox(height: 10),
+              _buildBodyFatField(),
               const SizedBox(height: AppSpacing.sectionGap),
 
               _sectionHeader('Location'),
@@ -444,22 +480,569 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  // ── Lifestyle Activity ───────────────────────────────────────────
+
+  Widget _buildLifestyleSelector() {
+    const options = {
+      'desk_job': 'Desk Job',
+      'lightly_active': 'Lightly Active',
+      'very_active_job': 'Very Active Job',
+    };
+    const subtitles = {
+      'desk_job': 'Office / WFH / Student',
+      'lightly_active': 'Retail / Teacher / Housework',
+      'very_active_job': 'Construction / Delivery / Sports',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Daily Lifestyle (outside gym)',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...options.entries.map((entry) {
+          final isSelected = _lifestyleActivity == entry.key;
+          return GestureDetector(
+            onTap: () => setState(() => _lifestyleActivity = entry.key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.only(bottom: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.accentTint : AppColors.input,
+                borderRadius: BorderRadius.circular(AppRadius.row),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.accent.withValues(alpha: 0.4)
+                      : AppColors.border,
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: 18,
+                    color: isSelected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.value,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? AppColors.textPrimary
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        subtitles[entry.key]!,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ── Diet Preference ──────────────────────────────────────────────
+
+  Widget _buildDietPreferenceChips() {
+    const options = {
+      'non_veg': 'Non-Veg',
+      'vegetarian': 'Vegetarian',
+      'vegan': 'Vegan',
+      'pescatarian': 'Pescatarian',
+      'keto': 'Keto',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Diet Preference',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.entries.map((entry) {
+            final isSelected = _dietPreference == entry.key;
+            return GestureDetector(
+              onTap: () => setState(() => _dietPreference = entry.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.accentTint : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.accent.withValues(alpha: 0.4)
+                        : AppColors.border,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  entry.value,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w400,
+                    color: isSelected
+                        ? AppColors.accent
+                        : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Injuries / Areas to Avoid ────────────────────────────────────
+
+  Widget _buildInjuriesChips() {
+    const options = [
+      'none', 'knee', 'back', 'shoulder', 'hip', 'wrist', 'ankle'
+    ];
+    const labels = {
+      'none': 'No injuries',
+      'knee': 'Knee',
+      'back': 'Back',
+      'shoulder': 'Shoulder',
+      'hip': 'Hip',
+      'wrist': 'Wrist',
+      'ankle': 'Ankle',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Injuries / Areas to Avoid',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) {
+            final isSelected = _injuries.contains(option);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (option == 'none') {
+                    _injuries = ['none'];
+                  } else {
+                    _injuries.remove('none');
+                    if (isSelected) {
+                      _injuries.remove(option);
+                      if (_injuries.isEmpty) _injuries = ['none'];
+                    } else {
+                      _injuries.add(option);
+                    }
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (option == 'none'
+                          ? AppColors.accentTint
+                          : AppColors.red.withValues(alpha: 0.12))
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: isSelected
+                        ? (option == 'none'
+                            ? AppColors.accent.withValues(alpha: 0.4)
+                            : AppColors.red.withValues(alpha: 0.4))
+                        : AppColors.border,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  labels[option]!,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w400,
+                    color: isSelected
+                        ? (option == 'none'
+                            ? AppColors.accent
+                            : AppColors.red)
+                        : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Body Fat % ───────────────────────────────────────────────────
+
+  Widget _buildBodyFatField() {
+    final hasValue = _bodyFatController.text.isNotEmpty;
+    final assessedLabel = _bodyFatAssessedAt != null
+        ? 'Last assessed: ${_formatDate(_bodyFatAssessedAt!)}'
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _bodyFatController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                ],
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Body Fat % (optional)',
+                  labelStyle: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  suffixText: hasValue ? '%' : null,
+                  prefixIcon: const Icon(
+                    Icons.monitor_heart_outlined,
+                    color: AppColors.textSecondary,
+                    size: 18,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.input,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.row),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.row),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.row),
+                    borderSide: const BorderSide(
+                      color: AppColors.accent,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // AI assess button (PRO)
+            GestureDetector(
+              onTap: _isAssessingBf ? null : _assessBodyFat,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.proGoldTint,
+                  borderRadius: BorderRadius.circular(AppRadius.row),
+                  border: Border.all(
+                    color: AppColors.proGold.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: _isAssessingBf
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(AppColors.proGold),
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.camera_alt_outlined,
+                            size: 16,
+                            color: AppColors.proGold,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'AI Assess',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.proGold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+        if (assessedLabel != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            assessedLabel,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+        const SizedBox(height: 6),
+        Text(
+          'Used for lean-mass protein targets. AI photo assessment is PRO, once per month.',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 11,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  void _assessBodyFat() {
+    SubscriptionService.instance.gate(
+      'ai_body_composition',
+      onPro: _runBfAssessment,
+      onFree: () => showPaywallSheet(
+        context,
+        feature: 'AI Body Composition Assessment',
+      ),
+    );
+  }
+
+  Future<void> _runBfAssessment() async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1080,
+      maxHeight: 1920,
+      imageQuality: 80,
+    );
+    if (file == null || !mounted) return;
+
+    setState(() => _isAssessingBf = true);
+
+    try {
+      final bytes = await file.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final profile = ref.read(userProfileProvider);
+      final weightKg =
+          (profile['current_weight_kg'] as num?)?.toDouble() ?? 70.0;
+      final heightCm = (profile['height_cm'] as num?)?.toDouble() ?? 170.0;
+      final gender = (profile['gender'] as String?) ?? 'male';
+      final dobStr = profile['date_of_birth'] as String? ?? '';
+      final dob = DateTime.tryParse(dobStr);
+      final age = dob != null ? DateTime.now().year - dob.year : 25;
+
+      final response = await SupabaseService.instance.client.functions.invoke(
+        'assess-body-composition',
+        body: {
+          'image_base64': base64Image,
+          'mime_type': kIsWeb ? 'image/jpeg' : 'image/jpeg',
+          'weight_kg': weightKg,
+          'height_cm': heightCm,
+          'gender': gender,
+          'age': age,
+        },
+      );
+
+      if (response.status != 200) {
+        final code = response.data?['code'] as String?;
+        final err = response.data?['error'] as String? ?? 'Assessment failed';
+        if (code == 'pro_required') {
+          showPaywallSheet(context, feature: 'AI Body Composition Assessment');
+        } else if (code == 'rate_limited') {
+          final next = response.data?['next_allowed_at'] as String?;
+          _showError(next != null
+              ? 'Next assessment available: ${_formatDate(next)}'
+              : 'Already assessed this month. Try again in 30 days.');
+        } else if (code == 'unsuitable_image') {
+          _showError(err);
+        } else {
+          _showError(err);
+        }
+        return;
+      }
+
+      final bfLow = (response.data!['bf_low'] as num).toDouble();
+      final bfHigh = (response.data!['bf_high'] as num).toDouble();
+      final bfMid = ((bfLow + bfHigh) / 2).roundToDouble();
+      final assessedAt = response.data!['assessed_at'] as String;
+
+      setState(() {
+        _bodyFatController.text = bfMid.toStringAsFixed(1);
+        _bodyFatAssessedAt = assessedAt;
+      });
+
+      // Immediately persist so it's not lost if user closes without saving
+      await ref.read(userProfileProvider.notifier).updateProfile({
+        'body_fat_percent': bfMid,
+        'body_fat_assessed_at': assessedAt,
+        'body_fat_range': '${bfLow.round()}-${bfHigh.round()}%',
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Body fat estimated: ${bfLow.round()}–${bfHigh.round()}%  (using ${bfMid.toStringAsFixed(1)}%)',
+              style: GoogleFonts.getFont('DM Sans', color: Colors.white),
+            ),
+            backgroundColor: AppColors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Assessment failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isAssessingBf = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.getFont('DM Sans')),
+        backgroundColor: AppColors.red,
+      ),
+    );
+  }
+
   Future<void> _save() async {
+    // Validate required numeric fields before saving to prevent
+    // downstream division-by-zero in BMR/TDEE calculations.
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showError('Please enter your name.');
+      return;
+    }
+
+    final height = double.tryParse(_heightController.text);
+    if (height == null || height < 100 || height > 250) {
+      _showError('Height must be between 100 and 250 cm.');
+      return;
+    }
+
+    final weight = double.tryParse(_weightController.text);
+    if (weight == null || weight < 30 || weight > 300) {
+      _showError('Weight must be between 30 and 300 kg.');
+      return;
+    }
+
+    final targetWeightText = _targetWeightController.text.trim();
+    final targetWeight = targetWeightText.isEmpty
+        ? 0.0
+        : double.tryParse(targetWeightText);
+    if (targetWeight == null || targetWeight < 0 || targetWeight > 300) {
+      _showError('Target weight must be between 0 and 300 kg.');
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
+      // Derive activity_level from lifestyle + training days (more accurate
+      // than the old direct-selection approach).
+      final derivedActivityLevel =
+          BmrCalculator.resolveActivityLevel(_lifestyleActivity, _daysPerWeek);
+
       final updates = <String, dynamic>{
-        'full_name': _nameController.text.trim(),
+        'full_name': name,
         'gender': _gender,
-        'height_cm': double.tryParse(_heightController.text) ?? 0,
-        'current_weight_kg': double.tryParse(_weightController.text) ?? 0,
-        'target_weight_kg':
-            double.tryParse(_targetWeightController.text) ?? 0,
+        'height_cm': height,
+        'current_weight_kg': weight,
+        'target_weight_kg': targetWeight,
         'primary_goal': _goal,
         'equipment_access': _equipment,
-        'activity_level': _activityLevel,
+        'lifestyle_activity': _lifestyleActivity,
+        'activity_level': derivedActivityLevel,
         'days_per_week': _daysPerWeek,
+        'diet_preference': _dietPreference,
+        'injuries': _injuries,
         'city': _cityController.text.trim(),
+        if (_bodyFatController.text.isNotEmpty)
+          'body_fat_percent': double.tryParse(_bodyFatController.text),
+        if (_bodyFatAssessedAt != null)
+          'body_fat_assessed_at': _bodyFatAssessedAt,
       };
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);

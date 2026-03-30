@@ -8,8 +8,6 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
-
 import '../providers/onboarding_provider.dart';
 
 class OnboardingChatScreen extends ConsumerStatefulWidget {
@@ -680,16 +678,19 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                     : () async {
                         final phase = await notifier.completeOnboarding();
                         if (phase != null && mounted) {
-                          // Read computed values from Hive profile (saved by completeOnboarding)
-                          final profile = UserRepository.instance.getProfile();
-                          final calories = (profile?['daily_calories'] as num?)?.toInt() ?? 2400;
-                          final protein = (profile?['protein_grams'] as num?)?.toInt() ?? 184;
-                          final daysPerWeek = (profile?['days_per_week'] as num?)?.toInt() ?? 4;
+                          // Read computed targets from provider state — set by
+                          // completeOnboarding() just before it returned.
+                          // This avoids a Hive re-read and eliminates the old
+                          // hardcoded fallback (which was 184g — someone's specific value).
+                          final s = ref.read(onboardingProvider);
+                          final targets = s.lastComputedTargets;
+                          final daysStr = s.answers['days_per_week'] as String? ?? '4';
+                          final daysPerWeek = int.tryParse(daysStr) ?? 4;
                           context.go('/plan-generation', extra: {
                             'phase': phase,
                             'daysPerWeek': daysPerWeek,
-                            'dailyCalories': calories,
-                            'proteinGrams': protein,
+                            'dailyCalories': targets?.dailyCalories ?? 2000,
+                            'proteinGrams': targets?.proteinGrams ?? 120,
                           });
                         }
                       },
@@ -818,6 +819,12 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         return 'Intermediate';
       case 'advanced':
         return 'Advanced';
+      case 'desk_job':
+        return 'Desk Job (office/WFH)';
+      case 'lightly_active':
+        return 'Lightly Active';
+      case 'very_active_job':
+        return 'Very Active Job';
       case 'bodyweight':
         return 'Bodyweight Only';
       case 'home_dumbbells':
@@ -863,8 +870,12 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         return 'Experience';
       case 'days_per_week':
         return 'Training Days';
+      case 'lifestyle_activity':
+        return 'Daily Lifestyle';
       case 'equipment_access':
         return 'Equipment';
+      case 'start_date':
+        return 'Start Date';
       default:
         return key;
     }

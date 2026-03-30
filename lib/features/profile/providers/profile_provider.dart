@@ -28,14 +28,12 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     final height = (profile['height_cm'] as num?)?.toDouble();
     final dob = profile['date_of_birth'] as String?;
     final gender = profile['gender'] as String?;
-    final activity = profile['activity_level'] as String?;
     final goal = profile['primary_goal'] as String?;
 
     if (weight == null ||
         height == null ||
         dob == null ||
         gender == null ||
-        activity == null ||
         goal == null) {
       return;
     }
@@ -46,16 +44,34 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     final age = DateTime.now().difference(birthDate).inDays ~/ 365;
     if (age <= 0) return;
 
+    // Prefer resolving from lifestyle + days (new system) over the old
+    // stored activity_level string (which was user-selected directly).
+    final lifestyle = profile['lifestyle_activity'] as String?;
+    final days = (profile['days_per_week'] as num?)?.toInt() ?? 4;
+    final resolvedActivity = lifestyle != null
+        ? BmrCalculator.resolveActivityLevel(lifestyle, days)
+        : (profile['activity_level'] as String? ?? 'moderate');
+
+    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble();
+
     final targets = BmrCalculator.calculateTargets(
       weightKg: weight,
       heightCm: height,
       age: age,
       gender: gender,
-      activityLevel: activity,
+      activityLevel: resolvedActivity,
       goal: goal,
+      targetWeightKg: targetWeight != null && targetWeight > 0
+          ? targetWeight
+          : null,
     );
 
-    await updateProfile(targets.toMap());
+    // Persist computed targets AND the resolved activity level so downstream
+    // code that reads 'activity_level' directly stays consistent.
+    await updateProfile({
+      ...targets.toMap(),
+      'activity_level': resolvedActivity,
+    });
   }
 }
 
