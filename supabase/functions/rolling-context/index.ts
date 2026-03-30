@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getEmbedding } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -260,6 +261,39 @@ serve(async (req: Request) => {
           skipped++;
           continue;
         }
+
+        // ── Phase C: Embed each message BEFORE deleting it ─────────────────
+        // Preserves semantic memory permanently in memory_embeddings.
+        // Delete only happens after this block — safe to re-run on failure.
+        // Partial embedding is acceptable (logged but doesn't abort the run).
+        let embeddedCount = 0;
+        for (const msg of toSummarize) {
+          try {
+            const content = `User: ${msg.user_message}\nCoach: ${msg.ai_response}`;
+            const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
+            if (!embedding) continue;
+            await supabaseClient.from("memory_embeddings").insert({
+              user_id: userId,
+              embedding,
+              content,
+              source_type: "conversation",
+              metadata: {
+                original_interaction_id: msg.id,
+                date: (msg.created_at as string).split("T")[0],
+                archived_by: "rolling-context",
+              },
+            });
+            embeddedCount++;
+          } catch (embErr) {
+            console.error(
+              `[rolling-context] Embed failed for msg ${msg.id}:`,
+              embErr,
+            );
+          }
+        }
+        console.log(
+          `[rolling-context] User ${userId}: embedded ${embeddedCount}/${toSummarize.length} messages before archival`,
+        );
 
         // Summarize the older messages
         const summary = await summarizeMessages(toSummarize);

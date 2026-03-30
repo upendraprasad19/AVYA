@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getEmbedding } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,6 +117,47 @@ serve(async (req: Request) => {
       });
     }
 
+    // ── Phase B: Retrieve relevant long-term memories (PRO only) ──────────
+    // Embed the user query → cosine similarity search → inject top 5 memories.
+    // Wrapped in try/catch: retrieval failure must never break the chat response.
+    let memoryBlock = "";
+    try {
+      const queryEmbedding = await getEmbedding(message, "RETRIEVAL_QUERY");
+      if (queryEmbedding) {
+        const { data: memories, error: memError } = await supabaseClient.rpc(
+          "match_memories",
+          {
+            p_user_id: userId,
+            p_query_embedding: queryEmbedding,
+            p_match_count: 5,
+            p_similarity_threshold: 0.65,
+          },
+        );
+
+        if (!memError && memories && memories.length > 0) {
+          const lines = (memories as Array<{
+            content: string;
+            source_type: string;
+            created_at: string;
+          }>).map((m) => {
+            const date = new Date(m.created_at).toISOString().split("T")[0];
+            return `[${date}] (${m.source_type}) ${m.content}`;
+          });
+
+          memoryBlock =
+            "\n\n--- Long-term memory (retrieved from past conversations) ---\n" +
+            lines.join("\n") +
+            "\n--- End of memory context ---";
+
+          console.log(
+            `[ai-proxy-pro] Memory retrieved: ${memories.length} items, ${memoryBlock.length} chars`,
+          );
+        }
+      }
+    } catch (memErr) {
+      console.error("[ai-proxy-pro] Memory retrieval error:", memErr);
+    }
+
     // Build system prompt
     let systemPrompt =
       "You are ICANBEFITTER PRO AI Coach — like a father who knows everything about this person. " +
@@ -145,6 +187,12 @@ serve(async (req: Request) => {
 
     if (snapshot_json) {
       systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
+    }
+
+    // Inject retrieved memories after snapshot — historical context sits after
+    // current state so the model weighs recency correctly.
+    if (memoryBlock) {
+      systemPrompt += memoryBlock;
     }
 
     // Try all 3 keys — rotate on rate limit for higher PRO throughput.
@@ -218,6 +266,30 @@ serve(async (req: Request) => {
       tokens_used: tokensUsed,
       created_at: new Date().toISOString(),
     });
+
+    // ── Phase A: Store this conversation turn as an embedding (PRO) ────────
+    // Fire-and-forget — Response is already built; this runs after return.
+    // PRO users get BOTH store (Phase A) and retrieval (Phase B).
+    (async () => {
+      try {
+        const content = `User: ${message}\nCoach: ${extracted.reply}`;
+        const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
+        if (!embedding) return;
+        await supabaseClient.from("memory_embeddings").insert({
+          user_id: userId,
+          embedding,
+          content,
+          source_type: "conversation",
+          metadata: {
+            date: new Date().toISOString().split("T")[0],
+            channel: "app",
+            model: PRO_MODEL_LABEL,
+          },
+        });
+      } catch (e) {
+        console.error("[ai-proxy-pro] Embed store error:", e);
+      }
+    })();
 
     return new Response(
       JSON.stringify({

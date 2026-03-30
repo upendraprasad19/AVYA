@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getEmbedding } from "../_shared/embeddings.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -277,6 +278,31 @@ serve(async (req: Request) => {
       tokens_used: result.tokens_used,
       created_at: new Date().toISOString(),
     });
+
+    // ── Phase A: Silent embedding accumulation (FREE tier) ─────────────────
+    // FREE users do NOT get retrieval — no latency hit, no PRO feature leak.
+    // Their embeddings silently accumulate so memory is rich if they upgrade.
+    // Fire-and-forget: Response is already built above; this runs after.
+    (async () => {
+      try {
+        const content = `User: ${message}\nCoach: ${extracted.reply}`;
+        const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
+        if (!embedding) return;
+        await supabaseClient.from("memory_embeddings").insert({
+          user_id: userId,
+          embedding,
+          content,
+          source_type: "conversation",
+          metadata: {
+            date: new Date().toISOString().split("T")[0],
+            channel: "app",
+            model: FREE_MODEL_LABEL,
+          },
+        });
+      } catch (e) {
+        console.error("[ai-proxy] Embed store error:", e);
+      }
+    })();
 
     return new Response(
       JSON.stringify({
