@@ -238,16 +238,13 @@ class AuthNotifier extends Notifier<AuthState2> {
     final existing = userBox.get('profile');
 
     // Ensure user exists in public.users table (Edge Functions need this).
-    try {
-      await _supabase.client.from('users').upsert({
-        'id': user.id,
-        'email': user.email ?? '',
-        'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
-        'last_active_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'id');
-    } catch (_) {
-      // Non-critical — Edge Functions will still work if user row exists from a previous session.
-    }
+    // Fire-and-forget — non-critical and must not block sign-in navigation.
+    _supabase.client.from('users').upsert({
+      'id': user.id,
+      'email': user.email ?? '',
+      'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
+      'last_active_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'id').catchError((_) {});
 
     if (existing == null) {
       // No local profile — could be first login OR re-login after sign-out.

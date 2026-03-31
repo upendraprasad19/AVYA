@@ -201,20 +201,26 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           const SizedBox(height: 10),
         ],
 
-        // ── 4. Today's Meals ──
-        _sectionLabel('TODAY\'S MEALS'),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: TodaysMealsCard(meals: nutrition.allMeals),
-        ),
-        const SizedBox(height: 10),
-
-        // ── 5b. Inline Water Tracker ──
+        // ── 4. Inline Water Tracker (moved above meals) ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
           child: _buildInlineWaterTracker(),
+        ),
+        const SizedBox(height: 10),
+
+        // ── 5. Today's Meals ──
+        _sectionLabel('TODAY\'S MEALS'),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding),
+          child: TodaysMealsCard(
+            meals: nutrition.allMeals,
+            onDelete: (logId) {
+              ref.read(foodLogProvider.notifier).deleteFoodLog(logId);
+            },
+            onEdit: (meal) => _showEditMacrosSheet(context, meal),
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -268,140 +274,135 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final remaining = (target - consumed).clamp(0, target);
     final progress =
         nutrition.calorieTarget > 0 ? consumed / nutrition.calorieTarget : 0.0;
+    final waterMl = ref.watch(waterIntakeProvider);
+    const waterTarget = 3000;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.cardPadding, 10, AppSpacing.cardPadding, AppSpacing.cardPadding),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(AppRadius.cardM),
         border:
             Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Title row with BMR/TDEE info icon
-          Row(
-            children: [
-              const Spacer(),
-              GestureDetector(
-                onTap: () => _showBmrTdeeInfo(targets),
-                child: Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: AppColors.input,
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: AppColors.border),
+          // Calorie ring
+          SizedBox(
+            width: 110,
+            height: 110,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomPaint(
+                  size: const Size(110, 110),
+                  painter: CalorieRingPainter(
+                    progress: progress.clamp(0.0, 1.0),
+                    trackColor: AppColors.input,
+                    fillColor: AppColors.accent,
+                    strokeWidth: 10,
                   ),
-                  child: const Icon(Icons.info_outline,
-                      color: AppColors.textSecondary, size: 12),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              // Calorie ring
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    CustomPaint(
-                      size: const Size(120, 120),
-                      painter: CalorieRingPainter(
-                        progress: progress.clamp(0.0, 1.0),
-                        trackColor: AppColors.input,
-                        fillColor: AppColors.accent,
-                        strokeWidth: 11,
+                    Text(
+                      '$consumed',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textPrimary,
+                        height: 1,
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$consumed',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textPrimary,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          'consumed',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 8,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$remaining',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.accent,
-                            height: 1,
-                          ),
-                        ),
-                        Text(
-                          'remaining',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 8,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 1),
+                    Text(
+                      'consumed',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 8,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$remaining',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.accent,
+                        height: 1,
+                      ),
+                    ),
+                    Text(
+                      'remaining',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 8,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 16),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
 
-              // Macro bars
-              Expanded(
-                child: Column(
-                  children: [
-                    _macroRow(
-                      label: 'PROTEIN',
-                      current: nutrition.protein.round(),
-                      target: nutrition.proteinTarget.round(),
-                      color: AppColors.orange,
-                    ),
-                    const SizedBox(height: 8),
-                    _macroRow(
-                      label: 'CARBS',
-                      current: nutrition.carbs.round(),
-                      target: nutrition.carbTarget.round(),
-                      color: AppColors.blue,
-                    ),
-                    const SizedBox(height: 8),
-                    _macroRow(
-                      label: 'FAT',
-                      current: nutrition.fat.round(),
-                      target: nutrition.fatTarget.round(),
-                      color: AppColors.purple,
-                    ),
-                    const SizedBox(height: 8),
-                    _macroRow(
-                      label: 'FIBER',
-                      current: nutrition.fiber.round(),
-                      target: nutrition.fiberTarget.round(),
-                      color: AppColors.green,
-                    ),
-                  ],
+          // Macro bars + hydration
+          Expanded(
+            child: Column(
+              children: [
+                // Info icon row (compact)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => _showBmrTdeeInfo(targets),
+                    child: const Icon(Icons.info_outline,
+                        color: AppColors.textSecondary, size: 13),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                _macroRow(
+                  label: 'PROTEIN',
+                  current: nutrition.protein.round(),
+                  target: nutrition.proteinTarget.round(),
+                  color: AppColors.orange,
+                ),
+                const SizedBox(height: 6),
+                _macroRow(
+                  label: 'CARBS',
+                  current: nutrition.carbs.round(),
+                  target: nutrition.carbTarget.round(),
+                  color: AppColors.blue,
+                ),
+                const SizedBox(height: 6),
+                _macroRow(
+                  label: 'FAT',
+                  current: nutrition.fat.round(),
+                  target: nutrition.fatTarget.round(),
+                  color: AppColors.purple,
+                ),
+                const SizedBox(height: 6),
+                _macroRow(
+                  label: 'FIBER',
+                  current: nutrition.fiber.round(),
+                  target: nutrition.fiberTarget.round(),
+                  color: AppColors.green,
+                ),
+                const SizedBox(height: 6),
+                _macroRow(
+                  label: 'WATER',
+                  current: waterMl,
+                  target: waterTarget,
+                  color: const Color(0xFF06b6d4),
+                  suffix: 'ml',
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -413,6 +414,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     required int current,
     required int target,
     required Color color,
+    String suffix = 'g',
   }) {
     final pct = target > 0 ? (current / target).clamp(0.0, 1.0) : 0.0;
 
@@ -433,7 +435,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               ),
             ),
             Text(
-              '$current / ${target}g',
+              '$current / $target$suffix',
               style: GoogleFonts.getFont(
                 'DM Sans',
                 fontSize: 10,
@@ -630,6 +632,149 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ── Edit Macros Sheet ────────────────────────────────────────
+
+  void _showEditMacrosSheet(BuildContext context, Map<String, dynamic> meal) {
+    final logId = meal['id'] as String?;
+    if (logId == null) return;
+
+    final calCtrl = TextEditingController(text: '${(meal['total_calories'] as num?)?.toInt() ?? 0}');
+    final proteinCtrl = TextEditingController(text: '${(meal['total_protein'] as num?)?.toInt() ?? 0}');
+    final carbsCtrl = TextEditingController(text: '${(meal['total_carbs'] as num?)?.toInt() ?? 0}');
+    final fatCtrl = TextEditingController(text: '${(meal['total_fat'] as num?)?.toInt() ?? 0}');
+    final foodName = meal['food_name'] as String? ?? 'Unknown';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'EDIT MACROS',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1.2,
+                    color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                foodName,
+                style: GoogleFonts.getFont('DM Sans', fontSize: 16,
+                    fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _macroField('Calories', calCtrl, AppColors.accent),
+                  const SizedBox(width: 8),
+                  _macroField('Protein (g)', proteinCtrl, AppColors.orange),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _macroField('Carbs (g)', carbsCtrl, AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  _macroField('Fat (g)', fatCtrl, AppColors.textSecondary),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () {
+                    ref.read(foodLogProvider.notifier).updateFoodLog(
+                      logId: logId,
+                      calories: double.tryParse(calCtrl.text) ?? 0,
+                      protein: double.tryParse(proteinCtrl.text) ?? 0,
+                      carbs: double.tryParse(carbsCtrl.text) ?? 0,
+                      fat: double.tryParse(fatCtrl.text) ?? 0,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(
+                    'SAVE',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 14,
+                        fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _macroField(String label, TextEditingController ctrl, Color accentColor) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+            style: GoogleFonts.getFont('DM Sans', fontSize: 9,
+                fontWeight: FontWeight.w700, letterSpacing: 0.5,
+                color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            style: GoogleFonts.getFont('DM Sans', fontSize: 16,
+                fontWeight: FontWeight.w700, color: accentColor),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.input,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: accentColor),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -858,7 +1003,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'How\'s your hydration?',
+                          'What is your urine color?',
                           style: GoogleFonts.getFont(
                             'DM Sans',
                             fontSize: 11,

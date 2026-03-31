@@ -1,15 +1,22 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 /// Full-screen splash with AVYA logo, tagline, and a 3-dot loading animation.
 ///
-/// Shows for 1.5 seconds, then navigates based on auth state:
+/// On mount, runs deferred heavy initialization (Supabase, seed data,
+/// OneSignal) so [main] can call [runApp] immediately and show this screen
+/// without a black-screen delay. Once init completes (minimum 1.5s for
+/// branding), navigates based on auth state:
 ///   - Authenticated + onboarded -> /home
 ///   - Authenticated + not onboarded -> /onboarding
 ///   - Not authenticated -> /sign-in
@@ -49,11 +56,35 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1200),
     )..repeat();
 
-    // Start the fade-in animation.
     _fadeController.forward();
 
-    // Navigate after 1.5 seconds.
-    Future.delayed(const Duration(milliseconds: 1500), _navigateNext);
+    // Run all deferred init in parallel with a minimum 1.5s splash duration.
+    _initAndNavigate();
+  }
+
+  Future<void> _initAndNavigate() async {
+    await Future.wait([
+      _runDeferredInit(),
+      Future.delayed(const Duration(milliseconds: 1500)),
+    ]);
+    _navigateNext();
+  }
+
+  /// Initializes Supabase, seeds first-launch data, and sets up OneSignal.
+  /// Safe to call multiple times — each service is idempotent.
+  Future<void> _runDeferredInit() async {
+    // Supabase must come first — auth state is needed by _navigateNext.
+    await SupabaseService.instance.initialize();
+
+    // Seed exercise + food databases on first launch only.
+    // compute() keeps JSON parsing off the main thread.
+    await SeedService.instance.seedIfNeeded();
+
+    // OneSignal — fire and forget; don't block navigation on OS permission dialog.
+    if (!kIsWeb) {
+      OneSignal.initialize(AppConstants.oneSignalAppId);
+      OneSignal.Notifications.requestPermission(true);
+    }
   }
 
   void _navigateNext() {

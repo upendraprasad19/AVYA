@@ -175,8 +175,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final trialInfo = ref.watch(trialInfoProvider);
 
     // Scroll when messages change or log actions appear
-    ref.listen(chatHistoryProvider, (_, __) => _scrollToBottom());
-    ref.listen(pendingLogActionsProvider, (_, __) => _scrollToBottom());
+    ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
+    ref.listen(pendingLogActionsProvider, (_, _) => _scrollToBottom());
     ref.listen(workoutDraftProvider, (_, next) {
       if (next != null) _scrollToBottom();
     });
@@ -1273,6 +1273,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               contentType: 'image/jpeg',
               upsert: true,
             ),
+          ).timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw Exception(
+                'Upload timed out. Please check your connection and try again.'),
           );
 
       setState(() => _uploadProgress = 0.7);

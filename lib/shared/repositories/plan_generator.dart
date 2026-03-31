@@ -42,6 +42,9 @@ class PlanGenerator {
           category: category,
           equipment: equipmentList,
           suitableFor: experienceLevel,
+          // Phase 1 uses only well-known foundational exercises so beginners
+          // don't get obscure movements on their first week.
+          foundationalOnly: phase == 1,
           limit: 6,
         );
 
@@ -244,6 +247,11 @@ class PlanGenerator {
     String reps = _adjustReps(defaultReps, phase, goal);
     int rest = _adjustRest(defaultRest, goal);
 
+    final equipRaw = exercise['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
     return PlannedExercise(
       exerciseId: exercise['id'] as String? ?? '',
       exerciseName: exercise['name'] as String? ?? 'Unknown',
@@ -254,6 +262,8 @@ class PlanGenerator {
       durationSeconds: defaultDuration,
       notes: _generateNotes(exercise, experienceLevel),
       exerciseType: exercise['exercise_type'] as String?,
+      category: exercise['category'] as String?,
+      equipmentNeeded: equipList,
     );
   }
 
@@ -509,6 +519,8 @@ class PlannedExercise {
   final String? notes;
   final String? exerciseType; // 'compound' or 'isolation'
   final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
+  final String? category; // Push, Pull, Legs, Core, etc.
+  final List<String>? equipmentNeeded;
 
   const PlannedExercise({
     required this.exerciseId,
@@ -521,6 +533,8 @@ class PlannedExercise {
     this.notes,
     this.exerciseType,
     this.supersetGroup,
+    this.category,
+    this.equipmentNeeded,
   });
 
   PlannedExercise copyWith({int? Function()? supersetGroup}) {
@@ -535,6 +549,8 @@ class PlannedExercise {
       notes: notes,
       exerciseType: exerciseType,
       supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
+      category: category,
+      equipmentNeeded: equipmentNeeded,
     );
   }
 
@@ -549,6 +565,8 @@ class PlannedExercise {
         if (notes != null) 'notes': notes,
         if (exerciseType != null) 'exercise_type': exerciseType,
         if (supersetGroup != null) 'superset_group': supersetGroup,
+        if (category != null) 'category': category,
+        if (equipmentNeeded != null) 'equipment_needed': equipmentNeeded,
       };
 }
 

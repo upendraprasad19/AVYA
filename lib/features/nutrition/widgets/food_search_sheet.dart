@@ -391,19 +391,9 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           ),
           const SizedBox(height: 6),
 
-          // Quick portion buttons
+          // Quick portion buttons (count-based for items like eggs, or gram-based)
           Row(
-            children: [
-              _portionButton(servingDesc, servingG),
-              const SizedBox(width: 6),
-              _portionButton('50g', 50),
-              const SizedBox(width: 6),
-              _portionButton('100g', 100),
-              const SizedBox(width: 6),
-              _portionButton('150g', 150),
-              const SizedBox(width: 6),
-              _portionButton('200g', 200),
-            ],
+            children: _buildPortionButtons(servingDesc, servingG),
           ),
           const SizedBox(height: 8),
 
@@ -529,6 +519,47 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
         ),
       ],
     );
+  }
+
+  /// Generates smart portion buttons. For count-based foods (egg, roti, slice,
+  /// piece, cup, scoop, tbsp, tsp, etc.), shows "1 egg, 2 eggs, 3 eggs, 4 eggs".
+  /// For gram-based foods, shows the standard serving + 50g/100g/150g/200g.
+  List<Widget> _buildPortionButtons(String servingDesc, double servingG) {
+    final lower = servingDesc.toLowerCase();
+    // Detect count-based servings
+    final isCountBased = RegExp(
+      r'^\d+\s*(egg|roti|chapati|paratha|slice|piece|pc|cup|scoop|tbsp|tsp|glass|bowl|serving|idli|dosa|puri|vada|samosa|pakora|tikki)',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
+    if (isCountBased && servingG > 0) {
+      // Extract the unit name from serving desc (e.g., "1 large egg" → "egg")
+      final unitMatch = RegExp(
+        r'\d+\s*(?:small|medium|large|big)?\s*(.*)',
+        caseSensitive: false,
+      ).firstMatch(servingDesc);
+      final unitName = unitMatch?.group(1)?.trim() ?? servingDesc;
+
+      final buttons = <Widget>[];
+      for (int i = 1; i <= 5; i++) {
+        if (i > 1) buttons.add(const SizedBox(width: 6));
+        buttons.add(_portionButton('$i $unitName', servingG * i));
+      }
+      return buttons;
+    }
+
+    // Default: standard serving + gram-based buttons
+    return [
+      _portionButton(servingDesc, servingG),
+      const SizedBox(width: 6),
+      _portionButton('50g', 50),
+      const SizedBox(width: 6),
+      _portionButton('100g', 100),
+      const SizedBox(width: 6),
+      _portionButton('150g', 150),
+      const SizedBox(width: 6),
+      _portionButton('200g', 200),
+    ];
   }
 
   Widget _portionButton(String label, double grams) {

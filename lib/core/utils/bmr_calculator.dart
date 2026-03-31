@@ -64,6 +64,12 @@ class BmrCalculator {
     required int age,
     required String gender,
   }) {
+    // Guard against unrealistic inputs that would produce invalid BMR.
+    if (weightKg <= 0 || weightKg > 500 ||
+        heightCm <= 0 || heightCm > 300 ||
+        age <= 0 || age > 120) {
+      return 0;
+    }
     final base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
     final raw = gender.toLowerCase() == 'male' ? base + 5 : base - 161;
     return (raw + _bmrOffset).roundToDouble();

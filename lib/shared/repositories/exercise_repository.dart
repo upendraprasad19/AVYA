@@ -73,6 +73,7 @@ class ExerciseRepository {
     String? difficulty,
     String? suitableFor,
     int? limit,
+    bool foundationalOnly = false,
   }) {
     var results = getAll();
 
@@ -110,6 +111,12 @@ class ExerciseRepository {
         }
         return true;
       }).toList();
+    }
+
+    if (foundationalOnly) {
+      results = results
+          .where((e) => e['is_foundational'] == true)
+          .toList();
     }
 
     // Sort compounds first.

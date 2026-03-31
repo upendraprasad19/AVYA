@@ -12,17 +12,20 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
+import 'package:icanbefitter/core/services/usage_counter_service.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:convert';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import '../providers/profile_provider.dart';
-import '../widgets/profile_banner.dart';
 import '../widgets/profile_identity.dart';
-import '../widgets/baseline_grid.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/biometric_sync_card.dart';
-import '../widgets/subscription_card.dart';
-import '../widgets/progress_photos_card.dart';
 import '../widgets/weekly_report_card.dart';
 import '../widgets/badges_grid.dart';
+import 'notification_settings_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -74,51 +77,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return true;
   }
 
-  String _getNotifTime(String key) {
-    final pref = _notifPrefs[key];
-    if (pref is Map && pref['time'] is String) return pref['time'] as String;
-    return '07:00';
-  }
-
-  String _getNotifDay(String key) {
-    final pref = _notifPrefs[key];
-    if (pref is Map && pref['day'] is String) return pref['day'] as String;
-    return 'sunday';
-  }
-
-  void _toggleNotif(String key, bool value) {
-    setState(() {
-      final pref = Map<String, dynamic>.from(
-        (_notifPrefs[key] as Map?) ?? {},
-      );
-      pref['enabled'] = value;
-      _notifPrefs[key] = pref;
-    });
-    _saveNotificationPreferences();
-  }
-
-  void _setNotifTime(String key, String time) {
-    setState(() {
-      final pref = Map<String, dynamic>.from(
-        (_notifPrefs[key] as Map?) ?? {},
-      );
-      pref['time'] = time;
-      _notifPrefs[key] = pref;
-    });
-    _saveNotificationPreferences();
-  }
-
-  void _setNotifDay(String key, String day) {
-    setState(() {
-      final pref = Map<String, dynamic>.from(
-        (_notifPrefs[key] as Map?) ?? {},
-      );
-      pref['day'] = day;
-      _notifPrefs[key] = pref;
-    });
-    _saveNotificationPreferences();
-  }
-
   void _retry() {
     setState(() => _isLoading = true);
     ref.invalidate(userProfileProvider);
@@ -166,38 +124,58 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final stats = ref.watch(userStatsProvider);
     final subInfo = ref.watch(subscriptionInfoProvider);
     final biometric = ref.watch(biometricProvider);
-    final photos = ref.watch(progressPhotosProvider);
     final usageWeeks = ref.watch(usageWeeksProvider);
     final firstReportViewed = ref.watch(firstReportViewedProvider);
 
     final name = profile['full_name'] as String? ?? 'User';
     final gender = profile['gender'] as String? ?? '';
-    final heightCm = (profile['height_cm'] as num?)?.toDouble();
     final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
-    final activityLevel = profile['activity_level'] as String? ?? '';
+    final targetKg = (profile['target_weight_kg'] as num?)?.toDouble();
+    final heightCm = (profile['height_cm'] as num?)?.toDouble();
+    final bodyFatPct = (profile['body_fat_pct'] as num?)?.toDouble();
     final dob = profile['date_of_birth'] as String?;
-
-    // Calculate age
-    String ageStr = '\u2014';
-    if (dob != null) {
-      final birthDate = DateTime.tryParse(dob);
-      if (birthDate != null) {
-        final age = DateTime.now().difference(birthDate).inDays ~/ 365;
-        if (age > 0) ageStr = '$age';
-      }
-    }
-
-    final genderStr = gender.isNotEmpty
-        ? gender[0].toUpperCase() + gender.substring(1)
-        : '\u2014';
-    final heightStr =
-        heightCm != null ? '${heightCm.toStringAsFixed(0)}cm' : '\u2014';
-    final weightStr =
-        weightKg != null ? '${weightKg.toStringAsFixed(0)}kg' : '\u2014';
-    final activityStr = _formatActivityLevel(activityLevel);
 
     final subtitle =
         'Phase ${stats.currentPhase} \u00B7 Week ${stats.currentWeek} \u00B7 ${_formatGoal(stats.primaryGoal)}';
+
+    // BMI calculation
+    double? bmi;
+    if (weightKg != null && heightCm != null && heightCm > 0) {
+      bmi = weightKg / ((heightCm / 100) * (heightCm / 100));
+    }
+
+    // Nutrition targets
+    Map<String, double>? nutritionTargets;
+    if (weightKg != null && heightCm != null && gender.isNotEmpty) {
+      int age = 25;
+      if (dob != null) {
+        final bd = DateTime.tryParse(dob);
+        if (bd != null) age = DateTime.now().difference(bd).inDays ~/ 365;
+      }
+      final t = BmrCalculator.calculateTargets(
+        weightKg: weightKg,
+        heightCm: heightCm,
+        age: age,
+        gender: gender,
+        activityLevel: profile['activity_level'] as String? ?? 'moderate',
+        goal: stats.primaryGoal,
+      );
+      nutritionTargets = {
+        'tdee': t.tdee.toDouble(),
+        'calories': t.dailyCalories.toDouble(),
+        'protein': t.proteinGrams.toDouble(),
+      };
+    }
+
+    // Usage counts for free users
+    final usageService = UsageCounterService.instance;
+    final isPro = subInfo.isPro;
+
+    // Enabled notifications count
+    int enabledNotifCount = 0;
+    for (final key in ['morning_checkin', 'workout_reminder', 'streak_alerts', 'weekly_recap', 'subscription_reminders']) {
+      if (_getNotifEnabled(key)) enabledNotifCount++;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -207,410 +185,788 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // Status bar safe area
-              SizedBox(height: MediaQuery.of(context).padding.top),
+              // Safe area
+              SizedBox(height: MediaQuery.of(context).padding.top + 10),
 
-              // 1. Banner
-              Opacity(
-                opacity: 0.5,
-                child: Stack(
-                  children: [
-                    ProfileBanner(
-                      onTapBanner: () => _showTodoSnackbar('Banner photo'),
-                      onTapEdit: () => _showTodoSnackbar('Banner photo'),
+              // 1. Profile identity (no banner — #1 remove Phase 2 dead-ends)
+              ProfileIdentity(
+                name: name,
+                subtitle: subtitle,
+                onTapAvatar: () => context.go('/profile/edit'),
+                onTapEdit: () => context.go('/profile/edit'),
+              ),
+              const SizedBox(height: 8),
+
+              // #2 Daily Completion summary
+              _buildDailyCompletion(stats),
+              const SizedBox(height: 8),
+
+              // #3 Body Stats card
+              _buildBodyStats(weightKg, targetKg, bmi, bodyFatPct),
+              const SizedBox(height: 8),
+
+              // #4 Journey timeline
+              _buildJourneyTimeline(stats),
+              const SizedBox(height: 8),
+
+              // #8 Nutrition Targets
+              if (nutritionTargets != null) ...[
+                _buildNutritionTargets(nutritionTargets),
+                const SizedBox(height: 8),
+              ],
+
+              // Achievements (#6 — badge detail already has tap, kept as-is)
+              const SectionHeader('ACHIEVEMENTS'),
+              const BadgesGrid(),
+              const SizedBox(height: 8),
+
+              // #7 Subscription Card (PRO=expiry, Free=rate limits)
+              const SectionHeader('SUBSCRIPTION'),
+              _buildSubscriptionSection(subInfo, isPro, usageService),
+              const SizedBox(height: 8),
+
+              // Health Sync
+              const SectionHeader('HEALTH SYNC'),
+              BiometricSyncCard(
+                stepsToday: biometric.stepsToday,
+                sleepHours: biometric.sleepHours,
+                isSyncEnabled: biometric.isSyncEnabled,
+                onToggleSync: () async {
+                  final newValue = !biometric.isSyncEnabled;
+                  ref.read(biometricProvider.notifier).toggleSync(newValue);
+                  if (newValue && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Health Connect sync enabled.',
+                          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                        ),
+                        backgroundColor: AppColors.card,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                },
+                onLogSleep: (hours, quality) {
+                  ref.read(biometricProvider.notifier).logSleep(
+                    hours: hours,
+                    quality: quality,
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+
+              // Reports
+              const SectionHeader('REPORTS'),
+              WeeklyReportCard(
+                isPro: subInfo.isPro,
+                usageWeeks: usageWeeks,
+                hasFirstReport: firstReportViewed,
+                onViewReport: () {
+                  if (!firstReportViewed) {
+                    ref.read(firstReportViewedProvider.notifier).markViewed();
+                  }
+                  context.go('/profile/reports');
+                },
+                onUpgradeTap: () {
+                  SubscriptionService.instance.gate(
+                    AppConstants.featureWeeklyAiReport,
+                    onPro: () => context.go('/profile/reports'),
+                    onFree: () => showPaywallSheet(context, feature: 'Weekly AI Report'),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+
+              // #5 Notifications (consolidated — just a row linking to settings screen)
+              const SectionHeader('SETTINGS'),
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.notifications_outlined,
+                  title: 'Notifications',
+                  subtitle: '$enabledNotifCount/5 enabled',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => NotificationSettingsScreen(
+                      notifPrefs: _notifPrefs,
+                      isPro: subInfo.isPro,
+                      onSave: (prefs) {
+                        setState(() => _notifPrefs = prefs);
+                        _saveNotificationPreferences();
+                      },
+                    )),
+                  ),
+                ),
+                ProfileRow(
+                  icon: Icons.tune,
+                  title: 'Units',
+                  trailing: UnitsSegmentedControl(
+                    isMetric: _isMetric,
+                    onChanged: (metric) {
+                      setState(() => _isMetric = metric);
+                      UserRepository.instance.setUnitsMetric(metric);
+                    },
+                  ),
+                ),
+                ProfileRow(
+                  icon: Icons.shield_outlined,
+                  title: 'Privacy & Permissions',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => _showPrivacyDialog(),
+                ),
+                // #10 Export Data
+                ProfileRow(
+                  icon: Icons.download_outlined,
+                  title: 'Export My Data',
+                  subtitle: 'Download all your data as JSON',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => _exportData(),
+                ),
+              ]),
+              const SizedBox(height: 12),
+
+              // Sign Out
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+                child: GestureDetector(
+                  onTap: () => _showSignOutDialog(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.red.withValues(alpha: 0.08),
+                      border: Border.all(color: AppColors.red.withValues(alpha: 0.2)),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    Positioned(
-                      top: 8,
-                      right: 26,
-                      child: _phase2Badge(),
+                    child: Center(
+                      child: Text(
+                        'Sign Out \u2192',
+                        style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red),
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
 
-              // 2. Profile identity (overlaps banner by 30px)
-              Transform.translate(
-                offset: const Offset(0, -30),
-                child: ProfileIdentity(
-                  name: name,
-                  subtitle: subtitle,
-                  onTapAvatar: () => _showTodoSnackbar('Avatar photo'),
-                  onTapEdit: () => context.go('/profile/edit'),
+              // #9 Delete Account — hidden behind expandable danger zone
+              const SizedBox(height: 8),
+              _buildDangerZone(),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── #2 Daily Completion ──────────────────────────────────────────
+
+  Widget _buildDailyCompletion(UserStatsData stats) {
+    // Read completion states from Hive
+    final hive = HiveService.instance;
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    final workoutSchedule = hive.workoutBox.values.where((raw) {
+      if (raw is! Map) return false;
+      return raw['date'] == todayStr && raw['status'] == 'completed';
+    });
+    final workoutDone = workoutSchedule.isNotEmpty || stats.totalWorkouts > 0;
+
+    final nutritionToday = ref.watch(nutritionSummaryProvider);
+    final hasMeals = nutritionToday.calories >= nutritionToday.calorieTarget &&
+        nutritionToday.protein >= nutritionToday.proteinTarget;
+
+    final waterMl = ref.watch(waterIntakeProvider);
+    final waterDone = waterMl >= 3000;
+
+    final weightDone = hive.healthBox.get('weight_$todayStr') != null;
+
+    final done = [workoutDone, hasMeals, waterDone, weightDone].where((b) => b).length;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: done == 4
+            ? AppColors.emerald.withValues(alpha: 0.3)
+            : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          // Progress ring
+          SizedBox(
+            width: 40, height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: done / 4,
+                  strokeWidth: 4,
+                  backgroundColor: AppColors.input,
+                  valueColor: AlwaysStoppedAnimation(
+                      done == 4 ? AppColors.emerald : AppColors.accent),
                 ),
-              ),
-
-              // Offset the negative margin
-              const SizedBox(height: 0),
-
-              // Move remaining content up to compensate for the transform
-              Transform.translate(
-                offset: const Offset(0, -22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Text('$done/4', style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 11, fontWeight: FontWeight.w900,
+                    color: done == 4 ? AppColors.emerald : AppColors.accent)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('DAILY GOALS', style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    // 3. Baseline stats
-                    const SectionHeader('YOUR BASELINE'),
-                    BaselineGrid(
-                      ageGender: '$ageStr / $genderStr',
-                      heightWeight: '$heightStr / $weightStr',
-                      activityLevel: activityStr,
-                      bodyFat: '\u2014',
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 4. Achievements
-                    const SectionHeader('ACHIEVEMENTS'),
-                    const BadgesGrid(),
-                    const SizedBox(height: 8),
-
-                    // 5. Subscription Card
-                    const SectionHeader('SUBSCRIPTION'),
-                    SubscriptionCard(
-                      isPro: subInfo.isPro,
-                      plan: subInfo.plan,
-                      expiresAt: subInfo.expiresAt,
-                      onUpgradeTap: () =>
-                          showPaywallSheet(context, feature: 'PRO'),
-                      onManageTap: () {
-                        if (subInfo.isPro) {
-                          // Show subscription details dialog
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: AppColors.card,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.cardM),
-                              ),
-                              title: Text(
-                                'Your Subscription',
-                                style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                              ),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Plan: ${(subInfo.plan ?? 'free').toUpperCase()}', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.proGold)),
-                                  const SizedBox(height: 8),
-                                  Text('Expires: ${subInfo.expiresAt ?? 'N/A'}', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary)),
-                                  const SizedBox(height: 12),
-                                  Text('To cancel or modify, contact support@icanbefitter.com', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary)),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(ctx).pop(),
-                                  child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
-                                ),
-                              ],
-                            ),
-                          );
-                        } else {
-                          showPaywallSheet(context, feature: 'PRO');
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 5. Biometric Sync (FREE for all)
-                    const SectionHeader('HEALTH SYNC'),
-                    BiometricSyncCard(
-                      stepsToday: biometric.stepsToday,
-                      sleepHours: biometric.sleepHours,
-                      isSyncEnabled: biometric.isSyncEnabled,
-                      onToggleSync: () async {
-                        final newValue = !biometric.isSyncEnabled;
-                        ref.read(biometricProvider.notifier).toggleSync(newValue);
-                        if (newValue) {
-                          // Notify user that Health Connect integration is being set up
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Health Connect sync enabled. Steps and sleep will be synced automatically.',
-                                  style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-                                ),
-                                backgroundColor: AppColors.card,
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 6. Progress & Tracking
-                    const SectionHeader('PROGRESS & TRACKING'),
-                    _buildCard([
-                      ProfileRow(
-                        icon: Icons.show_chart,
-                        title: 'Metrics & Graphs',
-                        subtitle: 'Weight, Body Fat, Lift PRs',
-                        trailing: const ProfileRowChevron(),
-                        onTap: () => context.go('/profile/reports'),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-
-                    // 7. Progress Photos (PRO gated — gallery coming Phase 2)
-                    Opacity(
-                      opacity: 0.5,
-                      child: Stack(
-                        children: [
-                          ProgressPhotosCard(
-                            isPro: subInfo.isPro,
-                            photoCount: photos.photoCount,
-                            onTap: () {
-                              _showTodoSnackbar('Progress Photos Gallery');
-                            },
-                            onUpgradeTap: () {
-                              SubscriptionService.instance.gate(
-                                AppConstants.featureProgressPhotos,
-                                onPro: () {},
-                                onFree: () => showPaywallSheet(context,
-                                    feature: 'Progress Photos'),
-                              );
-                            },
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 26,
-                            child: _phase2Badge(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 8. Weekly Report
-                    const SectionHeader('REPORTS'),
-                    WeeklyReportCard(
-                      isPro: subInfo.isPro,
-                      usageWeeks: usageWeeks,
-                      hasFirstReport: firstReportViewed,
-                      onViewReport: () {
-                        if (!firstReportViewed) {
-                          ref
-                              .read(firstReportViewedProvider.notifier)
-                              .markViewed();
-                        }
-                        context.go('/profile/reports');
-                      },
-                      onUpgradeTap: () {
-                        SubscriptionService.instance.gate(
-                          AppConstants.featureWeeklyAiReport,
-                          onPro: () => context.go('/profile/reports'),
-                          onFree: () => showPaywallSheet(context,
-                              feature: 'Weekly AI Report'),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 9. Morning Alert (PRO gated)
-                    const SectionHeader('DAILY MOTIVATION'),
-                    _buildCard([
-                      ProfileRow(
-                        icon: Icons.wb_sunny_outlined,
-                        title: 'AI Morning Alert',
-                        subtitle: subInfo.isPro
-                            ? 'Settings coming in Phase 2'
-                            : 'Generic reminders (PRO for AI)',
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!subInfo.isPro)
-                              Container(
-                                margin: const EdgeInsets.only(right: 6),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppColors.proGold.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'PRO',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.proGold,
-                                  ),
-                                ),
-                              ),
-                            const ProfileRowChevron(),
-                          ],
-                        ),
-                        onTap: () {
-                          SubscriptionService.instance.gate(
-                            AppConstants.featureMorningAlertPro,
-                            onPro: () =>
-                                _showTodoSnackbar('AI Morning Alert Settings'),
-                            onFree: () => showPaywallSheet(context,
-                                feature: 'Morning Alert'),
-                          );
-                        },
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-
-                    // 10. Notifications
-                    const SectionHeader('NOTIFICATIONS'),
-                    _buildCard([
-                      _NotificationRow(
-                        icon: Icons.wb_sunny_outlined,
-                        title: 'Morning check-in',
-                        isPro: !subInfo.isPro,
-                        enabled: _getNotifEnabled('morning_checkin'),
-                        onToggle: (v) => _toggleNotif('morning_checkin', v),
-                        timeValue: _getNotifTime('morning_checkin'),
-                        timeOptions: const ['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00'],
-                        onTimeChanged: (t) => _setNotifTime('morning_checkin', t),
-                      ),
-                      _NotificationRow(
-                        icon: Icons.fitness_center,
-                        title: 'Workout reminder',
-                        enabled: _getNotifEnabled('workout_reminder'),
-                        onToggle: (v) => _toggleNotif('workout_reminder', v),
-                        timeValue: _getNotifTime('workout_reminder'),
-                        timeOptions: const ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'],
-                        onTimeChanged: (t) => _setNotifTime('workout_reminder', t),
-                      ),
-                      _NotificationRow(
-                        icon: Icons.local_fire_department_outlined,
-                        title: 'Streak alerts',
-                        enabled: _getNotifEnabled('streak_alerts'),
-                        onToggle: (v) => _toggleNotif('streak_alerts', v),
-                      ),
-                      _NotificationRow(
-                        icon: Icons.bar_chart_rounded,
-                        title: 'Weekly recap',
-                        enabled: _getNotifEnabled('weekly_recap'),
-                        onToggle: (v) => _toggleNotif('weekly_recap', v),
-                        dayValue: _getNotifDay('weekly_recap'),
-                        dayOptions: const ['sunday', 'monday', 'saturday'],
-                        onDayChanged: (d) => _setNotifDay('weekly_recap', d),
-                      ),
-                      _NotificationRow(
-                        icon: Icons.credit_card_outlined,
-                        title: 'Subscription reminders',
-                        enabled: _getNotifEnabled('subscription_reminders'),
-                        onToggle: (v) => _toggleNotif('subscription_reminders', v),
-                        showBorder: false,
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-
-                    // 11. Settings
-                    const SectionHeader('SETTINGS'),
-                    _buildCard([
-                      ProfileRow(
-                        icon: Icons.tune,
-                        title: 'Units',
-                        trailing: UnitsSegmentedControl(
-                          isMetric: _isMetric,
-                          onChanged: (metric) {
-                            setState(() => _isMetric = metric);
-                            UserRepository.instance.setUnitsMetric(metric);
-                          },
-                        ),
-                      ),
-                      ProfileRow(
-                        icon: Icons.shield_outlined,
-                        title: 'Privacy & Permissions',
-                        showBorder: false,
-                        trailing: const ProfileRowChevron(),
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: AppColors.card,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.cardM)),
-                              title: Text('Privacy & Permissions', style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Your data is stored locally on your device (Hive). Supabase is used only for backups, AI, and community features.', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
-                                  const SizedBox(height: 12),
-                                  Text('Permissions:', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                                  const SizedBox(height: 6),
-                                  Text('\u2022 Camera: Meal scanning (optional)\n\u2022 Health Connect: Steps & sleep sync (optional)\n\u2022 Storage: Progress photos (optional)', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(ctx).pop(),
-                                  child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ]),
-                    const SizedBox(height: 12),
-
-                    // 12. Sign Out button
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: GestureDetector(
-                          onTap: () => _showSignOutDialog(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppColors.red.withValues(alpha: 0.08),
-                              border: Border.all(
-                                color: AppColors.red.withValues(alpha: 0.2),
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Sign Out \u2192',
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.red,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // 13. Delete Account
-                    Center(
-                      child: GestureDetector(
-                        onTap: () => _showDeleteAccountDialog(),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.screenPadding, vertical: 4),
-                          child: Text(
-                            'Delete Account',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.red.withValues(alpha: 0.3),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+                    _completionDot('Workout', workoutDone),
+                    const SizedBox(width: 8),
+                    _completionDot('Meals', hasMeals),
+                    const SizedBox(width: 8),
+                    _completionDot('Water', waterDone),
+                    const SizedBox(width: 8),
+                    _completionDot('Weight', weightDone),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _completionDot(String label, bool done) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(
+            color: done ? AppColors.emerald : AppColors.input,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: done ? AppColors.emerald : AppColors.border,
+              width: 1,
+            ),
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(label, style: GoogleFonts.getFont('DM Sans',
+            fontSize: 9, color: done ? AppColors.emerald : AppColors.textSecondary)),
+      ],
+    );
+  }
+
+  // ── #3 Body Stats Card ──────────────────────────────────────────
+
+  Widget _buildBodyStats(double? weight, double? target, double? bmi, double? bodyFat) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('BODY STATS', style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 10, fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/profile/edit'),
+                child: Text('EDIT', style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _statCell('Weight', weight != null ? '${weight.toStringAsFixed(1)} kg' : '\u2014', AppColors.accent),
+              _statCell('Target', target != null ? '${target.toStringAsFixed(1)} kg' : '\u2014', AppColors.emerald),
+              _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.blue),
+              _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.orange),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCell(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, style: GoogleFonts.getFont('DM Sans',
+              fontSize: 16, fontWeight: FontWeight.w900, color: color, height: 1)),
+          const SizedBox(height: 2),
+          Text(label, style: GoogleFonts.getFont('DM Sans',
+              fontSize: 9, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  // ── #4 Journey Timeline ─────────────────────────────────────────
+
+  Widget _buildJourneyTimeline(UserStatsData stats) {
+    // Phase data
+    const phaseNames = [
+      'Foundation', 'Building', 'Progression', 'Strength',
+      'Endurance', 'Power', 'Conditioning', 'Peak',
+      'Mastery', 'Elite', 'Champion', 'Legend',
+    ];
+    final phaseName = stats.currentPhase <= phaseNames.length
+        ? phaseNames[stats.currentPhase - 1]
+        : 'Phase ${stats.currentPhase}';
+
+    // Goal insights from profile
+    final profile = UserRepository.instance.getProfile() ?? {};
+    final currentWeight = (profile['current_weight_kg'] as num?)?.toDouble() ?? 0;
+    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble() ?? 0;
+    final goal = profile['primary_goal'] as String? ?? '';
+
+    // Weight trajectory (from weight logs in healthBox)
+    final hive = HiveService.instance;
+    final weightEntries = <MapEntry<DateTime, double>>[];
+    for (final key in hive.healthBox.keys) {
+      if (key is! String || !key.startsWith('weight_')) continue;
+      final raw = hive.healthBox.get(key);
+      if (raw is! Map) continue;
+      final w = (raw['weight_kg'] as num?)?.toDouble();
+      final d = DateTime.tryParse(raw['date'] as String? ?? '');
+      if (w != null && d != null) weightEntries.add(MapEntry(d, w));
+    }
+    weightEntries.sort((a, b) => a.key.compareTo(b.key));
+
+    // Compute weekly rate and ETA
+    String? trajectoryText;
+    String? etaText;
+    if (weightEntries.length >= 2 && targetWeight > 0) {
+      final first = weightEntries.first;
+      final last = weightEntries.last;
+      final weeksDiff = last.key.difference(first.key).inDays / 7.0;
+      if (weeksDiff > 0.5) {
+        final totalChange = last.value - first.value;
+        final weeklyRate = totalChange / weeksDiff;
+        final remaining = targetWeight - last.value;
+
+        if (weeklyRate.abs() > 0.05 && !weeklyRate.isNaN && !weeklyRate.isInfinite) {
+          final changeStr = totalChange.abs().toStringAsFixed(1);
+          final verb = totalChange < 0 ? 'Lost' : 'Gained';
+          trajectoryText = '$verb ${changeStr}kg in ${weeksDiff.toStringAsFixed(0)} weeks';
+
+          // ETA: if moving in the right direction
+          final movingRight = (goal.contains('lose') && weeklyRate < 0) ||
+              (goal.contains('build') && weeklyRate > 0) ||
+              (remaining.abs() < 0.5);
+          if (movingRight && remaining.abs() > 0.5 && weeklyRate != 0) {
+            final weeksToGo = (remaining / weeklyRate).abs().ceil();
+            etaText = 'At this rate: ~$weeksToGo weeks to goal';
+          }
+        }
+      }
+    }
+
+    // (Workout consistency data could be added here in future phases)
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Text('YOUR JOURNEY', style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 10, fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              const Spacer(),
+              Text('Week ${stats.currentWeek} of 4', style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent)),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Phase name + focus
+          Text(
+            'Phase ${stats.currentPhase} \u2014 $phaseName',
+            style: GoogleFonts.getFont('DM Sans',
+                fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 8),
+
+          // Week progress bar within phase
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: stats.currentWeek / 4.0,
+              minHeight: 6,
+              backgroundColor: AppColors.input,
+              valueColor: AlwaysStoppedAnimation(AppColors.accent),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Phase dots
+          Row(
+            children: List.generate(12, (phase) {
+              final isCompleted = phase + 1 < stats.currentPhase;
+              final isCurrent = phase + 1 == stats.currentPhase;
+              return Expanded(
+                child: Container(
+                  margin: EdgeInsets.only(right: phase < 11 ? 3 : 0),
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? AppColors.green
+                        : isCurrent
+                            ? AppColors.accent
+                            : stats.isPro || phase == 0
+                                ? AppColors.input
+                                : AppColors.input.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+
+          // Motivating insights
+          if (targetWeight > 0 && currentWeight > 0) ...[
+            _journeyInsight(
+              icon: Icons.flag_outlined,
+              text: 'Goal: ${goal.contains("lose") ? "Lose" : goal.contains("build") ? "Build to" : "Reach"} ${targetWeight.toStringAsFixed(0)}kg',
+              color: AppColors.accent,
+            ),
+          ],
+          if (trajectoryText != null)
+            _journeyInsight(
+              icon: Icons.trending_down,
+              text: trajectoryText,
+              color: AppColors.green,
+            ),
+          if (etaText != null)
+            _journeyInsight(
+              icon: Icons.timer_outlined,
+              text: etaText,
+              color: AppColors.accent,
+            ),
+          if (trajectoryText == null && targetWeight > 0)
+            _journeyInsight(
+              icon: Icons.scale_outlined,
+              text: 'Log your weight daily to see your trajectory',
+              color: AppColors.textSecondary,
+            ),
+
+          // Next milestone
+          if (stats.currentPhase == 1) ...[
+            const SizedBox(height: 2),
+            _journeyInsight(
+              icon: Icons.emoji_events_outlined,
+              text: '${(4 - stats.currentWeek).clamp(0, 4)} weeks to complete Phase 1',
+              color: AppColors.proGold,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _journeyInsight({required IconData icon, required String text, required Color color}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 12, fontWeight: FontWeight.w500, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── #7 Subscription Section ─────────────────────────────────────
+
+  Widget _buildSubscriptionSection(SubscriptionInfoData subInfo, bool isPro, UsageCounterService usage) {
+    if (isPro) {
+      // Simple PRO card with expiry
+      final expiryStr = subInfo.expiresAt != null
+          ? '${subInfo.expiresAt!.day}/${subInfo.expiresAt!.month}/${subInfo.expiresAt!.year}'
+          : '\u2014';
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          border: Border.all(color: AppColors.proGold.withValues(alpha: 0.3)),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1a1408), Color(0xFF0e1219)],
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.proGold,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text('PRO', style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: Colors.black)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${(subInfo.plan ?? "monthly").toUpperCase()} \u00B7 Renews $expiryStr',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 12,
+                    fontWeight: FontWeight.w600, color: AppColors.proGold),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Free user — show rate limits
+    final aiTextUsed = usage.used(AppConstants.featureAiTextLogPro, false);
+    final aiTextLimit = AppConstants.freeAiTextLogsPerDay;
+    final scanUsed = usage.used(AppConstants.featureScanMealPro, false);
+    final scanLimit = AppConstants.freeScanMealPerMonth;
+    final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
+    final cartLimit = AppConstants.freeCartAuditorPerMonth;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('FREE PLAN', style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.textSecondary)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => showPaywallSheet(context, feature: 'PRO'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text('Upgrade', style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black)),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
+          const SizedBox(height: 6),
+          _usageRow('Meal Scans', scanUsed, scanLimit, '/month'),
+          const SizedBox(height: 6),
+          _usageRow('Cart Auditor', cartUsed, cartLimit, '/month'),
+        ],
+      ),
+    );
+  }
+
+  Widget _usageRow(String label, int used, int limit, String period) {
+    final pct = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
+    final isExhausted = used >= limit;
+    return Row(
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(label, style: GoogleFonts.getFont('DM Sans',
+              fontSize: 11, color: AppColors.textSecondary)),
         ),
+        Expanded(
+          child: Container(
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.input,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: pct,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isExhausted ? AppColors.red : AppColors.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('$used/$limit$period', style: GoogleFonts.getFont('DM Sans',
+            fontSize: 10, fontWeight: FontWeight.w700,
+            color: isExhausted ? AppColors.red : AppColors.textSecondary)),
+      ],
+    );
+  }
+
+  // ── #8 Nutrition Targets ────────────────────────────────────────
+
+  Widget _buildNutritionTargets(Map<String, double> targets) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Text('MY TARGETS', style: GoogleFonts.getFont('DM Sans',
+              fontSize: 10, fontWeight: FontWeight.w700,
+              letterSpacing: 1.0, color: AppColors.textSecondary)),
+          const SizedBox(width: 12),
+          _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
+          const SizedBox(width: 8),
+          _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
+          const SizedBox(width: 8),
+          _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
+        ],
+      ),
+    );
+  }
+
+  Widget _targetChip(String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, style: GoogleFonts.getFont('DM Sans',
+              fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.accent)),
+          Text(label, style: GoogleFonts.getFont('DM Sans',
+              fontSize: 8, fontWeight: FontWeight.w700,
+              letterSpacing: 0.5, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  // ── #9 Danger Zone ──────────────────────────────────────────────
+
+  Widget _buildDangerZone() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: Text('Danger Zone', style: GoogleFonts.getFont('DM Sans',
+            fontSize: 11, color: AppColors.textSecondary)),
+        iconColor: AppColors.textSecondary,
+        collapsedIconColor: AppColors.textSecondary,
+        children: [
+          GestureDetector(
+            onTap: () => _showDeleteAccountDialog(),
+            child: Text('Delete Account', style: GoogleFonts.getFont('DM Sans',
+                fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── #10 Export Data ─────────────────────────────────────────────
+
+  Future<void> _exportData() async {
+    final hive = HiveService.instance;
+    final data = <String, dynamic>{
+      'exported_at': DateTime.now().toIso8601String(),
+      'profile': Map<String, dynamic>.from(hive.userBox.get('profile') as Map? ?? {}),
+      'workout_logs_count': hive.workoutBox.length,
+      'nutrition_logs_count': hive.nutritionBox.length,
+      'health_logs_count': hive.healthBox.length,
+    };
+
+    // Collect workout logs
+    final workouts = <Map<String, dynamic>>[];
+    for (final raw in hive.workoutBox.values) {
+      if (raw is Map) workouts.add(Map<String, dynamic>.from(raw));
+    }
+    data['workout_logs'] = workouts;
+
+    // Collect nutrition logs
+    final nutrition = <Map<String, dynamic>>[];
+    for (final raw in hive.nutritionBox.values) {
+      if (raw is Map) nutrition.add(Map<String, dynamic>.from(raw));
+    }
+    data['nutrition_logs'] = nutrition;
+
+    // Collect health logs
+    final health = <Map<String, dynamic>>[];
+    for (final raw in hive.healthBox.values) {
+      if (raw is Map) health.add(Map<String, dynamic>.from(raw));
+    }
+    data['health_logs'] = health;
+
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
+    await Share.share(jsonStr, subject: 'ICANBEFITTER Data Export');
+  }
+
+  // ── Privacy Dialog ──────────────────────────────────────────────
+
+  void _showPrivacyDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.cardM)),
+        title: Text('Privacy & Permissions', style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your data is stored locally on your device. Supabase is used only for backups, AI, and community features.', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 12),
+            Text('Permissions:', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const SizedBox(height: 6),
+            Text('\u2022 Camera: Meal scanning\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
+          ),
+        ],
       ),
     );
   }
@@ -625,40 +981,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         border: Border.all(color: AppColors.border),
       ),
       child: Column(children: children),
-    );
-  }
-
-  Widget _phase2Badge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.textSecondary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        'PHASE 2',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 8,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
-          color: AppColors.textSecondary,
-        ),
-      ),
-    );
-  }
-
-  void _showTodoSnackbar(String feature) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$feature — Coming in Phase 2',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-        ),
-        backgroundColor: AppColors.card,
-        duration: const Duration(seconds: 2),
-      ),
     );
   }
 
@@ -785,9 +1107,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onPressed: () async {
               Navigator.of(ctx).pop();
               try {
-                // Clear all local Hive data
-                await UserRepository.instance.clearAllData();
-                // Attempt to delete from Supabase (soft delete — marks account inactive)
+                // Sign out and soft-delete BEFORE clearing local data,
+                // otherwise the router sees authenticated + !onboarded → /onboarding.
                 try {
                   final supabase = SupabaseService.instance.client;
                   final userId = supabase.auth.currentUser?.id;
@@ -799,8 +1120,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   }
                   await supabase.auth.signOut();
                 } catch (_) {
-                  // Offline — local data already cleared
+                  // Offline — continue with local cleanup
                 }
+                // Clear all local Hive data after sign-out
+                await UserRepository.instance.clearAllData();
                 if (mounted) context.go('/sign-in');
               } catch (e) {
                 if (mounted) {
@@ -855,283 +1178,5 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  String _formatActivityLevel(String level) {
-    if (level.isEmpty) return '\u2014';
-    switch (level) {
-      case 'sedentary':
-        return 'Sedentary';
-      case 'lightly_active':
-        return 'Lightly Active';
-      case 'moderately_active':
-        return 'Moderately Active';
-      case 'very_active':
-        return 'Very Active';
-      case 'extra_active':
-        return 'Extra Active';
-      default:
-        return level[0].toUpperCase() +
-            level.substring(1).replaceAll('_', ' ');
-    }
-  }
 }
 
-/// A notification preference row with toggle, optional time/day picker, and PRO badge.
-class _NotificationRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool enabled;
-  final ValueChanged<bool> onToggle;
-  final bool isPro;
-  final bool showBorder;
-
-  // Time picker
-  final String? timeValue;
-  final List<String>? timeOptions;
-  final ValueChanged<String>? onTimeChanged;
-
-  // Day picker
-  final String? dayValue;
-  final List<String>? dayOptions;
-  final ValueChanged<String>? onDayChanged;
-
-  const _NotificationRow({
-    required this.icon,
-    required this.title,
-    required this.enabled,
-    required this.onToggle,
-    this.isPro = false,
-    this.showBorder = true,
-    this.timeValue,
-    this.timeOptions,
-    this.onTimeChanged,
-    this.dayValue,
-    this.dayOptions,
-    this.onDayChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: showBorder
-            ? const Border(
-                bottom: BorderSide(color: AppColors.border, width: 1),
-              )
-            : null,
-      ),
-      child: Row(
-        children: [
-          // Icon
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 15, color: AppColors.textSecondary),
-          ),
-          const SizedBox(width: 12),
-
-          // Title + PRO badge
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    title,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (isPro) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.proGold.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'PRO',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.proGold,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Time or Day picker (if applicable)
-          if (timeOptions != null && timeValue != null && enabled)
-            _TimePicker(
-              value: timeValue!,
-              options: timeOptions!,
-              onChanged: onTimeChanged!,
-            ),
-          if (dayOptions != null && dayValue != null && enabled)
-            _DayPicker(
-              value: dayValue!,
-              options: dayOptions!,
-              onChanged: onDayChanged!,
-            ),
-
-          const SizedBox(width: 8),
-
-          // Toggle
-          ProfileToggle(value: enabled, onChanged: onToggle),
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact time picker dropdown.
-class _TimePicker extends StatelessWidget {
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-
-  const _TimePicker({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  String _formatTime(String time24) {
-    final parts = time24.split(':');
-    final hour = int.tryParse(parts[0]) ?? 0;
-    final minute = parts.length > 1 ? parts[1] : '00';
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    return '$displayHour:$minute $period';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: onChanged,
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.border),
-      ),
-      itemBuilder: (ctx) => options
-          .map((t) => PopupMenuItem(
-                value: t,
-                child: Text(
-                  _formatTime(t),
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: t == value ? FontWeight.w700 : FontWeight.w400,
-                    color: t == value ? AppColors.accent : AppColors.textPrimary,
-                  ),
-                ),
-              ))
-          .toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _formatTime(value),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact day picker dropdown.
-class _DayPicker extends StatelessWidget {
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-
-  const _DayPicker({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  String _formatDay(String day) {
-    if (day.isEmpty) return day;
-    return day[0].toUpperCase() + day.substring(1);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: onChanged,
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.border),
-      ),
-      itemBuilder: (ctx) => options
-          .map((d) => PopupMenuItem(
-                value: d,
-                child: Text(
-                  _formatDay(d),
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: d == value ? FontWeight.w700 : FontWeight.w400,
-                    color: d == value ? AppColors.accent : AppColors.textPrimary,
-                  ),
-                ),
-              ))
-          .toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _formatDay(value),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),
-          ],
-        ),
-      ),
-    );
-  }
-}

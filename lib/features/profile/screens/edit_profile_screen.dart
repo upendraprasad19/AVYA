@@ -33,7 +33,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _gender = 'male';
   String _goal = 'general_fitness';
   String _equipment = 'full_gym';
-  String _activityLevel = 'moderate'; // kept for backwards-compat read; derived on save
   int _daysPerWeek = 4;
   String _lifestyleActivity = 'desk_job';
   String _dietPreference = 'non_veg';
@@ -57,14 +56,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     'full_gym': 'Full Gym',
   };
 
-  static const _activityLevels = {
-    'sedentary': 'Sedentary',
-    'light': 'Lightly Active',
-    'moderate': 'Moderately Active',
-    'active': 'Very Active',
-    'very_active': 'Extremely Active',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -84,7 +75,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _gender = (profile['gender'] as String?) ?? 'male';
     _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
     _equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
-    _activityLevel = (profile['activity_level'] as String?) ?? 'moderate';
     _daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
@@ -272,10 +262,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ? TextInputType.number
               : TextInputType.text,
       inputFormatters: isNumeric
-          ? [FilteringTextInputFormatter.digitsOnly]
+          ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)]
           : isDecimal
-              ? [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))]
-              : null,
+              ? [FilteringTextInputFormatter.allow(RegExp(r'[\d.]')), LengthLimitingTextInputFormatter(5)]
+              : [LengthLimitingTextInputFormatter(50)],
       style: GoogleFonts.getFont(
         'DM Sans',
         fontSize: 15,
@@ -924,6 +914,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         },
       );
 
+      if (!mounted) return;
       if (response.status != 200) {
         final code = response.data?['code'] as String?;
         final err = response.data?['error'] as String? ?? 'Assessment failed';

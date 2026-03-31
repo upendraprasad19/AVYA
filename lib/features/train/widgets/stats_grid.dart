@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
-import '../repositories/workout_repository.dart';
+import '../providers/train_provider.dart';
 
-class StatsGrid extends StatelessWidget {
+class StatsGrid extends ConsumerWidget {
   const StatsGrid({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final prs = _loadPRs();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prs = _loadPRs(ref);
     final hasData = prs.values.any((pr) => pr.current > 0);
 
     return Padding(
@@ -139,9 +140,9 @@ class StatsGrid extends StatelessWidget {
     );
   }
 
-  /// Reads workout_logs via WorkoutRepository to find PRs for the 4 key lifts.
-  Map<String, _PRData> _loadPRs() {
-    final rawPRs = WorkoutRepository.instance.loadKeyLiftPRs();
+  /// Reads workout_logs via provider so the grid refreshes after workout completion.
+  Map<String, _PRData> _loadPRs(WidgetRef ref) {
+    final rawPRs = ref.watch(workoutStatsProvider);
     return rawPRs.map((key, value) => MapEntry(
           key,
           _PRData(
@@ -157,7 +158,6 @@ class _PRData {
   final double previous;
 
   const _PRData({required this.current, required this.previous});
-  factory _PRData.empty() => const _PRData(current: 0, previous: 0);
 
   String get changeText {
     if (current <= 0) return 'No data yet';

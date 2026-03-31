@@ -275,9 +275,12 @@ class SendMessageNotifier extends Notifier<bool> {
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
     final limitNotifier = ref.read(messageLimitProvider.notifier);
     final currentLimit = ref.read(messageLimitProvider);
+    // isPro() is intentional here — this is provider-level routing (which
+    // AI model to call), not a UI feature gate. The paywall is shown by the
+    // AI Coach screen widget before send() is called, not inside the provider.
     final isPro = SubscriptionService.instance.isPro();
 
-    // Free user limit check
+    // Free user limit check — silent return; UI already shows the limit.
     if (!isPro && currentLimit >= AppConstants.freeAiMessagesPerDay) return;
 
     // Add user message
@@ -304,12 +307,6 @@ class SendMessageNotifier extends Notifier<bool> {
       final repo = AiCoachRepository.instance;
       final baseContext = repo.buildAiContext();
       final context = repo.enrichContextForQuery(message, baseContext);
-
-      final modelUsed = mode == 'deep'
-          ? 'glm-4.7'
-          : isPro
-              ? 'cerebras-120b'
-              : 'llama-3.1-8b';
 
       AiChatResponse aiResponse;
       if (mode == 'deep' && isPro) {

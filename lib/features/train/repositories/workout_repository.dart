@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 
 /// Repository for all workout-related Hive reads/writes.
 ///
@@ -96,7 +97,7 @@ class WorkoutRepository {
       'completed_at': completedAt.toIso8601String(),
       'sets_completed': setsCompleted,
       'duration_seconds': durationSeconds,
-      if (exerciseLogs != null) 'exercise_logs': exerciseLogs,
+      'exercise_logs': ?exerciseLogs,
     });
 
     return logId;
@@ -132,6 +133,39 @@ class WorkoutRepository {
       final bDate = b['completed_at'] as String? ?? '';
       return bDate.compareTo(aDate);
     });
+
+    return logs;
+  }
+
+  /// Get exercise logs actually logged on a specific date.
+  /// Returns entries with type 'exercise_log' matching the date.
+  List<Map<String, dynamic>> getExerciseLogsForDate(DateTime date) {
+    final dateStr = formatDateKey(date);
+
+    // Try indexed lookup first — O(k) where k = exercises logged that day.
+    // Index written by completeWorkout() for new data.
+    final indexKey = 'exercise_log_index_$dateStr';
+    final index = _hive.workoutBox.get(indexKey);
+    if (index is List && index.isNotEmpty) {
+      final logs = <Map<String, dynamic>>[];
+      for (final id in index) {
+        final raw = _hive.workoutBox.get(id);
+        if (raw is Map) {
+          logs.add(Map<String, dynamic>.from(raw));
+        }
+      }
+      if (logs.isNotEmpty) return logs;
+    }
+
+    // Fallback: full scan for pre-index data (before this optimisation).
+    final logs = <Map<String, dynamic>>[];
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['type'] != 'exercise_log') continue;
+      if (map['date'] != dateStr) continue;
+      logs.add(map);
+    }
 
     return logs;
   }
@@ -564,9 +598,7 @@ class WorkoutRepository {
 
   // ── Helpers ───────────────────────────────────────────────────
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
+  String _formatDate(DateTime date) => formatDateKey(date);
 
   /// Returns the Monday of the week containing [date].
   DateTime _getWeekStart(DateTime date) {

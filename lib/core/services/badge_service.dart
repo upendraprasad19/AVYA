@@ -1,4 +1,4 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
 
 /// Tracks and unlocks achievement badges stored in Hive configBox.
@@ -8,7 +8,9 @@ class BadgeService {
 
   static const _badgesKey = 'unlockedBadges';
 
-  Box get _box => Hive.box('configBox');
+  // Use HiveService singleton instead of Hive.box() directly to avoid
+  // HiveError if the box is not yet open.
+  dynamic get _box => HiveService.instance.configBox;
 
   /// Checks milestones and unlocks any newly earned badges.
   /// Returns the list of newly unlocked BadgeIds (empty if none).
@@ -75,4 +77,52 @@ class BadgeService {
   }
 
   int get unlockedCount => _getUnlocked().length;
+
+  /// Convenience: gathers all stats from Hive and checks all badge conditions.
+  /// Call this after any trigger event (workout complete, meal logged, weight logged, etc.).
+  List<BadgeId> checkAll() {
+    final hive = HiveService.instance;
+
+    int totalWorkouts = 0;
+    int totalPrs = 0;
+    bool hasCustomExercise = false;
+    for (final raw in hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw);
+      if (m['type'] == 'workout_log') totalWorkouts++;
+      if (m['type'] == 'exercise_log' && m['is_pr'] == true) totalPrs++;
+    }
+
+    for (final key in hive.customBox.keys) {
+      if (key is String && key.startsWith('custom_exercise_')) {
+        hasCustomExercise = true;
+        break;
+      }
+    }
+
+    final progress = hive.userBox.get('progress') as Map? ?? {};
+    final streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
+    final currentPhase = (progress['current_phase'] as int?) ?? 1;
+    final totalDone = (progress['total_workouts_done'] as int?) ?? 0;
+    // Phase 1 complete if user graduated to phase 2+
+    final phase1Complete = currentPhase >= 2;
+
+    int weightLogCount = 0;
+    for (final key in hive.healthBox.keys) {
+      if (key is String && key.startsWith('weight_')) weightLogCount++;
+    }
+
+    final hasChattedWithAI = hive.coachBox.isNotEmpty;
+
+    return checkAndUnlock(
+      totalWorkouts: totalWorkouts > 0 ? totalWorkouts : totalDone,
+      totalPrs: totalPrs,
+      currentStreakWeeks: streakWeeks,
+      weightLogCount: weightLogCount,
+      phase1Complete: phase1Complete,
+      hasChattedWithAI: hasChattedWithAI,
+      hasBeatCoach: false, // Beat My Coach not yet implemented
+      hasCustomExercise: hasCustomExercise,
+    );
+  }
 }

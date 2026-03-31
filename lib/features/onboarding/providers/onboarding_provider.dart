@@ -330,10 +330,22 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
+    } on FormatException catch (e) {
+      state = state.copyWith(
+        isCompleting: false,
+        error: 'Invalid data format: ${e.message}. Please check your inputs.',
+      );
+      return null;
+    } on RangeError catch (_) {
+      state = state.copyWith(
+        isCompleting: false,
+        error: 'A value was out of range. Please check your height, weight, and age.',
+      );
+      return null;
     } catch (e) {
       state = state.copyWith(
         isCompleting: false,
-        error: 'Something went wrong. Please try again.',
+        error: 'Something went wrong: ${e.runtimeType}. Please try again.',
       );
       return null;
     }

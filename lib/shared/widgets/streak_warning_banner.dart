@@ -3,24 +3,24 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Red warning banner shown on day 6–7 of a week when the streak is at risk.
 class StreakWarningBanner extends StatelessWidget {
-  final int streakWeeks;
+  final int streakDays;
   final int workoutsRemaining;
   final VoidCallback onTrainNow;
 
   const StreakWarningBanner({
     super.key,
-    required this.streakWeeks,
+    required this.streakDays,
     required this.workoutsRemaining,
     required this.onTrainNow,
   });
 
   /// Returns true if the banner should be displayed.
   static bool shouldShow({
-    required int streakWeeks,
+    required int streakDays,
     required int workoutsPlanned,
     required int workoutsCompleted,
   }) {
-    if (streakWeeks == 0) return false;
+    if (streakDays == 0) return false;
     final dayOfWeek = DateTime.now().weekday; // 1=Mon … 7=Sun
     final remaining = workoutsPlanned - workoutsCompleted;
     return dayOfWeek >= 6 && remaining > 0;
@@ -45,7 +45,7 @@ class StreakWarningBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$streakWeeks-week streak at risk!',
+                  '$streakDays-day streak at risk!',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 13,

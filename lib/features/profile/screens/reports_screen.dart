@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   bool _isGeneratingReport = false;
   Map<String, dynamic>? _aiReport;
   String? _reportError;
+  String _weightFilter = '3M'; // All, 1Y, 6M, 3M, 1M, 1W
 
   // Hive cache keys
   static const String _reportCacheKey = 'weekly_report_cache';
@@ -302,7 +304,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget _buildWorkoutFrequency() {
     final weekCounts = WorkoutRepository.instance.getWeeklyWorkoutCounts();
 
-    final maxCount = weekCounts.reduce((a, b) => a > b ? a : b);
+    final maxCount = weekCounts.isEmpty ? 0 : weekCounts.reduce((a, b) => a > b ? a : b);
     final maxBar = maxCount > 0 ? maxCount.toDouble() : 1.0;
 
     return Container(
@@ -376,7 +378,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Widget _buildWeightTrend() {
-    final last10 = NutritionRepository.instance.getWeightEntries(limit: 10);
+    // Load ALL weight entries (no limit)
+    final allEntries = NutritionRepository.instance.getWeightEntries(limit: 9999);
+
+    // Filter by selected time window
+    final now = DateTime.now();
+    final cutoff = _weightFilterCutoff(now);
+    final filtered = cutoff == null
+        ? allEntries
+        : allEntries.where((e) {
+            final d = DateTime.tryParse(e['date'] as String? ?? '');
+            return d != null && d.isAfter(cutoff);
+          }).toList();
+
+    // Target weight for projection
+    final profile = UserRepository.instance.getProfile() ?? {};
+    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble() ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -389,51 +406,286 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Weight Trend', style: AppTypography.titleS),
-          const SizedBox(height: 14),
-          if (last10.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  'No weight entries yet',
-                  style: AppTypography.bodyM
-                      .copyWith(color: AppColors.textSecondary),
-                ),
-              ),
-            )
-          else
-            ...last10.map((entry) {
-              final weight = (entry['weight_kg'] as num).toDouble();
-              final date = entry['date'] as String? ?? '';
+          const SizedBox(height: 10),
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      date,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+          // Time filter chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', '1Y', '6M', '3M', '1M', '1W'].map((label) {
+                final isActive = _weightFilter == label;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _weightFilter = label),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isActive ? AppColors.accent : AppColors.input,
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(
+                          color: isActive
+                              ? AppColors.accent
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isActive ? Colors.black : AppColors.textSecondary,
+                        ),
                       ),
                     ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          if (filtered.length < 2)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                child: Column(
+                  children: [
+                    Icon(Icons.show_chart, size: 32, color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                    const SizedBox(height: 8),
                     Text(
-                      '${weight.toStringAsFixed(1)} kg',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
+                      'Log your weight daily to see your trend',
+                      style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
-              );
-            }),
+              ),
+            )
+          else ...[
+            // Chart
+            SizedBox(
+              height: 180,
+              child: _buildLineChart(filtered, targetWeight),
+            ),
+
+            // Projection callout
+            if (targetWeight > 0 && filtered.length >= 2) ...[
+              const SizedBox(height: 10),
+              _buildProjectionCallout(filtered, targetWeight),
+            ],
+          ],
         ],
       ),
+    );
+  }
+
+  DateTime? _weightFilterCutoff(DateTime now) {
+    switch (_weightFilter) {
+      case '1W':  return now.subtract(const Duration(days: 7));
+      case '1M':  return now.subtract(const Duration(days: 30));
+      case '3M':  return now.subtract(const Duration(days: 90));
+      case '6M':  return now.subtract(const Duration(days: 180));
+      case '1Y':  return now.subtract(const Duration(days: 365));
+      default:    return null; // 'All'
+    }
+  }
+
+  Widget _buildLineChart(List<Map<String, dynamic>> entries, double targetWeight) {
+    final spots = <FlSpot>[];
+    final dates = <int, String>{};
+
+    for (int i = 0; i < entries.length; i++) {
+      final w = (entries[i]['weight_kg'] as num).toDouble();
+      spots.add(FlSpot(i.toDouble(), w));
+
+      // Store date labels for tooltip and axis
+      final dateStr = entries[i]['date'] as String? ?? '';
+      dates[i] = dateStr;
+    }
+
+    // Calculate Y axis range (guard against empty spots list)
+    if (spots.isEmpty) return const SizedBox.shrink();
+    final weights = spots.map((s) => s.y);
+    double minY = weights.reduce((a, b) => a < b ? a : b) - 1;
+    double maxY = weights.reduce((a, b) => a > b ? a : b) + 1;
+    if (targetWeight > 0) {
+      minY = minY < targetWeight ? minY : targetWeight - 1;
+      maxY = maxY > targetWeight ? maxY : targetWeight + 1;
+    }
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: ((maxY - minY) / 4).clamp(0.5, 10.0),
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: AppColors.border.withValues(alpha: 0.5),
+            strokeWidth: 0.5,
+          ),
+        ),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (value, meta) {
+                return Text(
+                  value.toStringAsFixed(0),
+                  style: GoogleFonts.getFont('DM Sans', fontSize: 9, color: AppColors.textSecondary),
+                );
+              },
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: (entries.length / 5).clamp(1, 100).roundToDouble(),
+              getTitlesWidget: (value, meta) {
+                final idx = value.toInt();
+                if (idx < 0 || idx >= entries.length) return const SizedBox();
+                final d = dates[idx] ?? '';
+                // Show abbreviated date: "3/12" or "12 Mar"
+                final parts = d.split('-');
+                if (parts.length == 3) {
+                  return Text(
+                    '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 8, color: AppColors.textSecondary),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        minY: minY,
+        maxY: maxY,
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                final dateStr = dates[spot.x.toInt()] ?? '';
+                return LineTooltipItem(
+                  '${spot.y.toStringAsFixed(1)} kg\n$dateStr',
+                  GoogleFonts.getFont('DM Sans', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                );
+              }).toList();
+            },
+          ),
+        ),
+        extraLinesData: targetWeight > 0
+            ? ExtraLinesData(horizontalLines: [
+                HorizontalLine(
+                  y: targetWeight,
+                  color: AppColors.green.withValues(alpha: 0.4),
+                  strokeWidth: 1,
+                  dashArray: [4, 4],
+                  label: HorizontalLineLabel(
+                    show: true,
+                    labelResolver: (_) => 'Goal: ${targetWeight.toStringAsFixed(0)}kg',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 9, color: AppColors.green),
+                  ),
+                ),
+              ])
+            : ExtraLinesData(),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.2,
+            color: AppColors.accent,
+            barWidth: 2.5,
+            dotData: FlDotData(
+              show: entries.length <= 30,
+              getDotPainter: (spot, percent, barData, index) {
+                return FlDotCirclePainter(
+                  radius: 3,
+                  color: AppColors.accent,
+                  strokeWidth: 1,
+                  strokeColor: AppColors.bg,
+                );
+              },
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              color: AppColors.accent.withValues(alpha: 0.06),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectionCallout(List<Map<String, dynamic>> entries, double targetWeight) {
+    final first = entries.first;
+    final last = entries.last;
+    final firstDate = DateTime.tryParse(first['date'] as String? ?? '');
+    final lastDate = DateTime.tryParse(last['date'] as String? ?? '');
+    final firstW = (first['weight_kg'] as num).toDouble();
+    final lastW = (last['weight_kg'] as num).toDouble();
+
+    if (firstDate == null || lastDate == null) return const SizedBox();
+    final weeksDiff = lastDate.difference(firstDate).inDays / 7.0;
+    if (weeksDiff < 0.5) return const SizedBox();
+
+    final weeklyRate = (lastW - firstW) / weeksDiff;
+    final remaining = targetWeight - lastW;
+
+    // Check if moving in right direction
+    final goal = UserRepository.instance.getProfile()?['primary_goal'] as String? ?? '';
+    final wantsLose = goal.contains('lose');
+    final movingRight = (wantsLose && weeklyRate < 0) || (!wantsLose && weeklyRate > 0);
+
+    if (!movingRight && remaining.abs() > 0.5) {
+      return Row(
+        children: [
+          Icon(Icons.warning_amber, size: 14, color: AppColors.orange),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Adjust your ${wantsLose ? "diet" : "nutrition"} to stay on track',
+              style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.orange),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (remaining.abs() < 0.5) {
+      return Row(
+        children: [
+          Icon(Icons.check_circle, size: 14, color: AppColors.green),
+          const SizedBox(width: 6),
+          Text(
+            'You\'ve reached your goal weight!',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.green),
+          ),
+        ],
+      );
+    }
+
+    final weeksToGo = (remaining / weeklyRate).abs().ceil();
+    final targetDate = DateTime.now().add(Duration(days: weeksToGo * 7));
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final dateLabel = '${monthNames[targetDate.month - 1]} ${targetDate.year}';
+
+    return Row(
+      children: [
+        Icon(Icons.trending_down, size: 14, color: AppColors.green),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'At current rate, you\'ll reach ${targetWeight.toStringAsFixed(0)}kg in ~$weeksToGo weeks (around $dateLabel)',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.green),
+          ),
+        ),
+      ],
     );
   }
 
@@ -562,21 +814,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onPressed: _isGeneratingReport
                   ? null
                   : () {
-                      final isPro = SubscriptionService.instance.isPro();
-                      if (!isPro) {
-                        // Free users: first report is free, subsequent ones are gated.
-                        final alreadyGenerated = HiveService.instance.configBox
-                            .get('first_report_generated', defaultValue: false) as bool;
-                        if (alreadyGenerated) {
-                          showPaywallSheet(context,
-                              feature: 'AI Weekly Report');
-                          return;
-                        }
-                      }
                       SubscriptionService.instance.gate(
                         AppConstants.featureWeeklyAiReport,
                         onPro: () => _generateReport(),
-                        onFree: () => _generateReport(),
+                        onFree: () {
+                          // First report is free; subsequent ones require PRO.
+                          final alreadyGenerated =
+                              HiveService.instance.configBox.get(
+                                    'first_report_generated',
+                                    defaultValue: false,
+                                  ) as bool;
+                          if (alreadyGenerated) {
+                            showPaywallSheet(context,
+                                feature: 'AI Weekly Report');
+                          } else {
+                            _generateReport();
+                          }
+                        },
                       );
                     },
               style: ElevatedButton.styleFrom(

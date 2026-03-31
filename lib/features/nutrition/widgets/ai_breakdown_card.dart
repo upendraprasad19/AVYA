@@ -60,7 +60,9 @@ class AiBreakdownCard extends ConsumerWidget {
           ),
 
           // Food items
-          ...breakdown.items.map((item) => _buildItemRow(item)),
+          ...breakdown.items.asMap().entries.map(
+            (e) => _buildItemRow(context, ref, e.value, e.key),
+          ),
 
           // Footer buttons
           Container(
@@ -125,7 +127,7 @@ class AiBreakdownCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildItemRow(AiFoodItem item) {
+  Widget _buildItemRow(BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: const BoxDecoration(
@@ -169,23 +171,131 @@ class AiBreakdownCard extends ConsumerWidget {
           _macroCol('${item.calories}', 'KCAL', AppColors.accent),
           const SizedBox(width: 10),
 
-          // Edit button
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.edit,
-              size: 10,
-              color: AppColors.textSecondary,
+          // Edit button — tappable
+          GestureDetector(
+            onTap: () => _showEditItemSheet(context, ref, item, index),
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppColors.input,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+              ),
+              child: const Icon(
+                Icons.edit,
+                size: 12,
+                color: AppColors.accent,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showEditItemSheet(BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
+    final calCtrl = TextEditingController(text: '${item.calories}');
+    final proteinCtrl = TextEditingController(text: item.protein.replaceAll('g', ''));
+    final carbsCtrl = TextEditingController(text: item.carbs.replaceAll('g', ''));
+    final fatCtrl = TextEditingController(text: item.fat.replaceAll('g', ''));
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 12),
+              Text('EDIT — ${item.name}',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 10, fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _editField('Calories', calCtrl, AppColors.accent)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _editField('Protein (g)', proteinCtrl, AppColors.orange)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _editField('Carbs (g)', carbsCtrl, AppColors.blue)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _editField('Fat (g)', fatCtrl, AppColors.textSecondary)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: GestureDetector(
+                  onTap: () {
+                    ref.read(aiBreakdownProvider.notifier).updateItem(
+                      index,
+                      calories: int.tryParse(calCtrl.text) ?? item.calories,
+                      protein: int.tryParse(proteinCtrl.text) ?? 0,
+                      carbs: int.tryParse(carbsCtrl.text) ?? 0,
+                      fat: int.tryParse(fatCtrl.text) ?? 0,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text('Save',
+                      style: GoogleFonts.getFont('DM Sans',
+                        fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editField(String label, TextEditingController ctrl, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.getFont('DM Sans', fontSize: 9,
+            fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13,
+                fontWeight: FontWeight.w700, color: color),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

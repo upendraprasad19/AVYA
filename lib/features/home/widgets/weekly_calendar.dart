@@ -57,9 +57,10 @@ class WeeklyCalendar extends ConsumerWidget {
         // Determine visual state
         final isCompleted = status == 'completed';
         final isWorkout = type == 'workout';
+        final isCustomTemplate = type == 'custom_template';
         final isRest = type == 'rest';
         final isTravel = status == 'travel';
-        final isPlanned = isWorkout && status == 'planned';
+        final isPlanned = (isWorkout || isCustomTemplate) && status == 'planned';
 
         Color bgColor;
         Color borderColor;

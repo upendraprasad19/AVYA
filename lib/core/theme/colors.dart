@@ -30,4 +30,8 @@ class AppColors {
   static const blue = Color(0xFF38bdf8);
   static const purple = Color(0xFFa855f7);
   static const green = Color(0xFF4ade80);
+
+  // Completion — Muted Emerald (teal-adjacent, premium feel)
+  static const emerald = Color(0xFF34d399);
+  static const emeraldTint = Color(0x1F34d399); // ~12% opacity
 }

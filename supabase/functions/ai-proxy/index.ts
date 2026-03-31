@@ -137,7 +137,88 @@ serve(async (req: Request) => {
 
     const userId = user.id;
 
-    // Check 30-day free trial
+    // Parse request body early — needed to route food_text_analysis
+    // before trial/rate-limit checks (food logging is always free).
+    const body = await req.json();
+    const { message, snapshot_json, type, text } = body;
+
+    // ── Food text analysis (separate path — no trial/rate-limit check) ────
+    if (type === "food_text_analysis" && text) {
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!geminiKey) {
+        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const prompt = `You are a nutritionist. The user says: "${text}"
+
+Analyse this as a meal and return ONLY a JSON object (no markdown, no code block) in this exact format:
+{
+  "meal_name": "short name for the meal",
+  "items": [
+    {
+      "name": "food item name",
+      "quantity": "e.g. 1 scoop, 2 rotis, 100g",
+      "calories": 120,
+      "protein": 25,
+      "carbs": 3,
+      "fat": 2,
+      "fiber": 0
+    }
+  ]
+}
+
+Rules:
+- Use realistic nutrition values per standard serving sizes for Indian foods
+- One item per distinct food
+- Protein/carbs/fat/fiber in grams (numbers only, no "g" suffix in the JSON)
+- If quantity is unclear, assume a typical single serving
+- Return ONLY the JSON object, nothing else`;
+
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+            }),
+          },
+        );
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          // Strip any markdown code fences if present
+          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(jsonStr);
+          return new Response(JSON.stringify(parsed), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch (_) {
+        // Fall through to error
+      }
+
+      return new Response(JSON.stringify({ error: "Food analysis failed" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!message || typeof message !== "string") {
+      return new Response(JSON.stringify({ error: "Missing 'message' in request body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Trial + rate-limit check for AI chat ─────────────────────────
     const { data: userData, error: userError } = await supabaseClient
       .from("users")
       .select("ai_chat_started_at")
@@ -172,7 +253,6 @@ serve(async (req: Request) => {
       );
     }
 
-    // Check daily message limit (15 msg/day)
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
@@ -195,17 +275,6 @@ serve(async (req: Request) => {
         JSON.stringify({ error: "Daily message limit reached", code: "RATE_LIMITED", limit: FREE_DAILY_LIMIT }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
-    }
-
-    // Parse request body
-    const body = await req.json();
-    const { message, snapshot_json } = body;
-
-    if (!message || typeof message !== "string") {
-      return new Response(JSON.stringify({ error: "Missing 'message' in request body" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // Build system prompt

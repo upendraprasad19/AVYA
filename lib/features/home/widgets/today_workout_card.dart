@@ -27,6 +27,9 @@ class TodayWorkoutCard extends StatelessWidget {
   // Rest day mode
   final bool isRestDay;
 
+  // Completed mode
+  final bool isDone;
+
   const TodayWorkoutCard({
     super.key,
     this.workoutTag,
@@ -41,6 +44,7 @@ class TodayWorkoutCard extends StatelessWidget {
     this.steps = 0,
     this.stepsGoal = 10000,
     this.isRestDay = false,
+    this.isDone = false,
   });
 
   @override
@@ -161,6 +165,33 @@ class TodayWorkoutCard extends StatelessWidget {
                         ],
                       ),
                     )
+                  else if (isDone)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: AppColors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 12, color: AppColors.green),
+                          const SizedBox(width: 4),
+                          Text(
+                            'DONE',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   else
                   TapScale(
                     onTap: onStart,
@@ -221,6 +252,7 @@ class TodayWorkoutCard extends StatelessWidget {
                           iconColor: AppColors.accent,
                           label: 'FUEL',
                           value: '${caloriesCurrent.round()}',
+                          target: '${caloriesTarget.round()}',
                           suffix: 'kcal',
                           valueColor: AppColors.accent,
                           progress: fuelProgress,
@@ -233,6 +265,7 @@ class TodayWorkoutCard extends StatelessWidget {
                           iconColor: AppColors.orange,
                           label: 'PROTEIN',
                           value: '${proteinCurrent.round()}',
+                          target: '${proteinTarget.round()}',
                           suffix: 'g',
                           valueColor: AppColors.orange,
                           progress: proteinProgress,
@@ -353,6 +386,7 @@ class _StatRow extends StatelessWidget {
   final Color iconColor;
   final String label;
   final String value;
+  final String target;
   final String suffix;
   final Color valueColor;
   final double progress;
@@ -363,6 +397,7 @@ class _StatRow extends StatelessWidget {
     required this.iconColor,
     required this.label,
     required this.value,
+    this.target = '',
     required this.suffix,
     required this.valueColor,
     required this.progress,
@@ -412,11 +447,20 @@ class _StatRow extends StatelessWidget {
                             height: 1,
                           ),
                         ),
+                        if (target.isNotEmpty)
+                          TextSpan(
+                            text: '/$target',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 9,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         TextSpan(
                           text: ' $suffix',
                           style: GoogleFonts.getFont(
                             'DM Sans',
-                            fontSize: 9,
+                            fontSize: 8,
                             color: AppColors.textSecondary,
                           ),
                         ),

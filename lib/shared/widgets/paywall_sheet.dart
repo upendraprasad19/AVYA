@@ -202,6 +202,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
         .round();
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(
@@ -215,7 +218,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
       ),
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
       child: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Drag handle
@@ -409,6 +413,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

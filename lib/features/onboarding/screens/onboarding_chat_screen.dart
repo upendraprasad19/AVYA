@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import 'package:flutter/services.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import '../providers/onboarding_provider.dart';
 
 class OnboardingChatScreen extends ConsumerStatefulWidget {
@@ -354,6 +356,32 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
     _handleNext(state, notifier);
   }
 
+  void _submitNumberAnswer(
+    String value,
+    OnboardingState state,
+    OnboardingNotifier notifier,
+  ) {
+    final parsed = double.tryParse(value);
+    if (parsed == null || parsed <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please enter a valid number greater than 0',
+              style: AppTypography.bodyM.copyWith(color: Colors.white),
+            ),
+            backgroundColor: AppColors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    notifier.setAnswer(state.currentStepData.key, value);
+    _textController.clear();
+    _handleNext(state, notifier);
+  }
+
   Widget _buildNumberInput(
     OnboardingState state,
     OnboardingNotifier notifier,
@@ -371,6 +399,10 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             style: AppTypography.bodyL.copyWith(color: AppColors.textPrimary),
             cursorColor: AppColors.accent,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+              LengthLimitingTextInputFormatter(6),
+            ],
             decoration: InputDecoration(
               hintText: 'Enter a number...',
               hintStyle: AppTypography.bodyL.copyWith(
@@ -398,22 +430,12 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                 ),
               ),
             ),
-            onSubmitted: (value) {
-              final num = double.tryParse(value);
-              if (num == null || num <= 0) return;
-              notifier.setAnswer(state.currentStepData.key, value);
-              _textController.clear();
-              _handleNext(state, notifier);
-            },
+            onSubmitted: (value) => _submitNumberAnswer(value, state, notifier),
           ),
         ),
         const SizedBox(width: 10),
         _buildSendButton(() {
-          final num = double.tryParse(_textController.text);
-          if (num == null || num <= 0) return;
-          notifier.setAnswer(state.currentStepData.key, _textController.text);
-          _textController.clear();
-          _handleNext(state, notifier);
+          _submitNumberAnswer(_textController.text, state, notifier);
         }),
       ],
     );
@@ -678,6 +700,8 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                     : () async {
                         final phase = await notifier.completeOnboarding();
                         if (phase != null && mounted) {
+                          // Refresh home calendar so scheduled workout days appear immediately
+                          ref.invalidate(calendarWeekProvider);
                           // Read computed targets from provider state — set by
                           // completeOnboarding() just before it returned.
                           // This avoids a Hive re-read and eliminates the old

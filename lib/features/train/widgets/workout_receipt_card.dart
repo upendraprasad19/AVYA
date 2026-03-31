@@ -6,34 +6,107 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
 import '../providers/train_provider.dart';
 
-// ── Sarcastic taglines (rotated randomly) ───────────────────────
-const _taglines = <String>[
-  'Muscles confused. Gains secured.',
+// ── Category-specific taglines ───────────────────────────────────
+const _taglinesPull = <String>[
+  'Back wider than your comfort zone.',
+  'Pulled more weight than your excuses.',
+  'Lats loading... rows complete.',
+  'Back day done. Posture improved by 1%.',
+  'If rowing was easy, they\'d call it sitting.',
+  'Deadlifts hit. Grip strength secured.',
+  'The bar came up. So did you.',
+  'Wide back energy activated.',
+];
+
+const _taglinesPush = <String>[
+  'Chest pressed. Triceps fired. Mission complete.',
+  'Push day: shoulders, ego, and reps — all up.',
+  'Bench done. Pressing on.',
+  'Pressed more than yesterday\'s bad decisions.',
+  'Shoulders like boulders. Almost.',
+  'OHP? Done. Respect? Earned.',
+  'Chest day energy. Arm day regrets.',
+  'Push it. Then push it some more.',
+];
+
+const _taglinesLegs = <String>[
+  'Legs? Destroyed. Ego? Inflated.',
+  'Squats done. Stairs now optional.',
+  'Skipping leg day? Couldn\'t be me. (Today.)',
+  'Ground shook. Quads spoke.',
+  'Deadlift + Squat combo. The classic.',
+  'Legs trained. Walking tomorrow: unlikely.',
+  'Don\'t skip legs. You didn\'t.',
+  'The squat rack was afraid of me today.',
+];
+
+const _taglinesCore = <String>[
+  'Core locked in. Spine approved.',
+  'Six-pack in progress. Beer not included.',
+  'Abs worked. Excuses destroyed.',
+  'Planked longer than my attention span.',
+  'Core strong. Everything else negotiable.',
+  'Crunched the numbers. And my abs.',
+];
+
+const _taglinesCardio = <String>[
+  'Cardio done. Dignity optional.',
+  'Ran from nothing. Felt great.',
+  'Heart rate elevated. Life improved.',
   'Sweat is just fat crying. You made a lot cry today.',
+  'Calories burned > Excuses made.',
+  'Distance covered. Goals closer.',
+];
+
+const _taglinesGeneric = <String>[
+  'Muscles confused. Gains secured.',
   'Gym done. Personality still under construction.',
-  'Another day of being better than yesterday\u2019s lazy version.',
+  'Another day of being better than yesterday\'s lazy version.',
   'My therapist said lift heavy. So here we are.',
   'The only drama I need is in my set count.',
   'Protein shake incoming in 3... 2... 1...',
-  'Lifted more than my ex\u2019s expectations.',
-  'Legs? Destroyed. Ego? Inflated.',
-  'The gym doesn\u2019t ask me stupid questions.',
   'Not bad for someone who almost skipped today.',
   'Built different. Also built sore.',
-  'Your workout is my warm-up. (Just kidding. I\u2019m dying.)',
+  'Your workout is my warm-up. (Just kidding. I\'m dying.)',
   'Zero missed reps. Infinite missed calls.',
-  'Gym crush noticed me. Or it was the mirror. Either way.',
-  'If being sore was a flex, I\u2019d be famous.',
-  'Skipping leg day? Couldn\u2019t be me. (Today.)',
   'Did I PR? Maybe. Am I sore? Definitely.',
   'Coach said one more set. That was four sets ago.',
-  'Calories burned > Excuses made.',
   'Crushed it like a protein bar wrapper.',
   'Rest days are for people without goals. (Jk rest is important.)',
   'One step closer to looking like my profile picture.',
   'Workout complete. Nap pending.',
   'Discipline hit. Brain still buffering.',
 ];
+
+String _pickTagline(String workoutName) {
+  final upper = workoutName.toUpperCase();
+  final rng = Random();
+  if (upper.contains('PULL') || upper.contains('BACK') ||
+      upper.contains('ROW') || upper.contains('DEADLIFT') ||
+      upper.contains('BICEP') || upper.contains('CURL')) {
+    return _taglinesPull[rng.nextInt(_taglinesPull.length)];
+  }
+  if (upper.contains('PUSH') || upper.contains('CHEST') ||
+      upper.contains('PRESS') || upper.contains('SHOULDER') ||
+      upper.contains('TRICEP')) {
+    return _taglinesPush[rng.nextInt(_taglinesPush.length)];
+  }
+  if (upper.contains('LEG') || upper.contains('SQUAT') ||
+      upper.contains('LUNGE') || upper.contains('GLUTE') ||
+      upper.contains('QUAD') || upper.contains('HAMSTRING') ||
+      upper.contains('CALF')) {
+    return _taglinesLegs[rng.nextInt(_taglinesLegs.length)];
+  }
+  if (upper.contains('CORE') || upper.contains('ABS') ||
+      upper.contains('PLANK') || upper.contains('CRUNCH')) {
+    return _taglinesCore[rng.nextInt(_taglinesCore.length)];
+  }
+  if (upper.contains('CARDIO') || upper.contains('RUN') ||
+      upper.contains('HIIT') || upper.contains('JUMP')) {
+    return _taglinesCardio[rng.nextInt(_taglinesCardio.length)];
+  }
+  return _taglinesGeneric[rng.nextInt(_taglinesGeneric.length)];
+}
 
 /// Data required to render a Workout Receipt card.
 class WorkoutReceiptData {
@@ -43,7 +116,6 @@ class WorkoutReceiptData {
   final List<ReceiptExercise> exercises;
   final double totalVolumeKg;
   final int totalSets;
-  final String duration;
   final List<String> prs;
   final int streakWeeks;
 
@@ -54,10 +126,11 @@ class WorkoutReceiptData {
     required this.exercises,
     required this.totalVolumeKg,
     required this.totalSets,
-    required this.duration,
     this.prs = const [],
     this.streakWeeks = 0,
   });
+
+  int get totalExercises => exercises.length;
 
   /// Build from ActiveWorkoutData after completion.
   factory WorkoutReceiptData.fromActiveWorkout(ActiveWorkoutData data) {
@@ -66,18 +139,39 @@ class WorkoutReceiptData {
     int totalSets = 0;
     final receiptExercises = <ReceiptExercise>[];
 
-    for (final ex in data.exercises) {
-      final sets = int.tryParse(ex.sets) ?? 3;
-      final reps = int.tryParse(ex.reps) ?? 10;
-      final weight =
-          double.tryParse(ex.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
-      totalSets += sets;
-      totalVolume += sets * reps * weight;
+    for (int exIdx = 0; exIdx < data.exercises.length; exIdx++) {
+      final ex = data.exercises[exIdx];
+      final numSets = int.tryParse(ex.sets) ?? 3;
+      final defaultReps = int.tryParse(ex.reps) ?? 10;
+
+      double bestWeight = 0;
+      int totalReps = 0;
+      int completedSets = 0;
+
+      for (int s = 0; s < numSets; s++) {
+        final key = '$exIdx-$s';
+        if (data.checkedSets.containsKey(key)) {
+          // Skip warm-up sets in volume
+          if (data.warmUpSets.containsKey(key)) continue;
+          completedSets++;
+          final vals = data.setInputValues[key];
+          final reps = vals?.reps ?? defaultReps;
+          final weight = vals?.weight ?? 0.0;
+
+          // Per-set volume: reps × weight for this specific set
+          totalVolume += reps * weight;
+
+          if (weight > bestWeight) bestWeight = weight;
+          totalReps += reps;
+        }
+      }
+
+      totalSets += completedSets;
       receiptExercises.add(ReceiptExercise(
         name: ex.name,
-        sets: sets,
-        reps: reps,
-        weightKg: weight,
+        sets: completedSets > 0 ? completedSets : numSets,
+        reps: completedSets > 0 ? (totalReps / completedSets.clamp(1, 999)).round() : defaultReps,
+        weightKg: bestWeight,
         loggingType: ex.loggingType,
       ));
     }
@@ -88,7 +182,6 @@ class WorkoutReceiptData {
       exercises: receiptExercises,
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
-      duration: data.timerFormatted,
       prs: data.detectedPRs,
     );
   }
@@ -125,7 +218,7 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagline = _taglines[Random().nextInt(_taglines.length)];
+    final tagline = _pickTagline(data.workoutName);
 
     return ShareableCard(
       repaintKey: repaintKey,
@@ -274,6 +367,9 @@ class WorkoutReceiptCard extends StatelessWidget {
   }
 
   Widget _buildSummaryRow() {
+    // "22 sets · 6 exercises" label replaces duration
+    final setsExLabel = '${data.totalSets} sets \u00b7 ${data.totalExercises} exercises';
+
     return Row(
       children: [
         _summaryChip(
@@ -281,9 +377,7 @@ class WorkoutReceiptCard extends StatelessWidget {
           'VOLUME',
         ),
         const SizedBox(width: 12),
-        _summaryChip('${data.totalSets}', 'SETS'),
-        const SizedBox(width: 12),
-        _summaryChip(data.duration, 'DURATION'),
+        _summaryChip(setsExLabel, 'WORKOUT'),
       ],
     );
   }
@@ -302,10 +396,11 @@ class WorkoutReceiptCard extends StatelessWidget {
               value,
               style: GoogleFonts.getFont(
                 'DM Sans',
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w900,
                 color: AppColors.textPrimary,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
             Text(

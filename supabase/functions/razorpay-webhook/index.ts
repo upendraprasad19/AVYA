@@ -112,6 +112,20 @@ serve(async (req: Request) => {
       );
     }
 
+    // Validate userId is a proper UUID to prevent injection / spoofing.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error("Invalid user_id format in payment notes:", userId);
+      return new Response(
+        JSON.stringify({ error: "Invalid user_id format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     if (plan !== "monthly" && plan !== "yearly") {
       return new Response(
         JSON.stringify({ error: "Invalid plan. Must be 'monthly' or 'yearly'" }),

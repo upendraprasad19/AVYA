@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -87,15 +88,49 @@ AiBreakdownData _estimateMealNutrition(String text) {
   int carbs;
   int fat;
 
-  if (_containsAny(lower, ['breakfast', 'morning', 'oats', 'cereal', 'paratha', 'poha', 'idli', 'dosa', 'upma', 'toast'])) {
+  // ── Specific food matches (checked first for accuracy) ──────────
+  if (_containsAny(lower, ['whey', 'protein powder', 'protein shake', 'protein supplement'])) {
+    // ~1.5 scoops = 45g whey protein powder
+    final scoops = _extractNumber(lower, ['scoop', 'scoops']) ?? 1.5;
+    final factor = scoops / 1.0;
+    kcal = (120 * factor).round(); protein = (25 * factor).round(); carbs = (3 * factor).round(); fat = (2 * factor).round();
+  } else if (_containsAny(lower, ['egg', 'eggs', 'anda'])) {
+    final count = _extractNumber(lower, ['egg', 'eggs', 'anda']) ?? 2.0;
+    kcal = (70 * count).round(); protein = (6 * count).round(); carbs = 0; fat = (5 * count).round();
+  } else if (_containsAny(lower, ['roti', 'chapati', 'chapatti'])) {
+    final count = _extractNumber(lower, ['roti', 'chapati']) ?? 2.0;
+    kcal = (100 * count).round(); protein = (3 * count).round(); carbs = (18 * count).round(); fat = (2 * count).round();
+  } else if (_containsAny(lower, ['paneer'])) {
+    final grams = _extractNumber(lower, ['g', 'gram', 'grams']) ?? 100.0;
+    final factor = grams / 100;
+    kcal = (265 * factor).round(); protein = (18 * factor).round(); carbs = (4 * factor).round(); fat = (20 * factor).round();
+  } else if (_containsAny(lower, ['dal', 'daal', 'lentil'])) {
+    final factor = _extractNumber(lower, ['bowl', 'bowls']) ?? 1.0;
+    kcal = (180 * factor).round(); protein = (12 * factor).round(); carbs = (28 * factor).round(); fat = (2 * factor).round();
+  } else if (_containsAny(lower, ['rice', 'chawal'])) {
+    final factor = _extractNumber(lower, ['cup', 'bowl']) ?? 1.0;
+    kcal = (200 * factor).round(); protein = (4 * factor).round(); carbs = (44 * factor).round(); fat = (0);
+  } else if (_containsAny(lower, ['banana', 'kela'])) {
+    final count = _extractNumber(lower, ['banana', 'bananas']) ?? 1.0;
+    kcal = (90 * count).round(); protein = (1 * count).round(); carbs = (23 * count).round(); fat = 0;
+  } else if (_containsAny(lower, ['chicken breast', 'grilled chicken'])) {
+    final grams = _extractNumber(lower, ['g', 'gram', 'grams']) ?? 150.0;
+    final factor = grams / 100;
+    kcal = (165 * factor).round(); protein = (31 * factor).round(); carbs = 0; fat = (4 * factor).round();
+  } else if (_containsAny(lower, ['milk', 'doodh'])) {
+    final ml = _extractNumber(lower, ['ml', 'glass', 'cup']) ?? 1.0;
+    final factor = (lower.contains('ml') ? ml : ml * 240) / 100;
+    kcal = (61 * factor).round(); protein = (3 * factor).round(); carbs = (5 * factor).round(); fat = (3 * factor).round();
+  // ── Meal-type estimates ─────────────────────────────────────────
+  } else if (_containsAny(lower, ['breakfast', 'morning', 'oats', 'cereal', 'paratha', 'poha', 'idli', 'dosa', 'upma', 'toast'])) {
     kcal = 400; protein = 20; carbs = 50; fat = 15;
-  } else if (_containsAny(lower, ['lunch', 'afternoon', 'thali', 'rice', 'roti', 'dal', 'sabzi'])) {
+  } else if (_containsAny(lower, ['lunch', 'afternoon', 'thali', 'sabzi'])) {
     kcal = 600; protein = 30; carbs = 70; fat = 20;
-  } else if (_containsAny(lower, ['dinner', 'night', 'chapati', 'paneer', 'chicken', 'fish', 'curry'])) {
+  } else if (_containsAny(lower, ['dinner', 'night', 'curry', 'fish', 'mutton'])) {
     kcal = 700; protein = 35; carbs = 80; fat = 25;
   } else {
     // Default snack estimate.
-    kcal = 250; protein = 10; carbs = 30; fat = 8;
+    kcal = 200; protein = 8; carbs = 25; fat = 6;
   }
 
   return AiBreakdownData(
@@ -119,6 +154,25 @@ bool _containsAny(String text, List<String> keywords) {
     if (text.contains(kw)) return true;
   }
   return false;
+}
+
+/// Extracts a leading number before any of the given unit words.
+/// e.g. "1.5 scoops whey" → 1.5 (when units=['scoop','scoops'])
+/// Returns null if no number found near those units.
+double? _extractNumber(String text, List<String> units) {
+  for (final unit in units) {
+    final pattern = RegExp(r'(\d+(?:\.\d+)?)\s*' + RegExp.escape(unit));
+    final match = pattern.firstMatch(text);
+    if (match != null && match.group(1) != null) {
+      return double.tryParse(match.group(1)!);
+    }
+  }
+  // Also look for a leading number anywhere in text
+  final leadingNum = RegExp(r'^(\d+(?:\.\d+)?)').firstMatch(text.trim());
+  if (leadingNum != null && leadingNum.group(1) != null) {
+    return double.tryParse(leadingNum.group(1)!);
+  }
+  return null;
 }
 
 // ── Selected Date ────────────────────────────────────────────────
@@ -325,10 +379,38 @@ final waterUnitProvider =
 // ── Urine Color Selection ───────────────────────────────────────
 
 class UrineColorNotifier extends Notifier<int> {
-  @override
-  int build() => -1; // -1 means none selected
+  static const _labels = [
+    'Pale straw', 'Clear yellow', 'Yellow', 'Dark yellow',
+    'Amber', 'Brown', 'Dark brown',
+  ];
 
-  void select(int index) => state = index;
+  @override
+  int build() {
+    // Restore today's selection from Hive if previously saved.
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final saved = HiveService.instance.healthBox.get('urine_color_$todayStr');
+    if (saved is Map) {
+      return (saved['index'] as int?) ?? -1;
+    }
+    return -1; // -1 means none selected
+  }
+
+  void select(int index) {
+    state = index;
+    // Persist to Hive for data analysis
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    HiveService.instance.healthBox.put('urine_color_$todayStr', {
+      'type': 'urine_color',
+      'date': todayStr,
+      'index': index,
+      'label': index >= 0 && index < _labels.length ? _labels[index] : 'unknown',
+      'recorded_at': now.toIso8601String(),
+    });
+  }
 }
 
 final urineColorProvider =
@@ -396,6 +478,18 @@ class AiBreakdownData {
     required this.totalKcal,
     required this.items,
   });
+
+  AiBreakdownData copyWith({
+    String? mealName,
+    int? totalKcal,
+    List<AiFoodItem>? items,
+  }) {
+    return AiBreakdownData(
+      mealName: mealName ?? this.mealName,
+      totalKcal: totalKcal ?? this.totalKcal,
+      items: items ?? this.items,
+    );
+  }
 }
 
 class AiFoodItem {
@@ -405,6 +499,7 @@ class AiFoodItem {
   final String protein;
   final String carbs;
   final String fat;
+  final int fiber;
 
   const AiFoodItem({
     required this.name,
@@ -413,7 +508,28 @@ class AiFoodItem {
     required this.protein,
     required this.carbs,
     required this.fat,
+    this.fiber = 0,
   });
+
+  AiFoodItem copyWith({
+    String? name,
+    String? quantity,
+    int? calories,
+    String? protein,
+    String? carbs,
+    String? fat,
+    int? fiber,
+  }) {
+    return AiFoodItem(
+      name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
+      calories: calories ?? this.calories,
+      protein: protein ?? this.protein,
+      carbs: carbs ?? this.carbs,
+      fat: fat ?? this.fat,
+      fiber: fiber ?? this.fiber,
+    );
+  }
 }
 
 class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
@@ -445,6 +561,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
                       protein: '${(item['protein'] as num?)?.toInt() ?? 0}g',
                       carbs: '${(item['carbs'] as num?)?.toInt() ?? 0}g',
                       fat: '${(item['fat'] as num?)?.toInt() ?? 0}g',
+                      fiber: (item['fiber'] as num?)?.toInt() ?? 0,
                     ))
                 .toList() ??
             [];
@@ -468,6 +585,21 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     state = _estimateMealNutrition(text);
   }
 
+  /// Update a single item's macros (called from the edit icon in the breakdown card).
+  void updateItem(int index, {required int calories, required int protein, required int carbs, required int fat}) {
+    final data = state;
+    if (data == null || index < 0 || index >= data.items.length) return;
+    final newItems = List<AiFoodItem>.from(data.items);
+    newItems[index] = newItems[index].copyWith(
+      calories: calories,
+      protein: '${protein}g',
+      carbs: '${carbs}g',
+      fat: '${fat}g',
+    );
+    final newTotalKcal = newItems.fold<int>(0, (sum, item) => sum + item.calories);
+    state = data.copyWith(items: newItems, totalKcal: newTotalKcal);
+  }
+
   void clear() => state = null;
 
   /// Save the analysed meal to nutrition log.
@@ -482,10 +614,12 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     int totalProtein = 0;
     int totalCarbs = 0;
     int totalFat = 0;
+    int totalFiber = 0;
     for (final item in data.items) {
       totalProtein += int.tryParse(item.protein.replaceAll('g', '')) ?? 0;
       totalCarbs += int.tryParse(item.carbs.replaceAll('g', '')) ?? 0;
       totalFat += int.tryParse(item.fat.replaceAll('g', '')) ?? 0;
+      totalFiber += item.fiber;
     }
 
     final id = 'nlog_${now.millisecondsSinceEpoch}';
@@ -498,6 +632,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       'total_protein': totalProtein,
       'total_carbs': totalCarbs,
       'total_fat': totalFat,
+      'total_fiber': totalFiber,
       'created_at': now.toIso8601String(),
       'source': 'ai_text',
     });
@@ -507,6 +642,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     ref.invalidate(weeklyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);
     ref.invalidate(recentFoodLogsProvider);
+    BadgeService.instance.checkAll();
   }
 }
 
@@ -568,6 +704,37 @@ class FoodLogNotifier extends Notifier<void> {
       'source': 'manual',
     });
 
+    ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
+    BadgeService.instance.checkAll();
+  }
+
+  Future<void> deleteFoodLog(String logId) async {
+    await HiveService.instance.nutritionBox.delete(logId);
+    ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
+  }
+
+  Future<void> updateFoodLog({
+    required String logId,
+    required double calories,
+    required double protein,
+    required double carbs,
+    required double fat,
+  }) async {
+    final box = HiveService.instance.nutritionBox;
+    final existing = box.get(logId);
+    if (existing == null) return;
+    final updated = Map<String, dynamic>.from(existing as Map);
+    updated['total_calories'] = calories.round();
+    updated['total_protein'] = protein.round();
+    updated['total_carbs'] = carbs.round();
+    updated['total_fat'] = fat.round();
+    await box.put(logId, updated);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);

@@ -8,9 +8,9 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 /// Plays a subtle pulse animation (1.0 -> 1.1 -> 1.0, 300ms) once on build
 /// to draw attention when the streak is non-zero.
 class StreakBadge extends StatefulWidget {
-  final int weeks;
+  final int days;
 
-  const StreakBadge({super.key, required this.weeks});
+  const StreakBadge({super.key, required this.days});
 
   @override
   State<StreakBadge> createState() => _StreakBadgeState();
@@ -42,7 +42,7 @@ class _StreakBadgeState extends State<StreakBadge>
     ]).animate(_pulseController);
 
     // Fire pulse once if streak is non-zero.
-    if (widget.weeks > 0) {
+    if (widget.days > 0) {
       Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) _pulseController.forward();
       });
@@ -53,7 +53,7 @@ class _StreakBadgeState extends State<StreakBadge>
   void didUpdateWidget(covariant StreakBadge oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Pulse when streak value increases.
-    if (widget.weeks > oldWidget.weeks && widget.weeks > 0) {
+    if (widget.days > oldWidget.days && widget.days > 0) {
       _pulseController.forward(from: 0);
     }
   }
@@ -83,11 +83,21 @@ class _StreakBadgeState extends State<StreakBadge>
             const Text('\u{1F525}', style: TextStyle(fontSize: 15)),
             const SizedBox(width: 6),
             Text(
-              '${widget.weeks}',
+              '${widget.days}',
               style: GoogleFonts.getFont(
                 'DM Sans',
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              widget.days == 1 ? 'day' : 'days',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
                 color: AppColors.accent,
               ),
             ),

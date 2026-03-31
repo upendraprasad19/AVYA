@@ -214,6 +214,17 @@ class BiometricNotifier extends Notifier<BiometricData> {
       }
     }
 
+    // Also check explicit sleep_log_ key
+    final sleepLog = healthBox.get('sleep_log_$todayStr');
+    if (sleepLog is Map) {
+      final hrs = (sleepLog['sleep_hours'] as num?)?.toDouble();
+      if (hrs != null) sleepHours = hrs;
+    }
+
+    // Also check explicit steps_today key (from Health Connect sync)
+    final stepsVal = healthBox.get('steps_today');
+    if (stepsVal is int && stepsVal > 0) stepsToday = stepsVal;
+
     return BiometricData(
       stepsToday: stepsToday,
       sleepHours: sleepHours,
@@ -225,6 +236,22 @@ class BiometricNotifier extends Notifier<BiometricData> {
     await HiveService.instance.configBox
         .put('health_sync_enabled', enabled);
     // Rebuild state
+    ref.invalidateSelf();
+  }
+
+  /// Manually log sleep for today.
+  Future<void> logSleep({required double hours, required String quality}) async {
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await HiveService.instance.healthBox.put('sleep_log_$todayStr', {
+      'date': todayStr,
+      'sleep_hours': hours,
+      'duration_hrs': hours,
+      'quality': quality,
+      'source': 'manual',
+      'created_at': now.toIso8601String(),
+    });
     ref.invalidateSelf();
   }
 }

@@ -168,7 +168,7 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
                 height: 20,
                 child: AnimatedBuilder(
                   animation: _countdownController,
-                  builder: (_, __) {
+                  builder: (_, _) {
                     return CircularProgressIndicator(
                       value: 1.0 - _countdownController.value,
                       strokeWidth: 2,

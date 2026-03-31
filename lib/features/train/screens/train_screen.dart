@@ -6,11 +6,15 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import '../repositories/workout_repository.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/train_provider.dart';
+import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../widgets/week_selector.dart';
 import '../widgets/stats_grid.dart';
 
@@ -174,6 +178,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     // YOUR PRs section
                     const StatsGrid(),
+
+                    const SizedBox(height: 20),
+
+                    // MY TEMPLATES section
+                    _buildMyTemplatesSection(context, ref),
 
                     const SizedBox(height: 20),
                   ],
@@ -423,39 +432,40 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   }
 
   Widget _buildRestHeroCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(
-          color: AppColors.border,
+    return GestureDetector(
+      onTap: () => _showRestDaySheet(context),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          border: Border.all(color: AppColors.border),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'REST DAY',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textSecondary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'REST DAY',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Recovery & mobility \u2014 stretch, walk, foam roll',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            const SizedBox(height: 4),
+            Text(
+              'Recovery & mobility \u2014 tap for recovery tips',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -579,18 +589,20 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       status = _RowStatus.planned;
     }
 
-    // Today's incomplete workout navigates to active workout; other non-rest days show preview
-    final isTappable = (!day.isRest && (isToday && !day.isDone)) || (!day.isRest && !isToday);
+    // Today's incomplete workout navigates to active workout; completed/future show preview; rest days show recovery sheet
+    final isTappable = day.isRest || (!day.isRest && (isToday && !day.isDone)) || (!day.isRest && !isToday);
 
     return GestureDetector(
       onTap: isTappable
           ? () {
-              if (isToday && !day.isDone) {
+              if (day.isRest) {
+                _showRestDaySheet(context);
+              } else if (isToday && !day.isDone) {
                 ref
                     .read(activeWorkoutProvider.notifier)
                     .startWorkout(day);
                 context.go('/train/active-workout');
-              } else if (!day.isRest) {
+              } else {
                 _showExercisePreviewSheet(context, day);
               }
             }
@@ -768,6 +780,128 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     }
   }
 
+  // ── Rest Day Sheet ────────────────────────────────────────────
+
+  void _showRestDaySheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              '🧘 Rest Day — Recovery',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This is when your muscles actually grow. Use today to recover well.',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'RECOVERY TIPS',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...[
+              ('🧘', 'Stretch for 10 minutes'),
+              ('🚶', 'Light walk 20–30 minutes'),
+              ('🔁', 'Foam roll sore muscles'),
+              ('💧', 'Drink at least 3L of water'),
+              ('😴', 'Aim for 7–9 hours of sleep tonight'),
+            ].map((tip) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Text(tip.$1, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 12),
+                  Text(
+                    tip.$2,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    builder: (_) => const WeightLogSheet(),
+                  );
+                },
+                icon: const Icon(Icons.monitor_weight_outlined, size: 18),
+                label: Text(
+                  'Log Weight',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: const BorderSide(color: AppColors.accent, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Exercise Preview Bottom Sheet ────────────────────────────
 
   void _showExercisePreviewSheet(BuildContext context, WorkoutDayData day) {
@@ -785,11 +919,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           '${dayNames[day.date!.weekday - 1]}, ${monthNames[day.date!.month - 1]} ${day.date!.day}';
     }
 
-    // Determine if this is a past completed day
-    final now = DateTime.now();
-    final todayDate = DateTime(now.year, now.month, now.day);
-    final isPastCompleted =
-        day.isDone && day.date != null && day.date!.isBefore(todayDate);
+    // Load actual exercise logs if this day is completed
+    final actualLogs = day.isDone && day.date != null
+        ? WorkoutRepository.instance.getExerciseLogsForDate(day.date!)
+        : <Map<String, dynamic>>[];
+    final hasActualLogs = actualLogs.isNotEmpty;
 
     showModalBottomSheet(
       context: context,
@@ -797,8 +931,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
+      isScrollControlled: true,
       builder: (ctx) {
-        return Padding(
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.55,
+          maxChildSize: 0.9,
+          builder: (_, scrollCtrl) => Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -817,15 +956,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Title: workout name
-              Text(
-                day.name.toUpperCase(),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
+              // Title row: workout name + completed badge
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      day.isDone
+                          ? '${day.name.toUpperCase()} ✓'
+                          : day.name.toUpperCase(),
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: day.isDone ? AppColors.green : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               if (dateLabel.isNotEmpty) ...[
                 const SizedBox(height: 2),
@@ -841,102 +988,181 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ],
               const SizedBox(height: 14),
 
-              // Exercise list
-              if (day.exercises.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'No exercises scheduled',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                )
-              else
-                ...List.generate(day.exercises.length, (index) {
-                  final ex = day.exercises[index];
-                  final restSecs = ex.rest.replaceAll('s', '');
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      children: [
-                        // Number circle
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${index + 1}',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Exercise info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                ex.name,
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                '${ex.sets} sets \u00b7 ${ex.reps} reps \u00b7 ${restSecs}s rest',
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w400,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-
-              // Completed badge for past completed days
-              if (isPastCompleted) ...[
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.check_circle, color: AppColors.green, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Completed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.green,
-                      ),
-                    ),
-                  ],
+              // Section label
+              Text(
+                hasActualLogs ? 'LOGGED EXERCISES' : 'PLANNED EXERCISES',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  color: AppColors.textSecondary,
                 ),
-              ],
+              ),
+              const SizedBox(height: 10),
+
+              // Exercise list: actual logs if available, else planned
+              Flexible(
+                child: ListView(
+                  controller: scrollCtrl,
+                  shrinkWrap: true,
+                  children: hasActualLogs
+                      ? actualLogs.map((log) {
+                          final name = log['exercise_name'] as String? ?? 'Exercise';
+                          final sets = log['sets_completed'] as int? ?? 0;
+                          final reps = log['reps_completed'] as int? ?? 0;
+                          final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+                          final duration = log['duration_seconds'] as int? ?? 0;
+                          final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+
+                          String detail;
+                          if (loggingType == 'timed') {
+                            final mins = duration ~/ 60;
+                            final secs = duration % 60;
+                            detail = sets > 1
+                                ? '$sets sets · ${mins > 0 ? '${mins}m ' : ''}${secs}s'
+                                : '${mins > 0 ? '${mins}m ' : ''}${secs}s';
+                          } else if (loggingType == 'cardio') {
+                            final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
+                            detail = '${duration ~/ 60} min · ${dist.toStringAsFixed(1)} km';
+                          } else if (weight > 0) {
+                            detail = '$sets sets · $reps reps · ${weight.toStringAsFixed(1)} kg';
+                          } else {
+                            detail = '$sets sets · $reps reps';
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Icon(Icons.check_circle, color: AppColors.green, size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        style: GoogleFonts.getFont(
+                                          'DM Sans',
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        detail,
+                                        style: GoogleFonts.getFont(
+                                          'DM Sans',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w400,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (log['is_pr'] == true)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.proGoldTint,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'PR',
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.proGold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }).toList()
+                      : day.exercises.isEmpty
+                          ? [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: Text(
+                                  day.isDone
+                                      ? 'Logged details not saved'
+                                      : 'No exercises scheduled',
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ]
+                          : List.generate(day.exercises.length, (index) {
+                              final ex = day.exercises[index];
+                              final restSecs = ex.rest.replaceAll('s', '');
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent.withValues(alpha: 0.08),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: GoogleFonts.getFont(
+                                          'DM Sans',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            ex.name,
+                                            style: GoogleFonts.getFont(
+                                              'DM Sans',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 1),
+                                          Text(
+                                            '${ex.sets} sets \u00b7 ${ex.reps} reps \u00b7 ${restSecs}s rest',
+                                            style: GoogleFonts.getFont(
+                                              'DM Sans',
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w400,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                ),
+              ),
             ],
+          ),
           ),
         );
       },
@@ -1121,6 +1347,219 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         icon: Icons.fitness_center,
         title: 'No workouts scheduled',
         subtitle: 'This week has no workouts in your plan.',
+      ),
+    );
+  }
+
+  // ── My Templates Section ─────────────────────────────────────
+
+  Widget _buildMyTemplatesSection(BuildContext context, WidgetRef ref) {
+    final templates = ref.watch(templatesProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header with + button
+          Row(
+            children: [
+              Text(
+                'MY TEMPLATES',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/train/template-builder'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentTint,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 12, color: AppColors.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Create',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (templates.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(AppRadius.cardM),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.fitness_center_outlined,
+                      size: 28, color: AppColors.textSecondary),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No templates yet',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap Create to build a custom workout',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...templates.map((tmpl) {
+              final name = tmpl['name'] as String? ?? 'Unnamed';
+              final exercises = tmpl['exercises'] as List? ?? [];
+              final templateId = tmpl['id'] as String? ?? '';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(AppRadius.cardM),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${exercises.length} exercise${exercises.length == 1 ? '' : 's'}',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w400,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _scheduleTemplate(context, ref, templateId, name),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentTint,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                            color: AppColors.accent.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          'Schedule',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  void _scheduleTemplate(
+      BuildContext context, WidgetRef ref, String templateId, String name) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 28)),
+      helpText: 'Schedule "$name"',
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.accent,
+            onPrimary: Colors.black,
+            surface: AppColors.card,
+            onSurface: AppColors.textPrimary,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (picked == null) return;
+    if (!context.mounted) return;
+
+    WorkoutScheduleService.instance.assignTemplateToDate(templateId, picked);
+    ref.invalidate(calendarWeekProvider);
+    ref.invalidate(currentPlanProvider);
+
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final dateStr = '${monthNames[picked.month - 1]} ${picked.day}';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Scheduled "$name" for $dateStr',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: AppColors.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

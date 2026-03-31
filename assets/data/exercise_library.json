@@ -44,7 +44,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bench-Press_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=192",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E002",
@@ -91,7 +92,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E003",
@@ -137,7 +139,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Incline-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Incline-Bench-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E004",
@@ -230,7 +233,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Push-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Push-Up_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=10",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E006",
@@ -276,7 +280,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Flyes_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Flyes_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E007",
@@ -365,7 +370,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Dip_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Dip_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E009",
@@ -411,7 +417,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E010",
@@ -456,7 +463,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pike-Push-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pike-Push-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E011",
@@ -503,7 +511,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Standing-Military-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Standing-Military-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E012",
@@ -549,7 +558,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shoulder-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shoulder-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E013",
@@ -595,7 +605,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E014",
@@ -643,7 +654,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E015",
@@ -688,7 +700,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Front-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Front-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E016",
@@ -734,7 +747,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Close-Grip-Barbell-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Close-Grip-Barbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E017",
@@ -777,7 +791,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Triceps-Pushdown_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Triceps-Pushdown_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E018",
@@ -820,7 +835,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Skull-Crusher_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Skull-Crusher_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E019",
@@ -863,7 +879,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lying-Triceps-Extension_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lying-Triceps-Extension_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E020",
@@ -908,7 +925,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Diamond-Push-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Diamond-Push-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E021",
@@ -957,7 +975,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Deadlift_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=262",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E022",
@@ -1004,7 +1023,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pull-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pull-Up_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=31",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E023",
@@ -1051,7 +1071,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bent-Over-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bent-Over-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E024",
@@ -1099,7 +1120,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-One-Arm-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-One-Arm-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E025",
@@ -1145,7 +1167,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lat-Pulldown_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lat-Pulldown_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E026",
@@ -1193,7 +1216,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Cable-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Cable-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E027",
@@ -1288,7 +1312,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E029",
@@ -1382,7 +1407,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E031",
@@ -1428,7 +1454,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E032",
@@ -1473,7 +1500,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E033",
@@ -1517,7 +1545,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Hammer-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Hammer-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E034",
@@ -1560,7 +1589,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Concentration-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Concentration-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E035",
@@ -1605,7 +1635,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E036",
@@ -1653,7 +1684,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Full-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Full-Squat_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=99",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E037",
@@ -1700,7 +1732,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Front-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Front-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E038",
@@ -1746,7 +1779,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Goblet-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Goblet-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E039",
@@ -1792,7 +1826,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E040",
@@ -1884,7 +1919,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bulgarian-Split-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bulgarian-Split-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E042",
@@ -1931,7 +1967,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Walking-Lunge_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Walking-Lunge_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E043",
@@ -1974,7 +2011,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Extension_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Extension_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E044",
@@ -2021,7 +2059,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Step-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Step-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E045",
@@ -2066,7 +2105,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Romanian-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Romanian-Deadlift_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E046",
@@ -2152,7 +2192,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Hip-Thrust_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Hip-Thrust_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E048",
@@ -2197,7 +2238,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Glute-Bridge_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Glute-Bridge_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E049",
@@ -2240,7 +2282,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lying-Leg-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lying-Leg-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E050",
@@ -2287,7 +2330,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Deadlift_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E051",
@@ -2311,7 +2355,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "15-20",
     "default_rest_secs": 45,
     "tempo": "2-0-2-2",
@@ -2332,7 +2376,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Standing-Calf-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Standing-Calf-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E052",
@@ -2375,7 +2420,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Calf-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Calf-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E053",
@@ -2466,7 +2512,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Plank_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Plank_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E055",
@@ -2513,7 +2560,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dead-Bug_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dead-Bug_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E056",
@@ -2557,7 +2605,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crunch_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crunch_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E057",
@@ -2600,7 +2649,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hanging-Leg-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hanging-Leg-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E058",
@@ -2647,7 +2697,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Ab-Wheel-Rollout_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Ab-Wheel-Rollout_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E059",
@@ -2692,7 +2743,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Russian-Twist_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Russian-Twist_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E060",
@@ -2736,7 +2788,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Crunch_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Crunch_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E061",
@@ -2780,7 +2833,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=8",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E062",
@@ -2824,7 +2878,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E063",
@@ -2847,7 +2902,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "3 min rounds",
     "default_rest_secs": 60,
     "tempo": "",
@@ -2868,7 +2923,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E064",
@@ -2913,7 +2969,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E065",
@@ -2935,7 +2992,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "10-15",
     "default_rest_secs": 60,
     "tempo": "",
@@ -2956,7 +3013,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Burpee_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Burpee_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E066",
@@ -3002,7 +3060,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Jump_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Jump_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E067",
@@ -3046,7 +3105,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Mountain-Climber_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Mountain-Climber_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E068",
@@ -3545,7 +3605,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E079",
@@ -3632,7 +3693,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E081",
@@ -3768,7 +3830,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E084",
@@ -3858,7 +3921,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E086",
@@ -4227,7 +4291,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Band-Pull-Apart_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Band-Pull-Apart_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E094",
@@ -4313,7 +4378,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Preacher-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Preacher-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E096",
@@ -4716,7 +4782,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Arnold-Dumbbell-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Arnold-Dumbbell-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E105",
@@ -4805,7 +4872,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shrug_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shrug_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E107",
@@ -5072,7 +5140,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E113",
@@ -5119,7 +5188,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Single-Arm-Dumbbell-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Single-Arm-Dumbbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E114",
@@ -5570,7 +5640,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chin-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chin-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E124",
@@ -5617,7 +5688,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inverted-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inverted-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E125",
@@ -5978,7 +6050,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E133",
@@ -6179,7 +6252,7 @@
     "suitable_for": [
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "5-8",
     "default_rest_secs": 180,
     "tempo": "",
@@ -6225,7 +6298,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "20 meters",
     "default_rest_secs": 120,
     "tempo": "",
@@ -6270,7 +6343,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "20-30 sec",
     "default_rest_secs": 60,
     "tempo": "",
@@ -6317,7 +6390,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "15-20",
     "default_rest_secs": 90,
     "tempo": "",
@@ -6520,7 +6593,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Lunge_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Lunge_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E145",
@@ -6568,7 +6642,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Lunge_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Lunge_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E146",
@@ -6844,7 +6919,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inchworm_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inchworm_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E152",
@@ -6889,7 +6965,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E153",
@@ -7203,7 +7280,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E160",
@@ -7249,7 +7327,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E161",
@@ -7871,7 +7950,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Crunch_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Crunch_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E175",
@@ -7916,7 +7996,8 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bicycle-Crunch_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bicycle-Crunch_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E176",
@@ -8003,7 +8084,8 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "is_foundational": true
   },
   {
     "id": "E178",
@@ -8241,7 +8323,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "20 meters",
     "default_rest_secs": 120,
     "tempo": "",
@@ -8283,7 +8365,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "5-8",
     "default_rest_secs": 120,
     "tempo": "",
@@ -8648,7 +8730,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "20-30 sec",
     "default_rest_secs": 45,
     "tempo": "",
@@ -8694,7 +8776,7 @@
       "Intermediate",
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "10-15",
     "default_rest_secs": 75,
     "tempo": "",
@@ -8736,7 +8818,7 @@
     "suitable_for": [
       "Advanced"
     ],
-    "default_sets": 5,
+    "default_sets": 3,
     "default_reps": "5-6",
     "default_rest_secs": 180,
     "tempo": "",

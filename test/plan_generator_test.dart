@@ -198,8 +198,6 @@ List<String> _getEquipmentList(String equipment) {
 class _PlanGeneratorTestHelper {
   static _SplitResult getSplitStructure(String goal, int daysPerWeek) {
     // Mirror of PlanGenerator._getSplitStructure()
-    final days = <_DayConfig>[];
-
     switch (goal) {
       case 'build_muscle':
         switch (daysPerWeek) {
@@ -244,7 +242,6 @@ class _PlanGeneratorTestHelper {
         return _SplitResult(List.generate(daysPerWeek, (i) =>
           _DayConfig('Training ${i + 1}', 'General fitness', ['push', 'pull', 'legs', 'core'])));
     }
-    return _SplitResult(days);
   }
 
   static _PhaseMeta getPhaseMeta(int phase, String goal) {
@@ -284,9 +281,9 @@ class _DayConfig {
   final String name;
   final String focus;
   final List<String> categories;
-  final int exercisesPerCategory;
+  final int exercisesPerCategory = 2;
 
-  _DayConfig(this.name, this.focus, this.categories, [this.exercisesPerCategory = 2]);
+  _DayConfig(this.name, this.focus, this.categories);
 }
 
 class _PhaseMeta {

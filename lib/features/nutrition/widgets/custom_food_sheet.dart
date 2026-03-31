@@ -226,17 +226,71 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
   }
 
   void _save() {
+    final calories = double.tryParse(_caloriesController.text) ?? 0;
+    final protein = double.tryParse(_proteinController.text) ?? 0;
+    final carbs = double.tryParse(_carbsController.text) ?? 0;
+    final fat = double.tryParse(_fatController.text) ?? 0;
+    final fiber = double.tryParse(_fiberController.text) ?? 0;
+
+    // Range validation — prevents nonsensical data from reaching Hive/Supabase.
+    if (calories < 0.1 || calories > 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Calories must be 0.1–2000 kcal per 100g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+    if (protein < 0 || protein > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Protein must be 0–100 g per 100g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+    if (carbs < 0 || carbs > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Carbs must be 0–100 g per 100g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+    if (fat < 0 || fat > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Fat must be 0–100 g per 100g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+    if (fiber < 0 || fiber > 50) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Fiber must be 0–50 g per 100g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+
+    final servingG = double.tryParse(_servingGController.text) ?? 0;
+    if (servingG < 1 || servingG > 10000) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Serving weight must be 1–10,000 g',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+        backgroundColor: AppColors.red,
+      ));
+      return;
+    }
+
     ref.read(customFoodProvider.notifier).addCustomFood(
           name: _nameController.text.trim(),
-          caloriesPer100g:
-              double.tryParse(_caloriesController.text) ?? 0,
-          proteinPer100g:
-              double.tryParse(_proteinController.text) ?? 0,
-          carbsPer100g:
-              double.tryParse(_carbsController.text) ?? 0,
-          fatPer100g: double.tryParse(_fatController.text) ?? 0,
-          fiberPer100g:
-              double.tryParse(_fiberController.text) ?? 0,
+          caloriesPer100g: calories,
+          proteinPer100g: protein,
+          carbsPer100g: carbs,
+          fatPer100g: fat,
+          fiberPer100g: fiber,
           servingDesc: _servingDescController.text.trim().isEmpty
               ? null
               : _servingDescController.text.trim(),

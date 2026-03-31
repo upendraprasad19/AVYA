@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/constants/app_environment.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'app.dart';
 
@@ -23,6 +24,7 @@ Future<void> main() async {
   await SeedService.instance.seedIfNeeded();
   await UsageCounterService.instance.checkAndResetCounters();
   await SupabaseService.instance.initialize();
+  RazorpayService.instance.initialize();
 
   runApp(
     const ProviderScope(

@@ -21,7 +21,7 @@ class BadgeUnlockOverlay extends StatefulWidget {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      pageBuilder: (ctx, _, __) => BadgeUnlockOverlay(
+      pageBuilder: (ctx, _, _) => BadgeUnlockOverlay(
         newBadgeIds: badgeIds,
         onDismiss: () => Navigator.of(ctx).pop(),
       ),

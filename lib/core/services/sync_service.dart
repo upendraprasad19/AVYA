@@ -119,6 +119,7 @@ class SyncService {
         _syncSleepLogs(userId),
         _syncStreaks(userId),
         _syncUserProfile(userId),
+        _syncUrineColorLogs(userId),
       ]);
 
       await _setTimestamp(_lastFullSyncKey);
@@ -160,7 +161,7 @@ class SyncService {
         .eq('user_id', userId)
         .gte('created_at', since);
 
-    final rows = res as List;
+    final rows = res;
     final healthBox = _hive.healthBox;
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
@@ -185,7 +186,7 @@ class SyncService {
         .eq('user_id', userId)
         .gte('created_at', since);
 
-    final rows = res as List;
+    final rows = res;
     final nutritionBox = _hive.nutritionBox;
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
@@ -206,7 +207,7 @@ class SyncService {
         .eq('user_id', userId)
         .gte('created_at', since);
 
-    final rows = res as List;
+    final rows = res;
     final healthBox = _hive.healthBox;
     for (final row in rows) {
       final map = Map<String, dynamic>.from(row as Map);
@@ -340,6 +341,30 @@ class SyncService {
         ...Map<String, dynamic>.from(log),
         'user_id': userId,
       }, onConflict: 'id');
+    }
+  }
+
+  Future<void> _syncUrineColorLogs(String userId) async {
+    final healthBox = _hive.healthBox;
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('urine_color_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      final date = log['date'] as String?;
+      if (date == null) continue;
+      try {
+        await _supabase.client.from('health_metrics').upsert({
+          'user_id': userId,
+          'date': date,
+          'metric_type': 'urine_color',
+          'value': (log['index'] as int?)?.toDouble() ?? -1,
+          'label': log['label'] ?? 'unknown',
+          'recorded_at': log['recorded_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,date,metric_type');
+      } catch (_) {
+        // Table may not exist yet — skip silently.
+      }
     }
   }
 

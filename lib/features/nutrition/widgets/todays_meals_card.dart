@@ -4,10 +4,18 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 
 /// Displays today's logged meals in a card with icon, name, macros, and calories.
+/// Supports swipe-to-delete and tap-to-edit macros.
 class TodaysMealsCard extends StatelessWidget {
   final List<Map<String, dynamic>> meals;
+  final void Function(Map<String, dynamic> meal)? onEdit;
+  final void Function(String logId)? onDelete;
 
-  const TodaysMealsCard({super.key, required this.meals});
+  const TodaysMealsCard({
+    super.key,
+    required this.meals,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -47,71 +55,93 @@ class TodaysMealsCard extends StatelessWidget {
         final protein = (meal['total_protein'] as num?)?.toInt() ?? 0;
         final carbs = (meal['total_carbs'] as num?)?.toInt() ?? 0;
         final fat = (meal['total_fat'] as num?)?.toInt() ?? 0;
+        final logId = meal['id'] as String?;
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            border: index < meals.length - 1
-                ? const Border(bottom: BorderSide(color: AppColors.border))
-                : null,
-          ),
-          child: Row(
-            children: [
-              // Meal icon
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: AppColors.input,
-                  borderRadius: BorderRadius.circular(8),
+        Widget row = GestureDetector(
+          onTap: onEdit != null ? () => onEdit!(meal) : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              border: index < meals.length - 1
+                  ? const Border(bottom: BorderSide(color: AppColors.border))
+                  : null,
+            ),
+            child: Row(
+              children: [
+                // Meal icon
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: AppColors.input,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('\uD83C\uDF7D', style: TextStyle(fontSize: 13)),
                 ),
-                alignment: Alignment.center,
-                child: const Text('\uD83C\uDF7D', style: TextStyle(fontSize: 13)),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
 
-              // Name + macros
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                // Name + macros
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'P:${protein}g \u00B7 C:${carbs}g \u00B7 F:${fat}g',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
+                      const SizedBox(height: 2),
+                      Text(
+                        'P:${protein}g \u00B7 C:${carbs}g \u00B7 F:${fat}g',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Calories
-              Text(
-                '$cal kcal',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
+                // Calories
+                Text(
+                  '$cal kcal',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
+
+        // Wrap with Dismissible for swipe-to-delete
+        if (onDelete != null && logId != null) {
+          row = Dismissible(
+            key: ValueKey(logId),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 18),
+              color: AppColors.red.withValues(alpha: 0.15),
+              child: const Icon(Icons.delete_outline, color: AppColors.red, size: 20),
+            ),
+            onDismissed: (_) => onDelete!(logId),
+            child: row,
+          );
+        }
+
+        return row;
       }),
     );
   }

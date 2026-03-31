@@ -1,5 +1,6 @@
 import '../services/hive_service.dart';
 import '../services/seed_service.dart';
+import '../utils/date_utils.dart';
 import '../../shared/repositories/plan_generator.dart';
 
 /// Maps generated plan days to real calendar dates and persists to Hive.
@@ -402,6 +403,30 @@ class WorkoutScheduleService {
     }
   }
 
+  // ── Custom Template Assignment ───────────────────────────────────
+
+  /// Assign a saved template to a specific calendar date.
+  /// Overwrites any existing plan entry for that date (generated or rest).
+  void assignTemplateToDate(String templateId, DateTime date) {
+    final tmpl = _hive.workoutBox.get(templateId);
+    if (tmpl == null) return;
+
+    final tmplMap = Map<String, dynamic>.from(tmpl as Map);
+    final dateKey = _dateKey(date);
+
+    _hive.workoutBox.put('$_schedulePrefix$dateKey', {
+      'date': dateKey,
+      'type': 'custom_template',
+      'template_id': templateId,
+      'workout_name': tmplMap['name'] as String? ?? 'Custom Workout',
+      'workout_focus': 'Custom',
+      'exercises': tmplMap['exercises'] ?? [],
+      'status': 'planned',
+      'is_swapped': false,
+      'completed_at': null,
+    });
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────
 
   /// Normalize a date to the Monday of its week.
@@ -411,7 +436,5 @@ class WorkoutScheduleService {
   }
 
   /// Format date as 'yyyy-MM-dd' string key.
-  String _dateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
+  String _dateKey(DateTime date) => formatDateKey(date);
 }

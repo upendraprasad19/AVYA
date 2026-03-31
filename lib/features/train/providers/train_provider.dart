@@ -3,8 +3,11 @@ import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
@@ -270,8 +273,7 @@ class CurrentPlanData {
     // First, try to find the workout for today's actual date.
     for (final day in weekDays) {
       if (day.date != null) {
-        final dayStr =
-            '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+        final dayStr = formatDateKey(day.date!);
         if (dayStr == todayStr && !day.isRest && !day.isDone) return day;
       }
     }
@@ -322,6 +324,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         // KEY FIX: Invalidate self AFTER generation completes so build()
         // re-runs and reads the freshly written plan from Hive.
         ref.invalidateSelf();
+        // Also refresh home calendar so newly scheduled days appear immediately.
+        ref.invalidate(calendarWeekProvider);
       } catch (e) {
         // Log but don't crash — plan generation failure is non-fatal.
         // User will see empty state and can retry via pull-to-refresh.
@@ -421,6 +425,26 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
               final equipList = equipRaw is List
                   ? equipRaw.map((e) => e.toString()).toList()
                   : <String>[];
+
+              // Fallback: if category missing from Hive (old plans), look up
+              // from exercise library by name.
+              String? category = m['category'] as String?;
+              if (category == null || category.isEmpty) {
+                final name = (m['exercise_name'] as String? ?? '').toLowerCase();
+                final exId = m['exercise_id'] as String?;
+                if (exId != null && exId.isNotEmpty) {
+                  final libEx = ExerciseRepository.instance.getById(exId);
+                  category = libEx?['category'] as String?;
+                }
+                if (category == null || category.isEmpty) {
+                  // Search by name as last resort
+                  final results = ExerciseRepository.instance.search(name);
+                  if (results.isNotEmpty) {
+                    category = results.first['category'] as String?;
+                  }
+                }
+              }
+
               return ExerciseData(
                 name: m['exercise_name'] as String? ?? 'Unknown',
                 sets: '${m['sets'] ?? 3}',
@@ -428,7 +452,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
                 weight: '0kg',
                 rest: '${m['rest_seconds'] ?? 60}s',
                 loggingType: m['logging_type'] as String? ?? 'weight_reps',
-                category: m['category'] as String?,
+                category: category,
                 equipmentNeeded: equipList,
                 exerciseType: m['exercise_type'] as String?,
                 supersetGroup: m['superset_group'] as int?,
@@ -514,7 +538,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final startStr = hive.configBox.get('plan_start_date') as String?;
     if (startStr == null) return;
 
-    final planStart = DateTime.parse(startStr);
+    final planStart = DateTime.tryParse(startStr) ?? DateTime.now();
     final sourceWeekStart =
         planStart.add(Duration(days: (sourceWeek - 1) * 7));
     final targetWeekStart =
@@ -572,6 +596,15 @@ class SelectedWeekNotifier extends Notifier<int> {
 
 final selectedWeekProvider =
     NotifierProvider<SelectedWeekNotifier, int>(SelectedWeekNotifier.new);
+
+// ── Workout Stats (PRs) ────────────────────────────────────────
+
+/// Provider for key lift PRs — watched by StatsGrid so it refreshes
+/// automatically after workout completion via ref.invalidate().
+final workoutStatsProvider =
+    Provider<Map<String, Map<String, double>>>((ref) {
+  return WorkoutRepository.instance.loadKeyLiftPRs();
+});
 
 // ── Expanded Day ────────────────────────────────────────────────
 
@@ -778,6 +811,94 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     );
   }
 
+  void removeExercise(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+    if (state.exercises.length <= 1) return; // Don't allow removing last exercise
+    final newExercises = List<ExerciseData>.from(state.exercises)
+      ..removeAt(exerciseIndex);
+    // Clean up checked sets and warm-up flags for removed and shifted exercises
+    final newChecked = <String, bool>{};
+    final newWarmUps = <String, bool>{};
+    final newInputValues = <String, SetInputValues>{};
+    for (final entry in state.checkedSets.entries) {
+      final parts = entry.key.split('-');
+      final exIdx = int.tryParse(parts[0]) ?? -1;
+      final setIdx = parts.length > 1 ? parts[1] : '';
+      if (exIdx < exerciseIndex) {
+        newChecked[entry.key] = entry.value;
+      } else if (exIdx > exerciseIndex) {
+        newChecked['${exIdx - 1}-$setIdx'] = entry.value;
+      }
+    }
+    for (final entry in state.warmUpSets.entries) {
+      final parts = entry.key.split('-');
+      final exIdx = int.tryParse(parts[0]) ?? -1;
+      final setIdx = parts.length > 1 ? parts[1] : '';
+      if (exIdx < exerciseIndex) {
+        newWarmUps[entry.key] = entry.value;
+      } else if (exIdx > exerciseIndex) {
+        newWarmUps['${exIdx - 1}-$setIdx'] = entry.value;
+      }
+    }
+    for (final entry in state.setInputValues.entries) {
+      final parts = entry.key.split('-');
+      final exIdx = int.tryParse(parts[0]) ?? -1;
+      final setIdx = parts.length > 1 ? parts[1] : '';
+      if (exIdx < exerciseIndex) {
+        newInputValues[entry.key] = entry.value;
+      } else if (exIdx > exerciseIndex) {
+        newInputValues['${exIdx - 1}-$setIdx'] = entry.value;
+      }
+    }
+    state = state.copyWith(
+      exercises: newExercises,
+      checkedSets: newChecked,
+      warmUpSets: newWarmUps,
+      setInputValues: newInputValues,
+    );
+  }
+
+  /// Add one set to the exercise at [exerciseIndex].
+  void addSet(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+    final ex = state.exercises[exerciseIndex];
+    final current = int.tryParse(ex.sets) ?? 3;
+    final newExercises = List<ExerciseData>.from(state.exercises);
+    newExercises[exerciseIndex] = ex.copyWith(sets: '${current + 1}');
+    state = state.copyWith(exercises: newExercises);
+  }
+
+  /// Remove the last set from the exercise at [exerciseIndex] (min 1 set).
+  void removeLastSet(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+    final ex = state.exercises[exerciseIndex];
+    final current = int.tryParse(ex.sets) ?? 3;
+    if (current <= 1) return; // Keep at least 1 set
+    final newSetCount = current - 1;
+    final newExercises = List<ExerciseData>.from(state.exercises);
+    newExercises[exerciseIndex] = ex.copyWith(sets: '$newSetCount');
+
+    // Remove checked/warm-up/input data for the deleted last set
+    final lastSetKey = '$exerciseIndex-$current'; // 0-based: set index = current-1
+    final removedKey = '$exerciseIndex-${current - 1}';
+    final newChecked = Map<String, bool>.from(state.checkedSets)
+      ..remove(removedKey)
+      ..remove(lastSetKey);
+    final newWarmUps = Map<String, bool>.from(state.warmUpSets)
+      ..remove(removedKey)
+      ..remove(lastSetKey);
+    final newInputValues = Map<String, SetInputValues>.from(state.setInputValues)
+      ..remove(removedKey)
+      ..remove(lastSetKey);
+
+    state = state.copyWith(
+      exercises: newExercises,
+      checkedSets: newChecked,
+      warmUpSets: newWarmUps,
+      setInputValues: newInputValues,
+    );
+  }
+
   /// Toggle warm-up flag for a specific set.
   void toggleWarmUp(int exerciseIndex, int setIndex) {
     final key = '$exerciseIndex-$setIndex';
@@ -884,30 +1005,43 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final hive = HiveService.instance;
     final now = DateTime.now();
 
-    // PR detection: compare each exercise's weight to best previous log
+    // PR detection: single-scan cache of exercise → best weight (O(n) once,
+    // then O(1) per exercise) instead of O(exercises × logs) nested loop.
+    final bestWeightMap = <String, double>{};
+    for (final raw in hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'exercise_log') continue;
+      final name = (log['exercise_name'] as String? ?? '').toLowerCase();
+      if (name.isEmpty) continue;
+      final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
+    }
+
     final prDescriptions = <String>[];
-    for (final exercise in state.exercises) {
+    for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
+      final exercise = state.exercises[exIdx];
       if (exercise.loggingType != 'weight_reps' &&
           exercise.loggingType != 'weighted_bodyweight') {
         continue;
       }
-      final currentWeight =
-          double.tryParse(exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
-              0;
-      if (currentWeight <= 0) continue;
 
-      // Find best previous weight for this exercise
-      double bestPrevious = 0;
-      for (final raw in hive.workoutBox.values) {
-        if (raw is! Map) continue;
-        final log = Map<String, dynamic>.from(raw);
-        final name =
-            (log['exercise_name'] as String? ?? '').toLowerCase();
-        if (name == exercise.name.toLowerCase()) {
-          final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-          if (w > bestPrevious) bestPrevious = w;
+      // Find the best weight from actual set inputs
+      double currentWeight = 0;
+      final numSets = int.tryParse(exercise.sets) ?? 3;
+      for (int s = 0; s < numSets; s++) {
+        final key = '$exIdx-$s';
+        if (state.checkedSets.containsKey(key) && !state.warmUpSets.containsKey(key)) {
+          final vals = state.setInputValues[key];
+          if (vals?.weight != null && vals!.weight! > currentWeight) {
+            currentWeight = vals.weight!;
+          }
         }
       }
+      if (currentWeight <= 0) continue;
+
+      // O(1) lookup from pre-built cache instead of O(n) per exercise
+      final bestPrevious = bestWeightMap[exercise.name.toLowerCase()] ?? 0;
 
       if (currentWeight > bestPrevious && bestPrevious > 0) {
         prDescriptions.add(
@@ -923,6 +1057,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       completedAt: state.workoutDay?.date ?? now,
     );
 
+    // Compute date key once — used by exercise logs, date index, and streak.
+    final dateStr = formatDateKey(now);
+    final savedLogIds = <String>[]; // Collect IDs for date index
+
     // Save individual exercise logs with is_pr flag, respecting logging type
     for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
       final exercise = state.exercises[exIdx];
@@ -930,8 +1068,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           .any((pr) => pr.startsWith(exercise.name));
       final logId =
           'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
-      final dateStr =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
       // Aggregate values from per-set input data
       final numSets = int.tryParse(exercise.sets) ?? 3;
@@ -1034,6 +1170,19 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
 
       await hive.workoutBox.put(logId, logMap);
+      savedLogIds.add(logId);
+    }
+
+    // Update date index for O(1) lookups by date (Fix 4: date index).
+    // Appends new log IDs to existing index (handles multiple workouts/day).
+    if (savedLogIds.isNotEmpty) {
+      final indexKey = 'exercise_log_index_$dateStr';
+      final existingIndex = hive.workoutBox.get(indexKey);
+      final indexList = existingIndex is List
+          ? List<String>.from(existingIndex)
+          : <String>[];
+      indexList.addAll(savedLogIds);
+      await hive.workoutBox.put(indexKey, indexList);
     }
 
     // Mark the scheduled day as completed in the calendar.
@@ -1044,37 +1193,55 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final progress = UserRepository.instance.getProgress() ?? {};
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
 
-    // Streak: check if this week has now hit the ≥80% completion threshold.
-    // markWorkoutCompleted already ran above, so the status is up-to-date.
+    // ── Daily streak (consecutive workout days — what users see) ──
+    // Reuse dateStr (already computed above) for today's date key.
+    final yesterdayStr = formatDateKey(now.subtract(const Duration(days: 1)));
+    final lastWorkoutDate = (progress['last_workout_date'] as String?) ?? '';
+    int streakDays = (progress['current_streak_days'] as int?) ?? 0;
+    if (lastWorkoutDate == dateStr) {
+      // Same day double-log — already counted, do nothing
+    } else if (lastWorkoutDate == yesterdayStr) {
+      streakDays += 1;  // Consecutive day — keep the streak going
+    } else {
+      streakDays = 1;   // Gap or first workout ever — start at 1
+    }
+
+    // ── Weekly streak (kept for badge logic — not shown in UI) ───
     final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
     final weekDays = repo.getWeek(currentWeekNum);
     final planned = weekDays.where((d) => d['type'] == 'workout').length;
-    final completed = weekDays.where((d) => d['status'] == 'completed').length;
+    final completedCount = weekDays.where((d) => d['status'] == 'completed').length;
     int streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
     final lastStreakWeek = (progress['last_streak_week'] as int?) ?? -1;
     if (planned > 0 &&
-        completed >= (planned * 0.8).ceil() &&
+        completedCount >= (planned * 0.8).ceil() &&
         currentWeekNum != lastStreakWeek) {
       streakWeeks += 1;
     }
 
     await UserRepository.instance.updateProgress({
       'total_workouts_done': totalDone,
+      'current_streak_days': streakDays,
+      'last_workout_date': dateStr,
       'current_streak_weeks': streakWeeks,
       'last_streak_week': currentWeekNum,
     });
 
     state = state.copyWith(isComplete: true, detectedPRs: prDescriptions);
 
-    // Refresh the plan provider so the UI reflects the completed workout.
-    ref.invalidate(currentPlanProvider);
+    // Check badge unlocks after workout completion.
+    BadgeService.instance.checkAll();
 
-    // Cross-screen: refresh home dashboard so calendar, streak, and workout
-    // card reflect the completion immediately.
+    // Refresh all affected providers. Riverpod batches invalidations within
+    // the same synchronous frame — these won't cause separate rebuilds.
+    // Each is independent (no transitive dependencies between them).
+    ref.invalidate(currentPlanProvider);
+    ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
-    ref.invalidate(weightHistoryProvider);
+    // Note: weightHistoryProvider not invalidated — workout completion
+    // doesn't change weight data (weight is logged separately).
   }
 
   void cancelWorkout() {

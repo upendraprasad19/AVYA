@@ -172,8 +172,8 @@ class SetInputRow extends StatelessWidget {
             ? TextInputType.number
             : const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: isInt
-            ? [FilteringTextInputFormatter.digitsOnly]
-            : [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+            ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)]
+            : [FilteringTextInputFormatter.allow(RegExp(r'[\d.]')), LengthLimitingTextInputFormatter(6)],
         textAlign: TextAlign.center,
         style: GoogleFonts.getFont(
           'DM Sans',

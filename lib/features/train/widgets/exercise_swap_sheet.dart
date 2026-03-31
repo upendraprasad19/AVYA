@@ -11,6 +11,7 @@ class ExerciseSwapSheet extends StatefulWidget {
   final String? category;
   final List<String>? equipment;
   final ValueChanged<SwapExerciseData> onSelect;
+  final VoidCallback? onDelete;
 
   const ExerciseSwapSheet({
     super.key,
@@ -18,6 +19,7 @@ class ExerciseSwapSheet extends StatefulWidget {
     required this.onSelect,
     this.category,
     this.equipment,
+    this.onDelete,
   });
 
   @override
@@ -149,6 +151,40 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
               ],
             ),
           ),
+          // Delete button
+          if (widget.onDelete != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onDelete!();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFef4444).withValues(alpha: 0.08),
+                    border: Border.all(
+                      color: const Color(0xFFef4444).withValues(alpha: 0.25),
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '\u2212 Remove Exercise',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFef4444),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           const Divider(height: 1, color: Color(0xFF1c2535)),
 
           // Search

@@ -1,0 +1,14 @@
+flutter_launcher_icons:
+  android:
+    notification_icon: "icon_0_notification"
+    notification_icon_background: "#07090e"
+  image_path: "assets/avya_icon.png"
+  image_path_android: "assets/avya_icon.png"
+  web:
+    background_color: "#07090e"
+    image_path: "assets/avya_icon.png"
+  windows:
+    image_path: "assets/avya_icon.png"
+    image_path_dark: "assets/avya_icon.png"
+  macos:
+    image_path: "assets/avya_icon.png"

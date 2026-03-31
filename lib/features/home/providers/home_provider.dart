@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
@@ -77,7 +78,7 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
         status = CalendarDayStatus.completed;
       } else if (statusStr == 'travel') {
         status = CalendarDayStatus.travel;
-      } else if (type == 'workout' && statusStr == 'planned') {
+      } else if ((type == 'workout' || type == 'custom_template') && statusStr == 'planned') {
         // Past day with planned workout that wasn't done = missed
         status = isPast && !isToday
             ? CalendarDayStatus.missed
@@ -170,7 +171,8 @@ class StreakNotifier extends Notifier<int> {
   @override
   int build() {
     final progress = UserRepository.instance.getProgress();
-    return (progress?['current_streak_weeks'] as int?) ?? 0;
+    // Show daily streak (consecutive workout days) — more intuitive for users
+    return (progress?['current_streak_days'] as int?) ?? 0;
   }
 }
 
@@ -488,8 +490,28 @@ class WeightLogNotifier extends Notifier<void> {
         Map<String, dynamic>.from(userBox.get('profile') as Map? ?? {});
     profile['current_weight_kg'] = weightKg;
     userBox.put('profile', profile);
+    BadgeService.instance.checkAll();
   }
 }
 
 final weightLogNotifierProvider =
     NotifierProvider<WeightLogNotifier, void>(WeightLogNotifier.new);
+
+// ── Today Weight Logged Check ────────────────────────────────────
+
+class TodayWeightLoggedNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    final healthBox = HiveService.instance.healthBox;
+    final today = DateTime.now();
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    return healthBox.get('weight_$todayStr') != null;
+  }
+
+  void refresh() => ref.invalidateSelf();
+}
+
+final todayWeightLoggedProvider =
+    NotifierProvider<TodayWeightLoggedNotifier, bool>(
+        TodayWeightLoggedNotifier.new);

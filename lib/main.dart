@@ -1,13 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/seed_service.dart';
-import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
-import 'package:icanbefitter/core/constants/app_constants.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'app.dart';
 
 Future<void> main() async {
@@ -17,22 +13,18 @@ Future<void> main() async {
   await dotenv.load(fileName: '.env');
 
   // 1. Initialize Hive — registers adapters and opens all 10 boxes.
+  //    Must complete before runApp() so Riverpod providers can read boxes.
   await HiveService.instance.init();
 
-  // 2. Seed bundled JSON data on first launch.
-  await SeedService.instance.seedIfNeeded();
-
-  // 3. Reset stale usage counters (daily/monthly) based on date.
+  // 2. Reset stale usage counters (daily/monthly) based on date.
+  //    Fast local-only operation; safe to do before runApp().
   await UsageCounterService.instance.checkAndResetCounters();
 
-  // 4. Initialize Supabase.
-  await SupabaseService.instance.initialize();
+  // 3. Initialize Razorpay checkout handler (no-op on web).
+  RazorpayService.instance.initialize();
 
-  // 5. Initialize OneSignal push notifications (mobile only).
-  if (!kIsWeb) {
-    OneSignal.initialize(AppConstants.oneSignalAppId);
-    await OneSignal.Notifications.requestPermission(true);
-  }
+  // Supabase, SeedService, and OneSignal are deferred to SplashScreen
+  // so the UI appears immediately instead of after a 30-50s black screen.
 
   runApp(
     const ProviderScope(

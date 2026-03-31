@@ -22,6 +22,7 @@ import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
 import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -237,7 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           // Streak badge
-          StreakBadge(weeks: streak),
+          StreakBadge(days: streak),
         ],
       ),
     );
@@ -253,7 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (streak == 0 || dayOfWeek < 6) return const SizedBox.shrink();
 
     return StreakWarningBanner(
-      streakWeeks: streak,
+      streakDays: streak,
       workoutsRemaining: 1,
       onTrainNow: () => context.go('/train'),
     );
@@ -318,6 +319,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // -- Quick Actions --------------------------------------------------
 
   Widget _buildQuickActions(BuildContext context) {
+    final schedule = ref.watch(todayWorkoutProvider);
+    final nutrition = ref.watch(nutritionSummaryProvider);
+    final waterMl = ref.watch(waterIntakeProvider);
+    final weightLogged = ref.watch(todayWeightLoggedProvider);
+
+    // Workout: completed or rest day → done
+    final workoutStatus = schedule?['status'] as String? ?? 'planned';
+    final workoutType = schedule?['type'] as String? ?? 'rest';
+    final workoutDone =
+        workoutStatus == 'completed' || workoutType != 'workout';
+
+    // Meals: both calories AND protein must hit target
+    final proteinProgress = nutrition.proteinTarget > 0
+        ? nutrition.protein / nutrition.proteinTarget
+        : 0.0;
+    final calorieProgress = nutrition.calorieTarget > 0
+        ? nutrition.calories / nutrition.calorieTarget
+        : 0.0;
+    final mealsDone = proteinProgress >= 1.0 && calorieProgress >= 1.0;
+
+    // Water: progress toward 3L goal
+    const waterGoalMl = 3000;
+    final waterProgress = waterMl / waterGoalMl;
+    final waterDone = waterMl >= waterGoalMl;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       child: Row(
@@ -325,19 +351,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           QuickActionButton(
             icon: Icons.fitness_center,
             label: 'Workout',
-            initiallyActive: true,
+            state: workoutDone
+                ? QuickActionState.completed
+                : QuickActionState.idle,
             onTap: () => context.go('/train'),
           ),
           const SizedBox(width: 7),
           QuickActionButton(
             icon: Icons.restaurant,
             label: 'Meals',
+            state: mealsDone
+                ? QuickActionState.completed
+                : QuickActionState.idle,
+            progress: proteinProgress,
+            progressColor: AppColors.accent,
             onTap: () => context.go('/nutrition'),
           ),
           const SizedBox(width: 7),
           QuickActionButton(
             icon: Icons.water_drop_outlined,
             label: 'Water',
+            state: waterDone
+                ? QuickActionState.completed
+                : QuickActionState.idle,
+            progress: waterProgress,
+            progressColor: AppColors.blue,
             onTap: () => showModalBottomSheet(
               context: context,
               backgroundColor: Colors.transparent,
@@ -348,6 +386,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           QuickActionButton(
             icon: Icons.monitor_weight_outlined,
             label: 'Weight',
+            state: weightLogged
+                ? QuickActionState.completed
+                : QuickActionState.idle,
             onTap: () => showModalBottomSheet(
               context: context,
               backgroundColor: Colors.transparent,
@@ -394,7 +435,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final nutrition = ref.watch(nutritionSummaryProvider);
 
     final type = schedule?['type'] as String? ?? 'rest';
+    final status = schedule?['status'] as String? ?? 'planned';
     final isRestDay = type != 'workout';
+    final isCompleted = status == 'completed';
     final workoutName = schedule?['workout_name'] as String? ?? 'Rest Day';
     final exercises = schedule?['exercises'] as List? ?? [];
     final week = schedule?['week'] as int? ?? 1;
@@ -406,6 +449,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         durationMin: 0,
         exerciseCount: 0,
         isRestDay: true,
+        onStart: () {},
+        caloriesCurrent: nutrition.calories,
+        caloriesTarget: nutrition.calorieTarget,
+        proteinCurrent: nutrition.protein,
+        proteinTarget: nutrition.proteinTarget,
+        steps: ref.watch(todayStepsProvider),
+        stepsGoal: 10000,
+      );
+    }
+
+    if (isCompleted) {
+      return TodayWorkoutCard(
+        workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE 1',
+        workoutName: workoutName.toUpperCase(),
+        durationMin: 0,
+        exerciseCount: exercises.length,
+        isRestDay: false,
+        isDone: true,
         onStart: () {},
         caloriesCurrent: nutrition.calories,
         caloriesTarget: nutrition.calorieTarget,
