@@ -5,28 +5,28 @@ void main() {
   group('BmrCalculator.calculateBmr', () {
     test('male — standard values', () {
       // 80kg, 175cm, 30yo male
-      // BMR = (10*80) + (6.25*175) - (5*30) + 5
-      //     = 800 + 1093.75 - 150 + 5 = 1748.75 → 1749
+      // BMR = (10*80) + (6.25*175) - (5*30) + 5 - 50 (offset)
+      //     = 800 + 1093.75 - 150 + 5 - 50 = 1698.75 → 1699
       final result = BmrCalculator.calculateBmr(
         weightKg: 80,
         heightCm: 175,
         age: 30,
         gender: 'male',
       );
-      expect(result, 1749.0);
+      expect(result, 1699.0);
     });
 
     test('female — standard values', () {
       // 60kg, 165cm, 28yo female
-      // BMR = (10*60) + (6.25*165) - (5*28) - 161
-      //     = 600 + 1031.25 - 140 - 161 = 1330.25 → 1330
+      // BMR = (10*60) + (6.25*165) - (5*28) - 161 - 50 (offset)
+      //     = 600 + 1031.25 - 140 - 161 - 50 = 1280.25 → 1280
       final result = BmrCalculator.calculateBmr(
         weightKg: 60,
         heightCm: 165,
         age: 28,
         gender: 'female',
       );
-      expect(result, 1330.0);
+      expect(result, 1280.0);
     });
 
     test('gender check is case-insensitive', () {
@@ -75,7 +75,8 @@ void main() {
         weightKg: weightKg, heightCm: heightCm, age: age,
         gender: gender, activityLevel: 'sedentary',
       );
-      expect(tdee, (bmr * 1.2).roundToDouble());
+      // TDEE applies a -100 offset in addition to the multiplier
+      expect(tdee, (bmr * 1.2 - 100).roundToDouble());
     });
 
     test('active multiplier (1.725)', () {
@@ -86,7 +87,8 @@ void main() {
         weightKg: weightKg, heightCm: heightCm, age: age,
         gender: gender, activityLevel: 'active',
       );
-      expect(tdee, (bmr * 1.725).roundToDouble());
+      // TDEE applies a -100 offset in addition to the multiplier
+      expect(tdee, (bmr * 1.725 - 100).roundToDouble());
     });
 
     test('unknown activity level defaults to sedentary (1.2)', () {
