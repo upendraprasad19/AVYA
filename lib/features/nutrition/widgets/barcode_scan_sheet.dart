@@ -112,6 +112,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
       'total_protein': food.proteinForServing(_servingG).round(),
       'total_carbs': food.carbsForServing(_servingG).round(),
       'total_fat': food.fatForServing(_servingG).round(),
+      'total_fiber': food.fiberForServing(_servingG).round(),
       'created_at': now.toIso8601String(),
       'source': 'barcode',
     });

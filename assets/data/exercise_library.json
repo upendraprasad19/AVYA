@@ -2895,7 +2895,7 @@
     "equipment_needed": [
       "Jump Rope"
     ],
-    "logging_type": "cardio",
+    "logging_type": "timed",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -3077,7 +3077,7 @@
     "equipment_needed": [
       "Bodyweight"
     ],
-    "logging_type": "cardio",
+    "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -3577,7 +3577,7 @@
       "Bodyweight",
       "Yoga Mat"
     ],
-    "logging_type": "cardio",
+    "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -6159,7 +6159,7 @@
     "equipment_needed": [
       "Bodyweight"
     ],
-    "logging_type": "cardio",
+    "logging_type": "timed",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -6204,7 +6204,7 @@
     "equipment_needed": [
       "Bodyweight"
     ],
-    "logging_type": "cardio",
+    "logging_type": "timed",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -6336,7 +6336,7 @@
     "equipment_needed": [
       "Battle Ropes"
     ],
-    "logging_type": "cardio",
+    "logging_type": "timed",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -8723,7 +8723,7 @@
     "equipment_needed": [
       "Battle Ropes"
     ],
-    "logging_type": "cardio",
+    "logging_type": "timed",
     "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
@@ -9081,7 +9081,7 @@
     "equipment_needed": [
       "Bodyweight"
     ],
-    "logging_type": "cardio",
+    "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
     "suitable_for": [
       "Beginner",

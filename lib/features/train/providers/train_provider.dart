@@ -296,7 +296,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
       Map<String, dynamic> profile, Map<String, dynamic>? progress) {
     final goal = profile['primary_goal'] as String? ?? 'general_fitness';
     final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
-    final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+    final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     final experience = profile['fitness_experience'] as String? ?? 'beginner';
     final phase = (progress?['current_phase'] as int?) ?? 1;
 
@@ -413,7 +413,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
       for (final dayMap in weekDays) {
         final type = dayMap['type'] as String? ?? 'rest';
-        final isRest = type != 'workout';
+        final isRest = type != 'workout' && type != 'custom_template';
         final status = dayMap['status'] as String? ?? 'planned';
         final exerciseMaps = dayMap['exercises'] as List? ?? [];
 
@@ -446,9 +446,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
               }
 
               return ExerciseData(
-                name: m['exercise_name'] as String? ?? 'Unknown',
-                sets: '${m['sets'] ?? 3}',
-                reps: m['reps'] as String? ?? '${m['reps'] ?? 10}',
+                name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
+                sets: '${m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3}',
+                reps: m['reps'] as String? ?? m['prescribed_reps'] as String? ?? m['default_reps'] as String? ?? '10',
                 weight: '0kg',
                 rest: '${m['rest_seconds'] ?? 60}s',
                 loggingType: m['logging_type'] as String? ?? 'weight_reps',
@@ -585,6 +585,11 @@ final currentPlanProvider =
 class SelectedWeekNotifier extends Notifier<int> {
   @override
   int build() {
+    // Default to the calendar week that contains today so the chip for
+    // the current date range is highlighted when the Train tab opens.
+    // Falls back to the stored progress week if no plan is scheduled yet.
+    final calendarWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
+    if (calendarWeek > 0) return calendarWeek;
     final progress = UserRepository.instance.getProgress();
     return (progress?['current_week'] as int?) ?? 1;
   }
@@ -644,6 +649,7 @@ class ActiveWorkoutData {
   final Map<String, SetInputValues> setInputValues; // "exerciseIndex-setIndex" -> values
   final Map<String, bool> warmUpSets; // "exerciseIndex-setIndex" -> true if warm-up
   final bool isComplete;
+  final bool isSaved; // true once completeWorkout() has written to Hive
   final List<String> detectedPRs; // PR descriptions detected on save
   // Superset manual grouping (session-only override, not persisted)
   final int? supersetGroupingSourceIndex; // exercise index being grouped
@@ -657,6 +663,7 @@ class ActiveWorkoutData {
     this.setInputValues = const {},
     this.warmUpSets = const {},
     this.isComplete = false,
+    this.isSaved = false,
     this.detectedPRs = const [],
     this.supersetGroupingSourceIndex,
     this.isSupersetGroupMode = false,
@@ -670,6 +677,7 @@ class ActiveWorkoutData {
     Map<String, SetInputValues>? setInputValues,
     Map<String, bool>? warmUpSets,
     bool? isComplete,
+    bool? isSaved,
     List<String>? detectedPRs,
     int? Function()? supersetGroupingSourceIndex,
     bool? isSupersetGroupMode,
@@ -682,6 +690,7 @@ class ActiveWorkoutData {
       setInputValues: setInputValues ?? this.setInputValues,
       warmUpSets: warmUpSets ?? this.warmUpSets,
       isComplete: isComplete ?? this.isComplete,
+      isSaved: isSaved ?? this.isSaved,
       detectedPRs: detectedPRs ?? this.detectedPRs,
       supersetGroupingSourceIndex: supersetGroupingSourceIndex != null
           ? supersetGroupingSourceIndex()
@@ -778,6 +787,20 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
     });
+  }
+
+  /// Allow manual override of elapsed seconds (e.g. user edits duration on finish).
+  void setElapsedSeconds(int seconds) {
+    state = state.copyWith(elapsedSeconds: seconds);
+  }
+
+  /// Reopen a completed workout for review without re-saving.
+  /// Sets isComplete = false so the workout screen shows again.
+  /// isSaved remains true to prevent double-logging.
+  void reopenWorkout() {
+    _timer?.cancel();
+    _timer = null;
+    state = state.copyWith(isComplete: false);
   }
 
   void toggleSet(int exerciseIndex, int setIndex) {
@@ -1001,6 +1024,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     _timer?.cancel();
     _timer = null;
 
+    // If already saved (user reopened workout to review), just mark complete
+    // again without re-writing to Hive — prevents duplicate exercise logs.
+    if (state.isSaved) {
+      state = state.copyWith(isComplete: true);
+      return;
+    }
+
     final repo = WorkoutRepository.instance;
     final hive = HiveService.instance;
     final now = DateTime.now();
@@ -1187,7 +1217,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     // Mark the scheduled day as completed in the calendar.
     final workoutDate = state.workoutDay?.date ?? now;
-    await repo.markWorkoutCompleted(workoutDate);
+    await repo.markWorkoutCompleted(workoutDate, durationSeconds: state.elapsedSeconds);
 
     // Update user progress + streak.
     final progress = UserRepository.instance.getProgress() ?? {};
@@ -1227,7 +1257,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       'last_streak_week': currentWeekNum,
     });
 
-    state = state.copyWith(isComplete: true, detectedPRs: prDescriptions);
+    state = state.copyWith(isComplete: true, isSaved: true, detectedPRs: prDescriptions);
 
     // Check badge unlocks after workout completion.
     BadgeService.instance.checkAll();
@@ -1240,6 +1270,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
+    ref.invalidate(allExercisePRsProvider);
     // Note: weightHistoryProvider not invalidated — workout completion
     // doesn't change weight data (weight is logged separately).
   }
@@ -1366,6 +1397,23 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     template['type'] = 'template';
     template['created_at'] = DateTime.now().toIso8601String();
     await hive.workoutBox.put(id, template);
+    ref.invalidateSelf();
+  }
+
+  Future<void> updateTemplate(
+      String templateId, Map<String, dynamic> template) async {
+    final hive = HiveService.instance;
+    final existing = hive.workoutBox.get(templateId);
+    if (existing == null) return;
+    final updated = Map<String, dynamic>.from(existing as Map);
+    updated['name'] = template['name'];
+    updated['exercises'] = template['exercises'];
+    updated['exercise_count'] = template['exercise_count'];
+    if (template.containsKey('assigned_days')) {
+      updated['assigned_days'] = template['assigned_days'];
+    }
+    updated['updated_at'] = DateTime.now().toIso8601String();
+    await hive.workoutBox.put(templateId, updated);
     ref.invalidateSelf();
   }
 }

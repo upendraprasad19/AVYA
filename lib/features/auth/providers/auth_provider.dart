@@ -6,7 +6,9 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 // ── Auth State Stream ───────────────────────────────────────────
 
@@ -66,9 +68,26 @@ class AuthNotifier extends Notifier<AuthState2> {
   SupabaseService get _supabase => SupabaseService.instance;
   HiveService get _hive => HiveService.instance;
 
+  /// Ensures Supabase is initialized, attempting initialization if needed.
+  /// Returns false and sets an error state if it cannot be initialized.
+  Future<bool> _ensureSupabaseReady() async {
+    if (_supabase.isInitialized) return true;
+    try {
+      await _supabase.initialize();
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Connection failed. Please check your internet and try again.',
+      );
+      return false;
+    }
+  }
+
   /// Sign in with email + password.
   Future<void> signInWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await _ensureSupabaseReady()) return;
     try {
       final response = await _supabase.client.auth.signInWithPassword(
         email: email,
@@ -93,7 +112,7 @@ class AuthNotifier extends Notifier<AuthState2> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
-        errorMessage: 'Something went wrong. Please try again.',
+        errorMessage: '[${e.runtimeType}] ${e.toString().split('\n').first}',
       );
     }
   }
@@ -101,6 +120,7 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Create a new account with email + password.
   Future<void> signUpWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await _ensureSupabaseReady()) return;
     try {
       final response = await _supabase.client.auth.signUp(
         email: email,
@@ -115,7 +135,38 @@ class AuthNotifier extends Notifier<AuthState2> {
         return;
       }
 
-      await _ensureLocalUser(response.user!);
+      // If identities is empty, the user already exists but hasn't confirmed
+      // their email — Supabase returns a fake success to prevent user enumeration.
+      if (response.user!.identities != null &&
+          response.user!.identities!.isEmpty) {
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage:
+              'An account with this email already exists. Please sign in.',
+        );
+        return;
+      }
+
+      // Email confirmation enabled → session is null, user must confirm email.
+      if (response.session == null) {
+        // Still try to set up local state, but don't require it to succeed.
+        try {
+          await _ensureLocalUser(response.user!);
+        } catch (_) {}
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage:
+              'Check your email for a confirmation link, then sign in.',
+        );
+        return;
+      }
+
+      // Session present → signed in immediately (email confirmation off).
+      try {
+        await _ensureLocalUser(response.user!);
+      } catch (_) {
+        // Local setup failure is non-fatal — auth succeeded.
+      }
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -125,7 +176,7 @@ class AuthNotifier extends Notifier<AuthState2> {
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
-        errorMessage: 'Something went wrong. Please try again.',
+        errorMessage: 'Sign up failed: ${e.toString().split('\n').first}',
       );
     }
   }
@@ -133,6 +184,7 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Sign in with Google OAuth.
   Future<void> signInWithGoogle() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await _ensureSupabaseReady()) return;
     try {
       await _supabase.client.auth.signInWithOAuth(
         OAuthProvider.google,
@@ -158,6 +210,7 @@ class AuthNotifier extends Notifier<AuthState2> {
       errorMessage: null,
       otpSent: false,
     );
+    if (!await _ensureSupabaseReady()) return;
     try {
       await _supabase.client.auth.signInWithOtp(phone: phone);
       state = state.copyWith(status: AuthStatus.idle, otpSent: true);
@@ -208,17 +261,22 @@ class AuthNotifier extends Notifier<AuthState2> {
   }
 
   /// Sign the user out of Supabase.
+  ///
+  /// Sign out BEFORE clearing Hive so the router never sees
+  /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> signOut() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    // 1. Terminate session (local scope always works offline).
     try {
-      await _supabase.client.auth.signOut();
-      state = const AuthState2(status: AuthStatus.idle);
-    } catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.error,
-        errorMessage: 'Sign out failed.',
-      );
+      await _supabase.client.auth.signOut(scope: SignOutScope.global);
+    } catch (_) {
+      try {
+        await _supabase.client.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {}
     }
+    // 2. Clear all user data after session is gone.
+    await UserRepository.instance.clearAllData();
+    state = const AuthState2(status: AuthStatus.idle);
   }
 
   /// Reset back to idle.
@@ -237,14 +295,29 @@ class AuthNotifier extends Notifier<AuthState2> {
     final configBox = _hive.configBox;
     final existing = userBox.get('profile');
 
+    // If Hive has a profile for a DIFFERENT user (e.g. incomplete sign-out),
+    // clear all user-specific boxes before restoring the new user's data.
+    if (existing != null) {
+      final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
+      if (existingId != null && existingId != user.id) {
+        await UserRepository.instance.clearAllData();
+      }
+    }
+
     // Ensure user exists in public.users table (Edge Functions need this).
-    // Fire-and-forget — non-critical and must not block sign-in navigation.
-    _supabase.client.from('users').upsert({
-      'id': user.id,
-      'email': user.email ?? '',
-      'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
-      'last_active_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'id').catchError((_) {});
+    // Awaited — AI chat returns 404 if this row is missing.
+    try {
+      await _supabase.client.from('users').upsert({
+        'id': user.id,
+        'email': user.email ?? '',
+        'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
+        'last_active_at': DateTime.now().toUtc().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'id');
+    } catch (e) {
+      debugPrint('users table upsert failed: $e');
+      // Non-fatal for sign-in, but AI chat may fail if row is missing.
+    }
 
     if (existing == null) {
       // No local profile — could be first login OR re-login after sign-out.
@@ -258,6 +331,25 @@ class AuthNotifier extends Notifier<AuthState2> {
             .limit(1);
 
         if (profileRows.isNotEmpty) {
+          // Verify the remote profile has real onboarding data.
+          // An empty row (all NULLs) can be created by sync errors and
+          // should NOT be treated as a valid returning-user profile.
+          final remoteProfile = Map<String, dynamic>.from(profileRows.first);
+          final hasRealData = remoteProfile['primary_goal'] != null ||
+              remoteProfile['height_cm'] != null;
+          if (!hasRealData) {
+            // Empty row — delete it and proceed as a new user.
+            try {
+              await supabase
+                  .from('user_profile')
+                  .delete()
+                  .eq('user_id', user.id);
+            } catch (_) {}
+          }
+        }
+        if (profileRows.isNotEmpty &&
+            (profileRows.first['primary_goal'] != null ||
+             profileRows.first['height_cm'] != null)) {
           // Returning user — restore profile and onboarding flag.
           final remoteProfile = Map<String, dynamic>.from(profileRows.first);
           remoteProfile['id'] = user.id;
@@ -284,7 +376,7 @@ class AuthNotifier extends Notifier<AuthState2> {
               configBox.get('onboarding_completed') == true) {
             final goal = remoteProfile['primary_goal'] as String? ?? 'general_fitness';
             final equipment = remoteProfile['equipment_access'] as String? ?? 'basic_gym';
-            final daysPerWeek = (remoteProfile['days_per_week'] as int?) ?? 4;
+            final daysPerWeek = (remoteProfile['days_per_week'] as num?)?.toInt() ?? 4;
             final experience = remoteProfile['fitness_experience'] as String? ?? 'beginner';
             final phase = progressRows.isNotEmpty
                 ? ((progressRows.first['current_phase'] as int?) ?? 1)
@@ -302,14 +394,22 @@ class AuthNotifier extends Notifier<AuthState2> {
               startDate = DateTime.now();
             }
 
-            await WorkoutScheduleService.instance.generateAndSchedule(
-              goal: goal,
-              equipment: equipment,
-              daysPerWeek: daysPerWeek,
-              startDate: startDate,
-              experienceLevel: experience,
-              phase: phase,
-            );
+            // Use a separate try-catch so plan generation failures are NOT
+            // swallowed by the outer Supabase-offline catch block.
+            try {
+              await WorkoutScheduleService.instance.generateAndSchedule(
+                goal: goal,
+                equipment: equipment,
+                daysPerWeek: daysPerWeek,
+                startDate: startDate,
+                experienceLevel: experience,
+                phase: phase,
+              );
+            } catch (genErr) {
+              debugPrint('Plan generation failed on login restore: $genErr');
+              // Non-fatal — train screen will show "generating" state and
+              // retry plan generation on first load.
+            }
           }
 
           return;
@@ -344,6 +444,13 @@ class AuthNotifier extends Notifier<AuthState2> {
       }
     }
 
+    // Gap detection: if local profile exists but Supabase user_profile is
+    // missing, push immediately. Recovers from a failed onboarding sync
+    // without requiring a 7-day wait for the weekly full sync.
+    if (existing != null) {
+      _pushProfileToSupabaseIfMissing(user.id);
+    }
+
     // Bind OneSignal external_id to Supabase user UUID for push targeting.
     if (!kIsWeb) {
       try {
@@ -351,6 +458,24 @@ class AuthNotifier extends Notifier<AuthState2> {
       } catch (_) {
         // Non-critical — push notifications will still work on next launch.
       }
+    }
+  }
+
+  /// Checks if user_profile row is missing in Supabase and pushes local
+  /// Hive profile if so. Fire-and-forget — never blocks sign-in.
+  void _pushProfileToSupabaseIfMissing(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('user_profile')
+          .select('user_id')
+          .eq('user_id', userId)
+          .limit(1);
+      if (rows.isEmpty) {
+        await SyncService.instance.syncProfileNow(userId);
+        debugPrint('[Auth] Gap detected — pushed missing user_profile to Supabase.');
+      }
+    } catch (_) {
+      // Offline — SyncService.checkAndSync() will handle on next launch.
     }
   }
 }

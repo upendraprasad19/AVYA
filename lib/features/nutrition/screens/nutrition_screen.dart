@@ -645,6 +645,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final proteinCtrl = TextEditingController(text: '${(meal['total_protein'] as num?)?.toInt() ?? 0}');
     final carbsCtrl = TextEditingController(text: '${(meal['total_carbs'] as num?)?.toInt() ?? 0}');
     final fatCtrl = TextEditingController(text: '${(meal['total_fat'] as num?)?.toInt() ?? 0}');
+    final fiberCtrl = TextEditingController(text: '${(meal['total_fiber'] as num?)?.toInt() ?? 0}');
     final foodName = meal['food_name'] as String? ?? 'Unknown';
 
     showModalBottomSheet(
@@ -691,16 +692,14 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               Row(
                 children: [
                   _macroField('Calories', calCtrl, AppColors.accent),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   _macroField('Protein (g)', proteinCtrl, AppColors.orange),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
+                  const SizedBox(width: 6),
                   _macroField('Carbs (g)', carbsCtrl, AppColors.textSecondary),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   _macroField('Fat (g)', fatCtrl, AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  _macroField('Fiber (g)', fiberCtrl, AppColors.green),
                 ],
               ),
               const SizedBox(height: 18),
@@ -722,6 +721,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                       protein: double.tryParse(proteinCtrl.text) ?? 0,
                       carbs: double.tryParse(carbsCtrl.text) ?? 0,
                       fat: double.tryParse(fatCtrl.text) ?? 0,
+                      fiber: double.tryParse(fiberCtrl.text) ?? 0,
                     );
                     Navigator.of(context).pop();
                   },
@@ -957,40 +957,70 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           ),
           const SizedBox(height: 10),
 
-          // -- Quick-add buttons --
-          Row(
-            children: [150, 250, 500, 750].map((amount) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: amount == 750 ? 0 : 6,
+          // -- Quick-add buttons or goal-reached message --
+          if (waterMl >= waterTarget)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: AppColors.blue.withValues(alpha: 0.2)),
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_circle_outline,
+                      size: 13, color: AppColors.blue),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Goal reached! Great hydration today 💧',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.blue,
+                    ),
                   ),
-                  child: GestureDetector(
-                    onTap: () =>
-                        ref.read(waterIntakeProvider.notifier).addWater(amount),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '+${amount}ml',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.blue,
+                ],
+              ),
+            )
+          else
+            Row(
+              children: [150, 250, 500, 750].map((amount) {
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: amount == 750 ? 0 : 6,
+                    ),
+                    child: GestureDetector(
+                      onTap: () => ref
+                          .read(waterIntakeProvider.notifier)
+                          .addWater(amount),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 6, horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.input,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '+${amount}ml',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.blue,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            ),
 
           // -- Expanded section: urine color picker --
           AnimatedSize(

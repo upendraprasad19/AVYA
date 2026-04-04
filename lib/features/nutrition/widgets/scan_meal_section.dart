@@ -99,7 +99,7 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                   borderRadius: BorderRadius.circular(AppRadius.badge),
                 ),
                 child: Text(
-                  '$remaining/$limit $periodLabel',
+                  '${limit - remaining}/$limit used $periodLabel',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 9,
@@ -126,7 +126,7 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                       color: AppColors.orange, size: 14),
                   const SizedBox(width: 6),
                   Text(
-                    '$used of $limit scans used today',
+                    '$used of $limit scans used $periodLabel',
                     style: GoogleFonts.getFont(
                       'DM Sans',
                       fontSize: 10,
@@ -340,12 +340,13 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
                     final id = 'nlog_${now.millisecondsSinceEpoch}';
                     final items = result['items'] as List<dynamic>? ?? [];
-                    int totalProtein = 0, totalCarbs = 0, totalFat = 0;
+                    int totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0;
                     for (final item in items) {
                       if (item is Map) {
                         totalProtein += (item['protein'] as num?)?.toInt() ?? 0;
                         totalCarbs += (item['carbs'] as num?)?.toInt() ?? 0;
                         totalFat += (item['fat'] as num?)?.toInt() ?? 0;
+                        totalFiber += (item['fiber'] as num?)?.toInt() ?? 0;
                       }
                     }
                     HiveService.instance.nutritionBox.put(id, {
@@ -357,6 +358,7 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                       'total_protein': totalProtein,
                       'total_carbs': totalCarbs,
                       'total_fat': totalFat,
+                      'total_fiber': totalFiber,
                       'created_at': now.toIso8601String(),
                       'source': 'scan_meal',
                     });

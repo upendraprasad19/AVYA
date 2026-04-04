@@ -4,16 +4,45 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 
-/// Weight sparkline card showing the last 7 weight entries.
-/// Reads data from the weightHistoryProvider in home_provider.dart.
-class WeightSparkline extends StatelessWidget {
-  final List<double> weights;
+/// Weight entry with date for axis labels.
+class WeightEntry {
+  final String date; // YYYY-MM-DD
+  final double weight;
+  const WeightEntry({required this.date, required this.weight});
+}
 
-  const WeightSparkline({super.key, required this.weights});
+/// Weight trend card with duration selector, Y-axis labels, and date axis.
+class WeightSparkline extends StatefulWidget {
+  final List<WeightEntry> entries;
+
+  const WeightSparkline({super.key, required this.entries});
+
+  @override
+  State<WeightSparkline> createState() => _WeightSparklineState();
+}
+
+class _WeightSparklineState extends State<WeightSparkline> {
+  String _selectedRange = '7d'; // 7d, 30d, 3m, 1y, All
+  static const _ranges = ['7d', '30d', '3m', '1y', 'All'];
+
+  List<WeightEntry> get _filteredEntries {
+    if (widget.entries.isEmpty) return [];
+    final now = DateTime.now();
+    final cutoff = switch (_selectedRange) {
+      '7d' => now.subtract(const Duration(days: 7)),
+      '30d' => now.subtract(const Duration(days: 30)),
+      '3m' => now.subtract(const Duration(days: 90)),
+      '1y' => now.subtract(const Duration(days: 365)),
+      _ => DateTime(2000), // All
+    };
+    final cutoffStr = '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+    final filtered = widget.entries.where((e) => e.date.compareTo(cutoffStr) >= 0).toList();
+    return filtered.isEmpty ? widget.entries : filtered;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (weights.isEmpty) {
+    if (widget.entries.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -41,10 +70,15 @@ class WeightSparkline extends StatelessWidget {
       );
     }
 
+    final entries = _filteredEntries;
+    final weights = entries.map((e) => e.weight).toList();
     final latest = weights.last;
     final change = weights.length >= 2 ? weights.last - weights[weights.length - 2] : 0.0;
     final changeStr = change >= 0 ? '+${change.toStringAsFixed(1)}' : change.toStringAsFixed(1);
     final changeColor = change < 0 ? AppColors.green : (change > 0 ? AppColors.orange : AppColors.textSecondary);
+
+    final minW = weights.reduce(min);
+    final maxW = weights.reduce(max);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -56,6 +90,7 @@ class WeightSparkline extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row
           Row(
             children: [
               const Icon(Icons.monitor_weight_outlined,
@@ -93,17 +128,150 @@ class WeightSparkline extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+
+          // Duration selector
+          Row(
+            children: _ranges.map((range) {
+              final isSelected = range == _selectedRange;
+              return Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedRange = range),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.accent.withValues(alpha: 0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.accent.withValues(alpha: 0.3)
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: Text(
+                      range,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? AppColors.accent : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+
+          // Chart with Y-axis labels
           SizedBox(
-            height: 40,
-            child: CustomPaint(
-              size: const Size(double.infinity, 40),
-              painter: _SparklinePainter(values: weights),
+            height: 70,
+            child: Row(
+              children: [
+                // Y-axis labels
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      maxW.toStringAsFixed(0),
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 8, color: AppColors.textSecondary),
+                    ),
+                    if (maxW != minW)
+                      Text(
+                        ((maxW + minW) / 2).toStringAsFixed(0),
+                        style: GoogleFonts.getFont('DM Sans',
+                            fontSize: 8, color: AppColors.textSecondary),
+                      ),
+                    Text(
+                      minW.toStringAsFixed(0),
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 8, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 6),
+                // Chart area
+                Expanded(
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 70),
+                    painter: _SparklinePainter(values: weights),
+                  ),
+                ),
+              ],
             ),
+          ),
+
+          // X-axis date labels
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 26), // align with chart area
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDateShort(entries.first.date),
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 8, color: AppColors.textSecondary),
+                ),
+                if (entries.length > 2)
+                  Text(
+                    _formatDateShort(entries[entries.length ~/ 2].date),
+                    style: GoogleFonts.getFont('DM Sans',
+                        fontSize: 8, color: AppColors.textSecondary),
+                  ),
+                Text(
+                  _formatDateShort(entries.last.date),
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 8, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+
+          // Min/Max summary
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Low: ${minW.toStringAsFixed(1)} kg',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 9, fontWeight: FontWeight.w600,
+                    color: AppColors.green),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'High: ${maxW.toStringAsFixed(1)} kg',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 9, fontWeight: FontWeight.w600,
+                    color: AppColors.orange),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${entries.length} entries',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 9, color: AppColors.textSecondary),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  String _formatDateShort(String dateStr) {
+    final parts = dateStr.split('-');
+    if (parts.length != 3) return dateStr;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final month = int.tryParse(parts[1]) ?? 1;
+    final day = int.tryParse(parts[2]) ?? 1;
+    return '${months[month - 1]} $day';
   }
 }
 

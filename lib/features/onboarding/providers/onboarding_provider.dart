@@ -171,8 +171,36 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   void nextStep() {
+    // Validate numeric biometric fields before advancing.
+    final key = state.currentStepData.key;
+    final raw = state.answers[key];
+    final num? value = raw is num ? raw : (raw is String ? num.tryParse(raw) : null);
+
+    if (key == 'height_cm' && value != null) {
+      if (value < 100 || value > 250) {
+        state = state.copyWith(
+          error: 'Height must be between 100 and 250 cm. Please re-enter.',
+        );
+        return;
+      }
+    } else if (key == 'current_weight_kg' && value != null) {
+      if (value < 20 || value > 300) {
+        state = state.copyWith(
+          error: 'Current weight must be between 20 and 300 kg. Please re-enter.',
+        );
+        return;
+      }
+    } else if (key == 'target_weight_kg' && value != null) {
+      if (value < 20 || value > 300) {
+        state = state.copyWith(
+          error: 'Target weight must be between 20 and 300 kg. Please re-enter.',
+        );
+        return;
+      }
+    }
+
     if (state.currentStep < state.totalSteps - 1) {
-      state = state.copyWith(currentStep: state.currentStep + 1);
+      state = state.copyWith(currentStep: state.currentStep + 1, error: null);
     }
   }
 
@@ -325,8 +353,16 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         DateTime.now().toIso8601String(),
       );
 
-      // Sync onboarding flag + profile to Supabase (background, don't block).
-      _syncOnboardingToSupabase(profile);
+      // Sync onboarding flag + profile to Supabase.
+      // Awaited so failures are caught and logged — non-fatal: Hive is already
+      // saved and SyncService will retry on next launch if offline.
+      try {
+        await _syncOnboardingToSupabase(profile);
+      } catch (syncErr) {
+        // Visible in debug console for testing; not shown to the user.
+        // ignore: avoid_print
+        print('[Onboarding] Supabase sync failed: $syncErr — will retry on next launch.');
+      }
 
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
@@ -365,56 +401,54 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     return fallback;
   }
 
-  /// Syncs onboarding completion flag + profile to Supabase (fire-and-forget).
+  /// Syncs onboarding completion flag + profile to Supabase.
   ///
   /// Only sends columns that exist in the Supabase tables — the local profile
   /// map contains computed fields (daily_calories, protein_grams, etc.) that
   /// are stored in Hive but do NOT have corresponding Postgres columns.
+  ///
+  /// Throws on failure so the caller can log and detect sync gaps.
   Future<void> _syncOnboardingToSupabase(Map<String, dynamic> profile) async {
-    try {
-      final supabase = SupabaseService.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
+    final supabase = SupabaseService.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
 
-      // Mark user as onboarded in users table.
-      await supabase.from('users').upsert({
-        'id': userId,
-        'email': supabase.auth.currentUser?.email,
-        'full_name': profile['full_name'],
-        'onboarding_completed': true,
-        'last_active_at': DateTime.now().toIso8601String(),
-      });
+    // Mark user as onboarded in users table.
+    await supabase.from('users').upsert({
+      'id': userId,
+      'email': supabase.auth.currentUser?.email,
+      'full_name': profile['full_name'],
+      'onboarding_completed': true,
+      'last_active_at': DateTime.now().toIso8601String(),
+    });
 
-      // Sync profile — only columns that exist in user_profile table.
-      await supabase.from('user_profile').upsert({
-        'user_id': userId,
-        'date_of_birth': profile['date_of_birth'],
-        'gender': profile['gender'],
-        'height_cm': profile['height_cm'],
-        'current_weight_kg': profile['current_weight_kg'],
-        'target_weight_kg': profile['target_weight_kg'],
-        'primary_goal': profile['primary_goal'],
-        'fitness_experience': profile['fitness_experience'],
-        'days_per_week': profile['days_per_week'],
-        'equipment_access': profile['equipment_access'],
-        'activity_level': profile['activity_level'],
-        'bmr': profile['bmr'],
-        'tdee': profile['tdee'],
-      });
+    // Sync profile — only columns that exist in user_profile table.
+    await supabase.from('user_profile').upsert({
+      'user_id': userId,
+      'date_of_birth': profile['date_of_birth'],
+      'gender': profile['gender'],
+      'height_cm': profile['height_cm'],
+      'current_weight_kg': profile['current_weight_kg'],
+      'target_weight_kg': profile['target_weight_kg'],
+      'primary_goal': profile['primary_goal'],
+      'fitness_experience': profile['fitness_experience'],
+      'days_per_week': profile['days_per_week'],
+      'equipment_access': profile['equipment_access'],
+      'activity_level': profile['activity_level'],
+      'bmr': profile['bmr'],
+      'tdee': profile['tdee'],
+    });
 
-      // Sync progress.
-      await supabase.from('user_progress').upsert({
-        'user_id': userId,
-        'current_phase': 1,
-        'current_week': 1,
-        'total_workouts_done': 0,
-        'current_streak_weeks': 0,
-        'phase_started_at': DateTime.now().toIso8601String(),
-        'plan_generated_at': DateTime.now().toIso8601String(),
-      });
-    } catch (_) {
-      // Offline or table not ready — will sync later via SyncService.
-    }
+    // Sync progress.
+    await supabase.from('user_progress').upsert({
+      'user_id': userId,
+      'current_phase': 1,
+      'current_week': 1,
+      'total_workouts_done': 0,
+      'current_streak_weeks': 0,
+      'phase_started_at': DateTime.now().toIso8601String(),
+      'plan_generated_at': DateTime.now().toIso8601String(),
+    });
   }
 }
 

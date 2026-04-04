@@ -119,25 +119,22 @@ class _BadgesGridState extends State<BadgesGrid> {
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
         children: [
-          Text(
-            '\u{1F525}',
-            style: const TextStyle(fontSize: 32),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Keep working out to unlock achievements',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+          const Text('🏆', style: TextStyle(fontSize: 16)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Complete workouts to unlock your first badge',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

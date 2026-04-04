@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import '../providers/train_provider.dart';
 
 class StatsGrid extends ConsumerWidget {
@@ -54,23 +56,7 @@ class StatsGrid extends ConsumerWidget {
 
           // View All Exercise PRs button
           GestureDetector(
-            onTap: () {
-              if (!hasData) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Start logging workouts to see your PRs!',
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.black),
-                    ),
-                    backgroundColor: AppColors.accent,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-                return;
-              }
-              // TODO: Navigate to all PRs screen
-            },
+            onTap: () => _showAllPRsSheet(context, ref),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -151,6 +137,164 @@ class StatsGrid extends ConsumerWidget {
           ),
         ));
   }
+
+  void _showAllPRsSheet(BuildContext context, WidgetRef ref) {
+    final allPRs = ref.read(allExercisePRsProvider);
+
+    if (allPRs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Start logging workouts to see your PRs!',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.black),
+          ),
+          backgroundColor: AppColors.accent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 8),
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.emoji_events,
+                        size: 16, color: AppColors.proGold),
+                    const SizedBox(width: 8),
+                    Text(
+                      'ALL EXERCISE PRs',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentTint,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        '${allPRs.length} exercises',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(height: 1, color: AppColors.border),
+              // List
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: allPRs.length,
+                  separatorBuilder: (_, _) =>
+                      Container(height: 1, color: AppColors.border),
+                  itemBuilder: (_, i) {
+                    final pr = allPRs[i];
+                    return Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: AppColors.proGold,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  pr.exerciseName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  pr.formattedDate,
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            pr.formattedValue,
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 }
 
 class _PRData {

@@ -3,6 +3,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
 
@@ -270,37 +271,39 @@ final nutritionSummaryProvider =
 
 // ── Weight History ───────────────────────────────────────────────
 
-class WeightHistoryNotifier extends Notifier<List<double>> {
+/// Returns ALL weight entries sorted by date (the widget handles filtering).
+class WeightHistoryNotifier extends Notifier<List<WeightEntryData>> {
   @override
-  List<double> build() {
+  List<WeightEntryData> build() {
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
 
-    final entries = <MapEntry<String, double>>[];
+    final entries = <WeightEntryData>[];
     for (final raw in healthBox.values) {
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       if (log['type'] == 'weight_log' || log['weight_kg'] != null) {
         final date = log['date'] as String? ?? '';
         final weight = (log['weight_kg'] as num?)?.toDouble();
-        if (weight != null) {
-          entries.add(MapEntry(date, weight));
+        if (weight != null && date.isNotEmpty) {
+          entries.add(WeightEntryData(date: date, weight: weight));
         }
       }
     }
 
-    // Sort by date and take last 7
-    entries.sort((a, b) => a.key.compareTo(b.key));
-    final last7 = entries.length > 7
-        ? entries.sublist(entries.length - 7)
-        : entries;
-
-    return last7.map((e) => e.value).toList();
+    entries.sort((a, b) => a.date.compareTo(b.date));
+    return entries;
   }
 }
 
+class WeightEntryData {
+  final String date;
+  final double weight;
+  const WeightEntryData({required this.date, required this.weight});
+}
+
 final weightHistoryProvider =
-    NotifierProvider<WeightHistoryNotifier, List<double>>(
+    NotifierProvider<WeightHistoryNotifier, List<WeightEntryData>>(
         WeightHistoryNotifier.new);
 
 // ── Latest AI Coach Insight ──────────────────────────────────────
@@ -515,3 +518,18 @@ class TodayWeightLoggedNotifier extends Notifier<bool> {
 final todayWeightLoggedProvider =
     NotifierProvider<TodayWeightLoggedNotifier, bool>(
         TodayWeightLoggedNotifier.new);
+
+// ── All Exercise PRs ─────────────────────────────────────────────
+
+/// Loads PR records for every exercise the user has ever logged.
+/// Invalidated by [completeWorkout()] so home screen refreshes immediately.
+class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
+  @override
+  List<ExercisePR> build() {
+    return WorkoutRepository.instance.loadAllExercisePRs();
+  }
+}
+
+final allExercisePRsProvider =
+    NotifierProvider<AllExercisePRsNotifier, List<ExercisePR>>(
+        AllExercisePRsNotifier.new);

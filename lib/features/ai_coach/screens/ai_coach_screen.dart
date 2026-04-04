@@ -224,23 +224,39 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   Widget _buildTrialCountdown(int messageCount, int daysRemaining) {
     final remaining = AppConstants.freeAiMessagesPerDay - messageCount;
+    final isUrgent = daysRemaining <= 3;
+    final textColor = isUrgent ? AppColors.red : AppColors.textSecondary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       color: const Color(0xFF07090e),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(Icons.timer_outlined, size: 12, color: const Color(0xFF6b7a8d)),
+          Icon(Icons.timer_outlined, size: 12, color: textColor),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              '$remaining msg${remaining == 1 ? "" : "s"} left today  •  $daysRemaining day${daysRemaining == 1 ? "" : "s"} remaining in trial',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                color: daysRemaining <= 3
-                    ? const Color(0xFFef4444)
-                    : const Color(0xFF6b7a8d),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$remaining msg${remaining == 1 ? "" : "s"} left today',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  '$daysRemaining day${daysRemaining == 1 ? "" : "s"} remaining in free trial',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 10,
+                    color: textColor.withAlpha(180),
+                  ),
+                ),
+              ],
             ),
           ),
           GestureDetector(
@@ -251,7 +267,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 'DM Sans',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF00D4FF),
+                color: AppColors.accent,
               ),
             ),
           ),
@@ -661,21 +677,46 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding, vertical: 8),
-        child: Row(
-          children: prompts.map((prompt) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: PromptChip(
-                label: prompt,
-                onTap: () => _sendMessage(prompt),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding, vertical: 8),
+            child: Row(
+              children: prompts.map((prompt) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: PromptChip(
+                    label: prompt,
+                    onTap: () => _sendMessage(prompt),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          // Right-edge fade to signal more chips are scrollable
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: Container(
+                width: 40,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      AppColors.bg.withAlpha(0),
+                      AppColors.bg.withAlpha(230),
+                    ],
+                  ),
+                ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -895,8 +936,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             ],
           ),
 
-          // Inline message counter (free users only)
-          if (!isPro) ...[
+          // Inline message counter — only when top trial banner is NOT shown
+          // (trial active users already see the counter in the banner above)
+          if (!isPro && !trialInfo.isTrialActive) ...[
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

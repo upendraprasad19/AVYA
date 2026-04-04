@@ -309,31 +309,36 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       );
                     }),
 
-                    // Add Exercise button
+                    // Add Exercise button — disabled in review mode (already saved)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 5),
                       child: GestureDetector(
-                        onTap: () => _showExercisePickerSheet(context, ref),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color:
-                                AppColors.accent.withValues(alpha: 0.05),
-                            border: Border.all(
-                              color: AppColors.accent
-                                  .withValues(alpha: 0.2),
-                              style: BorderStyle.solid,
+                        onTap: data.isSaved
+                            ? null
+                            : () => _showExercisePickerSheet(context, ref),
+                        child: Opacity(
+                          opacity: data.isSaved ? 0.3 : 1.0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.accent.withValues(alpha: 0.05),
+                              border: Border.all(
+                                color: AppColors.accent
+                                    .withValues(alpha: 0.2),
+                                style: BorderStyle.solid,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '+ Add Exercise',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.accent,
+                            child: Center(
+                              child: Text(
+                                '+ Add Exercise',
+                                style: GoogleFonts.getFont(
+                                  'DM Sans',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.accent,
+                                ),
                               ),
                             ),
                           ),
@@ -341,21 +346,25 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       ),
                     ),
 
-                    // Finish Workout button
+                    // Finish Workout button — disabled if already saved (review mode)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: GestureDetector(
-                        onTap: () => _showFinishDialog(context, ref, data),
+                        onTap: data.isSaved
+                            ? null
+                            : () => _showFinishDialog(context, ref, data),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           decoration: BoxDecoration(
-                            color: AppColors.accent,
+                            color: data.isSaved
+                                ? AppColors.accent.withValues(alpha: 0.4)
+                                : AppColors.accent,
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Center(
                             child: Text(
-                              '\u2713 Finish Workout',
+                              data.isSaved ? '\u2713 Already Saved' : '\u2713 Finish Workout',
                               style: GoogleFonts.getFont(
                                 'DM Sans',
                                 fontSize: 14,
@@ -584,6 +593,21 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     color: AppColors.textSecondary,
                   ),
                 ),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () => ref.read(activeWorkoutProvider.notifier).reopenWorkout(),
+                  child: Text(
+                    'Review Workout',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accent,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.accent,
+                    ),
+                  ),
+                ),
 
                 // PR callout
                 if (prs.isNotEmpty) ...[
@@ -664,7 +688,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 const SizedBox(height: AppSpacing.inlineGap),
 
                 GestureDetector(
-                  onTap: () => context.go('/home'),
+                  onTap: () {
+                    ref.read(activeWorkoutProvider.notifier).cancelWorkout();
+                    context.go('/train');
+                  },
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -674,7 +701,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        'Back to Home',
+                        'Back to Workouts',
                         style: GoogleFonts.getFont(
                           'DM Sans',
                           fontSize: 16,
@@ -829,6 +856,12 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 
   void _showFinishDialog(
       BuildContext context, WidgetRef ref, ActiveWorkoutData data) {
+    // Pre-fill with current elapsed seconds — user can edit before confirming.
+    final mins = data.elapsedSeconds ~/ 60;
+    final secs = data.elapsedSeconds % 60;
+    final minCtrl = TextEditingController(text: mins.toString());
+    final secCtrl = TextEditingController(text: secs.toString().padLeft(2, '0'));
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -843,14 +876,126 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             color: AppColors.textPrimary,
           ),
         ),
-        content: Text(
-          'You have logged ${data.completedSets}/${data.totalSets} sets. Finish this workout?',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${data.completedSets}/${data.totalSets} sets logged',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'DURATION',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                // Minutes field
+                SizedBox(
+                  width: 56,
+                  child: TextField(
+                    controller: minCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.accent,
+                    ),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.input,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            BorderSide(color: AppColors.accent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    ':',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                // Seconds field
+                SizedBox(
+                  width: 56,
+                  child: TextField(
+                    controller: secCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.accent,
+                    ),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.input,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            BorderSide(color: AppColors.accent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'min : sec',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -866,6 +1011,14 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ),
           ElevatedButton(
             onPressed: () {
+              // Apply user-edited duration before completing
+              final editedMins = int.tryParse(minCtrl.text) ?? mins;
+              final editedSecs =
+                  (int.tryParse(secCtrl.text) ?? secs).clamp(0, 59);
+              final totalSeconds = editedMins * 60 + editedSecs;
+              ref
+                  .read(activeWorkoutProvider.notifier)
+                  .setElapsedSeconds(totalSeconds);
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).completeWorkout();
             },
@@ -1050,6 +1203,28 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     _repsControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
     _durationControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
     _distanceControllers = List.generate(n, (_) => TextEditingController());
+
+    // Restore any values already captured in the provider (e.g. after widget rebuild).
+    // This prevents controller text from resetting to defaults when Riverpod state changes.
+    final savedValues = ref.read(activeWorkoutProvider).setInputValues;
+    for (int s = 0; s < n; s++) {
+      final captured = savedValues['${widget.exerciseIndex}-$s'];
+      if (captured == null) continue;
+      if (captured.weight != null) {
+        final w = captured.weight!;
+        _weightControllers[s].text =
+            w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+      }
+      if (captured.reps != null) {
+        _repsControllers[s].text = captured.reps.toString();
+      }
+      if (captured.durationSeconds != null) {
+        _durationControllers[s].text = captured.durationSeconds.toString();
+      }
+      if (captured.distanceKm != null) {
+        _distanceControllers[s].text = captured.distanceKm.toString();
+      }
+    }
   }
 
   /// Parse a reps string like "6-10" to its midpoint (8), or "10" to 10.

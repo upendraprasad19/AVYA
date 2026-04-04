@@ -184,7 +184,16 @@ class WeeklyCalendar extends ConsumerWidget {
         style: GoogleFonts.getFont('DM Sans', fontSize: 8),
       );
     }
+    if (isToday && isPlanned) {
+      // Today is a workout day — show dumbbell in black against cyan bg
+      return Icon(
+        Icons.fitness_center,
+        size: 9,
+        color: Colors.black.withValues(alpha: 0.5),
+      );
+    }
     if (isToday) {
+      // Today is a rest day — show em-dash
       return Text(
         '\u2014',
         style: GoogleFonts.getFont(
@@ -199,9 +208,7 @@ class WeeklyCalendar extends ConsumerWidget {
       return Icon(
         Icons.fitness_center,
         size: 9,
-        color: isToday
-            ? Colors.black.withValues(alpha: 0.5)
-            : AppColors.accent.withValues(alpha: 0.5),
+        color: AppColors.accent.withValues(alpha: 0.5),
       );
     }
     if (isPast && !isRest) {

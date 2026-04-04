@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
@@ -64,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _initAndNavigate() async {
     await Future.wait([
-      _runDeferredInit(),
+      _runDeferredInit().catchError((_) {}), // Never block navigation on init failure
       Future.delayed(const Duration(milliseconds: 1500)),
     ]);
     _navigateNext();
@@ -79,6 +80,10 @@ class _SplashScreenState extends State<SplashScreen>
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
     await SeedService.instance.seedIfNeeded();
+
+    // Trigger background sync check (weekly full sync, cross-channel pull).
+    // Fire-and-forget — checkAndSync() has its own try-catch.
+    SyncService.instance.checkAndSync();
 
     // OneSignal — fire and forget; don't block navigation on OS permission dialog.
     if (!kIsWeb) {
@@ -99,6 +104,24 @@ class _SplashScreenState extends State<SplashScreen>
 
     final isOnboarded = HiveService.instance.configBox
         .get('onboarding_completed', defaultValue: false) as bool;
+
+    // Guard: even if the flag is set, verify the profile has real data.
+    // A stale Hive can have onboarding_completed=true but only a minimal
+    // stub profile ({id, email}) — e.g. after a failed sync or browser
+    // storage surviving across rebuilds. Redirect to onboarding in that case.
+    if (isOnboarded) {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is Map) {
+        final hasRealData =
+            profile['primary_goal'] != null || profile['height_cm'] != null;
+        if (!hasRealData) {
+          // Clear the stale flag so onboarding can proceed.
+          HiveService.instance.configBox.delete('onboarding_completed');
+          context.go('/onboarding');
+          return;
+        }
+      }
+    }
 
     if (!isOnboarded) {
       context.go('/onboarding');

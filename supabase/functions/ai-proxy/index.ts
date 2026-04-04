@@ -152,7 +152,7 @@ serve(async (req: Request) => {
         });
       }
 
-      const prompt = `You are a nutritionist. The user says: "${text}"
+      const prompt = `You are a nutritionist with deep knowledge of Indian foods. The user says: "${text}"
 
 Analyse this as a meal and return ONLY a JSON object (no markdown, no code block) in this exact format:
 {
@@ -165,16 +165,17 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
       "protein": 25,
       "carbs": 3,
       "fat": 2,
-      "fiber": 0
+      "fiber": 4
     }
   ]
 }
 
 Rules:
-- Use realistic nutrition values per standard serving sizes for Indian foods
+- Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned
 - One item per distinct food
-- Protein/carbs/fat/fiber in grams (numbers only, no "g" suffix in the JSON)
-- If quantity is unclear, assume a typical single serving
+- All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix
+- IMPORTANT: fiber must reflect the actual dietary fiber content (e.g. broccoli 100g = 2.6g fiber, dal 100g = 8g fiber, roti 1 piece = 1.5g fiber, oats 40g = 3g fiber). Never return 0 for high-fiber foods.
+- If quantity is unclear, assume a typical single serving for an Indian adult
 - Return ONLY the JSON object, nothing else`;
 
       try {

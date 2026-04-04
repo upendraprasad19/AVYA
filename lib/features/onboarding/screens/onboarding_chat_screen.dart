@@ -89,8 +89,8 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         ),
         centerTitle: true,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: _buildProgressBar(onboardingState),
+          preferredSize: const Size.fromHeight(22),
+          child: _buildProgressHeader(onboardingState),
         ),
       ),
       body: _showSummary
@@ -100,6 +100,44 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   }
 
   // ── Progress Bar ────────────────────────────────────────────────
+
+  Widget _buildProgressHeader(OnboardingState state) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Step counter text
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Step ${state.currentStep + 1} of ${state.totalSteps}',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Text(
+                '${(state.progress * 100).round()}% complete',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Progress bar
+        _buildProgressBar(state),
+      ],
+    );
+  }
 
   Widget _buildProgressBar(OnboardingState state) {
     return Container(
@@ -453,6 +491,25 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
 
     return Column(
       children: [
+        // Format hint
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                'Scroll to select  ·  DD / MM / YYYY',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
         ScrollDatePicker(
           initialDate: initial ?? DateTime(1998, 1, 1),
           firstDate: DateTime(1940),

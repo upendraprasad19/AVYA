@@ -74,6 +74,8 @@ class ExerciseRepository {
     String? suitableFor,
     int? limit,
     bool foundationalOnly = false,
+    List<String>? targetMuscles,
+    List<String>? excludeMuscles,
   }) {
     var results = getAll();
 
@@ -117,6 +119,35 @@ class ExerciseRepository {
       results = results
           .where((e) => e['is_foundational'] == true)
           .toList();
+    }
+
+    // Filter by target muscles: exercise must have at least one primary_muscle
+    // that contains any of the target muscle strings (case-insensitive).
+    if (targetMuscles != null && targetMuscles.isNotEmpty) {
+      final targets =
+          targetMuscles.map((m) => m.toLowerCase()).toList();
+      results = results.where((e) {
+        final muscles = e['primary_muscles'];
+        if (muscles is! List || muscles.isEmpty) return false;
+        return muscles.any((m) {
+          final ml = m.toString().toLowerCase();
+          return targets.any((t) => ml.contains(t));
+        });
+      }).toList();
+    }
+
+    // Exclude exercises whose primary_muscles match any excluded muscle string.
+    if (excludeMuscles != null && excludeMuscles.isNotEmpty) {
+      final excludes =
+          excludeMuscles.map((m) => m.toLowerCase()).toList();
+      results = results.where((e) {
+        final muscles = e['primary_muscles'];
+        if (muscles is! List || muscles.isEmpty) return true;
+        return !muscles.any((m) {
+          final ml = m.toString().toLowerCase();
+          return excludes.any((ex) => ml.contains(ex));
+        });
+      }).toList();
     }
 
     // Sort compounds first.

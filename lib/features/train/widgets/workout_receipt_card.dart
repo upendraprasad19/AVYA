@@ -176,10 +176,36 @@ class WorkoutReceiptData {
       ));
     }
 
+    // Deduplicate: if the plan contains the same exercise twice (e.g. superset
+    // added twice), merge them into one entry — sum sets, max weight, avg reps.
+    final seen = <String, ReceiptExercise>{};
+    for (final ex in receiptExercises) {
+      final key = ex.name.toLowerCase().trim();
+      final existing = seen[key];
+      if (existing == null) {
+        seen[key] = ex;
+      } else {
+        final mergedSets = existing.sets + ex.sets;
+        final maxWeight = existing.weightKg > ex.weightKg
+            ? existing.weightKg
+            : ex.weightKg;
+        final avgReps = mergedSets > 0
+            ? ((existing.reps * existing.sets + ex.reps * ex.sets) / mergedSets).round()
+            : existing.reps;
+        seen[key] = ReceiptExercise(
+          name: existing.name,
+          sets: mergedSets,
+          reps: avgReps,
+          weightKg: maxWeight,
+          loggingType: existing.loggingType,
+        );
+      }
+    }
+
     return WorkoutReceiptData(
       date: now,
       workoutName: data.workoutDay?.name ?? 'WORKOUT',
-      exercises: receiptExercises,
+      exercises: seen.values.toList(),
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
       prs: data.detectedPRs,

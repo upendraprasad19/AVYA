@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -295,6 +297,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   fontWeight: FontWeight.w400,
                   color: AppColors.accent,
                 ),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => launchUrl(
+                        Uri.parse('https://icanbefitter.vercel.app'),
+                        mode: LaunchMode.externalApplication,
+                      ),
               ),
               const TextSpan(text: ' & '),
               TextSpan(
@@ -305,6 +312,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   fontWeight: FontWeight.w400,
                   color: AppColors.accent,
                 ),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => launchUrl(
+                        Uri.parse('https://icanbefitter.vercel.app'),
+                        mode: LaunchMode.externalApplication,
+                      ),
               ),
             ],
           ),

@@ -324,11 +324,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final waterMl = ref.watch(waterIntakeProvider);
     final weightLogged = ref.watch(todayWeightLoggedProvider);
 
-    // Workout: completed or rest day → done
+    // Workout: only mark done when the user actually completed it.
+    // Rest days stay idle — showing green on a rest day is misleading.
     final workoutStatus = schedule?['status'] as String? ?? 'planned';
-    final workoutType = schedule?['type'] as String? ?? 'rest';
-    final workoutDone =
-        workoutStatus == 'completed' || workoutType != 'workout';
+    final workoutDone = workoutStatus == 'completed';
 
     // Meals: both calories AND protein must hit target
     final proteinProgress = nutrition.proteinTarget > 0
@@ -460,10 +459,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     if (isCompleted) {
+      final durationSecs = (schedule?['duration_seconds'] as int?) ?? 0;
       return TodayWorkoutCard(
         workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE 1',
         workoutName: workoutName.toUpperCase(),
-        durationMin: 0,
+        durationMin: durationSecs > 0 ? (durationSecs / 60).round() : 0,
         exerciseCount: exercises.length,
         isRestDay: false,
         isDone: true,
@@ -547,8 +547,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // -- Weight Sparkline -----------------------------------------------
 
   Widget _buildWeightSparkline(WidgetRef ref) {
-    final weights = ref.watch(weightHistoryProvider);
-    return WeightSparkline(weights: weights);
+    final entries = ref.watch(weightHistoryProvider);
+    return WeightSparkline(
+      entries: entries
+          .map((e) => WeightEntry(date: e.date, weight: e.weight))
+          .toList(),
+    );
   }
 
   // -- Recent Food Logs -----------------------------------------------

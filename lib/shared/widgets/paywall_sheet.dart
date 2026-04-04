@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 
 /// Shows the single, reusable paywall bottom sheet.
 ///
@@ -151,7 +152,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
     return (basePrice * (100 - _promoDiscountPct) / 100).round();
   }
 
-  void _handleUpgrade() {
+  Future<void> _handleUpgrade() async {
     if (_isProcessing) return;
 
     if (kIsWeb) {
@@ -171,6 +172,10 @@ class _PaywallSheetState extends State<PaywallSheet> {
 
     setState(() => _isProcessing = true);
 
+    // Brief pause so the spinner is visible before Razorpay opens
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+
     Navigator.of(context).pop();
     RazorpayService.instance.openCheckout(
       plan: _selectedPlan,
@@ -183,6 +188,43 @@ class _PaywallSheetState extends State<PaywallSheet> {
         // Payment failed — user can retry from any PRO feature tap
       },
     );
+  }
+
+  Future<void> _handleRestore() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      await SubscriptionService.instance.refreshFromSupabase();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      final isPro = SubscriptionService.instance.isPro();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isPro
+                ? '✓ PRO restored successfully!'
+                : 'No active subscription found. Contact support if this is wrong.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: isPro ? AppColors.green : AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not verify purchase. Check your connection and try again.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -399,18 +441,38 @@ class _PaywallSheetState extends State<PaywallSheet> {
 
             const SizedBox(height: 10),
 
-            // Dismiss link
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Maybe later',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+            // Dismiss + Restore row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Maybe later',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
-              ),
+                Text('·',
+                    style: GoogleFonts.getFont('DM Sans',
+                        fontSize: 13, color: AppColors.textDisabled)),
+                TextButton(
+                  onPressed: _isProcessing ? null : _handleRestore,
+                  child: Text(
+                    'Restore Purchase',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

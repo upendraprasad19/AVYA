@@ -164,7 +164,14 @@ class BmrCalculator {
             targetWeightKg < weightKg)
         ? targetWeightKg
         : weightKg;
-    final proteinGrams = (proteinBaseKg * proteinPerKg).round();
+
+    // Cap protein so it never exceeds 40% of daily calories.
+    // This prevents impossible macro splits when BMR inputs were out of range
+    // (e.g. extremely high weight against a calories-clamped minimum).
+    final rawProteinGrams = (proteinBaseKg * proteinPerKg).round();
+    final maxProteinGrams = (dailyCalories * 0.40 / 4).round().clamp(50, 9999);
+    final proteinGrams = rawProteinGrams.clamp(50, maxProteinGrams);
+
     final fatGrams = (dailyCalories * fatPercentage / 9).round();
     final proteinCalories = proteinGrams * 4;
     final fatCalories = fatGrams * 9;

@@ -199,6 +199,7 @@ class AiBreakdownCard extends ConsumerWidget {
     final proteinCtrl = TextEditingController(text: item.protein.replaceAll('g', ''));
     final carbsCtrl = TextEditingController(text: item.carbs.replaceAll('g', ''));
     final fatCtrl = TextEditingController(text: item.fat.replaceAll('g', ''));
+    final fiberCtrl = TextEditingController(text: '${item.fiber}');
 
     showModalBottomSheet(
       context: context,
@@ -228,12 +229,14 @@ class AiBreakdownCard extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(child: _editField('Calories', calCtrl, AppColors.accent)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(child: _editField('Protein (g)', proteinCtrl, AppColors.orange)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(child: _editField('Carbs (g)', carbsCtrl, AppColors.blue)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(child: _editField('Fat (g)', fatCtrl, AppColors.textSecondary)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _editField('Fiber (g)', fiberCtrl, AppColors.green)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -247,6 +250,7 @@ class AiBreakdownCard extends ConsumerWidget {
                       protein: int.tryParse(proteinCtrl.text) ?? 0,
                       carbs: int.tryParse(carbsCtrl.text) ?? 0,
                       fat: int.tryParse(fatCtrl.text) ?? 0,
+                      fiber: int.tryParse(fiberCtrl.text) ?? item.fiber,
                     );
                     Navigator.of(context).pop();
                   },

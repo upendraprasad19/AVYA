@@ -9,9 +9,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import '../providers/profile_provider.dart';
 
@@ -41,6 +43,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String? _bodyFatAssessedAt;
   bool _isAssessingBf = false;
   bool _isSaving = false;
+  late bool _isMetric; // true = KG/CM, false = LBS/IN
 
   static const _goals = {
     'build_muscle': 'Build Muscle',
@@ -59,23 +62,44 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _isMetric = UserRepository.instance.getUnitsMetric();
     final profile = ref.read(userProfileProvider);
 
     _nameController =
         TextEditingController(text: profile['full_name'] as String? ?? '');
+
+    // Convert height/weight values to the user's preferred units for display.
+    // Storage is always metric (cm, kg); we convert on the way in and out.
+    final heightCmRaw = (profile['height_cm'] as num?)?.toDouble();
+    final weightKgRaw = (profile['current_weight_kg'] as num?)?.toDouble();
+    final targetKgRaw = (profile['target_weight_kg'] as num?)?.toDouble();
+
     _heightController = TextEditingController(
-        text: (profile['height_cm'] as num?)?.toString() ?? '');
+        text: heightCmRaw == null
+            ? ''
+            : _isMetric
+                ? heightCmRaw.toStringAsFixed(0)
+                : (heightCmRaw / 2.54).toStringAsFixed(1));
     _weightController = TextEditingController(
-        text: (profile['current_weight_kg'] as num?)?.toString() ?? '');
+        text: weightKgRaw == null
+            ? ''
+            : _isMetric
+                ? weightKgRaw.toStringAsFixed(1)
+                : (weightKgRaw * 2.20462).toStringAsFixed(0));
     _targetWeightController = TextEditingController(
-        text: (profile['target_weight_kg'] as num?)?.toString() ?? '');
+        text: targetKgRaw == null
+            ? ''
+            : _isMetric
+                ? targetKgRaw.toStringAsFixed(1)
+                : (targetKgRaw * 2.20462).toStringAsFixed(0));
+
     _cityController =
         TextEditingController(text: profile['city'] as String? ?? '');
 
     _gender = (profile['gender'] as String?) ?? 'male';
     _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
     _equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
-    _daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+    _daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
     _dietPreference = (profile['diet_preference'] as String?) ?? 'non_veg';
@@ -161,16 +185,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   Expanded(
                     child: _buildTextField(
                       controller: _heightController,
-                      label: 'Height (cm)',
+                      label: _isMetric ? 'Height (cm)' : 'Height (in)',
                       icon: Icons.height,
-                      isNumeric: true,
+                      isDecimal: !_isMetric,
+                      isNumeric: _isMetric,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.gridGap),
                   Expanded(
                     child: _buildTextField(
                       controller: _weightController,
-                      label: 'Weight (kg)',
+                      label: _isMetric ? 'Weight (kg)' : 'Weight (lbs)',
                       icon: Icons.monitor_weight_outlined,
                       isDecimal: true,
                     ),
@@ -180,7 +205,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               const SizedBox(height: AppSpacing.gridGap),
               _buildTextField(
                 controller: _targetWeightController,
-                label: 'Target Weight (kg)',
+                label: _isMetric ? 'Target Weight (kg)' : 'Target Weight (lbs)',
                 icon: Icons.flag,
                 isDecimal: true,
               ),
@@ -987,26 +1012,50 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       return;
     }
 
-    final height = double.tryParse(_heightController.text);
-    if (height == null || height < 100 || height > 250) {
-      _showError('Height must be between 100 and 250 cm.');
-      return;
+    // Parse height — stored in cm, displayed in user's preferred units.
+    final heightRaw = double.tryParse(_heightController.text);
+    if (_isMetric) {
+      if (heightRaw == null || heightRaw < 100 || heightRaw > 250) {
+        _showError('Height must be between 100 and 250 cm.');
+        return;
+      }
+    } else {
+      if (heightRaw == null || heightRaw < 39.4 || heightRaw > 98.4) {
+        _showError('Height must be between 39 and 98 in.');
+        return;
+      }
     }
+    // Always store in cm.
+    final height = _isMetric ? heightRaw : heightRaw * 2.54;
 
-    final weight = double.tryParse(_weightController.text);
-    if (weight == null || weight < 30 || weight > 300) {
-      _showError('Weight must be between 30 and 300 kg.');
-      return;
+    // Parse weight — stored in kg, displayed in user's preferred units.
+    final weightRaw = double.tryParse(_weightController.text);
+    if (_isMetric) {
+      if (weightRaw == null || weightRaw < 30 || weightRaw > 300) {
+        _showError('Weight must be between 30 and 300 kg.');
+        return;
+      }
+    } else {
+      if (weightRaw == null || weightRaw < 66 || weightRaw > 661) {
+        _showError('Weight must be between 66 and 661 lbs.');
+        return;
+      }
     }
+    // Always store in kg.
+    final weight = _isMetric ? weightRaw : weightRaw / 2.20462;
 
     final targetWeightText = _targetWeightController.text.trim();
-    final targetWeight = targetWeightText.isEmpty
+    final targetWeightRaw = targetWeightText.isEmpty
         ? 0.0
         : double.tryParse(targetWeightText);
-    if (targetWeight == null || targetWeight < 0 || targetWeight > 300) {
-      _showError('Target weight must be between 0 and 300 kg.');
+    if (targetWeightRaw == null || (_isMetric ? targetWeightRaw > 300 : targetWeightRaw > 661)) {
+      _showError(_isMetric
+          ? 'Target weight must be between 0 and 300 kg.'
+          : 'Target weight must be between 0 and 661 lbs.');
       return;
     }
+    // Always store in kg.
+    final targetWeight = _isMetric ? targetWeightRaw : targetWeightRaw / 2.20462;
 
     setState(() => _isSaving = true);
 
@@ -1038,6 +1087,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
+
+      // Push updated profile to Supabase immediately (fire-and-forget).
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId != null) {
+        SyncService.instance.syncProfileNow(userId);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

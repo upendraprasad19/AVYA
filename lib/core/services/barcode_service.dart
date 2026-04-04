@@ -29,6 +29,7 @@ class BarcodeFood {
   double proteinForServing(double grams) => proteinPer100g * grams / 100;
   double carbsForServing(double grams) => carbsPer100g * grams / 100;
   double fatForServing(double grams) => fatPer100g * grams / 100;
+  double fiberForServing(double grams) => fiberPer100g * grams / 100;
 }
 
 /// Calls Open Food Facts API to look up a product by barcode.

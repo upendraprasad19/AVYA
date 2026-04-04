@@ -2,6 +2,60 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 
+/// A personal record for a single exercise, based on all-time best value.
+class ExercisePR {
+  final String exerciseName;
+  final String loggingType; // weight_reps | bodyweight_reps | timed | cardio | distance
+  final double bestValue;   // kg / reps / secs / km depending on type
+  final DateTime date;      // date of the log that achieved this best
+
+  const ExercisePR({
+    required this.exerciseName,
+    required this.loggingType,
+    required this.bestValue,
+    required this.date,
+  });
+
+  /// Human-readable best value label (e.g. "80 kg", "15 reps", "2m 30s").
+  String get formattedValue {
+    switch (loggingType) {
+      case 'bodyweight_reps':
+        return '${bestValue.toInt()} reps';
+      case 'timed':
+        final secs = bestValue.toInt();
+        if (secs >= 60) {
+          final m = secs ~/ 60;
+          final s = secs % 60;
+          return s > 0 ? '${m}m ${s}s' : '${m}m';
+        }
+        return '${secs}s';
+      case 'cardio':
+      case 'distance':
+        // cardio bestValue is distance_km when > 0, else duration_seconds.
+        // Values < 10 are km (e.g. 5.2 km); >= 60 are seconds (e.g. 1800 → 30 min).
+        if (loggingType == 'cardio' && bestValue < 10) {
+          return '${bestValue.toStringAsFixed(1)} km';
+        }
+        if (bestValue >= 60) return '${(bestValue / 60).round()} min';
+        return '${bestValue.toStringAsFixed(1)} km';
+      default: // weight_reps, weighted_bodyweight
+        final kg = bestValue;
+        return kg == kg.roundToDouble()
+            ? '${kg.toInt()} kg'
+            : '${kg.toStringAsFixed(1)} kg';
+    }
+  }
+
+  /// Short date label: "1 Apr".
+  String get formattedDate {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]}';
+  }
+}
+
 /// Repository for all workout-related Hive reads/writes.
 ///
 /// Wraps [WorkoutScheduleService] and direct Hive access so that
@@ -67,8 +121,8 @@ class WorkoutRepository {
   // ── Completion ────────────────────────────────────────────────
 
   /// Mark a scheduled workout as completed for the given date.
-  Future<void> markWorkoutCompleted(DateTime date) async {
-    await _schedule.markCompleted(date);
+  Future<void> markWorkoutCompleted(DateTime date, {int durationSeconds = 0}) async {
+    await _schedule.markCompleted(date, durationSeconds: durationSeconds);
   }
 
   /// Mark a scheduled workout as skipped for the given date.
@@ -194,6 +248,69 @@ class WorkoutRepository {
   bool isTravelDay(DateTime date) => _schedule.isTravelDay(date);
 
   // ── PRs ──────────────────────────────────────────────────────
+
+  /// Loads personal records for ALL exercises the user has ever logged.
+  ///
+  /// Single pass through workoutBox. Groups by exercise name, tracks
+  /// best value per logging type. Returns sorted by most recent date first.
+  List<ExercisePR> loadAllExercisePRs() {
+    // key = exercise_name.toLowerCase().trim()
+    final bestMap = <String, ExercisePR>{};
+
+    for (final raw in _hive.workoutBox.values) {
+      if (raw is! Map) continue;
+      if (raw['type'] != 'exercise_log') continue; // skip before allocating
+      final log = Map<String, dynamic>.from(raw);
+
+      final name = (log['exercise_name'] as String? ?? '').trim();
+      if (name.isEmpty) continue;
+      final nameKey = name.toLowerCase();
+
+      final loggingType = (log['logging_type'] as String? ?? 'weight_reps');
+      final createdAt = log['created_at'] as String? ?? log['date'] as String? ?? '';
+      final date = DateTime.tryParse(createdAt) ?? DateTime(2020);
+
+      double value;
+      switch (loggingType) {
+        case 'weight_reps':
+        case 'weighted_bodyweight':
+          value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+          break;
+        case 'bodyweight_reps':
+          value = (log['reps_completed'] as num?)?.toDouble() ?? 0;
+          break;
+        case 'timed':
+          value = (log['duration_seconds'] as num?)?.toDouble() ?? 0;
+          break;
+        case 'cardio':
+          final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
+          final dur = (log['duration_seconds'] as num?)?.toDouble() ?? 0;
+          value = dist > 0 ? dist : dur;
+          break;
+        case 'distance':
+          value = (log['distance_km'] as num?)?.toDouble() ?? 0;
+          break;
+        default:
+          value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      }
+
+      if (value <= 0) continue;
+
+      final existing = bestMap[nameKey];
+      if (existing == null || value > existing.bestValue) {
+        bestMap[nameKey] = ExercisePR(
+          exerciseName: name,
+          loggingType: loggingType,
+          bestValue: value,
+          date: date,
+        );
+      }
+    }
+
+    final result = bestMap.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return result;
+  }
 
   /// Loads personal records for the key compound lifts from workout logs.
   ///

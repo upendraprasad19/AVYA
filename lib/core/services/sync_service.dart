@@ -382,14 +382,37 @@ class SyncService {
     }
   }
 
+  /// Immediately pushes the local Hive profile to Supabase user_profile.
+  /// Safe to call from anywhere — only sends columns that exist in the schema.
+  Future<void> syncProfileNow(String userId) => _syncUserProfile(userId);
+
   Future<void> _syncUserProfile(String userId) async {
     final userBox = _hive.userBox;
     final profile = userBox.get('profile');
     if (profile == null) return;
 
+    final p = Map<String, dynamic>.from(profile as Map);
+
+    // Only send columns that exist in the user_profile Supabase table.
+    // The Hive profile map contains extra computed fields (daily_calories,
+    // protein_grams, etc.) that have no Postgres column and would cause errors.
     await _supabase.client.from('user_profile').upsert({
-      ...Map<String, dynamic>.from(profile as Map),
       'user_id': userId,
+      if (p['date_of_birth'] != null) 'date_of_birth': p['date_of_birth'],
+      if (p['gender'] != null) 'gender': p['gender'],
+      if (p['height_cm'] != null) 'height_cm': p['height_cm'],
+      if (p['current_weight_kg'] != null) 'current_weight_kg': p['current_weight_kg'],
+      if (p['target_weight_kg'] != null) 'target_weight_kg': p['target_weight_kg'],
+      if (p['primary_goal'] != null) 'primary_goal': p['primary_goal'],
+      if (p['fitness_experience'] != null) 'fitness_experience': p['fitness_experience'],
+      if (p['days_per_week'] != null) 'days_per_week': p['days_per_week'],
+      if (p['equipment_access'] != null) 'equipment_access': p['equipment_access'],
+      if (p['activity_level'] != null) 'activity_level': p['activity_level'],
+      if (p['bmr'] != null) 'bmr': p['bmr'],
+      if (p['tdee'] != null) 'tdee': p['tdee'],
+      if (p['diet_preference'] != null) 'diet_preference': p['diet_preference'],
+      if (p['city'] != null) 'city': p['city'],
+      if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
     }, onConflict: 'user_id');
   }
 

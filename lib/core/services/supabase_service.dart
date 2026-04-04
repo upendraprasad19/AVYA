@@ -17,16 +17,22 @@ class SupabaseService {
   static SupabaseService get instance => _instance;
 
   bool _initialized = false;
+  // Stored so concurrent callers await the same Future and never double-init.
+  Future<void>? _initFuture;
 
   /// Initialize the Supabase client. Call once in main() before runApp().
+  /// Safe to call concurrently — only one actual init will run.
   Future<void> initialize() async {
     if (_initialized) return;
+    _initFuture ??= _doInitialize();
+    await _initFuture;
+  }
 
+  Future<void> _doInitialize() async {
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL']!,
       anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     );
-
     _initialized = true;
   }
 
@@ -46,6 +52,9 @@ class SupabaseService {
     if (!_initialized) return null;
     return client.auth.currentSession;
   }
+
+  /// Whether Supabase has been successfully initialized.
+  bool get isInitialized => _initialized;
 
   /// Whether a user is currently authenticated.
   /// Returns false if Supabase is not initialized.

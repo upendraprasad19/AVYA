@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -371,7 +372,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (raw is! Map) return false;
       return raw['date'] == todayStr && raw['status'] == 'completed';
     });
-    final workoutDone = workoutSchedule.isNotEmpty || stats.totalWorkouts > 0;
+    final workoutDone = workoutSchedule.isNotEmpty;
 
     final nutritionToday = ref.watch(nutritionSummaryProvider);
     final hasMeals = nutritionToday.calories >= nutritionToday.calorieTarget &&
@@ -468,6 +469,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // ── #3 Body Stats Card ──────────────────────────────────────────
 
   Widget _buildBodyStats(double? weight, double? target, double? bmi, double? bodyFat) {
+    // Format weight/target according to the user's units preference.
+    String fmtWeight(double? kg) {
+      if (kg == null) return '\u2014';
+      if (_isMetric) return '${kg.toStringAsFixed(1)} kg';
+      final lbs = kg * 2.20462;
+      return '${lbs.toStringAsFixed(0)} lbs';
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       padding: const EdgeInsets.all(14),
@@ -495,8 +504,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _statCell('Weight', weight != null ? '${weight.toStringAsFixed(1)} kg' : '\u2014', AppColors.accent),
-              _statCell('Target', target != null ? '${target.toStringAsFixed(1)} kg' : '\u2014', AppColors.emerald),
+              _statCell('Weight', fmtWeight(weight), AppColors.accent),
+              _statCell('Target', fmtWeight(target), AppColors.emerald),
               _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.blue),
               _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.orange),
             ],
@@ -754,13 +763,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
-    // Free user — show rate limits
+    // Free user — show trial pill + rate limits
     final aiTextUsed = usage.used(AppConstants.featureAiTextLogPro, false);
     final aiTextLimit = AppConstants.freeAiTextLogsPerDay;
     final scanUsed = usage.used(AppConstants.featureScanMealPro, false);
     final scanLimit = AppConstants.freeScanMealPerMonth;
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
     final cartLimit = AppConstants.freeCartAuditorPerMonth;
+
+    // Compute trial days remaining from Hive directly
+    final configBox = HiveService.instance.configBox;
+    final trialStartRaw = configBox.get('ai_trial_start') as String?;
+    int? trialDaysLeft;
+    if (trialStartRaw != null) {
+      final trialStart = DateTime.tryParse(trialStartRaw);
+      if (trialStart != null) {
+        final elapsed = DateTime.now().difference(trialStart).inDays;
+        final left = AppConstants.freeAiTrialDays - elapsed;
+        trialDaysLeft = left.clamp(0, AppConstants.freeAiTrialDays);
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
@@ -792,6 +814,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ],
           ),
+          // Trial days pill
+          if (trialDaysLeft != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: trialDaysLeft > 7
+                    ? AppColors.accentTint
+                    : AppColors.red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: trialDaysLeft > 7
+                      ? AppColors.accent.withValues(alpha: 0.2)
+                      : AppColors.red.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 11,
+                    color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    trialDaysLeft > 0
+                        ? '30-day AI trial · $trialDaysLeft day${trialDaysLeft == 1 ? '' : 's'} remaining'
+                        : 'AI trial expired · Upgrade to continue',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
           const SizedBox(height: 6),
@@ -1048,17 +1110,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  /// Clear Hive -> sign out Supabase -> route to auth screen.
+  /// Sign out Supabase -> clear Hive -> route to auth screen.
+  ///
+  /// Order matters: sign out FIRST so the router never sees
+  /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> _performSignOut() async {
+    // 1. Terminate the Supabase session (local scope always works offline).
     try {
-      // Clear all user-specific Hive boxes via repository
-      await UserRepository.instance.clearAllData();
-
-      // Sign out from Supabase
-      await SupabaseService.instance.client.auth.signOut();
+      await SupabaseService.instance.client.auth
+          .signOut(scope: SignOutScope.global);
     } catch (_) {
-      // Supabase not initialized or error — still navigate to sign-in.
+      try {
+        await SupabaseService.instance.client.auth
+            .signOut(scope: SignOutScope.local);
+      } catch (_) {}
     }
+
+    // 2. Wipe all user-specific Hive boxes after session is gone.
+    try {
+      await UserRepository.instance.clearAllData();
+    } catch (_) {}
 
     if (mounted) {
       context.go('/sign-in');
@@ -1118,9 +1189,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       'deleted_at': DateTime.now().toIso8601String(),
                     }).eq('id', userId);
                   }
-                  await supabase.auth.signOut();
+                  // Use global scope to sign out on server too.
+                  await supabase.auth.signOut(scope: SignOutScope.global);
                 } catch (_) {
-                  // Offline — continue with local cleanup
+                  // Offline or server error — force a local-only sign-out so
+                  // the router never sees authenticated + !onboarded → /onboarding.
+                  try {
+                    await SupabaseService.instance.client.auth
+                        .signOut(scope: SignOutScope.local);
+                  } catch (_) {}
                 }
                 // Clear all local Hive data after sign-out
                 await UserRepository.instance.clearAllData();

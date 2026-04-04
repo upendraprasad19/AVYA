@@ -483,7 +483,7 @@ class GraduationScreen extends ConsumerWidget {
                 await WorkoutScheduleService.instance.generateAndSchedule(
                   goal: profile['primary_goal'] as String? ?? 'general_fitness',
                   equipment: profile['equipment_access'] as String? ?? 'basic_gym',
-                  daysPerWeek: (profile['days_per_week'] as int?) ?? 4,
+                  daysPerWeek: (profile['days_per_week'] as num?)?.toInt() ?? 4,
                   startDate: DateTime.now(),
                   phase: nextPhase,
                   experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',

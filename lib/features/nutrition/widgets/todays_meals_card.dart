@@ -30,6 +30,34 @@ class TodaysMealsCard extends StatelessWidget {
     );
   }
 
+  static String _mealTypeLabel(String raw) {
+    switch (raw) {
+      case 'breakfast':
+        return 'BREAKFAST';
+      case 'lunch':
+        return 'LUNCH';
+      case 'dinner':
+        return 'DINNER';
+      case 'snacks':
+      case 'snack':
+        return 'SNACK';
+      default:
+        return '';
+    }
+  }
+
+  static String _formatTime(String? iso8601) {
+    if (iso8601 == null || iso8601.isEmpty) return '';
+    final dt = DateTime.tryParse(iso8601);
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final hour = local.hour;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$h12:$minute $period';
+  }
+
   Widget _buildEmpty() {
     return Padding(
       padding: const EdgeInsets.all(18),
@@ -55,7 +83,15 @@ class TodaysMealsCard extends StatelessWidget {
         final protein = (meal['total_protein'] as num?)?.toInt() ?? 0;
         final carbs = (meal['total_carbs'] as num?)?.toInt() ?? 0;
         final fat = (meal['total_fat'] as num?)?.toInt() ?? 0;
+        final fiber = (meal['total_fiber'] as num?)?.toInt() ?? 0;
         final logId = meal['id'] as String?;
+        final mealTypeRaw =
+            (meal['meal_type_label'] as String? ?? meal['meal_type'] as String?)
+                ?.toLowerCase() ??
+                '';
+        final mealTypeLabel = _mealTypeLabel(mealTypeRaw);
+        final createdAt = meal['created_at'] as String?;
+        final timeLabel = _formatTime(createdAt);
 
         Widget row = GestureDetector(
           onTap: onEdit != null ? () => onEdit!(meal) : null,
@@ -86,6 +122,19 @@ class TodaysMealsCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (mealTypeLabel.isNotEmpty) ...[
+                        Text(
+                          mealTypeLabel,
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                            color: AppColors.accent.withAlpha(180),
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                      ],
                       Text(
                         name,
                         style: GoogleFonts.getFont(
@@ -99,7 +148,7 @@ class TodaysMealsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'P:${protein}g \u00B7 C:${carbs}g \u00B7 F:${fat}g',
+                        'P:${protein}g · C:${carbs}g · Fat:${fat}g${fiber > 0 ? ' · Fi:${fiber}g' : ''}',
                         style: GoogleFonts.getFont(
                           'DM Sans',
                           fontSize: 10,
@@ -110,15 +159,29 @@ class TodaysMealsCard extends StatelessWidget {
                   ),
                 ),
 
-                // Calories
-                Text(
-                  '$cal kcal',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
+                // Calories + time
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$cal kcal',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    if (timeLabel.isNotEmpty)
+                      Text(
+                        timeLabel,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 9,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),

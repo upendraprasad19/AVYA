@@ -90,6 +90,7 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
 
     ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
     ref.invalidate(weightHistoryProvider);
+    ref.invalidate(todayWeightLoggedProvider);
 
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(

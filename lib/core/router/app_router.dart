@@ -127,8 +127,12 @@ class AppRouter {
                   GoRoute(
                     path: 'template-builder',
                     name: 'templateBuilder',
-                    builder: (context, state) =>
-                        const TemplateBuilderScreen(),
+                    builder: (context, state) {
+                      final extra = state.extra;
+                      return TemplateBuilderScreen(
+                        editData: extra is Map<String, dynamic> ? extra : null,
+                      );
+                    },
                   ),
                   GoRoute(
                     path: 'graduation',

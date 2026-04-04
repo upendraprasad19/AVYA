@@ -91,7 +91,29 @@
       "Bash(supabase login:*)",
       "Bash(gh pr:*)",
       "Bash(where gh:*)",
-      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")"
+      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
+      "Bash(find 'C:\\\\Upendra\\\\Claude Code\\\\Fitness App/lib' -name *achievement* -o -name *badge*)",
+      "Bash(find 'C:\\\\Upendra\\\\Claude Code\\\\Fitness App/lib/core' -name *badge*)",
+      "Bash(grep -r \"vercel\\\\|icanbefitter.com\\\\|deployed\\\\|production.*url\" 'C:\\\\Upendra\\\\Claude Code\\\\Fitness App' --include=*.yaml --include=*.yml --include=*.md --include=*.txt --include=*.json)",
+      "mcp__84d52c60-08e3-4ccd-ada2-b837cbf24f04__list_teams",
+      "mcp__84d52c60-08e3-4ccd-ada2-b837cbf24f04__get_project",
+      "Bash(grep -E \"provider\\\\.dart$\")",
+      "Bash(grep -E \"\\\\.dart$\")",
+      "Bash(dart analyze:*)",
+      "Bash(python -m http.server 8080)",
+      "mcp__ba7b5e8e-8611-4910-8e25-46712ab747b9__get_project",
+      "Bash(find 'C:/Upendra/Claude Code/Fitness App/build/web/' -name *.env -o -name .env)",
+      "WebFetch(domain:dedsavbjuwgarrhphgnl.supabase.co)",
+      "WebFetch(domain:play.google.com)",
+      "WebFetch(domain:www.forgefitapp.com)",
+      "WebFetch(domain:apps.apple.com)",
+      "WebFetch(domain:www.prlog.org)",
+      "WebFetch(domain:tracxn.com)",
+      "WebFetch(domain:www.linkedin.com)",
+      "Bash(tasklist)",
+      "Bash(taskkill /F /IM dart.exe /T)",
+      "Bash(taskkill /F /IM flutter.exe /T)",
+      "Bash(taskkill /F /IM flutter_tester.exe /T)"
     ]
   }
 }

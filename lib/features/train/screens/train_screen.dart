@@ -106,9 +106,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 14),
 
-                    // 2. Today's workout hero card (guarded for empty weeks)
-                    if (weekDays.isNotEmpty)
-                      _buildTodayHeroCard(context, plan, todayWorkout, weekDays)
+                    // 2. Today's workout hero card
+                    // Only show when viewing current week; use currentWeek
+                    // data for today-lookup so it's always accurate (W2+W6).
+                    if (selectedWeek == plan.currentWeek)
+                      _buildTodayHeroCard(context, plan, todayWorkout)
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -122,14 +124,27 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                                 BorderRadius.circular(AppRadius.cardM),
                             border: Border.all(color: AppColors.border),
                           ),
-                          child: Text(
-                            'No workouts scheduled for this week',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.textSecondary,
-                            ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_today,
+                                  size: 16, color: AppColors.textSecondary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  selectedWeek > plan.currentWeek
+                                      ? 'Week $selectedWeek hasn\'t started yet'
+                                      : weekDays.isEmpty
+                                          ? 'No workouts scheduled for this week'
+                                          : 'Viewing Week $selectedWeek plan',
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -157,8 +172,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                     WeekSelector(
                       totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
-                      onSelect: (week) =>
-                          ref.read(selectedWeekProvider.notifier).select(week),
+                      onSelect: (week) {
+                          ref.read(selectedWeekProvider.notifier).select(week);
+                          ref.read(expandedDayProvider.notifier).collapse();
+                        },
                     ),
                     const SizedBox(height: 10),
 
@@ -290,14 +307,15 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   // ── 2. Today's Workout Hero Card ──────────────────────────────
 
   Widget _buildTodayHeroCard(BuildContext context, CurrentPlanData plan,
-      WorkoutDayData? todayWorkout, List<WorkoutDayData> weekDays) {
-    // Determine if today is a rest day by checking actual date
+      WorkoutDayData? todayWorkout) {
+    // Always use current week data for today lookup (W2 fix).
+    final currentWeekDays = plan.getWeek(plan.currentWeek);
     final today = DateTime.now();
     final todayStr =
         '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
     WorkoutDayData? todayDay;
-    for (final day in weekDays) {
+    for (final day in currentWeekDays) {
       if (day.date != null) {
         final dayStr =
             '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
@@ -524,6 +542,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     final today = DateTime.now();
     final todayStr =
         '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final expandedIdx = ref.watch(expandedDayProvider);
 
     return Padding(
       padding:
@@ -537,7 +556,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         child: Column(
           children: [
             for (int i = 0; i < weekDays.length; i++) ...[
-              _buildCompactRow(context, weekDays[i], todayStr),
+              _buildCompactRow(context, weekDays[i], todayStr, i),
+              // Inline expanded exercises for completed days (W5)
+              if (expandedIdx == i && weekDays[i].isDone && weekDays[i].date != null)
+                _buildExpandedExercises(weekDays[i]),
               if (i < weekDays.length - 1)
                 Divider(
                   height: 1,
@@ -552,7 +574,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   }
 
   Widget _buildCompactRow(
-      BuildContext context, WorkoutDayData day, String todayStr) {
+      BuildContext context, WorkoutDayData day, String todayStr, int dayIndex) {
     // Determine if this is today
     bool isToday = false;
     if (day.date != null) {
@@ -589,24 +611,24 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       status = _RowStatus.planned;
     }
 
-    // Today's incomplete workout navigates to active workout; completed/future show preview; rest days show recovery sheet
-    final isTappable = day.isRest || (!day.isRest && (isToday && !day.isDone)) || (!day.isRest && !isToday);
-
+    // Today's incomplete workout navigates to active workout;
+    // completed days expand inline (W5); future/past show preview; rest days show recovery sheet
     return GestureDetector(
-      onTap: isTappable
-          ? () {
-              if (day.isRest) {
-                _showRestDaySheet(context);
-              } else if (isToday && !day.isDone) {
-                ref
-                    .read(activeWorkoutProvider.notifier)
-                    .startWorkout(day);
-                context.go('/train/active-workout');
-              } else {
-                _showExercisePreviewSheet(context, day);
-              }
-            }
-          : null,
+      onTap: () {
+        if (day.isRest) {
+          _showRestDaySheet(context);
+        } else if (isToday && !day.isDone) {
+          ref
+              .read(activeWorkoutProvider.notifier)
+              .startWorkout(day);
+          context.go('/train/active-workout');
+        } else if (day.isDone) {
+          // Completed days expand inline to show logged exercises (W5)
+          ref.read(expandedDayProvider.notifier).toggle(dayIndex);
+        } else {
+          _showExercisePreviewSheet(context, day);
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: status == _RowStatus.missed ? 0.6 : 1.0,
@@ -672,7 +694,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ],
 
               // Status indicator
-              _buildStatusIndicator(status),
+              _buildStatusIndicator(
+                status,
+                isExpanded: status == _RowStatus.done &&
+                    ref.watch(expandedDayProvider) == dayIndex,
+              ),
             ],
           ),
         ),
@@ -680,7 +706,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     );
   }
 
-  Widget _buildStatusIndicator(_RowStatus status) {
+  Widget _buildStatusIndicator(_RowStatus status, {bool isExpanded = false}) {
     switch (status) {
       case _RowStatus.done:
         return Row(
@@ -696,6 +722,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 fontWeight: FontWeight.w700,
                 color: AppColors.green,
               ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              isExpanded ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: AppColors.green.withValues(alpha: 0.6),
             ),
           ],
         );
@@ -778,6 +810,151 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       case _RowStatus.rest:
         return const SizedBox.shrink();
     }
+  }
+
+  // ── Expanded Exercises (W5) ─────────────────────────────────
+
+  Widget _buildExpandedExercises(WorkoutDayData day) {
+    final logs =
+        WorkoutRepository.instance.getExerciseLogsForDate(day.date!);
+
+    if (logs.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(50, 0, 14, 10),
+        child: Text(
+          'No exercise data logged',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+
+    // Build exercise log rows
+    final logRows = logs.map((log) {
+      final name = log['exercise_name'] as String? ?? 'Exercise';
+      final sets = log['sets_completed'] as int? ?? 0;
+      final reps = log['reps_completed'] as int? ?? 0;
+      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      final duration = log['duration_seconds'] as int? ?? 0;
+      final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+      final isPr = log['is_pr'] == true;
+
+      String detail;
+      if (loggingType == 'timed') {
+        final mins = duration ~/ 60;
+        final secs = duration % 60;
+        detail = sets > 1
+            ? '$sets sets \u00b7 ${mins > 0 ? '${mins}m ' : ''}${secs}s'
+            : '${mins > 0 ? '${mins}m ' : ''}${secs}s';
+      } else if (loggingType == 'cardio') {
+        final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
+        detail = '${duration ~/ 60} min \u00b7 ${dist.toStringAsFixed(1)} km';
+      } else if (weight > 0) {
+        detail =
+            '$sets sets \u00b7 $reps reps \u00b7 ${weight.toStringAsFixed(1)} kg';
+      } else {
+        detail = '$sets sets \u00b7 $reps reps';
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            Icon(
+              isPr ? Icons.emoji_events : Icons.check,
+              size: 13,
+              color: isPr ? AppColors.proGold : AppColors.green,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                name,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              detail,
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w400,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+
+    // "View Workout Card" button — shown when today's workout is saved
+    Widget? viewCardButton;
+    final workout = ref.read(activeWorkoutProvider);
+    if (workout.isSaved && day.date != null) {
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final dayStr =
+          '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+      if (dayStr == todayStr) {
+        viewCardButton = Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: GestureDetector(
+            onTap: () => context.go('/train/active-workout'),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.accentTint,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.card_giftcard_outlined,
+                      size: 14, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'View Workout Card',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(50, 2, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...logRows,
+          if (viewCardButton != null) viewCardButton,
+        ],
+      ),
+    );
   }
 
   // ── Rest Day Sheet ────────────────────────────────────────────
@@ -1486,9 +1663,33 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       ),
                     ),
                     GestureDetector(
+                      onTap: () => context.go('/train/template-builder', extra: {
+                        'templateId': templateId,
+                        'templateData': tmpl,
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.input,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Text(
+                          'Edit',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
                       onTap: () => _scheduleTemplate(context, ref, templateId, name),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: AppColors.accentTint,
                           borderRadius: BorderRadius.circular(100),
@@ -1519,12 +1720,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   void _scheduleTemplate(
       BuildContext context, WidgetRef ref, String templateId, String name) async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: now.add(const Duration(days: 1)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 28)),
       helpText: 'Schedule "$name"',
+      saveText: 'SCHEDULE',
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.dark(
@@ -1541,15 +1742,33 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     if (picked == null) return;
     if (!context.mounted) return;
 
-    WorkoutScheduleService.instance.assignTemplateToDate(templateId, picked);
+    // Assign to every date in the selected range
+    final dates = <DateTime>[];
+    var current = picked.start;
+    while (!current.isAfter(picked.end)) {
+      dates.add(current);
+      current = current.add(const Duration(days: 1));
+    }
+
+    for (final date in dates) {
+      WorkoutScheduleService.instance.assignTemplateToDate(templateId, date);
+    }
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(currentPlanProvider);
+    ref.invalidate(todayWorkoutProvider);
 
     const monthNames = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    final dateStr = '${monthNames[picked.month - 1]} ${picked.day}';
+
+    final String dateStr;
+    if (dates.length == 1) {
+      dateStr = '${monthNames[dates.first.month - 1]} ${dates.first.day}';
+    } else {
+      dateStr = '${monthNames[dates.first.month - 1]} ${dates.first.day} – '
+          '${monthNames[dates.last.month - 1]} ${dates.last.day} (${dates.length} days)';
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

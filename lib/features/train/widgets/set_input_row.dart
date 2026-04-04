@@ -164,6 +164,15 @@ class SetInputRow extends StatelessWidget {
     String hint, {
     bool isInt = false,
   }) {
+    // Cyan border indicates this set's values have been locked in.
+    final lockedBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(
+        color: AppColors.green.withValues(alpha: 0.5),
+        width: 1.5,
+      ),
+    );
+
     return SizedBox(
       height: 36,
       child: TextField(
@@ -179,7 +188,7 @@ class SetInputRow extends StatelessWidget {
           'DM Sans',
           fontSize: 15,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: isChecked ? AppColors.textPrimary : AppColors.textPrimary,
         ),
         decoration: InputDecoration(
           hintText: hint,
@@ -190,16 +199,20 @@ class SetInputRow extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
           filled: true,
-          fillColor: AppColors.input,
+          fillColor: isChecked
+              ? AppColors.green.withValues(alpha: 0.06)
+              : AppColors.input,
           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: AppColors.border),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border),
-          ),
+          enabledBorder: isChecked
+              ? lockedBorder
+              : OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: AppColors.border),
+                ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: AppColors.accent, width: 1.5),

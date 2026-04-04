@@ -252,11 +252,15 @@ class SendMessageNotifier extends Notifier<bool> {
             );
       }
     } catch (e) {
-      final errorMsg = e.toString().contains('FunctionException') ||
-              e.toString().contains('404') ||
-              e.toString().contains('Failed host lookup')
-          ? 'AI media analysis is not available yet. The Edge Function needs to be deployed to Supabase.'
-          : 'Sorry, I couldn\'t analyse that photo: ${e.toString().length > 100 ? e.toString().substring(0, 100) : e}';
+      final errStr2 = e.toString();
+      final String errorMsg;
+      if (errStr2.contains('Failed host lookup') || errStr2.contains('SocketException')) {
+        errorMsg = 'No internet connection. Please check your network and try again.';
+      } else if (errStr2.contains('FunctionException') || errStr2.contains('502') || errStr2.contains('503')) {
+        errorMsg = 'AI media analysis is temporarily unavailable. Please try again.';
+      } else {
+        errorMsg = 'Sorry, I couldn\'t analyse that photo. Please try again.';
+      }
       chatNotifier.replaceLastMessage(ChatMessage(
         text: errorMsg,
         isUser: false,
@@ -347,11 +351,23 @@ class SendMessageNotifier extends Notifier<bool> {
             );
       }
     } catch (e) {
-      final errorMsg = e.toString().contains('FunctionException') ||
-              e.toString().contains('404') ||
-              e.toString().contains('Failed host lookup')
-          ? 'AI service is not available yet. The Edge Functions need to be deployed to Supabase. Check supabase/functions/ for deployment instructions.'
-          : 'Sorry, I couldn\'t process that: ${e.toString().length > 100 ? e.toString().substring(0, 100) : e}';
+      final errStr = e.toString();
+      final String errorMsg;
+      if (errStr.contains('Failed host lookup') ||
+          errStr.contains('Failed to fetch') ||
+          errStr.contains('SocketException')) {
+        errorMsg = 'No internet connection. Please check your network and try again.';
+      } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
+        errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
+      } else if (errStr.contains('TRIAL_EXPIRED')) {
+        errorMsg = 'Your 30-day free AI trial has ended. Upgrade to PRO for unlimited coaching.';
+      } else if (errStr.contains('RATE_LIMITED')) {
+        errorMsg = 'Daily message limit reached (15/day on free plan). Try again tomorrow or upgrade to PRO.';
+      } else if (errStr.contains('FunctionException') || errStr.contains('502') || errStr.contains('503')) {
+        errorMsg = 'AI service is temporarily unavailable. Please try again in a moment.';
+      } else {
+        errorMsg = 'Sorry, something went wrong. Please try again.';
+      }
       chatNotifier.replaceLastMessage(ChatMessage(
         text: errorMsg,
         isUser: false,

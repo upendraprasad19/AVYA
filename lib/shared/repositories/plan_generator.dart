@@ -37,21 +37,23 @@ class PlanGenerator {
       final dayConfig = split[dayIndex];
       final exercises = <PlannedExercise>[];
 
-      for (final category in dayConfig.categories) {
+      for (final spec in dayConfig.specs) {
         final candidates = _exerciseRepo.query(
-          category: category,
+          category: spec.category,
           equipment: equipmentList,
           suitableFor: experienceLevel,
           // Phase 1 uses only well-known foundational exercises so beginners
           // don't get obscure movements on their first week.
           foundationalOnly: phase == 1,
+          targetMuscles: spec.targetMuscles,
+          excludeMuscles: spec.excludeMuscles,
           limit: 6,
         );
 
         // Pick exercises: compounds first, then isolations.
         final selected = _selectExercises(
           candidates,
-          maxCount: dayConfig.exercisesPerCategory,
+          maxCount: spec.count,
           phase: phase,
         );
 
@@ -153,17 +155,42 @@ class PlanGenerator {
     if (goal == 'build_muscle') {
       return [
         _DayConfig('Push', 'Chest, shoulders, triceps', ['Push'], 6),
-        _DayConfig('Pull', 'Back, biceps', ['Pull'], 6),
+        _DayConfig.targeted('Pull', 'Back, biceps', [
+          _CategorySpec('Pull', 4,
+              excludeMuscles: ['Biceps', 'Forearm']),
+          _CategorySpec('Pull', 2,
+              targetMuscles: ['Biceps']),
+        ]),
         _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 6),
-        _DayConfig('Upper', 'Chest, back, shoulders', ['Push', 'Pull'], 3),
+        _DayConfig.targeted('Upper', 'Shoulders, back, arms', [
+          _CategorySpec('Push', 2,
+              targetMuscles: ['Deltoid', 'Shoulder'],
+              excludeMuscles: ['Chest']),
+          _CategorySpec('Pull', 2,
+              excludeMuscles: ['Biceps', 'Forearm']),
+          _CategorySpec('Push', 1,
+              targetMuscles: ['Triceps']),
+          _CategorySpec('Pull', 1,
+              targetMuscles: ['Biceps']),
+        ]),
       ];
     }
     if (goal == 'strength') {
       return [
         _DayConfig('Squat Day', 'Squat + accessories', ['Legs'], 5),
         _DayConfig('Bench Day', 'Bench + upper push', ['Push'], 5),
-        _DayConfig('Deadlift Day', 'Deadlift + pull', ['Pull', 'Legs'], 3),
-        _DayConfig('OHP Day', 'Overhead press + accessories', ['Push', 'Core'], 3),
+        _DayConfig.targeted('Deadlift Day', 'Deadlift + back', [
+          _CategorySpec('Pull', 3,
+              excludeMuscles: ['Biceps', 'Forearm']),
+          _CategorySpec('Legs', 2,
+              targetMuscles: ['Hamstring', 'Glute']),
+        ]),
+        _DayConfig.targeted('OHP Day', 'Overhead press + accessories', [
+          _CategorySpec('Push', 3,
+              targetMuscles: ['Deltoid', 'Shoulder'],
+              excludeMuscles: ['Chest']),
+          _CategorySpec('Core', 2),
+        ]),
       ];
     }
     // lose_fat / general_fitness
@@ -178,11 +205,32 @@ class PlanGenerator {
   List<_DayConfig> _get5DaySplit(String goal) {
     if (goal == 'build_muscle') {
       return [
-        _DayConfig('Chest', 'Chest focus', ['Push'], 6),
-        _DayConfig('Back', 'Back focus', ['Pull'], 6),
-        _DayConfig('Shoulders + Arms', 'Delts, bi, tri', ['Push', 'Pull'], 3),
+        _DayConfig.targeted('Chest', 'Chest focus', [
+          _CategorySpec('Push', 6,
+              targetMuscles: ['Chest', 'Lower Chest', 'Upper Chest']),
+        ]),
+        _DayConfig.targeted('Back', 'Back focus', [
+          _CategorySpec('Pull', 6,
+              excludeMuscles: ['Biceps', 'Forearm']),
+        ]),
+        _DayConfig.targeted('Shoulders + Arms', 'Delts, biceps, triceps', [
+          _CategorySpec('Push', 2,
+              targetMuscles: ['Deltoid', 'Shoulder'],
+              excludeMuscles: ['Chest']),
+          _CategorySpec('Push', 2,
+              targetMuscles: ['Triceps']),
+          _CategorySpec('Pull', 2,
+              targetMuscles: ['Biceps']),
+        ]),
         _DayConfig('Legs', 'Quads, hams, glutes', ['Legs'], 6),
-        _DayConfig('Weak Points', 'Lagging muscles', ['Push', 'Pull', 'Core'], 2),
+        _DayConfig.targeted('Weak Points', 'Shoulders, arms, core', [
+          _CategorySpec('Push', 1,
+              targetMuscles: ['Deltoid', 'Shoulder'],
+              excludeMuscles: ['Chest']),
+          _CategorySpec('Pull', 1,
+              targetMuscles: ['Biceps']),
+          _CategorySpec('Core', 2),
+        ]),
       ];
     }
     // Default 5-day
@@ -190,7 +238,17 @@ class PlanGenerator {
       _DayConfig('Push', 'Chest, shoulders, triceps', ['Push'], 6),
       _DayConfig('Pull', 'Back, biceps', ['Pull'], 6),
       _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 6),
-      _DayConfig('Upper', 'Chest, back, shoulders', ['Push', 'Pull'], 3),
+      _DayConfig.targeted('Upper', 'Shoulders, back, arms', [
+        _CategorySpec('Push', 2,
+            targetMuscles: ['Deltoid', 'Shoulder'],
+            excludeMuscles: ['Chest']),
+        _CategorySpec('Pull', 2,
+            excludeMuscles: ['Biceps', 'Forearm']),
+        _CategorySpec('Push', 1,
+            targetMuscles: ['Triceps']),
+        _CategorySpec('Pull', 1,
+            targetMuscles: ['Biceps']),
+      ]),
       _DayConfig('Lower + Core', 'Legs, core, conditioning', ['Legs', 'Core', 'Cardio'], 2),
     ];
   }
@@ -198,11 +256,32 @@ class PlanGenerator {
   List<_DayConfig> _get6DaySplit(String goal) {
     if (goal == 'build_muscle') {
       return [
-        _DayConfig('Push A', 'Heavy chest focus', ['Push'], 6),
-        _DayConfig('Pull A', 'Heavy back focus', ['Pull'], 6),
+        _DayConfig.targeted('Push A', 'Heavy chest focus', [
+          _CategorySpec('Push', 4,
+              targetMuscles: ['Chest', 'Lower Chest', 'Upper Chest']),
+          _CategorySpec('Push', 2,
+              targetMuscles: ['Triceps']),
+        ]),
+        _DayConfig.targeted('Pull A', 'Heavy back focus', [
+          _CategorySpec('Pull', 4,
+              excludeMuscles: ['Biceps', 'Forearm']),
+          _CategorySpec('Pull', 2,
+              targetMuscles: ['Biceps']),
+        ]),
         _DayConfig('Legs A', 'Quad dominant', ['Legs'], 6),
-        _DayConfig('Push B', 'Volume shoulders', ['Push'], 6),
-        _DayConfig('Pull B', 'Volume back + biceps', ['Pull'], 6),
+        _DayConfig.targeted('Push B', 'Volume shoulders + triceps', [
+          _CategorySpec('Push', 4,
+              targetMuscles: ['Deltoid', 'Shoulder'],
+              excludeMuscles: ['Chest']),
+          _CategorySpec('Push', 2,
+              targetMuscles: ['Triceps']),
+        ]),
+        _DayConfig.targeted('Pull B', 'Volume back + biceps', [
+          _CategorySpec('Pull', 3,
+              excludeMuscles: ['Biceps', 'Forearm']),
+          _CategorySpec('Pull', 3,
+              targetMuscles: ['Biceps']),
+        ]),
         _DayConfig('Legs B', 'Hamstring + glute focus', ['Legs', 'Core'], 4),
       ];
     }
@@ -572,13 +651,29 @@ class PlannedExercise {
 
 // ── Private helpers ─────────────────────────────────────────────
 
+class _CategorySpec {
+  final String category;
+  final int count;
+  final List<String>? targetMuscles;
+  final List<String>? excludeMuscles;
+
+  const _CategorySpec(this.category, this.count,
+      {this.targetMuscles, this.excludeMuscles});
+}
+
 class _DayConfig {
   final String name;
   final String focus;
-  final List<String> categories;
-  final int exercisesPerCategory;
+  final List<_CategorySpec> specs;
 
-  const _DayConfig(this.name, this.focus, this.categories, this.exercisesPerCategory);
+  /// Simple constructor: uniform count per category, no muscle filtering.
+  _DayConfig(this.name, this.focus, List<String> categories, int countPerCategory)
+      : specs = categories
+            .map((c) => _CategorySpec(c, countPerCategory))
+            .toList();
+
+  /// Targeted constructor: explicit specs with muscle filtering.
+  const _DayConfig.targeted(this.name, this.focus, this.specs);
 }
 
 class _PhaseMeta {

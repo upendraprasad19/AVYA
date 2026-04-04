@@ -217,7 +217,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                   ),
                 ),
                 child: Text(
-                  '$remaining/$limit',
+                  '${limit - remaining}/$limit used',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 12,
@@ -235,7 +235,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
             child: Align(
               alignment: Alignment.centerRight,
               child: Text(
-                '$remaining of $limit AI logs remaining today',
+                '$remaining log${remaining == 1 ? '' : 's'} left today',
                 style: GoogleFonts.getFont(
                   'DM Sans',
                   fontSize: 9,

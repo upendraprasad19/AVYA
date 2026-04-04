@@ -125,11 +125,37 @@ class WorkoutScheduleService {
   // ── Queries ─────────────────────────────────────────────────────
 
   /// Get scheduled data for a specific date.
+  ///
+  /// Validates that a 'completed' status actually belongs to this date —
+  /// prevents stale completed_at timestamps from a previous session causing
+  /// a workout to appear as done before the user has started it.
   Map<String, dynamic>? getScheduleForDate(DateTime date) {
     final key = '$_schedulePrefix${_dateKey(date)}';
     final data = _hive.workoutBox.get(key);
     if (data == null) return null;
-    return Map<String, dynamic>.from(data as Map);
+    final map = Map<String, dynamic>.from(data as Map);
+
+    // Guard against stale completion: if status is 'completed', verify that
+    // completed_at date matches the requested date. If not, return as planned.
+    if (map['status'] == 'completed') {
+      final completedAt = map['completed_at'] as String?;
+      if (completedAt != null) {
+        final completedDate = DateTime.tryParse(completedAt);
+        if (completedDate != null) {
+          final requestedDateStr = _dateKey(date);
+          final completedDateStr = _dateKey(completedDate);
+          if (requestedDateStr != completedDateStr) {
+            // Stale — return as planned without writing back to Hive
+            final safe = Map<String, dynamic>.from(map);
+            safe['status'] = 'planned';
+            safe['completed_at'] = null;
+            return safe;
+          }
+        }
+      }
+    }
+
+    return map;
   }
 
   /// Get all scheduled days for a given week number (1-4).
@@ -217,7 +243,10 @@ class WorkoutScheduleService {
   // ── Completion ──────────────────────────────────────────────────
 
   /// Mark a workout day as completed.
-  Future<void> markCompleted(DateTime date) async {
+  ///
+  /// [durationSeconds] is stored in the schedule map so the home screen
+  /// can display the actual workout duration after completion.
+  Future<void> markCompleted(DateTime date, {int durationSeconds = 0}) async {
     final key = '$_schedulePrefix${_dateKey(date)}';
     final data = _hive.workoutBox.get(key);
     if (data == null) return;
@@ -225,6 +254,7 @@ class WorkoutScheduleService {
     final map = Map<String, dynamic>.from(data as Map);
     map['status'] = 'completed';
     map['completed_at'] = DateTime.now().toIso8601String();
+    map['duration_seconds'] = durationSeconds;
     await _hive.workoutBox.put(key, map);
   }
 
@@ -420,11 +450,34 @@ class WorkoutScheduleService {
       'template_id': templateId,
       'workout_name': tmplMap['name'] as String? ?? 'Custom Workout',
       'workout_focus': 'Custom',
-      'exercises': tmplMap['exercises'] ?? [],
+      'exercises': _normalizeExercises(tmplMap['exercises'] as List? ?? []),
       'status': 'planned',
       'is_swapped': false,
       'completed_at': null,
     });
+  }
+
+  /// Normalises template exercise objects to the canonical schedule field names.
+  ///
+  /// Template exercises come from the exercise library and use `name`,
+  /// `prescribed_sets`/`default_sets`, `prescribed_reps`/`default_reps`.
+  /// The workout parser and active-workout screen expect `exercise_name`,
+  /// `sets`, and `reps`. This conversion happens once at write time.
+  List<Map<String, dynamic>> _normalizeExercises(List raw) {
+    return raw.map((e) {
+      final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+      return {
+        'exercise_name': (m['exercise_name'] ?? m['name'] ?? 'Unknown').toString(),
+        'sets': m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3,
+        'reps': (m['reps'] ?? m['prescribed_reps'] ?? m['default_reps'] ?? '10').toString(),
+        'rest_seconds': m['rest_seconds'] ?? m['default_rest_secs'] ?? 60,
+        'logging_type': (m['logging_type'] ?? 'weight_reps').toString(),
+        'category': m['category'],
+        'exercise_type': m['exercise_type'],
+        'equipment_needed': m['equipment_needed'],
+        'superset_group': m['superset_group'],
+      };
+    }).toList();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────

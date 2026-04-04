@@ -1,5 +1,75 @@
-# CLAUDE.md — ICANBEFITTER Master Reference
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+# ICANBEFITTER Master Reference
 > Single source of truth for all coding agents. Read this before touching any file.
+
+---
+
+## 0. DEVELOPMENT COMMANDS
+
+### Environment Setup
+Copy `.env.example` → `.env` and fill in Supabase URL, anon key, and Razorpay key ID. The `.env` file is bundled as a Flutter asset and loaded at startup via `flutter_dotenv`.
+
+```
+SUPABASE_URL=https://dedsavbjuwgarrhphgnl.supabase.co
+SUPABASE_ANON_KEY=<anon key>
+RAZORPAY_KEY_ID=rzp_test_<key>   # use rzp_test_ for dev flavor
+```
+
+### Run / Build (two flavors: `dev` and `prod`)
+```bash
+# Run dev flavor on connected device
+flutter run --flavor dev -t lib/main.dart
+
+# Run prod flavor
+flutter run --flavor prod -t lib/main.dart
+
+# Release APK (prod)
+flutter build apk --flavor prod --release -t lib/main.dart
+
+# Release App Bundle (Play Store)
+flutter build appbundle --flavor prod --release -t lib/main.dart
+
+# Web (no flavor needed)
+flutter run -d chrome
+flutter build web
+```
+
+### Tests
+```bash
+# All unit tests (no device required)
+flutter test
+
+# Single test file
+flutter test test/bmr_calculator_test.dart
+
+# All integration tests (requires connected Android device)
+flutter test integration_test/app_test.dart --flavor dev
+
+# Single integration flow
+flutter test integration_test/flows/workout_log_flow_test.dart --flavor dev
+```
+
+Unit tests live in `test/`. Integration tests (require Hive + real device) live in `integration_test/flows/`.
+
+### Lint & Analysis
+```bash
+flutter analyze
+```
+
+### Riverpod Code Generation
+The project has `riverpod_generator` installed but providers are currently written manually using `flutter_riverpod` directly (no `.g.dart` files). If you add `@riverpod` annotations, run:
+```bash
+dart run build_runner build --delete-conflicting-outputs
+dart run build_runner watch   # watch mode during development
+```
+
+### Edge Functions (Supabase MCP — preferred)
+Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI — it is logged into the wrong account (personal, not fitness app account). See §2a for account details.
 
 ---
 

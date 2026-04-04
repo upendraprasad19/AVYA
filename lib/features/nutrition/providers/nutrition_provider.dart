@@ -586,7 +586,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   }
 
   /// Update a single item's macros (called from the edit icon in the breakdown card).
-  void updateItem(int index, {required int calories, required int protein, required int carbs, required int fat}) {
+  void updateItem(int index, {required int calories, required int protein, required int carbs, required int fat, int? fiber}) {
     final data = state;
     if (data == null || index < 0 || index >= data.items.length) return;
     final newItems = List<AiFoodItem>.from(data.items);
@@ -595,6 +595,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       protein: '${protein}g',
       carbs: '${carbs}g',
       fat: '${fat}g',
+      fiber: fiber,
     );
     final newTotalKcal = newItems.fold<int>(0, (sum, item) => sum + item.calories);
     state = data.copyWith(items: newItems, totalKcal: newTotalKcal);
@@ -725,6 +726,7 @@ class FoodLogNotifier extends Notifier<void> {
     required double protein,
     required double carbs,
     required double fat,
+    double fiber = 0,
   }) async {
     final box = HiveService.instance.nutritionBox;
     final existing = box.get(logId);
@@ -734,6 +736,7 @@ class FoodLogNotifier extends Notifier<void> {
     updated['total_protein'] = protein.round();
     updated['total_carbs'] = carbs.round();
     updated['total_fat'] = fat.round();
+    updated['total_fiber'] = fiber.round();
     await box.put(logId, updated);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);

@@ -10,7 +10,9 @@ import '../providers/train_provider.dart';
 import '../widgets/exercise_card.dart';
 
 class TemplateBuilderScreen extends ConsumerStatefulWidget {
-  const TemplateBuilderScreen({super.key});
+  final Map<String, dynamic>? editData;
+
+  const TemplateBuilderScreen({super.key, this.editData});
 
   @override
   ConsumerState<TemplateBuilderScreen> createState() =>
@@ -21,7 +23,34 @@ class _TemplateBuilderScreenState
     extends ConsumerState<TemplateBuilderScreen> {
   final _nameController = TextEditingController();
   final _exercises = <Map<String, dynamic>>[];
+  final _selectedDays = <int>{}; // 1=Mon, 2=Tue, ..., 7=Sun
   bool _isSaving = false;
+  String? _editingTemplateId;
+
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.editData;
+    if (data != null) {
+      _editingTemplateId = data['templateId'] as String?;
+      final tmpl = data['templateData'] as Map?;
+      if (tmpl != null) {
+        _nameController.text = (tmpl['name'] as String?) ?? '';
+        final exercises = tmpl['exercises'] as List?;
+        if (exercises != null) {
+          for (final e in exercises) {
+            if (e is Map) _exercises.add(Map<String, dynamic>.from(e));
+          }
+        }
+        final days = tmpl['assigned_days'] as List?;
+        if (days != null) {
+          for (final d in days) {
+            if (d is int) _selectedDays.add(d);
+          }
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -103,6 +132,86 @@ class _TemplateBuilderScreenState
                 ),
               ),
             ),
+            const SizedBox(height: AppSpacing.sectionGap),
+
+            // Day selector chips (W7) — assign template to specific weekdays
+            Text(
+              'ASSIGN TO DAYS',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: List.generate(7, (i) {
+                final dayNum = i + 1; // 1=Mon ... 7=Sun
+                const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                final isSelected = _selectedDays.contains(dayNum);
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i < 6 ? 6 : 0),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedDays.remove(dayNum);
+                          } else {
+                            _selectedDays.add(dayNum);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.accent.withValues(alpha: 0.1)
+                              : AppColors.input,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.accent.withValues(alpha: 0.4)
+                                : AppColors.border,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            dayLabels[i],
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 10,
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? AppColors.accent
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            if (_selectedDays.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${_selectedDays.length} day${_selectedDays.length == 1 ? '' : 's'} selected',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
             const SizedBox(height: AppSpacing.sectionGap),
 
             // Exercises header
@@ -242,12 +351,22 @@ class _TemplateBuilderScreenState
     setState(() => _isSaving = true);
 
     try {
-      await ref.read(templatesProvider.notifier).saveTemplate({
+      final templateData = {
         'name': name,
         'exercises': _exercises,
         'exercise_count': _exercises.length,
         'workout_type': 'custom',
-      });
+        if (_selectedDays.isNotEmpty)
+          'assigned_days': _selectedDays.toList()..sort(),
+      };
+
+      if (_editingTemplateId != null) {
+        // Update existing template
+        await ref.read(templatesProvider.notifier).updateTemplate(
+            _editingTemplateId!, templateData);
+      } else {
+        await ref.read(templatesProvider.notifier).saveTemplate(templateData);
+      }
 
       if (mounted) {
         context.go('/train');

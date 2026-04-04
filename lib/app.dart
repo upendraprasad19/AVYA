@@ -1,10 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/colors.dart';
 import 'core/router/app_router.dart';
+import 'core/services/day_rollover_service.dart';
 
-class ICanBeFitterApp extends StatelessWidget {
+/// Root widget. Uses ConsumerStatefulWidget so it can attach the
+/// [DayRolloverObserver] which needs a [WidgetRef] to invalidate providers.
+class ICanBeFitterApp extends ConsumerStatefulWidget {
   const ICanBeFitterApp({super.key});
+
+  @override
+  ConsumerState<ICanBeFitterApp> createState() => _ICanBeFitterAppState();
+}
+
+class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
+  @override
+  void initState() {
+    super.initState();
+    DayRolloverObserver.instance.init(ref);
+  }
+
+  @override
+  void dispose() {
+    DayRolloverObserver.instance.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
