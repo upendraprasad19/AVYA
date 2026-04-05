@@ -143,7 +143,7 @@ class WorkoutScheduleService {
         final completedDate = DateTime.tryParse(completedAt);
         if (completedDate != null) {
           final requestedDateStr = _dateKey(date);
-          final completedDateStr = _dateKey(completedDate);
+          final completedDateStr = _dateKey(completedDate.toLocal());
           if (requestedDateStr != completedDateStr) {
             // Stale — return as planned without writing back to Hive
             final safe = Map<String, dynamic>.from(map);
@@ -252,8 +252,9 @@ class WorkoutScheduleService {
     if (data == null) return;
 
     final map = Map<String, dynamic>.from(data as Map);
+    final completionTime = DateTime.now().toLocal();
     map['status'] = 'completed';
-    map['completed_at'] = DateTime.now().toIso8601String();
+    map['completed_at'] = completionTime.toIso8601String();
     map['duration_seconds'] = durationSeconds;
     await _hive.workoutBox.put(key, map);
   }

@@ -23,6 +23,7 @@ import '../widgets/weight_log_sheet.dart';
 import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -181,6 +182,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final firstName = ref.watch(userFirstNameProvider);
     final initial = ref.watch(userInitialProvider);
     final streak = ref.watch(streakProvider);
+    final profile = ref.watch(userProfileProvider);
+    final avatarUrl = profile['avatar_url'] as String?;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 14, AppSpacing.screenPadding, 10),
@@ -199,15 +202,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
             alignment: Alignment.center,
-            child: Text(
-              initial,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-                color: AppColors.accent,
-              ),
-            ),
+            child: avatarUrl != null && avatarUrl.isNotEmpty
+                ? ClipOval(
+                    child: Image.network(
+                      avatarUrl,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Text(
+                        initial,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
+                  )
+                : Text(
+                    initial,
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.accent,
+                    ),
+                  ),
           ),
           const SizedBox(width: 10),
           // Welcome text
@@ -248,14 +269,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildStreakWarning(WidgetRef ref) {
     final streak = ref.watch(streakProvider);
-    // Only show on day 6-7 of week when streak is active
-    // Use a simple heuristic: if streak > 0 and it's Sat/Sun
-    final dayOfWeek = DateTime.now().weekday;
-    if (streak == 0 || dayOfWeek < 6) return const SizedBox.shrink();
+    final calendarWeek = ref.watch(calendarWeekProvider);
+    final workoutsPlanned = calendarWeek
+        .where((day) => day.status != CalendarDayStatus.rest && day.status != CalendarDayStatus.none)
+        .length;
+    final workoutsCompleted = calendarWeek
+        .where((day) => day.status == CalendarDayStatus.completed)
+        .length;
+    final workoutsRemaining =
+        (workoutsPlanned - workoutsCompleted).clamp(0, workoutsPlanned).toInt();
+
+    if (!StreakWarningBanner.shouldShow(
+      streakDays: streak,
+      workoutsPlanned: workoutsPlanned,
+      workoutsCompleted: workoutsCompleted,
+    )) {
+      return const SizedBox.shrink();
+    }
 
     return StreakWarningBanner(
       streakDays: streak,
-      workoutsRemaining: 1,
+      workoutsRemaining: workoutsRemaining,
       onTrainNow: () => context.go('/train'),
     );
   }

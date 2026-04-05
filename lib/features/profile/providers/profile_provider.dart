@@ -1,8 +1,23 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+enum UploadResult { success, cancelled, error }
+
+class UploadOutcome {
+  final UploadResult result;
+  final String? url;
+  final String? errorMessage;
+  const UploadOutcome(this.result, {this.url, this.errorMessage});
+}
 
 // ── User Profile ─────────────────────────────────────────────────
 
@@ -72,6 +87,137 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       ...targets.toMap(),
       'activity_level': resolvedActivity,
     });
+  }
+
+  /// Upload avatar image using ImagePicker and save to Supabase storage.
+  /// Returns an [UploadOutcome] indicating success, cancellation, or error.
+  Future<UploadOutcome> uploadAvatar() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null) return const UploadOutcome(UploadResult.cancelled);
+
+      // Crop to square (circle preview)
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Photo',
+            toolbarColor: const Color(0xFF07090e),
+            toolbarWidgetColor: const Color(0xFFeef2f7),
+            backgroundColor: const Color(0xFF07090e),
+            activeControlsWidgetColor: const Color(0xFF00D4FF),
+            cropStyle: CropStyle.circle,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+        ],
+      );
+      if (cropped == null) return const UploadOutcome(UploadResult.cancelled);
+
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId == null) return const UploadOutcome(UploadResult.error, errorMessage: 'Not signed in');
+
+      final bytes = await File(cropped.path).readAsBytes();
+      final filePath = '$userId/avatar.jpg';
+
+      final publicUrl = await UserRepository.uploadImage(
+        bucket: 'avatars',
+        filePath: filePath,
+        bytes: bytes,
+      );
+
+      // Save to user_profile table (background sync)
+      await UserRepository.updateSupabaseProfileField(
+        userId: userId,
+        fields: {'avatar_url': publicUrl},
+      );
+
+      // Save to Hive
+      await updateProfile({'avatar_url': publicUrl});
+
+      // Evict cached image
+      PaintingBinding.instance.imageCache.evict(NetworkImage(publicUrl));
+
+      return UploadOutcome(UploadResult.success, url: publicUrl);
+    } catch (e) {
+      debugPrint('Upload error: $e');
+      return UploadOutcome(UploadResult.error, errorMessage: e.toString());
+    }
+  }
+
+  /// Upload banner image using ImagePicker and save to Supabase storage.
+  /// Returns an [UploadOutcome] indicating success, cancellation, or error.
+  Future<UploadOutcome> uploadBanner() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 640,
+        imageQuality: 92,
+      );
+      if (picked == null) return const UploadOutcome(UploadResult.cancelled);
+
+      // Crop to 3:1 banner aspect ratio
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 3, ratioY: 1),
+        compressQuality: 90,
+        maxWidth: 1920,
+        maxHeight: 640,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Banner',
+            toolbarColor: const Color(0xFF07090e),
+            toolbarWidgetColor: const Color(0xFFeef2f7),
+            backgroundColor: const Color(0xFF07090e),
+            activeControlsWidgetColor: const Color(0xFF00D4FF),
+            initAspectRatio: CropAspectRatioPreset.ratio16x9,
+            lockAspectRatio: true,
+          ),
+        ],
+      );
+      if (cropped == null) return const UploadOutcome(UploadResult.cancelled);
+
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId == null) return const UploadOutcome(UploadResult.error, errorMessage: 'Not signed in');
+
+      final bytes = await File(cropped.path).readAsBytes();
+      final filePath = '$userId/banner.jpg';
+
+      final publicUrl = await UserRepository.uploadImage(
+        bucket: 'banners',
+        filePath: filePath,
+        bytes: bytes,
+      );
+
+      // Save to user_profile table (background sync)
+      await UserRepository.updateSupabaseProfileField(
+        userId: userId,
+        fields: {'banner_url': publicUrl},
+      );
+
+      // Save to Hive
+      await updateProfile({'banner_url': publicUrl});
+
+      // Evict cached image
+      PaintingBinding.instance.imageCache.evict(NetworkImage(publicUrl));
+
+      return UploadOutcome(UploadResult.success, url: publicUrl);
+    } catch (e) {
+      debugPrint('Upload error: $e');
+      return UploadOutcome(UploadResult.error, errorMessage: e.toString());
+    }
   }
 }
 

@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
 /// User CRUD operations via Hive userBox (offline-first).
 ///
@@ -192,6 +195,79 @@ class UserRepository {
     await _hive.syncBox.clear();
     await _hive.configBox.clear();
     await _hive.customBox.clear();
-    // Keep exerciseBox and foodBox (seeded data, no need to re-download)
+    // Keep exerciseBox and foodBox (seeded data, no need to re-downloaded)
+  }
+
+  // ── Supabase Sync (background, fire-and-forget) ──────────────────
+
+  /// Uploads an image to Supabase Storage and returns the public URL.
+  ///
+  /// [bucket] — Storage bucket name (e.g. 'avatars', 'banners').
+  /// [filePath] — Path within the bucket (e.g. '$userId/avatar.jpg').
+  /// [bytes] — Raw image bytes to upload.
+  ///
+  /// Throws on failure so the caller can handle errors.
+  static Future<String> uploadImage({
+    required String bucket,
+    required String filePath,
+    required Uint8List bytes,
+  }) async {
+    await SupabaseService.instance.client.storage
+        .from(bucket)
+        .uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
+
+    final publicUrl = SupabaseService.instance.client.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+    return publicUrl;
+  }
+
+  /// Updates specific fields in the Supabase `user_profile` table.
+  ///
+  /// Fire-and-forget: catches all errors and logs them via debugPrint.
+  static Future<void> updateSupabaseProfileField({
+    required String userId,
+    required Map<String, dynamic> fields,
+  }) async {
+    try {
+      await SupabaseService.instance.client.from('user_profile').upsert(
+        {'user_id': userId, ...fields},
+        onConflict: 'user_id',
+      );
+    } catch (e) {
+      debugPrint('[UserRepository] updateSupabaseProfileField failed: $e');
+    }
+  }
+
+  /// Syncs onboarding data to Supabase: users, user_profile, and user_progress.
+  ///
+  /// Only sends columns that exist in the Supabase tables — the local profile
+  /// map contains computed fields (daily_calories, protein_grams, etc.) that
+  /// are stored in Hive but do NOT have corresponding Postgres columns.
+  ///
+  /// Throws on failure so the caller can detect sync gaps.
+  static Future<void> syncOnboardingToSupabase({
+    required String userId,
+    required Map<String, dynamic> userData,
+    required Map<String, dynamic> profileData,
+    required Map<String, dynamic> progressData,
+  }) async {
+    final supabase = SupabaseService.instance.client;
+
+    await supabase.from('users').upsert({
+      'id': userId,
+      ...userData,
+    });
+
+    await supabase.from('user_profile').upsert({
+      'user_id': userId,
+      ...profileData,
+    });
+
+    await supabase.from('user_progress').upsert({
+      'user_id': userId,
+      ...progressData,
+    });
   }
 }

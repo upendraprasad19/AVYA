@@ -1,13 +1,15 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 /// App-wide constants: API URLs, feature keys, limits, and thresholds.
+///
+/// Environment variables (SUPABASE_URL, SUPABASE_ANON_KEY, RAZORPAY_KEY_ID)
+/// are injected at build time via --dart-define-from-file=.env and accessed
+/// through String.fromEnvironment(). They are NEVER bundled as assets.
 class AppConstants {
   AppConstants._();
 
-  // ── API URLs (Supabase — loaded from .env) ────────────────────
+  // ── API URLs (injected at build time via --dart-define-from-file) ──
 
-  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
-  static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   // Edge Function names (invoked via Supabase client).
   static const String aiProxyFunction = 'ai-proxy';
@@ -131,6 +133,6 @@ class AppConstants {
   /// - share_plus: native OS share sheet
   /// - qr_flutter: client-side QR code generation (zero server cost)
 
-  /// Razorpay key (public, safe for client) — loaded from .env.
-  static String get razorpayKeyId => dotenv.env['RAZORPAY_KEY_ID'] ?? '';
+  /// Razorpay key (public, safe for client) — injected at build time.
+  static const String razorpayKeyId = String.fromEnvironment('RAZORPAY_KEY_ID');
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 /// Singleton service that manages all Hive boxes.
@@ -67,7 +68,8 @@ class HiveService {
   Future<Box> _safeOpenBox(String name) async {
     try {
       return await Hive.openBox(name);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[HiveService._safeOpenBox] $e');
       await Hive.deleteBoxFromDisk(name);
       return await Hive.openBox(name);
     }

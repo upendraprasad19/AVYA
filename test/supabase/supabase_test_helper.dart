@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -33,14 +32,11 @@ class SupabaseTestHelper {
     return _userId!;
   }
 
-  /// Initialize dotenv, Supabase, and Hive for testing.
+  /// Initialize Supabase and Hive for testing.
   /// Call once in setUpAll().
   static Future<void> init() async {
-    // Load .env from project root.
-    await dotenv.load(fileName: '.env');
-
-    final url = dotenv.env['SUPABASE_URL']!;
-    final anonKey = dotenv.env['SUPABASE_ANON_KEY']!;
+    const url = String.fromEnvironment('SUPABASE_URL');
+    const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
     await Supabase.initialize(url: url, anonKey: anonKey);
     _client = Supabase.instance.client;

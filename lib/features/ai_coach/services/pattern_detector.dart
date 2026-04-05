@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -94,8 +95,9 @@ class PatternDetector {
     try {
       final result = detector();
       if (result != null) list.add(result);
-    } catch (_) {
+    } catch (e) {
       // Partial data is OK — skip this pattern silently.
+      debugPrint('[PatternDetector._tryAdd] $e');
     }
   }
 

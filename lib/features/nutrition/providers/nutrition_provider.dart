@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -472,22 +473,26 @@ class AiBreakdownData {
   final String mealName;
   final int totalKcal;
   final List<AiFoodItem> items;
+  final String? error;
 
   const AiBreakdownData({
     required this.mealName,
     required this.totalKcal,
     required this.items,
+    this.error,
   });
 
   AiBreakdownData copyWith({
     String? mealName,
     int? totalKcal,
     List<AiFoodItem>? items,
+    String? error,
   }) {
     return AiBreakdownData(
       mealName: mealName ?? this.mealName,
       totalKcal: totalKcal ?? this.totalKcal,
       items: items ?? this.items,
+      error: error ?? this.error,
     );
   }
 }
@@ -576,13 +581,28 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         );
         return;
       }
-    } catch (_) {
-      // Edge Function unreachable — use local estimation below.
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      final isAuthError = msg.contains('401') || msg.contains('token') ||
+                          msg.contains('unauthorized') || msg.contains('jwt');
+      state = AiBreakdownData(
+        mealName: text,
+        totalKcal: 0,
+        items: [],
+        error: isAuthError
+            ? 'Session expired. Please sign out and sign in again.'
+            : 'AI analysis failed. Please check your connection and try again.',
+      );
+      return;
     }
 
-    // Local fallback: estimate by meal type keywords
-    await Future.delayed(const Duration(milliseconds: 500));
-    state = _estimateMealNutrition(text);
+    // Edge Function returned non-200 — show error
+    state = AiBreakdownData(
+      mealName: text,
+      totalKcal: 0,
+      items: [],
+      error: 'Could not analyse this meal. Please try again.',
+    );
   }
 
   /// Update a single item's macros (called from the edit icon in the breakdown card).
@@ -624,7 +644,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     }
 
     final id = 'nlog_${now.millisecondsSinceEpoch}';
-    await HiveService.instance.nutritionBox.put(id, {
+    final logMap = {
       'id': id,
       'date': dateStr,
       'meal_type': mealType.toLowerCase(),
@@ -636,7 +656,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       'total_fiber': totalFiber,
       'created_at': now.toIso8601String(),
       'source': 'ai_text',
-    });
+    };
+    await HiveService.instance.nutritionBox.put(id, logMap);
+    NutritionRepository.syncLogToSupabase(data: logMap);
 
     state = null;
     ref.invalidate(dailyNutritionProvider);
@@ -689,7 +711,7 @@ class FoodLogNotifier extends Notifier<void> {
 
     final factor = quantityG / 100.0;
 
-    await HiveService.instance.nutritionBox.put(id, {
+    final logMap = {
       'id': id,
       'date': dateStr,
       'meal_type': mealType.toLowerCase(),
@@ -703,7 +725,9 @@ class FoodLogNotifier extends Notifier<void> {
       'total_fiber': (fiberPer100 * factor).round(),
       'created_at': now.toIso8601String(),
       'source': 'manual',
-    });
+    };
+    await HiveService.instance.nutritionBox.put(id, logMap);
+    NutritionRepository.syncLogToSupabase(data: logMap);
 
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
@@ -738,6 +762,7 @@ class FoodLogNotifier extends Notifier<void> {
     updated['total_fat'] = fat.round();
     updated['total_fiber'] = fiber.round();
     await box.put(logId, updated);
+    NutritionRepository.syncLogToSupabase(data: updated);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);
@@ -809,7 +834,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final id = 'nlog_${now.millisecondsSinceEpoch}';
 
-    await HiveService.instance.nutritionBox.put(id, {
+    final logMap = {
       'id': id,
       'date': dateStr,
       'meal_type': mealType.toLowerCase(),
@@ -820,7 +845,9 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
       'total_fat': savedMeal['total_fat'] ?? 0,
       'created_at': now.toIso8601String(),
       'source': 'saved_meal',
-    });
+    };
+    await HiveService.instance.nutritionBox.put(id, logMap);
+    NutritionRepository.syncLogToSupabase(data: logMap);
 
     // Increment times_used counter on the saved meal
     final savedId = savedMeal['id'] as String?;
@@ -898,32 +925,7 @@ class CustomFoodNotifier extends Notifier<void> {
     await HiveService.instance.foodBox.put(id, food);
 
     // Background sync to Supabase
-    _syncToSupabase(food);
-  }
-
-  Future<void> _syncToSupabase(Map<String, dynamic> food) async {
-    try {
-      final userId = SupabaseService.instance.currentUser?.id;
-      if (userId == null) return;
-
-      await SupabaseService.instance.client.from('user_custom_foods').insert({
-        'user_id': userId,
-        'name': food['name'],
-        'calories_per_100g': food['calories_per_100g'],
-        'protein_per_100g': food['protein_per_100g'],
-        'carbs_per_100g': food['carbs_per_100g'],
-        'fat_per_100g': food['fat_per_100g'],
-        'fiber_per_100g': food['fiber_per_100g'],
-        'standard_serving_desc': food['standard_serving_desc'],
-        'standard_serving_g': food['standard_serving_g'],
-        'calories_std': food['calories_std'],
-        'protein_std': food['protein_std'],
-        'carbs_std': food['carbs_std'],
-        'fat_std': food['fat_std'],
-      });
-    } catch (_) {
-      // Offline — will sync later via SyncService.
-    }
+    NutritionRepository.syncCustomFoodToSupabase(data: food);
   }
 }
 

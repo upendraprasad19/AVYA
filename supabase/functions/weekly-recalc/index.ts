@@ -12,6 +12,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface WorkoutLog {
+  user_id: string;
   exercise_id: string;
   exercise_name: string;
   weight_kg: number | null;
@@ -21,6 +22,7 @@ interface WorkoutLog {
 }
 
 interface ScheduledWorkout {
+  user_id: string;
   status: string;
   scheduled_date: string;
 }
@@ -107,6 +109,46 @@ function calculateExperienceLevel(
   return "beginner";
 }
 
+/**
+ * Fetches all rows from a table with pagination to handle large datasets.
+ * Supabase JS client returns max 1000 rows by default; this fetches all pages.
+ */
+async function fetchAllRows<T>(
+  supabaseClient: ReturnType<typeof createClient>,
+  table: string,
+  selectCols: string,
+  dateColumn: string,
+  dateGte: string,
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  const allRows: T[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabaseClient
+      .from(table)
+      .select(selectCols)
+      .gte(dateColumn, dateGte)
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (error) {
+      throw new Error(`Failed to fetch ${table} at offset ${offset}: ${error.message}`);
+    }
+
+    if (data && data.length > 0) {
+      allRows.push(...(data as T[]));
+      offset += data.length;
+      // If we got fewer rows than PAGE_SIZE, we've reached the end
+      hasMore = data.length === PAGE_SIZE;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allRows;
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -120,115 +162,139 @@ serve(async (req: Request) => {
   }
 
   try {
+    const start = Date.now();
+
     // This is a cron job — uses service role key, no JWT validation
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Find users active in the last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const { data: activeUsers, error: usersError } = await supabaseClient
-      .from("users")
-      .select("id")
-      .gte("last_active_at", sevenDaysAgo.toISOString());
-
-    if (usersError) {
-      console.error("Failed to fetch active users:", usersError);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch active users" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    if (!activeUsers || activeUsers.length === 0) {
-      return new Response(
-        JSON.stringify({ status: "success", users_processed: 0 }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
 
     const fourWeeksAgo = new Date();
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
     const fourWeeksAgoStr = fourWeeksAgo.toISOString().split("T")[0];
 
-    let processed = 0;
-    let errors = 0;
+    // ── STEP 1: Bulk fetch ALL data in 2 parallel queries ──
+    const [allLogs, allScheduled] = await Promise.all([
+      fetchAllRows<WorkoutLog>(
+        supabaseClient,
+        "workout_logs",
+        "user_id, exercise_id, exercise_name, weight_kg, sets_completed, reps_completed, date",
+        "date",
+        fourWeeksAgoStr,
+      ),
+      fetchAllRows<ScheduledWorkout>(
+        supabaseClient,
+        "scheduled_workouts",
+        "user_id, status, scheduled_date",
+        "scheduled_date",
+        fourWeeksAgoStr,
+      ),
+    ]);
 
-    for (const { id: userId } of activeUsers) {
-      try {
-        // Pull last 4 weeks of workout_logs
-        const { data: workoutLogs, error: logsError } = await supabaseClient
-          .from("workout_logs")
-          .select(
-            "exercise_id, exercise_name, weight_kg, sets_completed, reps_completed, date",
-          )
-          .eq("user_id", userId)
-          .gte("date", fourWeeksAgoStr);
+    console.log(
+      `weekly-recalc: fetched ${allLogs.length} logs, ${allScheduled.length} scheduled in ${Date.now() - start}ms`,
+    );
 
-        if (logsError) {
-          console.error(`Failed to fetch logs for user ${userId}:`, logsError);
-          errors++;
-          continue;
-        }
-
-        // Pull scheduled workouts for completion rate
-        const { data: scheduledWorkouts, error: schedError } = await supabaseClient
-          .from("scheduled_workouts")
-          .select("status, scheduled_date")
-          .eq("user_id", userId)
-          .gte("scheduled_date", fourWeeksAgoStr);
-
-        if (schedError) {
-          console.error(
-            `Failed to fetch scheduled workouts for user ${userId}:`,
-            schedError,
-          );
-          errors++;
-          continue;
-        }
-
-        const level = calculateExperienceLevel(
-          (workoutLogs ?? []) as WorkoutLog[],
-          (scheduledWorkouts ?? []) as ScheduledWorkout[],
-        );
-
-        // Update user_progress
-        const { error: updateError } = await supabaseClient
-          .from("user_progress")
-          .update({
-            detected_experience_level: level,
-            experience_last_calculated: new Date().toISOString(),
-          })
-          .eq("user_id", userId);
-
-        if (updateError) {
-          console.error(
-            `Failed to update experience for user ${userId}:`,
-            updateError,
-          );
-          errors++;
-          continue;
-        }
-
-        processed++;
-      } catch (userErr) {
-        console.error(`Error processing user ${userId}:`, userErr);
-        errors++;
+    // ── STEP 2: Group by user_id in JavaScript ──
+    const logsByUser = new Map<string, WorkoutLog[]>();
+    for (const log of allLogs) {
+      const list = logsByUser.get(log.user_id);
+      if (list) {
+        list.push(log);
+      } else {
+        logsByUser.set(log.user_id, [log]);
       }
     }
+
+    const scheduledByUser = new Map<string, ScheduledWorkout[]>();
+    for (const sw of allScheduled) {
+      const list = scheduledByUser.get(sw.user_id);
+      if (list) {
+        list.push(sw);
+      } else {
+        scheduledByUser.set(sw.user_id, [sw]);
+      }
+    }
+
+    // Merge all user IDs from both maps (a user might have logs but no schedule, or vice versa)
+    const allUserIds = new Set<string>([
+      ...logsByUser.keys(),
+      ...scheduledByUser.keys(),
+    ]);
+
+    console.log(
+      `weekly-recalc: grouped data for ${allUserIds.size} users in ${Date.now() - start}ms`,
+    );
+
+    // ── STEP 3: Calculate experience level for each user locally ──
+    const levels = new Map<string, string>();
+    const workoutCounts = new Map<string, number>();
+
+    for (const userId of allUserIds) {
+      const userLogs = logsByUser.get(userId) || [];
+      const userScheduled = scheduledByUser.get(userId) || [];
+
+      const level = calculateExperienceLevel(userLogs, userScheduled);
+      levels.set(userId, level);
+      workoutCounts.set(userId, userLogs.length);
+    }
+
+    console.log(
+      `weekly-recalc: calculated levels for ${levels.size} users in ${Date.now() - start}ms`,
+    );
+
+    // ── STEP 4: Batch UPDATE in chunks of 100 concurrent upserts ──
+    const BATCH_SIZE = 100;
+    const userIds = Array.from(allUserIds);
+    let processed = 0;
+    let errors = 0;
+    const nowIso = new Date().toISOString();
+
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const chunk = userIds.slice(i, i + BATCH_SIZE);
+
+      const results = await Promise.all(
+        chunk.map((userId) =>
+          supabaseClient
+            .from("user_progress")
+            .upsert(
+              {
+                user_id: userId,
+                detected_experience_level: levels.get(userId),
+                experience_last_calculated: nowIso,
+                total_workouts_done: workoutCounts.get(userId) || 0,
+              },
+              { onConflict: "user_id" },
+            )
+            .then((res) => ({ userId, error: res.error }))
+        ),
+      );
+
+      for (const result of results) {
+        if (result.error) {
+          console.error(
+            `Failed to update experience for user ${result.userId}:`,
+            result.error,
+          );
+          errors++;
+        } else {
+          processed++;
+        }
+      }
+    }
+
+    const totalTime = Date.now() - start;
+    console.log(
+      `weekly-recalc: processed ${processed} users, ${errors} errors in ${totalTime}ms`,
+    );
 
     return new Response(
       JSON.stringify({
         status: "success",
         users_processed: processed,
         errors,
-        total_active: activeUsers.length,
+        total_users: allUserIds.size,
+        total_logs: allLogs.length,
+        total_scheduled: allScheduled.length,
+        duration_ms: totalTime,
       }),
       {
         status: 200,

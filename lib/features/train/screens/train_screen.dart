@@ -1720,37 +1720,195 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   void _scheduleTemplate(
       BuildContext context, WidgetRef ref, String templateId, String name) async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final today = DateTime(now.year, now.month, now.day);
+    final Set<DateTime> selected = {};
+
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 28)),
-      helpText: 'Schedule "$name"',
-      saveText: 'SCHEDULE',
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: AppColors.accent,
-            onPrimary: Colors.black,
-            surface: AppColors.card,
-            onSurface: AppColors.textPrimary,
-          ),
-        ),
-        child: child!,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          // Build 6 weeks of dates starting from Monday of this week
+          final weeks = <List<DateTime?>>[];
+          var weekStart = today.subtract(Duration(days: today.weekday - 1));
+          for (int w = 0; w < 6; w++) {
+            final week = <DateTime?>[];
+            for (int d = 0; d < 7; d++) {
+              week.add(weekStart.add(Duration(days: d)));
+            }
+            weeks.add(week);
+            weekStart = weekStart.add(const Duration(days: 7));
+          }
+
+          const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Schedule "$name"',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Tap days to select. Any combination.',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                // Day headers
+                Row(
+                  children: dayLabels
+                      .map((l) => Expanded(
+                            child: Center(
+                              child: Text(
+                                l,
+                                style: GoogleFonts.getFont('DM Sans',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 8),
+                // Calendar grid
+                ...weeks.map((week) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: week.map((date) {
+                          if (date == null) {
+                            return const Expanded(child: SizedBox());
+                          }
+                          final isPast = date.isBefore(today);
+                          final isSelected = selected.contains(date);
+                          final isToday = date == today;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: isPast
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        if (isSelected) {
+                                          selected.remove(date);
+                                        } else {
+                                          selected.add(date);
+                                        }
+                                      });
+                                    },
+                              child: Container(
+                                height: 36,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.accent
+                                      : isToday
+                                          ? AppColors.accent
+                                              .withValues(alpha: 0.15)
+                                          : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isToday && !isSelected
+                                      ? Border.all(
+                                          color: AppColors.accent, width: 1)
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '${date.day}',
+                                  style: GoogleFonts.getFont(
+                                    'DM Sans',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: isPast
+                                        ? AppColors.textSecondary
+                                            .withValues(alpha: 0.3)
+                                        : isSelected
+                                            ? Colors.black
+                                            : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    )),
+                const SizedBox(height: 16),
+                // Selected count
+                if (selected.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '${selected.length} day${selected.length == 1 ? '' : 's'} selected',
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accent),
+                    ),
+                  ),
+                // Schedule button
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: selected.isEmpty
+                        ? null
+                        : () => Navigator.of(ctx).pop(true),
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: selected.isEmpty
+                            ? AppColors.border
+                            : AppColors.accent,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'SCHEDULE',
+                        style: GoogleFonts.getFont('DM Sans',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: selected.isEmpty
+                                ? AppColors.textSecondary
+                                : Colors.black),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
 
-    if (picked == null) return;
+    if (confirmed != true || selected.isEmpty) return;
     if (!context.mounted) return;
 
-    // Assign to every date in the selected range
-    final dates = <DateTime>[];
-    var current = picked.start;
-    while (!current.isAfter(picked.end)) {
-      dates.add(current);
-      current = current.add(const Duration(days: 1));
-    }
+    final sortedDates = selected.toList()..sort();
 
-    for (final date in dates) {
+    for (final date in sortedDates) {
       WorkoutScheduleService.instance.assignTemplateToDate(templateId, date);
     }
     ref.invalidate(calendarWeekProvider);
@@ -1763,22 +1921,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     ];
 
     final String dateStr;
-    if (dates.length == 1) {
-      dateStr = '${monthNames[dates.first.month - 1]} ${dates.first.day}';
+    if (sortedDates.length == 1) {
+      dateStr =
+          '${monthNames[sortedDates.first.month - 1]} ${sortedDates.first.day}';
     } else {
-      dateStr = '${monthNames[dates.first.month - 1]} ${dates.first.day} – '
-          '${monthNames[dates.last.month - 1]} ${dates.last.day} (${dates.length} days)';
+      dateStr = '${sortedDates.length} days';
     }
 
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Scheduled "$name" for $dateStr',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+          style: GoogleFonts.getFont('DM Sans',
+              fontSize: 13, fontWeight: FontWeight.w500),
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Nutritional data returned from a barcode lookup.
@@ -81,7 +82,8 @@ class BarcodeService {
         servingDesc: product['serving_size'] as String?,
         servingG: servingG > 0 ? servingG : 100,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[BarcodeService.lookup] $e');
       return null;
     }
   }

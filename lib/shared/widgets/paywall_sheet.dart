@@ -211,7 +211,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[PaywallSheet._handleRestore] $e');
       if (!mounted) return;
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(

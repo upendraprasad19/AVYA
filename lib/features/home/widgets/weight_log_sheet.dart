@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import '../providers/home_provider.dart';
+import '../../profile/providers/profile_provider.dart';
 
 /// Bottom sheet for quickly logging today's weight from the home screen.
 class WeightLogSheet extends ConsumerStatefulWidget {
@@ -91,6 +92,7 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
     ref.invalidate(weightHistoryProvider);
     ref.invalidate(todayWeightLoggedProvider);
+    ref.invalidate(userProfileProvider);
 
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(

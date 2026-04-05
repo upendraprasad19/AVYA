@@ -26,6 +26,7 @@ const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
 const FREE_DAILY_LIMIT = 15;
 const FREE_TRIAL_DAYS = 30;
 const TIMEOUT_MS = 8000;
+const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
 async function callCerebras(
   apiKey: string,
@@ -212,6 +213,42 @@ Rules:
       });
     }
 
+    // ── Scan meal (image analysis) ────────────────────────────────────
+    if (type === "scan_meal" && body.image) {
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!geminiKey) {
+        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
+          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const scanPrompt = `You are a nutritionist with deep knowledge of Indian foods. Look at this food photo carefully. Identify all food items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
+{"meal_name":"short name describing the meal","items":[{"name":"food item name","quantity":"estimated quantity e.g. 1 bowl, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
+Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: scanPrompt }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+            }),
+          },
+        );
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(jsonStr);
+          return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } catch (_) {}
+      return new Response(JSON.stringify({ error: "Image analysis failed" }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!message || typeof message !== "string") {
       return new Response(JSON.stringify({ error: "Missing 'message' in request body" }), {
         status: 400,
@@ -275,6 +312,34 @@ Rules:
       return new Response(
         JSON.stringify({ error: "Daily message limit reached", code: "RATE_LIMITED", limit: FREE_DAILY_LIMIT }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ── Deduplication: return cached response if same user sent same message recently ──
+    const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
+    const { data: recentDup } = await supabaseClient
+      .from("ai_coach_interactions")
+      .select("ai_response, model_used, tokens_used")
+      .eq("user_id", userId)
+      .eq("channel", "app")
+      .eq("user_message", message)
+      .gte("created_at", dedupCutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recentDup?.ai_response) {
+      console.log(`[ai-proxy] Dedup hit for user ${userId} — returning cached response`);
+      const extracted = extractLogActions(recentDup.ai_response);
+      return new Response(
+        JSON.stringify({
+          reply: extracted.reply,
+          model_used: recentDup.model_used ?? FREE_MODEL_LABEL,
+          tokens_used: recentDup.tokens_used ?? 0,
+          actions: extracted.actions,
+          deduplicated: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

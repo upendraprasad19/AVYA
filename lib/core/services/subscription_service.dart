@@ -1,5 +1,4 @@
-import 'dart:ui';
-
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -44,6 +43,10 @@ class SubscriptionService {
   static const String _isProKey = 'isPro';
   static const String _expiresAtKey = 'expiresAt';
   static const String _planKey = 'plan';
+  static const String _lastVerifiedKey = 'lastVerifiedAt';
+
+  /// Server-side verification cache TTL (5 minutes).
+  static const Duration _verifyCacheTtl = Duration(minutes: 5);
 
   // ── Core API ────────────────────────────────────────────────
 
@@ -139,8 +142,72 @@ class SubscriptionService {
       await configBox.put(_isProKey, true);
       await configBox.put(_expiresAtKey, expiresAt.toIso8601String());
       await configBox.put(_planKey, plan ?? 'monthly');
-    } catch (_) {
+    } catch (e) {
       // Offline or error — keep cached state, do not throw.
+      debugPrint('[SubscriptionService.refreshFromSupabase] $e');
+    }
+  }
+
+  /// Server-side subscription verification via `verify-subscription` edge function.
+  ///
+  /// Called from `gate()` for high-value PRO features. Uses a 5-minute cache TTL
+  /// so we don't hit the server on every single gate() call.
+  ///
+  /// If the server confirms the user is NOT PRO but Hive says they are,
+  /// this immediately downgrades. Prevents Hive-spoofing attacks.
+  ///
+  /// Returns `true` if verified PRO, `false` if free/expired/offline.
+  Future<bool> verifyFromServer() async {
+    try {
+      final supabase = SupabaseService.instance;
+      if (!supabase.isInitialized || !supabase.isAuthenticated) return isPro();
+
+      // Check cache — skip server call if verified recently
+      final lastVerifiedRaw = _hive.configBox.get(_lastVerifiedKey);
+      if (lastVerifiedRaw != null) {
+        final lastVerified = DateTime.tryParse(lastVerifiedRaw.toString());
+        if (lastVerified != null &&
+            DateTime.now().difference(lastVerified) < _verifyCacheTtl) {
+          return isPro(); // Cache is fresh — trust local state
+        }
+      }
+
+      final response = await supabase.callFunction(
+        'verify-subscription',
+        body: {},
+      );
+
+      if (response.status != 200) {
+        debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status}');
+        return isPro(); // Server error — trust cached state
+      }
+
+      final data = response.data as Map<String, dynamic>?;
+      if (data == null) return isPro();
+
+      final serverIsPro = data['is_pro'] as bool? ?? false;
+      final serverPlan = data['plan'] as String?;
+      final serverExpiresAt = data['expires_at'] as String?;
+
+      final configBox = _hive.configBox;
+
+      if (serverIsPro && serverExpiresAt != null) {
+        // Server confirms PRO — update local cache
+        await configBox.put(_isProKey, true);
+        await configBox.put(_expiresAtKey, serverExpiresAt);
+        await configBox.put(_planKey, serverPlan ?? 'monthly');
+      } else {
+        // Server says NOT PRO — downgrade immediately (anti-spoof)
+        await _downgradeLocally();
+      }
+
+      // Update verification timestamp
+      await configBox.put(_lastVerifiedKey, DateTime.now().toIso8601String());
+
+      return serverIsPro;
+    } catch (e) {
+      debugPrint('[SubscriptionService.verifyFromServer] $e');
+      return isPro(); // Offline — trust cached state
     }
   }
 

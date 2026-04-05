@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -37,7 +36,6 @@ void main() {
 
   setUpAll(() async {
     kIsDevFlavor = true;
-    await dotenv.load(fileName: '.env.dev');
     await initHiveForTest();
     await SupabaseService.instance.initialize();
   });

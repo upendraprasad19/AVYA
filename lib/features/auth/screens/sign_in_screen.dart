@@ -65,7 +65,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         authNotifier.resetState();
       }
       if (next.status == AuthStatus.success) {
-        context.go('/onboarding');
+        context.go('/splash');
       }
     });
 

@@ -15,6 +15,8 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import '../providers/profile_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -1087,6 +1089,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
+
+      // Refresh downstream views that cache profile-derived targets/state.
+      ref.invalidate(userStatsProvider);
+      ref.invalidate(nutritionSummaryProvider);
+      ref.invalidate(dailyNutritionProvider);
+      ref.invalidate(macroTargetsProvider);
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;

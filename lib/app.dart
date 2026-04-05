@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/colors.dart';
 import 'core/router/app_router.dart';
 import 'core/services/day_rollover_service.dart';
+import 'core/services/razorpay_service.dart';
 
 /// Root widget. Uses ConsumerStatefulWidget so it can attach the
 /// [DayRolloverObserver] which needs a [WidgetRef] to invalidate providers.
@@ -19,6 +20,7 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
   void initState() {
     super.initState();
     DayRolloverObserver.instance.init(ref);
+    RazorpayService.navigatorKey = AppRouter.navigatorKey;
   }
 
   @override

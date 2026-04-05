@@ -15,6 +15,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const PRO_MODEL = "cerebras/gpt-oss-120b";
 const PRO_MODEL_LABEL = "Cerebras gpt-oss-120B";
+const AI_TIMEOUT_MS = 15000; // 15s — reports are longer, allow more time
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -313,28 +314,44 @@ ${Object.entries(dailyTotals)
 - Streak: ${userProgress?.current_streak_weeks ?? 0} weeks
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
-    // ── Call Cerebras gpt-oss-120B via OpenRouter ──────────────
-    const aiResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://icanbefitter.app",
-          "X-Title": "ICANBEFITTER PRO Weekly Report",
+    // ── Call Cerebras gpt-oss-120B via OpenRouter (with timeout) ──
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+    let aiResponse: Response;
+    try {
+      aiResponse = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://icanbefitter.app",
+            "X-Title": "ICANBEFITTER PRO Weekly Report",
+          },
+          body: JSON.stringify({
+            model: PRO_MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            max_tokens: 1500,
+            temperature: 0.7,
+          }),
+          signal: controller.signal,
         },
-        body: JSON.stringify({
-          model: PRO_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
-      },
-    );
+      );
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
+        console.error("Weekly report AI timed out after 15s");
+        return jsonResponse({ error: "AI request timed out. Please try again." }, 504);
+      }
+      throw fetchErr;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!aiResponse.ok) {
       const errorBody = await aiResponse.text();

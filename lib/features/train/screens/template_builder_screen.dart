@@ -5,7 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import '../../home/providers/home_provider.dart';
 import '../providers/train_provider.dart';
 import '../widgets/exercise_card.dart';
 
@@ -136,12 +138,21 @@ class _TemplateBuilderScreenState
 
             // Day selector chips (W7) — assign template to specific weekdays
             Text(
-              'ASSIGN TO DAYS',
+              _editingTemplateId != null ? 'EDIT SCHEDULE' : 'ASSIGN TO DAYS',
               style: GoogleFonts.getFont(
                 'DM Sans',
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap days to toggle. Selected days sync to your home calendar.',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
                 color: AppColors.textSecondary,
               ),
             ),
@@ -230,19 +241,36 @@ class _TemplateBuilderScreenState
 
             // Exercise list
             if (_exercises.isEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 30),
-                child: Column(
-                  children: [
-                    Icon(Icons.add_circle_outline,
-                        color: AppColors.textDisabled, size: 40),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Add exercises to your template',
-                      style: AppTypography.bodyM
-                          .copyWith(color: AppColors.textSecondary),
+              GestureDetector(
+                onTap: () => _showExerciseSearch(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  decoration: BoxDecoration(
+                    color: AppColors.input,
+                    borderRadius: BorderRadius.circular(AppRadius.cardS),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.25),
+                      style: BorderStyle.solid,
                     ),
-                  ],
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.add_circle_outline,
+                          color: AppColors.accent, size: 40),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap to add exercises',
+                        style: AppTypography.bodyM
+                            .copyWith(color: AppColors.accent, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Build your workout by adding exercises',
+                        style: AppTypography.bodyS
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
@@ -360,12 +388,43 @@ class _TemplateBuilderScreenState
           'assigned_days': _selectedDays.toList()..sort(),
       };
 
+      String templateId;
       if (_editingTemplateId != null) {
-        // Update existing template
         await ref.read(templatesProvider.notifier).updateTemplate(
             _editingTemplateId!, templateData);
+        templateId = _editingTemplateId!;
       } else {
+        templateId = 'tmpl_${DateTime.now().millisecondsSinceEpoch}';
+        templateData['id'] = templateId;
         await ref.read(templatesProvider.notifier).saveTemplate(templateData);
+      }
+
+      // Sync assigned_days to calendar schedule entries (next 8 weeks)
+      if (_selectedDays.isNotEmpty) {
+        final workoutBox = HiveService.instance.workoutBox;
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        // Write schedule entries for next 8 weeks
+        for (int weekOffset = 0; weekOffset < 8; weekOffset++) {
+          for (final dayNum in _selectedDays) {
+            // dayNum: 1=Mon, 7=Sun — DateTime.weekday: 1=Mon, 7=Sun
+            final weekStart = today.subtract(Duration(days: today.weekday - 1));
+            final targetDate = weekStart
+                .add(Duration(days: weekOffset * 7 + dayNum - 1));
+            if (targetDate.isBefore(today)) continue;
+            final key = 'schedule_${targetDate.toIso8601String().substring(0, 10)}';
+            workoutBox.put(key, {
+              'date': targetDate.toIso8601String().substring(0, 10),
+              'type': 'custom_template',
+              'template_id': templateId,
+              'workout_name': name,
+              'status': 'planned',
+            });
+          }
+        }
+        // Refresh calendar providers
+        ref.invalidate(calendarWeekProvider);
+        ref.invalidate(todayWorkoutProvider);
       }
 
       if (mounted) {

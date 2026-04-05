@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
@@ -16,7 +15,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 ///
 /// On mount, runs deferred heavy initialization (Supabase, seed data,
 /// OneSignal) so [main] can call [runApp] immediately and show this screen
-/// without a black-screen delay. Once init completes (minimum 1.5s for
+/// without a black-screen delay. Once init completes (minimum 3s for
 /// branding), navigates based on auth state:
 ///   - Authenticated + onboarded -> /home
 ///   - Authenticated + not onboarded -> /onboarding
@@ -59,14 +58,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     _fadeController.forward();
 
-    // Run all deferred init in parallel with a minimum 1.5s splash duration.
+    // Run all deferred init in parallel with a minimum 3s splash duration.
     _initAndNavigate();
   }
 
   Future<void> _initAndNavigate() async {
     await Future.wait([
       _runDeferredInit().catchError((_) {}), // Never block navigation on init failure
-      Future.delayed(const Duration(milliseconds: 1500)),
+      Future.delayed(const Duration(milliseconds: 3000)),
     ]);
     _navigateNext();
   }
@@ -142,43 +141,28 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // AVYA logo — fade in
-            FadeTransition(
-              opacity: _logoFade,
-              child: Image.asset(
-                'assets/avya_logo.png',
-                width: 200,
-                fit: BoxFit.contain,
-              ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Full bleed splash image
+          FadeTransition(
+            opacity: _logoFade,
+            child: Image.asset(
+              'assets/avya_logo.png',
+              fit: BoxFit.cover,
             ),
-            const SizedBox(height: 20),
-
-            // Tagline — fade in with 200ms delay
-            FadeTransition(
+          ),
+          // 3-dot loader pinned to bottom center
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: FadeTransition(
               opacity: _taglineFade,
-              child: Text(
-                'Your AI Fitness Coach',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+              child: Center(child: _buildDotLoader()),
             ),
-            const SizedBox(height: 32),
-
-            // 3-dot loader
-            FadeTransition(
-              opacity: _taglineFade,
-              child: _buildDotLoader(),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

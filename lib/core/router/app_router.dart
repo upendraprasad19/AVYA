@@ -31,11 +31,13 @@ import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 class AppRouter {
   AppRouter._();
 
-  static final GlobalKey<NavigatorState> _rootNavigatorKey =
+  /// Global navigator key — exposed for RazorpayService to show snackbars
+  /// and invalidate providers after async payment callbacks.
+  static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
   static final GoRouter router = GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: navigatorKey,
     initialLocation: '/splash',
     debugLogDiagnostics: true,
     redirect: _authRedirect,

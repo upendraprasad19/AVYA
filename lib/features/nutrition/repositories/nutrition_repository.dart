@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Repository for all nutrition-related Hive reads/writes.
 ///
@@ -453,5 +455,56 @@ class NutritionRepository {
   DateTime _getWeekStart(DateTime date) {
     final daysFromMonday = date.weekday - 1;
     return DateTime(date.year, date.month, date.day - daysFromMonday);
+  }
+
+  // ── Supabase Sync (background, fire-and-forget) ──────────────────
+
+  /// Syncs a nutrition log to the Supabase `nutrition_logs` table.
+  ///
+  /// Fire-and-forget: catches all errors and logs them via debugPrint.
+  /// The caller should have already written to Hive before calling this.
+  static Future<void> syncLogToSupabase({
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId == null) return;
+      await SupabaseService.instance.client.from('nutrition_logs').upsert(
+        {...data, 'user_id': userId},
+        onConflict: 'id',
+      );
+    } catch (e) {
+      debugPrint('[NutritionRepository] syncLogToSupabase failed: $e');
+    }
+  }
+
+  /// Syncs a user-created custom food to the Supabase `user_custom_foods` table.
+  ///
+  /// Fire-and-forget: catches all errors and logs them via debugPrint.
+  /// The caller should have already written to Hive before calling this.
+  static Future<void> syncCustomFoodToSupabase({
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId == null) return;
+      await SupabaseService.instance.client.from('user_custom_foods').insert({
+        'user_id': userId,
+        'name': data['name'],
+        'calories_per_100g': data['calories_per_100g'],
+        'protein_per_100g': data['protein_per_100g'],
+        'carbs_per_100g': data['carbs_per_100g'],
+        'fat_per_100g': data['fat_per_100g'],
+        'fiber_per_100g': data['fiber_per_100g'],
+        'standard_serving_desc': data['standard_serving_desc'],
+        'standard_serving_g': data['standard_serving_g'],
+        'calories_std': data['calories_std'],
+        'protein_std': data['protein_std'],
+        'carbs_std': data['carbs_std'],
+        'fat_std': data['fat_std'],
+      });
+    } catch (e) {
+      debugPrint('[NutritionRepository] syncCustomFoodToSupabase failed: $e');
+    }
   }
 }

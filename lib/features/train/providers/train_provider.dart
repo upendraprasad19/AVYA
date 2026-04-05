@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -1079,16 +1080,18 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
     }
 
+    final workoutDate = state.workoutDay?.date ?? now;
+
     // Save workout log via repository.
     await repo.saveWorkoutLog(
       workoutName: state.workoutDay?.name ?? 'Workout',
       setsCompleted: state.completedSets,
       durationSeconds: state.elapsedSeconds,
-      completedAt: state.workoutDay?.date ?? now,
+      completedAt: workoutDate,
     );
 
-    // Compute date key once — used by exercise logs, date index, and streak.
-    final dateStr = formatDateKey(now);
+    // Compute date key once — used by exercise logs, date index, schedule, and streak.
+    final dateStr = formatDateKey(workoutDate);
     final savedLogIds = <String>[]; // Collect IDs for date index
 
     // Save individual exercise logs with is_pr flag, respecting logging type
@@ -1216,7 +1219,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     }
 
     // Mark the scheduled day as completed in the calendar.
-    final workoutDate = state.workoutDay?.date ?? now;
     await repo.markWorkoutCompleted(workoutDate, durationSeconds: state.elapsedSeconds);
 
     // Update user progress + streak.
@@ -1224,8 +1226,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
 
     // ── Daily streak (consecutive workout days — what users see) ──
-    // Reuse dateStr (already computed above) for today's date key.
-    final yesterdayStr = formatDateKey(now.subtract(const Duration(days: 1)));
+    // Reuse dateStr (already computed above) for the workout's scheduled date key.
+    final yesterdayStr = formatDateKey(
+      workoutDate.subtract(const Duration(days: 1)),
+    );
     final lastWorkoutDate = (progress['last_workout_date'] as String?) ?? '';
     int streakDays = (progress['current_streak_days'] as int?) ?? 0;
     if (lastWorkoutDate == dateStr) {
@@ -1261,6 +1265,9 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     // Check badge unlocks after workout completion.
     BadgeService.instance.checkAll();
+
+    // Fire-and-forget cloud sync of workout data (non-blocking).
+    SyncService.instance.syncWorkoutData();
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

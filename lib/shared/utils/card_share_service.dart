@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -44,8 +45,9 @@ class CardShareService {
         [XFile.fromData(pngBytes, name: name, mimeType: 'image/png')],
         text: 'Shared from AVYA',
       );
-    } catch (_) {
+    } catch (e) {
       // Fire-and-forget — never block the UI.
+      debugPrint('[CardShareService.captureAndShare] $e');
     }
   }
 }

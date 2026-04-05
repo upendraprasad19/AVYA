@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -41,6 +42,13 @@ class SyncService {
     try {
       if (!_supabase.isAuthenticated) return;
 
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+
+      // On reinstall / new device: if Hive workout data is empty,
+      // pull everything from Supabase first.
+      await _restoreIfNeeded(userId);
+
       // Pull recent cross-channel logs (Telegram → Hive, last 24h).
       await pullRecentCrossChannelLogs();
 
@@ -58,19 +66,13 @@ class SyncService {
       if (SubscriptionService.instance.isPro()) {
         subscribeToRealtimeSync();
       }
-    } catch (_) {
+    } catch (e) {
       // Offline or error — silently skip.
+      debugPrint('[SyncService.checkAndSync] $e');
     }
   }
 
   /// Compiles a daily snapshot from Hive data for AI context injection.
-  ///
-  /// The snapshot contains ~300 tokens of user context:
-  /// profile, this week's workouts, today's nutrition, weight, streak,
-  /// PRs, detected experience, coaching_notes.
-  ///
-  /// Uses AiCoachRepository.buildAiContext() which already aggregates
-  /// data from all Hive boxes via proper repository methods.
   Map<String, dynamic> compileDailySnapshot() {
     final today = DateTime.now().toIso8601String().substring(0, 10);
     final aiContext = AiCoachRepository.instance.buildAiContext();
@@ -97,8 +99,9 @@ class SyncService {
       }, onConflict: 'user_id,snapshot_date');
 
       await _setTimestamp(_lastSnapshotKey);
-    } catch (_) {
+    } catch (e) {
       // Offline — will retry next scheduled run.
+      debugPrint('[SyncService.pushSnapshot] $e');
     }
   }
 
@@ -113,6 +116,8 @@ class SyncService {
 
       await Future.wait([
         _syncWorkoutLogs(userId),
+        _syncExerciseLogs(userId),
+        _syncScheduleCompletions(userId),
         _syncNutritionLogs(userId),
         _syncWeightLogs(userId),
         _syncMeasurements(userId),
@@ -123,8 +128,79 @@ class SyncService {
       ]);
 
       await _setTimestamp(_lastFullSyncKey);
-    } catch (_) {
+    } catch (e) {
       // Partial sync failure — next launch will retry.
+      debugPrint('[SyncService.weeklyFullSync] $e');
+    }
+  }
+
+  // ── Workout-Specific Sync (callable after workout completion) ──
+
+  /// Push workout logs + exercise logs + schedule completions to Supabase.
+  /// Call this after a workout is completed for near-realtime backup.
+  Future<void> syncWorkoutData() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+
+      await Future.wait([
+        _syncWorkoutLogs(userId),
+        _syncExerciseLogs(userId),
+        _syncScheduleCompletions(userId),
+      ]);
+    } catch (e) {
+      // Offline — will sync on next weekly sync.
+      debugPrint('[SyncService.syncWorkoutData] $e');
+    }
+  }
+
+  // ── Restore from Cloud (reinstall / new device) ────────────────
+
+  /// Checks if local Hive is empty and restores from Supabase if so.
+  /// Called automatically by checkAndSync() on app launch.
+  Future<void> _restoreIfNeeded(String userId) async {
+    // Check if there's any workout data locally. If workoutBox has
+    // exercise logs or workout logs, the user hasn't reinstalled.
+    bool hasLocalData = false;
+    for (final key in _hive.workoutBox.keys) {
+      if (key is String &&
+          (key.startsWith('wlog_') || key.startsWith('exlog_'))) {
+        hasLocalData = true;
+        break;
+      }
+    }
+
+    if (!hasLocalData) {
+      await restoreFromCloud(userId);
+    }
+  }
+
+  /// Pulls all user data from Supabase into Hive.
+  /// Used on reinstall/login when Hive is empty.
+  ///
+  /// PRO users get 90 days of history; free users get 30 days.
+  Future<void> restoreFromCloud(String userId) async {
+    try {
+      final isPro = SubscriptionService.instance.isPro();
+      final days = isPro ? 90 : 30;
+      final since =
+          DateTime.now().subtract(Duration(days: days)).toIso8601String();
+
+      await Future.wait([
+        _restoreWorkoutLogs(userId, since),
+        _restoreExerciseLogs(userId, since),
+        _restoreScheduleCompletions(userId, since),
+        _restoreCustomExercises(userId),
+        _restoreCustomFoods(userId),
+        _restoreWeightLogs(userId, since),
+        _restoreNutritionLogs(userId, since),
+        _restoreMeasurements(userId, since),
+        _restoreUserProfile(userId),
+        _restoreUserProgress(userId),
+      ]);
+    } catch (e) {
+      // Partial restore is fine — app works offline with whatever we got.
+      debugPrint('[SyncService.restoreFromCloud] $e');
     }
   }
 
@@ -133,9 +209,6 @@ class SyncService {
   /// Pulls logs from Supabase that were created in the last 24 hours
   /// from other channels (e.g. Telegram bot). Merges into local Hive
   /// without overwriting existing entries.
-  ///
-  /// Called on every app launch for ALL users (free + PRO).
-  /// Lightweight: one query per table, last 24h only.
   Future<void> pullRecentCrossChannelLogs() async {
     try {
       final userId = _supabase.currentUser?.id;
@@ -149,8 +222,9 @@ class SyncService {
         _pullNutritionLogs(userId, since),
         _pullMeasurements(userId, since),
       ]);
-    } catch (_) {
+    } catch (e) {
       // Offline or error — silently skip.
+      debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
     }
   }
 
@@ -244,8 +318,9 @@ class SyncService {
     final userId = _supabase.currentUser?.id;
     if (userId == null) return;
 
-    // Subscribe to weight_logs inserts for this user
-    _supabase.client
+    // Subscribe to weight_logs inserts for this user.
+    // Store the subscription so it can be cancelled on logout.
+    _realtimeSubscription = _supabase.client
         .from('weight_logs')
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
@@ -272,33 +347,112 @@ class SyncService {
     _realtimeSubscription = null;
   }
 
-  // ── Private sync helpers ────────────────────────────────────
+  // ── Private Push Helpers ────────────────────────────────────
 
+  /// Pushes workout session logs (wlog_* keys) to Supabase workout_logs.
   Future<void> _syncWorkoutLogs(String userId) async {
     final workoutBox = _hive.workoutBox;
-    final logs = workoutBox.get('workout_logs');
-    if (logs == null) return;
+    for (final key in workoutBox.keys) {
+      if (key is! String || !key.startsWith('wlog_')) continue;
+      final raw = workoutBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
 
-    final items = (logs as List).cast<Map>();
-    for (final log in items) {
-      await _supabase.client.from('workout_logs').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+      try {
+        await _supabase.client.from('workout_logs').upsert({
+          'user_id': userId,
+          'exercise_name': log['workout_name'],
+          'date': log['date'],
+          'logged_at': log['completed_at'],
+          'sets_completed': log['sets_completed'],
+          'duration_seconds': log['duration_seconds'],
+          'notes': log['id'], // store local ID for dedup
+          'created_at': log['completed_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        // Skip individual failures.
+        debugPrint('[SyncService._syncWorkoutLogs] $e');
+      }
+    }
+  }
+
+  /// Pushes individual exercise logs (exlog_* keys) to
+  /// Supabase workout_log_exercises table.
+  Future<void> _syncExerciseLogs(String userId) async {
+    final workoutBox = _hive.workoutBox;
+    for (final key in workoutBox.keys) {
+      if (key is! String || !key.startsWith('exlog_')) continue;
+      final raw = workoutBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+
+      try {
+        await _supabase.client.from('workout_log_exercises').upsert({
+          'workout_log_id': log['id'],
+          'user_id': userId,
+          'exercise_id': log['id'] ?? key,
+          'exercise_name': log['exercise_name'] ?? '',
+          'logging_type': log['logging_type'],
+          'set_number': log['sets_completed'] ?? 1,
+          'reps': log['reps_completed'],
+          'weight_kg': log['weight_kg'],
+          'duration_seconds': log['duration_seconds'],
+          'distance_km': log['distance_km'],
+          'is_pr': log['is_pr'] ?? false,
+          'has_warmup_sets': log['has_warmup_sets'] ?? false,
+          'completed_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        // Skip individual failures.
+        debugPrint('[SyncService._syncExerciseLogs] $e');
+      }
+    }
+  }
+
+  /// Pushes completed schedule entries to workout_schedule_completions.
+  Future<void> _syncScheduleCompletions(String userId) async {
+    final workoutBox = _hive.workoutBox;
+    for (final key in workoutBox.keys) {
+      if (key is! String || !key.startsWith('schedule_')) continue;
+      final raw = workoutBox.get(key);
+      if (raw is! Map) continue;
+      final entry = Map<String, dynamic>.from(raw);
+
+      if (entry['status'] != 'completed') continue;
+
+      final date = entry['date'] as String?;
+      if (date == null) continue;
+
+      try {
+        await _supabase.client.from('workout_schedule_completions').upsert({
+          'user_id': userId,
+          'scheduled_date': date,
+          'day_of_week': entry['day_of_week']?.toString(),
+          'workout_name': entry['workout_name'],
+          'duration_seconds': entry['duration_seconds'],
+          'completed_at':
+              entry['completed_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,scheduled_date');
+      } catch (e) {
+        // Skip individual failures.
+        debugPrint('[SyncService._syncScheduleCompletions] $e');
+      }
     }
   }
 
   Future<void> _syncNutritionLogs(String userId) async {
     final nutritionBox = _hive.nutritionBox;
-    final logs = nutritionBox.get('nutrition_logs');
-    if (logs == null) return;
-
-    final items = (logs as List).cast<Map>();
-    for (final log in items) {
-      await _supabase.client.from('nutrition_logs').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+    for (final key in nutritionBox.keys) {
+      if (key is! String || !key.startsWith("nlog_")) continue;
+      final log = nutritionBox.get(key);
+      if (log == null) continue;
+      try {
+        await _supabase.client.from("nutrition_logs").upsert({
+          ...Map<String, dynamic>.from(log as Map), "user_id": userId,
+        }, onConflict: "id");
+      } catch (e) {
+        debugPrint('[SyncService._syncNutritionLogs] $e');
+      }
     }
   }
 
@@ -362,8 +516,9 @@ class SyncService {
           'label': log['label'] ?? 'unknown',
           'recorded_at': log['recorded_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,date,metric_type');
-      } catch (_) {
+      } catch (e) {
         // Table may not exist yet — skip silently.
+        debugPrint('[SyncService._syncUrineColorLogs] $e');
       }
     }
   }
@@ -394,8 +549,6 @@ class SyncService {
     final p = Map<String, dynamic>.from(profile as Map);
 
     // Only send columns that exist in the user_profile Supabase table.
-    // The Hive profile map contains extra computed fields (daily_calories,
-    // protein_grams, etc.) that have no Postgres column and would cause errors.
     await _supabase.client.from('user_profile').upsert({
       'user_id': userId,
       if (p['date_of_birth'] != null) 'date_of_birth': p['date_of_birth'],
@@ -412,6 +565,8 @@ class SyncService {
       if (p['tdee'] != null) 'tdee': p['tdee'],
       if (p['diet_preference'] != null) 'diet_preference': p['diet_preference'],
       if (p['city'] != null) 'city': p['city'],
+      if (p['body_fat_percent'] != null) 'body_fat_percent': p['body_fat_percent'],
+      if (p['body_fat_assessed_at'] != null) 'body_fat_assessed_at': p['body_fat_assessed_at'],
       if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
     }, onConflict: 'user_id');
   }
@@ -450,8 +605,328 @@ class SyncService {
       }
 
       await _setTimestamp(_lastCustomSyncKey);
-    } catch (_) {
+    } catch (e) {
       // Silently skip.
+      debugPrint('[SyncService._syncCustomItems] $e');
+    }
+  }
+
+  // ── Private Restore Helpers (Cloud → Hive) ──────────────────
+
+  Future<void> _restoreWorkoutLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('workout_logs')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since)
+          .order('created_at');
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final loggedAt = map['logged_at'] as String? ?? '';
+        final ts = DateTime.tryParse(loggedAt)?.millisecondsSinceEpoch ??
+            DateTime.now().millisecondsSinceEpoch;
+        final logId = 'wlog_$ts';
+
+        // Skip if already exists
+        if (_hive.workoutBox.get(logId) != null) continue;
+
+        await _hive.workoutBox.put(logId, {
+          'id': logId,
+          'type': 'workout_log',
+          'workout_name': map['exercise_name'] ?? 'Workout',
+          'date': map['date'],
+          'completed_at': loggedAt,
+          'sets_completed': map['sets_completed'],
+          'duration_seconds': map['duration_seconds'],
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreWorkoutLogs] $e');
+    }
+  }
+
+  Future<void> _restoreExerciseLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('workout_log_exercises')
+          .select()
+          .eq('user_id', userId)
+          .gte('completed_at', since)
+          .order('completed_at');
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final completedAt = map['completed_at'] as String? ?? '';
+        final name = map['exercise_name'] as String? ?? '';
+        final ts = DateTime.tryParse(completedAt)?.millisecondsSinceEpoch ??
+            DateTime.now().millisecondsSinceEpoch;
+        final logId = 'exlog_${ts}_${name.hashCode}';
+
+        if (_hive.workoutBox.get(logId) != null) continue;
+
+        final dateStr = completedAt.length >= 10
+            ? completedAt.substring(0, 10)
+            : DateTime.now().toIso8601String().substring(0, 10);
+
+        final logMap = <String, dynamic>{
+          'id': logId,
+          'type': 'exercise_log',
+          'exercise_name': name,
+          'date': dateStr,
+          'logging_type': map['logging_type'] ?? 'weight_reps',
+          'is_pr': map['is_pr'] ?? false,
+          'has_warmup_sets': map['has_warmup_sets'] ?? false,
+          'created_at': completedAt,
+        };
+
+        if (map['weight_kg'] != null) {
+          logMap['weight_kg'] = (map['weight_kg'] as num).toDouble();
+        }
+        if (map['reps'] != null) logMap['reps_completed'] = map['reps'];
+        if (map['set_number'] != null) {
+          logMap['sets_completed'] = map['set_number'];
+        }
+        if (map['duration_seconds'] != null) {
+          logMap['duration_seconds'] = map['duration_seconds'];
+        }
+        if (map['distance_km'] != null) {
+          logMap['distance_km'] = (map['distance_km'] as num).toDouble();
+        }
+
+        await _hive.workoutBox.put(logId, logMap);
+
+        // Rebuild date index
+        final indexKey = 'exercise_log_index_$dateStr';
+        final existingIndex = _hive.workoutBox.get(indexKey);
+        final indexList = existingIndex is List
+            ? List<String>.from(existingIndex)
+            : <String>[];
+        if (!indexList.contains(logId)) {
+          indexList.add(logId);
+          await _hive.workoutBox.put(indexKey, indexList);
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreExerciseLogs] $e');
+    }
+  }
+
+  Future<void> _restoreScheduleCompletions(
+      String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('workout_schedule_completions')
+          .select()
+          .eq('user_id', userId)
+          .gte('completed_at', since)
+          .order('scheduled_date');
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['scheduled_date'] as String? ?? '';
+        final key = 'schedule_$date';
+
+        final existing = _hive.workoutBox.get(key);
+        if (existing is Map) {
+          // Update existing schedule entry to completed status
+          final entry = Map<String, dynamic>.from(existing);
+          if (entry['status'] != 'completed') {
+            entry['status'] = 'completed';
+            entry['completed_at'] = map['completed_at'];
+            entry['duration_seconds'] = map['duration_seconds'];
+            await _hive.workoutBox.put(key, entry);
+          }
+        }
+        // If no schedule entry exists, the plan hasn't been generated yet
+        // on this device — schedule completions alone aren't useful without
+        // the full plan context. Skip silently.
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreScheduleCompletions] $e');
+    }
+  }
+
+  Future<void> _restoreCustomExercises(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('user_custom_exercises')
+          .select()
+          .eq('user_id', userId);
+
+      if (rows.isEmpty) return;
+
+      final items = rows
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+
+      // Merge with existing custom exercises
+      final existing = _hive.customBox.get('custom_exercises');
+      final existingList = existing is List
+          ? (existing).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
+          : <Map<String, dynamic>>[];
+
+      final existingNames =
+          existingList.map((e) => (e['name'] as String? ?? '').toLowerCase()).toSet();
+
+      for (final item in items) {
+        final name = (item['name'] as String? ?? '').toLowerCase();
+        if (!existingNames.contains(name)) {
+          existingList.add(item);
+          existingNames.add(name);
+        }
+      }
+
+      await _hive.customBox.put('custom_exercises', existingList);
+    } catch (e) {
+      debugPrint('[SyncService._restoreCustomExercises] $e');
+    }
+  }
+
+  Future<void> _restoreCustomFoods(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('user_custom_foods')
+          .select()
+          .eq('user_id', userId);
+
+      if (rows.isEmpty) return;
+
+      final items = rows
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+
+      final existing = _hive.customBox.get('custom_foods');
+      final existingList = existing is List
+          ? (existing).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
+          : <Map<String, dynamic>>[];
+
+      final existingNames =
+          existingList.map((e) => (e['name'] as String? ?? '').toLowerCase()).toSet();
+
+      for (final item in items) {
+        final name = (item['name'] as String? ?? '').toLowerCase();
+        if (!existingNames.contains(name)) {
+          existingList.add(item);
+          existingNames.add(name);
+        }
+      }
+
+      await _hive.customBox.put('custom_foods', existingList);
+    } catch (e) {
+      debugPrint('[SyncService._restoreCustomFoods] $e');
+    }
+  }
+
+  Future<void> _restoreWeightLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('weight_logs')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['date'] as String? ?? '';
+        final key = 'weight_$date';
+        if (_hive.healthBox.get(key) != null) continue;
+        await _hive.healthBox.put(key, {
+          'type': 'weight_log',
+          'date': date,
+          'weight_kg': map['weight_kg'],
+          'created_at': map['created_at'],
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreWeightLogs] $e');
+    }
+  }
+
+  Future<void> _restoreNutritionLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('nutrition_logs')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id'] as String? ?? '';
+        if (_hive.nutritionBox.get(id) != null) continue;
+        await _hive.nutritionBox.put(id, {
+          ...map,
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreNutritionLogs] $e');
+    }
+  }
+
+  Future<void> _restoreMeasurements(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('body_measurements')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['date'] as String? ?? '';
+        final key = 'measurement_$date';
+        if (_hive.healthBox.get(key) != null) continue;
+        await _hive.healthBox.put(key, {
+          ...map,
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreMeasurements] $e');
+    }
+  }
+
+  Future<void> _restoreUserProfile(String userId) async {
+    try {
+      // Only restore if local profile is missing
+      if (_hive.userBox.get('profile') != null) return;
+
+      final rows = await _supabase.client
+          .from('user_profile')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+
+      if (rows.isEmpty) return;
+      final map = Map<String, dynamic>.from(rows.first as Map);
+      map.remove('user_id'); // Don't store user_id inside the profile map
+      await _hive.userBox.put('profile', map);
+    } catch (e) {
+      debugPrint('[SyncService._restoreUserProfile] $e');
+    }
+  }
+
+  Future<void> _restoreUserProgress(String userId) async {
+    try {
+      // Only restore if local progress is missing
+      if (_hive.userBox.get('progress') != null) return;
+
+      final rows = await _supabase.client
+          .from('user_progress')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+
+      if (rows.isEmpty) return;
+      final map = Map<String, dynamic>.from(rows.first as Map);
+      map.remove('user_id');
+      await _hive.userBox.put('progress', map);
+    } catch (e) {
+      debugPrint('[SyncService._restoreUserProgress] $e');
     }
   }
 

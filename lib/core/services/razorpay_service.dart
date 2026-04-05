@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Handles Razorpay checkout flow:
 ///   1. Open Razorpay WebView checkout (₹349/month or ₹2,999/year)
@@ -49,6 +52,13 @@ class RazorpayService {
     VoidCallback? onSuccess,
     VoidCallback? onFailure,
   }) {
+    final keyId = AppConstants.razorpayKeyId;
+    if (keyId.isEmpty || keyId.contains('REPLACE')) {
+      debugPrint('RazorpayService: invalid key ID — aborting checkout');
+      onFailure?.call();
+      return;
+    }
+
     _onSuccess = onSuccess;
     _onFailure = onFailure;
     _pendingPlan = plan;
@@ -63,6 +73,7 @@ class RazorpayService {
     }
 
     final amount = baseAmount * 100; // Razorpay expects paise
+    debugPrint('RazorpayService: opening checkout — plan=$plan, amount=$amount paise, key=${keyId.substring(0, 12)}...');
 
     final user = SupabaseService.instance.currentUser;
 
@@ -95,21 +106,110 @@ class RazorpayService {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Poll Supabase for webhook confirmation, then update Hive.
+    debugPrint('RazorpayService: payment success — paymentId=${response.paymentId}, orderId=${response.orderId}');
+
+    // Show "verifying" snackbar immediately so user isn't staring at nothing
+    final ctx = navigatorKey?.currentContext;
+    if (ctx != null) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Verifying payment...',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0e1219),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 15),
+        ),
+      );
+    }
+
     await _pollAndActivate(
       paymentId: response.paymentId ?? '',
       orderId: response.orderId ?? '',
       signature: response.signature ?? '',
     );
+
+    // Clear the "verifying" snackbar before showing success
+    if (ctx != null) {
+      ScaffoldMessenger.of(ctx).clearSnackBars();
+    }
+
     _onSuccess?.call();
+    _showProActivatedFeedback();
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    debugPrint('RazorpayService: payment error — code=${response.code}, message=${response.message}');
     _onFailure?.call();
+    final context = navigatorKey?.currentContext;
+    if (context == null) return;
+    final msg = response.message ?? 'Payment failed';
+    // Only show error if it's not a user cancellation
+    if (response.code != Razorpay.PAYMENT_CANCELLED) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Payment failed: $msg',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: const Color(0xFF2a1a1a),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
     // External wallet selected — treat as pending, do nothing.
+  }
+
+  /// Shows a success snackbar and invalidates subscription providers
+  /// using the global navigator key. Safe to call after the paywall
+  /// sheet has been dismissed.
+  void _showProActivatedFeedback() {
+    final context = navigatorKey?.currentContext;
+    if (context == null) return;
+
+    // Invalidate subscription provider so UI updates immediately
+    try {
+      final container = ProviderScope.containerOf(context, listen: false);
+      container.invalidate(subscriptionInfoProvider);
+    } catch (_) {}
+
+    // Show success snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
+            const SizedBox(width: 10),
+            Text(
+              'PRO activated! Welcome to AVYA PRO',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1a2a1a),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   /// Polls Supabase subscriptions table for confirmation from the
@@ -147,8 +247,8 @@ class RazorpayService {
           await hive.configBox.put('plan', plan ?? 'monthly');
           return;
         }
-      } catch (_) {
-        // Network error — retry.
+      } catch (e) {
+        debugPrint('RazorpayService: poll attempt $attempt failed: $e');
       }
     }
 
@@ -156,6 +256,7 @@ class RazorpayService {
     // so the user isn't stuck. Next app launch will re-verify via
     // SubscriptionService.refreshFromSupabase().
     final fallbackPlan = _pendingPlan ?? 'monthly';
+    debugPrint('RazorpayService: polling exhausted — activating 24h fallback for plan=$fallbackPlan');
     await hive.configBox.put('isPro', true);
     await hive.configBox.put(
       'expiresAt',

@@ -47,7 +47,8 @@ class DeepAnalysisCard extends StatelessWidget {
           .map((i) => i.userMessage)
           .toList();
       return messages.join(' ');
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[DeepAnalysisCard._buildAnalysisText] $e');
       return 'Keep logging consistently — your deep analysis will appear here once I have enough data to spot patterns.';
     }
   }

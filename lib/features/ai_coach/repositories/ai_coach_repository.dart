@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -83,7 +84,9 @@ class AiCoachRepository {
               'records': history.take(20).toList(),
             };
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[AiCoachRepository.enrichContextForQuery] exerciseHistory: $e');
+        }
       }
 
       // Nutrition trend query
@@ -95,7 +98,9 @@ class AiCoachRepository {
           if (trends.isNotEmpty) {
             context['nutrition_trend'] = trends;
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[AiCoachRepository.enrichContextForQuery] nutritionTrend: $e');
+        }
       }
 
       // Weight trend query
@@ -106,7 +111,9 @@ class AiCoachRepository {
           if (weights.isNotEmpty) {
             context['weight_trend'] = weights;
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[AiCoachRepository.enrichContextForQuery] weightTrend: $e');
+        }
       }
 
       // Progress / "how am I doing" query
@@ -115,11 +122,15 @@ class AiCoachRepository {
         try {
           context['workout_adherence'] =
               WorkoutRepository.instance.getWorkoutAdherence(days: 90);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[AiCoachRepository.enrichContextForQuery] workoutAdherence: $e');
+        }
         try {
           context['nutrition_trend'] =
               NutritionRepository.instance.getWeeklyAverages(weeks: 12);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[AiCoachRepository.enrichContextForQuery] progressNutritionTrend: $e');
+        }
       }
 
       // 7-day summary (always add if available)
@@ -138,9 +149,12 @@ class AiCoachRepository {
             'days_logged': dailyMacros.length,
           };
         }
-      } catch (_) {}
-    } catch (_) {
+      } catch (e) {
+        debugPrint('[AiCoachRepository.enrichContextForQuery] sevenDayNutrition: $e');
+      }
+    } catch (e) {
       // Enrichment is best-effort — never fail the AI call
+      debugPrint('[AiCoachRepository.enrichContextForQuery] $e');
     }
 
     return context;
@@ -533,7 +547,8 @@ class AiCoachRepository {
           .map((i) => i.coachNotice)
           .take(5) // max 5 to not bloat context
           .toList();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AiCoachRepository._getCoachNotices] $e');
       return [];
     }
   }
@@ -562,7 +577,8 @@ class AiCoachRepository {
     try {
       final insights = PatternDetector.instance.analyze();
       return insights.isNotEmpty ? insights.first : null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AiCoachRepository.getTopInsight] $e');
       return null;
     }
   }

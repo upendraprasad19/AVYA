@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import '../providers/nutrition_provider.dart';
+import 'custom_food_sheet.dart';
 
 /// Bottom sheet for searching the food database (5K items) and logging
 /// with adjustable portions. FREE for all users.
@@ -177,6 +178,37 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                 color: AppColors.textSecondary,
               ),
             ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).pop();
+                showCustomFoodSheet(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.accent.withValues(alpha: 0.06),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add, color: AppColors.accent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Create custom food',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -184,13 +216,49 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
 
     if (results.isEmpty) {
       return Center(
-        child: Text(
-          'No foods found for "${_searchController.text}"',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'No foods found for "${_searchController.text}"',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).pop();
+                showCustomFoodSheet(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
+                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add, color: AppColors.accent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Create custom food',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }

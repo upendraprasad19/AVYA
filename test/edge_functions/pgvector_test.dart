@@ -3,7 +3,6 @@ library;
 
 import 'dart:math';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -28,11 +27,12 @@ void main() {
   }
 
   setUpAll(() async {
-    await dotenv.load(fileName: '.env');
+    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+    const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
     await Supabase.initialize(
-      url: dotenv.env['SUPABASE_URL']!,
-      anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+      url: supabaseUrl,
+      anonKey: anonKey,
     );
     client = Supabase.instance.client;
 

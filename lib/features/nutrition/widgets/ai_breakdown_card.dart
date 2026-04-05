@@ -14,6 +14,31 @@ class AiBreakdownCard extends ConsumerWidget {
     final breakdown = ref.watch(aiBreakdownProvider);
     if (breakdown == null) return const SizedBox.shrink();
 
+    // Show error state if AI analysis failed
+    if (breakdown.error != null) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(AppRadius.cardS),
+          border: Border.all(color: Colors.red.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                breakdown.error!,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       decoration: BoxDecoration(

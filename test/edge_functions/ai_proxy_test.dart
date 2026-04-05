@@ -3,7 +3,6 @@ library;
 
 import 'dart:convert';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,16 +14,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// Run: flutter test test/edge_functions/ai_proxy_test.dart
 void main() {
-  late String supabaseUrl;
-  late String anonKey;
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
   late SupabaseClient client;
   late String accessToken;
 
   setUpAll(() async {
-    await dotenv.load(fileName: '.env');
-    supabaseUrl = dotenv.env['SUPABASE_URL']!;
-    anonKey = dotenv.env['SUPABASE_ANON_KEY']!;
-
     await Supabase.initialize(url: supabaseUrl, anonKey: anonKey);
     client = Supabase.instance.client;
 

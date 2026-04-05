@@ -68,6 +68,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     };
   }
 
+  String? _addCacheBuster(String? url) {
+    if (url == null || url.isEmpty) return null;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return url.contains('?') ? '$url&t=$ts' : '$url?t=$ts';
+  }
+
   Future<void> _saveNotificationPreferences() async {
     await HiveService.instance.configBox.put('notification_preferences', _notifPrefs);
   }
@@ -133,7 +139,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
     final targetKg = (profile['target_weight_kg'] as num?)?.toDouble();
     final heightCm = (profile['height_cm'] as num?)?.toDouble();
-    final bodyFatPct = (profile['body_fat_pct'] as num?)?.toDouble();
+    final bodyFatPct = (profile['body_fat_percent'] as num?)?.toDouble();
     final dob = profile['date_of_birth'] as String?;
 
     final subtitle =
@@ -189,11 +195,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // Safe area
               SizedBox(height: MediaQuery.of(context).padding.top + 10),
 
-              // 1. Profile identity (no banner — #1 remove Phase 2 dead-ends)
+              // 1. Profile identity with banner + avatar
               ProfileIdentity(
                 name: name,
                 subtitle: subtitle,
-                onTapAvatar: () => context.go('/profile/edit'),
+                avatarUrl: _addCacheBuster(profile['avatar_url'] as String?),
+                bannerUrl: _addCacheBuster(profile['banner_url'] as String?),
+                onReplaceAvatar: () async {
+                  final outcome = await ref.read(userProfileProvider.notifier).uploadAvatar();
+                  if (!mounted) return;
+                  ref.invalidate(userProfileProvider);
+                  if (outcome.result == UploadResult.cancelled) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                      outcome.result == UploadResult.success
+                          ? 'Profile photo updated'
+                          : 'Upload failed: ${outcome.errorMessage ?? "Unknown error"}',
+                      style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                    backgroundColor: outcome.result == UploadResult.success
+                        ? const Color(0xFF1a2a1a)
+                        : const Color(0xFF2a1a1a),
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                },
+                onReplaceBanner: () async {
+                  final outcome = await ref.read(userProfileProvider.notifier).uploadBanner();
+                  if (!mounted) return;
+                  ref.invalidate(userProfileProvider);
+                  if (outcome.result == UploadResult.cancelled) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                      outcome.result == UploadResult.success
+                          ? 'Banner updated'
+                          : 'Upload failed: ${outcome.errorMessage ?? "Unknown error"}',
+                      style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                    backgroundColor: outcome.result == UploadResult.success
+                        ? const Color(0xFF1a2a1a)
+                        : const Color(0xFF2a1a1a),
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                },
                 onTapEdit: () => context.go('/profile/edit'),
               ),
               const SizedBox(height: 8),
@@ -1119,17 +1162,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       await SupabaseService.instance.client.auth
           .signOut(scope: SignOutScope.global);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ProfileScreen._performSignOut] global signOut: $e');
       try {
         await SupabaseService.instance.client.auth
             .signOut(scope: SignOutScope.local);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[ProfileScreen._performSignOut] local signOut: $e');
+      }
     }
 
     // 2. Wipe all user-specific Hive boxes after session is gone.
     try {
       await UserRepository.instance.clearAllData();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ProfileScreen._performSignOut] clearAllData: $e');
+    }
 
     if (mounted) {
       context.go('/sign-in');
@@ -1191,13 +1239,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   }
                   // Use global scope to sign out on server too.
                   await supabase.auth.signOut(scope: SignOutScope.global);
-                } catch (_) {
+                } catch (e) {
                   // Offline or server error — force a local-only sign-out so
                   // the router never sees authenticated + !onboarded → /onboarding.
+                  debugPrint('[ProfileScreen._deleteAccount] global signOut: $e');
                   try {
                     await SupabaseService.instance.client.auth
                         .signOut(scope: SignOutScope.local);
-                  } catch (_) {}
+                  } catch (e) {
+                    debugPrint('[ProfileScreen._deleteAccount] local signOut: $e');
+                  }
                 }
                 // Clear all local Hive data after sign-out
                 await UserRepository.instance.clearAllData();

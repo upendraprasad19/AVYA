@@ -648,16 +648,45 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             Consumer(
               builder: (context, ref, _) {
                 final insight = ref.watch(coachInsightProvider);
-                return Text(
-                  insight,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                    height: 1.6,
-                  ),
+                return Column(
+                  children: [
+                    Text(
+                      insight,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary,
+                        height: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_graph_rounded, size: 13, color: AppColors.accent),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Keep logging — AI learns from your data',
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -1280,7 +1309,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           // Dynamic import to avoid web compilation issues
           final compressed = await _compressImage(imageBytes);
           compressedBytes = compressed ?? imageBytes;
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[AiCoachScreen._pickAndUploadImage] $e');
           compressedBytes = imageBytes;
         }
       } else {
@@ -1383,7 +1413,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         format: CompressFormat.jpeg,
       );
       return result;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AiCoachScreen._compressImage] $e');
       return null;
     }
   }

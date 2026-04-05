@@ -1,4 +1,4 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Singleton wrapper around the Supabase client.
@@ -29,9 +29,12 @@ class SupabaseService {
   }
 
   Future<void> _doInitialize() async {
+    assert(AppConstants.supabaseUrl.isNotEmpty, 'SUPABASE_URL not set — pass --dart-define-from-file=.env');
+    assert(AppConstants.supabaseAnonKey.isNotEmpty, 'SUPABASE_ANON_KEY not set — pass --dart-define-from-file=.env');
+
     await Supabase.initialize(
-      url: dotenv.env['SUPABASE_URL']!,
-      anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+      url: AppConstants.supabaseUrl,
+      anonKey: AppConstants.supabaseAnonKey,
     );
     _initialized = true;
   }
@@ -68,7 +71,14 @@ class SupabaseService {
     String name, {
     Map<String, String>? headers,
     Map<String, dynamic>? body,
-  }) {
+  }) async {
+    // Ensure JWT is fresh before calling edge functions
+    try {
+      await client.auth.refreshSession();
+    } catch (_) {
+      // Refresh failed — proceed anyway, the invoke will surface the auth error
+    }
+
     return client.functions.invoke(
       name,
       headers: headers,

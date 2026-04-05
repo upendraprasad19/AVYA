@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'hive_service.dart';
@@ -25,6 +25,10 @@ Map<String, dynamic> _parseJsonToIdMap(String jsonString) {
 ///
 /// JSON parsing runs in a background isolate via [compute] to avoid
 /// blocking the main thread during first-launch seeding.
+///
+/// Uses granular flags (`seeded_exercises`, `seeded_foods`) so that if
+/// one asset fails (corrupt file, disk full), the other can still succeed
+/// and the failed one retries on next launch.
 class SeedService {
   SeedService._();
   static final SeedService _instance = SeedService._();
@@ -32,7 +36,13 @@ class SeedService {
 
   static const String _exerciseAssetPath = 'assets/data/exercise_library.json';
   static const String _foodAssetPath = 'assets/data/food_database.json';
+
+  /// Legacy flag — kept for backward compat with existing installs.
   static const String _seededKey = 'seeded';
+
+  /// Granular flags — one per asset, so partial failures are retried.
+  static const String _exercisesSeededKey = 'seeded_exercises';
+  static const String _foodsSeededKey = 'seeded_foods';
 
   final HiveService _hive = HiveService.instance;
 
@@ -40,35 +50,86 @@ class SeedService {
   /// exercise and food databases into Hive.
   ///
   /// On subsequent launches this returns immediately (fast path).
+  /// Partial failures are handled: if exercises succeed but foods fail,
+  /// exercises won't be re-seeded on the next launch.
   Future<void> seedIfNeeded() async {
     final configBox = _hive.configBox;
-    final alreadySeeded = configBox.get(_seededKey, defaultValue: false) as bool;
 
+    // Fast path: both already seeded (or legacy flag from previous version).
+    final alreadySeeded = configBox.get(_seededKey, defaultValue: false) as bool;
+    final exercisesSeeded =
+        configBox.get(_exercisesSeededKey, defaultValue: false) as bool;
+    final foodsSeeded =
+        configBox.get(_foodsSeededKey, defaultValue: false) as bool;
+
+    if (alreadySeeded && exercisesSeeded && foodsSeeded) return;
+
+    // If legacy flag is set but granular flags aren't, migrate.
+    if (alreadySeeded && !exercisesSeeded) {
+      await configBox.put(_exercisesSeededKey, true);
+    }
+    if (alreadySeeded && !foodsSeeded) {
+      await configBox.put(_foodsSeededKey, true);
+    }
     if (alreadySeeded) return;
 
-    await Future.wait([
-      _seedExercises(),
-      _seedFoods(),
-    ]);
+    // Seed each asset independently — partial failures don't block the other.
+    final needExercises = !exercisesSeeded;
+    final needFoods = !foodsSeeded;
 
-    await configBox.put(_seededKey, true);
+    final results = await Future.wait(
+      [
+        if (needExercises) _seedExercises(),
+        if (needFoods) _seedFoods(),
+      ],
+      eagerError: false, // Let both complete even if one fails
+    );
+
+    // Mark individual success flags. The results list maps 1:1 with the
+    // futures we passed in, but since we used conditional list entries,
+    // we track success via try/catch inside each seed method instead.
+    // (The actual success tracking is done by the methods themselves.)
+
+    // If both granular flags are now set, mark legacy flag too.
+    final exDone =
+        configBox.get(_exercisesSeededKey, defaultValue: false) as bool;
+    final fdDone =
+        configBox.get(_foodsSeededKey, defaultValue: false) as bool;
+
+    if (exDone && fdDone) {
+      await configBox.put(_seededKey, true);
+    }
   }
 
   /// Reads [_exerciseAssetPath] from the asset bundle, parses it in a
   /// background isolate, then writes every exercise into exerciseBox keyed
   /// by its `id`.
   Future<void> _seedExercises() async {
-    final jsonString = await rootBundle.loadString(_exerciseAssetPath);
-    final entries = await compute(_parseJsonToIdMap, jsonString);
-    await _hive.exerciseBox.putAll(entries);
+    try {
+      final jsonString = await rootBundle.loadString(_exerciseAssetPath);
+      final entries = await compute(_parseJsonToIdMap, jsonString);
+      await _hive.exerciseBox.putAll(entries);
+      await _hive.configBox.put(_exercisesSeededKey, true);
+      debugPrint('[SeedService] Exercises seeded: ${entries.length} items');
+    } catch (e) {
+      debugPrint('[SeedService._seedExercises] FAILED: $e');
+      // Will retry on next launch since _exercisesSeededKey stays false.
+    }
   }
 
   /// Reads [_foodAssetPath] from the asset bundle, parses it in a
   /// background isolate, then writes every food item into foodBox keyed
   /// by its `id`.
   Future<void> _seedFoods() async {
-    final jsonString = await rootBundle.loadString(_foodAssetPath);
-    final entries = await compute(_parseJsonToIdMap, jsonString);
-    await _hive.foodBox.putAll(entries);
+    try {
+      final jsonString = await rootBundle.loadString(_foodAssetPath);
+      final entries = await compute(_parseJsonToIdMap, jsonString);
+      await _hive.foodBox.putAll(entries);
+      await _hive.configBox.put(_foodsSeededKey, true);
+      debugPrint('[SeedService] Foods seeded: ${entries.length} items');
+    } catch (e) {
+      debugPrint('[SeedService._seedFoods] FAILED: $e');
+      // Will retry on next launch since _foodsSeededKey stays false.
+    }
   }
 }

@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:icanbefitter/core/services/barcode_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Opens the barcode scanner as a full-screen bottom sheet.
@@ -272,6 +273,22 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                               fontWeight: FontWeight.w700,
                               color: AppColors.accent),
                         ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        showCustomFoodSheet(context);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text("Add manually",
+                          style: GoogleFonts.getFont("DM Sans", fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
                       ),
                     ),
                   ],

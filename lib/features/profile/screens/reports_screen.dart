@@ -66,8 +66,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         if (daysSinceCache < 7) {
           try {
             _aiReport = jsonDecode(cachedJson) as Map<String, dynamic>;
-          } catch (_) {
+          } catch (e) {
             // Corrupted cache, ignore
+            debugPrint('[ReportsScreen._loadCachedReport] $e');
           }
         }
       }

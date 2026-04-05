@@ -16,6 +16,7 @@ import '../widgets/scan_meal_section.dart';
 import '../widgets/saved_meals_section.dart';
 import '../widgets/food_search_sheet.dart';
 import '../widgets/barcode_scan_sheet.dart';
+import '../widgets/custom_food_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -615,6 +616,32 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                     fontWeight: FontWeight.w400,
                     color: AppColors.textSecondary,
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => showCustomFoodSheet(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+              color: AppColors.accent.withValues(alpha: 0.06),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  'Create custom food',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent),
                 ),
               ],
             ),

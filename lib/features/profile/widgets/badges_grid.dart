@@ -489,8 +489,9 @@ class _BadgeShareSheetState extends State<_BadgeShareSheet> {
         [XFile.fromData(pngBytes, mimeType: 'image/png', name: 'achievement.png')],
         text: 'I just unlocked "${widget.badge.name}" on ICANBEFITTER! ${widget.badge.emoji}',
       );
-    } catch (_) {
+    } catch (e) {
       // Sharing cancelled or failed — silent
+      debugPrint('[BadgesGrid._shareBadge] $e');
     } finally {
       if (mounted) setState(() => _sharing = false);
     }

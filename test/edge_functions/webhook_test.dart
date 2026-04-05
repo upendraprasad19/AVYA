@@ -3,7 +3,6 @@ library;
 
 import 'dart:convert';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,14 +14,8 @@ import 'package:http/http.dart' as http;
 ///
 /// Run: flutter test test/edge_functions/webhook_test.dart
 void main() {
-  late String supabaseUrl;
-  late String anonKey;
-
-  setUpAll(() async {
-    await dotenv.load(fileName: '.env');
-    supabaseUrl = dotenv.env['SUPABASE_URL']!;
-    anonKey = dotenv.env['SUPABASE_ANON_KEY']!;
-  });
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   /// Helper to call the webhook Edge Function.
   Future<http.Response> callWebhook({
