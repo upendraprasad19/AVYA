@@ -6,6 +6,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Handles Razorpay checkout flow:
@@ -141,7 +142,7 @@ class RazorpayService {
     );
 
     // Clear the "verifying" snackbar before showing success
-    if (ctx != null) {
+    if (ctx != null && ctx.mounted) {
       ScaffoldMessenger.of(ctx).clearSnackBars();
     }
 
@@ -224,8 +225,8 @@ class RazorpayService {
 
     final hive = HiveService.instance;
 
-    for (int attempt = 0; attempt < 5; attempt++) {
-      await Future.delayed(const Duration(seconds: 2));
+    for (int attempt = 0; attempt < 10; attempt++) {
+      await Future.delayed(const Duration(seconds: 3));
 
       try {
         final row = await SupabaseService.instance.client
@@ -252,16 +253,21 @@ class RazorpayService {
       }
     }
 
-    // Fallback: even if polling fails, optimistically activate for 24h
-    // so the user isn't stuck. Next app launch will re-verify via
-    // SubscriptionService.refreshFromSupabase().
+    // Fallback: webhook may be delayed (especially in test mode).
+    // Activate for the plan duration so user isn't stuck.
+    // Next app launch will re-verify via SubscriptionService.refreshFromSupabase().
     final fallbackPlan = _pendingPlan ?? 'monthly';
-    debugPrint('RazorpayService: polling exhausted — activating 24h fallback for plan=$fallbackPlan');
+    debugPrint('RazorpayService: polling exhausted — activating fallback for plan=$fallbackPlan');
+    final fallbackEnd = fallbackPlan == 'yearly'
+        ? DateTime.now().add(const Duration(days: 365))
+        : DateTime.now().add(const Duration(days: 30));
     await hive.configBox.put('isPro', true);
-    await hive.configBox.put(
-      'expiresAt',
-      DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
-    );
+    await hive.configBox.put('expiresAt', fallbackEnd.toIso8601String());
     await hive.configBox.put('plan', fallbackPlan);
+
+    // Queue a delayed re-check in case webhook arrives after polling window
+    Future.delayed(const Duration(seconds: 60), () {
+      SubscriptionService.instance.refreshFromSupabase();
+    });
   }
 }

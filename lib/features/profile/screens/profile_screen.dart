@@ -16,7 +16,10 @@ import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import '../providers/profile_provider.dart';
@@ -27,6 +30,7 @@ import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
 import '../widgets/badges_grid.dart';
 import 'notification_settings_screen.dart';
+import 'package:icanbefitter/shared/widgets/community_review_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -67,6 +71,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'subscription_reminders': {'enabled': true},
     };
   }
+
+  static String _monthName(int m) => const ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
 
   String? _addCacheBuster(String? url) {
     if (url == null || url.isEmpty) return null;
@@ -203,7 +209,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 bannerUrl: _addCacheBuster(profile['banner_url'] as String?),
                 onReplaceAvatar: () async {
                   final outcome = await ref.read(userProfileProvider.notifier).uploadAvatar();
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   ref.invalidate(userProfileProvider);
                   if (outcome.result == UploadResult.cancelled) {
                     debugPrint('[ProfileScreen] Avatar upload cancelled: ${outcome.errorMessage}');
@@ -232,7 +238,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
                 onReplaceBanner: () async {
                   final outcome = await ref.read(userProfileProvider.notifier).uploadBanner();
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   ref.invalidate(userProfileProvider);
                   if (outcome.result == UploadResult.cancelled) {
                     debugPrint('[ProfileScreen] Banner upload cancelled: ${outcome.errorMessage}');
@@ -342,6 +348,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   );
                 },
               ),
+              const SizedBox(height: 8),
+
+              // #4b Invite Friends (referral)
+              const SectionHeader('SHARE & GROW'),
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.card_giftcard,
+                  title: 'Invite Friends',
+                  subtitle: 'Both get 7 days PRO free',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => _showInviteFriends(),
+                ),
+                ProfileRow(
+                  icon: Icons.rate_review_outlined,
+                  title: 'Review Community Items',
+                  subtitle: 'Approve foods & exercises from users',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const CommunityReviewSheet(),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 8),
 
               // #5 Notifications (consolidated — just a row linking to settings screen)
@@ -792,7 +824,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (isPro) {
       // Simple PRO card with expiry
       final expiryStr = subInfo.expiresAt != null
-          ? '${subInfo.expiresAt!.day}/${subInfo.expiresAt!.month}/${subInfo.expiresAt!.year}'
+          ? '${subInfo.expiresAt!.day} ${_monthName(subInfo.expiresAt!.month)} ${subInfo.expiresAt!.year}'
           : '\u2014';
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
@@ -1065,7 +1097,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     data['health_logs'] = health;
 
     final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
-    await Share.share(jsonStr, subject: 'ICANBEFITTER Data Export');
+    // Write to a temp file to avoid OOM on large exports
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/avya_export_${DateTime.now().millisecondsSinceEpoch}.json');
+    await file.writeAsString(jsonStr);
+    await Share.shareXFiles([XFile(file.path)], subject: 'AVYA Fit Data Export');
   }
 
   // ── Privacy Dialog ──────────────────────────────────────────────
@@ -1086,6 +1122,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Text('Permissions:', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
             const SizedBox(height: 6),
             Text('\u2022 Camera: Meal scanning\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => _launchUrl('https://icanbefitter.vercel.app/privacy'),
+              child: Row(
+                children: [
+                  const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text('Read our Privacy Policy', style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _launchUrl('https://icanbefitter.vercel.app/terms'),
+              child: Row(
+                children: [
+                  const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text('Terms of Service', style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1094,6 +1152,101 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _launchUrl(String url) {
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _showInviteFriends() async {
+    String? referralCode;
+    try {
+      referralCode = await SupabaseService.instance.getOrCreateReferralCode();
+    } catch (e) {
+      debugPrint('[ProfileScreen._showInviteFriends] $e');
+    }
+
+    if (referralCode == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate referral code', style: GoogleFonts.getFont('DM Sans', fontSize: 13)), backgroundColor: AppColors.red),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Invite Friends',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Share your code with friends. When they sign up, both of you get 7 days of PRO free!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              // Code display
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      referralCode!,
+                      style: GoogleFonts.getFont('DM Sans', fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.accent, letterSpacing: 1.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Share button
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Share.share(
+                      'Join me on AVYA Fit! Use my referral code $referralCode to get 7 days of PRO free. Download: https://icanbefitter.vercel.app',
+                      subject: 'AVYA Fit Referral',
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                  ),
+                  child: Text(
+                    'Share My Code',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

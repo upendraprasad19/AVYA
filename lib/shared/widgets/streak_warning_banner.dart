@@ -5,12 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 class StreakWarningBanner extends StatelessWidget {
   final int streakDays;
   final int workoutsRemaining;
+  final int freezesAvailable;
   final VoidCallback onTrainNow;
 
   const StreakWarningBanner({
     super.key,
     required this.streakDays,
     required this.workoutsRemaining,
+    this.freezesAvailable = 0,
     required this.onTrainNow,
   });
 
@@ -54,11 +56,15 @@ class StreakWarningBanner extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$workoutsRemaining workout${workoutsRemaining > 1 ? "s" : ""} left this week',
+                  freezesAvailable > 0
+                      ? '$workoutsRemaining left \u2022 $freezesAvailable freeze${freezesAvailable > 1 ? "s" : ""} remaining'
+                      : '$workoutsRemaining left \u2022 No freezes \u2014 don\'t miss today!',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 11,
-                    color: const Color(0xFF6b7a8d),
+                    color: freezesAvailable > 0
+                        ? const Color(0xFF6b7a8d)
+                        : const Color(0xFFef4444).withValues(alpha: 0.7),
                   ),
                 ),
               ],

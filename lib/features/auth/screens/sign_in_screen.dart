@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 
 import '../providers/auth_provider.dart';
 
@@ -26,10 +28,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
+  final _referralController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+
+  final _privacyTapRecognizer = TapGestureRecognizer();
+  final _termsTapRecognizer = TapGestureRecognizer();
 
   bool _isSignUp = false;
   bool _obscurePassword = true;
+  bool _consentGiven = false;
+  bool _showReferralField = false;
   _SignInView _currentView = _SignInView.main;
 
   @override
@@ -38,6 +46,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _passwordController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
+    _referralController.dispose();
+    _privacyTapRecognizer.dispose();
+    _termsTapRecognizer.dispose();
     super.dispose();
   }
 
@@ -65,6 +76,25 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         authNotifier.resetState();
       }
       if (next.status == AuthStatus.success) {
+        // Save referral code to Hive so it can be retried if redemption fails
+        final code = _referralController.text.trim();
+        if (code.isNotEmpty) {
+          // Store pending referral in configBox for retry on next launch
+          try {
+            final configBox = Hive.box('configBox');
+            configBox.put('pending_referral_code', code);
+          } catch (_) {}
+          SupabaseService.instance.callFunction(
+            'redeem-referral',
+            body: {'code': code},
+          ).then((_) {
+            debugPrint('[SignIn] Referral code redeemed: $code');
+            // Clear pending code on success
+            try { Hive.box('configBox').delete('pending_referral_code'); } catch (_) {}
+          }).catchError((e) {
+            debugPrint('[SignIn] Referral redemption failed (will retry on next launch): $e');
+          });
+        }
         context.go('/splash');
       }
     });
@@ -73,19 +103,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Full-bleed background image (same as splash)
+          Image.asset('assets/avya_logo.png', fit: BoxFit.cover),
+          // Dark overlay for text readability
+          Container(color: AppColors.bg.withValues(alpha: 0.75)),
+          // Content on top
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenPadding,
+                ),
+                child: _currentView == _SignInView.main
+                    ? _buildMainView(authNotifier, isLoading)
+                    : _currentView == _SignInView.email
+                        ? _buildEmailView(authNotifier, isLoading)
+                        : _buildPhoneView(authState, authNotifier, isLoading),
+              ),
             ),
-            child: _currentView == _SignInView.main
-                ? _buildMainView(authNotifier, isLoading)
-                : _currentView == _SignInView.email
-                    ? _buildEmailView(authNotifier, isLoading)
-                    : _buildPhoneView(authState, authNotifier, isLoading),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -98,11 +138,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       children: [
         const SizedBox(height: 60),
 
-        // AVYA logo
-        _buildLogo(),
-        const SizedBox(height: 12),
-
-        // Tagline
+        // Tagline (logo is now the full-screen background)
         Text(
           'AI-powered fitness & nutrition',
           style: GoogleFonts.getFont(
@@ -123,14 +159,89 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
+
+        // ── Consent checkbox (DPDP compliance) ─────────────
+        GestureDetector(
+          onTap: () => setState(() => _consentGiven = !_consentGiven),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: Checkbox(
+                  value: _consentGiven,
+                  onChanged: (v) => setState(() => _consentGiven = v ?? false),
+                  activeColor: AppColors.accent,
+                  checkColor: Colors.black,
+                  side: BorderSide(
+                    color: _consentGiven ? AppColors.accent : AppColors.textSecondary,
+                    width: 1.5,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                    children: [
+                      const TextSpan(text: 'I agree to the '),
+                      TextSpan(
+                        text: 'Privacy Policy',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accent,
+                        ),
+                        recognizer: _privacyTapRecognizer
+                          ..onTap = () => launchUrl(
+                                Uri.parse('https://icanbefitter.vercel.app/privacy'),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                      ),
+                      const TextSpan(text: ' and '),
+                      TextSpan(
+                        text: 'Terms of Service',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accent,
+                        ),
+                        recognizer: _termsTapRecognizer
+                          ..onTap = () => launchUrl(
+                                Uri.parse('https://icanbefitter.vercel.app/terms'),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
 
         // ── Continue with Google — PRIMARY ──────────────────
         SizedBox(
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
-            onPressed: isLoading ? null : () => authNotifier.signInWithGoogle(),
+            onPressed: isLoading || !_consentGiven ? null : () => authNotifier.signInWithGoogle(),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
@@ -180,7 +291,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           width: double.infinity,
           height: 52,
           child: OutlinedButton(
-            onPressed: isLoading
+            onPressed: isLoading || !_consentGiven
                 ? null
                 : () => setState(() => _currentView = _SignInView.phone),
             style: OutlinedButton.styleFrom(
@@ -225,7 +336,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           width: double.infinity,
           height: 52,
           child: OutlinedButton(
-            onPressed: isLoading
+            onPressed: isLoading || !_consentGiven
                 ? null
                 : () => setState(() => _currentView = _SignInView.email),
             style: OutlinedButton.styleFrom(
@@ -277,50 +388,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 16),
 
-        // ── Legal text ──────────────────────────────────────
-        RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
+        // ── Referral code (optional) ────────────────────────
+        GestureDetector(
+          onTap: () => setState(() => _showReferralField = !_showReferralField),
+          child: Text(
+            _showReferralField ? 'Hide referral code' : 'Have a referral code?',
             style: GoogleFonts.getFont(
               'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary.withAlpha(128),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.accent,
             ),
-            children: [
-              const TextSpan(text: 'By continuing, you agree to our '),
-              TextSpan(
-                text: 'Terms of Service',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.accent,
-                ),
-                recognizer: TapGestureRecognizer()
-                  ..onTap = () => launchUrl(
-                        Uri.parse('https://icanbefitter.vercel.app'),
-                        mode: LaunchMode.externalApplication,
-                      ),
-              ),
-              const TextSpan(text: ' & '),
-              TextSpan(
-                text: 'Privacy Policy',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.accent,
-                ),
-                recognizer: TapGestureRecognizer()
-                  ..onTap = () => launchUrl(
-                        Uri.parse('https://icanbefitter.vercel.app'),
-                        mode: LaunchMode.externalApplication,
-                      ),
-              ),
-            ],
           ),
         ),
+        if (_showReferralField) ...[
+          const SizedBox(height: 10),
+          _buildTextField(
+            controller: _referralController,
+            hintText: 'Enter referral code (e.g. AVYA-XXXX1234)',
+            prefixIcon: Icons.card_giftcard,
+            maxLength: 20,
+          ),
+        ],
+
         const SizedBox(height: 40),
       ],
     );
@@ -554,12 +644,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     Widget? suffixIcon,
     bool obscureText = false,
     String? Function(String?)? validator,
+    int? maxLength,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
+      maxLength: maxLength,
       style: AppTypography.bodyL.copyWith(color: AppColors.textPrimary),
       cursorColor: AppColors.accent,
       decoration: InputDecoration(

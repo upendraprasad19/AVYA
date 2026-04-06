@@ -20,9 +20,9 @@ class AiBreakdownCard extends ConsumerWidget {
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.1),
+          color: Colors.red.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: Colors.red.withOpacity(0.3)),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [

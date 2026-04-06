@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
-import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import '../providers/train_provider.dart';
 
 class StatsGrid extends ConsumerWidget {

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -81,6 +82,7 @@ Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
 
 /// Estimates nutrition for a meal description when AI analysis fails.
 /// Uses simple keyword matching to classify meal type.
+// ignore: unused_element
 AiBreakdownData _estimateMealNutrition(String text) {
   final lower = text.toLowerCase();
 
@@ -582,15 +584,17 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         return;
       }
     } catch (e) {
+      debugPrint('[NutritionProvider.analyseText] error: $e');
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
-                          msg.contains('unauthorized') || msg.contains('jwt');
+                          msg.contains('unauthorized') || msg.contains('jwt') ||
+                          msg.contains('no active session');
       state = AiBreakdownData(
         mealName: text,
         totalKcal: 0,
         items: [],
         error: isAuthError
-            ? 'Session expired. Please sign out and sign in again.'
+            ? 'Session expired. Please restart the app or sign out and sign in again.'
             : 'AI analysis failed. Please check your connection and try again.',
       );
       return;
@@ -894,6 +898,7 @@ class CustomFoodNotifier extends Notifier<void> {
     double fiberPer100g = 0,
     String? servingDesc,
     double? servingG,
+    bool submittedToDb = false,
   }) async {
     final now = DateTime.now();
     final id = 'custom_food_${now.millisecondsSinceEpoch}';
@@ -915,6 +920,8 @@ class CustomFoodNotifier extends Notifier<void> {
       'fat_std': (fatPer100g * factor).round(),
       'times_logged': 0,
       'is_custom': true,
+      'submitted_to_db': submittedToDb,
+      'approved': false,
       'created_at': now.toIso8601String(),
     };
 

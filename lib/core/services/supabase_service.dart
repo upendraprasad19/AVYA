@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -66,6 +67,47 @@ class SupabaseService {
     return currentUser != null;
   }
 
+  /// Fetches or generates a referral code for the current user.
+  /// Returns the code string, or null on failure.
+  Future<String?> getOrCreateReferralCode() async {
+    final userId = currentUser?.id;
+    if (userId == null) return null;
+
+    // Check for existing code
+    final rows = await client
+        .from('referral_codes')
+        .select('code')
+        .eq('user_id', userId)
+        .limit(1);
+
+    if (rows.isNotEmpty) return rows.first['code'] as String?;
+
+    // Generate new code with retry for collisions
+    final profile = client.auth.currentUser?.userMetadata;
+    final name = (profile?['full_name'] as String?) ?? 'USER';
+    final prefix = name.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
+    final shortPrefix = prefix.length >= 4 ? prefix.substring(0, 4) : prefix.padRight(4, 'X');
+
+    for (int attempt = 0; attempt < 5; attempt++) {
+      final seed = DateTime.now().microsecondsSinceEpoch + attempt * 1000;
+      final random = (1000 + seed % 9000).toString();
+      final candidate = 'AVYA-$shortPrefix$random';
+      try {
+        await client.from('referral_codes').insert({
+          'user_id': userId,
+          'code': candidate,
+        });
+        return candidate;
+      } catch (e) {
+        if (attempt == 4) {
+          debugPrint('[SupabaseService.getOrCreateReferralCode] $e');
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
   /// Shortcut to invoke a Supabase Edge Function by [name].
   Future<FunctionResponse> callFunction(
     String name, {
@@ -75,8 +117,15 @@ class SupabaseService {
     // Ensure JWT is fresh before calling edge functions
     try {
       await client.auth.refreshSession();
-    } catch (_) {
-      // Refresh failed — proceed anyway, the invoke will surface the auth error
+    } catch (e) {
+      debugPrint('[SupabaseService.callFunction] refreshSession failed: $e');
+      // Check if we still have a valid session — it may not have expired yet
+      final session = client.auth.currentSession;
+      if (session == null) {
+        throw Exception('No active session. Please sign in again.');
+      }
+      // Session exists but refresh failed — proceed with existing token.
+      // The token may still be valid within its JWT expiry window.
     }
 
     return client.functions.invoke(

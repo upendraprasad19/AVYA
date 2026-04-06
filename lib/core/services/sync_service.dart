@@ -62,6 +62,9 @@ class SyncService {
       // Push any pending custom items immediately.
       await _syncCustomItems();
 
+      // Pull approved community foods/exercises.
+      await syncCommunityItems();
+
       // PRO users: subscribe to realtime for instant Telegram sync.
       if (SubscriptionService.instance.isPro()) {
         subscribeToRealtimeSync();
@@ -125,6 +128,9 @@ class SyncService {
         _syncStreaks(userId),
         _syncUserProfile(userId),
         _syncUrineColorLogs(userId),
+        _syncWaterLogs(userId),
+        _syncWorkoutPlan(userId),
+        _syncUserProgress(userId),
       ]);
 
       await _setTimestamp(_lastFullSyncKey);
@@ -197,6 +203,10 @@ class SyncService {
         _restoreMeasurements(userId, since),
         _restoreUserProfile(userId),
         _restoreUserProgress(userId),
+        _restoreWorkoutPlan(userId),
+        _restoreWaterLogs(userId, since),
+        _restoreSleepLogs(userId, since),
+        _restoreStreaks(userId),
       ]);
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
@@ -461,7 +471,7 @@ class SyncService {
     final logs = healthBox.get('weight_logs');
     if (logs == null) return;
 
-    final items = (logs as List).cast<Map>();
+    final items = (logs as List).whereType<Map>();
     for (final log in items) {
       await _supabase.client.from('weight_logs').upsert({
         ...Map<String, dynamic>.from(log),
@@ -475,7 +485,7 @@ class SyncService {
     final logs = healthBox.get('body_measurements');
     if (logs == null) return;
 
-    final items = (logs as List).cast<Map>();
+    final items = (logs as List).whereType<Map>();
     for (final log in items) {
       await _supabase.client.from('body_measurements').upsert({
         ...Map<String, dynamic>.from(log),
@@ -489,7 +499,7 @@ class SyncService {
     final logs = healthBox.get('sleep_logs');
     if (logs == null) return;
 
-    final items = (logs as List).cast<Map>();
+    final items = (logs as List).whereType<Map>();
     for (final log in items) {
       await _supabase.client.from('sleep_logs').upsert({
         ...Map<String, dynamic>.from(log),
@@ -499,6 +509,8 @@ class SyncService {
   }
 
   Future<void> _syncUrineColorLogs(String userId) async {
+    // Urine color data is now merged into the water_logs table
+    // (health_metrics table does not exist).
     final healthBox = _hive.healthBox;
     for (final key in healthBox.keys) {
       if (key is! String || !key.startsWith('urine_color_')) continue;
@@ -508,17 +520,37 @@ class SyncService {
       final date = log['date'] as String?;
       if (date == null) continue;
       try {
-        await _supabase.client.from('health_metrics').upsert({
+        await _supabase.client.from('water_logs').upsert({
           'user_id': userId,
           'date': date,
-          'metric_type': 'urine_color',
-          'value': (log['index'] as int?)?.toDouble() ?? -1,
-          'label': log['label'] ?? 'unknown',
-          'recorded_at': log['recorded_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id,date,metric_type');
+          'urine_color': (log['index'] as int?) ?? -1,
+          'urine_status': log['label'] ?? 'unknown',
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,date');
       } catch (e) {
-        // Table may not exist yet — skip silently.
         debugPrint('[SyncService._syncUrineColorLogs] $e');
+      }
+    }
+  }
+
+  Future<void> _syncWaterLogs(String userId) async {
+    final healthBox = _hive.healthBox;
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('water_ml_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! int) continue;
+      // Extract date from key: "water_ml_2026-04-06" → "2026-04-06"
+      final date = key.substring('water_ml_'.length);
+      if (date.isEmpty) continue;
+      try {
+        await _supabase.client.from('water_logs').upsert({
+          'user_id': userId,
+          'date': date,
+          'total_ml': raw,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,date');
+      } catch (e) {
+        debugPrint('[SyncService._syncWaterLogs] $e');
       }
     }
   }
@@ -528,7 +560,7 @@ class SyncService {
     final logs = healthBox.get('streaks');
     if (logs == null) return;
 
-    final items = (logs as List).cast<Map>();
+    final items = (logs as List).whereType<Map>();
     for (final log in items) {
       await _supabase.client.from('streaks').upsert({
         ...Map<String, dynamic>.from(log),
@@ -620,7 +652,8 @@ class SyncService {
           .select()
           .eq('user_id', userId)
           .gte('created_at', since)
-          .order('created_at');
+          .order('created_at')
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -654,7 +687,8 @@ class SyncService {
           .select()
           .eq('user_id', userId)
           .gte('completed_at', since)
-          .order('completed_at');
+          .order('completed_at')
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -721,7 +755,8 @@ class SyncService {
           .select()
           .eq('user_id', userId)
           .gte('completed_at', since)
-          .order('scheduled_date');
+          .order('scheduled_date')
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -825,7 +860,8 @@ class SyncService {
           .from('weight_logs')
           .select()
           .eq('user_id', userId)
-          .gte('created_at', since);
+          .gte('created_at', since)
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -851,7 +887,8 @@ class SyncService {
           .from('nutrition_logs')
           .select()
           .eq('user_id', userId)
-          .gte('created_at', since);
+          .gte('created_at', since)
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -873,7 +910,8 @@ class SyncService {
           .from('body_measurements')
           .select()
           .eq('user_id', userId)
-          .gte('created_at', since);
+          .gte('created_at', since)
+          .limit(5000);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -927,6 +965,279 @@ class SyncService {
       await _hive.userBox.put('progress', map);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProgress] $e');
+    }
+  }
+
+  // ── Restore: Water, Sleep, Streaks ──────────────────────────
+
+  Future<void> _restoreWaterLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('water_logs')
+          .select()
+          .eq('user_id', userId)
+          .gte('date', since.substring(0, 10)) // date is a DATE column, use date part only
+          .limit(5000);
+
+      final healthBox = _hive.healthBox;
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['date'] as String? ?? '';
+        if (date.isEmpty) continue;
+        final key = 'water_ml_$date';
+        final totalMl = map['total_ml'] as int?;
+        if (totalMl != null && totalMl > 0) {
+          // Only restore if local doesn't already have data for this date
+          final existing = healthBox.get(key);
+          if (existing == null || existing == 0) {
+            await healthBox.put(key, totalMl);
+          }
+        }
+        // Restore urine color if present
+        final urineColor = map['urine_color'] as int?;
+        if (urineColor != null && urineColor >= 0) {
+          final urineKey = 'urine_color_$date';
+          if (healthBox.get(urineKey) == null) {
+            await healthBox.put(urineKey, {
+              'date': date,
+              'index': urineColor,
+              'label': map['urine_status'] ?? 'unknown',
+              'source': 'cloud_restore',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreWaterLogs] $e');
+    }
+  }
+
+  Future<void> _restoreSleepLogs(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('sleep_logs')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since)
+          .limit(5000);
+
+      if (rows.isEmpty) return;
+
+      final healthBox = _hive.healthBox;
+      // Get existing local sleep logs
+      final existingRaw = healthBox.get('sleep_logs');
+      final existing = existingRaw is List ? List<Map>.from(existingRaw) : <Map>[];
+      final existingIds = existing
+          .map((e) => e['id']?.toString() ?? '')
+          .toSet();
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id']?.toString() ?? '';
+        if (id.isNotEmpty && !existingIds.contains(id)) {
+          existing.add({...map, 'source': 'cloud_restore'});
+        }
+      }
+
+      await healthBox.put('sleep_logs', existing);
+    } catch (e) {
+      debugPrint('[SyncService._restoreSleepLogs] $e');
+    }
+  }
+
+  Future<void> _restoreStreaks(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('streaks')
+          .select()
+          .eq('user_id', userId)
+          .order('week_start', ascending: false)
+          .limit(52);
+
+      if (rows.isEmpty) return;
+
+      final healthBox = _hive.healthBox;
+      final existingRaw = healthBox.get('streaks');
+      final existing = existingRaw is List ? List<Map>.from(existingRaw) : <Map>[];
+      final existingIds = existing
+          .map((e) => e['id']?.toString() ?? '')
+          .toSet();
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id']?.toString() ?? '';
+        if (id.isNotEmpty && !existingIds.contains(id)) {
+          existing.add({...map, 'source': 'cloud_restore'});
+        }
+      }
+
+      await healthBox.put('streaks', existing);
+    } catch (e) {
+      debugPrint('[SyncService._restoreStreaks] $e');
+    }
+  }
+
+  // ── Sync: Workout Plan + User Progress ─────────────────────
+
+  /// Pushes the current workout plan (plan JSON + schedule entries + dates)
+  /// to Supabase user_progress.plan_json so it can be restored on new device.
+  Future<void> _syncWorkoutPlan(String userId) async {
+    try {
+      final workoutBox = _hive.workoutBox;
+      final configBox = _hive.configBox;
+
+      final plan = workoutBox.get('current_plan');
+      if (plan == null) return;
+
+      final planStart = configBox.get('plan_start_date');
+      final planEnd = configBox.get('plan_end_date');
+
+      // Collect schedule entries (schedule_YYYY-MM-DD)
+      final schedules = <String, dynamic>{};
+      for (final key in workoutBox.keys) {
+        if (key is String && key.startsWith('schedule_')) {
+          final val = workoutBox.get(key);
+          if (val != null) {
+            schedules[key] = val is Map ? Map<String, dynamic>.from(val) : val;
+          }
+        }
+      }
+
+      final planBundle = {
+        'plan': plan is Map ? Map<String, dynamic>.from(plan) : plan,
+        'plan_start_date': planStart,
+        'plan_end_date': planEnd,
+        'schedules': schedules,
+        'synced_at': DateTime.now().toIso8601String(),
+      };
+
+      await _supabase.client.from('user_progress').upsert({
+        'user_id': userId,
+        'plan_json': planBundle,
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('[SyncService._syncWorkoutPlan] $e');
+    }
+  }
+
+  /// Pushes local user progress (phase, week, streaks, etc.) to Supabase.
+  Future<void> _syncUserProgress(String userId) async {
+    try {
+      final progress = _hive.userBox.get('progress');
+      if (progress == null) return;
+
+      final p = Map<String, dynamic>.from(progress as Map);
+
+      await _supabase.client.from('user_progress').upsert({
+        'user_id': userId,
+        if (p['current_phase'] != null) 'current_phase': p['current_phase'],
+        if (p['current_week'] != null) 'current_week': p['current_week'],
+        if (p['phase_started_at'] != null) 'phase_started_at': p['phase_started_at'],
+        if (p['plan_generated_at'] != null) 'plan_generated_at': p['plan_generated_at'],
+        if (p['total_workouts_done'] != null) 'total_workouts_done': p['total_workouts_done'],
+        if (p['current_streak_weeks'] != null) 'current_streak_weeks': p['current_streak_weeks'],
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('[SyncService._syncUserProgress] $e');
+    }
+  }
+
+  /// Restores workout plan from Supabase plan_json on new device.
+  Future<void> _restoreWorkoutPlan(String userId) async {
+    try {
+      // Only restore if local plan is missing
+      if (_hive.workoutBox.get('current_plan') != null) return;
+
+      final rows = await _supabase.client
+          .from('user_progress')
+          .select('plan_json')
+          .eq('user_id', userId)
+          .limit(1);
+
+      if (rows.isEmpty) return;
+      final planJson = rows.first['plan_json'];
+      if (planJson == null) return;
+
+      final bundle = Map<String, dynamic>.from(planJson as Map);
+      final plan = bundle['plan'];
+      final planStart = bundle['plan_start_date'];
+      final planEnd = bundle['plan_end_date'];
+      final schedules = bundle['schedules'];
+
+      if (plan != null) {
+        await _hive.workoutBox.put('current_plan', plan is Map ? Map<String, dynamic>.from(plan) : plan);
+      }
+      if (planStart != null) {
+        await _hive.configBox.put('plan_start_date', planStart);
+      }
+      if (planEnd != null) {
+        await _hive.configBox.put('plan_end_date', planEnd);
+      }
+      if (schedules != null && schedules is Map) {
+        for (final entry in schedules.entries) {
+          final key = entry.key.toString();
+          if (key.startsWith('schedule_')) {
+            await _hive.workoutBox.put(key, entry.value is Map ? Map<String, dynamic>.from(entry.value as Map) : entry.value);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreWorkoutPlan] $e');
+    }
+  }
+
+  // ── Sync: Community Items (approved by 10+ users) ─────────
+
+  /// Pulls approved community foods/exercises from Supabase into local Hive.
+  /// Called on app launch to keep the local database growing.
+  Future<void> syncCommunityItems() async {
+    try {
+      final lastSync = _hive.syncBox.get('last_community_sync');
+      final sinceDate = lastSync != null
+          ? DateTime.tryParse(lastSync.toString())?.toIso8601String()
+          : '2020-01-01T00:00:00Z';
+
+      // Pull approved community foods
+      final foods = await _supabase.client
+          .from('user_custom_foods')
+          .select()
+          .eq('approved', true)
+          .gte('created_at', sinceDate ?? '2020-01-01T00:00:00Z');
+
+      if (foods.isNotEmpty) {
+        final foodBox = _hive.foodBox;
+        for (final row in foods) {
+          final map = Map<String, dynamic>.from(row as Map);
+          final id = map['id']?.toString();
+          if (id != null && id.isNotEmpty && foodBox.get(id) == null) {
+            map['source'] = 'community';
+            foodBox.put(id, map);
+          }
+        }
+      }
+
+      // Pull approved community exercises
+      final exercises = await _supabase.client
+          .from('user_custom_exercises')
+          .select()
+          .eq('approved_for_library', true)
+          .gte('created_at', sinceDate ?? '2020-01-01T00:00:00Z');
+
+      if (exercises.isNotEmpty) {
+        final exerciseBox = _hive.exerciseBox;
+        for (final row in exercises) {
+          final map = Map<String, dynamic>.from(row as Map);
+          final id = map['id']?.toString();
+          if (id != null && id.isNotEmpty && exerciseBox.get(id) == null) {
+            map['source'] = 'community';
+            exerciseBox.put(id, map);
+          }
+        }
+      }
+
+      await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());
+    } catch (e) {
+      debugPrint('[SyncService.syncCommunityItems] $e');
     }
   }
 

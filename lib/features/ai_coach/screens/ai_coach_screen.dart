@@ -665,9 +665,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.08),
+                        color: AppColors.accent.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,

@@ -2197,6 +2197,7 @@ class _CreateCustomExerciseSheetState
 
   String _loggingType = 'weight_reps';
   String _category = 'Push';
+  bool _shareWithCommunity = false;
 
   static const _loggingTypes = [
     ('weight_reps', 'Weight + Reps'),
@@ -2233,6 +2234,8 @@ class _CreateCustomExerciseSheetState
       'equipment_needed': <String>[],
       'is_custom': true,
       'type': 'exercise',
+      'submitted_to_library': _shareWithCommunity,
+      'approved_for_library': false,
     };
 
     HiveService.instance.customBox.put(key, exercise);
@@ -2509,7 +2512,26 @@ class _CreateCustomExerciseSheetState
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+
+          // Share with community toggle
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Share with AVYA community',
+                  style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ),
+              Switch(
+                value: _shareWithCommunity,
+                onChanged: (v) => setState(() => _shareWithCommunity = v),
+                activeThumbColor: AppColors.accent,
+                activeTrackColor: AppColors.accent.withValues(alpha: 0.3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
 
           // Save button
           SizedBox(

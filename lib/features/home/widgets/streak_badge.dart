@@ -9,8 +9,9 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 /// to draw attention when the streak is non-zero.
 class StreakBadge extends StatefulWidget {
   final int days;
+  final int freezesAvailable;
 
-  const StreakBadge({super.key, required this.days});
+  const StreakBadge({super.key, required this.days, this.freezesAvailable = 0});
 
   @override
   State<StreakBadge> createState() => _StreakBadgeState();
@@ -99,6 +100,29 @@ class _StreakBadgeState extends State<StreakBadge>
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: AppColors.accent,
+              ),
+            ),
+            // Streak freeze indicator
+            const SizedBox(width: 8),
+            Text(
+              '\u{2744}\uFE0F', // ❄️
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.freezesAvailable > 0
+                    ? AppColors.blue
+                    : AppColors.textDisabled,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '${widget.freezesAvailable}',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: widget.freezesAvailable > 0
+                    ? AppColors.blue
+                    : AppColors.textDisabled,
               ),
             ),
           ],

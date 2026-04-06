@@ -402,7 +402,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     required void Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: options.containsKey(value) ? value : options.keys.first,
+      initialValue: options.containsKey(value) ? value : options.keys.first,
       items: options.entries
           .map((e) => DropdownMenuItem(
                 value: e.key,

@@ -77,7 +77,7 @@ class SeedService {
     final needExercises = !exercisesSeeded;
     final needFoods = !foodsSeeded;
 
-    final results = await Future.wait(
+    await Future.wait(
       [
         if (needExercises) _seedExercises(),
         if (needFoods) _seedFoods(),

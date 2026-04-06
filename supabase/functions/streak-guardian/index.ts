@@ -117,11 +117,56 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // 5. Send push notification.
+      // 5. Build a contextual message based on streak + snapshot data.
+      const snap = snapshot?.snapshot_json ?? {};
+      const streakDays = (snap?.current_streak_days as number) ?? streakWeeks * 7;
+      const recentPR = snap?.recent_pr_exercise as string | null;
+      const weight = snap?.current_weight_kg as number | null;
+      const targetWeight = snap?.target_weight_kg as number | null;
+
+      let title = "Don't break your streak!";
+      let message = `You haven't logged today. ${streakWeeks}-week streak on the line!`;
+
+      // Milestone-based messages
+      if (streakDays === 7) {
+        title = "1 week strong!";
+        message = "You've hit 7 days straight — that's the hardest week done. Don't stop now!";
+      } else if (streakDays === 14) {
+        title = "2 weeks! You're building a habit.";
+        message = "14 days of consistency. Most people quit by now — you didn't. Keep going!";
+      } else if (streakDays === 30) {
+        title = "30-day warrior!";
+        message = "A full month of training. You're in the top 5% of users. Log today to keep it alive!";
+      } else if (streakDays === 50) {
+        title = "50 days. Legendary.";
+        message = "Half a century of consistency. This streak is worth protecting — don't miss today!";
+      } else if (streakDays === 100) {
+        title = "100-DAY STREAK!";
+        message = "Triple digits. You're officially unstoppable. One workout away from 101!";
+      } else if (streakDays % 10 === 0 && streakDays > 10) {
+        title = `${streakDays}-day milestone!`;
+        message = `${streakDays} days of showing up. That's elite. Don't let today be the one you miss.`;
+      } else if (recentPR) {
+        title = "You hit a PR recently!";
+        message = `New best on ${recentPR} this week. Momentum is real — keep your ${streakWeeks}-week streak alive!`;
+      } else if (weight && targetWeight && Math.abs(weight - targetWeight) < 2) {
+        title = "Almost at your goal weight!";
+        message = `You're within 2kg of your target. Don't miss today — every session counts now.`;
+      } else {
+        // Varied generic messages
+        const variants = [
+          `It's getting late. Your ${streakWeeks}-week streak is waiting for today's workout.`,
+          `${streakDays} days of consistency so far. One workout keeps it alive.`,
+          `You didn't come this far to only come this far. ${streakWeeks} weeks and counting!`,
+          `Your future self will thank you. Log a workout before midnight to keep your streak.`,
+        ];
+        message = variants[streakDays % variants.length];
+      }
+
       const ok = await sendPushNotification({
         userId,
-        title: "Don't break your streak!",
-        message: `It's late. You haven't logged today. Don't break your ${streakWeeks}-week streak.`,
+        title,
+        message,
         screen: "/train",
       });
 

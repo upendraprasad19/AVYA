@@ -70,7 +70,7 @@ class _WeekSelectorState extends State<WeekSelector> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: widget.totalWeeks,
-        separatorBuilder: (_, __) => const SizedBox(width: _tabSpacing),
+        separatorBuilder: (_, index) => const SizedBox(width: _tabSpacing),
         itemBuilder: (context, index) {
           final week = index + 1;
           final isSelected = week == widget.selectedWeek;

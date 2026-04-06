@@ -22,6 +22,7 @@ import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
 import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
@@ -42,6 +43,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Brief loading shimmer on first build before Hive data is read.
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
+      // Check if a streak freeze was just consumed and notify the user
+      _checkStreakFreezeUsed();
+    });
+  }
+
+  void _checkStreakFreezeUsed() {
+    final progress = UserRepository.instance.getProgress();
+    if (progress == null) return;
+    final justUsed = progress['streak_freeze_just_used'] as bool? ?? false;
+    if (!justUsed) return;
+    final remaining = (progress['streak_freeze_remaining_after_use'] as int?) ?? 0;
+    // Clear the flag
+    UserRepository.instance.updateProgress({'streak_freeze_just_used': false});
+    // Show toast
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'Streak Freeze used! $remaining remaining this week.',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: AppColors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ));
     });
   }
 
@@ -209,7 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Text(
+                      errorBuilder: (_, err, stack) => Text(
                         initial,
                         style: GoogleFonts.getFont(
                           'DM Sans',
@@ -258,8 +285,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
-          // Streak badge
-          StreakBadge(days: streak),
+          // Streak badge with freeze count
+          StreakBadge(
+            days: streak,
+            freezesAvailable: ref.watch(streakFreezeProvider),
+          ),
         ],
       ),
     );
@@ -290,6 +320,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return StreakWarningBanner(
       streakDays: streak,
       workoutsRemaining: workoutsRemaining,
+      freezesAvailable: ref.watch(streakFreezeProvider),
       onTrainNow: () => context.go('/train'),
     );
   }

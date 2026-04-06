@@ -1269,10 +1269,24 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     );
     final lastWorkoutDate = (progress['last_workout_date'] as String?) ?? '';
     int streakDays = (progress['current_streak_days'] as int?) ?? 0;
+    int freezesAvailable = (progress['streak_freezes_available'] as int?) ?? 1;
+    final freezeUsedDates = List<String>.from(
+      (progress['streak_freeze_used_dates'] as List?) ?? [],
+    );
     if (lastWorkoutDate == dateStr) {
       // Same day double-log — already counted, do nothing
     } else if (lastWorkoutDate == yesterdayStr) {
       streakDays += 1;  // Consecutive day — keep the streak going
+    } else if (streakDays > 0 && freezesAvailable > 0 && lastWorkoutDate.isNotEmpty) {
+      // Gap detected but user has a streak freeze — apply it
+      freezesAvailable -= 1;
+      freezeUsedDates.add(yesterdayStr); // Mark the missed day as frozen
+      streakDays += 1; // Continue the streak through the freeze
+      // Flag for UI to show "Streak Freeze used" toast
+      UserRepository.instance.updateProgress({
+        'streak_freeze_just_used': true,
+        'streak_freeze_remaining_after_use': freezesAvailable,
+      });
     } else {
       streakDays = 1;   // Gap or first workout ever — start at 1
     }
@@ -1296,6 +1310,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       'last_workout_date': dateStr,
       'current_streak_weeks': streakWeeks,
       'last_streak_week': currentWeekNum,
+      'streak_freezes_available': freezesAvailable,
+      'streak_freeze_used_dates': freezeUsedDates,
     });
 
     state = state.copyWith(isComplete: true, isSaved: true, detectedPRs: prDescriptions);

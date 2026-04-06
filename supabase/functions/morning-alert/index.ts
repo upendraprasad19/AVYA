@@ -48,15 +48,68 @@ function getYesterdayIST(): string {
 
 /**
  * Generate a FREE template-based morning alert (no AI cost).
+ * Enhanced with milestone celebrations, PR shoutouts, and weight progress.
  */
 function generateFreeAlert(
   name: string,
   snapshotJson: Record<string, unknown> | null,
 ): string {
   const firstName = name?.split(" ")[0] ?? "Champion";
-  const streak = snapshotJson?.current_streak_weeks ?? 0;
-  const todayWorkout = snapshotJson?.today_workout_name ?? null;
+  const snap = snapshotJson ?? {};
+  const streakWeeks = (snap.current_streak_weeks as number) ?? 0;
+  const streakDays = (snap.current_streak_days as number) ?? streakWeeks * 7;
+  const todayWorkout = snap.today_workout_name as string | null;
+  const totalWorkouts = (snap.total_workouts_done as number) ?? 0;
+  const recentPR = snap.recent_pr_exercise as string | null;
+  const recentPRWeight = snap.recent_pr_weight as number | null;
+  const weight = snap.current_weight_kg as number | null;
+  const targetWeight = snap.target_weight_kg as number | null;
+  const yesterdayCalories = snap.yesterday_calories as number | null;
+  const calorieTarget = snap.daily_calorie_target as number | null;
 
+  // Check for milestone events first — these take priority
+  // Streak milestones
+  if (streakDays === 7) {
+    return `${firstName}, you just hit 7 DAYS straight! First week complete — that's the hardest one. ${todayWorkout ? `${todayWorkout} is up today.` : "Keep the momentum!"} Let's make it 14!`;
+  }
+  if (streakDays === 30) {
+    return `30 DAYS, ${firstName}! A full month of consistency. You're in the top 5% of AVYA users. ${todayWorkout ? `${todayWorkout} today — let's go!` : "What a milestone!"}`;
+  }
+  if (streakDays === 50) {
+    return `FIFTY DAYS, ${firstName}! Half a century of showing up for yourself. ${todayWorkout ? `${todayWorkout} is scheduled.` : "Legendary consistency."} You're built different.`;
+  }
+  if (streakDays === 100) {
+    return `${firstName}, 100 DAYS! Triple digits. You've done what 99% of people only dream about. ${todayWorkout ? `Day 101 starts with ${todayWorkout}.` : "Unstoppable."}`;
+  }
+
+  // Workout count milestones
+  if (totalWorkouts === 10) {
+    return `Good morning ${firstName}! You've completed 10 workouts total — double digits! ${todayWorkout ? `${todayWorkout} is up next.` : "Keep building!"} Every session counts.`;
+  }
+  if (totalWorkouts === 50) {
+    return `${firstName}, 50 workouts logged! That's serious dedication. ${todayWorkout ? `${todayWorkout} today.` : "You're crushing it."} Here's to the next 50!`;
+  }
+  if (totalWorkouts === 100) {
+    return `100 WORKOUTS, ${firstName}! You've put in the work and it shows. ${todayWorkout ? `${todayWorkout} makes it 101.` : "Triple-digit warrior!"} Incredible.`;
+  }
+
+  // PR celebration
+  if (recentPR) {
+    const prDetail = recentPRWeight ? ` (${recentPRWeight}kg)` : "";
+    return `Good morning ${firstName}! You hit a new PR on ${recentPR}${prDetail} recently! Momentum is real. ${todayWorkout ? `${todayWorkout} today — keep pushing.` : "Ride that wave!"}`;
+  }
+
+  // Weight milestone — close to target
+  if (weight && targetWeight && Math.abs(weight - targetWeight) < 2) {
+    return `${firstName}, you're within 2kg of your goal weight! So close. ${todayWorkout ? `${todayWorkout} is scheduled today.` : "Every session brings you closer."} Keep going!`;
+  }
+
+  // Yesterday's nutrition win
+  if (yesterdayCalories && calorieTarget && Math.abs(yesterdayCalories - calorieTarget) < 100) {
+    return `Good morning ${firstName}! Yesterday you nailed your calorie target (${yesterdayCalories} kcal). ${todayWorkout ? `${todayWorkout} today.` : "Keep that precision going!"} Consistency wins.`;
+  }
+
+  // Default: standard greeting with workout + streak + motivational line
   let message = `Good morning ${firstName}!`;
 
   if (todayWorkout) {
@@ -65,11 +118,12 @@ function generateFreeAlert(
     message += ` Ready to crush your goals today?`;
   }
 
-  if (typeof streak === "number" && streak > 0) {
-    message += ` ${streak} week streak going strong!`;
+  if (streakDays > 0) {
+    message += ` ${streakDays}-day streak going strong!`;
+  } else if (streakWeeks > 0) {
+    message += ` ${streakWeeks} week streak going strong!`;
   }
 
-  // Add a rotating motivational line based on day of week
   const dayOfWeek = new Date().getDay();
   const motivationalLines = [
     "Make today count!",
@@ -94,9 +148,11 @@ async function generateProAlert(
   snapshotJson: Record<string, unknown>,
 ): Promise<string | null> {
   const systemPrompt =
-    "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
+    "You are AVYA Fit's morning coach. Generate a short, personalised morning alert " +
     "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
-    "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
+    "today's scheduled workout name, weight lifted, streak day count, yesterday's calories vs target, " +
+    "recent PRs (exercise name + weight), current vs target weight progress, total workouts completed. " +
+    "Celebrate milestones (7/14/30/50/100 day streaks, PR records, weight goals within reach). " +
     "Be encouraging, specific, and actionable. Use the user's first name. " +
     "Output ONLY the alert message, no preamble or formatting.";
 

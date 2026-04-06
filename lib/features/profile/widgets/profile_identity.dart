@@ -31,7 +31,7 @@ class ProfileIdentity extends StatelessWidget {
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black87,
-        pageBuilder: (_, __, ___) => GestureDetector(
+        pageBuilder: (_, anim, secondAnim) => GestureDetector(
           onTap: () => Navigator.of(context).pop(),
           child: Scaffold(
             backgroundColor: Colors.black87,
@@ -98,13 +98,13 @@ class ProfileIdentity extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: 120,
-                                placeholder: (_, __) => Container(
+                                placeholder: (_, url) => Container(
                                   color: AppColors.input,
                                   child: const Center(
                                     child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textSecondary)),
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => Container(
+                                errorWidget: (_, url, err) => Container(
                                   decoration: const BoxDecoration(
                                     gradient: LinearGradient(
                                       begin: Alignment.topLeft,
@@ -237,11 +237,43 @@ class ProfileIdentity extends StatelessWidget {
       height: 62,
       child: Stack(
         children: [
-          // Avatar circle - tap to view (if exists) or replace (if null)
+          // Avatar circle - tap to show options (view/replace) or replace directly
           GestureDetector(
-            onTap: avatarUrl != null && avatarUrl!.isNotEmpty
-                ? () => _openFullScreen(context, avatarUrl!, 'avatar_hero')
-                : onReplaceAvatar,
+            onTap: () {
+              if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: AppColors.card,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                  ),
+                  builder: (_) => SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(height: 12),
+                          ListTile(
+                            leading: const Icon(Icons.fullscreen, color: AppColors.accent),
+                            title: Text('View Photo', style: GoogleFonts.getFont('DM Sans', fontSize: 14, color: AppColors.textPrimary)),
+                            onTap: () { Navigator.pop(context); _openFullScreen(context, avatarUrl!, 'avatar_hero'); },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.camera_alt, color: AppColors.accent),
+                            title: Text('Change Photo', style: GoogleFonts.getFont('DM Sans', fontSize: 14, color: AppColors.textPrimary)),
+                            onTap: () { Navigator.pop(context); onReplaceAvatar(); },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              } else {
+                onReplaceAvatar();
+              }
+            },
             child: Container(
               width: 62,
               height: 62,
@@ -261,10 +293,10 @@ class ProfileIdentity extends StatelessWidget {
                           fit: BoxFit.cover,
                           width: 62,
                           height: 62,
-                          placeholder: (_, __) => const Center(
+                          placeholder: (_, url) => const Center(
                             child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
                           ),
-                          errorWidget: (_, __, ___) => _buildInitialAvatar(),
+                          errorWidget: (_, url, err) => _buildInitialAvatar(),
                         ),
                       ),
                     )
@@ -272,15 +304,16 @@ class ProfileIdentity extends StatelessWidget {
             ),
           ),
 
-          // Camera button - always triggers replace
+          // Camera button - always triggers replace (larger touch target)
           Positioned(
-            bottom: 0,
-            right: 0,
+            bottom: -2,
+            right: -2,
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: onReplaceAvatar,
               child: Container(
-                width: 28,
-                height: 28,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: AppColors.accent,
                   shape: BoxShape.circle,
@@ -288,7 +321,7 @@ class ProfileIdentity extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.camera_alt,
-                  size: 13,
+                  size: 15,
                   color: Colors.black,
                 ),
               ),

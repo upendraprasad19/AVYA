@@ -3,6 +3,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
@@ -179,6 +180,45 @@ class StreakNotifier extends Notifier<int> {
 
 final streakProvider =
     NotifierProvider<StreakNotifier, int>(StreakNotifier.new);
+
+// ── Streak Freeze ────────────────────────────────────────────────
+
+class StreakFreezeNotifier extends Notifier<int> {
+  @override
+  int build() {
+    _refillIfNewWeek();
+    final progress = UserRepository.instance.getProgress();
+    return (progress?['streak_freezes_available'] as int?) ?? 1;
+  }
+
+  /// Refills streak freezes weekly. Runs on any app launch — checks if the
+  /// most recent Monday has passed since last refill. FREE=1, PRO=3.
+  void _refillIfNewWeek() {
+    final now = DateTime.now();
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final lastRefill = progress['streak_freezes_last_refill'] as String?;
+
+    // Calculate this week's Monday (00:00)
+    final daysSinceMonday = (now.weekday - DateTime.monday) % 7;
+    final thisMonday = DateTime(now.year, now.month, now.day - daysSinceMonday);
+    final thisMondayStr = thisMonday.toIso8601String().substring(0, 10);
+
+    // Already refilled for this week's Monday
+    if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) return;
+
+    final isPro = SubscriptionService.instance.isPro();
+    final maxFreezes = isPro ? 3 : 1;
+
+    UserRepository.instance.updateProgress({
+      'streak_freezes_available': maxFreezes,
+      'streak_freeze_used_dates': <String>[], // Reset weekly used dates
+      'streak_freezes_last_refill': thisMondayStr,
+    });
+  }
+}
+
+final streakFreezeProvider =
+    NotifierProvider<StreakFreezeNotifier, int>(StreakFreezeNotifier.new);
 
 // ── Today's Workout ──────────────────────────────────────────────
 

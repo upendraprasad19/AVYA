@@ -34,6 +34,8 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
   final _servingDescController = TextEditingController(text: '1 serving');
   final _servingGController = TextEditingController(text: '100');
 
+  bool _shareWithCommunity = false;
+
   bool get _isValid =>
       _nameController.text.trim().isNotEmpty &&
       (double.tryParse(_caloriesController.text) ?? 0) > 0;
@@ -188,6 +190,28 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
             ),
           ),
 
+          // Share with community toggle
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Share with AVYA community',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ),
+                Switch(
+                  value: _shareWithCommunity,
+                  onChanged: (v) => setState(() => _shareWithCommunity = v),
+                  activeThumbColor: AppColors.accent,
+                  activeTrackColor: AppColors.accent.withValues(alpha: 0.3),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+
           // Save button
           Padding(
             padding: EdgeInsets.fromLTRB(
@@ -295,6 +319,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
               ? null
               : _servingDescController.text.trim(),
           servingG: double.tryParse(_servingGController.text),
+          submittedToDb: _shareWithCommunity,
         );
 
     Navigator.of(context).pop();

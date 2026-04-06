@@ -951,7 +951,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...logRows,
-          if (viewCardButton != null) viewCardButton,
+          ?viewCardButton,
         ],
       ),
     );

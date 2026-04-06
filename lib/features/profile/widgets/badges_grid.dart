@@ -21,10 +21,19 @@ class BadgesGrid extends StatefulWidget {
 
 class _BadgesGridState extends State<BadgesGrid> {
   bool _showLocked = false;
+  late List<AchievementBadge> _allBadges;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure badges are checked on every profile view
+    BadgeService.instance.checkAll();
+    _allBadges = BadgeService.instance.getAllWithStatus();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final allBadges = BadgeService.instance.getAllWithStatus();
+    final allBadges = _allBadges;
     final unlocked = allBadges.where((b) => b.isUnlocked).toList();
     final locked = allBadges.where((b) => !b.isUnlocked).toList();
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -351,12 +352,16 @@ class SendMessageNotifier extends Notifier<bool> {
             );
       }
     } catch (e) {
+      debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
       final String errorMsg;
       if (errStr.contains('Failed host lookup') ||
           errStr.contains('Failed to fetch') ||
           errStr.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
+      } else if (errStr.contains('No active session') || errStr.contains('401') ||
+          errStr.contains('token') || errStr.contains('unauthorized') || errStr.contains('jwt')) {
+        errorMsg = 'Session expired. Please restart the app or sign out and sign in again.';
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
       } else if (errStr.contains('TRIAL_EXPIRED')) {
@@ -364,7 +369,7 @@ class SendMessageNotifier extends Notifier<bool> {
       } else if (errStr.contains('RATE_LIMITED')) {
         errorMsg = 'Daily message limit reached (15/day on free plan). Try again tomorrow or upgrade to PRO.';
       } else if (errStr.contains('FunctionException') || errStr.contains('502') || errStr.contains('503')) {
-        errorMsg = 'AI service is temporarily unavailable. Please try again in a moment.';
+        errorMsg = 'AI service is temporarily unavailable. Please restart the app and try again.';
       } else {
         errorMsg = 'Sorry, something went wrong. Please try again.';
       }

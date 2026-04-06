@@ -210,7 +210,7 @@ class PrSnapshot extends ConsumerWidget {
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: prs.length,
-                  separatorBuilder: (_, __) =>
+                  separatorBuilder: (_, index) =>
                       Container(height: 1, color: AppColors.border),
                   itemBuilder: (_, i) {
                     final pr = prs[i];
