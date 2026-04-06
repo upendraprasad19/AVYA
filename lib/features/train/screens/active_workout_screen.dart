@@ -1225,6 +1225,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         _distanceControllers[s].text = captured.distanceKm.toString();
       }
     }
+
+    // Pre-seed provider state with controller values so that the receipt card
+    // and exercise logger have correct data even if the user checks a set
+    // without editing the pre-filled weight/reps fields.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final n = _weightControllers.length;
+      for (int s = 0; s < n; s++) {
+        _captureSetValues(s);
+      }
+    });
   }
 
   /// Parse a reps string like "6-10" to its midpoint (8), or "10" to 10.

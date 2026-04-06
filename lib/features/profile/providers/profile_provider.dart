@@ -100,7 +100,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         maxHeight: 512,
         imageQuality: 85,
       );
-      if (picked == null) return const UploadOutcome(UploadResult.cancelled);
+      if (picked == null) {
+        debugPrint('[ProfileProvider.uploadAvatar] picker returned null — user cancelled or permission denied');
+        return const UploadOutcome(UploadResult.cancelled, errorMessage: 'No image selected. Check gallery permissions in Settings.');
+      }
 
       // Crop to square (circle preview)
       final cropped = await ImageCropper().cropImage(
@@ -122,7 +125,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
           ),
         ],
       );
-      if (cropped == null) return const UploadOutcome(UploadResult.cancelled);
+      if (cropped == null) {
+        debugPrint('[ProfileProvider.uploadAvatar] cropper returned null — user dismissed crop screen');
+        return const UploadOutcome(UploadResult.cancelled, errorMessage: 'Crop cancelled');
+      }
 
       final userId = SupabaseService.instance.currentUser?.id;
       if (userId == null) return const UploadOutcome(UploadResult.error, errorMessage: 'Not signed in');
@@ -166,7 +172,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         maxHeight: 640,
         imageQuality: 92,
       );
-      if (picked == null) return const UploadOutcome(UploadResult.cancelled);
+      if (picked == null) {
+        debugPrint('[ProfileProvider.uploadBanner] picker returned null — user cancelled or permission denied');
+        return const UploadOutcome(UploadResult.cancelled, errorMessage: 'No image selected. Check gallery permissions in Settings.');
+      }
 
       // Crop to 3:1 banner aspect ratio
       final cropped = await ImageCropper().cropImage(
@@ -187,7 +196,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
           ),
         ],
       );
-      if (cropped == null) return const UploadOutcome(UploadResult.cancelled);
+      if (cropped == null) {
+        debugPrint('[ProfileProvider.uploadBanner] cropper returned null — user dismissed crop screen');
+        return const UploadOutcome(UploadResult.cancelled, errorMessage: 'Crop cancelled');
+      }
 
       final userId = SupabaseService.instance.currentUser?.id;
       if (userId == null) return const UploadOutcome(UploadResult.error, errorMessage: 'Not signed in');

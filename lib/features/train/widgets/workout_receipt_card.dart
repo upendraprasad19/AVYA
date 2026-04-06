@@ -148,7 +148,16 @@ class WorkoutReceiptData {
       int totalReps = 0;
       int completedSets = 0;
 
-      for (int s = 0; s < numSets; s++) {
+      // Scan for dynamically added sets beyond the template's prescribed count.
+      int maxSet = numSets;
+      for (final key in data.checkedSets.keys) {
+        if (key.startsWith('$exIdx-')) {
+          final s = int.tryParse(key.split('-').last) ?? 0;
+          if (s + 1 > maxSet) maxSet = s + 1;
+        }
+      }
+
+      for (int s = 0; s < maxSet; s++) {
         final key = '$exIdx-$s';
         if (data.checkedSets.containsKey(key)) {
           // Skip warm-up sets in volume

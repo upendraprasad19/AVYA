@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import '../../home/providers/home_provider.dart';
 import '../providers/train_provider.dart';
@@ -399,27 +399,29 @@ class _TemplateBuilderScreenState
         await ref.read(templatesProvider.notifier).saveTemplate(templateData);
       }
 
-      // Sync assigned_days to calendar schedule entries (next 8 weeks)
+      // Sync assigned_days to calendar schedule entries.
+      // Uses assignTemplateToDate() which writes COMPLETE entries including
+      // normalised exercises — not bare stubs.
+      // Limits to 4 weeks within the plan boundary (Phase 1 = 4 weeks).
       if (_selectedDays.isNotEmpty) {
-        final workoutBox = HiveService.instance.workoutBox;
+        final scheduleService = WorkoutScheduleService.instance;
+        final planStart = scheduleService.getPlanStartDate();
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
-        // Write schedule entries for next 8 weeks
-        for (int weekOffset = 0; weekOffset < 8; weekOffset++) {
+        final weekStart = today.subtract(Duration(days: today.weekday - 1));
+        const maxWeeks = 4;
+        final planEnd = planStart != null
+            ? planStart.add(const Duration(days: maxWeeks * 7 - 1))
+            : weekStart.add(const Duration(days: maxWeeks * 7 - 1));
+
+        for (int weekOffset = 0; weekOffset < maxWeeks; weekOffset++) {
           for (final dayNum in _selectedDays) {
-            // dayNum: 1=Mon, 7=Sun — DateTime.weekday: 1=Mon, 7=Sun
-            final weekStart = today.subtract(Duration(days: today.weekday - 1));
+            // dayNum: 1=Mon, 7=Sun
             final targetDate = weekStart
                 .add(Duration(days: weekOffset * 7 + dayNum - 1));
             if (targetDate.isBefore(today)) continue;
-            final key = 'schedule_${targetDate.toIso8601String().substring(0, 10)}';
-            workoutBox.put(key, {
-              'date': targetDate.toIso8601String().substring(0, 10),
-              'type': 'custom_template',
-              'template_id': templateId,
-              'workout_name': name,
-              'status': 'planned',
-            });
+            if (targetDate.isAfter(planEnd)) continue;
+            scheduleService.assignTemplateToDate(templateId, targetDate);
           }
         }
         // Refresh calendar providers

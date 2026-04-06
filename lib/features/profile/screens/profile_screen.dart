@@ -205,7 +205,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   final outcome = await ref.read(userProfileProvider.notifier).uploadAvatar();
                   if (!mounted) return;
                   ref.invalidate(userProfileProvider);
-                  if (outcome.result == UploadResult.cancelled) return;
+                  if (outcome.result == UploadResult.cancelled) {
+                    debugPrint('[ProfileScreen] Avatar upload cancelled: ${outcome.errorMessage}');
+                    if (outcome.errorMessage != null && outcome.errorMessage!.isNotEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(outcome.errorMessage!, style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+                        backgroundColor: AppColors.card,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 3),
+                      ));
+                    }
+                    return;
+                  }
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(
                       outcome.result == UploadResult.success
@@ -223,7 +234,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   final outcome = await ref.read(userProfileProvider.notifier).uploadBanner();
                   if (!mounted) return;
                   ref.invalidate(userProfileProvider);
-                  if (outcome.result == UploadResult.cancelled) return;
+                  if (outcome.result == UploadResult.cancelled) {
+                    debugPrint('[ProfileScreen] Banner upload cancelled: ${outcome.errorMessage}');
+                    if (outcome.errorMessage != null && outcome.errorMessage!.isNotEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(outcome.errorMessage!, style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+                        backgroundColor: AppColors.card,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 3),
+                      ));
+                    }
+                    return;
+                  }
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(
                       outcome.result == UploadResult.success

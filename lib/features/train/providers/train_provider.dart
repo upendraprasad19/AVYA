@@ -339,7 +339,13 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;
-    final week = (progress?['current_week'] as int?) ?? 1;
+    // Use calendar-based week (derived from plan_start_date + today) so the
+    // "Week N hasn't started yet" message is always accurate.  Falls back to
+    // the Hive-stored value when no plan is scheduled yet.
+    final calendarWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
+    final week = calendarWeek > 0
+        ? calendarWeek
+        : ((progress?['current_week'] as int?) ?? 1);
 
     final planExists = repo.hasPlan();
     if (!planExists) {
@@ -398,12 +404,18 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         planMap?['focus'] as String? ?? 'Movement patterns & baseline strength';
 
     // Determine the actual number of weeks in the plan.
-    // Default to 4, but scan Hive for the maximum week present.
-    int totalWeeks = 4;
-    for (int w = 5; w <= 12; w++) {
-      final weekDaysCheck = repo.getWeek(w);
-      if (weekDaysCheck.isEmpty) break;
-      totalWeeks = w;
+    // Phase 1 (Foundation) is always exactly 4 weeks.
+    // PRO phases (2-12) may have more weeks — scan Hive for the max.
+    final int totalWeeks;
+    if (phase <= 1) {
+      totalWeeks = 4;
+    } else {
+      int scanned = 4;
+      for (int w = 5; w <= 12; w++) {
+        if (repo.getWeek(w).isEmpty) break;
+        scanned = w;
+      }
+      totalWeeks = scanned;
     }
 
     // Build weeks from Hive schedule data.
@@ -759,6 +771,7 @@ class ActiveWorkoutData {
 
 class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   Timer? _timer;
+  DateTime? _workoutStartTime;
 
   @override
   ActiveWorkoutData build() {
@@ -777,6 +790,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
     }
 
+    _workoutStartTime = DateTime.now();
+
     state = ActiveWorkoutData(
       workoutDay: day,
       exercises: List.from(day.exercises),
@@ -785,8 +800,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       warmUpSets: warmUps,
     );
 
+    // Use wall-clock elapsed time so the timer survives phone lock / app pause.
+    // The Timer only triggers rebuilds; actual duration = now − startTime.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+      if (_workoutStartTime != null) {
+        final elapsed = DateTime.now().difference(_workoutStartTime!).inSeconds;
+        state = state.copyWith(elapsedSeconds: elapsed);
+      }
     });
   }
 
@@ -801,6 +821,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   void reopenWorkout() {
     _timer?.cancel();
     _timer = null;
+    _workoutStartTime = null;
     state = state.copyWith(isComplete: false);
   }
 
@@ -1024,6 +1045,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   Future<void> completeWorkout() async {
     _timer?.cancel();
     _timer = null;
+    _workoutStartTime = null;
 
     // If already saved (user reopened workout to review), just mark complete
     // again without re-writing to Hive — prevents duplicate exercise logs.
@@ -1057,10 +1079,18 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         continue;
       }
 
-      // Find the best weight from actual set inputs
+      // Find the best weight from actual set inputs.
+      // Scan checkedSets keys for this exercise to handle dynamically added sets
+      // (user pressed "+") beyond the original template count.
       double currentWeight = 0;
-      final numSets = int.tryParse(exercise.sets) ?? 3;
-      for (int s = 0; s < numSets; s++) {
+      int maxSet = int.tryParse(exercise.sets) ?? 3;
+      for (final key in state.checkedSets.keys) {
+        if (key.startsWith('$exIdx-')) {
+          final s = int.tryParse(key.split('-').last) ?? 0;
+          if (s + 1 > maxSet) maxSet = s + 1;
+        }
+      }
+      for (int s = 0; s < maxSet; s++) {
         final key = '$exIdx-$s';
         if (state.checkedSets.containsKey(key) && !state.warmUpSets.containsKey(key)) {
           final vals = state.setInputValues[key];
@@ -1102,15 +1132,22 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       final logId =
           'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
 
-      // Aggregate values from per-set input data
-      final numSets = int.tryParse(exercise.sets) ?? 3;
+      // Aggregate values from per-set input data.
+      // Scan checkedSets for dynamically added sets beyond template count.
+      int maxSetLog = int.tryParse(exercise.sets) ?? 3;
+      for (final key in state.checkedSets.keys) {
+        if (key.startsWith('$exIdx-')) {
+          final s = int.tryParse(key.split('-').last) ?? 0;
+          if (s + 1 > maxSetLog) maxSetLog = s + 1;
+        }
+      }
       double totalWeight = 0;
       int totalReps = 0;
       int totalDuration = 0;
       double totalDistance = 0;
       int completedSets = 0;
 
-      for (int s = 0; s < numSets; s++) {
+      for (int s = 0; s < maxSetLog; s++) {
         final key = '$exIdx-$s';
         if (state.checkedSets.containsKey(key)) {
           // Skip warm-up sets in volume calculations
@@ -1141,7 +1178,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
 
       // Check if any sets for this exercise were warm-up
-      final hasWarmUpSets = List.generate(numSets, (s) => '$exIdx-$s')
+      final hasWarmUpSets = List.generate(maxSetLog, (s) => '$exIdx-$s')
           .any((key) => state.warmUpSets.containsKey(key));
 
       // Validate loggingType — treat unknown types as 'weight_reps'
