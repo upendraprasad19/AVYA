@@ -32,13 +32,13 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
     final isPro = SubscriptionService.instance.isPro();
     final limit = isPro
         ? AppConstants.proScanMealPerDay
-        : AppConstants.freeScanMealPerMonth;
+        : AppConstants.freeScanMealPerDay;
     final used = UsageCounterService.instance
         .used(AppConstants.featureScanMealPro, isPro);
-    final periodLabel = isPro ? 'today' : 'this month';
+    final periodLabel = 'today';
 
-    // Soft cap warning for PRO: show at 2/3 used
-    final showSoftCap = isPro && used >= 2 && remaining > 0;
+    // Soft cap warning for PRO: show at 7/10 used
+    final showSoftCap = isPro && used >= 7 && remaining > 0;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -225,9 +225,9 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();
-    final isPro = SubscriptionService.instance.isPro();
+    // Quota increment moved to ScanMealNotifier.scanImage() success path
+    // so failures don't consume a daily attempt.
     ref.read(scanMealProvider.notifier).scanImage(imageBytes);
-    await UsageCounterService.instance.increment(AppConstants.featureScanMealPro, isPro);
   }
 
   Widget _buildError(String error) {

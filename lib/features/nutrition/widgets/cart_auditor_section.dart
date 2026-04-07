@@ -23,12 +23,13 @@ class CartAuditorSection extends ConsumerWidget {
     final isPro = SubscriptionService.instance.isPro();
     final limit = isPro
         ? AppConstants.proCartAuditorPerDay
-        : AppConstants.freeCartAuditorPerMonth;
+        : AppConstants.freeCartAuditorPerDay;
     final used = UsageCounterService.instance
         .used(AppConstants.featureCartAuditorPro, isPro);
-    final periodLabel = isPro ? 'today' : 'this month';
+    final periodLabel = 'today';
 
-    final showSoftCap = isPro && used >= 2 && remaining > 0;
+    // Soft cap warning for PRO: show at 7/10 used
+    final showSoftCap = isPro && used >= 7 && remaining > 0;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -212,9 +213,9 @@ class CartAuditorSection extends ConsumerWidget {
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();
-    final isPro = SubscriptionService.instance.isPro();
+    // Quota increment moved to CartAuditorNotifier.analyseCart() success path
+    // so failures don't consume a daily attempt.
     ref.read(cartAuditorProvider.notifier).analyseCart(imageBytes);
-    await UsageCounterService.instance.increment(AppConstants.featureCartAuditorPro, isPro);
   }
 
   Widget _buildError(String error, WidgetRef ref) {

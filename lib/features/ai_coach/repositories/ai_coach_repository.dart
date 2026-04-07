@@ -407,8 +407,11 @@ class AiCoachRepository {
     final workoutBox = _hive.workoutBox;
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final weekEnd = weekStart.add(const Duration(days: 6));
     final weekStartStr =
         '${weekStart.year}-${weekStart.month.toString().padLeft(2, '0')}-${weekStart.day.toString().padLeft(2, '0')}';
+    final weekEndStr =
+        '${weekEnd.year}-${weekEnd.month.toString().padLeft(2, '0')}-${weekEnd.day.toString().padLeft(2, '0')}';
     final todayStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
@@ -423,7 +426,7 @@ class AiCoachRepository {
 
       if (log['type'] == 'workout_log') {
         final date = log['date'] as String? ?? '';
-        if (date.compareTo(weekStartStr) >= 0) {
+        if (date.compareTo(weekStartStr) >= 0 && date.compareTo(weekEndStr) <= 0) {
           completed++;
           if (date == todayStr) completedToday = true;
         }
@@ -436,7 +439,7 @@ class AiCoachRepository {
       }
       if (log['type'] == 'workout') {
         final date = log['date'] as String? ?? '';
-        if (date.compareTo(weekStartStr) >= 0) {
+        if (date.compareTo(weekStartStr) >= 0 && date.compareTo(weekEndStr) <= 0) {
           planned++;
         }
       }
@@ -519,11 +522,14 @@ class AiCoachRepository {
     }
 
     // Get water intake from healthBox
+    // Writer (WaterIntakeNotifier) stores an int directly; handle both int and Map.
     final healthBox = _hive.healthBox;
     final waterData = healthBox.get('water_ml_$todayStr');
-    final waterMl = (waterData is Map)
-        ? ((waterData['total_ml'] as num?)?.toInt() ?? 0)
-        : 0;
+    final waterMl = (waterData is int)
+        ? waterData
+        : (waterData is Map)
+            ? ((waterData['total_ml'] as num?)?.toInt() ?? 0)
+            : 0;
 
     return {
       'calories_logged': calories.round(),

@@ -987,6 +987,11 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           isScanning: false,
           result: data,
         );
+        // Increment quota only on actual success — not on failure/error
+        await UsageCounterService.instance.increment(
+          AppConstants.featureScanMealPro,
+          SubscriptionService.instance.isPro(),
+        );
         return;
       }
 
@@ -1061,6 +1066,11 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
         state = state.copyWith(
           isAnalysing: false,
           result: data,
+        );
+        // Increment quota only on actual success — not on failure/error
+        await UsageCounterService.instance.increment(
+          AppConstants.featureCartAuditorPro,
+          SubscriptionService.instance.isPro(),
         );
         return;
       }

@@ -109,6 +109,19 @@ class SubscriptionService {
       final userId = supabase.currentUser?.id;
       if (userId == null) return;
 
+      // Grace period: if local activation just happened (Phase 3 fallback),
+      // don't query Supabase yet — give the direct write time to propagate.
+      final localActivation = _hive.configBox.get('localActivationAt');
+      if (localActivation != null && isPro()) {
+        final activatedAt = DateTime.tryParse(localActivation.toString());
+        if (activatedAt != null &&
+            DateTime.now().difference(activatedAt).inMinutes < 10) {
+          return; // Grace period — don't override local activation yet
+        }
+        // Past grace period — clear the flag
+        await _hive.configBox.delete('localActivationAt');
+      }
+
       final response = await supabase.client
           .from('subscriptions')
           .select()
@@ -178,8 +191,12 @@ class SubscriptionService {
       );
 
       if (response.status != 200) {
+        // Offline-first: trust local Hive cache when server is unreachable.
+        // This is intentional — a non-200 (network error, 401, 5xx) should
+        // not immediately downgrade the user. The cache has a TTL
+        // (_verifyCacheTtl) and will re-verify on next app launch.
         debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status}');
-        return isPro(); // Server error — trust cached state
+        return isPro();
       }
 
       final data = response.data as Map<String, dynamic>?;

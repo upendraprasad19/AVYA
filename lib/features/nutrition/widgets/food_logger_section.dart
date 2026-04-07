@@ -84,9 +84,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     final canAnalyse = _controller.text.trim().length >= 3 && !isAnalysing;
     final remaining = ref.watch(aiTextLogRemainingProvider);
     final isPro = SubscriptionService.instance.isPro();
-    final limit = isPro
-        ? AppConstants.proAiTextLogsPerDay
-        : AppConstants.freeAiTextLogsPerDay;
+    final limit = AppConstants.freeAiTextLogsPerDay;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -200,50 +198,53 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Usage counter badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-                decoration: BoxDecoration(
-                  color: remaining > 0
-                      ? AppColors.accent.withValues(alpha: 0.08)
-                      : AppColors.red.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
+              if (!isPro) ...[
+                const SizedBox(width: 8),
+                // Usage counter badge (free users only — PRO is unlimited)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                  decoration: BoxDecoration(
                     color: remaining > 0
-                        ? AppColors.accent.withValues(alpha: 0.2)
-                        : AppColors.red.withValues(alpha: 0.2),
+                        ? AppColors.accent.withValues(alpha: 0.08)
+                        : AppColors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: remaining > 0
+                          ? AppColors.accent.withValues(alpha: 0.2)
+                          : AppColors.red.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Text(
+                    '${limit - remaining}/$limit used',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: remaining > 0 ? AppColors.accent : AppColors.red,
+                    ),
                   ),
                 ),
-                child: Text(
-                  '${limit - remaining}/$limit used',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: remaining > 0 ? AppColors.accent : AppColors.red,
-                  ),
-                ),
-              ),
+              ],
             ],
           ),
 
-          // Usage label
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                '$remaining log${remaining == 1 ? '' : 's'} left today',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 9,
-                  color: AppColors.textSecondary,
+          // Usage label (free users only)
+          if (!isPro)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '$remaining log${remaining == 1 ? '' : 's'} left today',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 9,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

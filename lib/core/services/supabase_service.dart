@@ -150,7 +150,7 @@ class SupabaseService {
   /// Shortcut to invoke a Supabase Edge Function by [name].
   ///
   /// Proactively refreshes the JWT if it expires within 60 seconds.
-  /// On 401 response, retries once with a freshly refreshed token.
+  /// Returns the response directly — callers handle non-200 status codes.
   Future<FunctionResponse> callFunction(
     String name, {
     Map<String, String>? headers,

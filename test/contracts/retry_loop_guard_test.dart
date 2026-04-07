@@ -35,6 +35,25 @@ void main() {
   // ── Fix 2A: No auto-retry in callFunction ────────────────────
 
   group('Guard: SupabaseService.callFunction has no 401 retry', () {
+    test('callFunction docstring does not promise retry behavior', () {
+      final source = allSources.entries
+          .firstWhere((e) => e.key.contains('supabase_service.dart'))
+          .value;
+
+      // The docstring above callFunction must NOT mention "retry" or "401"
+      // since the implementation is now single-attempt.
+      final docStart = source.indexOf('/// Shortcut to invoke a Supabase Edge Function');
+      final docEnd = source.indexOf('Future<FunctionResponse> callFunction(');
+      expect(docStart, isNot(-1));
+      expect(docEnd, isNot(-1));
+
+      final docstring = source.substring(docStart, docEnd);
+      expect(docstring.toLowerCase().contains('retry'), isFalse,
+          reason: 'callFunction docstring must not mention "retry" — implementation is single-attempt');
+      expect(docstring.contains('401'), isFalse,
+          reason: 'callFunction docstring must not mention "401" — no retry logic exists');
+    });
+
     test('callFunction does NOT contain 401 retry logic', () {
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))

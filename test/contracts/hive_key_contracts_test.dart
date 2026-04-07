@@ -120,6 +120,19 @@ void main() {
           reason:
               'AI context must NOT use "water_\$todayStr" — must be "water_ml_\$todayStr"');
     });
+
+    test('AI context reader handles int water value (not just Map)', () {
+      final aiRepoSource = allSources.entries
+          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
+          .value;
+
+      // Writer (WaterIntakeNotifier) stores a plain int.
+      // Reader must handle `int` first, then fall back to `Map`.
+      expect(aiRepoSource, contains('waterData is int'),
+          reason:
+              'AI context reader must check for int first — '
+              'WaterIntakeNotifier stores water as a plain int, not a Map');
+    });
   });
 
   // ── Sleep Keys ─────────────────────────────────────────────────
