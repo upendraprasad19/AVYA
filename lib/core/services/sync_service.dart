@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -27,8 +28,18 @@ class SyncService {
   static const String _lastFullSyncKey = 'last_full_sync';
   static const String _lastCustomSyncKey = 'last_custom_sync';
 
-  /// Duration between full syncs (7 days).
-  static const Duration _fullSyncInterval = Duration(days: 7);
+  /// Duration between full syncs (1 day — safe because all upserts are idempotent).
+  static const Duration _fullSyncInterval = Duration(days: 1);
+
+  /// Deterministic UUID generator for sync IDs.
+  /// Converts Hive keys (e.g. `wlog_1775500200000`) into stable UUIDs
+  /// so repeated syncs don't create duplicate rows.
+  static const _uuidGen = Uuid();
+  static const _syncNamespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
+  static String _deterministicId(String localKey) {
+    return _uuidGen.v5(_syncNamespace, localKey);
+  }
 
   // ── Public API ──────────────────────────────────────────────
 
@@ -206,10 +217,9 @@ class SyncService {
   /// PRO users get 90 days of history; free users get 30 days.
   Future<void> restoreFromCloud(String userId) async {
     try {
-      final isPro = SubscriptionService.instance.isPro();
-      final days = isPro ? 90 : 30;
-      final since =
-          DateTime.now().subtract(Duration(days: days)).toIso8601String();
+      // Full restore for ALL users — no date limit. Data is already in Supabase
+      // and storage per user is negligible (~1-2MB/year).
+      const since = '2020-01-01T00:00:00Z';
 
       await Future.wait([
         _restoreWorkoutLogs(userId, since),
@@ -421,13 +431,14 @@ class SyncService {
 
       try {
         await _supabase.client.from('workout_logs').upsert({
+          'id': _deterministicId(key),
           'user_id': userId,
           'exercise_name': log['workout_name'],
           'date': log['date'],
           'logged_at': log['completed_at'],
           'sets_completed': log['sets_completed'],
           'duration_seconds': log['duration_seconds'],
-          'notes': log['id'], // store local ID for dedup
+          'notes': log['id'], // store local ID for reference
           'created_at': log['completed_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
       } catch (e) {
@@ -449,6 +460,7 @@ class SyncService {
 
       try {
         await _supabase.client.from('workout_log_exercises').upsert({
+          'id': _deterministicId(key),
           'workout_log_id': log['id'],
           'user_id': userId,
           'exercise_id': log['id'] ?? key,
@@ -549,43 +561,77 @@ class SyncService {
 
   Future<void> _syncWeightLogs(String userId) async {
     final healthBox = _hive.healthBox;
-    final logs = healthBox.get('weight_logs');
-    if (logs == null) return;
-
-    final items = (logs as List).whereType<Map>();
-    for (final log in items) {
-      await _supabase.client.from('weight_logs').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+    // Writers use per-day keys like 'weight_2026-04-07', NOT a single list key.
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('weight_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'weight_log') continue;
+      try {
+        await _supabase.client.from('weight_logs').upsert({
+          'id': _deterministicId(key),
+          'user_id': userId,
+          'date': log['date'],
+          'weight_kg': log['weight_kg'],
+          'notes': log['notes'],
+          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncWeightLogs] $key: $e');
+      }
     }
   }
 
   Future<void> _syncMeasurements(String userId) async {
     final healthBox = _hive.healthBox;
-    final logs = healthBox.get('body_measurements');
-    if (logs == null) return;
-
-    final items = (logs as List).whereType<Map>();
-    for (final log in items) {
-      await _supabase.client.from('body_measurements').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+    // Writers use per-day keys like 'measurement_2026-04-07'.
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('measurement_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      try {
+        await _supabase.client.from('body_measurements').upsert({
+          'id': _deterministicId(key),
+          'user_id': userId,
+          'date': log['date'],
+          'chest': log['chest'],
+          'waist': log['waist'],
+          'hips': log['hips'],
+          'arms': log['arms'],
+          'notes': log['notes'],
+          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncMeasurements] $key: $e');
+      }
     }
   }
 
   Future<void> _syncSleepLogs(String userId) async {
     final healthBox = _hive.healthBox;
-    final logs = healthBox.get('sleep_logs');
-    if (logs == null) return;
-
-    final items = (logs as List).whereType<Map>();
-    for (final log in items) {
-      await _supabase.client.from('sleep_logs').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+    // Writers use per-day keys like 'sleep_log_2026-04-07'.
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('sleep_log_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      try {
+        await _supabase.client.from('sleep_logs').upsert({
+          'id': _deterministicId(key),
+          'user_id': userId,
+          'date': log['date'],
+          'duration_hrs': log['duration_hrs'],
+          'quality': log['quality'],
+          'bed_time': log['bed_time'],
+          'wake_time': log['wake_time'],
+          'notes': log['notes'],
+          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncSleepLogs] $key: $e');
+      }
     }
   }
 
@@ -643,16 +689,37 @@ class SyncService {
 
     final items = (logs as List).whereType<Map>();
     for (final log in items) {
-      await _supabase.client.from('streaks').upsert({
-        ...Map<String, dynamic>.from(log),
-        'user_id': userId,
-      }, onConflict: 'id');
+      final data = Map<String, dynamic>.from(log);
+      final weekStart = data['week_start']?.toString() ?? '';
+      // Remove local-only fields before sending to Supabase.
+      data.remove('local_id');
+      try {
+        await _supabase.client.from('streaks').upsert({
+          'id': _deterministicId('streak_${userId}_$weekStart'),
+          ...data,
+          'user_id': userId,
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncStreaks] $e');
+      }
     }
   }
 
   /// Immediately pushes the local Hive profile to Supabase user_profile.
   /// Safe to call from anywhere — only sends columns that exist in the schema.
   Future<void> syncProfileNow(String userId) => _syncUserProfile(userId);
+
+  /// Immediately pushes user_progress to Supabase (total_workouts_done, streaks, etc.).
+  /// Called fire-and-forget after every workout completion.
+  Future<void> syncProgressNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncUserProgress(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncProgressNow] $e');
+    }
+  }
 
   Future<void> _syncUserProfile(String userId) async {
     final userBox = _hive.userBox;
@@ -1128,22 +1195,17 @@ class SyncService {
       if (rows.isEmpty) return;
 
       final healthBox = _hive.healthBox;
-      // Get existing local sleep logs
-      final existingRaw = healthBox.get('sleep_logs');
-      final existing = existingRaw is List ? List<Map>.from(existingRaw) : <Map>[];
-      final existingIds = existing
-          .map((e) => e['id']?.toString() ?? '')
-          .toSet();
-
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
-        final id = map['id']?.toString() ?? '';
-        if (id.isNotEmpty && !existingIds.contains(id)) {
-          existing.add({...map, 'source': 'cloud_restore'});
-        }
+        final date = map['date'] as String?;
+        if (date == null) continue;
+        final key = 'sleep_log_$date';
+        if (healthBox.get(key) != null) continue; // Don't overwrite local data
+        await healthBox.put(key, {
+          ...map,
+          'source': 'cloud_restore',
+        });
       }
-
-      await healthBox.put('sleep_logs', existing);
     } catch (e) {
       debugPrint('[SyncService._restoreSleepLogs] $e');
     }

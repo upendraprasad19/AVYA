@@ -162,29 +162,13 @@ class SupabaseService {
       throw Exception('No active session. Please sign in again.');
     }
 
-    // First attempt
+    // Single attempt — no auto-retry here.
+    // Callers (e.g. AiCoachProvider) handle auth errors at their own level.
     final response = await client.functions.invoke(
       name,
       headers: headers,
       body: body,
     );
-
-    // Auto-retry on 401: refresh token and try once more
-    if (response.status == 401) {
-      debugPrint('[SupabaseService.callFunction] Got 401, retrying with refreshed token...');
-      try {
-        await client.auth.refreshSession();
-      } catch (e) {
-        debugPrint('[SupabaseService.callFunction] retry refresh failed: $e');
-        throw Exception('Session expired. Please sign out and sign in again.');
-      }
-
-      return client.functions.invoke(
-        name,
-        headers: headers,
-        body: body,
-      );
-    }
 
     return response;
   }

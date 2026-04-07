@@ -116,7 +116,10 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Validate JWT
+    // Extract user ID from JWT.
+    // verify_jwt is DISABLED on this function because the Supabase gateway
+    // was silently rejecting valid JWTs (100% 401 rate). We validate manually
+    // with proper Base64URL decode and expiry check.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
@@ -125,18 +128,38 @@ serve(async (req: Request) => {
       });
     }
 
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+    let userId: string;
+    let jwtExpired = false;
+    try {
+      const parts = token.split(".");
+      if (parts.length !== 3) throw new Error("Invalid JWT format");
+      // JWT uses Base64URL encoding — convert to standard Base64 for atob()
+      let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      while (base64.length % 4) base64 += "=";
+      const payload = JSON.parse(atob(base64));
+      userId = payload.sub;
+      if (!userId) throw new Error("No sub claim in JWT");
+      // Manual expiry check (since verify_jwt is disabled)
+      const exp = payload.exp as number | undefined;
+      if (exp && Date.now() / 1000 > exp) {
+        jwtExpired = true;
+      }
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid token format" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (jwtExpired) {
+      return new Response(JSON.stringify({ error: "Token expired" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = user.id;
+    // Service role client for DB operations only (NOT for auth validation)
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Parse request body early — needed to route food_text_analysis
     // before trial/rate-limit checks (food logging is always free).

@@ -33,6 +33,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _scrollController = ScrollController();
   final _inputFocusNode = FocusNode();
   bool _isRecording = false;
+  bool _localSending = false; // Synchronous debounce flag to prevent double-tap
 
   // Media attachment state
   final _imagePicker = ImagePicker();
@@ -158,8 +159,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   void _doSend(String text, {String mode = 'quick'}) {
-    ref.read(sendMessageProvider.notifier).send(text, mode: mode);
+    if (_localSending) return; // Block rapid double-taps synchronously
+    setState(() => _localSending = true);
     _messageController.clear();
+    ref.read(sendMessageProvider.notifier).send(text, mode: mode).whenComplete(() {
+      if (mounted) setState(() => _localSending = false);
+    });
     _scrollToBottom();
   }
 

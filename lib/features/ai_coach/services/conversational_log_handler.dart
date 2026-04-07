@@ -245,7 +245,7 @@ Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   for (final raw in workoutBox.values) {
     if (raw is! Map) continue;
     final entry = Map<String, dynamic>.from(raw);
-    if (entry['type'] == 'scheduled_workout' &&
+    if (entry['type'] == 'workout' &&
         entry['date'] == dateStr &&
         entry['status'] != 'completed') {
       entry['status'] = 'completed';

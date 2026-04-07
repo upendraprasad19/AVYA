@@ -51,6 +51,8 @@ class AiCoachRepository {
       },
       'this_week_workouts': _getThisWeekWorkouts(),
       'today_nutrition': _getTodayNutrition(),
+      'today_steps': _getTodaySteps(),
+      'step_history_7d': _getStepHistory(days: 7),
       'latest_weight': _getLatestWeight(),
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
@@ -432,7 +434,7 @@ class AiCoachRepository {
           exerciseNames.add(log['exercise_name'] as String? ?? '');
         }
       }
-      if (log['type'] == 'scheduled') {
+      if (log['type'] == 'workout') {
         final date = log['date'] as String? ?? '';
         if (date.compareTo(weekStartStr) >= 0) {
           planned++;
@@ -446,6 +448,54 @@ class AiCoachRepository {
       'completed_today': completedToday,
       'today_exercises': exerciseNames.take(5).toList(),
     };
+  }
+
+  /// Returns step counts for the last [days] days as a list of {date, steps}.
+  List<Map<String, dynamic>> _getStepHistory({int days = 7}) {
+    final healthBox = _hive.healthBox;
+    final result = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < days; i++) {
+      final d = DateTime.now().subtract(Duration(days: i));
+      final dateStr =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final raw = healthBox.get('step_$dateStr');
+      if (raw is Map) {
+        final log = Map<String, dynamic>.from(raw);
+        if (log['type'] == 'step_log') {
+          result.add({
+            'date': dateStr,
+            'steps': (log['steps'] as num?)?.toInt() ?? 0,
+          });
+        }
+      }
+    }
+
+    return result;
+  }
+
+  int _getTodaySteps() {
+    final healthBox = _hive.healthBox;
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    // Check proper step_log format (written by HealthSyncService)
+    for (final raw in healthBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] == 'step_log' && log['date'] == todayStr) {
+        return (log['steps'] as num?)?.toInt() ?? 0;
+      }
+    }
+
+    // Fallback to legacy key format
+    final stepsDate = healthBox.get('steps_date') as String?;
+    if (stepsDate == todayStr) {
+      return (healthBox.get('steps_today') as num?)?.toInt() ?? 0;
+    }
+
+    return 0;
   }
 
   Map<String, dynamic> _getTodayNutrition() {
@@ -470,7 +520,7 @@ class AiCoachRepository {
 
     // Get water intake from healthBox
     final healthBox = _hive.healthBox;
-    final waterData = healthBox.get('water_$todayStr');
+    final waterData = healthBox.get('water_ml_$todayStr');
     final waterMl = (waterData is Map)
         ? ((waterData['total_ml'] as num?)?.toInt() ?? 0)
         : 0;

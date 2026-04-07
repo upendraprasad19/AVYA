@@ -1,0 +1,266 @@
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Contract tests for Hive key agreements.
+///
+/// These tests scan the actual source code to verify that all WRITERS and
+/// READERS of Hive keys use the same key formats. If someone changes a key
+/// pattern in one file but not another, these tests break immediately.
+///
+/// **WHY:** Bugs #4, #6, #7, #8 in the 2026-04-07 audit were all caused
+/// by writers and readers using different Hive key formats. These tests
+/// prevent that class of bug from ever recurring.
+void main() {
+  final libDir = Directory('lib');
+
+  /// Recursively reads all `.dart` files under [dir] and returns their
+  /// contents as a map of {relativePath: source}.
+  Map<String, String> readAllDartFiles(Directory dir) {
+    final files = <String, String>{};
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is File && entity.path.endsWith('.dart')) {
+        files[entity.path] = entity.readAsStringSync();
+      }
+    }
+    return files;
+  }
+
+  late Map<String, String> allSources;
+
+  setUpAll(() {
+    expect(libDir.existsSync(), isTrue, reason: 'Run from project root');
+    allSources = readAllDartFiles(libDir);
+  });
+
+  // ── Weight Keys ────────────────────────────────────────────────
+
+  group('Contract: weight key format', () {
+    test('all weight writers use "weight_\$dateStr" key prefix', () {
+      // Every healthBox.put that writes a weight_log must use 'weight_' prefix
+      final writers = <String>[];
+      for (final entry in allSources.entries) {
+        final source = entry.value;
+        // Match: healthBox.put('weight_$...'
+        if (RegExp(r"healthBox\.put\('weight_").hasMatch(source)) {
+          writers.add(entry.key);
+        }
+      }
+      expect(writers, isNotEmpty,
+          reason: 'Must have at least one weight writer');
+
+      // Verify no writer uses the OLD list-based key 'weight_logs'
+      for (final entry in allSources.entries) {
+        final source = entry.value;
+        // Old pattern: healthBox.put('weight_logs', ...) or healthBox.get('weight_logs')
+        // as a list write/read should NOT exist
+        final hasOldPut = source.contains("healthBox.put('weight_logs'");
+        expect(hasOldPut, isFalse,
+            reason:
+                '${entry.key}: Uses stale "weight_logs" list key. Must use per-day "weight_\$dateStr" keys.');
+      }
+    });
+
+    test('sync reader scans weight_* prefix (not list key)', () {
+      final syncSource = allSources.entries
+          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
+          .value;
+
+      // Must iterate keys with startsWith('weight_')
+      expect(syncSource, contains("startsWith('weight_')"),
+          reason:
+              'sync_service._syncWeightLogs must iterate per-day weight_* keys');
+
+      // Must NOT read a single 'weight_logs' list
+      expect(syncSource.contains("healthBox.get('weight_logs')"), isFalse,
+          reason:
+              'sync_service must not read stale "weight_logs" list key');
+    });
+
+    test('health_sync_service weight writer uses weight_\$dateStr', () {
+      final healthSyncSource = allSources.entries
+          .firstWhere((e) => e.key.contains('health_sync_service.dart'))
+          .value;
+
+      // HealthSyncService builds the key as a variable: weightKey = 'weight_$todayStr'
+      // then calls hive.healthBox.put(weightKey, {...})
+      expect(
+          healthSyncSource.contains("'weight_\$todayStr'") ||
+              healthSyncSource.contains("healthBox.put('weight_"),
+          isTrue,
+          reason:
+              'HealthSyncService must write weight data with weight_\$dateStr key');
+    });
+  });
+
+  // ── Water Keys ─────────────────────────────────────────────────
+
+  group('Contract: water key format', () {
+    test('water writer uses "water_ml_\$todayStr" key', () {
+      final nutritionProviderSource = allSources.entries
+          .firstWhere((e) => e.key.contains('nutrition_provider.dart'))
+          .value;
+
+      expect(nutritionProviderSource, contains("'water_ml_\$todayStr'"),
+          reason: 'WaterIntakeNotifier must write with water_ml_ prefix');
+    });
+
+    test('AI context reader uses "water_ml_\$todayStr" key', () {
+      final aiRepoSource = allSources.entries
+          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
+          .value;
+
+      expect(aiRepoSource, contains("'water_ml_\$todayStr'"),
+          reason: 'AI context must read with water_ml_ prefix');
+
+      // Must NOT use the old wrong key 'water_$todayStr' (without 'ml_')
+      // Check for the exact wrong pattern: 'water_$ (not followed by 'ml')
+      // i.e. healthBox.get('water_$todayStr') — missing the 'ml_' part
+      final wrongPattern = RegExp(r"'water_\$(?!ml)");
+      expect(wrongPattern.hasMatch(aiRepoSource), isFalse,
+          reason:
+              'AI context must NOT use "water_\$todayStr" — must be "water_ml_\$todayStr"');
+    });
+  });
+
+  // ── Sleep Keys ─────────────────────────────────────────────────
+
+  group('Contract: sleep key format', () {
+    test('sleep writer uses "sleep_log_\$dateStr" key', () {
+      // At least one file must write sleep_log_ keys
+      final writers = allSources.entries
+          .where((e) => e.value.contains("'sleep_log_\$"))
+          .map((e) => e.key)
+          .toList();
+      expect(writers, isNotEmpty,
+          reason: 'Must have at least one sleep_log writer');
+    });
+
+    test('sync reader scans sleep_log_* prefix (not list key)', () {
+      final syncSource = allSources.entries
+          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
+          .value;
+
+      expect(syncSource, contains("startsWith('sleep_log_')"),
+          reason:
+              'sync_service._syncSleepLogs must iterate per-day sleep_log_* keys');
+
+      // Must NOT read the stale 'sleep_logs' list key
+      expect(syncSource.contains("healthBox.get('sleep_logs')"), isFalse,
+          reason: 'sync_service must not read stale "sleep_logs" list key');
+    });
+  });
+
+  // ── Measurement Keys ───────────────────────────────────────────
+
+  group('Contract: measurement key format', () {
+    test('measurement writers use "measurement_\$dateStr" key', () {
+      final writers = allSources.entries
+          .where((e) =>
+              e.value.contains("'measurement_\$dateStr'") ||
+              e.value.contains("'measurement_\$date'"))
+          .map((e) => e.key)
+          .toList();
+      expect(writers, isNotEmpty,
+          reason: 'Must have at least one measurement writer');
+    });
+
+    test('sync reader scans measurement_* prefix (not list key)', () {
+      final syncSource = allSources.entries
+          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
+          .value;
+
+      expect(syncSource, contains("startsWith('measurement_')"),
+          reason:
+              'sync_service._syncMeasurements must iterate per-day measurement_* keys');
+
+      // Must NOT read the stale 'body_measurements' list key
+      expect(
+          syncSource.contains("healthBox.get('body_measurements')"), isFalse,
+          reason:
+              'sync_service must not read stale "body_measurements" list key');
+    });
+  });
+
+  // ── Schedule Type Values ───────────────────────────────────────
+
+  group('Contract: workout schedule type values', () {
+    test('schedule writer uses type "workout" for workout days', () {
+      final scheduleSource = allSources.entries
+          .firstWhere(
+              (e) => e.key.contains('workout_schedule_service.dart'))
+          .value;
+
+      // Verify the schedule service writes type: 'workout' (not 'scheduled')
+      expect(scheduleSource, contains("'type': 'workout'"),
+          reason:
+              'WorkoutScheduleService must write type: "workout" for workout days');
+    });
+
+    test('schedule writer uses type "rest" for rest days', () {
+      final scheduleSource = allSources.entries
+          .firstWhere(
+              (e) => e.key.contains('workout_schedule_service.dart'))
+          .value;
+
+      expect(scheduleSource, contains("'type': 'rest'"),
+          reason:
+              'WorkoutScheduleService must write type: "rest" for rest days');
+    });
+
+    test('AI context reader checks type "workout" (not "scheduled")', () {
+      final aiRepoSource = allSources.entries
+          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
+          .value;
+
+      // Must check for 'workout' to count planned workouts
+      expect(aiRepoSource, contains("log['type'] == 'workout'"),
+          reason:
+              'AI context must check type == "workout" to match scheduler');
+
+      // Must NOT check for the old wrong value 'scheduled'
+      expect(aiRepoSource.contains("== 'scheduled'"), isFalse,
+          reason:
+              'AI context must not check type == "scheduled" (stale value)');
+    });
+
+    test(
+        'conversational_log_handler checks type "workout" (not "scheduled_workout")',
+        () {
+      final handlerSource = allSources.entries
+          .firstWhere(
+              (e) => e.key.contains('conversational_log_handler.dart'))
+          .value;
+
+      // Must check for 'workout' when marking scheduled days completed
+      expect(handlerSource, contains("entry['type'] == 'workout'"),
+          reason:
+              'Log handler must check type == "workout" to match scheduler');
+
+      // Must NOT check for the old wrong value 'scheduled_workout'
+      expect(handlerSource.contains("== 'scheduled_workout'"), isFalse,
+          reason:
+              'Log handler must not check type == "scheduled_workout" (stale value)');
+    });
+  });
+
+  // ── Step Keys ──────────────────────────────────────────────────
+
+  group('Contract: step key format', () {
+    test('step writer and reader agree on "step_\$dateStr" key', () {
+      final healthSyncSource = allSources.entries
+          .firstWhere((e) => e.key.contains('health_sync_service.dart'))
+          .value;
+
+      // Writer: HealthSyncService uses step_$todayStr
+      expect(healthSyncSource, contains("'step_\$todayStr'"),
+          reason: 'HealthSyncService must write step data with step_\$todayStr');
+
+      // Reader: ai_coach_repository reads step_$dateStr
+      final aiRepoSource = allSources.entries
+          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
+          .value;
+      expect(aiRepoSource, contains("'step_\$dateStr'"),
+          reason: 'AI repo must read step data with step_\$dateStr key');
+    });
+  });
+}

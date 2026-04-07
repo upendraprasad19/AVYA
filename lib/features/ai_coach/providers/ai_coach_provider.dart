@@ -191,9 +191,6 @@ final trialInfoProvider =
 // ── Send Message ─────────────────────────────────────────────────
 
 class SendMessageNotifier extends Notifier<bool> {
-  /// Tracks whether we've already retried after an auth error (prevents infinite retry loops).
-  bool _hasRetriedAuth = false;
-
   @override
   bool build() => false; // isLoading
 
@@ -364,28 +361,20 @@ class SendMessageNotifier extends Notifier<bool> {
       debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
 
-      // Detect session/auth errors for auto-retry
+      // Detect session/auth errors — refresh token proactively but do NOT
+      // retry the send().  The old recursive send() caused an infinite loop
+      // (30+ duplicate messages).  User can simply tap Send again.
       final isAuthError = errStr.contains('No active session') ||
           errStr.contains('401') || errStr.contains('unauthorized') ||
           errStr.contains('jwt') || errStr.contains('Session expired');
 
-      // Auto-retry once on auth errors — token may have been refreshed by callFunction
-      if (isAuthError && !_hasRetriedAuth) {
-        _hasRetriedAuth = true;
-        debugPrint('[AiCoachProvider] Auth error detected, refreshing token and retrying...');
+      if (isAuthError) {
+        debugPrint('[AiCoachProvider] Auth error detected, refreshing token (no retry)...');
         try {
-          final freshToken = await SupabaseService.instance.ensureFreshToken();
-          if (freshToken != null) {
-            // Remove loading message, retry the send
-            chatNotifier.removeLastMessage();
-            state = false;
-            _hasRetriedAuth = false; // Reset for future sends
-            return send(message, mode: mode);
-          }
-        } catch (retryErr) {
-          debugPrint('[AiCoachProvider] Retry also failed: $retryErr');
+          await SupabaseService.instance.ensureFreshToken();
+        } catch (refreshErr) {
+          debugPrint('[AiCoachProvider] Token refresh failed: $refreshErr');
         }
-        _hasRetriedAuth = false;
       }
 
       final String errorMsg;

@@ -1,0 +1,141 @@
+name: Test & Analyze
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Cancel in-progress runs for the same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
+  # Fast gate — runs in ~2 minutes. Blocks all PRs on failure.
+  analyze-and-unit-test:
+    name: Analyze & Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze (zero warnings allowed)
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run unit tests (pure Dart — no device needed)
+        run: flutter test test/ --reporter expanded
+
+  # ── Tier 2: Contract Tests ─────────────────────────────────────
+  # Verifies Hive key agreements, retry guards, Edge Function patterns.
+  # These catch the exact class of bugs from the 2026-04-07 audit.
+  contract-tests:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run contract tests
+        run: flutter test test/contracts/ --reporter expanded
+
+  # ── Tier 3: Supabase Integration Tests (requires secrets) ──────
+  # Only runs if SUPABASE_URL secret is configured.
+  supabase-tests:
+    name: Supabase Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run Supabase tests
+        if: env.SUPABASE_URL != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter test test/supabase/ \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --reporter expanded
+
+      - name: Run Edge Function tests
+        if: env.SUPABASE_URL != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter test test/edge_functions/ \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --reporter expanded
+
+  # ── Build Gate: Verify APK compiles ─────────────────────────────
+  # Catches compile errors that flutter analyze misses (template issues,
+  # asset problems, Gradle failures).
+  build-check:
+    name: Build Check (APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [analyze-and-unit-test, contract-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK (validates compilation)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'placeholder_key' }}
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID || 'rzp_test_placeholder' }}
+        run: |
+          # Create a minimal .env for build-time defines
+          echo "SUPABASE_URL=$SUPABASE_URL" > .env
+          echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
+          echo "RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID" >> .env
+          flutter build apk --dart-define-from-file=.env --flavor dev --debug

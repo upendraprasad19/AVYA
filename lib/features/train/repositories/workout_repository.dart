@@ -68,6 +68,49 @@ class WorkoutRepository {
   final WorkoutScheduleService _schedule = WorkoutScheduleService.instance;
   final HiveService _hive = HiveService.instance;
 
+  // ── Streak Calculation ───────────────────────────────────────
+
+  /// Calculates the current workout streak by scanning the schedule backwards.
+  ///
+  /// Schedule-aware: rest days are invisible and never break the streak.
+  /// Only missed *scheduled workout days* cause a break.
+  /// Handles schedule changes, template swaps, and cross-week boundaries.
+  int calculateCurrentStreak() {
+    int streak = 0;
+    final today = DateTime.now();
+
+    for (int i = 0; i < 365; i++) {
+      final date = today.subtract(Duration(days: i));
+      final dateStr = formatDateKey(date);
+      final raw = _hive.workoutBox.get('schedule_$dateStr');
+
+      if (raw == null) {
+        // No schedule entry — before plan start or gap
+        if (streak > 0) break;
+        continue;
+      }
+
+      final schedule = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+      final type = schedule['type']?.toString() ?? '';
+      final status = schedule['status']?.toString() ?? '';
+
+      // Rest days are invisible — skip them entirely
+      if (type == 'rest' || type == 'off') continue;
+
+      // Workout day
+      if (status == 'completed') {
+        streak += 1;
+      } else if (i == 0) {
+        // Today's workout not done YET — don't penalize
+        continue;
+      } else {
+        // Missed scheduled workout day — streak breaks
+        break;
+      }
+    }
+    return streak;
+  }
+
   // ── Plan Queries ──────────────────────────────────────────────
 
   /// Whether a workout plan has been generated and saved to Hive.
@@ -151,7 +194,7 @@ class WorkoutRepository {
       'completed_at': completedAt.toIso8601String(),
       'sets_completed': setsCompleted,
       'duration_seconds': durationSeconds,
-      'exercise_logs': ?exerciseLogs,
+      'exercise_logs': exerciseLogs,
     });
 
     return logId;
