@@ -12,7 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 0. DEVELOPMENT COMMANDS
 
 ### Environment Setup
-Copy `.env.example` → `.env` and fill in Supabase URL, anon key, and Razorpay key ID. The `.env` file is bundled as a Flutter asset and loaded at startup via `flutter_dotenv`.
+Copy `.env.example` → `.env` and fill in Supabase URL, anon key, and Razorpay key ID.
+Environment variables are injected **at build time** via `--dart-define-from-file=.env` (NOT flutter_dotenv — the package was removed). Every `flutter run` / `flutter build` command **MUST** include this flag or the app will crash with "No host specified in URI".
 
 ```
 SUPABASE_URL=https://dedsavbjuwgarrhphgnl.supabase.co
@@ -21,22 +22,24 @@ RAZORPAY_KEY_ID=rzp_test_<key>   # use rzp_test_ for dev flavor
 ```
 
 ### Run / Build (two flavors: `dev` and `prod`)
+> ⚠️ **CRITICAL**: Every command below includes `--dart-define-from-file=.env`. Without it, SUPABASE_URL compiles to an empty string and auth will crash.
+
 ```bash
 # Run dev flavor on connected device
-flutter run --flavor dev -t lib/main.dart
+flutter run --dart-define-from-file=.env --flavor dev -t lib/main.dart
 
 # Run prod flavor
-flutter run --flavor prod -t lib/main.dart
+flutter run --dart-define-from-file=.env --flavor prod -t lib/main.dart
 
 # Release APK (prod)
-flutter build apk --flavor prod --release -t lib/main.dart
+flutter build apk --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
 
 # Release App Bundle (Play Store)
-flutter build appbundle --flavor prod --release -t lib/main.dart
+flutter build appbundle --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
 
 # Web (no flavor needed)
-flutter run -d chrome
-flutter build web
+flutter run --dart-define-from-file=.env -d chrome
+flutter build web --dart-define-from-file=.env
 ```
 
 ### Tests
@@ -47,11 +50,11 @@ flutter test
 # Single test file
 flutter test test/bmr_calculator_test.dart
 
-# All integration tests (requires connected Android device)
-flutter test integration_test/app_test.dart --flavor dev
+# All integration tests (requires connected Android device + .env)
+flutter test --dart-define-from-file=.env integration_test/app_test.dart --flavor dev
 
 # Single integration flow
-flutter test integration_test/flows/workout_log_flow_test.dart --flavor dev
+flutter test --dart-define-from-file=.env integration_test/flows/workout_log_flow_test.dart --flavor dev
 ```
 
 Unit tests live in `test/`. Integration tests (require Hive + real device) live in `integration_test/flows/`.

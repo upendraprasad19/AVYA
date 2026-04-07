@@ -109,7 +109,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           // Full-bleed background image (same as splash)
           Image.asset('assets/avya_logo.png', fit: BoxFit.cover),
           // Dark overlay for text readability
-          Container(color: AppColors.bg.withValues(alpha: 0.75)),
+          Container(color: AppColors.bg.withValues(alpha: 0.55)),
           // Content on top
           SafeArea(
             child: Center(
@@ -442,8 +442,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Logo (smaller)
-        _buildLogo(),
         const SizedBox(height: 32),
 
         // Email form
@@ -570,8 +568,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Logo (smaller)
-        _buildLogo(),
         const SizedBox(height: 32),
 
         // Phone input / OTP section
@@ -621,16 +617,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ],
         const SizedBox(height: 40),
       ],
-    );
-  }
-
-  // ── Logo ────────────────────────────────────────────────────────
-
-  Widget _buildLogo() {
-    return Image.asset(
-      'assets/avya_logo.png',
-      width: 160,
-      fit: BoxFit.contain,
     );
   }
 

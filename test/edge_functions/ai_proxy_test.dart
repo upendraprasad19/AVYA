@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,15 +13,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Direct HTTP calls to Edge Functions — no UI, no Flutter widgets.
 /// Validates auth guards, response format, and basic functionality.
 ///
-/// Run: flutter test test/edge_functions/ai_proxy_test.dart
+/// Run: flutter test test/edge_functions/ai_proxy_test.dart \
+///        --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
 void main() {
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isEmpty || anonKey.isEmpty) {
+    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    return;
+  }
 
   late SupabaseClient client;
   late String accessToken;
 
   setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+      if (call.method == 'getAll') return <String, dynamic>{};
+      if (call.method == 'setBool' || call.method == 'setString' || call.method == 'remove') return true;
+      return null;
+    });
+
     await Supabase.initialize(url: supabaseUrl, anonKey: anonKey);
     client = Supabase.instance.client;
 

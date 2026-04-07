@@ -30,8 +30,15 @@ class SupabaseService {
   }
 
   Future<void> _doInitialize() async {
-    assert(AppConstants.supabaseUrl.isNotEmpty, 'SUPABASE_URL not set — pass --dart-define-from-file=.env');
-    assert(AppConstants.supabaseAnonKey.isNotEmpty, 'SUPABASE_ANON_KEY not set — pass --dart-define-from-file=.env');
+    // Runtime guard — works in both debug AND release builds.
+    // (assert() is stripped in release, so this is the real safety net.)
+    if (AppConstants.supabaseUrl.isEmpty ||
+        AppConstants.supabaseAnonKey.isEmpty) {
+      throw StateError(
+        'SUPABASE_URL or SUPABASE_ANON_KEY is empty. '
+        'Build with: flutter run --dart-define-from-file=.env --flavor dev',
+      );
+    }
 
     await Supabase.initialize(
       url: AppConstants.supabaseUrl,

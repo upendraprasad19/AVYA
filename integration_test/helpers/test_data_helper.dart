@@ -221,6 +221,35 @@ class TestDataHelper {
     });
   }
 
+  // ── Streak Freeze ────────────────────────────────────────────────
+
+  /// Sets streak freeze availability for testing.
+  static void setStreakFreezes({
+    int available = 1,
+    List<String> usedDates = const [],
+    String? lastRefill,
+  }) {
+    final progress =
+        (HiveService.instance.userBox.get('progress') as Map?)?.cast<String, dynamic>() ?? {};
+    HiveService.instance.userBox.put('progress', {
+      ...progress,
+      'streak_freezes_available': available,
+      'streak_freeze_used_dates': usedDates,
+      'streak_freezes_last_refill': lastRefill ?? DateTime.now().toIso8601String().substring(0, 10),
+    });
+  }
+
+  /// Simulates a "streak freeze just used" flag for toast testing.
+  static void setStreakFreezeJustUsed({int remaining = 0}) {
+    final progress =
+        (HiveService.instance.userBox.get('progress') as Map?)?.cast<String, dynamic>() ?? {};
+    HiveService.instance.userBox.put('progress', {
+      ...progress,
+      'streak_freeze_just_used': true,
+      'streak_freeze_remaining_after_use': remaining,
+    });
+  }
+
   // ── Hive scan-meal counter ───────────────────────────────────────
 
   static void setScanMealCountAtMonthlyLimit() {

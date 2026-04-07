@@ -3,6 +3,7 @@ library;
 
 import 'dart:math';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,8 +13,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// using synthetic 768-dimensional vectors (zero API cost — no Gemini
 /// embedding calls needed).
 ///
-/// Run: flutter test test/edge_functions/pgvector_test.dart
+/// Run: flutter test test/edge_functions/pgvector_test.dart \
+///        --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
 void main() {
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isEmpty || anonKey.isEmpty) {
+    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    return;
+  }
+
   late SupabaseClient client;
   late String userId;
 
@@ -27,8 +37,14 @@ void main() {
   }
 
   setUpAll(() async {
-    const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-    const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+      if (call.method == 'getAll') return <String, dynamic>{};
+      if (call.method == 'setBool' || call.method == 'setString' || call.method == 'remove') return true;
+      return null;
+    });
 
     await Supabase.initialize(
       url: supabaseUrl,

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { cascadeChat } from "./_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,14 +9,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const CEREBRAS_API_KEY = Deno.env.get("CEREBRAS_API_KEY")!;
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const PRO_MODEL = "cerebras/gpt-oss-120b";
 const PRO_MODEL_LABEL = "Cerebras gpt-oss-120B";
-const AI_TIMEOUT_MS = 15000; // 15s — reports are longer, allow more time
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -314,57 +312,21 @@ ${Object.entries(dailyTotals)
 - Streak: ${userProgress?.current_streak_weeks ?? 0} weeks
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
-    // ── Call Cerebras gpt-oss-120B via OpenRouter (with timeout) ──
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-
-    let aiResponse: Response;
-    try {
-      aiResponse = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://icanbefitter.app",
-            "X-Title": "ICANBEFITTER PRO Weekly Report",
-          },
-          body: JSON.stringify({
-            model: PRO_MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
-            ],
-            max_tokens: 1500,
-            temperature: 0.7,
-          }),
-          signal: controller.signal,
-        },
-      );
-    } catch (fetchErr) {
-      clearTimeout(timer);
-      if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
-        console.error("Weekly report AI timed out after 15s");
-        return jsonResponse({ error: "AI request timed out. Please try again." }, 504);
-      }
-      throw fetchErr;
-    } finally {
-      clearTimeout(timer);
-    }
-
-    if (!aiResponse.ok) {
-      const errorBody = await aiResponse.text();
-      console.error("OpenRouter error:", aiResponse.status, errorBody);
-      return jsonResponse(
-        { error: "AI provider error. Please try again later." },
-        502,
-      );
-    }
-
-    const aiData = await aiResponse.json();
-    const aiContent = aiData.choices?.[0]?.message?.content;
-    const tokensUsed = aiData.usage?.total_tokens ?? 0;
+    // ── Call AI via cascade (PRO model → free fallbacks) ──────────
+    const { content: aiContent, modelUsed, tokensUsed } = await cascadeChat({
+      models: [
+        PRO_MODEL,
+        "qwen/qwen3.6-plus:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "minimax/minimax-m2.5:free",
+      ],
+      systemPrompt,
+      userPrompt: userMessage,
+      maxTokens: 1500,
+      temperature: 0.7,
+      timeoutMs: 15000,
+      title: "ICANBEFITTER PRO Weekly Report",
+    });
 
     if (!aiContent) {
       return jsonResponse(
@@ -430,7 +392,7 @@ ${Object.entries(dailyTotals)
       channel: "weekly_report",
       user_message: `Weekly report request for ${sevenDaysAgoStr} to ${todayStr}`,
       ai_response: JSON.stringify(report),
-      model_used: PRO_MODEL_LABEL,
+      model_used: modelUsed ?? PRO_MODEL_LABEL,
       tokens_used: tokensUsed,
       created_at: new Date().toISOString(),
     });
@@ -441,7 +403,7 @@ ${Object.entries(dailyTotals)
       generated_at: now.toISOString(),
       period_start: sevenDaysAgoStr,
       period_end: todayStr,
-      model_used: PRO_MODEL_LABEL,
+      model_used: modelUsed ?? PRO_MODEL_LABEL,
       tokens_used: tokensUsed,
       nutrition_summary: {
         days_logged: daysLogged,

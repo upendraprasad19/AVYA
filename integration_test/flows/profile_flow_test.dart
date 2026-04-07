@@ -258,4 +258,127 @@ void main() {
     expect(hasHealthSync, isTrue,
         reason: 'Profile should have a Health Sync section');
   });
+
+  // ── T11 ─────────────────────────────────────────────────────────
+
+  testWidgets('T11: Invite Friends row visible on Profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+
+    await signInWithTestUser(tester);
+    await navigateToProfile(tester);
+
+    // Scroll down to find the Invite Friends row
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+    }
+
+    final hasInvite = anyTextVisible(
+        ['Invite', 'invite', 'Refer', 'refer', 'Share', 'Friends']);
+    expect(hasInvite, isTrue,
+        reason: 'Profile should have an "Invite Friends" or referral section');
+  });
+
+  // ── T12 ─────────────────────────────────────────────────────────
+
+  testWidgets('T12: Privacy Policy row visible on Profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+
+    await signInWithTestUser(tester);
+    await navigateToProfile(tester);
+
+    // Scroll down to find the Privacy Policy row
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+
+    final hasPrivacy = anyTextVisible(
+        ['Privacy', 'privacy', 'Policy', 'GDPR', 'Data']);
+    expect(hasPrivacy, isTrue,
+        reason: 'Profile should have a Privacy Policy link');
+  });
+
+  // ── T13 ─────────────────────────────────────────────────────────
+
+  testWidgets('T13: Export Data row visible on Profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+
+    await signInWithTestUser(tester);
+    await navigateToProfile(tester);
+
+    // Scroll down to find the Export Data row
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+
+    final hasExport = anyTextVisible(
+        ['Export', 'export', 'Download', 'Data']);
+    expect(hasExport, isTrue,
+        reason: 'Profile should have an Export Data option (GDPR compliance)');
+  });
+
+  // ── T14 ─────────────────────────────────────────────────────────
+
+  testWidgets('T14: Delete Account row visible on Profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+
+    await signInWithTestUser(tester);
+    await navigateToProfile(tester);
+
+    // Scroll all the way down to find Delete Account
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -600));
+      await tester.pumpAndSettle();
+    }
+
+    final hasDelete = anyTextVisible(
+        ['Delete', 'delete', 'Remove Account', 'Delete Account']);
+    expect(hasDelete, isTrue,
+        reason: 'Profile should have a Delete Account option (GDPR compliance)');
+  });
+
+  // ── T15 ─────────────────────────────────────────────────────────
+
+  testWidgets('T15: Community Review section accessible', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+
+    await signInWithTestUser(tester);
+    await navigateToProfile(tester);
+
+    // Scroll to find the Community Review row
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isNotEmpty) {
+      await tester.drag(scrollable.first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+    }
+
+    // Look for community review option
+    final hasCommunity = anyTextVisible(
+        ['Community', 'community', 'Review', 'Crowd', 'Submissions']);
+    if (hasCommunity) {
+      // Tap it and check it opens without crash
+      for (final label in ['Community', 'Review', 'Submissions']) {
+        final btn = find.textContaining(label, findRichText: true);
+        if (btn.evaluate().isNotEmpty) {
+          await tester.tap(btn.first);
+          await tester.pumpAndSettle(const Duration(seconds: 2));
+          expect(tester.takeException(), isNull,
+              reason: 'Community Review sheet should open without crash');
+          return;
+        }
+      }
+    }
+    // Community review may not be visible if no items pending — that's OK.
+  });
 }

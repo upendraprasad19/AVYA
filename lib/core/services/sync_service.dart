@@ -52,6 +52,9 @@ class SyncService {
       // Pull recent cross-channel logs (Telegram → Hive, last 24h).
       await pullRecentCrossChannelLogs();
 
+      // Pull latest fitness_summary from Supabase → Hive (updated nightly by rolling-context).
+      await _syncFitnessSummary(userId);
+
       // Check if a weekly full sync is needed.
       final lastFull = _getTimestamp(_lastFullSyncKey);
       if (lastFull == null ||
@@ -211,6 +214,32 @@ class SyncService {
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
+    }
+  }
+
+  // ── Fitness Summary Sync (rolling-context → Hive) ───────────
+
+  /// Fetches the latest fitness_summary from user_daily_snapshots
+  /// and writes it to coachBox. Updated nightly by rolling-context cron.
+  Future<void> _syncFitnessSummary(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('user_daily_snapshots')
+          .select('snapshot_json')
+          .eq('user_id', userId)
+          .not('snapshot_json->fitness_summary', 'is', null)
+          .order('snapshot_date', ascending: false)
+          .limit(1);
+
+      if (rows.isNotEmpty) {
+        final json = rows.first['snapshot_json'] as Map<String, dynamic>?;
+        final summary = json?['fitness_summary'] as String?;
+        if (summary != null && summary.isNotEmpty) {
+          await _hive.coachBox.put('fitness_summary', summary);
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService._syncFitnessSummary] $e');
     }
   }
 

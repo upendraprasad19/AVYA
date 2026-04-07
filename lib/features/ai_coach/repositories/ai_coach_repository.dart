@@ -54,6 +54,7 @@ class AiCoachRepository {
       'latest_weight': _getLatestWeight(),
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
+      'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
     };
@@ -592,5 +593,11 @@ class AiCoachRepository {
       }
     }
     return [];
+  }
+
+  /// Returns the rolling conversation summary from coachBox.
+  /// Written by SyncService from the nightly rolling-context Edge Function.
+  String _getFitnessSummary() {
+    return _hive.coachBox.get('fitness_summary') as String? ?? '';
   }
 }

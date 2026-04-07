@@ -17,6 +17,11 @@ void main() {
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
+  if (supabaseUrl.isEmpty || anonKey.isEmpty) {
+    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    return;
+  }
+
   /// Helper to call the webhook Edge Function.
   Future<http.Response> callWebhook({
     Map<String, dynamic>? body,

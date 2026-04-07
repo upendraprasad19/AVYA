@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,6 +20,13 @@ class SupabaseTestHelper {
   static const String testEmail = 'qa@icanbefitter.com';
   static const String testPassword = 'QA_Test_2024!';
 
+  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  /// Returns true if env vars are configured. Tests should skip if false.
+  static bool get hasCredentials =>
+      supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+
   static late SupabaseClient _client;
   static String? _userId;
 
@@ -32,13 +41,29 @@ class SupabaseTestHelper {
     return _userId!;
   }
 
+  /// Register a mock SharedPreferences channel handler so that
+  /// Supabase.initialize() works in pure `flutter test` (no device).
+  static void _mockSharedPreferences() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+      if (call.method == 'getAll') return <String, dynamic>{};
+      if (call.method == 'setBool' ||
+          call.method == 'setString' ||
+          call.method == 'remove') {
+        return true;
+      }
+      return null;
+    });
+  }
+
   /// Initialize Supabase and Hive for testing.
   /// Call once in setUpAll().
   static Future<void> init() async {
-    const url = String.fromEnvironment('SUPABASE_URL');
-    const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    _mockSharedPreferences();
 
-    await Supabase.initialize(url: url, anonKey: anonKey);
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
     _client = Supabase.instance.client;
 
     // Initialize Hive in a temp directory for tests.

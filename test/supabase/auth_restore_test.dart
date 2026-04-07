@@ -13,6 +13,11 @@ import 'supabase_test_helper.dart';
 ///
 /// Run: flutter test test/supabase/auth_restore_test.dart
 void main() {
+  if (!SupabaseTestHelper.hasCredentials) {
+    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    return;
+  }
+
   late Box userBox;
   late Box configBox;
 

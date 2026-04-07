@@ -76,9 +76,13 @@ class AuthNotifier extends Notifier<AuthState2> {
       await _supabase.initialize();
       return true;
     } catch (e) {
+      // Surface build-config errors clearly; everything else is a connectivity issue.
+      final msg = e is StateError
+          ? e.message
+          : 'Connection failed. Please check your internet and try again.';
       state = state.copyWith(
         status: AuthStatus.error,
-        errorMessage: 'Connection failed. Please check your internet and try again.',
+        errorMessage: msg,
       );
       return false;
     }

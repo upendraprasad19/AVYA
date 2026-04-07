@@ -17,6 +17,11 @@ import 'supabase_test_helper.dart';
 ///
 /// Run: flutter test test/supabase/sync_service_test.dart
 void main() {
+  if (!SupabaseTestHelper.hasCredentials) {
+    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    return;
+  }
+
   late Box userBox;
   late Box healthBox;
   late Box syncBox;

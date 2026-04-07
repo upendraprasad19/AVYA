@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { getEmbedding } from "../_shared/embeddings.ts";
+import { getEmbedding } from "./_shared/embeddings.ts";
+import { cascadeChat, FREE_MODELS } from "./_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,9 +20,6 @@ const SUMMARY_MODEL_LABEL = "Cerebras Llama 3.1 8B";
 
 const MESSAGE_THRESHOLD = 50;
 const KEEP_RECENT = 10;
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1000;
-const TIMEOUT_MS = 10000;
 
 /**
  * Returns yesterday's date string in IST (UTC+5:30) as YYYY-MM-DD.
@@ -44,13 +42,9 @@ function getTodayIST(): string {
   return istDate.toISOString().split("T")[0];
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Call OpenRouter to summarize conversation messages into a fitness summary.
- * Retries on failure up to MAX_RETRIES times.
+ * Call cascadeChat to summarize conversation messages into a fitness summary.
+ * Uses the shared cascade utility — tries SUMMARY_MODEL first, then FREE_MODELS.
  */
 async function summarizeMessages(
   messages: { user_message: string; ai_response: string; created_at: string }[],
@@ -72,72 +66,19 @@ async function summarizeMessages(
     "- Key coaching advice given\n" +
     "Output ONLY the summary text, no preamble.";
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const { content } = await cascadeChat({
+    models: [
+      SUMMARY_MODEL,
+      ...FREE_MODELS,
+    ],
+    systemPrompt,
+    userPrompt: `Summarize this fitness coaching conversation:\n\n${conversationText}`,
+    maxTokens: 300,
+    timeoutMs: 10000,
+    title: "ICANBEFITTER Rolling Context",
+  });
 
-    try {
-      const response = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://icanbefitter.app",
-            "X-Title": "ICANBEFITTER Rolling Context",
-          },
-          body: JSON.stringify({
-            model: SUMMARY_MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              {
-                role: "user",
-                content: `Summarize this fitness coaching conversation:\n\n${conversationText}`,
-              },
-            ],
-            max_tokens: 300,
-          }),
-          signal: controller.signal,
-        },
-      );
-
-      if (!response.ok) {
-        console.error(
-          `Summarization attempt ${attempt + 1} failed:`,
-          response.status,
-        );
-        if (attempt < MAX_RETRIES) {
-          await sleep(RETRY_DELAY_MS * (attempt + 1));
-          continue;
-        }
-        return null;
-      }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content && typeof content === "string") {
-        return content.trim();
-      }
-
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * (attempt + 1));
-        continue;
-      }
-      return null;
-    } catch (err) {
-      console.error(`Summarization attempt ${attempt + 1} error:`, err);
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * (attempt + 1));
-        continue;
-      }
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  return null;
+  return content;
 }
 
 serve(async (req: Request) => {

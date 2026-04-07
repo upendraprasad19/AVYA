@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { sendPushNotification } from "../_shared/send_notification.ts";
+import { sendPushNotification } from "./_shared/send_notification.ts";
+import { cascadeChat } from "./_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,75 +140,33 @@ function generateFreeAlert(
   return message;
 }
 
-/**
- * Generate a PRO personalised morning alert using Cerebras 120B.
- * Single attempt with 3s hard timeout — no retries (fail fast at scale).
- */
 async function generateProAlert(
   name: string,
   snapshotJson: Record<string, unknown>,
 ): Promise<string | null> {
   const systemPrompt =
-    "You are AVYA Fit's morning coach. Generate a short, personalised morning alert " +
+    "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
     "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
-    "today's scheduled workout name, weight lifted, streak day count, yesterday's calories vs target, " +
-    "recent PRs (exercise name + weight), current vs target weight progress, total workouts completed. " +
-    "Celebrate milestones (7/14/30/50/100 day streaks, PR records, weight goals within reach). " +
+    "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
     "Be encouraging, specific, and actionable. Use the user's first name. " +
     "Output ONLY the alert message, no preamble or formatting.";
 
   const userPrompt =
     `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const { content } = await cascadeChat({
+    models: [
+      PRO_MODEL,
+      "qwen/qwen3.6-plus:free",
+    ],
+    systemPrompt,
+    userPrompt,
+    maxTokens: 150,
+    timeoutMs: AI_TIMEOUT_MS,
+    title: "ICANBEFITTER Morning Alert",
+  });
 
-  try {
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://icanbefitter.app",
-          "X-Title": "ICANBEFITTER Morning Alert",
-        },
-        body: JSON.stringify({
-          model: PRO_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: 150,
-        }),
-        signal: controller.signal,
-      },
-    );
-
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      console.error(`PRO alert AI error: HTTP ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (content && typeof content === "string") {
-      return content.trim();
-    }
-    return null;
-  } catch (err) {
-    clearTimeout(timer);
-    // AbortError = timeout, anything else = network failure — both get free fallback
-    if (err instanceof DOMException && err.name === "AbortError") {
-      console.warn("PRO alert AI timed out (3s limit) — falling back to free template");
-    } else {
-      console.error("PRO alert AI error:", err);
-    }
-    return null;
-  }
+  return content;
 }
 
 /**
