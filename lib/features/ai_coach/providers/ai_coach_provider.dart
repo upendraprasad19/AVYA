@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../repositories/ai_coach_repository.dart';
 
@@ -89,6 +90,11 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   void replaceLastMessage(ChatMessage message) {
     if (state.isEmpty) return;
     state = [...state.sublist(0, state.length - 1), message];
+  }
+
+  void removeLastMessage() {
+    if (state.isEmpty) return;
+    state = [...state.sublist(0, state.length - 1)];
   }
 }
 
@@ -185,6 +191,9 @@ final trialInfoProvider =
 // ── Send Message ─────────────────────────────────────────────────
 
 class SendMessageNotifier extends Notifier<bool> {
+  /// Tracks whether we've already retried after an auth error (prevents infinite retry loops).
+  bool _hasRetriedAuth = false;
+
   @override
   bool build() => false; // isLoading
 
@@ -354,14 +363,38 @@ class SendMessageNotifier extends Notifier<bool> {
     } catch (e) {
       debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
+
+      // Detect session/auth errors for auto-retry
+      final isAuthError = errStr.contains('No active session') ||
+          errStr.contains('401') || errStr.contains('unauthorized') ||
+          errStr.contains('jwt') || errStr.contains('Session expired');
+
+      // Auto-retry once on auth errors — token may have been refreshed by callFunction
+      if (isAuthError && !_hasRetriedAuth) {
+        _hasRetriedAuth = true;
+        debugPrint('[AiCoachProvider] Auth error detected, refreshing token and retrying...');
+        try {
+          final freshToken = await SupabaseService.instance.ensureFreshToken();
+          if (freshToken != null) {
+            // Remove loading message, retry the send
+            chatNotifier.removeLastMessage();
+            state = false;
+            _hasRetriedAuth = false; // Reset for future sends
+            return send(message, mode: mode);
+          }
+        } catch (retryErr) {
+          debugPrint('[AiCoachProvider] Retry also failed: $retryErr');
+        }
+        _hasRetriedAuth = false;
+      }
+
       final String errorMsg;
       if (errStr.contains('Failed host lookup') ||
           errStr.contains('Failed to fetch') ||
           errStr.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
-      } else if (errStr.contains('No active session') || errStr.contains('401') ||
-          errStr.contains('token') || errStr.contains('unauthorized') || errStr.contains('jwt')) {
-        errorMsg = 'Session expired. Please restart the app or sign out and sign in again.';
+      } else if (isAuthError) {
+        errorMsg = 'Session expired. Please sign out and sign in again.';
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
       } else if (errStr.contains('TRIAL_EXPIRED')) {

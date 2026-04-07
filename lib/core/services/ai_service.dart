@@ -111,11 +111,13 @@ class AiService {
   }
 
   /// Direct HTTP fallback for web when Supabase client fails.
+  /// Proactively refreshes JWT before making the call.
   Future<AiChatResponse> _directHttpCall(
       String functionName, String message, Map<String, dynamic> context) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
-    final session = _supabase.client.auth.currentSession;
-    final token = session?.accessToken ?? AppConstants.supabaseAnonKey;
+    // Ensure fresh token before direct HTTP call
+    final freshToken = await _supabase.ensureFreshToken();
+    final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
     final response = await _httpClient.post(
       Uri.parse(url),
@@ -226,6 +228,7 @@ class AiService {
   }
 
   /// Direct HTTP fallback for media calls on web when Supabase client fails.
+  /// Proactively refreshes JWT before making the call.
   Future<AiChatResponse> _directMediaHttpCall(
     String message,
     String mediaUrl,
@@ -233,8 +236,9 @@ class AiService {
     Map<String, dynamic> context,
   ) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/ai-media-proxy';
-    final session = _supabase.client.auth.currentSession;
-    final token = session?.accessToken ?? AppConstants.supabaseAnonKey;
+    // Ensure fresh token before direct HTTP call
+    final freshToken = await _supabase.ensureFreshToken();
+    final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
     final response = await _httpClient.post(
       Uri.parse(url),

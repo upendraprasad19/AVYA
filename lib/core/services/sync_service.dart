@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -68,6 +69,15 @@ class SyncService {
       // Pull approved community foods/exercises.
       await syncCommunityItems();
 
+      // Sync health data (Google Fit / Health Connect) if enabled
+      if (HealthSyncService.isEnabled()) {
+        try {
+          await HealthSyncService.instance.syncToHive();
+        } catch (e) {
+          debugPrint('[SyncService.checkAndSync] Health sync failed: $e');
+        }
+      }
+
       // PRO users: subscribe to realtime for instant Telegram sync.
       if (SubscriptionService.instance.isPro()) {
         subscribeToRealtimeSync();
@@ -134,6 +144,12 @@ class SyncService {
         _syncWaterLogs(userId),
         _syncWorkoutPlan(userId),
         _syncUserProgress(userId),
+        // ── New sync gap methods ──
+        _syncWorkoutTemplates(userId),
+        _syncScheduledWorkouts(userId),
+        _syncSavedMeals(userId),
+        _syncUserPreferences(userId),
+        _syncCoachInteractions(userId),
       ]);
 
       await _setTimestamp(_lastFullSyncKey);
@@ -210,6 +226,12 @@ class SyncService {
         _restoreWaterLogs(userId, since),
         _restoreSleepLogs(userId, since),
         _restoreStreaks(userId),
+        // ── New restore methods ──
+        _restoreWorkoutTemplates(userId),
+        _restoreScheduledWorkouts(userId, since),
+        _restoreSavedMeals(userId),
+        _restoreUserPreferences(userId),
+        _restoreCoachInteractions(userId, since),
       ]);
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
@@ -483,12 +505,42 @@ class SyncService {
     final nutritionBox = _hive.nutritionBox;
     for (final key in nutritionBox.keys) {
       if (key is! String || !key.startsWith("nlog_")) continue;
-      final log = nutritionBox.get(key);
-      if (log == null) continue;
+      final raw = nutritionBox.get(key);
+      if (raw == null) continue;
+      final log = Map<String, dynamic>.from(raw as Map);
       try {
+        // Push aggregate nutrition_logs row
+        final logForSupabase = Map<String, dynamic>.from(log);
+        logForSupabase.remove('items'); // Don't store items list in the parent table
         await _supabase.client.from("nutrition_logs").upsert({
-          ...Map<String, dynamic>.from(log as Map), "user_id": userId,
+          ...logForSupabase, "user_id": userId,
         }, onConflict: "id");
+
+        // Push individual nutrition_log_items (Gap 5)
+        final items = log['items'];
+        if (items is List) {
+          final logId = log['id'] as String? ?? key;
+          for (int i = 0; i < items.length; i++) {
+            final item = items[i] is Map
+                ? Map<String, dynamic>.from(items[i] as Map)
+                : <String, dynamic>{};
+            try {
+              await _supabase.client.from('nutrition_log_items').upsert({
+                'id': '${logId}_item_$i',
+                'log_id': logId,
+                'food_id': item['food_id'],
+                'food_name': item['name'] ?? item['food_name'] ?? '',
+                'quantity_g': item['serving_g'] ?? item['quantity_g'],
+                'calories': item['calories'],
+                'protein': item['protein'],
+                'carbs': item['carbs'],
+                'fat': item['fat'],
+              }, onConflict: 'id');
+            } catch (itemErr) {
+              debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
+            }
+          }
+        }
       } catch (e) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
       }
@@ -912,9 +964,10 @@ class SyncService {
 
   Future<void> _restoreNutritionLogs(String userId, String since) async {
     try {
+      // Join with nutrition_log_items to restore individual food items
       final rows = await _supabase.client
           .from('nutrition_logs')
-          .select()
+          .select('*, nutrition_log_items(*)')
           .eq('user_id', userId)
           .gte('created_at', since)
           .limit(5000);
@@ -923,10 +976,32 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
         if (_hive.nutritionBox.get(id) != null) continue;
-        await _hive.nutritionBox.put(id, {
-          ...map,
-          'source': 'cloud_restore',
-        });
+
+        // Extract items from joined nutrition_log_items
+        final itemRows = map['nutrition_log_items'] as List? ?? [];
+        if (itemRows.isNotEmpty) {
+          final items = itemRows.map((item) {
+            final m = Map<String, dynamic>.from(item as Map);
+            return {
+              'food_id': m['food_id'],
+              'name': m['food_name'],
+              'food_name': m['food_name'],
+              'quantity_g': m['quantity_g'],
+              'serving_g': m['quantity_g'],
+              'calories': m['calories'],
+              'protein': m['protein'],
+              'carbs': m['carbs'],
+              'fat': m['fat'],
+            };
+          }).toList();
+          map['items'] = items;
+        }
+
+        // Remove the nested Supabase join structure
+        map.remove('nutrition_log_items');
+        map['source'] = 'cloud_restore';
+
+        await _hive.nutritionBox.put(id, map);
       }
     } catch (e) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
@@ -1267,6 +1342,359 @@ class SyncService {
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());
     } catch (e) {
       debugPrint('[SyncService.syncCommunityItems] $e');
+    }
+  }
+
+  // ── Gap 1+2: Workout Templates + Template Exercises ─────────
+
+  /// Pushes workout templates and their exercises to Supabase.
+  Future<void> _syncWorkoutTemplates(String userId) async {
+    final workoutBox = _hive.workoutBox;
+    for (final key in workoutBox.keys) {
+      if (key is! String || !key.startsWith('tmpl_')) continue;
+      final raw = workoutBox.get(key);
+      if (raw is! Map) continue;
+      final tmpl = Map<String, dynamic>.from(raw);
+      if (tmpl['type'] != 'template') continue;
+
+      try {
+        final tmplId = tmpl['id']?.toString() ?? key;
+        final exercises = tmpl['exercises'] as List? ?? [];
+
+        // Upsert template header
+        await _supabase.client.from('workout_templates').upsert({
+          'id': tmplId,
+          'user_id': userId,
+          'name': tmpl['name'] ?? 'Untitled',
+          'description': tmpl['description'],
+          'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'],
+          'estimated_duration_mins': tmpl['estimated_duration_mins'],
+          'source': 'user',
+          'is_active': true,
+          'created_at': tmpl['created_at'] ?? DateTime.now().toIso8601String(),
+          'last_used_at': tmpl['last_used_at'],
+        }, onConflict: 'id');
+
+        // Upsert child exercises
+        for (int i = 0; i < exercises.length; i++) {
+          final ex = exercises[i] is Map
+              ? Map<String, dynamic>.from(exercises[i] as Map)
+              : <String, dynamic>{};
+          try {
+            await _supabase.client.from('template_exercises').upsert({
+              'id': '${tmplId}_ex_$i',
+              'template_id': tmplId,
+              'exercise_id': ex['exercise_id'] ?? ex['id'],
+              'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
+              'order_index': i,
+              'logging_type': ex['logging_type'] ?? 'weight_reps',
+              'prescribed_sets': ex['sets'] is int ? ex['sets'] : int.tryParse(ex['sets']?.toString() ?? ''),
+              'prescribed_reps': ex['reps']?.toString(),
+              'prescribed_weight': ex['weight_kg']?.toString() ?? ex['prescribed_weight']?.toString(),
+              'prescribed_time_secs': ex['time_secs'] ?? ex['prescribed_time_secs'],
+              'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
+              'notes': ex['notes'],
+            }, onConflict: 'id');
+          } catch (exErr) {
+            debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
+          }
+        }
+      } catch (e) {
+        debugPrint('[SyncService._syncWorkoutTemplates] $e');
+      }
+    }
+  }
+
+  /// Restores workout templates (with exercises) from Supabase.
+  Future<void> _restoreWorkoutTemplates(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('workout_templates')
+          .select('*, template_exercises(*)')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .limit(500);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id'] as String? ?? '';
+        if (id.isEmpty) continue;
+        final hiveKey = id.startsWith('tmpl_') ? id : 'tmpl_${id.hashCode}';
+        if (_hive.workoutBox.get(hiveKey) != null) continue;
+
+        // Sort exercises by order_index
+        final exerciseRows = map['template_exercises'] as List? ?? [];
+        exerciseRows.sort((a, b) =>
+            ((a as Map)['order_index'] as int? ?? 0)
+                .compareTo((b as Map)['order_index'] as int? ?? 0));
+
+        final exercises = exerciseRows.map((e) {
+          final ex = Map<String, dynamic>.from(e as Map);
+          return {
+            'exercise_name': ex['exercise_name'],
+            'name': ex['exercise_name'],
+            'exercise_id': ex['exercise_id'],
+            'id': ex['exercise_id'],
+            'logging_type': ex['logging_type'] ?? 'weight_reps',
+            'sets': ex['prescribed_sets']?.toString() ?? '3',
+            'reps': ex['prescribed_reps']?.toString() ?? '10',
+            'weight_kg': ex['prescribed_weight'],
+            'rest_seconds': ex['rest_seconds'],
+            'rest_secs': ex['rest_seconds'],
+            'notes': ex['notes'],
+          };
+        }).toList();
+
+        await _hive.workoutBox.put(hiveKey, {
+          'id': hiveKey,
+          'type': 'template',
+          'name': map['name'],
+          'description': map['description'],
+          'workout_focus': map['workout_type'],
+          'workout_type': map['workout_type'],
+          'exercises': exercises,
+          'created_at': map['created_at'],
+          'last_used_at': map['last_used_at'],
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreWorkoutTemplates] $e');
+    }
+  }
+
+  // ── Gap 3: Scheduled Workouts ──────────────────────────────
+
+  /// Pushes full scheduled workout definitions to Supabase.
+  /// Complements _syncScheduleCompletions which only pushes completed status.
+  Future<void> _syncScheduledWorkouts(String userId) async {
+    final workoutBox = _hive.workoutBox;
+    for (final key in workoutBox.keys) {
+      if (key is! String || !key.startsWith('schedule_')) continue;
+      final raw = workoutBox.get(key);
+      if (raw is! Map) continue;
+      final entry = Map<String, dynamic>.from(raw);
+      final date = entry['date'] as String?;
+      if (date == null) continue;
+
+      try {
+        final parsedDate = DateTime.tryParse(date);
+        await _supabase.client.from('scheduled_workouts').upsert({
+          'user_id': userId,
+          'template_id': entry['template_id'],
+          'scheduled_date': date,
+          'week_number': entry['week'] ?? entry['week_number'],
+          'day_of_week': parsedDate?.weekday ?? entry['day_of_week'],
+          'status': entry['status'] ?? 'planned',
+          'completed_at': entry['completed_at'],
+        }, onConflict: 'user_id,scheduled_date');
+      } catch (e) {
+        debugPrint('[SyncService._syncScheduledWorkouts] $e');
+      }
+    }
+  }
+
+  /// Restores scheduled workouts from Supabase (supplement to plan restore).
+  Future<void> _restoreScheduledWorkouts(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('scheduled_workouts')
+          .select()
+          .eq('user_id', userId)
+          .gte('scheduled_date', since.substring(0, 10))
+          .order('scheduled_date')
+          .limit(5000);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['scheduled_date'] as String? ?? '';
+        if (date.isEmpty) continue;
+        final key = 'schedule_$date';
+        // Skip if plan restore already populated this
+        if (_hive.workoutBox.get(key) != null) continue;
+
+        await _hive.workoutBox.put(key, {
+          'date': date,
+          'type': map['template_id'] != null ? 'custom_template' : 'workout',
+          'template_id': map['template_id'],
+          'status': map['status'] ?? 'planned',
+          'completed_at': map['completed_at'],
+          'week': map['week_number'],
+          'week_number': map['week_number'],
+          'day_of_week': map['day_of_week'],
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreScheduledWorkouts] $e');
+    }
+  }
+
+  // ── Gap 4: User Saved Meals ────────────────────────────────
+
+  /// Pushes saved meals to Supabase user_saved_meals table.
+  Future<void> _syncSavedMeals(String userId) async {
+    final nutritionBox = _hive.nutritionBox;
+    for (final key in nutritionBox.keys) {
+      if (key is! String || !key.startsWith('saved_meal_')) continue;
+      final raw = nutritionBox.get(key);
+      if (raw is! Map) continue;
+      final meal = Map<String, dynamic>.from(raw);
+      if (meal['is_saved_meal'] != true) continue;
+
+      try {
+        await _supabase.client.from('user_saved_meals').upsert({
+          'id': meal['id'] ?? key,
+          'user_id': userId,
+          'name': meal['name'] ?? 'Unnamed Meal',
+          'items': meal['items'],
+          'total_calories': meal['total_calories'],
+          'total_protein': meal['total_protein'],
+          'times_used': meal['times_used'] ?? 0,
+          'created_at': meal['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncSavedMeals] $e');
+      }
+    }
+  }
+
+  /// Restores saved meals from Supabase.
+  Future<void> _restoreSavedMeals(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('user_saved_meals')
+          .select()
+          .eq('user_id', userId)
+          .limit(500);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id'] as String? ?? '';
+        if (id.isEmpty) continue;
+        final hiveKey = id.startsWith('saved_meal_') ? id : 'saved_meal_${id.hashCode}';
+        if (_hive.nutritionBox.get(hiveKey) != null) continue;
+
+        await _hive.nutritionBox.put(hiveKey, {
+          'id': hiveKey,
+          'is_saved_meal': true,
+          'name': map['name'],
+          'total_calories': map['total_calories'],
+          'total_protein': map['total_protein'],
+          'total_carbs': map['total_carbs'],
+          'total_fat': map['total_fat'],
+          'items': map['items'],
+          'times_used': map['times_used'] ?? 0,
+          'created_at': map['created_at'],
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreSavedMeals] $e');
+    }
+  }
+
+  // ── Gap 6: User Preferences ────────────────────────────────
+
+  /// Pushes user preferences to Supabase user_preferences table.
+  Future<void> _syncUserPreferences(String userId) async {
+    try {
+      final prefs = _hive.userBox.get('preferences');
+      if (prefs == null) return;
+      final p = Map<String, dynamic>.from(prefs as Map);
+
+      await _supabase.client.from('user_preferences').upsert({
+        'user_id': userId,
+        'motivational_style': p['motivational_style'] ?? 'encouraging',
+        'biggest_obstacle': p['biggest_obstacle'],
+        'preferred_language': p['preferred_language'] ?? 'en',
+        'coaching_notes': p['coaching_notes'],
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('[SyncService._syncUserPreferences] $e');
+    }
+  }
+
+  /// Restores user preferences from Supabase.
+  Future<void> _restoreUserPreferences(String userId) async {
+    try {
+      if (_hive.userBox.get('preferences') != null) return;
+
+      final rows = await _supabase.client
+          .from('user_preferences')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+
+      if (rows.isEmpty) return;
+      final map = Map<String, dynamic>.from(rows.first as Map);
+      map.remove('user_id');
+      await _hive.userBox.put('preferences', map);
+    } catch (e) {
+      debugPrint('[SyncService._restoreUserPreferences] $e');
+    }
+  }
+
+  // ── Gap 7: AI Coach Interactions ───────────────────────────
+
+  /// Pushes AI coach interactions to Supabase.
+  /// Note: The AI proxy Edge Function already writes server-side,
+  /// so this mainly catches edge-case local-only entries.
+  Future<void> _syncCoachInteractions(String userId) async {
+    final coachBox = _hive.coachBox;
+    for (final key in coachBox.keys) {
+      if (key is! String || !key.startsWith('coach_')) continue;
+      final raw = coachBox.get(key);
+      if (raw is! Map) continue;
+      final entry = Map<String, dynamic>.from(raw);
+
+      try {
+        await _supabase.client.from('ai_coach_interactions').upsert({
+          'id': entry['id'] ?? key,
+          'user_id': userId,
+          'channel': 'in_app',
+          'user_message': entry['user_message'] ?? '',
+          'ai_response': entry['ai_response'] ?? '',
+          'model_used': entry['model_used'] ?? 'unknown',
+          'created_at': entry['created_at'] ?? DateTime.now().toIso8601String(),
+        }, onConflict: 'id');
+      } catch (e) {
+        debugPrint('[SyncService._syncCoachInteractions] $e');
+      }
+    }
+  }
+
+  /// Restores AI coach interactions from Supabase (for chat history on new device).
+  Future<void> _restoreCoachInteractions(String userId, String since) async {
+    try {
+      final rows = await _supabase.client
+          .from('ai_coach_interactions')
+          .select()
+          .eq('user_id', userId)
+          .gte('created_at', since)
+          .order('created_at')
+          .limit(1000);
+
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id'] as String? ?? '';
+        if (id.isEmpty) continue;
+        final hiveKey = id.startsWith('coach_') ? id : 'coach_${id.hashCode}';
+        if (_hive.coachBox.get(hiveKey) != null) continue;
+
+        await _hive.coachBox.put(hiveKey, {
+          'id': hiveKey,
+          'user_message': map['user_message'] ?? '',
+          'ai_response': map['ai_response'] ?? '',
+          'model_used': map['model_used'] ?? 'unknown',
+          'mode': 'quick',
+          'is_user_message': true,
+          'created_at': map['created_at'],
+          'source': 'cloud_restore',
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreCoachInteractions] $e');
     }
   }
 

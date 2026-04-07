@@ -147,6 +147,8 @@ class WorkoutReceiptData {
       double bestWeight = 0;
       int totalReps = 0;
       int completedSets = 0;
+      int minReps = 999;
+      int maxReps = 0;
 
       // Scan for dynamically added sets beyond the template's prescribed count.
       int maxSet = numSets;
@@ -160,7 +162,7 @@ class WorkoutReceiptData {
       for (int s = 0; s < maxSet; s++) {
         final key = '$exIdx-$s';
         if (data.checkedSets.containsKey(key)) {
-          // Skip warm-up sets in volume
+          // Skip warm-up sets in volume and rep tracking
           if (data.warmUpSets.containsKey(key)) continue;
           completedSets++;
           final vals = data.setInputValues[key];
@@ -172,7 +174,15 @@ class WorkoutReceiptData {
 
           if (weight > bestWeight) bestWeight = weight;
           totalReps += reps;
+          if (reps < minReps) minReps = reps;
+          if (reps > maxReps) maxReps = reps;
         }
+      }
+
+      // Reset min/max to defaults if no sets were completed
+      if (completedSets == 0) {
+        minReps = defaultReps;
+        maxReps = defaultReps;
       }
 
       totalSets += completedSets;
@@ -180,6 +190,8 @@ class WorkoutReceiptData {
         name: ex.name,
         sets: completedSets > 0 ? completedSets : numSets,
         reps: completedSets > 0 ? (totalReps / completedSets.clamp(1, 999)).round() : defaultReps,
+        minReps: minReps == 999 ? defaultReps : minReps,
+        maxReps: maxReps == 0 ? defaultReps : maxReps,
         weightKg: bestWeight,
         loggingType: ex.loggingType,
       ));
@@ -201,10 +213,14 @@ class WorkoutReceiptData {
         final avgReps = mergedSets > 0
             ? ((existing.reps * existing.sets + ex.reps * ex.sets) / mergedSets).round()
             : existing.reps;
+        final mergedMinReps = existing.minReps < ex.minReps ? existing.minReps : ex.minReps;
+        final mergedMaxReps = existing.maxReps > ex.maxReps ? existing.maxReps : ex.maxReps;
         seen[key] = ReceiptExercise(
           name: existing.name,
           sets: mergedSets,
           reps: avgReps,
+          minReps: mergedMinReps,
+          maxReps: mergedMaxReps,
           weightKg: maxWeight,
           loggingType: existing.loggingType,
         );
@@ -225,7 +241,9 @@ class WorkoutReceiptData {
 class ReceiptExercise {
   final String name;
   final int sets;
-  final int reps;
+  final int reps; // kept for backward compat (average reps)
+  final int minReps;
+  final int maxReps;
   final double weightKg;
   final String loggingType;
 
@@ -234,8 +252,13 @@ class ReceiptExercise {
     required this.sets,
     required this.reps,
     required this.weightKg,
+    this.minReps = 0,
+    this.maxReps = 0,
     this.loggingType = 'weight_reps',
   });
+
+  /// Whether all sets had the same rep count.
+  bool get hasUniformReps => minReps == maxReps || minReps <= 0;
 }
 
 /// Workout Receipt Card — rendered inside a ShareableCard wrapper.
@@ -381,23 +404,30 @@ class WorkoutReceiptCard extends StatelessWidget {
     }).toList();
   }
 
+  /// Formats rep display: shows range if sets had different rep counts.
+  String _repDisplay(ReceiptExercise ex) {
+    if (ex.hasUniformReps) return '${ex.reps}';
+    return '${ex.minReps}-${ex.maxReps}';
+  }
+
   String _exerciseDetail(ReceiptExercise ex) {
+    final reps = _repDisplay(ex);
     switch (ex.loggingType) {
       case 'bodyweight_reps':
-        return '${ex.sets}\u00d7${ex.reps}';
+        return '${ex.sets}\u00d7$reps';
       case 'timed':
-        return '${ex.sets}\u00d7${ex.reps}s';
+        return '${ex.sets}\u00d7${reps}s';
       case 'cardio':
-        return '${ex.reps} min';
+        return '$reps min';
       case 'distance':
-        return '${ex.reps} km';
+        return '$reps km';
       case 'weighted_bodyweight':
-        return '${ex.sets}\u00d7${ex.reps} +${ex.weightKg.toStringAsFixed(0)}kg';
+        return '${ex.sets}\u00d7$reps +${ex.weightKg.toStringAsFixed(0)}kg';
       default: // weight_reps
         if (ex.weightKg > 0) {
-          return '${ex.sets}\u00d7${ex.reps}\u00d7${ex.weightKg.toStringAsFixed(0)}kg';
+          return '${ex.sets}\u00d7$reps\u00d7${ex.weightKg.toStringAsFixed(0)}kg';
         }
-        return '${ex.sets}\u00d7${ex.reps}';
+        return '${ex.sets}\u00d7$reps';
     }
   }
 

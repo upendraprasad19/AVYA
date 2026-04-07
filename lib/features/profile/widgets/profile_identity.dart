@@ -39,7 +39,11 @@ class ProfileIdentity extends StatelessWidget {
               child: Hero(
                 tag: heroTag,
                 child: InteractiveViewer(
-                  child: CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.contain),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    cacheKey: '${imageUrl}_fullres', // Separate cache key for full resolution
+                  ),
                 ),
               ),
             ),
@@ -98,6 +102,8 @@ class ProfileIdentity extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: 120,
+                                memCacheWidth: (MediaQuery.of(context).size.width * MediaQuery.of(context).devicePixelRatio).toInt(),
+                                memCacheHeight: (120 * MediaQuery.of(context).devicePixelRatio).toInt(),
                                 placeholder: (_, url) => Container(
                                   color: AppColors.input,
                                   child: const Center(
@@ -293,6 +299,8 @@ class ProfileIdentity extends StatelessWidget {
                           fit: BoxFit.cover,
                           width: 62,
                           height: 62,
+                          memCacheWidth: 186, // 62 * 3 for retina
+                          memCacheHeight: 186,
                           placeholder: (_, url) => const Center(
                             child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
                           ),

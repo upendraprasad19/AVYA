@@ -4,6 +4,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -391,6 +392,16 @@ class BiometricNotifier extends Notifier<BiometricData> {
   }
 
   Future<void> toggleSync(bool enabled) async {
+    if (enabled) {
+      // Request Health Connect / HealthKit permissions first
+      final granted = await HealthSyncService.instance.requestPermissions();
+      if (!granted) {
+        debugPrint('[BiometricNotifier] Health permissions denied — not enabling sync');
+        return; // Don't enable toggle if permissions denied
+      }
+      // Sync data immediately after permissions granted
+      await HealthSyncService.instance.syncToHive();
+    }
     await HiveService.instance.configBox
         .put('health_sync_enabled', enabled);
     // Rebuild state

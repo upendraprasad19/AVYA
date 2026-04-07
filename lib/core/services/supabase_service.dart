@@ -115,30 +115,77 @@ class SupabaseService {
     return null;
   }
 
+  /// Returns a fresh access token, refreshing proactively if the current
+  /// JWT expires within [buffer]. Returns null if no session exists or
+  /// refresh fails and the token is already expired.
+  Future<String?> ensureFreshToken({
+    Duration buffer = const Duration(seconds: 60),
+  }) async {
+    final session = client.auth.currentSession;
+    if (session == null) return null;
+
+    // Check if token expires within the buffer window
+    final expiresAt = session.expiresAt;
+    if (expiresAt != null) {
+      final expiryTime = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+      if (DateTime.now().isAfter(expiryTime.subtract(buffer))) {
+        // Token is about to expire or already expired — refresh
+        try {
+          final refreshed = await client.auth.refreshSession();
+          return refreshed.session?.accessToken;
+        } catch (e) {
+          debugPrint('[SupabaseService.ensureFreshToken] refresh failed: $e');
+          // If token is already past expiry, return null (caller should handle)
+          if (DateTime.now().isAfter(expiryTime)) return null;
+          // Token hasn't expired yet, return existing
+          return session.accessToken;
+        }
+      }
+    }
+
+    // Token is still fresh
+    return session.accessToken;
+  }
+
   /// Shortcut to invoke a Supabase Edge Function by [name].
+  ///
+  /// Proactively refreshes the JWT if it expires within 60 seconds.
+  /// On 401 response, retries once with a freshly refreshed token.
   Future<FunctionResponse> callFunction(
     String name, {
     Map<String, String>? headers,
     Map<String, dynamic>? body,
   }) async {
-    // Ensure JWT is fresh before calling edge functions
-    try {
-      await client.auth.refreshSession();
-    } catch (e) {
-      debugPrint('[SupabaseService.callFunction] refreshSession failed: $e');
-      // Check if we still have a valid session — it may not have expired yet
-      final session = client.auth.currentSession;
-      if (session == null) {
-        throw Exception('No active session. Please sign in again.');
-      }
-      // Session exists but refresh failed — proceed with existing token.
-      // The token may still be valid within its JWT expiry window.
+    // Proactive token refresh — avoids sending an expired JWT
+    final token = await ensureFreshToken();
+    if (token == null && client.auth.currentSession == null) {
+      throw Exception('No active session. Please sign in again.');
     }
 
-    return client.functions.invoke(
+    // First attempt
+    final response = await client.functions.invoke(
       name,
       headers: headers,
       body: body,
     );
+
+    // Auto-retry on 401: refresh token and try once more
+    if (response.status == 401) {
+      debugPrint('[SupabaseService.callFunction] Got 401, retrying with refreshed token...');
+      try {
+        await client.auth.refreshSession();
+      } catch (e) {
+        debugPrint('[SupabaseService.callFunction] retry refresh failed: $e');
+        throw Exception('Session expired. Please sign out and sign in again.');
+      }
+
+      return client.functions.invoke(
+        name,
+        headers: headers,
+        body: body,
+      );
+    }
+
+    return response;
   }
 }

@@ -213,8 +213,21 @@ class RazorpayService {
     );
   }
 
+  /// Computes a valid end date for a plan, used when webhook row has
+  /// no end_date or as fallback when polling exhausts.
+  String _computeEndDate(String plan) {
+    final end = plan == 'yearly'
+        ? DateTime.now().add(const Duration(days: 365))
+        : DateTime.now().add(const Duration(days: 30));
+    return end.toIso8601String();
+  }
+
   /// Polls Supabase subscriptions table for confirmation from the
-  /// razorpay-webhook Edge Function. Retries up to 5 times with 2s delay.
+  /// razorpay-webhook Edge Function.
+  ///
+  /// Uses exponential backoff: 2s → 3s → 4s (15 attempts, ~45s total).
+  /// On exhaustion, calls verify-payment Edge Function as final check
+  /// before falling back to local-only activation.
   Future<void> _pollAndActivate({
     required String paymentId,
     required String orderId,
@@ -224,9 +237,13 @@ class RazorpayService {
     if (userId == null) return;
 
     final hive = HiveService.instance;
+    final fallbackPlan = _pendingPlan ?? 'monthly';
 
-    for (int attempt = 0; attempt < 10; attempt++) {
-      await Future.delayed(const Duration(seconds: 3));
+    // Phase 1: Poll Supabase with exponential backoff (15 attempts)
+    for (int attempt = 0; attempt < 15; attempt++) {
+      // Exponential backoff: 2s for first 5, 3s for next 5, 4s for last 5
+      final delay = attempt < 5 ? 2 : (attempt < 10 ? 3 : 4);
+      await Future.delayed(Duration(seconds: delay));
 
       try {
         final row = await SupabaseService.instance.client
@@ -238,14 +255,17 @@ class RazorpayService {
             .limit(1)
             .maybeSingle();
 
-        if (row != null && row['razorpay_payment_id'] == paymentId) {
-          // Webhook confirmed — activate locally.
+        if (row != null) {
+          // Accept any active subscription — don't require exact payment_id match
+          // because webhook timing may differ from poll timing
           final endDate = row['end_date'] as String?;
-          final plan = row['plan'] as String?;
+          final plan = row['plan'] as String? ?? fallbackPlan;
 
           await hive.configBox.put('isPro', true);
-          await hive.configBox.put('expiresAt', endDate ?? '');
-          await hive.configBox.put('plan', plan ?? 'monthly');
+          await hive.configBox.put('expiresAt',
+              (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan));
+          await hive.configBox.put('plan', plan);
+          debugPrint('RazorpayService: webhook confirmed at attempt $attempt');
           return;
         }
       } catch (e) {
@@ -253,20 +273,50 @@ class RazorpayService {
       }
     }
 
-    // Fallback: webhook may be delayed (especially in test mode).
-    // Activate for the plan duration so user isn't stuck.
+    // Phase 2: Direct verification via Edge Function (server checks Razorpay API)
+    if (paymentId.isNotEmpty) {
+      try {
+        debugPrint('RazorpayService: polling exhausted, trying verify-payment Edge Function...');
+        final verifyResponse = await SupabaseService.instance.callFunction(
+          'verify-payment',
+          body: {
+            'payment_id': paymentId,
+            'plan': fallbackPlan,
+          },
+        );
+
+        if (verifyResponse.status == 200 && verifyResponse.data != null) {
+          final data = verifyResponse.data is Map
+              ? verifyResponse.data as Map<String, dynamic>
+              : <String, dynamic>{};
+          if (data['verified'] == true) {
+            final endDate = data['end_date'] as String?;
+            final plan = data['plan'] as String? ?? fallbackPlan;
+            await hive.configBox.put('isPro', true);
+            await hive.configBox.put('expiresAt',
+                (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan));
+            await hive.configBox.put('plan', plan);
+            debugPrint('RazorpayService: verified via Edge Function');
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('RazorpayService: verify-payment Edge Function failed: $e');
+      }
+    }
+
+    // Phase 3: Local-only fallback — activate PRO so user isn't stuck.
     // Next app launch will re-verify via SubscriptionService.refreshFromSupabase().
-    final fallbackPlan = _pendingPlan ?? 'monthly';
-    debugPrint('RazorpayService: polling exhausted — activating fallback for plan=$fallbackPlan');
-    final fallbackEnd = fallbackPlan == 'yearly'
-        ? DateTime.now().add(const Duration(days: 365))
-        : DateTime.now().add(const Duration(days: 30));
+    debugPrint('RazorpayService: all verification exhausted — activating local fallback for plan=$fallbackPlan');
     await hive.configBox.put('isPro', true);
-    await hive.configBox.put('expiresAt', fallbackEnd.toIso8601String());
+    await hive.configBox.put('expiresAt', _computeEndDate(fallbackPlan));
     await hive.configBox.put('plan', fallbackPlan);
 
-    // Queue a delayed re-check in case webhook arrives after polling window
+    // Queue delayed re-checks in case webhook arrives late
     Future.delayed(const Duration(seconds: 60), () {
+      SubscriptionService.instance.refreshFromSupabase();
+    });
+    Future.delayed(const Duration(minutes: 5), () {
       SubscriptionService.instance.refreshFromSupabase();
     });
   }

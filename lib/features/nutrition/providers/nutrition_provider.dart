@@ -588,13 +588,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
                           msg.contains('unauthorized') || msg.contains('jwt') ||
-                          msg.contains('no active session');
+                          msg.contains('no active session') || msg.contains('session expired');
       state = AiBreakdownData(
         mealName: text,
         totalKcal: 0,
         items: [],
         error: isAuthError
-            ? 'Session expired. Please restart the app or sign out and sign in again.'
+            ? 'Session expired. Please sign out and sign in again.'
             : 'AI analysis failed. Please check your connection and try again.',
       );
       return;
