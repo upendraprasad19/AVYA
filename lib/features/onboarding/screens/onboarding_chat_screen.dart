@@ -182,7 +182,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                     color: AppColors.accentTint,
                     borderRadius: BorderRadius.circular(AppRadius.badge),
                     border: Border.all(
-                      color: AppColors.accent.withAlpha(51),
+                      color: AppColors.accent.withValues(alpha: 0.20),
                     ),
                   ),
                   child: Text(
@@ -275,7 +275,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             bottomLeft: Radius.circular(18),
             bottomRight: Radius.circular(18),
           ),
-          border: Border.all(color: AppColors.accent.withAlpha(51)),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.20)),
         ),
         child: Text(
           text,
@@ -557,7 +557,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
               borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.accent.withAlpha(128)
+                    ? AppColors.accent.withValues(alpha: 0.50)
                     : AppColors.border,
                 width: isSelected ? 1.5 : 1,
               ),
@@ -789,12 +789,12 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.black,
-                  disabledBackgroundColor: AppColors.accent.withAlpha(100),
+                  disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.39),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   elevation: 4,
-                  shadowColor: AppColors.accent.withAlpha(60),
+                  shadowColor: AppColors.accent.withValues(alpha: 0.24),
                 ),
                 child: state.isCompleting
                     ? const SizedBox(

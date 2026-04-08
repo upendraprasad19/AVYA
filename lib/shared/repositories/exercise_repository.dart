@@ -88,15 +88,18 @@ class ExerciseRepository {
     }
 
     if (equipment != null && equipment.isNotEmpty) {
+      final equipLower = equipment.map((e) => e.toLowerCase()).toSet();
       results = results.where((e) {
         final needed = e['equipment_needed'];
         if (needed == null) return true; // bodyweight
         if (needed is List) {
           // Exercise is usable if ALL its required equipment is in user's set.
-          return needed.every((item) =>
-              equipment.contains(item.toString().toLowerCase()) ||
-              item.toString().toLowerCase() == 'none' ||
-              item.toString().toLowerCase() == 'bodyweight');
+          return needed.every((item) {
+            final lower = item.toString().toLowerCase();
+            return equipLower.contains(lower) ||
+                lower == 'none' ||
+                lower == 'bodyweight';
+          });
         }
         return true;
       }).toList();

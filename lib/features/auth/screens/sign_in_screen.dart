@@ -245,12 +245,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
-              disabledBackgroundColor: Colors.white.withAlpha(150),
+              disabledBackgroundColor: Colors.white.withValues(alpha: 0.59),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
               elevation: 2,
-              shadowColor: Colors.black.withAlpha(40),
+              shadowColor: Colors.black.withValues(alpha: 0.16),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
             ),
             child: isLoading
@@ -343,7 +343,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               backgroundColor: Colors.transparent,
               foregroundColor: AppColors.accent,
               side: BorderSide(
-                color: AppColors.accent.withAlpha(77),
+                color: AppColors.accent.withValues(alpha: 0.30),
                 width: 1,
               ),
               shape: RoundedRectangleBorder(
@@ -693,12 +693,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.accent,
           foregroundColor: Colors.black,
-          disabledBackgroundColor: AppColors.accent.withAlpha(100),
+          disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.39),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           elevation: 4,
-          shadowColor: AppColors.accent.withAlpha(60),
+          shadowColor: AppColors.accent.withValues(alpha: 0.24),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
         ),
         child: isLoading

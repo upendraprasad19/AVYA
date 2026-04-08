@@ -130,7 +130,7 @@ class TodaysMealsCard extends StatelessWidget {
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.8,
-                            color: AppColors.accent.withAlpha(180),
+                            color: AppColors.accent.withValues(alpha: 0.71),
                           ),
                         ),
                         const SizedBox(height: 1),

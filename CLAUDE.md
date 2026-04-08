@@ -206,7 +206,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | Box | Contents |
 |-----|----------|
 | `userBox` | user profile, preferences, progress |
-| `workoutBox` | workout_logs, scheduled_workouts, templates |
+| `workoutBox` | workout_logs, scheduled_workouts, templates, exercise_logs |
 | `nutritionBox` | nutrition_logs, saved_meals |
 | `healthBox` | weight_logs, measurements, streaks, sleep_logs |
 | `exerciseBox` | exercise_library (seeded from bundled JSON) |
@@ -215,6 +215,15 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `coachBox` | ai_coach_interactions, coaching_notes |
 | `syncBox` | last_sync_timestamps, pending_sync_queue |
 | `configBox` | subscription status, feature flags, app config |
+
+#### workoutBox Key Patterns
+| Key Pattern | Value |
+|-------------|-------|
+| `schedule_YYYY-MM-DD` | Schedule entry (type, status, workout_name, exercises, week) |
+| `exercise_log_index_YYYY-MM-DD` | List of exercise log IDs for that date |
+| `exlog_<timestamp>_<hash>` | Exercise log: exercise_name, logging_type, weight_kg, reps_completed, sets_completed, volume_kg, is_pr |
+| `wlog_<timestamp>` | Workout log: workout_name, date, duration_seconds, sets_completed |
+| `template_<id>` | Workout template with exercises |
 
 ---
 
@@ -260,6 +269,8 @@ lib/
       screens/active_workout_screen.dart
       screens/template_builder_screen.dart
       widgets/
+        workout_receipt_card.dart          # WorkoutReceiptData + WorkoutReceiptCard
+        workout_receipt_sheet.dart         # Reusable receipt bottom sheet (shared)
       providers/train_provider.dart
       repositories/workout_repository.dart
       models/
@@ -378,7 +389,8 @@ template_exercises (id uuid PK, template_id uuid FK, exercise_id uuid FK,
 
 scheduled_workouts (id uuid PK, user_id uuid FK, template_id uuid FK,
   scheduled_date date, week_number int, day_of_week int,
-  status text DEFAULT 'planned', completed_at timestamptz)
+  status text DEFAULT 'planned', completed_at timestamptz,
+  UNIQUE(user_id, scheduled_date))  -- prevents duplicate schedules on sync
 
 workout_logs (id uuid PK, user_id uuid FK, scheduled_workout_id uuid FK,
   template_id uuid FK, exercise_id uuid FK, exercise_name text,
@@ -432,7 +444,13 @@ body_measurements (id uuid PK, user_id uuid FK, date date,
 
 streaks (id uuid PK, user_id uuid FK, week_start date,
   workouts_planned int, workouts_completed int,
-  is_streak_maintained bool, created_at timestamptz)
+  is_streak_maintained bool, created_at timestamptz,
+  UNIQUE(user_id, week_start))  -- prevents duplicate weeks on restore/sync
+
+water_logs (id uuid PK, user_id uuid FK, date date,
+  total_ml int, urine_color int, urine_status text,
+  updated_at timestamptz, created_at timestamptz,
+  UNIQUE(user_id, date))  -- prevents duplicate water entries on sync
 
 sleep_logs (id uuid PK, user_id uuid FK, date date,
   duration_hrs numeric, quality text, bed_time time,
@@ -456,6 +474,14 @@ subscriptions (id uuid PK, user_id uuid FK, plan text,
   status text, start_date timestamptz, end_date timestamptz,
   razorpay_order_id text, razorpay_payment_id text,
   razorpay_signature text, created_at timestamptz)
+
+promo_codes (code text PK, discount_pct int, valid_until date,
+  max_uses int, used_count int DEFAULT 0, is_active bool, created_at timestamptz)
+
+promo_code_uses (id uuid PK, code text FK→promo_codes, user_id uuid FK→users,
+  plan_purchased text, original_amount int, discount_applied int,
+  final_amount int, used_at timestamptz)
+-- RPC: increment_promo_used_count(p_code text) — atomically increments used_count
 
 food_corrections (id uuid PK, user_id uuid FK, food_id uuid FK,
   original_values jsonb, corrected_values jsonb, created_at timestamptz)
@@ -577,12 +603,20 @@ adaptive_workouts      → AI workout adjustments from biometrics (Phase 2)
 
 ### Shareable Cards (ALL FREE — growth engine)
 ```
-workout_receipt        → PNG after every completed workout
+workout_receipt        → PNG after every completed workout + viewable later via "View Card"
 future_prediction      → AI forecast card (once free, monthly PRO)
 beat_my_coach          → HIIT challenge card (1 per 2 weeks, all users)
+video_share            → Remotion/Lambda video render (DEFERRED — hidden until post-launch)
 ```
 All shareable cards include: ICANBEFITTER wordmark + QR code → www.icanbefitter.com
 Packages: share_plus (native share sheet) + qr_flutter (client-side QR, zero server cost)
+
+**Workout Receipt — View Past Cards:**
+- Receipt data reconstructed on-the-fly from Hive exercise logs (`exercise_log_index_YYYY-MM-DD`)
+- `WorkoutReceiptData.fromExerciseLogs(date)` — static factory, returns null if no logs
+- `WorkoutReceiptSheet` — reusable bottom sheet (`lib/features/train/widgets/workout_receipt_sheet.dart`)
+- Access points: Home screen completed card "View Card" button, Calendar day detail "View Workout Card" button
+- Exercise logs store `volume_kg` field for exact volume reconstruction (falls back to `weight_kg × reps` for old logs)
 
 ### Correct Usage (ALWAYS use this)
 ```dart
@@ -631,6 +665,25 @@ Cost per user/month: ~₹1.80
 - GLM-4.7 on Cerebras
 - Full personalised coaching: photo/video upload, deep analysis
 - Free users see it locked → PRO paywall
+
+### Vision Features (ai-proxy — Gemini Flash)
+- `food_text_analysis`: Text → nutrition JSON. Always free, no rate limit.
+- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 15/day abuse cap.
+- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 15/day abuse cap.
+- Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. Client-side limits handle exact free/PRO tiers.
+
+### Server-Side Workout Analytics
+- `weekly-recalc`: Reads exercise-level data from `workout_log_exercises` (NOT `workout_logs`). Derives date from `completed_at`. Groups exercises by `exercise_id` (= exercise_name) for weight progression tracking. `total_workouts_done` counts distinct dates, not exercise rows.
+- `weekly-report`: Two-query approach — exercise data from `workout_log_exercises`, workout metadata (duration, RPE) from `workout_logs`. `sets_completed` reads actual `set_number` from per-exercise summary (not hardcoded 1). RPE guarded against zero-denominator (returns "N/A" when no RPE data).
+
+### Exercise Log Cloud Contract (workout_log_exercises)
+Each row is a **per-exercise summary** (NOT per-set), matching the Hive exlog_* shape:
+- `exercise_id` = exercise_name (stable identity for cross-week grouping)
+- `workout_log_id` = deterministic ID from date (groups all exercises in same workout)
+- `set_number` = total completed sets for this exercise (NOT "which set number")
+- `reps` = cumulative reps across all sets
+- `weight_kg` = best (max) weight across sets
+- RPE: NOT stored per exercise. Workout-level RPE column exists in `workout_logs` but is currently never written by the Flutter app (no UI for it).
 
 ### coaching_notes
 - Batch extraction daily (11PM IST with snapshot)
@@ -690,7 +743,7 @@ Phase {
 1. Header (name + greeting + avatar + streak counter)
 2. Weekly calendar strip (7 days, color-coded by completion)
 3. Quick actions: Log Workout | Log Meal | Hydration | Sleep
-4. Today's workout card → Start Workout
+4. Today's workout card → Start Workout (or DONE + View Card + stats if completed)
 5. Nutrition snapshot (calories + protein vs target)
 6. AI Coach insight
 7. Weight sparkline (last 7 entries)
@@ -698,6 +751,11 @@ Phase {
 9. Recent logged foods
 10. Step counter (Health Connect)
 ```
+
+**Today's Workout Card — Completed State:**
+- Shows: DONE badge (green) + "View Card >" (cyan) + best lift + total volume
+- "View Card" opens `WorkoutReceiptSheet` with receipt reconstructed from Hive exercise logs
+- Calendar day detail sheet also shows "View Workout Card" button for completed days
 
 ---
 
@@ -758,21 +816,41 @@ Mifflin-St Jeor BMR formula → adjusted by activity level = TDEE.
 | Periodically | Check for new approved community items | ← Supabase → Hive |
 | On restore | Pull full history (all users) | ← Supabase → Hive |
 
+### Sync Deduplication Rules
+- **Streaks:** `onConflict: 'user_id,week_start'` (UNIQUE constraint in DB). Restore dedupes by `week_start` — cloud row replaces local if conflict found. Never dedup by cloud `id` alone (causes same-week duplicates).
+- **Workout logs/exercises:** Upserted by deterministic UUID (`_deterministicId(localKey)`). Safe for re-sync.
+- **Water logs:** `onConflict: 'user_id,date'` (UNIQUE constraint added migration 013). One row per user per day.
+- **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
+
+### Restore Pagination
+- All restore queries use paginated fetch (1,000 rows per page, offset-based).
+- Safety ceiling: 50,000 rows per table to prevent runaway fetches.
+- No hardcoded `.limit(5000)` — truly full-history restore for all users.
+
 ---
 
 ## 16. PAYMENT FLOW
 
 ```
 User taps "Upgrade to PRO"
-  → Opens Razorpay WebView checkout
+  → Opens Razorpay WebView checkout (amount adjusted for promo if applied)
   → User pays
   → Razorpay webhook → Edge Function (razorpay-webhook)
   → Verify HMAC-SHA256 signature (MANDATORY)
+  → Derive plan from payment amount (promo-aware)
   → Write to Supabase subscriptions table
-  → App polls Supabase for confirmation
+  → Redeem promo code (increment used_count + audit trail)
+  → App polls Supabase for confirmation (exact payment_id match)
+  → Falls back to verify-payment Edge Function if webhook slow
   → Updates Hive configBox {isPro: true, expiresAt, plan}
   → PRO features unlock immediately
 ```
+
+### Payment Security Rules (NON-NEGOTIABLE)
+1. **Plan derived from amount, NEVER from client:** Both `razorpay-webhook` and `verify-payment` derive the plan (monthly/yearly) from `payment.amount` in paise. Client-supplied `body.plan` is ignored for entitlement. Prevents a ₹349 monthly payment from getting yearly (365-day) entitlement.
+2. **Promo-aware amount validation (tolerant):** If `notes.promo_code` exists, Edge Functions look up the promo in `promo_codes` table and compute discounted expected amount from `discount_pct`. **Tolerant:** accepts the discounted amount even if the promo has since expired or exhausted — the promo was valid when checkout opened, and Razorpay capture can take minutes. Only rejects if the promo code doesn't exist at all or the discount math doesn't match. Logs a warning for race-condition cases.
+3. **Promo redemption on success:** After subscription insert, `increment_promo_used_count` RPC atomically increments `used_count`. Audit row written to `promo_code_uses`. This is non-fatal — subscription is already created.
+4. **Two-tier polling:** Client polls by exact `razorpay_payment_id` (attempts 0-11), then falls back to any active subscription created in last 5 minutes (attempts 12-14). Prevents upgrades (monthly→yearly) from resolving against the old stale row.
 
 ---
 

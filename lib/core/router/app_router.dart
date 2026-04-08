@@ -216,6 +216,9 @@ class AppRouter {
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;
 
+    // Guard against Hive not yet initialized (startup race).
+    if (!HiveService.instance.isInitialized) return null;
+
     final isAuthenticated = SupabaseService.instance.isAuthenticated;
 
     // Not signed in -> go to sign-in (unless already there).

@@ -4,16 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
-import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
-import 'package:icanbefitter/shared/widgets/video_share_button.dart';
 import '../providers/train_provider.dart';
-import '../providers/video_render_provider.dart';
 import '../widgets/exercise_swap_sheet.dart';
 import '../widgets/set_input_row.dart';
 import '../widgets/workout_receipt_card.dart';
+import '../widgets/workout_receipt_sheet.dart';
 
 class ActiveWorkoutScreen extends ConsumerStatefulWidget {
   const ActiveWorkoutScreen({super.key});
@@ -683,9 +680,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 ),
                 const SizedBox(height: AppSpacing.inlineGap),
 
-                // Share as Video — triggers Remotion render pipeline
-                _buildVideoShareRow(data),
-                const SizedBox(height: AppSpacing.inlineGap),
+                // Share as Video — hidden until Remotion/Lambda infra is live
+                // _buildVideoShareRow(data),
 
                 GestureDetector(
                   onTap: () {
@@ -720,66 +716,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     );
   }
 
-  /// Builds the "Share as Video" row — triggers Remotion render pipeline.
-  Widget _buildVideoShareRow(ActiveWorkoutData data) {
-    final renderState = ref.watch(videoRenderNotifierProvider);
-
-    if (renderState.status == VideoRenderStatus.idle) {
-      return GestureDetector(
-        onTap: () {
-          final receiptData = WorkoutReceiptData.fromActiveWorkout(data);
-          final userName = UserRepository.instance.getProfile()?['full_name']
-                  as String? ??
-              'Athlete';
-          final progress = UserRepository.instance.getProgress() ?? {};
-          ref.read(videoRenderNotifierProvider.notifier).triggerWorkoutVideo(
-            compositionId: 'WorkoutCompletion',
-            inputProps: {
-              'userName': userName,
-              'workoutName': receiptData.workoutName,
-              'totalVolume': receiptData.totalVolumeKg,
-              'durationSeconds': data.elapsedSeconds,
-              'streakWeeks': (progress['current_streak_weeks'] as int?) ?? 0,
-              'newPrs': data.detectedPRs,
-            },
-          );
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0e1219),
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.video_library_rounded,
-                    color: AppColors.textSecondary, size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Share as Video',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SizedBox(
-      width: double.infinity,
-      child: Center(child: VideoShareButton()),
-    );
-  }
+  // Video share feature deferred — see CLAUDE.md §10.
 
   String _getDayType(String name) {
     if (name.contains('CHEST') || name.contains('TRICEPS')) return 'PUSH DAY';
@@ -1045,12 +982,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 
   void _showWorkoutReceipt(BuildContext context, ActiveWorkoutData data) {
     final receiptData = WorkoutReceiptData.fromActiveWorkout(data);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _WorkoutReceiptSheet(receiptData: receiptData),
-    );
+    WorkoutReceiptSheet.show(context, receiptData);
   }
 
   void _showCancelDialog(BuildContext context, WidgetRef ref) {
@@ -2563,85 +2495,3 @@ class _CreateCustomExerciseSheetState
   }
 }
 
-// ── Workout Receipt Bottom Sheet ─────────────────────────────────
-
-class _WorkoutReceiptSheet extends StatefulWidget {
-  final WorkoutReceiptData receiptData;
-
-  const _WorkoutReceiptSheet({required this.receiptData});
-
-  @override
-  State<_WorkoutReceiptSheet> createState() => _WorkoutReceiptSheetState();
-}
-
-class _WorkoutReceiptSheetState extends State<_WorkoutReceiptSheet> {
-  final _cardKey = GlobalKey();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The shareable card
-            WorkoutReceiptCard(
-              data: widget.receiptData,
-              repaintKey: _cardKey,
-            ),
-            const SizedBox(height: 16),
-
-            // Share button
-            GestureDetector(
-              onTap: () async {
-                await CardShareService.captureAndShare(
-                  _cardKey,
-                  filename: 'icanbefitter_workout.png',
-                );
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Center(
-                  child: Text(
-                    'Share to Instagram / WhatsApp',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Close
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Close',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-}

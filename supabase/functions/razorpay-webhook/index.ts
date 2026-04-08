@@ -13,6 +13,11 @@ const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Canonical plan prices in paise.
+// Keep in sync with verify-payment/index.ts and AppConstants in Flutter.
+const MONTHLY_PAISE = 34900; // ₹349
+const YEARLY_PAISE = 299900; // ₹2,999
+
 async function verifySignature(
   body: string,
   signature: string,
@@ -31,6 +36,90 @@ async function verifySignature(
     hexEncode(new Uint8Array(signed)),
   );
   return expectedSignature === signature;
+}
+
+/**
+ * Compute the expected payment amount in paise for a given plan,
+ * optionally adjusted by a valid promo code.
+ *
+ * Returns { expectedPaise, promoApplied, discountPct } or null if promo invalid.
+ * Identical logic in verify-payment/index.ts.
+ */
+async function computeExpectedAmount(
+  plan: string,
+  promoCode: string | undefined,
+  supabaseClient: ReturnType<typeof createClient>,
+): Promise<{ expectedPaise: number; promoApplied: boolean; discountPct: number }> {
+  const fullPrice = plan === "monthly" ? MONTHLY_PAISE : YEARLY_PAISE;
+
+  if (!promoCode) {
+    return { expectedPaise: fullPrice, promoApplied: false, discountPct: 0 };
+  }
+
+  // Look up promo code in database
+  const { data: promo } = await supabaseClient
+    .from("promo_codes")
+    .select("discount_pct, is_active, valid_until, max_uses, used_count")
+    .eq("code", promoCode)
+    .maybeSingle();
+
+  if (!promo) {
+    console.warn(`Promo code '${promoCode}' not found — using full price`);
+    return { expectedPaise: fullPrice, promoApplied: false, discountPct: 0 };
+  }
+
+  // Tolerant validation: accept the discounted amount even if promo has since
+  // expired or exhausted, as long as the promo EXISTS and the discount math
+  // matches. The promo was valid when the user started checkout; Razorpay
+  // capture can take seconds to minutes. Rejecting a paid amount over a race
+  // condition causes user complaints and refund hassles.
+  const now = new Date();
+  const validUntil = new Date(promo.valid_until);
+  const isExpired = validUntil < now;
+  const isExhausted = promo.max_uses !== null && (promo.used_count as number) >= (promo.max_uses as number);
+  const isInactive = !promo.is_active;
+
+  if (isExpired || isExhausted || isInactive) {
+    console.warn(
+      `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+      `— honoring anyway (was valid at checkout time)`
+    );
+  }
+
+  const pct = promo.discount_pct as number;
+  const discountedPrice = Math.round(fullPrice * (100 - pct) / 100);
+  return { expectedPaise: discountedPrice, promoApplied: true, discountPct: pct };
+}
+
+/**
+ * Record promo code usage (non-fatal — subscription is already created).
+ * Identical logic in verify-payment/index.ts.
+ */
+async function redeemPromo(
+  supabaseClient: ReturnType<typeof createClient>,
+  promoCode: string,
+  userId: string,
+  plan: string,
+  originalPaise: number,
+  discountPct: number,
+  finalPaise: number,
+) {
+  try {
+    // Atomically increment used_count
+    await supabaseClient.rpc("increment_promo_used_count", { p_code: promoCode });
+
+    // Audit trail
+    await supabaseClient.from("promo_code_uses").insert({
+      code: promoCode,
+      user_id: userId,
+      plan_purchased: plan,
+      original_amount: originalPaise,
+      discount_applied: originalPaise - finalPaise,
+      final_amount: finalPaise,
+    });
+  } catch (e) {
+    console.error("Non-fatal: promo redemption failed:", e);
+  }
 }
 
 serve(async (req: Request) => {
@@ -100,6 +189,7 @@ serve(async (req: Request) => {
     const notes = paymentEntity.notes ?? {};
     const userId = notes.user_id;
     const plan = notes.plan; // 'monthly' or 'yearly'
+    const promoCode = notes.promo_code as string | undefined;
 
     if (!userId || !plan) {
       console.error("Missing user_id or plan in payment notes:", notes);
@@ -137,6 +227,29 @@ serve(async (req: Request) => {
     }
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Validate payment amount matches expected plan price (promo-aware).
+    // HMAC signature proves payload authenticity; this guards against
+    // Razorpay-side bugs, test-mode exploits, or illegitimate discounts.
+    const { expectedPaise, promoApplied, discountPct } =
+      await computeExpectedAmount(plan, promoCode, supabaseClient);
+    const actualPaise = paymentEntity.amount;
+
+    if (typeof actualPaise === "number" && actualPaise !== expectedPaise) {
+      console.error(
+        `Amount mismatch: expected ${expectedPaise} paise for ${plan}` +
+          (promoCode ? ` (promo: ${promoCode}, ${discountPct}% off)` : "") +
+          `, got ${actualPaise}`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Payment amount does not match plan price" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const now = new Date();
     const endDate = new Date(now);
 
@@ -189,6 +302,20 @@ serve(async (req: Request) => {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
+      );
+    }
+
+    // ── Redeem promo code if applied ────────────────────────────
+    if (promoApplied && promoCode) {
+      const fullPrice = plan === "monthly" ? MONTHLY_PAISE : YEARLY_PAISE;
+      await redeemPromo(
+        supabaseClient,
+        promoCode,
+        userId,
+        plan,
+        fullPrice,
+        discountPct,
+        actualPaise,
       );
     }
 

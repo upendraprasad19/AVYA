@@ -605,8 +605,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
       case 'log_food':
         final name = data['food_name'] as String? ?? 'Food';
         final meal = data['meal_type'] as String? ?? 'snacks';
-        final cap =
-            meal.isEmpty ? meal : meal[0].toUpperCase() + meal.substring(1);
+        final cap = meal.isEmpty ? 'Snacks' : meal[0].toUpperCase() + meal.substring(1);
         return PendingLogAction(
           id: id,
           type: LogActionType.food,
@@ -631,8 +630,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
             valueCm <= 0) {
           return null;
         }
-        final cap =
-            type.isEmpty ? type : type[0].toUpperCase() + type.substring(1);
+        final cap = type.isEmpty ? '' : type[0].toUpperCase() + type.substring(1);
         return PendingLogAction(
           id: id,
           type: LogActionType.measurement,

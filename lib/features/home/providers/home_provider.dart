@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -354,6 +355,10 @@ class AiInsightNotifier extends Notifier<String?> {
     final hive = HiveService.instance;
     final coachBox = hive.coachBox;
 
+    // Only show insights from today — stale responses are misleading
+    final now = DateTime.now();
+    final todayPrefix = formatDateKey(now); // 'YYYY-MM-DD'
+
     String? latestMessage;
     String latestDate = '';
 
@@ -361,10 +366,27 @@ class AiInsightNotifier extends Notifier<String?> {
       if (raw is! Map) continue;
       final interaction = Map<String, dynamic>.from(raw);
       final createdAt = interaction['created_at'] as String? ?? '';
+      if (!createdAt.startsWith(todayPrefix)) continue;
       final response = interaction['ai_response'] as String?;
       if (response != null && createdAt.compareTo(latestDate) > 0) {
         latestDate = createdAt;
         latestMessage = response;
+      }
+    }
+
+    // If no AI interaction today, generate a contextual message
+    if (latestMessage == null) {
+      final schedule = WorkoutScheduleService.instance.getScheduleForDate(now);
+      if (schedule != null) {
+        final type = schedule['type'] as String? ?? 'rest';
+        final status = schedule['status'] as String? ?? 'planned';
+        final name = schedule['workout_name'] as String? ?? 'Workout';
+        final exercises = schedule['exercises'] as List? ?? [];
+        if (status == 'completed') {
+          return '$name completed — ${exercises.length} exercises. Great work! Rest up and hit your protein target.';
+        } else if (type == 'workout' || type == 'custom_template') {
+          return '$name is scheduled for today — ${exercises.length} exercises. Ready when you are!';
+        }
       }
     }
 

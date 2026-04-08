@@ -109,31 +109,43 @@ class RazorpayService {
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     debugPrint('RazorpayService: payment success — paymentId=${response.paymentId}, orderId=${response.orderId}');
 
-    // Show "verifying" snackbar immediately so user isn't staring at nothing
+    // Capture ScaffoldMessenger BEFORE any awaits to avoid
+    // use_build_context_synchronously lint.
     final ctx = navigatorKey?.currentContext;
-    if (ctx != null) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Verifying payment...',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFF0e1219),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 15),
-        ),
-      );
+    final messenger = ctx != null ? ScaffoldMessenger.maybeOf(ctx) : null;
+
+    // Force-refresh Supabase JWT. The app was backgrounded during Razorpay
+    // WebView checkout, so the access token may have expired. Without this,
+    // subsequent Edge Function calls (AI chat, food analysis) fail with 401.
+    try {
+      await SupabaseService.instance.client.auth.refreshSession();
+      debugPrint('RazorpayService: session refreshed after checkout');
+    } catch (e) {
+      debugPrint('RazorpayService: session refresh failed (non-fatal): $e');
     }
+
+    // Show "verifying" snackbar immediately so user isn't staring at nothing.
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Verifying payment...',
+              style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0e1219),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 15),
+      ),
+    );
 
     await _pollAndActivate(
       paymentId: response.paymentId ?? '',
@@ -142,9 +154,7 @@ class RazorpayService {
     );
 
     // Clear the "verifying" snackbar before showing success
-    if (ctx != null && ctx.mounted) {
-      ScaffoldMessenger.of(ctx).clearSnackBars();
-    }
+    messenger?.clearSnackBars();
 
     _onSuccess?.call();
     _showProActivatedFeedback();
@@ -239,33 +249,49 @@ class RazorpayService {
     final hive = HiveService.instance;
     final fallbackPlan = _pendingPlan ?? 'monthly';
 
-    // Phase 1: Poll Supabase with exponential backoff (15 attempts)
+    // Phase 1: Poll Supabase with exponential backoff (15 attempts).
+    // Attempts 0-11: exact match on razorpay_payment_id (this specific payment).
+    // Attempts 12-14: fall back to any active row created in last 5 minutes.
     for (int attempt = 0; attempt < 15; attempt++) {
-      // Exponential backoff: 2s for first 5, 3s for next 5, 4s for last 5
       final delay = attempt < 5 ? 2 : (attempt < 10 ? 3 : 4);
       await Future.delayed(Duration(seconds: delay));
 
       try {
-        final row = await SupabaseService.instance.client
-            .from('subscriptions')
-            .select()
-            .eq('user_id', userId)
-            .eq('status', 'active')
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
+        Map<String, dynamic>? row;
+
+        if (attempt < 12) {
+          // Exact match: only accept the subscription created by THIS payment
+          row = await SupabaseService.instance.client
+              .from('subscriptions')
+              .select()
+              .eq('user_id', userId)
+              .eq('razorpay_payment_id', paymentId)
+              .eq('status', 'active')
+              .maybeSingle();
+        } else {
+          // Fallback: any active subscription created in the last 5 minutes
+          final cutoff = DateTime.now().subtract(const Duration(minutes: 5)).toUtc().toIso8601String();
+          row = await SupabaseService.instance.client
+              .from('subscriptions')
+              .select()
+              .eq('user_id', userId)
+              .eq('status', 'active')
+              .gte('created_at', cutoff)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+        }
 
         if (row != null) {
-          // Accept any active subscription — don't require exact payment_id match
-          // because webhook timing may differ from poll timing
           final endDate = row['end_date'] as String?;
           final plan = row['plan'] as String? ?? fallbackPlan;
 
-          await hive.configBox.put('isPro', true);
-          await hive.configBox.put('expiresAt',
-              (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan));
-          await hive.configBox.put('plan', plan);
-          debugPrint('RazorpayService: webhook confirmed at attempt $attempt');
+          await SubscriptionService.instance.writeSubscriptionState(
+            isPro: true,
+            expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
+            plan: plan,
+          );
+          debugPrint('RazorpayService: webhook confirmed at attempt $attempt (exact=${attempt < 12})');
           return;
         }
       } catch (e) {
@@ -292,10 +318,11 @@ class RazorpayService {
           if (data['verified'] == true) {
             final endDate = data['end_date'] as String?;
             final plan = data['plan'] as String? ?? fallbackPlan;
-            await hive.configBox.put('isPro', true);
-            await hive.configBox.put('expiresAt',
-                (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan));
-            await hive.configBox.put('plan', plan);
+            await SubscriptionService.instance.writeSubscriptionState(
+              isPro: true,
+              expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
+              plan: plan,
+            );
             debugPrint('RazorpayService: verified via Edge Function');
             return;
           }
@@ -307,9 +334,11 @@ class RazorpayService {
 
     // Phase 3: Local-only fallback — activate PRO so user isn't stuck.
     debugPrint('RazorpayService: all verification exhausted — activating local fallback for plan=$fallbackPlan');
-    await hive.configBox.put('isPro', true);
-    await hive.configBox.put('expiresAt', _computeEndDate(fallbackPlan));
-    await hive.configBox.put('plan', fallbackPlan);
+    await SubscriptionService.instance.writeSubscriptionState(
+      isPro: true,
+      expiresAt: _computeEndDate(fallbackPlan),
+      plan: fallbackPlan,
+    );
     await hive.configBox.put('localActivationAt', DateTime.now().toIso8601String());
 
     // SECURITY: Do NOT write subscriptions/users tables from the client.

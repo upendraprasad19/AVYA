@@ -14,6 +14,111 @@ const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Canonical plan prices in paise.
+// Keep in sync with razorpay-webhook/index.ts and AppConstants in Flutter.
+const MONTHLY_PAISE = 34900; // ₹349
+const YEARLY_PAISE = 299900; // ₹2,999
+
+/**
+ * Derive the plan type from a Razorpay payment amount.
+ *
+ * 1. Exact match against full prices.
+ * 2. If a promo code is present, compute discounted prices and match.
+ * 3. Returns { plan, promoApplied, promoCode, originalPaise, discountPct }
+ *    or null if no match.
+ */
+async function derivePlanFromAmount(
+  amountPaise: number,
+  promoCode: string | undefined,
+  supabase: ReturnType<typeof createClient>,
+): Promise<{
+  plan: "monthly" | "yearly";
+  promoApplied: boolean;
+  promoCode: string | null;
+  originalPaise: number;
+  discountPct: number;
+} | null> {
+  // 1. Exact full-price match
+  if (amountPaise === MONTHLY_PAISE) {
+    return { plan: "monthly", promoApplied: false, promoCode: null, originalPaise: MONTHLY_PAISE, discountPct: 0 };
+  }
+  if (amountPaise === YEARLY_PAISE) {
+    return { plan: "yearly", promoApplied: false, promoCode: null, originalPaise: YEARLY_PAISE, discountPct: 0 };
+  }
+
+  // 2. Promo-discounted price
+  if (promoCode) {
+    const { data: promo } = await supabase
+      .from("promo_codes")
+      .select("discount_pct, is_active, valid_until, max_uses, used_count")
+      .eq("code", promoCode)
+      .maybeSingle();
+
+    if (promo) {
+      // Tolerant validation: accept the discounted amount even if promo has
+      // since expired or exhausted. The promo was valid when checkout opened;
+      // Razorpay capture can take seconds to minutes. Rejecting a paid amount
+      // over a race condition causes user complaints and refund hassles.
+      const now = new Date();
+      const validUntil = new Date(promo.valid_until);
+      const isExpired = validUntil < now;
+      const isExhausted = promo.max_uses !== null && (promo.used_count as number) >= (promo.max_uses as number);
+      const isInactive = !promo.is_active;
+
+      if (isExpired || isExhausted || isInactive) {
+        console.warn(
+          `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `— honoring anyway (was valid at checkout time)`
+        );
+      }
+
+      const pct = promo.discount_pct as number;
+      const discountedMonthly = Math.round(MONTHLY_PAISE * (100 - pct) / 100);
+      const discountedYearly = Math.round(YEARLY_PAISE * (100 - pct) / 100);
+
+      if (amountPaise === discountedMonthly) {
+        return { plan: "monthly", promoApplied: true, promoCode, originalPaise: MONTHLY_PAISE, discountPct: pct };
+      }
+      if (amountPaise === discountedYearly) {
+        return { plan: "yearly", promoApplied: true, promoCode, originalPaise: YEARLY_PAISE, discountPct: pct };
+      }
+    }
+  }
+
+  return null; // No match
+}
+
+/**
+ * Record promo code usage (non-fatal — subscription is already created).
+ * Identical logic in razorpay-webhook/index.ts.
+ */
+async function redeemPromo(
+  supabase: ReturnType<typeof createClient>,
+  promoCode: string,
+  userId: string,
+  plan: string,
+  originalPaise: number,
+  discountPct: number,
+  finalPaise: number,
+) {
+  try {
+    // Atomically increment used_count
+    await supabase.rpc("increment_promo_used_count", { p_code: promoCode });
+
+    // Audit trail
+    await supabase.from("promo_code_uses").insert({
+      code: promoCode,
+      user_id: userId,
+      plan_purchased: plan,
+      original_amount: originalPaise,
+      discount_applied: originalPaise - finalPaise,
+      final_amount: finalPaise,
+    });
+  } catch (e) {
+    console.error("Non-fatal: promo redemption failed:", e);
+  }
+}
+
 /**
  * Direct Razorpay payment verification Edge Function.
  *
@@ -21,10 +126,11 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  * fails to confirm a payment within the polling window.
  *
  * Flow:
- *   1. Receives { payment_id, plan } with JWT auth
+ *   1. Receives { payment_id, plan? } with JWT auth
  *   2. Calls Razorpay GET /v1/payments/{id} with server credentials
- *   3. If payment is captured → upserts subscription row
- *   4. Returns { verified, plan, end_date }
+ *   3. Derives plan from payment.amount (NOT from body.plan)
+ *   4. If payment is captured → upserts subscription row
+ *   5. Returns { verified, plan, end_date }
  */
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -73,7 +179,8 @@ serve(async (req: Request) => {
     // ── Parse body ─────────────────────────────────────────────
     const body = await req.json();
     const paymentId = body.payment_id as string;
-    const plan = (body.plan as string) || "monthly";
+    // body.plan is accepted for backward compat but NOT trusted for entitlement.
+    const clientClaimedPlan = (body.plan as string) || "";
 
     if (!paymentId) {
       return new Response(
@@ -85,24 +192,13 @@ serve(async (req: Request) => {
       );
     }
 
-    if (plan !== "monthly" && plan !== "yearly") {
-      return new Response(
-        JSON.stringify({ error: "Invalid plan. Must be 'monthly' or 'yearly'" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // ── Check if subscription already exists ───────────────────
+    // ── Check if subscription already exists for THIS payment ──
     const { data: existingSub } = await supabase
       .from("subscriptions")
       .select("id, end_date, plan")
       .eq("user_id", userId)
+      .eq("razorpay_payment_id", paymentId)
       .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1)
       .maybeSingle();
 
     if (existingSub) {
@@ -184,6 +280,37 @@ serve(async (req: Request) => {
       );
     }
 
+    // ── Derive plan from payment amount (NOT from body.plan) ────
+    const actualPaise = payment.amount as number;
+    const promoCode = payment.notes?.promo_code as string | undefined;
+
+    const derived = await derivePlanFromAmount(actualPaise, promoCode, supabase);
+    if (!derived) {
+      console.error(
+        `Amount mismatch: ${actualPaise} paise does not match any plan` +
+          (promoCode ? ` (promo: ${promoCode})` : ""),
+      );
+      return new Response(
+        JSON.stringify({
+          verified: false,
+          error: "Payment amount does not match any known plan price",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const plan = derived.plan;
+
+    // Log if client-claimed plan disagrees with derived plan
+    if (clientClaimedPlan && clientClaimedPlan !== plan) {
+      console.warn(
+        `Plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise}`,
+      );
+    }
+
     // ── Create subscription ─────────────────────────────────────
     const now = new Date();
     const endDate = new Date(now);
@@ -249,6 +376,19 @@ serve(async (req: Request) => {
         subscription_expires_at: endDate.toISOString(),
       })
       .eq("id", userId);
+
+    // ── Redeem promo code if applied ────────────────────────────
+    if (derived.promoApplied && derived.promoCode) {
+      await redeemPromo(
+        supabase,
+        derived.promoCode,
+        userId,
+        plan,
+        derived.originalPaise,
+        derived.discountPct,
+        actualPaise,
+      );
+    }
 
     return new Response(
       JSON.stringify({

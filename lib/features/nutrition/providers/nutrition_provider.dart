@@ -592,8 +592,20 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final isServiceError = msg.contains('503') || msg.contains('502') ||
                              msg.contains('unavailable') || msg.contains('non-2xx') ||
                              msg.contains('food ai') || msg.contains('food analysis failed');
+
+      // Auto-refresh session on auth error (same pattern as AI Coach).
+      // User can tap "Analyse & Log" again without signing out.
+      if (isAuthError) {
+        try {
+          await SupabaseService.instance.client.auth.refreshSession();
+          debugPrint('[NutritionProvider] Session refreshed — user can retry.');
+        } catch (refreshErr) {
+          debugPrint('[NutritionProvider] Session refresh failed: $refreshErr');
+        }
+      }
+
       final errorMsg = isAuthError
-          ? 'Session expired. Please sign out and sign in again.'
+          ? 'Session refreshed. Please tap Analyse again.'
           : isServiceError
               ? 'AI food analysis is temporarily unavailable. Please try again shortly.'
               : 'AI analysis failed. Please check your connection and try again.';

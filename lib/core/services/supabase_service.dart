@@ -119,7 +119,7 @@ class SupabaseService {
   /// JWT expires within [buffer]. Returns null if no session exists or
   /// refresh fails and the token is already expired.
   Future<String?> ensureFreshToken({
-    Duration buffer = const Duration(seconds: 60),
+    Duration buffer = const Duration(minutes: 5),
   }) async {
     final session = client.auth.currentSession;
     if (session == null) return null;

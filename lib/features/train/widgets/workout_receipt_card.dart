@@ -2,7 +2,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
 import '../providers/train_provider.dart';
 
@@ -234,6 +237,106 @@ class WorkoutReceiptData {
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
       prs: data.detectedPRs,
+    );
+  }
+
+  /// Reconstruct receipt data from Hive exercise logs for a given date.
+  /// Returns null if no exercise logs are found for that date.
+  static WorkoutReceiptData? fromExerciseLogs(DateTime date) {
+    final Box wb = HiveService.instance.workoutBox;
+    final dateKey = formatDateKey(date);
+
+    // 1. Get log IDs from the date index
+    final indexKey = 'exercise_log_index_$dateKey';
+    final logIds = wb.get(indexKey);
+    if (logIds == null || logIds is! List || logIds.isEmpty) return null;
+
+    // 2. Read each exercise log and build ReceiptExercise list
+    double totalVolume = 0;
+    int totalSets = 0;
+    final prs = <String>[];
+    final seen = <String, ReceiptExercise>{};
+
+    for (final logId in logIds) {
+      final log = wb.get(logId);
+      if (log == null || log is! Map) continue;
+
+      final name = log['exercise_name'] as String? ?? 'Unknown';
+      final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+      final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
+      final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      final isPr = log['is_pr'] as bool? ?? false;
+      // Prefer exact stored volume; fall back to approximation for old logs
+      final storedVolume = (log['volume_kg'] as num?)?.toDouble();
+      final exerciseVolume = storedVolume ?? (weightKg * reps);
+
+      if (isPr) {
+        if (weightKg > 0) {
+          prs.add('$name — ${weightKg.toStringAsFixed(0)}kg');
+        } else {
+          prs.add(name);
+        }
+      }
+
+      totalVolume += exerciseVolume;
+      totalSets += sets;
+
+      // Merge duplicates (same exercise name)
+      final key = name.toLowerCase().trim();
+      final existing = seen[key];
+      if (existing == null) {
+        seen[key] = ReceiptExercise(
+          name: name,
+          sets: sets,
+          reps: sets > 0 ? (reps / sets).round() : reps,
+          minReps: sets > 0 ? (reps / sets).round() : reps,
+          maxReps: sets > 0 ? (reps / sets).round() : reps,
+          weightKg: weightKg,
+          loggingType: loggingType,
+        );
+      } else {
+        final mergedSets = existing.sets + sets;
+        final maxWeight = existing.weightKg > weightKg
+            ? existing.weightKg
+            : weightKg;
+        final avgReps = mergedSets > 0
+            ? ((existing.reps * existing.sets + (sets > 0 ? (reps / sets).round() : reps) * sets) / mergedSets).round()
+            : existing.reps;
+        seen[key] = ReceiptExercise(
+          name: existing.name,
+          sets: mergedSets,
+          reps: avgReps,
+          minReps: avgReps,
+          maxReps: avgReps,
+          weightKg: maxWeight,
+          loggingType: existing.loggingType,
+        );
+      }
+    }
+
+    if (seen.isEmpty) return null;
+
+    // 3. Read workout_log for workout name
+    String workoutName = 'WORKOUT';
+    final allKeys = wb.keys.toList();
+    for (final k in allKeys) {
+      final val = wb.get(k);
+      if (val is Map &&
+          val['type'] == 'workout_log' &&
+          val['date'] == dateKey) {
+        workoutName = (val['workout_name'] as String?) ?? 'WORKOUT';
+        break;
+      }
+    }
+
+    return WorkoutReceiptData(
+      date: date,
+      workoutName: workoutName,
+      exercises: seen.values.toList(),
+      totalVolumeKg: totalVolume,
+      totalSets: totalSets,
+      prs: prs,
     );
   }
 }

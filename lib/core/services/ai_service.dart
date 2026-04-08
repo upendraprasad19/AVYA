@@ -39,15 +39,29 @@ class AiService {
   static AiService get instance => _instance;
 
   final SupabaseService _supabase = SupabaseService.instance;
-  final http.Client _httpClient = http.Client();
+  http.Client? _httpClient;
+
+  /// Lazily-created HTTP client for web fallback calls.
+  /// Closed by [dispose] when the app shuts down.
+  http.Client get _client => _httpClient ??= http.Client();
+
+  /// Closes the HTTP client. Call from app teardown (e.g. in main dispose).
+  void dispose() {
+    _httpClient?.close();
+    _httpClient = null;
+  }
 
   // ── Response parsing helpers ──────────────────────────────────
 
   /// Parse the Edge Function response into an [AiChatResponse].
   AiChatResponse _parseResponse(dynamic data) {
     if (data is String) {
-      final parsed = json.decode(data) as Map<String, dynamic>;
-      return _buildResponse(parsed);
+      try {
+        final parsed = json.decode(data) as Map<String, dynamic>;
+        return _buildResponse(parsed);
+      } on FormatException catch (e) {
+        throw AiServiceException('Malformed AI response JSON: $e');
+      }
     }
     if (data is Map) {
       return _buildResponse(Map<String, dynamic>.from(data));
@@ -151,7 +165,7 @@ class AiService {
     final freshToken = await _supabase.ensureFreshToken();
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
-    final response = await _httpClient.post(
+    final response = await _client.post(
       Uri.parse(url),
       headers: {
         'Content-Type': 'application/json',
@@ -272,7 +286,7 @@ class AiService {
     final freshToken = await _supabase.ensureFreshToken();
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
-    final response = await _httpClient.post(
+    final response = await _client.post(
       Uri.parse(url),
       headers: {
         'Content-Type': 'application/json',

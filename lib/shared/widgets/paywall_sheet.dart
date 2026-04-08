@@ -505,7 +505,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 ),
                 child: TextField(
                   controller: _promoController,
-                  enabled: !_promoApplied,
+                  enabled: !_promoApplied && !_promoValidating,
                   textCapitalization: TextCapitalization.characters,
                   style: GoogleFonts.getFont(
                     'DM Sans',

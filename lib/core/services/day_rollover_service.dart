@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 
 // ── Home screen daily providers ──
@@ -47,6 +48,11 @@ class DayRolloverObserver with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkAndRollover();
+      // Re-subscribe to realtime sync if PRO (was paused on background).
+      SyncService.instance.subscribeToRealtimeSync();
+    } else if (state == AppLifecycleState.paused) {
+      // Cancel realtime subscription on background to save battery/data.
+      SyncService.instance.unsubscribeRealtime();
     }
   }
 

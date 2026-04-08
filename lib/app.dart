@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/colors.dart';
 import 'core/router/app_router.dart';
+import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
 import 'core/services/razorpay_service.dart';
+import 'core/services/sync_service.dart';
 
 /// Root widget. Uses ConsumerStatefulWidget so it can attach the
 /// [DayRolloverObserver] which needs a [WidgetRef] to invalidate providers.
@@ -26,6 +28,8 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
   @override
   void dispose() {
     DayRolloverObserver.instance.dispose();
+    SyncService.instance.unsubscribeRealtime();
+    AiService.instance.dispose();
     super.dispose();
   }
 
@@ -98,7 +102,7 @@ class _MobileFrame extends StatelessWidget {
     final frameW = (frameH / maxH * maxW).clamp(300.0, maxW);
 
     return Container(
-      color: const Color(0xFF020305),
+      color: AppColors.bg,
       child: Center(
         child: Container(
           width: frameW,
@@ -107,7 +111,7 @@ class _MobileFrame extends StatelessWidget {
             color: AppColors.bg,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
-              color: const Color(0xFF1a1f2e),
+              color: AppColors.border,
               width: 2.5,
             ),
             boxShadow: [
@@ -131,7 +135,7 @@ class _MobileFrame extends StatelessWidget {
                     width: 110,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0a0f18),
+                      color: AppColors.header,
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),

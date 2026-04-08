@@ -104,6 +104,8 @@ class PredictionCard extends StatelessWidget {
                 color: AppColors.textPrimary,
                 height: 1.6,
               ),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
             )
           else
             Text(

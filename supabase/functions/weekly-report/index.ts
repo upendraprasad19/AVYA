@@ -138,21 +138,64 @@ serve(async (req: Request) => {
       .eq("user_id", targetUserId)
       .single();
 
-    // 4. Workout logs for the past 7 days
-    const { data: workoutLogs, error: workoutError } = await supabase
-      .from("workout_logs")
+    // 4a. Exercise-level data from workout_log_exercises (per-set granular data)
+    // workout_logs now stores summary rows; exercise details are in workout_log_exercises.
+    const { data: exerciseLogs, error: exerciseError } = await supabase
+      .from("workout_log_exercises")
       .select(
-        "date, exercise_name, sets_completed, reps_completed, weight_kg, " +
-          "duration_seconds, is_pr, rpe",
+        "exercise_name, set_number, reps, weight_kg, duration_seconds, is_pr, completed_at",
       )
+      .eq("user_id", targetUserId)
+      .gte("completed_at", sevenDaysAgoStr + "T00:00:00Z")
+      .lte("completed_at", todayStr + "T23:59:59Z")
+      .order("completed_at", { ascending: true });
+
+    if (exerciseError) {
+      console.error("Exercise logs query error:", exerciseError);
+    }
+
+    // 4b. Workout-level summary from workout_logs (duration, rpe, workout_name)
+    const { data: workoutSummaries, error: summaryError } = await supabase
+      .from("workout_logs")
+      .select("date, exercise_name, duration_seconds, rpe")
       .eq("user_id", targetUserId)
       .gte("date", sevenDaysAgoStr)
       .lte("date", todayStr)
       .order("date", { ascending: true });
 
-    if (workoutError) {
-      console.error("Workout query error:", workoutError);
+    if (summaryError) {
+      console.error("Workout summary query error:", summaryError);
     }
+
+    // Merge into unified workoutLogs format for downstream code.
+    // Each row is a per-exercise SUMMARY (not per-set). set_number = total sets for that exercise.
+    // Summary logs provide: date, duration_seconds, rpe
+    const workoutLogs: Array<Record<string, unknown>> = (exerciseLogs ?? []).map((e: Record<string, unknown>) => ({
+      date: e.completed_at ? (e.completed_at as string).split("T")[0] : todayStr,
+      exercise_name: e.exercise_name,
+      sets_completed: (e.set_number as number) ?? 1, // actual set count from per-exercise summary
+      reps_completed: e.reps,
+      weight_kg: e.weight_kg,
+      duration_seconds: e.duration_seconds,
+      is_pr: e.is_pr,
+      rpe: null, // RPE is workout-level, not exercise-level
+    }));
+
+    // Attach RPE from workout summaries to the first exercise entry of each date
+    const rpeByDate: Record<string, number | null> = {};
+    for (const ws of workoutSummaries ?? []) {
+      const d = (ws as Record<string, unknown>).date as string;
+      const rpe = (ws as Record<string, unknown>).rpe as number | null;
+      if (rpe && !rpeByDate[d]) rpeByDate[d] = rpe;
+    }
+    for (const wl of workoutLogs) {
+      const d = wl.date as string;
+      if (rpeByDate[d] && wl.rpe === null) {
+        wl.rpe = rpeByDate[d];
+      }
+    }
+
+    const workoutError = exerciseError || summaryError;
 
     // 5. Weight logs for trend
     const { data: weightLogs } = await supabase
@@ -208,13 +251,18 @@ serve(async (req: Request) => {
       0,
     );
     const prs = workouts.filter((w: Record<string, unknown>) => w.is_pr === true);
+    // Guard zero denominator: RPE is workout-level and currently never written
+    // by the Flutter app, so all values are null. Avoid NaN.
+    const rpeEntries = workouts.filter(
+      (w: Record<string, unknown>) => w.rpe != null && (w.rpe as number) > 0,
+    );
     const avgRpe =
-      workouts.length > 0
+      rpeEntries.length > 0
         ? (
-            workouts.reduce(
-              (sum: number, w: Record<string, unknown>) => sum + ((w.rpe as number) || 0),
+            rpeEntries.reduce(
+              (sum: number, w: Record<string, unknown>) => sum + (w.rpe as number),
               0,
-            ) / workouts.filter((w: Record<string, unknown>) => w.rpe).length
+            ) / rpeEntries.length
           ).toFixed(1)
         : "N/A";
 

@@ -97,7 +97,7 @@ serve(async (req: Request) => {
       .gt("end_date", new Date().toISOString())
       .order("end_date", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (subError || !subscription) {
       return new Response(

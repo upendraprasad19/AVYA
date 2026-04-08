@@ -48,6 +48,24 @@ class SubscriptionService {
   /// Server-side verification cache TTL (5 minutes).
   static const Duration _verifyCacheTtl = Duration(minutes: 5);
 
+  /// Atomically writes all subscription keys in a single Hive batch.
+  ///
+  /// Hive's [Box.putAll] writes all entries in one I/O operation,
+  /// preventing inconsistent state if the app crashes mid-write.
+  ///
+  /// Public so [RazorpayService] can use the same atomic pattern.
+  Future<void> writeSubscriptionState({
+    required bool isPro,
+    required String expiresAt,
+    required String plan,
+  }) async {
+    await _hive.configBox.putAll(<String, dynamic>{
+      _isProKey: isPro,
+      _expiresAtKey: expiresAt,
+      _planKey: plan,
+    });
+  }
+
   // ── Core API ────────────────────────────────────────────────
 
   /// Returns `true` if the user has an active PRO subscription.
@@ -114,12 +132,15 @@ class SubscriptionService {
       final localActivation = _hive.configBox.get('localActivationAt');
       if (localActivation != null && isPro()) {
         final activatedAt = DateTime.tryParse(localActivation.toString());
-        if (activatedAt != null &&
-            DateTime.now().difference(activatedAt).inMinutes < 10) {
+        if (activatedAt == null) {
+          // Malformed timestamp — clear and continue with server check.
+          await _hive.configBox.delete('localActivationAt');
+        } else if (DateTime.now().difference(activatedAt).inMinutes < 10) {
           return; // Grace period — don't override local activation yet
+        } else {
+          // Past grace period — clear the flag
+          await _hive.configBox.delete('localActivationAt');
         }
-        // Past grace period — clear the flag
-        await _hive.configBox.delete('localActivationAt');
       }
 
       final response = await supabase.client
@@ -150,11 +171,12 @@ class SubscriptionService {
         return;
       }
 
-      // Active subscription — upgrade locally.
-      final configBox = _hive.configBox;
-      await configBox.put(_isProKey, true);
-      await configBox.put(_expiresAtKey, expiresAt.toIso8601String());
-      await configBox.put(_planKey, plan ?? 'monthly');
+      // Active subscription — upgrade locally (atomic write).
+      await writeSubscriptionState(
+        isPro: true,
+        expiresAt: expiresAt.toIso8601String(),
+        plan: plan ?? 'monthly',
+      );
     } catch (e) {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
@@ -206,25 +228,26 @@ class SubscriptionService {
       final serverPlan = data['plan'] as String?;
       final serverExpiresAt = data['expires_at'] as String?;
 
-      final configBox = _hive.configBox;
-
       if (serverIsPro && serverExpiresAt != null) {
-        // Server confirms PRO — update local cache
-        await configBox.put(_isProKey, true);
-        await configBox.put(_expiresAtKey, serverExpiresAt);
-        await configBox.put(_planKey, serverPlan ?? 'monthly');
+        // Server confirms PRO — update local cache (atomic write)
+        await writeSubscriptionState(
+          isPro: true,
+          expiresAt: serverExpiresAt,
+          plan: serverPlan ?? 'monthly',
+        );
       } else {
         // Server says NOT PRO — downgrade immediately (anti-spoof)
         await _downgradeLocally();
       }
 
       // Update verification timestamp
-      await configBox.put(_lastVerifiedKey, DateTime.now().toIso8601String());
+      await _hive.configBox.put(_lastVerifiedKey, DateTime.now().toIso8601String());
 
       return serverIsPro;
-    } catch (e) {
+    } on Exception catch (e) {
+      // Network errors, timeouts, platform exceptions — trust cached state.
       debugPrint('[SubscriptionService.verifyFromServer] $e');
-      return isPro(); // Offline — trust cached state
+      return isPro();
     }
   }
 

@@ -782,14 +782,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   void startWorkout(WorkoutDayData day) {
     _timer?.cancel();
 
-    // Auto-mark first set of compound exercises as warm-up
-    final warmUps = <String, bool>{};
-    for (int i = 0; i < day.exercises.length; i++) {
-      if (day.exercises[i].isCompound) {
-        warmUps['$i-0'] = true; // first set is warm-up
-      }
-    }
-
     _workoutStartTime = DateTime.now();
 
     state = ActiveWorkoutData(
@@ -797,7 +789,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       exercises: List.from(day.exercises),
       elapsedSeconds: 0,
       checkedSets: {},
-      warmUpSets: warmUps,
+      warmUpSets: const {},
     );
 
     // Use wall-clock elapsed time so the timer survives phone lock / app pause.
@@ -1145,6 +1137,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       int totalReps = 0;
       int totalDuration = 0;
       double totalDistance = 0;
+      double volumeKg = 0; // exact per-set volume for receipt reconstruction
       int completedSets = 0;
 
       for (int s = 0; s < maxSetLog; s++) {
@@ -1163,6 +1156,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             totalReps += vals.reps ?? 0;
             totalDuration += vals.durationSeconds ?? 0;
             totalDistance += vals.distanceKm ?? 0;
+            // Accumulate exact per-set volume
+            volumeKg += (vals.weight ?? 0) * (vals.reps ?? 0);
           }
         }
       }
@@ -1203,6 +1198,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         'logging_type': effectiveLoggingType,
         'is_pr': isPr,
         'has_warmup_sets': hasWarmUpSets,
+        'volume_kg': volumeKg,
         'created_at': now.toIso8601String(),
       };
 

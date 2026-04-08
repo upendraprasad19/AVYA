@@ -319,7 +319,7 @@ class AuthNotifier extends Notifier<AuthState2> {
       await _supabase.client.from('users').upsert({
         'id': user.id,
         'email': user.email ?? '',
-        'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
+        'full_name': user.userMetadata?['full_name'] ?? ((user.email?.isNotEmpty == true) ? user.email!.split('@').first : 'User'),
         'created_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'id', ignoreDuplicates: true);
 

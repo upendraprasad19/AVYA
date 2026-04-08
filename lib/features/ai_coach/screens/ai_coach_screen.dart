@@ -258,7 +258,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 10,
-                    color: textColor.withAlpha(180),
+                    color: textColor.withValues(alpha: 0.71),
                   ),
                 ),
               ],
@@ -742,8 +742,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      AppColors.bg.withAlpha(0),
-                      AppColors.bg.withAlpha(230),
+                      AppColors.bg.withValues(alpha: 0.0),
+                      AppColors.bg.withValues(alpha: 0.90),
                     ],
                   ),
                 ),

@@ -12,6 +12,9 @@ class HiveService {
 
   bool _initialized = false;
 
+  /// Whether [init] has completed successfully.
+  bool get isInitialized => _initialized;
+
   /// All box names used by the app.
   static const String userBoxName = 'userBox';
   static const String workoutBoxName = 'workoutBox';

@@ -19,6 +19,8 @@ import '../widgets/quick_action_button.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import '../widgets/pr_snapshot.dart';
 import '../widgets/recent_food_logs.dart';
 import '../widgets/swap_sheet.dart';
@@ -157,14 +159,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final workoutsDone = progress?['total_workouts_done'] ?? 0;
       final streakDays = progress?['current_streak_days'] ?? 0;
 
-      final prompt = '''Based on this user's current data, generate a realistic
-12-week fitness prediction:
-- Name: $name
-- Current weight: ${weight}kg, Target: ${target}kg
-- Goal: $goal
-- Workouts completed: $workoutsDone
-- Current streak: $streakDays days
-Keep it under 200 words, conversational tone.''';
+      final prompt = '''Predict realistic 12-week fitness outcomes.
+
+Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
+
+Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+• Weight: current → 4wk → 8wk → 12wk
+• Body fat estimate change
+• Key lift projections
+• One motivational line''';
 
       final aiContext = {
         'system_prompt':
@@ -681,6 +684,27 @@ Keep it under 200 words, conversational tone.''';
 
     if (isCompleted) {
       final durationSecs = (schedule?['duration_seconds'] as int?) ?? 0;
+
+      // Compute best lift + volume from exercise logs
+      final receiptData = WorkoutReceiptData.fromExerciseLogs(DateTime.now());
+      double? volume;
+      String? bestLift;
+      if (receiptData != null) {
+        volume = receiptData.totalVolumeKg;
+        // Best lift = exercise with highest weight
+        double maxW = 0;
+        String maxName = '';
+        for (final ex in receiptData.exercises) {
+          if (ex.weightKg > maxW) {
+            maxW = ex.weightKg;
+            maxName = ex.name;
+          }
+        }
+        if (maxW > 0) {
+          bestLift = '$maxName ${maxW.toStringAsFixed(0)}kg';
+        }
+      }
+
       return TodayWorkoutCard(
         workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE 1',
         workoutName: workoutName.toUpperCase(),
@@ -688,6 +712,11 @@ Keep it under 200 words, conversational tone.''';
         exerciseCount: exercises.length,
         isRestDay: false,
         isDone: true,
+        totalVolumeKg: volume,
+        bestLift: bestLift,
+        onViewCard: receiptData != null
+            ? () => WorkoutReceiptSheet.show(context, receiptData)
+            : null,
         onStart: () {},
         caloriesCurrent: nutrition.calories,
         caloriesTarget: nutrition.calorieTarget,

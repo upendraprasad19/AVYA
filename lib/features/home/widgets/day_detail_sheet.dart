@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 
 /// Bottom sheet showing workout details for a tapped calendar day.
 ///
@@ -35,7 +37,7 @@ class DayDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = schedule?['type'] as String? ?? 'none';
     final status = schedule?['status'] as String? ?? 'none';
-    final isWorkout = type == 'workout';
+    final isWorkout = type == 'workout' || type == 'custom_template';
     final isCompleted = status == 'completed';
     final isRestDay = type == 'rest' || type == 'none';
 
@@ -97,7 +99,7 @@ class DayDetailSheet extends StatelessWidget {
   Widget _buildHeader() {
     final workoutName = schedule?['workout_name'] as String? ?? '';
     final type = schedule?['type'] as String? ?? 'none';
-    final isWorkout = type == 'workout';
+    final isWorkout = type == 'workout' || type == 'custom_template';
     final week = schedule?['week'] as int? ?? 0;
 
     return Row(
@@ -367,43 +369,91 @@ class DayDetailSheet extends StatelessWidget {
         AppSpacing.cardPadding,
         MediaQuery.of(context).padding.bottom + 16,
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: isCompleted
-            ? _buildCompletedBadge()
-            : _buildStartButton(context, enabled: isToday),
-      ),
+      child: isCompleted
+          ? _buildCompletedFooter(context)
+          : SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: _buildStartButton(context, enabled: isToday),
+            ),
     );
   }
 
-  Widget _buildCompletedBadge() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.green.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(
-          color: AppColors.green.withValues(alpha: 0.25),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle, size: 18, color: AppColors.green),
-          const SizedBox(width: 6),
-          Text(
-            'COMPLETED',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
-              color: AppColors.green,
+  Widget _buildCompletedFooter(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Completed badge
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: AppColors.green.withValues(alpha: 0.25),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle, size: 18, color: AppColors.green),
+                const SizedBox(width: 6),
+                Text(
+                  'COMPLETED',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                    color: AppColors.green,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        // View Workout Card button
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: Material(
+            color: AppColors.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: InkWell(
+              onTap: () {
+                final receiptData = WorkoutReceiptData.fromExerciseLogs(date);
+                if (receiptData != null) {
+                  WorkoutReceiptSheet.show(context, receiptData);
+                }
+              },
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.receipt_long,
+                        size: 16, color: AppColors.accent),
+                    const SizedBox(width: 6),
+                    Text(
+                      'View Workout Card',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

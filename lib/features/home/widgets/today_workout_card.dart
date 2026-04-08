@@ -30,6 +30,11 @@ class TodayWorkoutCard extends StatelessWidget {
   // Completed mode
   final bool isDone;
 
+  // Completed-state extras
+  final double? totalVolumeKg;
+  final String? bestLift;
+  final VoidCallback? onViewCard;
+
   const TodayWorkoutCard({
     super.key,
     this.workoutTag,
@@ -45,6 +50,9 @@ class TodayWorkoutCard extends StatelessWidget {
     this.stepsGoal = 10000,
     this.isRestDay = false,
     this.isDone = false,
+    this.totalVolumeKg,
+    this.bestLift,
+    this.onViewCard,
   });
 
   @override
@@ -166,31 +174,92 @@ class TodayWorkoutCard extends StatelessWidget {
                       ),
                     )
                   else if (isDone)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: AppColors.green.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle,
-                              size: 12, color: AppColors.green),
-                          const SizedBox(width: 4),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: DONE badge + View Card button
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: AppColors.green.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(AppRadius.pill),
+                                border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      size: 10, color: AppColors.green),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'DONE',
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (onViewCard != null) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: onViewCard,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'View Card',
+                                        style: GoogleFonts.getFont(
+                                          'DM Sans',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      const Icon(Icons.arrow_forward_ios,
+                                          size: 8, color: AppColors.accent),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        // Row 2: Best lift + volume stats
+                        if (bestLift != null || totalVolumeKg != null) ...[
+                          const SizedBox(height: 6),
                           Text(
-                            'DONE',
+                            [
+                              if (bestLift != null) '\u{1F3C6} $bestLift',
+                              if (totalVolumeKg != null)
+                                '${totalVolumeKg!.toStringAsFixed(0)} kg vol',
+                            ].join('  \u00B7  '),
                             style: GoogleFonts.getFont(
                               'DM Sans',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.green,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
-                      ),
+                      ],
                     )
                   else
                   TapScale(

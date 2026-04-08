@@ -396,12 +396,12 @@ class SyncService {
         .from('weight_logs')
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
-        .listen((rows) {
+        .listen((rows) async {
           for (final row in rows) {
             final date = row['date'] as String? ?? '';
             final key = 'weight_$date';
             if (_hive.healthBox.get(key) == null) {
-              _hive.healthBox.put(key, {
+              await _hive.healthBox.put(key, {
                 'type': 'weight_log',
                 'date': date,
                 'weight_kg': row['weight_kg'],
@@ -443,8 +443,7 @@ class SyncService {
           'created_at': log['completed_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
       } catch (e) {
-        // Skip individual failures.
-        debugPrint('[SyncService._syncWorkoutLogs] $e');
+        debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
       }
     }
   }
@@ -460,11 +459,18 @@ class SyncService {
       final log = Map<String, dynamic>.from(raw);
 
       try {
+        // Each row is a per-exercise SUMMARY (1 row per exercise, not per set).
+        // set_number = total completed sets for this exercise.
+        // reps = cumulative reps across all sets.
+        // weight_kg = best (max) weight across sets.
+        // workout_log_id = deterministic from date → groups exercises by workout.
+        // exercise_id = exercise_name → stable identity for cross-week grouping.
+        final date = log['date'] as String? ?? '';
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
-          'workout_log_id': log['id'],
+          'workout_log_id': _deterministicId('workout_$date'),
           'user_id': userId,
-          'exercise_id': log['id'] ?? key,
+          'exercise_id': log['exercise_name'] ?? key,
           'exercise_name': log['exercise_name'] ?? '',
           'logging_type': log['logging_type'],
           'set_number': log['sets_completed'] ?? 1,
@@ -477,8 +483,7 @@ class SyncService {
           'completed_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
       } catch (e) {
-        // Skip individual failures.
-        debugPrint('[SyncService._syncExerciseLogs] $e');
+        debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
       }
     }
   }
@@ -508,8 +513,7 @@ class SyncService {
               entry['completed_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
-        // Skip individual failures.
-        debugPrint('[SyncService._syncScheduleCompletions] $e');
+        debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
       }
     }
   }
@@ -699,7 +703,7 @@ class SyncService {
           'id': _deterministicId('streak_${userId}_$weekStart'),
           ...data,
           'user_id': userId,
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,week_start');
       } catch (e) {
         debugPrint('[SyncService._syncStreaks] $e');
       }
@@ -792,17 +796,55 @@ class SyncService {
     }
   }
 
+  // ── Paginated Fetch Helper ──────────────────────────────────
+
+  /// Fetches all rows from a Supabase table using offset-based pagination.
+  /// Replaces hardcoded `.limit(5000)` to support full-history restore.
+  /// Safety ceiling: 50,000 rows per table to prevent runaway fetches.
+  Future<List<Map<String, dynamic>>> _fetchAllRows(
+    String table,
+    String userId, {
+    String? dateColumn,
+    String? since,
+    String orderBy = 'created_at',
+    int pageSize = 1000,
+    String? selectColumns,
+  }) async {
+    const maxRows = 50000;
+    final results = <Map<String, dynamic>>[];
+    int offset = 0;
+    while (true) {
+      var query = _supabase.client
+          .from(table)
+          .select(selectColumns ?? '*')
+          .eq('user_id', userId);
+      if (dateColumn != null && since != null) {
+        query = query.gte(dateColumn, since);
+      }
+      final rows = await query
+          .order(orderBy)
+          .range(offset, offset + pageSize - 1);
+      for (final row in rows) {
+        results.add(Map<String, dynamic>.from(row as Map));
+      }
+      if (rows.length < pageSize) break; // last page
+      offset += pageSize;
+      if (results.length >= maxRows) {
+        debugPrint('[SyncService._fetchAllRows] Hit $maxRows ceiling for $table');
+        break;
+      }
+    }
+    return results;
+  }
+
   // ── Private Restore Helpers (Cloud → Hive) ──────────────────
 
   Future<void> _restoreWorkoutLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('workout_logs')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since)
-          .order('created_at')
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'workout_logs', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+      );
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -831,13 +873,10 @@ class SyncService {
 
   Future<void> _restoreExerciseLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('workout_log_exercises')
-          .select()
-          .eq('user_id', userId)
-          .gte('completed_at', since)
-          .order('completed_at')
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'workout_log_exercises', userId,
+        dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+      );
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -904,8 +943,7 @@ class SyncService {
           .select()
           .eq('user_id', userId)
           .gte('completed_at', since)
-          .order('scheduled_date')
-          .limit(5000);
+          .order('scheduled_date');
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -1005,12 +1043,10 @@ class SyncService {
 
   Future<void> _restoreWeightLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('weight_logs')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since)
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'weight_logs', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+      );
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -1032,13 +1068,25 @@ class SyncService {
 
   Future<void> _restoreNutritionLogs(String userId, String since) async {
     try {
-      // Join with nutrition_log_items to restore individual food items
-      final rows = await _supabase.client
-          .from('nutrition_logs')
-          .select('*, nutrition_log_items(*)')
-          .eq('user_id', userId)
-          .gte('created_at', since)
-          .limit(5000);
+      // Join with nutrition_log_items to restore individual food items.
+      // Paginated fetch (1000 per page, max 50,000).
+      final rows = <Map<String, dynamic>>[];
+      int offset = 0;
+      const pageSize = 1000;
+      while (true) {
+        final page = await _supabase.client
+            .from('nutrition_logs')
+            .select('*, nutrition_log_items(*)')
+            .eq('user_id', userId)
+            .gte('created_at', since)
+            .order('created_at')
+            .range(offset, offset + pageSize - 1);
+        for (final r in page) {
+          rows.add(Map<String, dynamic>.from(r as Map));
+        }
+        if (page.length < pageSize || rows.length >= 50000) break;
+        offset += pageSize;
+      }
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -1078,12 +1126,10 @@ class SyncService {
 
   Future<void> _restoreMeasurements(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('body_measurements')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since)
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'body_measurements', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+      );
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -1144,12 +1190,10 @@ class SyncService {
 
   Future<void> _restoreWaterLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('water_logs')
-          .select()
-          .eq('user_id', userId)
-          .gte('date', since.substring(0, 10)) // date is a DATE column, use date part only
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'water_logs', userId,
+        dateColumn: 'date', since: since.substring(0, 10), orderBy: 'date',
+      );
 
       final healthBox = _hive.healthBox;
       for (final row in rows) {
@@ -1190,8 +1234,7 @@ class SyncService {
           .from('sleep_logs')
           .select()
           .eq('user_id', userId)
-          .gte('created_at', since)
-          .limit(5000);
+          .gte('created_at', since);
 
       if (rows.isEmpty) return;
 
@@ -1226,22 +1269,32 @@ class SyncService {
       final healthBox = _hive.healthBox;
       final existingRaw = healthBox.get('streaks');
       final existing = existingRaw is List ? List<Map>.from(existingRaw) : <Map>[];
-      final existingIds = existing
-          .map((e) => e['id']?.toString() ?? '')
-          .toSet();
+
+      // Deduplicate by week_start (not cloud id) to prevent same-week duplicates.
+      // Cloud data is authoritative — replace local row if conflict found.
+      final existingWeekStarts = <String, int>{};
+      for (int i = 0; i < existing.length; i++) {
+        final ws = existing[i]['week_start']?.toString() ?? '';
+        if (ws.isNotEmpty) existingWeekStarts[ws] = i;
+      }
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
-        final id = map['id']?.toString() ?? '';
-        if (id.isNotEmpty && !existingIds.contains(id)) {
-          // Add local_id so train_provider's indexWhere(s['local_id'] == streakId)
-          // can match restored rows instead of creating duplicates.
-          final weekStart = map['week_start']?.toString() ?? '';
-          existing.add({
-            ...map,
-            'local_id': 'streak_$weekStart',
-            'source': 'cloud_restore',
-          });
+        final weekStart = map['week_start']?.toString() ?? '';
+        if (weekStart.isEmpty) continue;
+
+        final restoredRow = <String, dynamic>{
+          ...map,
+          'local_id': 'streak_$weekStart',
+          'source': 'cloud_restore',
+        };
+
+        if (existingWeekStarts.containsKey(weekStart)) {
+          // Replace local row with cloud data (cloud is authoritative)
+          existing[existingWeekStarts[weekStart]!] = restoredRow;
+        } else {
+          existingWeekStarts[weekStart] = existing.length;
+          existing.add(restoredRow);
         }
       }
 
@@ -1567,13 +1620,11 @@ class SyncService {
   /// Restores scheduled workouts from Supabase (supplement to plan restore).
   Future<void> _restoreScheduledWorkouts(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('scheduled_workouts')
-          .select()
-          .eq('user_id', userId)
-          .gte('scheduled_date', since.substring(0, 10))
-          .order('scheduled_date')
-          .limit(5000);
+      final rows = await _fetchAllRows(
+        'scheduled_workouts', userId,
+        dateColumn: 'scheduled_date', since: since.substring(0, 10),
+        orderBy: 'scheduled_date',
+      );
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);

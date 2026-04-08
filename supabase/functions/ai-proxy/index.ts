@@ -116,10 +116,11 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Extract user ID from JWT.
-    // verify_jwt is DISABLED on this function because the Supabase gateway
-    // was silently rejecting valid JWTs (100% 401 rate). We validate manually
-    // with proper Base64URL decode and expiry check.
+    // Validate JWT via Supabase Auth (server-side signature verification).
+    // verify_jwt is DISABLED on this function's config because the Supabase
+    // gateway middleware was silently rejecting valid JWTs (100% 401 rate).
+    // Instead, we use supabaseClient.auth.getUser() which validates the
+    // JWT signature + expiry via the Auth API — same pattern as ai-proxy-pro.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
@@ -128,38 +129,18 @@ serve(async (req: Request) => {
       });
     }
 
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    let userId: string;
-    let jwtExpired = false;
-    try {
-      const parts = token.split(".");
-      if (parts.length !== 3) throw new Error("Invalid JWT format");
-      // JWT uses Base64URL encoding — convert to standard Base64 for atob()
-      let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      while (base64.length % 4) base64 += "=";
-      const payload = JSON.parse(atob(base64));
-      userId = payload.sub;
-      if (!userId) throw new Error("No sub claim in JWT");
-      // Manual expiry check (since verify_jwt is disabled)
-      const exp = payload.exp as number | undefined;
-      if (exp && Date.now() / 1000 > exp) {
-        jwtExpired = true;
-      }
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid token format" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (jwtExpired) {
-      return new Response(JSON.stringify({ error: "Token expired" }), {
+    const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !authUser) {
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Service role client for DB operations only (NOT for auth validation)
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const userId = authUser.id;
 
     // Parse request body early — needed to route food_text_analysis
     // before trial/rate-limit checks (food logging is always free).
@@ -236,6 +217,26 @@ Rules:
       });
     }
 
+    // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
+    // Client-side limits handle exact free/PRO tiers; this is a server-side
+    // safety net to prevent modified clients from unlimited Gemini calls.
+    if (type === "scan_meal" || type === "cart_auditor") {
+      const todayVisionStr = new Date().toISOString().split("T")[0];
+      const { count: visionCount } = await supabaseClient
+        .from("ai_coach_interactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .in("channel", ["scan_meal", "cart_auditor"])
+        .gte("created_at", todayVisionStr + "T00:00:00Z");
+
+      if ((visionCount ?? 0) >= 15) {
+        return new Response(
+          JSON.stringify({ error: "Daily vision analysis limit reached. Try again tomorrow." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // ── Scan meal (image analysis) ────────────────────────────────────
     if (type === "scan_meal" && body.image) {
       const geminiKey = Deno.env.get("GEMINI_API_KEY");
@@ -264,10 +265,74 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
           const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
           const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(jsonStr);
+
+          // Log usage for rate limiting
+          try {
+            await supabaseClient.from("ai_coach_interactions").insert({
+              user_id: userId,
+              channel: "scan_meal",
+              user_message: "[scan_meal] analysis",
+              ai_response: "success",
+              model_used: "Gemini 1.5 Flash",
+              tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
+              created_at: new Date().toISOString(),
+            });
+          } catch (_) {}
+
           return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       } catch (_) {}
       return new Response(JSON.stringify({ error: "Image analysis failed" }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Cart auditor (grocery screenshot analysis) ───────────────────
+    if (type === "cart_auditor" && body.image) {
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!geminiKey) {
+        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
+          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const cartPrompt = `You are a nutrition expert with deep knowledge of Indian grocery products. Analyse this grocery cart, receipt, or shopping screenshot carefully. Identify all food/grocery items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
+{"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
+Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
+      try {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: cartPrompt }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+            }),
+          },
+        );
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(jsonStr);
+
+          // Log usage for rate limiting
+          try {
+            await supabaseClient.from("ai_coach_interactions").insert({
+              user_id: userId,
+              channel: "cart_auditor",
+              user_message: "[cart_auditor] analysis",
+              ai_response: "success",
+              model_used: "Gemini 1.5 Flash",
+              tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
+              created_at: new Date().toISOString(),
+            });
+          } catch (_) {}
+
+          return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } catch (_) {}
+      return new Response(JSON.stringify({ error: "Cart analysis failed" }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

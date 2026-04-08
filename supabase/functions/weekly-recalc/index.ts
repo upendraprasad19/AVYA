@@ -16,9 +16,9 @@ interface WorkoutLog {
   exercise_id: string;
   exercise_name: string;
   weight_kg: number | null;
-  sets_completed: number | null;
-  reps_completed: number | null;
-  date: string;
+  reps: number | null;
+  completed_at: string;
+  date: string; // derived from completed_at
 }
 
 interface ScheduledWorkout {
@@ -172,13 +172,15 @@ serve(async (req: Request) => {
     const fourWeeksAgoStr = fourWeeksAgo.toISOString().split("T")[0];
 
     // ── STEP 1: Bulk fetch ALL data in 2 parallel queries ──
-    const [allLogs, allScheduled] = await Promise.all([
-      fetchAllRows<WorkoutLog>(
+    // Read from workout_log_exercises (per-exercise data) instead of workout_logs
+    // (which now stores summary rows after sync refactor).
+    const [rawLogs, allScheduled] = await Promise.all([
+      fetchAllRows<{ user_id: string; exercise_id: string; exercise_name: string; weight_kg: number | null; reps: number | null; completed_at: string }>(
         supabaseClient,
-        "workout_logs",
-        "user_id, exercise_id, exercise_name, weight_kg, sets_completed, reps_completed, date",
-        "date",
-        fourWeeksAgoStr,
+        "workout_log_exercises",
+        "user_id, exercise_id, exercise_name, weight_kg, reps, completed_at",
+        "completed_at",
+        fourWeeksAgoStr + "T00:00:00Z",
       ),
       fetchAllRows<ScheduledWorkout>(
         supabaseClient,
@@ -188,6 +190,12 @@ serve(async (req: Request) => {
         fourWeeksAgoStr,
       ),
     ]);
+
+    // Derive date from completed_at for downstream scoring
+    const allLogs: WorkoutLog[] = rawLogs.map((r) => ({
+      ...r,
+      date: r.completed_at ? r.completed_at.split("T")[0] : fourWeeksAgoStr,
+    }));
 
     console.log(
       `weekly-recalc: fetched ${allLogs.length} logs, ${allScheduled.length} scheduled in ${Date.now() - start}ms`,
@@ -234,7 +242,10 @@ serve(async (req: Request) => {
 
       const level = calculateExperienceLevel(userLogs, userScheduled);
       levels.set(userId, level);
-      workoutCounts.set(userId, userLogs.length);
+      // Count distinct workout dates, not exercise rows.
+      // Each row is a per-exercise summary; a 6-exercise workout = 6 rows but 1 workout.
+      const distinctDates = new Set(userLogs.map((l) => l.date));
+      workoutCounts.set(userId, distinctDates.size);
     }
 
     console.log(
@@ -286,9 +297,10 @@ serve(async (req: Request) => {
       `weekly-recalc: processed ${processed} users, ${errors} errors in ${totalTime}ms`,
     );
 
+    const status = errors === 0 ? "success" : (errors > processed ? "failed" : "partial");
     return new Response(
       JSON.stringify({
-        status: "success",
+        status,
         users_processed: processed,
         errors,
         total_users: allUserIds.size,
@@ -297,7 +309,7 @@ serve(async (req: Request) => {
         duration_ms: totalTime,
       }),
       {
-        status: 200,
+        status: errors > processed ? 500 : 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );

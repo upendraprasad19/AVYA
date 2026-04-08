@@ -429,18 +429,18 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         }
       }
 
-      final predictionPrompt = '''Based on this user's profile, predict realistic fitness outcomes at 3, 6, and 12 months.
+      final predictionPrompt = '''Predict realistic fitness outcomes at 3, 6, and 12 months.
 
 Profile: ${profile['gender']}, age $age, ${profile['height_cm']}cm, ${profile['current_weight_kg']}kg → ${profile['target_weight_kg']}kg goal
 Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
 Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
 BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
 
-Return a motivational but realistic prediction with specific numbers for:
-- Weight at 3/6/12 months
-- Estimated body fat % change
-- Key lift improvements (bench, squat, deadlift estimates)
-Keep it under 200 words, conversational tone.''';
+Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+• Weight: 74kg → 71kg (3mo) → 69kg (6mo) → 67kg (12mo)
+• Body fat: ~22% → ~18%
+• Bench: 40kg → 60kg, Squat: 50kg → 80kg
+• One motivational line''';
 
       final context = {
         'system_prompt':
