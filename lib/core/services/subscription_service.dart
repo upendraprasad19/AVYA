@@ -180,6 +180,17 @@ class SubscriptionService {
     } catch (e) {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
+
+      // Don't let network errors perpetuate phantom PRO indefinitely.
+      // If local activation grace period (10 min) has passed, clear the flag
+      // so the NEXT launch will do a proper server check.
+      final localAct = _hive.configBox.get('localActivationAt');
+      if (localAct != null) {
+        final actAt = DateTime.tryParse(localAct.toString());
+        if (actAt != null && DateTime.now().difference(actAt).inMinutes >= 10) {
+          await _hive.configBox.delete('localActivationAt');
+        }
+      }
     }
   }
 

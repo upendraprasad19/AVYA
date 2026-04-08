@@ -365,8 +365,17 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         await _syncOnboardingToSupabase(profile);
       } catch (syncErr) {
         // Visible in debug console for testing; not shown to the user.
-        // ignore: avoid_print
-        print('[Onboarding] Supabase sync failed: $syncErr — will retry on next launch.');
+        debugPrint('[Onboarding] Supabase sync failed: $syncErr — scheduling retry');
+        // Retry once after 10s — JWT may need refresh after sign-up flow.
+        Future.delayed(const Duration(seconds: 10), () async {
+          try {
+            await SupabaseService.instance.client.auth.refreshSession();
+            await _syncOnboardingToSupabase(profile);
+            debugPrint('[Onboarding] Retry succeeded');
+          } catch (e) {
+            debugPrint('[Onboarding] Retry also failed: $e — will sync on next daily sync');
+          }
+        });
       }
 
       // Fire-and-forget: generate AI prediction card in background.

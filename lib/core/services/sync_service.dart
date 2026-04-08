@@ -29,7 +29,7 @@ class SyncService {
   static const String _lastCustomSyncKey = 'last_custom_sync';
 
   /// Duration between full syncs (1 day — safe because all upserts are idempotent).
-  static const Duration _fullSyncInterval = Duration(days: 1);
+  static const Duration _fullSyncInterval = Duration(days: 1); // daily full sync on app launch
 
   /// Deterministic UUID generator for sync IDs.
   /// Converts Hive keys (e.g. `wlog_1775500200000`) into stable UUIDs
@@ -76,6 +76,16 @@ class SyncService {
 
       // Push any pending custom items immediately.
       await _syncCustomItems();
+
+      // Push daily snapshot + trigger coaching notes extraction.
+      // Idempotent: Edge Function upserts by (user_id, snapshot_date).
+      // Includes: profile, progress, workouts, nutrition, water, steps,
+      // weight, PRs, coaching notes — full AI context for reports/alerts.
+      try {
+        await pushSnapshot();
+      } catch (e) {
+        debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
+      }
 
       // Pull approved community foods/exercises.
       await syncCommunityItems();
@@ -135,7 +145,7 @@ class SyncService {
   /// Pushes all workout logs, nutrition logs, weight logs, measurements,
   /// sleep logs, and streaks to Supabase.
   ///
-  /// Triggered on app launch if >7 days since last full sync.
+  /// Triggered on app launch if >1 day since last full sync.
   Future<void> weeklyFullSync() async {
     try {
       final userId = _supabase.currentUser?.id;

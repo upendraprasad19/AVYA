@@ -384,6 +384,12 @@ class RazorpayService {
     for (final delay in delays) {
       Future.delayed(delay, () async {
         try {
+          // Refresh JWT before retry — the original token from checkout
+          // is likely expired (app was backgrounded during Razorpay WebView).
+          try {
+            await SupabaseService.instance.client.auth.refreshSession();
+          } catch (_) {}
+
           final response = await SupabaseService.instance.callFunction(
             'verify-payment',
             body: {
