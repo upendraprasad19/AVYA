@@ -10,6 +10,8 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/onboarding_provider.dart';
 
 class OnboardingChatScreen extends ConsumerStatefulWidget {
@@ -757,8 +759,17 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                     : () async {
                         final phase = await notifier.completeOnboarding();
                         if (phase != null && mounted) {
-                          // Refresh home calendar so scheduled workout days appear immediately
+                          // Refresh all home/nutrition/train providers so fresh
+                          // onboarding data (name, macros, plan) is visible immediately.
                           ref.invalidate(calendarWeekProvider);
+                          ref.invalidate(userFirstNameProvider);
+                          ref.invalidate(userInitialProvider);
+                          ref.invalidate(userGreetingProvider);
+                          ref.invalidate(nutritionSummaryProvider);
+                          ref.invalidate(macroTargetsProvider);
+                          ref.invalidate(currentPlanProvider);
+                          ref.invalidate(todayWorkoutProvider);
+                          ref.invalidate(streakProvider);
                           // Read computed targets from provider state — set by
                           // completeOnboarding() just before it returned.
                           // This avoids a Hive re-read and eliminates the old

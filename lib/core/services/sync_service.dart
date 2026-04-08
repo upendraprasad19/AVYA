@@ -214,7 +214,8 @@ class SyncService {
   /// Pulls all user data from Supabase into Hive.
   /// Used on reinstall/login when Hive is empty.
   ///
-  /// PRO users get 90 days of history; free users get 30 days.
+  /// Restores full history for ALL users (free + PRO).
+  /// Storage per user is negligible (~1-2MB/year).
   Future<void> restoreFromCloud(String userId) async {
     try {
       // Full restore for ALL users — no date limit. Data is already in Supabase
@@ -1233,7 +1234,14 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id']?.toString() ?? '';
         if (id.isNotEmpty && !existingIds.contains(id)) {
-          existing.add({...map, 'source': 'cloud_restore'});
+          // Add local_id so train_provider's indexWhere(s['local_id'] == streakId)
+          // can match restored rows instead of creating duplicates.
+          final weekStart = map['week_start']?.toString() ?? '';
+          existing.add({
+            ...map,
+            'local_id': 'streak_$weekStart',
+            'source': 'cloud_restore',
+          });
         }
       }
 

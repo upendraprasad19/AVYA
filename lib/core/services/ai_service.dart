@@ -110,6 +110,38 @@ class AiService {
     }
   }
 
+  /// Send a prediction request that bypasses daily limits and interaction
+  /// logging. Used for onboarding predictions and PRO monthly refreshes.
+  ///
+  /// The Edge Function handles `type: 'prediction'` by skipping the daily
+  /// message count check and the `ai_coach_interactions` insert.
+  Future<AiChatResponse> predict(
+      String message, Map<String, dynamic> context) async {
+    try {
+      final response = await _supabase.callFunction(
+        'ai-proxy',
+        body: {
+          'message': message,
+          'context': context,
+          'snapshot_json': context,
+          'type': 'prediction',
+        },
+      );
+
+      if (response.status != 200) {
+        throw AiServiceException(
+          'Prediction failed with status ${response.status}',
+          statusCode: response.status,
+        );
+      }
+
+      return _parseResponse(response.data);
+    } catch (e) {
+      if (e is AiServiceException) rethrow;
+      throw AiServiceException('Prediction request failed: $e');
+    }
+  }
+
   /// Direct HTTP fallback for web when Supabase client fails.
   /// Proactively refreshes JWT before making the call.
   Future<AiChatResponse> _directHttpCall(

@@ -1262,34 +1262,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final progress = UserRepository.instance.getProgress() ?? {};
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
 
-    // ── Daily streak (consecutive workout days — what users see) ──
-    // Reuse dateStr (already computed above) for the workout's scheduled date key.
-    final yesterdayStr = formatDateKey(
-      workoutDate.subtract(const Duration(days: 1)),
-    );
-    final lastWorkoutDate = (progress['last_workout_date'] as String?) ?? '';
-    int streakDays = (progress['current_streak_days'] as int?) ?? 0;
-    int freezesAvailable = (progress['streak_freezes_available'] as int?) ?? 1;
-    final freezeUsedDates = List<String>.from(
-      (progress['streak_freeze_used_dates'] as List?) ?? [],
-    );
-    if (lastWorkoutDate == dateStr) {
-      // Same day double-log — already counted, do nothing
-    } else if (lastWorkoutDate == yesterdayStr) {
-      streakDays += 1;  // Consecutive day — keep the streak going
-    } else if (streakDays > 0 && freezesAvailable > 0 && lastWorkoutDate.isNotEmpty) {
-      // Gap detected but user has a streak freeze — apply it
-      freezesAvailable -= 1;
-      freezeUsedDates.add(yesterdayStr); // Mark the missed day as frozen
-      streakDays += 1; // Continue the streak through the freeze
-      // Flag for UI to show "Streak Freeze used" toast
-      UserRepository.instance.updateProgress({
-        'streak_freeze_just_used': true,
-        'streak_freeze_remaining_after_use': freezesAvailable,
-      });
-    } else {
-      streakDays = 1;   // Gap or first workout ever — start at 1
-    }
+    // ── Daily streak (schedule-aware — skips rest days) ──
+    // Calculated on-the-fly by scanning schedule backwards.
+    // Handles rest days, schedule changes, and template swaps correctly.
+    final streakDays = repo.calculateCurrentStreak();
 
     // ── Weekly streak (kept for badge logic — not shown in UI) ───
     final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
@@ -1310,17 +1286,46 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       'last_workout_date': dateStr,
       'current_streak_weeks': streakWeeks,
       'last_streak_week': currentWeekNum,
-      'streak_freezes_available': freezesAvailable,
-      'streak_freeze_used_dates': freezeUsedDates,
     });
+
+    // ── Create/update per-week streak row for Supabase streaks table ──
+    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
+    if (planStart != null && planned > 0) {
+      final weekStart = planStart.add(Duration(days: (currentWeekNum - 1) * 7));
+      final weekStartStr = formatDateKey(weekStart);
+      final streakId = 'streak_$weekStartStr';
+
+      final healthBox = HiveService.instance.healthBox;
+      final existing = (healthBox.get('streaks') as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          <Map<String, dynamic>>[];
+      final idx = existing.indexWhere((s) => s['local_id'] == streakId);
+
+      final row = <String, dynamic>{
+        'local_id': streakId,
+        'week_start': weekStartStr,
+        'workouts_planned': planned,
+        'workouts_completed': completedCount,
+        'is_streak_maintained': completedCount >= (planned * 0.8).ceil(),
+      };
+
+      if (idx >= 0) {
+        existing[idx] = row;
+      } else {
+        existing.add(row);
+      }
+      await healthBox.put('streaks', existing);
+    }
 
     state = state.copyWith(isComplete: true, isSaved: true, detectedPRs: prDescriptions);
 
     // Check badge unlocks after workout completion.
     BadgeService.instance.checkAll();
 
-    // Fire-and-forget cloud sync of workout data (non-blocking).
+    // Fire-and-forget cloud sync of workout data + progress (non-blocking).
     SyncService.instance.syncWorkoutData();
+    SyncService.instance.syncProgressNow();
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

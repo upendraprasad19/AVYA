@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ---
 
@@ -801,13 +801,13 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 
 ## 19. AGENT TEAM
 
-See `.claude/agents/` for full definitions:
+See `.Codex/agents/` for full definitions:
 - `manager-agent.md` — Autonomous orchestrator. Reads BUILD_ORDER, spawns agents, runs QA, advances phases.
 - `database-agent.md` — Supabase migrations, RLS, seed data.
 - `backend-agent.md` — Edge Functions (AI proxy, Razorpay, crons).
 - `screen-agent.md` — Build any of the 5 screens (parameterized).
 - `auth-agent.md` — Supabase Auth + onboarding flow.
-- `qa-agent.md` — Read-only reviewer against this CLAUDE.md.
+- `qa-agent.md` — Read-only reviewer against this AGENTS.md.
 
 ---
 

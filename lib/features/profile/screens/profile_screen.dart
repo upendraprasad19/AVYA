@@ -307,6 +307,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   final newValue = !biometric.isSyncEnabled;
                   ref.read(biometricProvider.notifier).toggleSync(newValue);
                   if (newValue && mounted) {
+                    // Invalidate home screen step provider so it re-reads
+                    // the freshly synced Hive data immediately.
+                    ref.invalidate(todayStepsProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -864,9 +867,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final aiTextUsed = usage.used(AppConstants.featureAiTextLogPro, false);
     final aiTextLimit = AppConstants.freeAiTextLogsPerDay;
     final scanUsed = usage.used(AppConstants.featureScanMealPro, false);
-    final scanLimit = AppConstants.freeScanMealPerMonth;
+    final scanLimit = AppConstants.freeScanMealPerDay;
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
-    final cartLimit = AppConstants.freeCartAuditorPerMonth;
+    final cartLimit = AppConstants.freeCartAuditorPerDay;
 
     // Compute trial days remaining from Hive directly
     final configBox = HiveService.instance.configBox;
@@ -954,9 +957,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const SizedBox(height: 12),
           _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
           const SizedBox(height: 6),
-          _usageRow('Meal Scans', scanUsed, scanLimit, '/month'),
+          _usageRow('Meal Scans', scanUsed, scanLimit, '/day'),
           const SizedBox(height: 6),
-          _usageRow('Cart Auditor', cartUsed, cartLimit, '/month'),
+          _usageRow('Cart Auditor', cartUsed, cartLimit, '/day'),
         ],
       ),
     );

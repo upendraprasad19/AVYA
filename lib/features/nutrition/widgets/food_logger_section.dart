@@ -70,8 +70,11 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     ref.read(aiAnalysingProvider.notifier).set(true);
     await ref.read(aiBreakdownProvider.notifier).analyse(text);
 
-    // Increment usage counter after successful analysis
-    await usage.increment(AppConstants.featureAiTextLogPro, isPro);
+    // Only increment quota if analysis actually succeeded (not on error)
+    final result = ref.read(aiBreakdownProvider);
+    if (result != null && result.error == null) {
+      await usage.increment(AppConstants.featureAiTextLogPro, isPro);
+    }
 
     ref.read(aiAnalysingProvider.notifier).set(false);
     _controller.clear();

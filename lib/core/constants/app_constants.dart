@@ -37,9 +37,9 @@ class AppConstants {
   static const String featureReasoningTab = 'reasoning_tab';
   static const String featureWeeklyAiReport = 'weekly_ai_report';
   static const String featureProgressPhotos = 'progress_photos';
-  static const String featureScanMealPro = 'scan_meal_pro';         // 3/day PRO (free=3/month)
-  static const String featureCartAuditorPro = 'cart_auditor_pro';   // 3/day PRO (free=1/month)
-  static const String featureAiTextLogPro = 'ai_text_log_pro';      // 10/day PRO (free=3/day)
+  static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)
+  static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)
+  static const String featureAiTextLogPro = 'ai_text_log_pro';      // Unlimited PRO (free=10/day)
   static const String featureVoiceNotes = 'voice_notes';
   static const String featureMorningAlertPro = 'morning_alert_pro'; // AI-personalised (free=generic)
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
@@ -50,39 +50,29 @@ class AppConstants {
   // ── Free Tier Limits ──────────────────────────────────────
 
   /// Maximum AI coach messages per day for free users.
+  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (15).
   static const int freeAiMessagesPerDay = 15;
 
   /// Free AI coach trial duration in days.
   static const int freeAiTrialDays = 30;
 
   /// Free AI food text logs per day.
-  static const int freeAiTextLogsPerDay = 3;
+  static const int freeAiTextLogsPerDay = 10;
 
-  /// PRO AI food text logs per day.
-  static const int proAiTextLogsPerDay = 10;
+  /// Free scan meal uses per day.
+  static const int freeScanMealPerDay = 3;
 
-  /// Free scan meal uses per month.
-  static const int freeScanMealPerMonth = 3;
+  /// PRO scan meal uses per day (soft cap warning at 7).
+  static const int proScanMealPerDay = 10;
 
-  /// PRO scan meal uses per day (soft cap warning at 2).
-  static const int proScanMealPerDay = 3;
+  /// Free cart auditor uses per day.
+  static const int freeCartAuditorPerDay = 1;
 
-  /// Free cart auditor uses per month.
-  static const int freeCartAuditorPerMonth = 1;
+  /// PRO cart auditor uses per day (soft cap warning at 7).
+  static const int proCartAuditorPerDay = 10;
 
-  /// PRO cart auditor uses per day (soft cap warning at 2).
-  static const int proCartAuditorPerDay = 3;
-
-  /// Beat My Coach challenge interval in days (free users).
+  /// Beat My Coach challenge interval in days (disabled — Phase 2).
   static const int beatMyCoachIntervalDays = 14;
-
-  /// Free users can restore up to this many days of data.
-  /// Updated from 30 → 90 for better AI personalisation and user retention.
-  static const int freeRestoreDays = 90;
-
-  /// PRO users can restore ALL data (effectively unlimited).
-  /// The value is set high (3650 = ~10 years) as a practical "forever".
-  static const int proRestoreDays = 3650;
 
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';

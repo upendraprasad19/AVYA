@@ -589,13 +589,19 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final isAuthError = msg.contains('401') || msg.contains('token') ||
                           msg.contains('unauthorized') || msg.contains('jwt') ||
                           msg.contains('no active session') || msg.contains('session expired');
+      final isServiceError = msg.contains('503') || msg.contains('502') ||
+                             msg.contains('unavailable') || msg.contains('non-2xx') ||
+                             msg.contains('food ai') || msg.contains('food analysis failed');
+      final errorMsg = isAuthError
+          ? 'Session expired. Please sign out and sign in again.'
+          : isServiceError
+              ? 'AI food analysis is temporarily unavailable. Please try again shortly.'
+              : 'AI analysis failed. Please check your connection and try again.';
       state = AiBreakdownData(
         mealName: text,
         totalKcal: 0,
         items: [],
-        error: isAuthError
-            ? 'Session expired. Please sign out and sign in again.'
-            : 'AI analysis failed. Please check your connection and try again.',
+        error: errorMsg,
       );
       return;
     }

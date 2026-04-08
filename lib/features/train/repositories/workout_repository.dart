@@ -1,6 +1,7 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// A personal record for a single exercise, based on all-time best value.
 class ExercisePR {
@@ -79,6 +80,15 @@ class WorkoutRepository {
     int streak = 0;
     final today = DateTime.now();
 
+    // Load freeze data for consumption during streak calculation
+    final progress = UserRepository.instance.getProgress() ?? {};
+    int freezesAvailable =
+        (progress['streak_freezes_available'] as int?) ?? 0;
+    final usedDatesRaw =
+        progress['streak_freeze_used_dates'] as List? ?? <String>[];
+    final usedDates = List<String>.from(usedDatesRaw);
+    bool freezeConsumedThisCalc = false;
+
     for (int i = 0; i < 365; i++) {
       final date = today.subtract(Duration(days: i));
       final dateStr = formatDateKey(date);
@@ -94,8 +104,9 @@ class WorkoutRepository {
       final type = schedule['type']?.toString() ?? '';
       final status = schedule['status']?.toString() ?? '';
 
-      // Rest days are invisible — skip them entirely
+      // Rest days and travel days are invisible — skip them entirely
       if (type == 'rest' || type == 'off') continue;
+      if (status == 'travel') continue;
 
       // Workout day
       if (status == 'completed') {
@@ -103,11 +114,29 @@ class WorkoutRepository {
       } else if (i == 0) {
         // Today's workout not done YET — don't penalize
         continue;
+      } else if (freezesAvailable > 0 && !usedDates.contains(dateStr)) {
+        // Missed day — consume a streak freeze if available
+        freezesAvailable -= 1;
+        usedDates.add(dateStr);
+        freezeConsumedThisCalc = true;
+        // Don't increment streak, but don't break — continue checking
+        continue;
       } else {
-        // Missed scheduled workout day — streak breaks
+        // Missed scheduled workout day, no freeze left — streak breaks
         break;
       }
     }
+
+    // Persist freeze state if any were consumed
+    if (freezeConsumedThisCalc) {
+      UserRepository.instance.updateProgress({
+        'streak_freezes_available': freezesAvailable,
+        'streak_freeze_used_dates': usedDates,
+        'streak_freeze_just_used': true,
+        'streak_freeze_remaining_after_use': freezesAvailable,
+      });
+    }
+
     return streak;
   }
 

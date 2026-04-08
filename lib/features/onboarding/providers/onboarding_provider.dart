@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -309,7 +311,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      await _userRepo.updateProfileFields(profile);
+      // Use saveProfile (not updateProfileFields) to guarantee a clean
+      // slate. updateProfileFields merges onto existing data, which would
+      // carry over avatar_url / banner_url from a previously logged-in account.
+      await _userRepo.saveProfile(profile);
 
       // Ensure exercise data is seeded before plan generation.
       // Without exercises, PlanGenerator produces 0-exercise (all-rest) workouts.
@@ -348,10 +353,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
       await _userRepo.setOnboarded();
 
-      await _hive.configBox.put(
-        'ai_chat_started_at',
-        DateTime.now().toIso8601String(),
-      );
+      // Note: ai_trial_start is set lazily by ai_coach_provider on first
+      // chat message, and server sets users.ai_chat_started_at on first
+      // Edge Function call. No need to write a local key here.
+      // The dead 'ai_chat_started_at' local key was removed — nothing reads it.
 
       // Sync onboarding flag + profile to Supabase.
       // Awaited so failures are caught and logged — non-fatal: Hive is already
@@ -363,6 +368,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         // ignore: avoid_print
         print('[Onboarding] Supabase sync failed: $syncErr — will retry on next launch.');
       }
+
+      // Fire-and-forget: generate AI prediction card in background.
+      // Non-blocking — user proceeds to home screen immediately.
+      _generatePrediction(profile);
 
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
@@ -399,6 +408,60 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     if (value is double) return value.toInt();
     if (value is String) return int.tryParse(value) ?? fallback;
     return fallback;
+  }
+
+  /// Generates an AI fitness prediction card and saves it to Hive configBox.
+  ///
+  /// Called fire-and-forget after onboarding — does NOT block the user.
+  /// Uses ai-proxy Edge Function (free tier) since this runs for all users.
+  /// On failure, the prediction card simply shows an empty state.
+  void _generatePrediction(Map<String, dynamic> profile) async {
+    try {
+      final dob = profile['date_of_birth'] as String? ?? '';
+      int age = 25;
+      final dobDate = DateTime.tryParse(dob);
+      if (dobDate != null) {
+        final now = DateTime.now();
+        age = now.year - dobDate.year;
+        if (now.month < dobDate.month ||
+            (now.month == dobDate.month && now.day < dobDate.day)) {
+          age--;
+        }
+      }
+
+      final predictionPrompt = '''Based on this user's profile, predict realistic fitness outcomes at 3, 6, and 12 months.
+
+Profile: ${profile['gender']}, age $age, ${profile['height_cm']}cm, ${profile['current_weight_kg']}kg → ${profile['target_weight_kg']}kg goal
+Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
+Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
+BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
+
+Return a motivational but realistic prediction with specific numbers for:
+- Weight at 3/6/12 months
+- Estimated body fat % change
+- Key lift improvements (bench, squat, deadlift estimates)
+Keep it under 200 words, conversational tone.''';
+
+      final context = {
+        'system_prompt':
+            'You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.',
+      };
+
+      // Use predict() — bypasses daily limit check and interaction logging.
+      // Predictions are a FREE feature, separate from the AI Coach quota.
+      final response = await AiService.instance.predict(predictionPrompt, context);
+      final reply = response.reply;
+
+      if (reply.isNotEmpty) {
+        final configBox = HiveService.instance.configBox;
+        await configBox.put('prediction_text', reply);
+        await configBox.put('prediction_date', DateTime.now().toIso8601String());
+        debugPrint('[Onboarding] Prediction card generated successfully');
+      }
+    } catch (e) {
+      // Non-fatal — prediction card will show empty state.
+      debugPrint('[Onboarding] Prediction generation failed: $e');
+    }
   }
 
   /// Syncs onboarding completion flag + profile to Supabase via UserRepository.

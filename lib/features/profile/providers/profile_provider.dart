@@ -97,9 +97,6 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 85,
       );
       if (picked == null) {
         debugPrint('[ProfileProvider.uploadAvatar] picker returned null — user cancelled or permission denied');
@@ -110,9 +107,9 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       final cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        compressQuality: 85,
-        maxWidth: 512,
-        maxHeight: 512,
+        compressQuality: 92,
+        maxWidth: 800,
+        maxHeight: 800,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Photo',
@@ -169,9 +166,6 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 640,
-        imageQuality: 92,
       );
       if (picked == null) {
         debugPrint('[ProfileProvider.uploadBanner] picker returned null — user cancelled or permission denied');
@@ -182,7 +176,7 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       final cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 3, ratioY: 1),
-        compressQuality: 90,
+        compressQuality: 95,
         maxWidth: 1920,
         maxHeight: 640,
         uiSettings: [

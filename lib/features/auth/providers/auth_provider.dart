@@ -299,25 +299,34 @@ class AuthNotifier extends Notifier<AuthState2> {
     final configBox = _hive.configBox;
     final existing = userBox.get('profile');
 
-    // If Hive has a profile for a DIFFERENT user (e.g. incomplete sign-out),
-    // clear all user-specific boxes before restoring the new user's data.
+    // If Hive has a profile that isn't provably this user's, wipe it.
+    // Covers three cases:
+    //   1. Different user was logged in (existingId != user.id)
+    //   2. Old profile has no 'id' field (set via onboarding without id) —
+    //      we can't confirm it belongs to the new user, so clear it.
+    //   3. Incomplete sign-out left stale data behind.
     if (existing != null) {
       final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
-      if (existingId != null && existingId != user.id) {
+      if (existingId == null || existingId != user.id) {
         await UserRepository.instance.clearAllData();
       }
     }
 
     // Ensure user exists in public.users table (Edge Functions need this).
-    // Awaited — AI chat returns 404 if this row is missing.
+    // Uses ignoreDuplicates so full_name + created_at are only set once
+    // (on first sign-up) and never overwritten on subsequent sign-ins.
     try {
       await _supabase.client.from('users').upsert({
         'id': user.id,
         'email': user.email ?? '',
         'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@').first ?? 'User',
-        'last_active_at': DateTime.now().toUtc().toIso8601String(),
         'created_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'id');
+      }, onConflict: 'id', ignoreDuplicates: true);
+
+      // Always update last_active_at (safe — doesn't touch full_name)
+      await _supabase.client.from('users').update({
+        'last_active_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', user.id);
     } catch (e) {
       debugPrint('users table upsert failed: $e');
       // Non-fatal for sign-in, but AI chat may fail if row is missing.
@@ -370,6 +379,25 @@ class AuthNotifier extends Notifier<AuthState2> {
           if (progressRows.isNotEmpty) {
             await userBox.put(
                 'progress', Map<String, dynamic>.from(progressRows.first));
+          }
+
+          // Hydrate AI trial start from server (preserves trial across devices).
+          // The server sets users.ai_chat_started_at on first AI chat message.
+          try {
+            final userRows = await supabase
+                .from('users')
+                .select('ai_chat_started_at')
+                .eq('id', user.id)
+                .limit(1);
+            if (userRows.isNotEmpty) {
+              final serverTrialStart =
+                  userRows.first['ai_chat_started_at'] as String?;
+              if (serverTrialStart != null) {
+                await configBox.put('ai_trial_start', serverTrialStart);
+              }
+            }
+          } catch (e) {
+            debugPrint('AI trial hydration failed: $e');
           }
 
           // Regenerate workout schedule locally only if plan is missing AND

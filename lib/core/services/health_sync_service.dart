@@ -97,6 +97,17 @@ class HealthSyncService {
     // ── Steps ────────────────────────────────────────────────
     final steps = await fetchStepsToday();
     if (steps != null) {
+      // Write as a proper map entry so TodayStepsNotifier can find it
+      // (it scans healthBox.values for maps with type == 'step_log').
+      final stepKey = 'step_$todayStr';
+      await hive.healthBox.put(stepKey, {
+        'type': 'step_log',
+        'date': todayStr,
+        'steps': steps,
+        'source': 'health_connect',
+        'created_at': now.toIso8601String(),
+      });
+      // Also keep legacy keys for backward compatibility
       await hive.healthBox.put('steps_today', steps);
       await hive.healthBox.put('steps_date', todayStr);
       debugPrint('[HealthSyncService] synced steps: $steps');

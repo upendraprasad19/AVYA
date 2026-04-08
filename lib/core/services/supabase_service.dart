@@ -158,8 +158,19 @@ class SupabaseService {
   }) async {
     // Proactive token refresh — avoids sending an expired JWT
     final token = await ensureFreshToken();
-    if (token == null && client.auth.currentSession == null) {
-      throw Exception('No active session. Please sign in again.');
+    if (token == null) {
+      // Token is expired and soft refresh failed. Force a hard refresh.
+      // This handles the case where the session object exists in memory
+      // but the access token is expired (e.g. after Razorpay checkout).
+      try {
+        final refreshed = await client.auth.refreshSession();
+        if (refreshed.session == null) {
+          throw Exception('No active session. Please sign in again.');
+        }
+      } catch (e) {
+        // Refresh token itself has expired — user must re-authenticate.
+        throw Exception('No active session. Please sign in again.');
+      }
     }
 
     // Single attempt — no auto-retry here.

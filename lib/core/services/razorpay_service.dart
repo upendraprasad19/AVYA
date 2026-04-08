@@ -306,11 +306,23 @@ class RazorpayService {
     }
 
     // Phase 3: Local-only fallback — activate PRO so user isn't stuck.
-    // Next app launch will re-verify via SubscriptionService.refreshFromSupabase().
     debugPrint('RazorpayService: all verification exhausted — activating local fallback for plan=$fallbackPlan');
     await hive.configBox.put('isPro', true);
     await hive.configBox.put('expiresAt', _computeEndDate(fallbackPlan));
     await hive.configBox.put('plan', fallbackPlan);
+    await hive.configBox.put('localActivationAt', DateTime.now().toIso8601String());
+
+    // SECURITY: Do NOT write subscriptions/users tables from the client.
+    // Per CLAUDE.md: Supabase is written ONLY by the webhook Edge Function
+    // (server-side HMAC verification). The client only polls + reads.
+    //
+    // Schedule background retries of the verify-payment Edge Function,
+    // which has the Razorpay secret key and validates payment server-side.
+    _scheduleVerificationRetry(
+      paymentId: paymentId,
+      orderId: orderId,
+      plan: fallbackPlan,
+    );
 
     // Queue delayed re-checks in case webhook arrives late
     Future.delayed(const Duration(seconds: 60), () {
@@ -319,5 +331,57 @@ class RazorpayService {
     Future.delayed(const Duration(minutes: 5), () {
       SubscriptionService.instance.refreshFromSupabase();
     });
+  }
+
+  /// Background retry of the verify-payment Edge Function.
+  ///
+  /// The Edge Function has the Razorpay secret key and validates the
+  /// payment server-side via the Razorpay API. On success, it writes
+  /// to the Supabase subscriptions table (server-side, with proof).
+  ///
+  /// 3 attempts at 60s, 5m, 15m. On final failure, does nothing —
+  /// existing safety nets reconcile on next app launch.
+  void _scheduleVerificationRetry({
+    required String paymentId,
+    required String orderId,
+    required String plan,
+  }) {
+    const delays = [
+      Duration(seconds: 60),
+      Duration(minutes: 5),
+      Duration(minutes: 15),
+    ];
+
+    for (final delay in delays) {
+      Future.delayed(delay, () async {
+        try {
+          final response = await SupabaseService.instance.callFunction(
+            'verify-payment',
+            body: {
+              'payment_id': paymentId,
+              'order_id': orderId,
+              'plan': plan,
+            },
+          );
+          if (response.status == 200) {
+            // verify-payment returns 200 with verified:false for uncaptured
+            // payments, and 200 with verified:true even if the subscription
+            // row insert failed. Only trust verified:true.
+            final data = response.data is Map
+                ? Map<String, dynamic>.from(response.data as Map)
+                : <String, dynamic>{};
+            if (data['verified'] == true) {
+              debugPrint('RazorpayService: verify-payment retry confirmed after ${delay.inSeconds}s');
+              await SubscriptionService.instance.refreshFromSupabase();
+              await HiveService.instance.configBox.delete('localActivationAt');
+              return; // Payment verified server-side — stop retrying
+            }
+            debugPrint('RazorpayService: verify-payment returned 200 but verified=${data['verified']} — continuing retries');
+          }
+        } catch (e) {
+          debugPrint('RazorpayService: verify-payment retry failed after ${delay.inSeconds}s: $e');
+        }
+      });
+    }
   }
 }

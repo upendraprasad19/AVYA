@@ -16,46 +16,42 @@ class UsageCounterService {
 
   static const String _aiTextLogCountToday = 'ai_text_log_count_today';
   static const String _scanMealCountToday = 'scan_meal_count_today';
-  static const String _scanMealCountMonth = 'scan_meal_count_month';
   static const String _cartAuditorCountToday = 'cart_auditor_count_today';
-  static const String _cartAuditorCountMonth = 'cart_auditor_count_month';
   static const String _lastDailyReset = 'last_daily_reset';
-  static const String _lastMonthlyReset = 'last_monthly_reset';
 
   // ── Feature → Counter Key Mapping ────────────────────────────────
 
-  /// Returns the Hive key for a feature's counter, depending on whether
-  /// the user is PRO (daily counters) or free (daily or monthly).
+  /// Returns the Hive key for a feature's counter.
+  /// All counters are now daily (no monthly counters).
   String? _counterKey(String feature, bool isPro) {
     if (feature == AppConstants.featureAiTextLogPro) {
-      // Both free and PRO use daily counter for AI text logs.
       return _aiTextLogCountToday;
     }
     if (feature == AppConstants.featureScanMealPro) {
-      return isPro ? _scanMealCountToday : _scanMealCountMonth;
+      return _scanMealCountToday;
     }
     if (feature == AppConstants.featureCartAuditorPro) {
-      return isPro ? _cartAuditorCountToday : _cartAuditorCountMonth;
+      return _cartAuditorCountToday;
     }
     return null;
   }
 
   /// Returns the maximum allowed uses for a feature.
+  /// PRO AI text logs are unlimited (returns max int).
   int _limit(String feature, bool isPro) {
     if (feature == AppConstants.featureAiTextLogPro) {
-      return isPro
-          ? AppConstants.proAiTextLogsPerDay
-          : AppConstants.freeAiTextLogsPerDay;
+      // PRO: unlimited AI text logs
+      return isPro ? 999999 : AppConstants.freeAiTextLogsPerDay;
     }
     if (feature == AppConstants.featureScanMealPro) {
       return isPro
           ? AppConstants.proScanMealPerDay
-          : AppConstants.freeScanMealPerMonth;
+          : AppConstants.freeScanMealPerDay;
     }
     if (feature == AppConstants.featureCartAuditorPro) {
       return isPro
           ? AppConstants.proCartAuditorPerDay
-          : AppConstants.freeCartAuditorPerMonth;
+          : AppConstants.freeCartAuditorPerDay;
     }
     return 0;
   }
@@ -110,23 +106,14 @@ class UsageCounterService {
     final configBox = _hive.configBox;
     final now = DateTime.now();
     final todayStr = _isoDate(now);
-    final monthStr = _isoMonth(now);
 
-    // ── Daily reset ───────────────────────────────────────────────
+    // ── Daily reset (all counters are now daily) ─────────────────
     final lastDaily = configBox.get(_lastDailyReset) as String?;
     if (lastDaily != todayStr) {
       await configBox.put(_aiTextLogCountToday, 0);
       await configBox.put(_scanMealCountToday, 0);
       await configBox.put(_cartAuditorCountToday, 0);
       await configBox.put(_lastDailyReset, todayStr);
-    }
-
-    // ── Monthly reset ─────────────────────────────────────────────
-    final lastMonthly = configBox.get(_lastMonthlyReset) as String?;
-    if (lastMonthly != monthStr) {
-      await configBox.put(_scanMealCountMonth, 0);
-      await configBox.put(_cartAuditorCountMonth, 0);
-      await configBox.put(_lastMonthlyReset, monthStr);
     }
   }
 
@@ -135,10 +122,5 @@ class UsageCounterService {
   /// Format date as 'yyyy-MM-dd'.
   String _isoDate(DateTime d) {
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
-  /// Format date as 'yyyy-MM'.
-  String _isoMonth(DateTime d) {
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}';
   }
 }

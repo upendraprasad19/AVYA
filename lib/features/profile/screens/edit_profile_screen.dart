@@ -17,6 +17,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/profile_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -1095,6 +1096,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(nutritionSummaryProvider);
       ref.invalidate(dailyNutritionProvider);
       ref.invalidate(macroTargetsProvider);
+      // Refresh home screen name/greeting — these are separate providers
+      // in home_provider.dart that cache the name independently.
+      ref.invalidate(userFirstNameProvider);
+      ref.invalidate(userInitialProvider);
+      ref.invalidate(userGreetingProvider);
+      // Refresh train plan if equipment or days_per_week changed.
+      ref.invalidate(currentPlanProvider);
+      ref.invalidate(todayWorkoutProvider);
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;

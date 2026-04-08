@@ -222,7 +222,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     TestDataHelper.setFreeUser();
-    TestDataHelper.setScanMealCountAtMonthlyLimit();
+    TestDataHelper.setScanMealCountAtDailyLimit();
 
     await signInWithTestUser(tester);
     await navigateToNutrition(tester);

@@ -252,11 +252,8 @@ class TestDataHelper {
 
   // ── Hive scan-meal counter ───────────────────────────────────────
 
-  static void setScanMealCountAtMonthlyLimit() {
-    final now = DateTime.now();
-    final monthKey =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}';
+  static void setScanMealCountAtDailyLimit() {
     HiveService.instance.configBox
-        .put('scan_meal_month_$monthKey', AppConstants.freeScanMealPerMonth);
+        .put('scan_meal_count_today', AppConstants.freeScanMealPerDay);
   }
 }

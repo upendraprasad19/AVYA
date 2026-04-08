@@ -369,11 +369,15 @@ class SendMessageNotifier extends Notifier<bool> {
           errStr.contains('jwt') || errStr.contains('Session expired');
 
       if (isAuthError) {
-        debugPrint('[AiCoachProvider] Auth error detected, refreshing token (no retry)...');
+        debugPrint('[AiCoachProvider] Auth error detected, forcing hard token refresh...');
         try {
-          await SupabaseService.instance.ensureFreshToken();
+          // Force a hard refresh (not just ensureFreshToken which uses a buffer).
+          // After this, the session has a fresh access token.
+          // User can tap Send again without signing out.
+          await SupabaseService.instance.client.auth.refreshSession();
+          debugPrint('[AiCoachProvider] Hard refresh succeeded — user can tap Send again.');
         } catch (refreshErr) {
-          debugPrint('[AiCoachProvider] Token refresh failed: $refreshErr');
+          debugPrint('[AiCoachProvider] Hard refresh failed: $refreshErr');
         }
       }
 
@@ -383,7 +387,7 @@ class SendMessageNotifier extends Notifier<bool> {
           errStr.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
       } else if (isAuthError) {
-        errorMsg = 'Session expired. Please sign out and sign in again.';
+        errorMsg = 'Session refreshed. Please tap Send to try again.';
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
       } else if (errStr.contains('TRIAL_EXPIRED')) {

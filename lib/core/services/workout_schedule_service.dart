@@ -445,8 +445,20 @@ class WorkoutScheduleService {
     final tmplMap = Map<String, dynamic>.from(tmpl as Map);
     final dateKey = _dateKey(date);
 
+    // Calculate the correct week number for this date relative to plan start.
+    final planStartStr = _hive.configBox.get(_planStartKey) as String?;
+    int weekNum = 1;
+    if (planStartStr != null) {
+      final planStart = DateTime.tryParse(planStartStr);
+      if (planStart != null) {
+        final diff = date.difference(planStart).inDays;
+        weekNum = (diff ~/ 7 + 1).clamp(1, 4);
+      }
+    }
+
     _hive.workoutBox.put('$_schedulePrefix$dateKey', {
       'date': dateKey,
+      'week': weekNum,
       'type': 'custom_template',
       'template_id': templateId,
       'workout_name': tmplMap['name'] as String? ?? 'Custom Workout',

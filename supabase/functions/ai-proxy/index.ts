@@ -164,7 +164,7 @@ serve(async (req: Request) => {
     // Parse request body early — needed to route food_text_analysis
     // before trial/rate-limit checks (food logging is always free).
     const body = await req.json();
-    const { message, snapshot_json, type, text } = body;
+    const { message, snapshot_json, type, text, context } = body;
 
     // ── Food text analysis (separate path — no trial/rate-limit check) ────
     if (type === "food_text_analysis" && text) {
@@ -270,6 +270,45 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
       return new Response(JSON.stringify({ error: "Image analysis failed" }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── Prediction handler — bypasses daily limits + interaction logging ──
+    // Used for onboarding predictions and PRO monthly refreshes.
+    // This is a FREE system function, not an AI Coach message.
+    if (type === "prediction") {
+      if (!message || typeof message !== "string") {
+        return new Response(JSON.stringify({ error: "Missing 'message' for prediction" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const systemPrompt = (context?.system_prompt as string) ??
+        "You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.";
+
+      let result: { reply: string; tokens_used: number } | null = null;
+      for (const key of CEREBRAS_KEYS) {
+        if (!key) continue;
+        result = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
+        if (result) break;
+      }
+
+      if (!result) {
+        return new Response(
+          JSON.stringify({ error: "AI temporarily unavailable" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // No daily limit check. No ai_coach_interactions logging.
+      return new Response(
+        JSON.stringify({
+          reply: result.reply,
+          model_used: FREE_MODEL_LABEL,
+          tokens_used: result.tokens_used,
+          actions: [],
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     if (!message || typeof message !== "string") {

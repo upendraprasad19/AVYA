@@ -477,7 +477,10 @@ class GraduationScreen extends ConsumerWidget {
                 final profile = UserRepository.instance.getProfile() ?? {};
                 final progress = UserRepository.instance.getProgress() ?? {};
                 final currentPhase = (progress['current_phase'] as int?) ?? 1;
-                final nextPhase = currentPhase + 1;
+                // Cycle phases 9→10→11→12→9→10... for users who've completed all 12
+                final nextPhase = currentPhase >= 12
+                    ? 9 + ((currentPhase - 8) % 4) // Cycles: 9→10→11→12→9→10...
+                    : currentPhase + 1;
 
                 // Generate next phase plan and write schedule to Hive
                 await WorkoutScheduleService.instance.generateAndSchedule(
