@@ -358,11 +358,13 @@ class BiometricNotifier extends Notifier<BiometricData> {
       final entry = Map<String, dynamic>.from(raw);
       final date = entry['date'] as String?;
       if (date != todayStr) continue;
+      final type = entry['type'] as String?;
 
-      if (entry['steps'] != null) {
+      // Only match typed entries to avoid cross-contamination
+      if (type == 'step_log' && entry['steps'] != null) {
         stepsToday = (entry['steps'] as num).toInt();
       }
-      if (entry['sleep_hours'] != null) {
+      if (type == 'sleep_log' && entry['sleep_hours'] != null) {
         sleepHours = (entry['sleep_hours'] as num).toDouble();
       }
     }
@@ -374,9 +376,13 @@ class BiometricNotifier extends Notifier<BiometricData> {
       if (hrs != null) sleepHours = hrs;
     }
 
-    // Also check explicit steps_today key (from Health Connect sync)
-    final stepsVal = healthBox.get('steps_today');
-    if (stepsVal is int && stepsVal > 0) stepsToday = stepsVal;
+    // Legacy steps_today key has NO date field — only use it if
+    // the companion steps_date key matches today (prevents stale yesterday values).
+    final stepsDate = healthBox.get('steps_date') as String?;
+    if (stepsDate == todayStr) {
+      final stepsVal = healthBox.get('steps_today');
+      if (stepsVal is int && stepsVal > 0) stepsToday = stepsVal;
+    }
 
     return BiometricData(
       stepsToday: stepsToday,

@@ -352,14 +352,45 @@ final weightHistoryProvider =
 class AiInsightNotifier extends Notifier<String?> {
   @override
   String? build() {
-    final hive = HiveService.instance;
-    final coachBox = hive.coachBox;
-
-    // Only show insights from today — stale responses are misleading
     final now = DateTime.now();
-    final todayPrefix = formatDateKey(now); // 'YYYY-MM-DD'
 
-    String? latestMessage;
+    // 1. Always compute insight from LOCAL schedule data (source of truth)
+    final insight = _computeScheduleInsight(now);
+
+    // 2. Optionally append a coach tip from today's latest AI interaction
+    final coachTip = _getLatestCoachTip(now);
+    if (coachTip != null) {
+      return '$insight\n💡 $coachTip';
+    }
+
+    return insight;
+  }
+
+  /// Build insight from today's workout schedule in Hive.
+  String _computeScheduleInsight(DateTime now) {
+    final schedule = WorkoutScheduleService.instance.getScheduleForDate(now);
+    if (schedule != null) {
+      final type = schedule['type'] as String? ?? 'rest';
+      final status = schedule['status'] as String? ?? 'planned';
+      final name = schedule['workout_name'] as String? ?? 'Workout';
+      final exercises = schedule['exercises'] as List? ?? [];
+      if (status == 'completed') {
+        return '$name completed today — ${exercises.length} exercises. Great work 💪';
+      } else if (type == 'workout' || type == 'custom_template') {
+        return '$name is scheduled for today — ${exercises.length} exercises. Ready when you are!';
+      } else if (type == 'rest') {
+        return 'Rest day today. Recovery is part of the plan 🧘';
+      }
+    }
+    return 'No workout scheduled for today. A good day for active recovery!';
+  }
+
+  /// Extract a short tip from the latest AI coach response today.
+  /// Returns the last sentence (≤80 chars) or null.
+  String? _getLatestCoachTip(DateTime now) {
+    final coachBox = HiveService.instance.coachBox;
+    final todayPrefix = formatDateKey(now);
+    String? latestResponse;
     String latestDate = '';
 
     for (final raw in coachBox.values) {
@@ -370,27 +401,17 @@ class AiInsightNotifier extends Notifier<String?> {
       final response = interaction['ai_response'] as String?;
       if (response != null && createdAt.compareTo(latestDate) > 0) {
         latestDate = createdAt;
-        latestMessage = response;
+        latestResponse = response;
       }
     }
 
-    // If no AI interaction today, generate a contextual message
-    if (latestMessage == null) {
-      final schedule = WorkoutScheduleService.instance.getScheduleForDate(now);
-      if (schedule != null) {
-        final type = schedule['type'] as String? ?? 'rest';
-        final status = schedule['status'] as String? ?? 'planned';
-        final name = schedule['workout_name'] as String? ?? 'Workout';
-        final exercises = schedule['exercises'] as List? ?? [];
-        if (status == 'completed') {
-          return '$name completed — ${exercises.length} exercises. Great work! Rest up and hit your protein target.';
-        } else if (type == 'workout' || type == 'custom_template') {
-          return '$name is scheduled for today — ${exercises.length} exercises. Ready when you are!';
-        }
-      }
-    }
+    if (latestResponse == null) return null;
 
-    return latestMessage;
+    // Extract last sentence as a concise tip — skip if it's too long
+    final sentences = latestResponse.split(RegExp(r'[.!?]\s+'));
+    final tip = sentences.last.trim();
+    if (tip.length > 80 || tip.length < 10) return null;
+    return tip;
   }
 }
 

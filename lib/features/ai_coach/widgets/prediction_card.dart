@@ -94,7 +94,7 @@ class PredictionCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           // Prediction text or placeholder
-          if (hasPrediction)
+          if (hasPrediction) ...[
             Text(
               predictionText!,
               style: GoogleFonts.getFont(
@@ -106,8 +106,25 @@ class PredictionCard extends StatelessWidget {
               ),
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
-            )
-          else
+            ),
+            // "Read More" — opens full prediction in bottom sheet
+            if (predictionText!.length > 120)
+              GestureDetector(
+                onTap: () => _showFullPrediction(context),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Read More →',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ),
+              ),
+          ] else
             Text(
               'Complete onboarding to get your personalised fitness prediction.',
               style: GoogleFonts.getFont(
@@ -218,6 +235,88 @@ class PredictionCard extends StatelessWidget {
         predictionText: predictionText!,
         generatedAt: generatedAt,
         predictionStats: null,
+      ),
+    );
+  }
+
+  void _showFullPrediction(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'YOUR 90-DAY PREDICTION',
+                style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 11, fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2, color: AppColors.accent),
+              ),
+              if (generatedAt != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Generated ${_formatDate(generatedAt!)}',
+                  style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 9, color: AppColors.textSecondary),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(
+                predictionText!,
+                style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 13, fontWeight: FontWeight.w400,
+                  color: AppColors.textPrimary, height: 1.7),
+              ),
+              const SizedBox(height: 20),
+              // Share button
+              SizedBox(
+                width: double.infinity,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showShareSheet(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Center(
+                      child: Text('Share to Instagram / WhatsApp',
+                        style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 14, fontWeight: FontWeight.w900,
+                          color: Colors.black)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -414,7 +513,7 @@ class _ShareablePredictionSheetState
             ],
           ],
 
-          // Prediction text
+          // Prediction text — no maxLines limit on shareable card
           Text(
             widget.predictionText,
             style: GoogleFonts.getFont(
@@ -424,8 +523,6 @@ class _ShareablePredictionSheetState
               color: AppColors.textPrimary,
               height: 1.6,
             ),
-            maxLines: 6,
-            overflow: TextOverflow.ellipsis,
           ),
 
           // Motivational tagline

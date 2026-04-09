@@ -34,22 +34,8 @@ class StatsGrid extends ConsumerWidget {
           if (!hasData)
             _buildNoDataAlert()
           else ...[
-            // 2×2 grid
-            Row(
-              children: [
-                Expanded(child: _StatCard.fromPR('🏋️', 'BENCH PRESS', prs['bench']!)),
-                const SizedBox(width: AppSpacing.inlineGap),
-                Expanded(child: _StatCard.fromPR('🏋️', 'SQUAT', prs['squat']!)),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.inlineGap),
-            Row(
-              children: [
-                Expanded(child: _StatCard.fromPR('🏋️', 'DEADLIFT', prs['deadlift']!)),
-                const SizedBox(width: AppSpacing.inlineGap),
-                Expanded(child: _StatCard.fromPR('💪', 'OVERHEAD PRESS', prs['ohp']!)),
-              ],
-            ),
+            // Dynamic 2×2 grid — shows key lifts or top exercises
+            _buildDynamicGrid(prs),
           ],
           const SizedBox(height: 10),
 
@@ -82,6 +68,47 @@ class StatsGrid extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Build a 2×2 grid from the PR map — keys may be standard lift names
+  /// (bench, squat, etc.) or actual exercise names for dynamic PRs.
+  Widget _buildDynamicGrid(Map<String, _PRData> prs) {
+    // Map of standard keys to display labels + emojis
+    const standardLabels = {
+      'bench': ('🏋️', 'BENCH PRESS'),
+      'squat': ('🏋️', 'SQUAT'),
+      'deadlift': ('🏋️', 'DEADLIFT'),
+      'ohp': ('💪', 'OHP'),
+    };
+
+    final entries = prs.entries.where((e) => e.value.current > 0).toList();
+    // Pad to 4 for the grid (fill empty slots)
+    while (entries.length < 4) {
+      entries.add(MapEntry('—', const _PRData(current: 0, previous: 0)));
+    }
+
+    Widget cardFor(MapEntry<String, _PRData> e) {
+      final std = standardLabels[e.key];
+      final emoji = std?.$1 ?? '💪';
+      final label = std?.$2 ?? e.key.toUpperCase();
+      return Expanded(child: _StatCard.fromPR(emoji, label, e.value));
+    }
+
+    return Column(
+      children: [
+        Row(children: [
+          cardFor(entries[0]),
+          const SizedBox(width: AppSpacing.inlineGap),
+          cardFor(entries[1]),
+        ]),
+        const SizedBox(height: AppSpacing.inlineGap),
+        Row(children: [
+          cardFor(entries[2]),
+          const SizedBox(width: AppSpacing.inlineGap),
+          cardFor(entries[3]),
+        ]),
+      ],
     );
   }
 
@@ -126,15 +153,37 @@ class StatsGrid extends ConsumerWidget {
   }
 
   /// Reads workout_logs via provider so the grid refreshes after workout completion.
+  /// Uses allExercisePRsProvider (same as Home screen) for consistent data,
+  /// falling back to the 4 key lifts grid if the user has bench/squat/deadlift/OHP data.
   Map<String, _PRData> _loadPRs(WidgetRef ref) {
+    // First try the key lifts (legacy behavior)
     final rawPRs = ref.watch(workoutStatsProvider);
-    return rawPRs.map((key, value) => MapEntry(
-          key,
-          _PRData(
-            current: value['current'] ?? 0,
-            previous: value['previous'] ?? 0,
-          ),
-        ));
+    final hasKeyLifts = rawPRs.values.any((v) => (v['current'] ?? 0) > 0);
+    if (hasKeyLifts) {
+      return rawPRs.map((key, value) => MapEntry(
+            key,
+            _PRData(
+              current: value['current'] ?? 0,
+              previous: value['previous'] ?? 0,
+            ),
+          ));
+    }
+
+    // Fallback: use top 4 from ALL exercise PRs (same source as Home screen)
+    final allPRs = ref.watch(allExercisePRsProvider);
+    final top4 = allPRs.where((pr) => pr.bestValue > 0).take(4).toList();
+    if (top4.isEmpty) {
+      // Return empty key lifts so hasData check fails → shows empty state
+      return rawPRs.map((key, value) => MapEntry(
+            key, _PRData(current: 0, previous: 0)));
+    }
+
+    // Build a dynamic map using exercise names as keys
+    final result = <String, _PRData>{};
+    for (final pr in top4) {
+      result[pr.exerciseName] = _PRData(current: pr.bestValue, previous: 0);
+    }
+    return result;
   }
 
   void _showAllPRsSheet(BuildContext context, WidgetRef ref) {
