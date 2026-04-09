@@ -186,8 +186,8 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 │                                                      │
 │  SYNC TO SUPABASE:                                   │
 │    Immediately: custom foods/exercises (community)    │
-│    Daily (11PM IST): user_daily_snapshot for AI      │
-│    Weekly (on app launch if >7d): full sync all logs │
+│    Every app launch: pushSnapshot() (AI context)     │
+│    Daily (app launch if >1d): full sync all logs     │
 │                                                      │
 │  RESTORE (new device):                               │
 │    Login → pull from Supabase → populate Hive        │
