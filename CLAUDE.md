@@ -94,7 +94,7 @@ Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI �
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (21 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI Coach Free | Edge Function → Cerebras Llama 3.1 8B free tier (30-day trial, 15 msg/day) |
+| AI Coach Free | Edge Function → OpenRouter Gemma 4 27B cascade (text+image, 30-day trial, 15 msg/day) |
 | AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function, ~₹1.80/user/month) |
 | AI Reasoning PRO | GLM-4.7 on Cerebras |
 | Food AI | OpenRouter Gemma 4 cascade (free) → Gemini 2.5 Flash Lite (fallback) |
@@ -648,11 +648,12 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 ### Free Users (30-day trial, 15 msg/day)
 ```
 Client → Edge Function (ai-proxy)
-  → Try Cerebras Llama 3.1 8B (free tier)
-  → If fail → Groq Llama 4 (free tier)
-  → If fail → Gemini 2.0 Flash Lite (pay-as-you-go)
+  → Try OpenRouter Gemma 4 27B cascade (text + image):
+      google/gemma-4-27b-it:free → gemma-4-31b-it:free → gemma-4-26b-a4b-it:free
+  → If all fail → Cerebras Llama 3.1 8B (text-only fallback)
   ← Response to client
-Cost at 10K users: ~₹2,500/month
+  JWT auto-retry: on 401/session error, refresh token + single inline retry
+Cost at 10K users: ~₹0 (all free-tier models)
 ```
 
 ### PRO Users (unlimited)
@@ -694,7 +695,7 @@ Each row is a **per-exercise summary** (NOT per-set), matching the Hive exlog_* 
 
 ### Context Injection
 - System prompt receives `user_daily_snapshot` JSON (~300 tokens)
-- Contains: profile, this week's workouts, today's nutrition, weight, streak, PRs, detected experience, coaching_notes
+- Contains: profile (incl. city), this week's workouts, today's nutrition (incl. urine status), weight, streak, PRs, detected experience, coaching_notes
 - One Hive read. Complete context. Zero additional queries.
 
 ---
@@ -774,7 +775,7 @@ Phase {
 - Weight + body measurements tracking
 - Streak counter + water tracking
 - Steps + sleep sync (Google Fit / Health Connect)
-- AI Coach — 30 days free (15 msg/day, Cerebras Llama 3.1 8B)
+- AI Coach — 30 days free (15 msg/day, OpenRouter Gemma 4 27B)
 - Telegram bot — 30 days free
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
@@ -804,7 +805,7 @@ canUnlock = completionRate >= 0.8 AND weeksElapsed >= 4
 ```
 
 ### Calorie Calculation
-Mifflin-St Jeor BMR formula → adjusted by activity level = TDEE.
+Hybrid BMR: Katch-McArdle when body fat % available (`370 + 21.6 × lean_mass_kg`), Mifflin-St Jeor fallback. Both apply -50 BMR offset and -100 TDEE offset. Activity level derived from lifestyle + training days → TDEE.
 
 ---
 
@@ -914,3 +915,5 @@ See `.claude/agents/` for full definitions:
 | JWT expired during payment poll | Refresh JWT before each verify-payment retry |
 | Onboarding sync fails silently | Retry sync with JWT refresh on failure |
 | Daily snapshot not pushing | pushSnapshot() must be wired into checkAndSync(), fires on every app launch |
+| AI chat "Session refreshed" error | JWT auto-retry: on auth error, refresh token + single inline retry (NOT recursive — old recursive caused 30+ duplicates) |
+| Days/week change not rescheduling | `generateAndScheduleFromDate()` in WorkoutScheduleService — deletes future non-completed entries, preserves completed, regenerates from today |
