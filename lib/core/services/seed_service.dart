@@ -44,6 +44,14 @@ class SeedService {
   static const String _exercisesSeededKey = 'seeded_exercises';
   static const String _foodsSeededKey = 'seeded_foods';
 
+  /// Bump this integer whenever the bundled exercise_library.json changes
+  /// (new exercises added, existing exercises modified). On app launch, if the
+  /// stored version is less than this, exercises are re-seeded. putAll() is
+  /// idempotent — existing entries are overwritten with the same data while
+  /// new entries are added.
+  static const int _exerciseLibraryVersion = 2;
+  static const String _exerciseVersionKey = 'exercise_library_version';
+
   final HiveService _hive = HiveService.instance;
 
   /// Checks if seed data has already been loaded; if not, seeds both
@@ -62,7 +70,15 @@ class SeedService {
     final foodsSeeded =
         configBox.get(_foodsSeededKey, defaultValue: false) as bool;
 
-    if (alreadySeeded && exercisesSeeded && foodsSeeded) return;
+    // Check if exercise library needs a version upgrade (new exercises added).
+    final storedExVersion =
+        configBox.get(_exerciseVersionKey, defaultValue: 0) as int;
+    final needExerciseUpgrade =
+        exercisesSeeded && storedExVersion < _exerciseLibraryVersion;
+
+    if (alreadySeeded && exercisesSeeded && foodsSeeded && !needExerciseUpgrade) {
+      return;
+    }
 
     // If legacy flag is set but granular flags aren't, migrate.
     if (alreadySeeded && !exercisesSeeded) {
@@ -74,7 +90,7 @@ class SeedService {
     if (alreadySeeded) return;
 
     // Seed each asset independently — partial failures don't block the other.
-    final needExercises = !exercisesSeeded;
+    final needExercises = !exercisesSeeded || needExerciseUpgrade;
     final needFoods = !foodsSeeded;
 
     await Future.wait(
@@ -110,7 +126,8 @@ class SeedService {
       final entries = await compute(_parseJsonToIdMap, jsonString);
       await _hive.exerciseBox.putAll(entries);
       await _hive.configBox.put(_exercisesSeededKey, true);
-      debugPrint('[SeedService] Exercises seeded: ${entries.length} items');
+      await _hive.configBox.put(_exerciseVersionKey, _exerciseLibraryVersion);
+      debugPrint('[SeedService] Exercises seeded: ${entries.length} items (v$_exerciseLibraryVersion)');
     } catch (e) {
       debugPrint('[SeedService._seedExercises] FAILED: $e');
       // Will retry on next launch since _exercisesSeededKey stays false.

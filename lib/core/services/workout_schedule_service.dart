@@ -41,6 +41,7 @@ class WorkoutScheduleService {
     required DateTime startDate,
     String experienceLevel = 'beginner',
     int phase = 1,
+    List<int>? preferredDays,
   }) async {
     // Guard: ensure exercise data is seeded before generation.
     // If exerciseBox is empty, PlanGenerator will produce 0-exercise workouts.
@@ -56,10 +57,11 @@ class WorkoutScheduleService {
       daysPerWeek: daysPerWeek,
       phase: phase,
       experienceLevel: experienceLevel,
+      preferredDays: preferredDays,
     );
 
     // 2. Get the day assignment pattern for the week
-    final dayPattern = _getDayPattern(daysPerWeek);
+    final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
 
     // 3. Map to calendar dates (4 weeks × 7 days = 28 days)
     final workoutBox = _hive.workoutBox;
@@ -73,9 +75,16 @@ class WorkoutScheduleService {
     await configBox.put(_planStartKey, monday.toIso8601String());
     await configBox.put(_planEndKey, endDate.toIso8601String());
     await workoutBox.put(_planKey, plan.toMap());
+    if (preferredDays != null) {
+      await configBox.put('preferred_training_days', preferredDays);
+    }
 
-    // 4. For each of the 4 weeks, assign workouts to the pattern days
+    // 4. For each of the 4 weeks, assign workouts to the pattern days.
+    //    V2: each week reads from its own weekPlan for distinct exercises.
     for (int week = 0; week < 4; week++) {
+      final weekPlan = week < plan.weekPlans.length
+          ? plan.weekPlans[week]
+          : plan.weekPlans.last;
       final weekStart = monday.add(Duration(days: week * 7));
       int workoutDayIndex = 0;
 
@@ -84,8 +93,8 @@ class WorkoutScheduleService {
         final dateKey = _dateKey(date);
         final isWorkoutDay = dayPattern.contains(dayOfWeek);
 
-        if (isWorkoutDay && workoutDayIndex < plan.workouts.length) {
-          final workoutDay = plan.workouts[workoutDayIndex];
+        if (isWorkoutDay && workoutDayIndex < weekPlan.workoutDays.length) {
+          final workoutDay = weekPlan.workoutDays[workoutDayIndex];
           await workoutBox.put('$_schedulePrefix$dateKey', {
             'date': dateKey,
             'week': week + 1,
@@ -95,6 +104,11 @@ class WorkoutScheduleService {
             'workout_name': workoutDay.name,
             'workout_focus': workoutDay.focus,
             'exercises': workoutDay.exercises.map((e) => e.toMap()).toList(),
+            if (workoutDay.warmup.isNotEmpty)
+              'warmup': workoutDay.warmup.map((e) => e.toMap()).toList(),
+            if (workoutDay.cooldown.isNotEmpty)
+              'cooldown': workoutDay.cooldown.map((e) => e.toMap()).toList(),
+            'week_character': weekPlan.weekCharacter,
             'status': 'planned', // planned | completed | skipped | shifted
             'completed_at': null,
             'is_swapped': false,
@@ -110,6 +124,7 @@ class WorkoutScheduleService {
             'workout_name': 'Rest Day',
             'workout_focus': 'Recovery & mobility',
             'exercises': <Map<String, dynamic>>[],
+            'week_character': weekPlan.weekCharacter,
             'status': 'rest',
             'completed_at': null,
             'is_swapped': false,
@@ -136,6 +151,7 @@ class WorkoutScheduleService {
     required DateTime fromDate,
     String experienceLevel = 'beginner',
     int phase = 1,
+    List<int>? preferredDays,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -149,6 +165,7 @@ class WorkoutScheduleService {
       daysPerWeek: daysPerWeek,
       phase: phase,
       experienceLevel: experienceLevel,
+      preferredDays: preferredDays,
     );
 
     // 2. Delete future non-completed schedule entries
@@ -178,11 +195,17 @@ class WorkoutScheduleService {
     await _hive.configBox.put(_planStartKey, monday.toIso8601String());
     await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
     await workoutBox.put(_planKey, plan.toMap());
+    if (preferredDays != null) {
+      await _hive.configBox.put('preferred_training_days', preferredDays);
+    }
 
     // 4. Assign new workouts from today forward, skipping completed dates
-    final dayPattern = _getDayPattern(daysPerWeek);
+    final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
 
     for (int week = 0; week < 4; week++) {
+      final weekPlan = week < plan.weekPlans.length
+          ? plan.weekPlans[week]
+          : plan.weekPlans.last;
       final weekStart = monday.add(Duration(days: week * 7));
       int workoutDayIndex = 0;
 
@@ -193,7 +216,7 @@ class WorkoutScheduleService {
 
         // Skip dates before today
         if (date.isBefore(today)) {
-          if (dayPattern.contains(dayOfWeek) && workoutDayIndex < plan.workouts.length) {
+          if (dayPattern.contains(dayOfWeek) && workoutDayIndex < weekPlan.workoutDays.length) {
             workoutDayIndex++;
           }
           continue;
@@ -204,7 +227,7 @@ class WorkoutScheduleService {
         if (existing != null) {
           final map = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
           if (map['status'] == 'completed') {
-            if (dayPattern.contains(dayOfWeek) && workoutDayIndex < plan.workouts.length) {
+            if (dayPattern.contains(dayOfWeek) && workoutDayIndex < weekPlan.workoutDays.length) {
               workoutDayIndex++;
             }
             continue;
@@ -212,8 +235,8 @@ class WorkoutScheduleService {
         }
 
         final isWorkoutDay = dayPattern.contains(dayOfWeek);
-        if (isWorkoutDay && workoutDayIndex < plan.workouts.length) {
-          final workoutDay = plan.workouts[workoutDayIndex];
+        if (isWorkoutDay && workoutDayIndex < weekPlan.workoutDays.length) {
+          final workoutDay = weekPlan.workoutDays[workoutDayIndex];
           await workoutBox.put(scheduleKey, {
             'date': dateKey,
             'week': week + 1,
@@ -223,6 +246,11 @@ class WorkoutScheduleService {
             'workout_name': workoutDay.name,
             'workout_focus': workoutDay.focus,
             'exercises': workoutDay.exercises.map((e) => e.toMap()).toList(),
+            if (workoutDay.warmup.isNotEmpty)
+              'warmup': workoutDay.warmup.map((e) => e.toMap()).toList(),
+            if (workoutDay.cooldown.isNotEmpty)
+              'cooldown': workoutDay.cooldown.map((e) => e.toMap()).toList(),
+            'week_character': weekPlan.weekCharacter,
             'status': 'planned',
             'completed_at': null,
             'is_swapped': false,
@@ -238,6 +266,7 @@ class WorkoutScheduleService {
             'workout_name': 'Rest Day',
             'workout_focus': 'Recovery & mobility',
             'exercises': <Map<String, dynamic>>[],
+            'week_character': weekPlan.weekCharacter,
             'status': 'rest',
             'completed_at': null,
             'is_swapped': false,

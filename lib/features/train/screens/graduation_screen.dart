@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -483,6 +484,12 @@ class GraduationScreen extends ConsumerWidget {
                     : currentPhase + 1;
 
                 // Generate next phase plan and write schedule to Hive
+                final savedDays = HiveService.instance.configBox
+                    .get('preferred_training_days');
+                final preferredDays = savedDays is List
+                    ? savedDays.cast<int>()
+                    : null;
+
                 await WorkoutScheduleService.instance.generateAndSchedule(
                   goal: profile['primary_goal'] as String? ?? 'general_fitness',
                   equipment: profile['equipment_access'] as String? ?? 'basic_gym',
@@ -490,6 +497,7 @@ class GraduationScreen extends ConsumerWidget {
                   startDate: DateTime.now(),
                   phase: nextPhase,
                   experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',
+                  preferredDays: preferredDays,
                 );
 
                 // Update user progress

@@ -1,9 +1,19 @@
+import 'dart:math';
+
 import 'exercise_repository.dart';
 
-/// Local Dart plan generator. Queries Hive exerciseBox — zero API cost.
+/// Local Dart plan generator V2. Queries Hive exerciseBox — zero API cost.
 ///
-/// Generates a 4-week workout phase based on user's goal, equipment, and
-/// available training days. Phase 1 is ALWAYS free. Phases 2-12 require PRO.
+/// Pipeline architecture:
+///   SplitSelector → ExerciseSelector → PeriodizationEngine →
+///   SupersetPairer → (Phase output)
+///
+/// Produces 4 genuinely distinct weeks per phase with:
+/// - Daily Undulating Periodization (DUP) — intensity varies per day
+/// - Weekly volume wave — baseline → overreach → peak → deload
+/// - A/B workout alternation — different exercises weeks 1&3 vs 2&4
+/// - Smart antagonist superset pairing
+/// - Experience-aware exercise filtering
 ///
 /// DO NOT modify this file without explicit instruction.
 class PlanGenerator {
@@ -13,425 +23,95 @@ class PlanGenerator {
 
   final ExerciseRepository _exerciseRepo = ExerciseRepository.instance;
 
-  /// Generates a workout phase.
+  /// Deterministic exercise count per workout: split days × effective experience.
+  static const _exerciseCounts = <int, Map<String, int>>{
+    3: {'beginner': 5, 'intermediate': 6, 'advanced': 6},
+    4: {'beginner': 5, 'intermediate': 5, 'advanced': 6},
+    5: {'beginner': 4, 'intermediate': 5, 'advanced': 5},
+    6: {'beginner': 4, 'intermediate': 4, 'advanced': 5},
+  };
+
+  /// Generates a workout phase with 4 distinct weeks.
   ///
   /// - [goal]: build_muscle | lose_fat | general_fitness | strength
   /// - [equipment]: bodyweight | home_dumbbells | basic_gym | full_gym
   /// - [daysPerWeek]: 3 | 4 | 5 | 6
   /// - [phase]: Phase number (1-12). Phase 1 is free; 2-12 require PRO.
   /// - [experienceLevel]: beginner | intermediate | advanced
+  /// - [preferredDays]: User-selected training days (0=Mon..6=Sun). Null = defaults.
   Phase generate({
     required String goal,
     required String equipment,
     required int daysPerWeek,
     int phase = 1,
     String experienceLevel = 'beginner',
+    List<int>? preferredDays,
   }) {
-    final split = _getSplitStructure(goal, daysPerWeek);
     final equipmentList = _getEquipmentList(equipment);
-    final phaseMeta = _getPhaseMeta(phase, goal);
+    final effectiveExp = effectiveLevel(experienceLevel, phase);
+    final maxPerDay =
+        _exerciseCounts[daysPerWeek]?[effectiveExp] ?? 5;
 
-    final workoutDays = <WorkoutDay>[];
+    // Stage 1: Split structure with A/B variants + intensity profiles
+    final splitPlan = _SplitSelector.select(goal, daysPerWeek);
 
-    for (int dayIndex = 0; dayIndex < split.length; dayIndex++) {
-      final dayConfig = split[dayIndex];
-      final exercises = <PlannedExercise>[];
+    // Stage 2: Exercise selection for both variants
+    final populated = _ExerciseSelector.pick(
+      splitPlan: splitPlan,
+      exerciseRepo: _exerciseRepo,
+      equipmentList: equipmentList,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      maxPerDay: maxPerDay,
+      goal: goal,
+    );
 
-      for (final spec in dayConfig.specs) {
-        final candidates = _exerciseRepo.query(
-          category: spec.category,
-          equipment: equipmentList,
-          suitableFor: experienceLevel,
-          // Phase 1 uses only well-known foundational exercises so beginners
-          // don't get obscure movements on their first week.
-          foundationalOnly: phase == 1,
-          targetMuscles: spec.targetMuscles,
-          excludeMuscles: spec.excludeMuscles,
-          limit: 6,
-        );
+    // Stage 3: Periodization (DUP profiles + volume wave → 4 distinct weeks)
+    final weeks = _PeriodizationEngine.apply(
+      populated: populated,
+      phase: phase,
+      is6Day: daysPerWeek == 6,
+    );
 
-        // Pick exercises: compounds first, then isolations.
-        final selected = _selectExercises(
-          candidates,
-          maxCount: spec.count,
-          phase: phase,
-        );
+    // Stage 4: Smart antagonist superset pairing
+    final paired = _SupersetPairer.pair(weeks);
 
-        for (final exercise in selected) {
-          exercises.add(_buildPlannedExercise(
-            exercise: exercise,
-            phase: phase,
-            goal: goal,
-            experienceLevel: experienceLevel,
-          ));
-        }
-      }
+    // Stage 5: Attach warm-up and cool-down
+    final complete = _WarmupCooldownSelector.attach(
+      paired, effectiveExp, equipmentList,
+    );
 
-      workoutDays.add(WorkoutDay(
-        dayNumber: dayIndex + 1,
-        name: dayConfig.name,
-        focus: dayConfig.focus,
-        exercises: exercises,
-      ));
-    }
-
-    // Auto-pair exercises as supersets within each workout day.
-    // Skip the first 2 exercises (main compounds — done solo), then pair
-    // exercises at indices [2,3] as superset group 0, and [4,5] as group 1.
-    for (int dayIndex = 0; dayIndex < workoutDays.length; dayIndex++) {
-      final day = workoutDays[dayIndex];
-      final exercises = day.exercises;
-      if (exercises.length >= 4) {
-        // Pair exercise[2] with exercise[3] as superset group 0
-        final updatedExercises = List<PlannedExercise>.from(exercises);
-        updatedExercises[2] = updatedExercises[2].copyWith(supersetGroup: () => 0);
-        updatedExercises[3] = updatedExercises[3].copyWith(supersetGroup: () => 0);
-
-        // Pair exercise[4] with exercise[5] as superset group 1 (if they exist)
-        if (exercises.length >= 6) {
-          updatedExercises[4] = updatedExercises[4].copyWith(supersetGroup: () => 1);
-          updatedExercises[5] = updatedExercises[5].copyWith(supersetGroup: () => 1);
-        }
-
-        workoutDays[dayIndex] = WorkoutDay(
-          dayNumber: day.dayNumber,
-          name: day.name,
-          focus: day.focus,
-          exercises: updatedExercises,
-        );
-      }
-    }
-
-    // Build 4 weeks with progressive overload.
-    final weeks = _buildWeeks(workoutDays, phase);
+    // Build Phase output
+    final meta = _getPhaseMeta(phase, goal);
 
     return Phase(
       phase: phase,
-      name: phaseMeta.name,
-      focus: phaseMeta.focus,
+      name: meta.name,
+      focus: meta.focus,
       weeks: '${(phase - 1) * 4 + 1}-${phase * 4}',
-      dailyCalories: phaseMeta.dailyCalories,
-      proteinGrams: phaseMeta.proteinGrams,
-      workouts: workoutDays,
-      weekPlans: weeks,
+      dailyCalories: meta.dailyCalories,
+      proteinGrams: meta.proteinGrams,
+      workouts: complete[0].workoutDays, // backward compat: week 1
+      weekPlans: complete,
+      preferredDays: preferredDays,
     );
   }
 
-  // ── Split structures ────────────────────────────────────────
+  // ── Experience progression ──────────────────────────────────────
 
-  /// Returns the workout split based on goal and training days.
-  List<_DayConfig> _getSplitStructure(String goal, int daysPerWeek) {
-    switch (daysPerWeek) {
-      case 3:
-        return _get3DaySplit(goal);
-      case 4:
-        return _get4DaySplit(goal);
-      case 5:
-        return _get5DaySplit(goal);
-      case 6:
-        return _get6DaySplit(goal);
-      default:
-        return _get4DaySplit(goal);
+  /// Effective experience level widens as users progress through phases.
+  static String effectiveLevel(String experience, int phase) {
+    if (experience == 'advanced') return 'advanced';
+    if (experience == 'intermediate') {
+      return phase >= 4 ? 'advanced' : 'intermediate';
     }
+    // beginner
+    if (phase >= 5) return 'advanced';
+    if (phase >= 3) return 'intermediate';
+    return 'beginner';
   }
 
-  List<_DayConfig> _get3DaySplit(String goal) {
-    if (goal == 'lose_fat' || goal == 'general_fitness') {
-      return [
-        _DayConfig('Full Body A', 'Compound focus', ['Push', 'Pull', 'Legs'], 2),
-        _DayConfig('Full Body B', 'Strength + cardio', ['Push', 'Pull', 'Legs'], 2),
-        _DayConfig('Full Body C', 'Volume + core', ['Legs', 'Core', 'Cardio'], 2),
-      ];
-    }
-    // build_muscle / strength
-    return [
-      _DayConfig('Push + Core', 'Chest, shoulders, triceps', ['Push', 'Core'], 3),
-      _DayConfig('Pull + Core', 'Back, biceps', ['Pull', 'Core'], 3),
-      _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 5),
-    ];
-  }
-
-  List<_DayConfig> _get4DaySplit(String goal) {
-    if (goal == 'build_muscle') {
-      return [
-        _DayConfig('Push', 'Chest, shoulders, triceps', ['Push'], 6),
-        _DayConfig.targeted('Pull', 'Back, biceps', [
-          _CategorySpec('Pull', 4,
-              excludeMuscles: ['Biceps', 'Forearm']),
-          _CategorySpec('Pull', 2,
-              targetMuscles: ['Biceps']),
-        ]),
-        _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 6),
-        _DayConfig.targeted('Upper', 'Shoulders, back, arms', [
-          _CategorySpec('Push', 2,
-              targetMuscles: ['Deltoid', 'Shoulder'],
-              excludeMuscles: ['Chest']),
-          _CategorySpec('Pull', 2,
-              excludeMuscles: ['Biceps', 'Forearm']),
-          _CategorySpec('Push', 1,
-              targetMuscles: ['Triceps']),
-          _CategorySpec('Pull', 1,
-              targetMuscles: ['Biceps']),
-        ]),
-      ];
-    }
-    if (goal == 'strength') {
-      return [
-        _DayConfig('Squat Day', 'Squat + accessories', ['Legs'], 5),
-        _DayConfig('Bench Day', 'Bench + upper push', ['Push'], 5),
-        _DayConfig.targeted('Deadlift Day', 'Deadlift + back', [
-          _CategorySpec('Pull', 3,
-              excludeMuscles: ['Biceps', 'Forearm']),
-          _CategorySpec('Legs', 2,
-              targetMuscles: ['Hamstring', 'Glute']),
-        ]),
-        _DayConfig.targeted('OHP Day', 'Overhead press + accessories', [
-          _CategorySpec('Push', 3,
-              targetMuscles: ['Deltoid', 'Shoulder'],
-              excludeMuscles: ['Chest']),
-          _CategorySpec('Core', 2),
-        ]),
-      ];
-    }
-    // lose_fat / general_fitness
-    return [
-      _DayConfig('Upper Push', 'Chest, shoulders, triceps', ['Push'], 5),
-      _DayConfig('Lower Body', 'Legs + cardio', ['Legs', 'Cardio'], 3),
-      _DayConfig('Upper Pull', 'Back, biceps', ['Pull'], 5),
-      _DayConfig('Full Body + Core', 'Total body + core', ['Legs', 'Core', 'Cardio'], 2),
-    ];
-  }
-
-  List<_DayConfig> _get5DaySplit(String goal) {
-    if (goal == 'build_muscle') {
-      return [
-        _DayConfig.targeted('Chest', 'Chest focus', [
-          _CategorySpec('Push', 6,
-              targetMuscles: ['Chest', 'Lower Chest', 'Upper Chest']),
-        ]),
-        _DayConfig.targeted('Back', 'Back focus', [
-          _CategorySpec('Pull', 6,
-              excludeMuscles: ['Biceps', 'Forearm']),
-        ]),
-        _DayConfig.targeted('Shoulders + Arms', 'Delts, biceps, triceps', [
-          _CategorySpec('Push', 2,
-              targetMuscles: ['Deltoid', 'Shoulder'],
-              excludeMuscles: ['Chest']),
-          _CategorySpec('Push', 2,
-              targetMuscles: ['Triceps']),
-          _CategorySpec('Pull', 2,
-              targetMuscles: ['Biceps']),
-        ]),
-        _DayConfig('Legs', 'Quads, hams, glutes', ['Legs'], 6),
-        _DayConfig.targeted('Weak Points', 'Shoulders, arms, core', [
-          _CategorySpec('Push', 1,
-              targetMuscles: ['Deltoid', 'Shoulder'],
-              excludeMuscles: ['Chest']),
-          _CategorySpec('Pull', 1,
-              targetMuscles: ['Biceps']),
-          _CategorySpec('Core', 2),
-        ]),
-      ];
-    }
-    // Default 5-day
-    return [
-      _DayConfig('Push', 'Chest, shoulders, triceps', ['Push'], 6),
-      _DayConfig('Pull', 'Back, biceps', ['Pull'], 6),
-      _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 6),
-      _DayConfig.targeted('Upper', 'Shoulders, back, arms', [
-        _CategorySpec('Push', 2,
-            targetMuscles: ['Deltoid', 'Shoulder'],
-            excludeMuscles: ['Chest']),
-        _CategorySpec('Pull', 2,
-            excludeMuscles: ['Biceps', 'Forearm']),
-        _CategorySpec('Push', 1,
-            targetMuscles: ['Triceps']),
-        _CategorySpec('Pull', 1,
-            targetMuscles: ['Biceps']),
-      ]),
-      _DayConfig('Lower + Core', 'Legs, core, conditioning', ['Legs', 'Core', 'Cardio'], 2),
-    ];
-  }
-
-  List<_DayConfig> _get6DaySplit(String goal) {
-    if (goal == 'build_muscle') {
-      return [
-        _DayConfig.targeted('Push A', 'Heavy chest focus', [
-          _CategorySpec('Push', 4,
-              targetMuscles: ['Chest', 'Lower Chest', 'Upper Chest']),
-          _CategorySpec('Push', 2,
-              targetMuscles: ['Triceps']),
-        ]),
-        _DayConfig.targeted('Pull A', 'Heavy back focus', [
-          _CategorySpec('Pull', 4,
-              excludeMuscles: ['Biceps', 'Forearm']),
-          _CategorySpec('Pull', 2,
-              targetMuscles: ['Biceps']),
-        ]),
-        _DayConfig('Legs A', 'Quad dominant', ['Legs'], 6),
-        _DayConfig.targeted('Push B', 'Volume shoulders + triceps', [
-          _CategorySpec('Push', 4,
-              targetMuscles: ['Deltoid', 'Shoulder'],
-              excludeMuscles: ['Chest']),
-          _CategorySpec('Push', 2,
-              targetMuscles: ['Triceps']),
-        ]),
-        _DayConfig.targeted('Pull B', 'Volume back + biceps', [
-          _CategorySpec('Pull', 3,
-              excludeMuscles: ['Biceps', 'Forearm']),
-          _CategorySpec('Pull', 3,
-              targetMuscles: ['Biceps']),
-        ]),
-        _DayConfig('Legs B', 'Hamstring + glute focus', ['Legs', 'Core'], 4),
-      ];
-    }
-    // Default 6-day PPL
-    return [
-      _DayConfig('Push', 'Chest, shoulders, triceps', ['Push'], 6),
-      _DayConfig('Pull', 'Back, biceps', ['Pull'], 6),
-      _DayConfig('Legs', 'Quads, hamstrings, glutes', ['Legs'], 6),
-      _DayConfig('Push + Core', 'Upper push + core', ['Push', 'Core'], 4),
-      _DayConfig('Pull + Cardio', 'Upper pull + conditioning', ['Pull', 'Cardio'], 4),
-      _DayConfig('Legs + Core', 'Lower body + core', ['Legs', 'Core'], 4),
-    ];
-  }
-
-  // ── Exercise selection ──────────────────────────────────────
-
-  List<Map<String, dynamic>> _selectExercises(
-    List<Map<String, dynamic>> candidates, {
-    required int maxCount,
-    required int phase,
-  }) {
-    if (candidates.isEmpty) return [];
-    if (candidates.length <= maxCount) return candidates;
-    return candidates.sublist(0, maxCount);
-  }
-
-  PlannedExercise _buildPlannedExercise({
-    required Map<String, dynamic> exercise,
-    required int phase,
-    required String goal,
-    required String experienceLevel,
-  }) {
-    final loggingType =
-        exercise['logging_type'] as String? ?? 'weight_reps';
-    final defaultSets = exercise['default_sets'] as int? ?? 3;
-    final defaultReps = exercise['default_reps'] as String? ?? '10';
-    final defaultRest = exercise['default_rest_secs'] as int? ?? 60;
-    final defaultDuration = exercise['default_duration_secs'] as int?;
-
-    // Progressive overload: increase sets/intensity with phases.
-    int sets = _adjustSets(defaultSets, phase, goal);
-    String reps = _adjustReps(defaultReps, phase, goal);
-    int rest = _adjustRest(defaultRest, goal);
-
-    final equipRaw = exercise['equipment_needed'];
-    final equipList = equipRaw is List
-        ? equipRaw.map((e) => e.toString()).toList()
-        : <String>[];
-
-    return PlannedExercise(
-      exerciseId: exercise['id'] as String? ?? '',
-      exerciseName: exercise['name'] as String? ?? 'Unknown',
-      loggingType: loggingType,
-      sets: sets,
-      reps: reps,
-      restSeconds: rest,
-      durationSeconds: defaultDuration,
-      notes: _generateNotes(exercise, experienceLevel),
-      exerciseType: exercise['exercise_type'] as String?,
-      category: exercise['category'] as String?,
-      equipmentNeeded: equipList,
-    );
-  }
-
-  int _adjustSets(int base, int phase, String goal) {
-    // Gradual volume increase across phases.
-    int phaseBonus = ((phase - 1) * 0.5).floor();
-    if (goal == 'strength') {
-      return (base + phaseBonus).clamp(3, 5);
-    }
-    if (goal == 'build_muscle') {
-      return (base + phaseBonus).clamp(3, 5);
-    }
-    return (base + phaseBonus).clamp(2, 4);
-  }
-
-  String _adjustReps(String base, int phase, String goal) {
-    // Parse the default reps (could be "10", "8-12", "30s", etc.)
-    final numericMatch = RegExp(r'(\d+)').firstMatch(base);
-    if (numericMatch == null) return base;
-
-    final baseReps = int.parse(numericMatch.group(1)!);
-
-    if (goal == 'strength') {
-      final adjusted = (baseReps - phase + 1).clamp(3, 8);
-      return '$adjusted';
-    }
-    if (goal == 'build_muscle') {
-      // Hypertrophy range: 8-12, slight variation per phase.
-      final low = (baseReps - 2).clamp(6, 10);
-      final high = (baseReps + 2).clamp(8, 15);
-      return '$low-$high';
-    }
-    if (goal == 'lose_fat') {
-      final adjusted = (baseReps + 2).clamp(10, 20);
-      return '$adjusted';
-    }
-    return base;
-  }
-
-  int _adjustRest(int base, String goal) {
-    switch (goal) {
-      case 'strength':
-        return base.clamp(120, 300); // 2-5 min for strength
-      case 'build_muscle':
-        return base.clamp(60, 120); // 1-2 min for hypertrophy
-      case 'lose_fat':
-        return base.clamp(30, 60); // 30-60s for fat loss
-      default:
-        return base.clamp(45, 90);
-    }
-  }
-
-  String? _generateNotes(Map<String, dynamic> exercise, String level) {
-    final cues = exercise['coaching_cues'];
-    if (cues is List && cues.isNotEmpty) {
-      return cues.first.toString();
-    }
-    return null;
-  }
-
-  // ── Week builder with progressive overload ──────────────────
-
-  List<WeekPlan> _buildWeeks(List<WorkoutDay> workoutDays, int phase) {
-    return List.generate(4, (weekIndex) {
-      return WeekPlan(
-        weekNumber: (phase - 1) * 4 + weekIndex + 1,
-        weekInPhase: weekIndex + 1,
-        overloadNotes: _getOverloadNotes(weekIndex),
-        workoutDays: workoutDays,
-      );
-    });
-  }
-
-  String _getOverloadNotes(int weekIndex) {
-    switch (weekIndex) {
-      case 0:
-        return 'Baseline week — learn the movements, find working weights.';
-      case 1:
-        return 'Add 1 rep to each set OR increase weight by 2.5 kg.';
-      case 2:
-        return 'Push intensity — increase weight by 2.5-5 kg where possible.';
-      case 3:
-        return 'Deload week — reduce weight by 10%, focus on form and recovery.';
-      default:
-        return '';
-    }
-  }
-
-  // ── Equipment mapping ───────────────────────────────────────
+  // ── Equipment mapping (unchanged) ──────────────────────────────
 
   List<String> _getEquipmentList(String equipment) {
     switch (equipment) {
@@ -455,62 +135,994 @@ class PlanGenerator {
     }
   }
 
-  // ── Phase metadata ──────────────────────────────────────────
+  // ── Phase metadata (unchanged) ─────────────────────────────────
 
   _PhaseMeta _getPhaseMeta(int phase, String goal) {
-    // Phase 1 metadata.
     if (phase == 1) {
       return _PhaseMeta(
         name: 'Foundation',
         focus: 'Movement patterns & baseline strength',
-        dailyCalories: 0, // Calculated by BMR calculator, not here.
+        dailyCalories: 0,
         proteinGrams: 0,
       );
     }
-
-    // Higher phases get progressively harder names/focuses.
-    final phaseNames = [
-      '', // 0 (unused)
-      'Foundation',
-      'Adaptation',
-      'Building',
-      'Intensification',
-      'Strength Peak',
-      'Volume Block',
-      'Power Phase',
-      'Hypertrophy Focus',
-      'Conditioning',
-      'Peak Performance',
-      'Mastery',
-      'Elite',
+    const names = [
+      '', 'Foundation', 'Adaptation', 'Building', 'Intensification',
+      'Strength Peak', 'Volume Block', 'Power Phase', 'Hypertrophy Focus',
+      'Conditioning', 'Peak Performance', 'Mastery', 'Elite',
     ];
-
-    final phaseFocuses = [
-      '',
-      'Movement patterns & baseline strength',
+    const focuses = [
+      '', 'Movement patterns & baseline strength',
       'Increasing work capacity & form refinement',
       'Progressive overload & muscle growth',
       'Increasing intensity & strength gains',
-      'Peak strength development',
-      'High volume training block',
-      'Power & explosive movements',
-      'Maximum muscle growth',
-      'Work capacity & endurance',
-      'Performance optimization',
-      'Advanced techniques & periodization',
-      'Elite programming',
+      'Peak strength development', 'High volume training block',
+      'Power & explosive movements', 'Maximum muscle growth',
+      'Work capacity & endurance', 'Performance optimization',
+      'Advanced techniques & periodization', 'Elite programming',
     ];
-
     return _PhaseMeta(
-      name: phase < phaseNames.length ? phaseNames[phase] : 'Phase $phase',
-      focus: phase < phaseFocuses.length ? phaseFocuses[phase] : 'Advanced training',
+      name: phase < names.length ? names[phase] : 'Phase $phase',
+      focus: phase < focuses.length ? focuses[phase] : 'Advanced training',
       dailyCalories: 0,
       proteinGrams: 0,
     );
   }
 }
 
-// ── Data classes ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// STAGE 1: SPLIT SELECTOR
+// ══════════════════════════════════════════════════════════════════
+
+class _SplitSelector {
+  static List<_DaySlot> select(String goal, int daysPerWeek) {
+    switch (daysPerWeek) {
+      case 3:
+        return _get3Day(goal);
+      case 5:
+        return _get5Day(goal);
+      case 6:
+        return _get6Day(goal);
+      default:
+        return _get4Day(goal);
+    }
+  }
+
+  // Intensity profiles assigned per position within a week.
+  static const _profiles3 = ['strength', 'hypertrophy', 'endurance'];
+  static const _profiles4 = ['strength', 'hypertrophy', 'strength', 'endurance'];
+  static const _profiles5 = ['strength', 'hypertrophy', 'endurance', 'strength', 'hypertrophy'];
+
+  // ── 3-day splits ───────────────────────────────────────────────
+
+  static List<_DaySlot> _get3Day(String goal) {
+    if (goal == 'lose_fat' || goal == 'general_fitness') {
+      return [
+        _DaySlot(
+          name: 'Full Body A', focus: 'Compound focus',
+          dayType: 'full_body', intensity: _profiles3[0],
+          specsA: [_CSpec('Push', 2), _CSpec('Pull', 2), _CSpec('Legs', 1)],
+        ),
+        _DaySlot(
+          name: 'Full Body B', focus: 'Strength + cardio',
+          dayType: 'full_body', intensity: _profiles3[1],
+          specsA: [_CSpec('Push', 2), _CSpec('Pull', 2), _CSpec('Legs', 1)],
+        ),
+        _DaySlot(
+          name: 'Full Body C', focus: 'Volume + core',
+          dayType: 'full_body', intensity: _profiles3[2],
+          specsA: [_CSpec('Legs', 2), _CSpec('Core', 2), _CSpec('Cardio', 1)],
+        ),
+      ];
+    }
+    // build_muscle / strength
+    return [
+      _DaySlot(
+        name: 'Push + Core', focus: 'Chest, shoulders, triceps',
+        dayType: 'push', intensity: _profiles3[0],
+        specsA: [
+          _CSpec('Push', 3, target: ['Chest', 'Upper Chest', 'Lower Chest']),
+          _CSpec('Core', 2),
+        ],
+        specsB: [
+          _CSpec('Push', 3, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+          _CSpec('Core', 2),
+        ],
+      ),
+      _DaySlot(
+        name: 'Pull + Core', focus: 'Back, biceps',
+        dayType: 'pull', intensity: _profiles3[1],
+        specsA: [
+          _CSpec('Pull', 3, exclude: ['Biceps', 'Forearm']),
+          _CSpec('Core', 2),
+        ],
+        specsB: [
+          _CSpec('Pull', 3),
+          _CSpec('Core', 2),
+        ],
+      ),
+      _DaySlot(
+        name: 'Legs', focus: 'Quads, hamstrings, glutes',
+        dayType: 'legs', intensity: _profiles3[2],
+        specsA: [_CSpec('Legs', 5, target: ['Quad'])],
+        specsB: [_CSpec('Legs', 5, target: ['Hamstring', 'Glute'])],
+      ),
+    ];
+  }
+
+  // ── 4-day splits ───────────────────────────────────────────────
+
+  static List<_DaySlot> _get4Day(String goal) {
+    if (goal == 'build_muscle') {
+      return [
+        _DaySlot(
+          name: 'Push', focus: 'Chest, shoulders, triceps',
+          dayType: 'push', intensity: _profiles4[0],
+          specsA: [
+            _CSpec('Push', 4, target: ['Chest', 'Upper Chest', 'Lower Chest']),
+            _CSpec('Push', 2, target: ['Triceps']),
+          ],
+          specsB: [
+            _CSpec('Push', 3, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Push', 2, target: ['Triceps']),
+            _CSpec('Push', 1, target: ['Chest']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Pull', focus: 'Back, biceps',
+          dayType: 'pull', intensity: _profiles4[1],
+          specsA: [
+            _CSpec('Pull', 4, exclude: ['Biceps', 'Forearm']),
+            _CSpec('Pull', 2, target: ['Biceps']),
+          ],
+          specsB: [
+            _CSpec('Pull', 4),
+            _CSpec('Pull', 2, target: ['Biceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Legs', focus: 'Quads, hamstrings, glutes',
+          dayType: 'legs', intensity: _profiles4[2],
+          specsA: [_CSpec('Legs', 6, target: ['Quad'])],
+          specsB: [_CSpec('Legs', 6, target: ['Hamstring', 'Glute'])],
+        ),
+        _DaySlot(
+          name: 'Upper', focus: 'Shoulders, back, arms',
+          dayType: 'upper', intensity: _profiles4[3],
+          specsA: [
+            _CSpec('Push', 2, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Pull', 2, exclude: ['Biceps', 'Forearm']),
+            _CSpec('Push', 1, target: ['Triceps']),
+            _CSpec('Pull', 1, target: ['Biceps']),
+          ],
+          specsB: [
+            _CSpec('Push', 2, target: ['Chest']),
+            _CSpec('Pull', 2, target: ['Biceps']),
+            _CSpec('Push', 1, target: ['Triceps']),
+            _CSpec('Pull', 1, exclude: ['Biceps', 'Forearm']),
+          ],
+        ),
+      ];
+    }
+    if (goal == 'strength') {
+      // Strength: primary lift fixed in A and B, accessories differ.
+      return [
+        _DaySlot(
+          name: 'Squat Day', focus: 'Squat + accessories',
+          dayType: 'legs', intensity: _profiles4[0],
+          specsA: [_CSpec('Legs', 5)],
+          specsB: [_CSpec('Legs', 5, target: ['Hamstring', 'Glute'])],
+        ),
+        _DaySlot(
+          name: 'Bench Day', focus: 'Bench + upper push',
+          dayType: 'push', intensity: _profiles4[1],
+          specsA: [_CSpec('Push', 5, target: ['Chest'])],
+          specsB: [_CSpec('Push', 5)],
+        ),
+        _DaySlot(
+          name: 'Deadlift Day', focus: 'Deadlift + back',
+          dayType: 'pull', intensity: _profiles4[2],
+          specsA: [
+            _CSpec('Pull', 3, exclude: ['Biceps', 'Forearm']),
+            _CSpec('Legs', 2, target: ['Hamstring', 'Glute']),
+          ],
+          specsB: [
+            _CSpec('Pull', 3),
+            _CSpec('Legs', 2),
+          ],
+        ),
+        _DaySlot(
+          name: 'OHP Day', focus: 'Overhead press + accessories',
+          dayType: 'push', intensity: _profiles4[3],
+          specsA: [
+            _CSpec('Push', 3, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Core', 2),
+          ],
+          specsB: [
+            _CSpec('Push', 3, target: ['Deltoid', 'Shoulder']),
+            _CSpec('Core', 2),
+          ],
+        ),
+      ];
+    }
+    // lose_fat / general_fitness
+    return [
+      _DaySlot(
+        name: 'Upper Push', focus: 'Chest, shoulders, triceps',
+        dayType: 'push', intensity: _profiles4[0],
+        specsA: [_CSpec('Push', 5)],
+      ),
+      _DaySlot(
+        name: 'Lower Body', focus: 'Legs + cardio',
+        dayType: 'legs', intensity: _profiles4[1],
+        specsA: [_CSpec('Legs', 3), _CSpec('Cardio', 2)],
+      ),
+      _DaySlot(
+        name: 'Upper Pull', focus: 'Back, biceps',
+        dayType: 'pull', intensity: _profiles4[2],
+        specsA: [_CSpec('Pull', 5)],
+      ),
+      _DaySlot(
+        name: 'Full Body + Core', focus: 'Total body + core',
+        dayType: 'full_body', intensity: _profiles4[3],
+        specsA: [_CSpec('Legs', 2), _CSpec('Core', 2), _CSpec('Cardio', 1)],
+      ),
+    ];
+  }
+
+  // ── 5-day splits ───────────────────────────────────────────────
+
+  static List<_DaySlot> _get5Day(String goal) {
+    if (goal == 'build_muscle') {
+      return [
+        _DaySlot(
+          name: 'Chest', focus: 'Chest focus',
+          dayType: 'push', intensity: _profiles5[0],
+          specsA: [_CSpec('Push', 6, target: ['Chest', 'Upper Chest', 'Lower Chest'])],
+        ),
+        _DaySlot(
+          name: 'Back', focus: 'Back focus',
+          dayType: 'pull', intensity: _profiles5[1],
+          specsA: [_CSpec('Pull', 6, exclude: ['Biceps', 'Forearm'])],
+        ),
+        _DaySlot(
+          name: 'Shoulders + Arms', focus: 'Delts, biceps, triceps',
+          dayType: 'shoulders_arms', intensity: _profiles5[2],
+          specsA: [
+            _CSpec('Push', 2, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Push', 2, target: ['Triceps']),
+            _CSpec('Pull', 2, target: ['Biceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Legs', focus: 'Quads, hams, glutes',
+          dayType: 'legs', intensity: _profiles5[3],
+          specsA: [_CSpec('Legs', 6)],
+          specsB: [_CSpec('Legs', 6, target: ['Hamstring', 'Glute'])],
+        ),
+        _DaySlot(
+          name: 'Weak Points', focus: 'Shoulders, arms, core',
+          dayType: 'upper', intensity: _profiles5[4],
+          specsA: [
+            _CSpec('Push', 1, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Pull', 1, target: ['Biceps']),
+            _CSpec('Core', 2),
+          ],
+        ),
+      ];
+    }
+    // Default 5-day
+    return [
+      _DaySlot(
+        name: 'Push', focus: 'Chest, shoulders, triceps',
+        dayType: 'push', intensity: _profiles5[0],
+        specsA: [_CSpec('Push', 6)],
+      ),
+      _DaySlot(
+        name: 'Pull', focus: 'Back, biceps',
+        dayType: 'pull', intensity: _profiles5[1],
+        specsA: [_CSpec('Pull', 6)],
+      ),
+      _DaySlot(
+        name: 'Legs', focus: 'Quads, hamstrings, glutes',
+        dayType: 'legs', intensity: _profiles5[2],
+        specsA: [_CSpec('Legs', 6)],
+      ),
+      _DaySlot(
+        name: 'Upper', focus: 'Shoulders, back, arms',
+        dayType: 'upper', intensity: _profiles5[3],
+        specsA: [
+          _CSpec('Push', 2, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+          _CSpec('Pull', 2, exclude: ['Biceps', 'Forearm']),
+          _CSpec('Push', 1, target: ['Triceps']),
+          _CSpec('Pull', 1, target: ['Biceps']),
+        ],
+      ),
+      _DaySlot(
+        name: 'Lower + Core', focus: 'Legs, core, conditioning',
+        dayType: 'legs', intensity: _profiles5[4],
+        specsA: [_CSpec('Legs', 2), _CSpec('Core', 2), _CSpec('Cardio', 1)],
+      ),
+    ];
+  }
+
+  // ── 6-day splits (A/B baked into split — no week-to-week alternation) ─
+
+  static List<_DaySlot> _get6Day(String goal) {
+    if (goal == 'build_muscle') {
+      return [
+        _DaySlot(
+          name: 'Push A', focus: 'Heavy chest focus',
+          dayType: 'push', intensity: 'strength',
+          specsA: [
+            _CSpec('Push', 4, target: ['Chest', 'Upper Chest', 'Lower Chest']),
+            _CSpec('Push', 2, target: ['Triceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Pull A', focus: 'Heavy back focus',
+          dayType: 'pull', intensity: 'strength',
+          specsA: [
+            _CSpec('Pull', 4, exclude: ['Biceps', 'Forearm']),
+            _CSpec('Pull', 2, target: ['Biceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Legs A', focus: 'Quad dominant',
+          dayType: 'legs', intensity: 'strength',
+          specsA: [_CSpec('Legs', 6)],
+        ),
+        _DaySlot(
+          name: 'Push B', focus: 'Volume shoulders + triceps',
+          dayType: 'push', intensity: 'hypertrophy',
+          specsA: [
+            _CSpec('Push', 4, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
+            _CSpec('Push', 2, target: ['Triceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Pull B', focus: 'Volume back + biceps',
+          dayType: 'pull', intensity: 'hypertrophy',
+          specsA: [
+            _CSpec('Pull', 3, exclude: ['Biceps', 'Forearm']),
+            _CSpec('Pull', 3, target: ['Biceps']),
+          ],
+        ),
+        _DaySlot(
+          name: 'Legs B', focus: 'Hamstring + glute focus',
+          dayType: 'legs', intensity: 'hypertrophy',
+          specsA: [_CSpec('Legs', 4), _CSpec('Core', 2)],
+        ),
+      ];
+    }
+    // Default 6-day PPL
+    return [
+      _DaySlot(name: 'Push', focus: 'Chest, shoulders, triceps',
+          dayType: 'push', intensity: 'strength',
+          specsA: [_CSpec('Push', 6)]),
+      _DaySlot(name: 'Pull', focus: 'Back, biceps',
+          dayType: 'pull', intensity: 'strength',
+          specsA: [_CSpec('Pull', 6)]),
+      _DaySlot(name: 'Legs', focus: 'Quads, hamstrings, glutes',
+          dayType: 'legs', intensity: 'strength',
+          specsA: [_CSpec('Legs', 6)]),
+      _DaySlot(name: 'Push + Core', focus: 'Upper push + core',
+          dayType: 'push', intensity: 'hypertrophy',
+          specsA: [_CSpec('Push', 4), _CSpec('Core', 2)]),
+      _DaySlot(name: 'Pull + Cardio', focus: 'Upper pull + conditioning',
+          dayType: 'pull', intensity: 'hypertrophy',
+          specsA: [_CSpec('Pull', 4), _CSpec('Cardio', 2)]),
+      _DaySlot(name: 'Legs + Core', focus: 'Lower body + core',
+          dayType: 'legs', intensity: 'hypertrophy',
+          specsA: [_CSpec('Legs', 4), _CSpec('Core', 2)]),
+    ];
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STAGE 2: EXERCISE SELECTOR
+// ══════════════════════════════════════════════════════════════════
+
+class _ExerciseSelector {
+  /// Picks exercises for A and B variants of each day.
+  static List<_PopulatedDay> pick({
+    required List<_DaySlot> splitPlan,
+    required ExerciseRepository exerciseRepo,
+    required List<String> equipmentList,
+    required String effectiveExp,
+    required int phase,
+    required int maxPerDay,
+    required String goal,
+  }) {
+    final result = <_PopulatedDay>[];
+
+    for (final slot in splitPlan) {
+      // Cap spec counts to maxPerDay
+      final cappedA = _capSpecs(slot.specsA, maxPerDay);
+      final bSpecs = slot.specsB ?? slot.specsA;
+      final cappedB = _capSpecs(bSpecs, maxPerDay);
+
+      // Select Variant A exercises
+      final exercisesA = _selectForSpecs(
+        cappedA, exerciseRepo, equipmentList, effectiveExp, phase,
+      );
+
+      // Select Variant B exercises, excluding A names
+      final excludeNames = exercisesA.map((e) => e.exerciseName).toSet();
+
+      // For strength goal, allow primary compound overlap (first spec's exercises)
+      final firstSpecCount = cappedA.isNotEmpty ? cappedA.first.count : 0;
+      Set<String> effectiveExclude;
+      if (goal == 'strength' && exercisesA.length >= firstSpecCount) {
+        // Don't exclude the primary compound exercises
+        effectiveExclude = exercisesA
+            .skip(firstSpecCount)
+            .map((e) => e.exerciseName)
+            .toSet();
+      } else {
+        effectiveExclude = excludeNames;
+      }
+
+      final exercisesB = _selectForSpecs(
+        cappedB, exerciseRepo, equipmentList, effectiveExp, phase,
+        excludeNames: effectiveExclude,
+      );
+
+      // If B couldn't fill enough, allow compound overlap
+      if (exercisesB.length < (maxPerDay * 0.5).ceil() && exercisesB.length < exercisesA.length) {
+        final fallbackB = _selectForSpecs(
+          cappedB, exerciseRepo, equipmentList, effectiveExp, phase,
+        );
+        if (fallbackB.length > exercisesB.length) {
+          result.add(_PopulatedDay(
+            name: slot.name, focus: slot.focus,
+            dayType: slot.dayType, intensity: slot.intensity,
+            exercisesA: exercisesA,
+            exercisesB: fallbackB.map((e) => e.copyWith(variant: 'B')).toList(),
+          ));
+          continue;
+        }
+      }
+
+      result.add(_PopulatedDay(
+        name: slot.name, focus: slot.focus,
+        dayType: slot.dayType, intensity: slot.intensity,
+        exercisesA: exercisesA,
+        exercisesB: slot.specsB != null
+            ? exercisesB.map((e) => e.copyWith(variant: 'B')).toList()
+            : exercisesA, // no specsB → B uses same as A (6-day, simple splits)
+      ));
+    }
+    return result;
+  }
+
+  /// Cap spec counts so total doesn't exceed [maxPerDay].
+  static List<_CSpec> _capSpecs(List<_CSpec> specs, int maxPerDay) {
+    final total = specs.fold<int>(0, (sum, s) => sum + s.count);
+    if (total <= maxPerDay) return specs;
+
+    // Trim from last spec first (isolations are typically last).
+    final capped = specs.map((s) => _CSpec(s.category, s.count,
+        target: s.targetMuscles, exclude: s.excludeMuscles)).toList();
+    var excess = total - maxPerDay;
+    for (var i = capped.length - 1; i >= 0 && excess > 0; i--) {
+      final trim = min(excess, capped[i].count - 1); // keep at least 1
+      capped[i] = _CSpec(capped[i].category, capped[i].count - trim,
+          target: capped[i].targetMuscles, exclude: capped[i].excludeMuscles);
+      excess -= trim;
+    }
+    return capped;
+  }
+
+  /// Query and select exercises for a list of category specs.
+  static List<PlannedExercise> _selectForSpecs(
+    List<_CSpec> specs,
+    ExerciseRepository repo,
+    List<String> equipment,
+    String effectiveExp,
+    int phase, {
+    Set<String>? excludeNames,
+  }) {
+    final exercises = <PlannedExercise>[];
+
+    for (final spec in specs) {
+      var candidates = repo.query(
+        category: spec.category,
+        equipment: equipment,
+        suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+        foundationalOnly: phase == 1,
+        targetMuscles: spec.targetMuscles,
+        excludeMuscles: spec.excludeMuscles,
+        limit: spec.count + 4, // extra candidates for exclusion
+      );
+
+      // Exclude already-selected exercise names
+      if (excludeNames != null && excludeNames.isNotEmpty) {
+        candidates = candidates
+            .where((c) => !excludeNames.contains(c['name'] as String? ?? ''))
+            .toList();
+      }
+
+      // Also exclude exercises already picked in this variant
+      final pickedNames = exercises.map((e) => e.exerciseName).toSet();
+      candidates = candidates
+          .where((c) => !pickedNames.contains(c['name'] as String? ?? ''))
+          .toList();
+
+      // Pick up to spec.count — compounds already sorted first by repo
+      final selected = candidates.length <= spec.count
+          ? candidates
+          : candidates.sublist(0, spec.count);
+
+      for (final ex in selected) {
+        exercises.add(_buildExercise(ex));
+      }
+    }
+    return exercises;
+  }
+
+  /// Build a PlannedExercise from an exercise map (with exercise defaults).
+  static PlannedExercise _buildExercise(Map<String, dynamic> ex) {
+    final equipRaw = ex['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
+    final musclesRaw = ex['primary_muscles'];
+    final muscles = musclesRaw is List
+        ? musclesRaw.map((m) => m.toString()).toList()
+        : <String>[];
+
+    final cues = ex['coaching_cues'];
+    final notes = (cues is List && cues.isNotEmpty) ? cues.first.toString() : null;
+
+    return PlannedExercise(
+      exerciseId: ex['id'] as String? ?? '',
+      exerciseName: ex['name'] as String? ?? 'Unknown',
+      loggingType: ex['logging_type'] as String? ?? 'weight_reps',
+      sets: ex['default_sets'] as int? ?? 3,
+      reps: ex['default_reps'] as String? ?? '10',
+      restSeconds: ex['default_rest_secs'] as int? ?? 60,
+      durationSeconds: ex['default_duration_secs'] as int?,
+      notes: notes,
+      exerciseType: ex['exercise_type'] as String?,
+      category: ex['category'] as String?,
+      equipmentNeeded: equipList,
+      primaryMuscles: muscles,
+      variant: 'A',
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STAGE 3: PERIODIZATION ENGINE
+// ══════════════════════════════════════════════════════════════════
+
+class _PeriodizationEngine {
+  // Base parameters per intensity profile.
+  static const _profileParams = <String, List<int>>{
+    //                sets, reps, rest(s)
+    'strength':      [4,    5,    150],
+    'hypertrophy':   [3,    10,   75],
+    'endurance':     [2,    18,   38],
+  };
+
+  // Volume wave: [sets multiplier desc, reps offset, weight cue, character]
+  static const _waveNames = ['baseline', 'overreach', 'peak', 'deload'];
+  static const _waveCues = [
+    'Find working weight',
+    'Same weight, more volume',
+    '+2.5 kg if Week 2 felt good',
+    'Light week — same weight, fewer sets. Come back stronger.',
+  ];
+  static const _waveNotes = [
+    'Baseline week — learn the movements, find working weights.',
+    'Overreach — extra set per exercise, push your limits.',
+    'Peak intensity — heavier weight, fewer reps. Test yourself.',
+    'Strategic recovery — your muscles grow during rest, not during lifting. Trust the process.',
+  ];
+
+  /// Produces 4 distinct WeekPlan objects from the populated split.
+  static List<WeekPlan> apply({
+    required List<_PopulatedDay> populated,
+    required int phase,
+    required bool is6Day,
+  }) {
+    return List.generate(4, (weekIdx) {
+      // Determine which variant to use this week.
+      // Week 0,2 = A; Week 1,3 = B. For 6-day: always A (A/B baked in).
+      final useB = !is6Day && (weekIdx == 1 || weekIdx == 3);
+
+      final workoutDays = <WorkoutDay>[];
+      for (int d = 0; d < populated.length; d++) {
+        final day = populated[d];
+        final baseExercises = useB ? day.exercisesB : day.exercisesA;
+        final profile = _profileParams[day.intensity] ?? _profileParams['hypertrophy']!;
+        final baseSets = profile[0];
+        final baseReps = profile[1];
+        final baseRest = profile[2];
+
+        // Apply volume wave to each exercise
+        final adjusted = baseExercises.map((ex) {
+          return _applyWave(ex, weekIdx, baseSets, baseReps, baseRest, day.intensity);
+        }).toList();
+
+        workoutDays.add(WorkoutDay(
+          dayNumber: d + 1,
+          name: day.name,
+          focus: day.focus,
+          exercises: adjusted,
+        ));
+      }
+
+      return WeekPlan(
+        weekNumber: (phase - 1) * 4 + weekIdx + 1,
+        weekInPhase: weekIdx + 1,
+        overloadNotes: _waveNotes[weekIdx],
+        weekCharacter: _waveNames[weekIdx],
+        workoutDays: workoutDays,
+      );
+    });
+  }
+
+  /// Apply DUP profile + volume wave to a single exercise.
+  static PlannedExercise _applyWave(
+    PlannedExercise ex, int weekIdx,
+    int baseSets, int baseReps, int baseRest, String intensity,
+  ) {
+    final lt = ex.loggingType;
+    // Only override sets/reps/rest for rep-based exercises.
+    final isRepBased = lt == 'weight_reps' || lt == 'bodyweight_reps' ||
+        lt == 'weighted_bodyweight' || lt == 'reps_only';
+
+    if (!isRepBased) {
+      // Timed/cardio/distance: keep exercise defaults, just apply set wave.
+      final waveSets = _waveSets(ex.sets, weekIdx);
+      return ex.copyWith(
+        sets: waveSets,
+        intensityProfile: intensity,
+        weightCue: _waveCues[weekIdx],
+        variant: ex.variant,
+      );
+    }
+
+    // Rep-based: override with profile params + wave.
+    final sets = _waveSets(baseSets, weekIdx);
+    final reps = _waveReps(baseReps, weekIdx, intensity);
+    final rest = baseRest;
+
+    return ex.copyWith(
+      sets: sets,
+      reps: '$reps',
+      restSeconds: rest,
+      intensityProfile: intensity,
+      weightCue: _waveCues[weekIdx],
+      variant: ex.variant,
+    );
+  }
+
+  /// Volume wave applied to sets.
+  static int _waveSets(int base, int weekIdx) {
+    switch (weekIdx) {
+      case 0: return base;                              // baseline
+      case 1: return base + 1;                          // overreach
+      case 2: return base;                              // peak
+      case 3: return max(1, (base * 0.6).floor());      // deload
+      default: return base;
+    }
+  }
+
+  /// Volume wave applied to reps.
+  static int _waveReps(int base, int weekIdx, String intensity) {
+    switch (weekIdx) {
+      case 0: return base;                              // baseline
+      case 1: return base;                              // overreach (same reps)
+      case 2:                                           // peak: fewer reps
+        return intensity == 'endurance' ? base - 1 : base - 2;
+      case 3: return (base * 0.8).round();              // deload
+      default: return base;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STAGE 4: SUPERSET PAIRER
+// ══════════════════════════════════════════════════════════════════
+
+class _SupersetPairer {
+  /// Antagonist muscle pair map. Key = muscle, Value = list of antagonists.
+  static const _antagonists = <String, List<String>>{
+    'chest':         ['lats', 'back', 'upper back', 'full back', 'rhomboids'],
+    'upper chest':   ['lats', 'back', 'upper back'],
+    'lower chest':   ['lats', 'back'],
+    'lats':          ['chest', 'upper chest', 'lower chest'],
+    'back':          ['chest', 'upper chest'],
+    'upper back':    ['chest'],
+    'front deltoid': ['rear deltoid', 'shoulders (rear)'],
+    'deltoids':      ['rear deltoid'],
+    'side deltoid':  ['rear deltoid'],
+    'rear deltoid':  ['front deltoid', 'deltoids', 'side deltoid'],
+    'biceps':        ['triceps'],
+    'triceps':       ['biceps'],
+    'quads':         ['hamstrings'],
+    'quadriceps':    ['hamstrings'],
+    'hamstrings':    ['quads', 'quadriceps'],
+    'abs':           ['lower back', 'erector spinae'],
+    'core':          ['lower back'],
+    'lower back':    ['abs', 'core'],
+    'hip flexors':   ['glutes'],
+    'glutes':        ['hip flexors'],
+  };
+
+  /// Day types that get supersets.
+  static const _supersetDays = {'legs', 'upper', 'full_body', 'shoulders_arms'};
+
+  /// Pair exercises by antagonist muscles within each workout day.
+  static List<WeekPlan> pair(List<WeekPlan> weeks) {
+    return weeks.map((week) {
+      final days = week.workoutDays.map((day) {
+        // Find the dayType from the day name heuristic or pass-through.
+        // We infer dayType from the existing data to avoid changing WorkoutDay.
+        final dayType = _inferDayType(day);
+        if (!_supersetDays.contains(dayType)) return day;
+
+        final exercises = List<PlannedExercise>.from(day.exercises);
+        if (exercises.length < 4) return day; // need at least 4 for a superset
+
+        // First 2 exercises = standalone compounds (never superset).
+        int groupIdx = 0;
+        final paired = <int>{};
+
+        for (int i = 2; i < exercises.length; i++) {
+          if (paired.contains(i)) continue;
+          final musclesI = _normalize(exercises[i].primaryMuscles);
+
+          for (int j = i + 1; j < exercises.length; j++) {
+            if (paired.contains(j)) continue;
+            final musclesJ = _normalize(exercises[j].primaryMuscles);
+
+            if (_areAntagonists(musclesI, musclesJ)) {
+              exercises[i] = exercises[i].copyWith(supersetGroup: groupIdx);
+              exercises[j] = exercises[j].copyWith(supersetGroup: groupIdx);
+              paired.addAll([i, j]);
+              groupIdx++;
+              break;
+            }
+          }
+        }
+
+        return WorkoutDay(
+          dayNumber: day.dayNumber,
+          name: day.name,
+          focus: day.focus,
+          exercises: exercises,
+        );
+      }).toList();
+
+      return WeekPlan(
+        weekNumber: week.weekNumber,
+        weekInPhase: week.weekInPhase,
+        overloadNotes: week.overloadNotes,
+        weekCharacter: week.weekCharacter,
+        workoutDays: days,
+      );
+    }).toList();
+  }
+
+  static List<String> _normalize(List<String>? muscles) =>
+      muscles?.map((m) => m.toLowerCase()).toList() ?? [];
+
+  static bool _areAntagonists(List<String> a, List<String> b) {
+    for (final muscleA in a) {
+      final antags = _antagonists[muscleA];
+      if (antags == null) continue;
+      for (final muscleB in b) {
+        if (antags.contains(muscleB)) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Infer dayType from the workout day name.
+  static String _inferDayType(WorkoutDay day) {
+    final n = day.name.toLowerCase();
+    if (n.contains('full body')) return 'full_body';
+    if (n.contains('upper')) return 'upper';
+    if (n.contains('shoulder') || n.contains('arms')) return 'shoulders_arms';
+    if (n.contains('legs') || n.contains('lower') || n.contains('squat') || n.contains('deadlift')) return 'legs';
+    if (n.contains('push') || n.contains('bench') || n.contains('chest') || n.contains('ohp')) return 'push';
+    if (n.contains('pull') || n.contains('back')) return 'pull';
+    return 'upper'; // default: allow supersets
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STAGE 5: WARMUP & COOLDOWN SELECTOR
+// ══════════════════════════════════════════════════════════════════
+
+class _WarmupCooldownSelector {
+  /// General cardio options (bodyweight — always available).
+  static const _bodyweightCardio = ['Spot Jogging', 'Jumping Jacks'];
+
+  /// Additional cardio options when user has gym equipment.
+  static const _gymCardio = ['Jump Rope', 'Cycling (Stationary)', 'Running (Treadmill)'];
+
+  /// Dynamic warm-up exercises per dayType, by experience tier.
+  static const _dynamicWarmup = <String, Map<String, List<String>>>{
+    'push': {
+      'beginner': ['Arm Circles', 'Torso Twists', 'Wall Push Up'],
+      'advanced': ['Arm Circles', 'Push Up', 'Band Pull Apart'],
+    },
+    'pull': {
+      'beginner': ['Arm Circles', 'Wrist Rotations', 'Neck Rotations'],
+      'advanced': ['Arm Circles', 'Dead Hang', 'Neck Rotations'],
+    },
+    'legs': {
+      'beginner': ['High Knees', 'Leg Swings', 'Hip Circles'],
+      'advanced': ['High Knees', 'Baithak (Hindu Squat)', 'Leg Swings'],
+    },
+    'upper': {
+      'beginner': ['Arm Circles', 'Torso Twists', 'Wrist Rotations'],
+      'advanced': ['Arm Circles', 'Push Up', 'Dead Hang'],
+    },
+    'full_body': {
+      'beginner': ['Jumping Jacks', 'Arm Circles', 'Hip Circles'],
+      'advanced': ['High Knees', 'Push Up', 'Baithak (Hindu Squat)'],
+    },
+    'shoulders_arms': {
+      'beginner': ['Arm Circles', 'Wrist Rotations', 'Neck Rotations'],
+      'advanced': ['Arm Circles', 'Wrist Rotations', 'Band Pull Apart'],
+    },
+  };
+
+  /// Static stretch cool-down exercises per dayType.
+  static const _cooldownStretches = <String, List<String>>{
+    'push': ['Chest Doorway Stretch', 'Cross-body Shoulder Stretch', 'Overhead Stretch'],
+    'pull': ['Standing Toe Touch', 'Cross-body Shoulder Stretch', 'Side Bend Stretch'],
+    'legs': ['Standing Quad Stretch', 'Standing Toe Touch', 'Side Bend Stretch'],
+    'upper': ['Chest Doorway Stretch', 'Standing Toe Touch', 'Cross-body Shoulder Stretch'],
+    'full_body': ['Standing Toe Touch', 'Standing Quad Stretch', 'Chest Doorway Stretch'],
+    'shoulders_arms': ['Cross-body Shoulder Stretch', 'Overhead Stretch', 'Deep Breathing'],
+  };
+
+  /// Attach warm-up and cool-down to every WorkoutDay in every WeekPlan.
+  static List<WeekPlan> attach(
+    List<WeekPlan> weeks,
+    String effectiveExp,
+    List<String> equipmentList,
+  ) {
+    final isAdvanced = effectiveExp != 'beginner';
+    final hasGymEquipment = equipmentList.any(
+        (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'));
+
+    // Build the full cardio pool.
+    final cardioPool = [..._bodyweightCardio];
+    if (hasGymEquipment) cardioPool.addAll(_gymCardio);
+
+    return weeks.map((week) {
+      final days = week.workoutDays.asMap().entries.map((entry) {
+        final dayIndex = entry.key;
+        final day = entry.value;
+        final dayType = _inferDayType(day);
+
+        // --- WARM-UP ---
+        final warmup = <PlannedExercise>[];
+
+        // 1. General cardio (rotate by day index for variety).
+        final cardioName = cardioPool[dayIndex % cardioPool.length];
+        warmup.add(_timedExercise(cardioName, '300', 'warmup'));
+
+        // 2. Workout-specific dynamic (3 exercises).
+        final tier = isAdvanced ? 'advanced' : 'beginner';
+        final dynamicMap = _dynamicWarmup[dayType] ?? _dynamicWarmup['upper']!;
+        final dynamicList = dynamicMap[tier] ?? dynamicMap['beginner']!;
+        for (final name in dynamicList) {
+          warmup.add(_warmupExercise(name));
+        }
+
+        // --- COOL-DOWN ---
+        final cooldown = <PlannedExercise>[];
+
+        // 1. Walk-off.
+        cooldown.add(_timedExercise('Slow Walking', '300', 'cooldown'));
+
+        // 2. Static stretches (3 exercises).
+        final stretches = _cooldownStretches[dayType] ?? _cooldownStretches['upper']!;
+        for (final name in stretches) {
+          cooldown.add(_timedExercise(name, '30', 'cooldown'));
+        }
+
+        return WorkoutDay(
+          dayNumber: day.dayNumber,
+          name: day.name,
+          focus: day.focus,
+          exercises: day.exercises,
+          warmup: warmup,
+          cooldown: cooldown,
+        );
+      }).toList();
+
+      return WeekPlan(
+        weekNumber: week.weekNumber,
+        weekInPhase: week.weekInPhase,
+        overloadNotes: week.overloadNotes,
+        weekCharacter: week.weekCharacter,
+        workoutDays: days,
+      );
+    }).toList();
+  }
+
+  /// Create a timed exercise (cardio warm-up, walk-off, stretches).
+  static PlannedExercise _timedExercise(String name, String duration, String category) {
+    return PlannedExercise(
+      exerciseId: name,
+      exerciseName: name,
+      loggingType: 'timed',
+      sets: 1,
+      reps: '${duration}s',
+      restSeconds: 0,
+      category: category,
+    );
+  }
+
+  /// Create a warm-up exercise. Activation exercises (Push Up, Baithak, etc.)
+  /// get bodyweight_reps logging; dynamic stretches get timed logging.
+  static PlannedExercise _warmupExercise(String name) {
+    // Activation exercises use bodyweight_reps with low volume.
+    const activationExercises = {
+      'Push Up', 'Wall Push Up', 'Baithak (Hindu Squat)', 'Band Pull Apart',
+    };
+    if (activationExercises.contains(name)) {
+      return PlannedExercise(
+        exerciseId: name,
+        exerciseName: name,
+        loggingType: 'bodyweight_reps',
+        sets: 1,
+        reps: '10',
+        restSeconds: 0,
+        category: 'warmup',
+      );
+    }
+
+    // Dead Hang is timed activation.
+    if (name == 'Dead Hang') {
+      return _timedExercise(name, '30', 'warmup');
+    }
+
+    // Dynamic stretches: default timed durations.
+    const durationMap = <String, String>{
+      'Arm Circles': '60',
+      'Neck Rotations': '30',
+      'Torso Twists': '60',
+      'Hip Circles': '60',
+      'Leg Swings': '60',
+      'Wrist Rotations': '30',
+      'Ankle Rotations': '30',
+      'Jumping Jacks': '60',
+      'High Knees': '60',
+      'Butt Kicks': '60',
+      'Spot Jogging': '60',
+    };
+    final dur = durationMap[name] ?? '60';
+    return _timedExercise(name, dur, 'warmup');
+  }
+
+  /// Infer dayType from workout name (same logic as _SupersetPairer).
+  static String _inferDayType(WorkoutDay day) {
+    final n = day.name.toLowerCase();
+    if (n.contains('full body')) return 'full_body';
+    if (n.contains('upper')) return 'upper';
+    if (n.contains('shoulder') || n.contains('arms')) return 'shoulders_arms';
+    if (n.contains('legs') || n.contains('lower') || n.contains('squat') || n.contains('deadlift')) return 'legs';
+    if (n.contains('push') || n.contains('bench') || n.contains('chest') || n.contains('ohp')) return 'push';
+    if (n.contains('pull') || n.contains('back')) return 'pull';
+    return 'upper'; // default
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DATA CLASSES
+// ══════════════════════════════════════════════════════════════════
 
 class Phase {
   final int phase;
@@ -519,8 +1131,9 @@ class Phase {
   final String weeks;
   final int dailyCalories;
   final int proteinGrams;
-  final List<WorkoutDay> workouts;
+  final List<WorkoutDay> workouts; // backward compat: week 1
   final List<WeekPlan> weekPlans;
+  final List<int>? preferredDays;
 
   const Phase({
     required this.phase,
@@ -531,6 +1144,7 @@ class Phase {
     required this.proteinGrams,
     required this.workouts,
     required this.weekPlans,
+    this.preferredDays,
   });
 
   Map<String, dynamic> toMap() => {
@@ -542,6 +1156,7 @@ class Phase {
         'protein_grams': proteinGrams,
         'workouts': workouts.map((w) => w.toMap()).toList(),
         'week_plans': weekPlans.map((w) => w.toMap()).toList(),
+        if (preferredDays != null) 'preferred_days': preferredDays,
       };
 }
 
@@ -549,12 +1164,14 @@ class WeekPlan {
   final int weekNumber;
   final int weekInPhase;
   final String overloadNotes;
+  final String weekCharacter; // baseline | overreach | peak | deload
   final List<WorkoutDay> workoutDays;
 
   const WeekPlan({
     required this.weekNumber,
     required this.weekInPhase,
     required this.overloadNotes,
+    this.weekCharacter = 'baseline',
     required this.workoutDays,
   });
 
@@ -562,6 +1179,7 @@ class WeekPlan {
         'week_number': weekNumber,
         'week_in_phase': weekInPhase,
         'overload_notes': overloadNotes,
+        'week_character': weekCharacter,
         'workout_days': workoutDays.map((d) => d.toMap()).toList(),
       };
 }
@@ -571,12 +1189,16 @@ class WorkoutDay {
   final String name;
   final String focus;
   final List<PlannedExercise> exercises;
+  final List<PlannedExercise> warmup;
+  final List<PlannedExercise> cooldown;
 
   const WorkoutDay({
     required this.dayNumber,
     required this.name,
     required this.focus,
     required this.exercises,
+    this.warmup = const [],
+    this.cooldown = const [],
   });
 
   Map<String, dynamic> toMap() => {
@@ -584,6 +1206,10 @@ class WorkoutDay {
         'name': name,
         'focus': focus,
         'exercises': exercises.map((e) => e.toMap()).toList(),
+        if (warmup.isNotEmpty)
+          'warmup': warmup.map((e) => e.toMap()).toList(),
+        if (cooldown.isNotEmpty)
+          'cooldown': cooldown.map((e) => e.toMap()).toList(),
       };
 }
 
@@ -596,10 +1222,15 @@ class PlannedExercise {
   final int restSeconds;
   final int? durationSeconds;
   final String? notes;
-  final String? exerciseType; // 'compound' or 'isolation'
-  final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
-  final String? category; // Push, Pull, Legs, Core, etc.
+  final String? exerciseType;
+  final int? supersetGroup;
+  final String? category;
   final List<String>? equipmentNeeded;
+  // V2 fields
+  final String intensityProfile; // strength | hypertrophy | endurance
+  final String? weightCue;
+  final String variant; // A | B
+  final List<String>? primaryMuscles;
 
   const PlannedExercise({
     required this.exerciseId,
@@ -614,22 +1245,40 @@ class PlannedExercise {
     this.supersetGroup,
     this.category,
     this.equipmentNeeded,
+    this.intensityProfile = 'hypertrophy',
+    this.weightCue,
+    this.variant = 'A',
+    this.primaryMuscles,
   });
 
-  PlannedExercise copyWith({int? Function()? supersetGroup}) {
+  PlannedExercise copyWith({
+    int? sets,
+    String? reps,
+    int? restSeconds,
+    String? notes,
+    int? supersetGroup,
+    String? intensityProfile,
+    String? weightCue,
+    String? variant,
+    List<String>? primaryMuscles,
+  }) {
     return PlannedExercise(
       exerciseId: exerciseId,
       exerciseName: exerciseName,
       loggingType: loggingType,
-      sets: sets,
-      reps: reps,
-      restSeconds: restSeconds,
+      sets: sets ?? this.sets,
+      reps: reps ?? this.reps,
+      restSeconds: restSeconds ?? this.restSeconds,
       durationSeconds: durationSeconds,
-      notes: notes,
+      notes: notes ?? this.notes,
       exerciseType: exerciseType,
-      supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
+      supersetGroup: supersetGroup ?? this.supersetGroup,
       category: category,
       equipmentNeeded: equipmentNeeded,
+      intensityProfile: intensityProfile ?? this.intensityProfile,
+      weightCue: weightCue ?? this.weightCue,
+      variant: variant ?? this.variant,
+      primaryMuscles: primaryMuscles ?? this.primaryMuscles,
     );
   }
 
@@ -646,34 +1295,66 @@ class PlannedExercise {
         if (supersetGroup != null) 'superset_group': supersetGroup,
         if (category != null) 'category': category,
         if (equipmentNeeded != null) 'equipment_needed': equipmentNeeded,
+        'intensity_profile': intensityProfile,
+        if (weightCue != null) 'weight_cue': weightCue,
+        'variant': variant,
+        if (primaryMuscles != null) 'primary_muscles': primaryMuscles,
       };
 }
 
-// ── Private helpers ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// PRIVATE HELPERS
+// ══════════════════════════════════════════════════════════════════
 
-class _CategorySpec {
+/// Category spec for exercise queries.
+class _CSpec {
   final String category;
   final int count;
   final List<String>? targetMuscles;
   final List<String>? excludeMuscles;
 
-  const _CategorySpec(this.category, this.count,
-      {this.targetMuscles, this.excludeMuscles});
+  const _CSpec(this.category, this.count, {
+    List<String>? target,
+    List<String>? exclude,
+  }) : targetMuscles = target, excludeMuscles = exclude;
 }
 
-class _DayConfig {
+/// A day slot in the split plan.
+class _DaySlot {
   final String name;
   final String focus;
-  final List<_CategorySpec> specs;
+  final String dayType;     // push | pull | legs | upper | full_body | shoulders_arms
+  final String intensity;   // strength | hypertrophy | endurance
+  final List<_CSpec> specsA;
+  final List<_CSpec>? specsB; // null = same as A (variety via exclusion or 6-day)
 
-  /// Simple constructor: uniform count per category, no muscle filtering.
-  _DayConfig(this.name, this.focus, List<String> categories, int countPerCategory)
-      : specs = categories
-            .map((c) => _CategorySpec(c, countPerCategory))
-            .toList();
+  const _DaySlot({
+    required this.name,
+    required this.focus,
+    required this.dayType,
+    required this.intensity,
+    required this.specsA,
+    this.specsB,
+  });
+}
 
-  /// Targeted constructor: explicit specs with muscle filtering.
-  const _DayConfig.targeted(this.name, this.focus, this.specs);
+/// Populated day with selected exercises for both variants.
+class _PopulatedDay {
+  final String name;
+  final String focus;
+  final String dayType;
+  final String intensity;
+  final List<PlannedExercise> exercisesA;
+  final List<PlannedExercise> exercisesB;
+
+  const _PopulatedDay({
+    required this.name,
+    required this.focus,
+    required this.dayType,
+    required this.intensity,
+    required this.exercisesA,
+    required this.exercisesB,
+  });
 }
 
 class _PhaseMeta {

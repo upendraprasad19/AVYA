@@ -313,6 +313,13 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           if (exerciseBox.isEmpty) return;
         }
 
+        // Read saved preferred training days (user-selected day picker).
+        final savedDays = HiveService.instance.configBox
+            .get('preferred_training_days');
+        final preferredDays = savedDays is List
+            ? savedDays.cast<int>()
+            : null;
+
         await WorkoutScheduleService.instance.generateAndSchedule(
           goal: goal,
           equipment: equipment,
@@ -320,6 +327,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           startDate: DateTime.now(),
           experienceLevel: experience,
           phase: phase,
+          preferredDays: preferredDays,
         );
 
         // KEY FIX: Invalidate self AFTER generation completes so build()

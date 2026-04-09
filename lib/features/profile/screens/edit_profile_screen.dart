@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -1204,6 +1205,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final experience = (profile['detected_experience_level'] as String?) ?? 'beginner';
           final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
 
+          final savedDays = HiveService.instance.configBox
+              .get('preferred_training_days');
+          final preferredDays = savedDays is List
+              ? savedDays.cast<int>()
+              : null;
+
           await WorkoutScheduleService.instance.generateAndScheduleFromDate(
             goal: _goal,
             equipment: _equipment,
@@ -1211,6 +1218,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             fromDate: DateTime.now(),
             experienceLevel: experience,
             phase: currentPhase,
+            preferredDays: preferredDays,
           );
         }
       }

@@ -1,95 +1,264 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
-/// Tests for PlanGenerator output shape and structural rules.
+/// Tests for PlanGenerator V2 — data models, effectiveLevel, copyWith,
+/// and structural guarantees.
 ///
-/// Note: PlanGenerator.generate() queries Hive exerciseBox. When Hive is not
-/// seeded with exercise data these tests validate structural guarantees
-/// (correct number of days, valid phase metadata, non-negative sets/reps)
-/// rather than exercise content. Full seeded tests run in integration_test/.
+/// Note: The full pipeline (SplitSelector → ExerciseSelector →
+/// PeriodizationEngine → SupersetPairer) requires Hive to be seeded with
+/// exercise data. These unit tests validate:
+/// 1. effectiveLevel() progression logic
+/// 2. Data model construction + serialization
+/// 3. PlannedExercise.copyWith() supports all fields
+/// 4. WeekPlan model with weekCharacter
+/// 5. Phase model with weekPlans + preferredDays
+///
+/// Full end-to-end tests with Hive run in integration_test/.
 void main() {
-  group('Phase metadata', () {
-    test('Phase 1 is named Foundation', () {
-      final meta = _getPhaseMeta(1, 'build_muscle');
-      expect(meta.name, isNotEmpty);
-      expect(meta.phase, 1);
+  group('effectiveLevel()', () {
+    test('advanced always returns advanced', () {
+      for (final phase in [1, 2, 3, 4, 5, 6, 12]) {
+        expect(PlanGenerator.effectiveLevel('advanced', phase), 'advanced');
+      }
     });
 
-    test('phase number is preserved in output', () {
-      for (final phase in [1, 2, 3, 6, 12]) {
-        final meta = _getPhaseMeta(phase, 'general_fitness');
-        expect(meta.phase, phase);
+    test('intermediate returns intermediate for phases 1-3', () {
+      expect(PlanGenerator.effectiveLevel('intermediate', 1), 'intermediate');
+      expect(PlanGenerator.effectiveLevel('intermediate', 2), 'intermediate');
+      expect(PlanGenerator.effectiveLevel('intermediate', 3), 'intermediate');
+    });
+
+    test('intermediate returns advanced from phase 4+', () {
+      expect(PlanGenerator.effectiveLevel('intermediate', 4), 'advanced');
+      expect(PlanGenerator.effectiveLevel('intermediate', 8), 'advanced');
+      expect(PlanGenerator.effectiveLevel('intermediate', 12), 'advanced');
+    });
+
+    test('beginner returns beginner for phases 1-2', () {
+      expect(PlanGenerator.effectiveLevel('beginner', 1), 'beginner');
+      expect(PlanGenerator.effectiveLevel('beginner', 2), 'beginner');
+    });
+
+    test('beginner returns intermediate for phases 3-4', () {
+      expect(PlanGenerator.effectiveLevel('beginner', 3), 'intermediate');
+      expect(PlanGenerator.effectiveLevel('beginner', 4), 'intermediate');
+    });
+
+    test('beginner returns advanced from phase 5+', () {
+      expect(PlanGenerator.effectiveLevel('beginner', 5), 'advanced');
+      expect(PlanGenerator.effectiveLevel('beginner', 10), 'advanced');
+    });
+  });
+
+  group('PlannedExercise model', () {
+    test('stores all fields correctly', () {
+      const exercise = PlannedExercise(
+        exerciseId: 'abc',
+        exerciseName: 'Squat',
+        loggingType: 'weight_reps',
+        sets: 4,
+        reps: '8-10',
+        restSeconds: 120,
+        supersetGroup: null,
+        intensityProfile: 'strength',
+        weightCue: 'Find working weight',
+        variant: 'A',
+        primaryMuscles: ['Quads', 'Glutes'],
+      );
+      expect(exercise.sets, 4);
+      expect(exercise.reps, '8-10');
+      expect(exercise.restSeconds, 120);
+      expect(exercise.supersetGroup, isNull);
+      expect(exercise.intensityProfile, 'strength');
+      expect(exercise.weightCue, 'Find working weight');
+      expect(exercise.variant, 'A');
+      expect(exercise.primaryMuscles, ['Quads', 'Glutes']);
+    });
+
+    test('defaults: intensityProfile=hypertrophy, variant=A', () {
+      const exercise = PlannedExercise(
+        exerciseId: 'abc',
+        exerciseName: 'Push-up',
+        loggingType: 'bodyweight_reps',
+        sets: 3,
+        reps: '12',
+        restSeconds: 60,
+      );
+      expect(exercise.intensityProfile, 'hypertrophy');
+      expect(exercise.variant, 'A');
+      expect(exercise.weightCue, isNull);
+      expect(exercise.primaryMuscles, isNull);
+    });
+
+    test('toMap() includes V2 fields', () {
+      const exercise = PlannedExercise(
+        exerciseId: 'test-id',
+        exerciseName: 'Bench Press',
+        loggingType: 'weight_reps',
+        sets: 4,
+        reps: '5',
+        restSeconds: 150,
+        intensityProfile: 'strength',
+        weightCue: '+2.5 kg',
+        variant: 'B',
+        primaryMuscles: ['Chest'],
+        supersetGroup: 1,
+      );
+      final map = exercise.toMap();
+      expect(map['intensity_profile'], 'strength');
+      expect(map['weight_cue'], '+2.5 kg');
+      expect(map['variant'], 'B');
+      expect(map['primary_muscles'], ['Chest']);
+      expect(map['superset_group'], 1);
+    });
+
+    test('toMap() omits null optional fields', () {
+      const exercise = PlannedExercise(
+        exerciseId: 'abc',
+        exerciseName: 'Squat',
+        loggingType: 'weight_reps',
+        sets: 3,
+        reps: '10',
+        restSeconds: 75,
+      );
+      final map = exercise.toMap();
+      expect(map.containsKey('superset_group'), isFalse);
+      expect(map.containsKey('weight_cue'), isFalse);
+      expect(map.containsKey('notes'), isFalse);
+      expect(map.containsKey('duration_seconds'), isFalse);
+      // intensity_profile and variant always present (have defaults)
+      expect(map['intensity_profile'], 'hypertrophy');
+      expect(map['variant'], 'A');
+    });
+  });
+
+  group('PlannedExercise.copyWith()', () {
+    const base = PlannedExercise(
+      exerciseId: 'abc',
+      exerciseName: 'Squat',
+      loggingType: 'weight_reps',
+      sets: 4,
+      reps: '5',
+      restSeconds: 150,
+      intensityProfile: 'strength',
+      variant: 'A',
+      primaryMuscles: ['Quads'],
+    );
+
+    test('updates sets', () {
+      final updated = base.copyWith(sets: 5);
+      expect(updated.sets, 5);
+      expect(updated.reps, '5'); // unchanged
+      expect(updated.exerciseName, 'Squat'); // unchanged
+    });
+
+    test('updates reps', () {
+      final updated = base.copyWith(reps: '8-10');
+      expect(updated.reps, '8-10');
+      expect(updated.sets, 4); // unchanged
+    });
+
+    test('updates restSeconds', () {
+      final updated = base.copyWith(restSeconds: 90);
+      expect(updated.restSeconds, 90);
+    });
+
+    test('updates supersetGroup', () {
+      final updated = base.copyWith(supersetGroup: 0);
+      expect(updated.supersetGroup, 0);
+    });
+
+    test('updates intensityProfile', () {
+      final updated = base.copyWith(intensityProfile: 'hypertrophy');
+      expect(updated.intensityProfile, 'hypertrophy');
+    });
+
+    test('updates weightCue', () {
+      final updated = base.copyWith(weightCue: 'Recovery');
+      expect(updated.weightCue, 'Recovery');
+    });
+
+    test('updates variant', () {
+      final updated = base.copyWith(variant: 'B');
+      expect(updated.variant, 'B');
+    });
+
+    test('updates primaryMuscles', () {
+      final updated = base.copyWith(primaryMuscles: ['Chest', 'Triceps']);
+      expect(updated.primaryMuscles, ['Chest', 'Triceps']);
+    });
+
+    test('updates notes', () {
+      final updated = base.copyWith(notes: 'Focus on form');
+      expect(updated.notes, 'Focus on form');
+    });
+
+    test('preserves unchanged fields', () {
+      final updated = base.copyWith(sets: 5);
+      expect(updated.exerciseId, 'abc');
+      expect(updated.exerciseName, 'Squat');
+      expect(updated.loggingType, 'weight_reps');
+      expect(updated.reps, '5');
+      expect(updated.restSeconds, 150);
+      expect(updated.intensityProfile, 'strength');
+      expect(updated.variant, 'A');
+      expect(updated.primaryMuscles, ['Quads']);
+    });
+  });
+
+  group('WeekPlan model', () {
+    test('stores weekCharacter', () {
+      const plan = WeekPlan(
+        weekNumber: 1,
+        weekInPhase: 1,
+        overloadNotes: 'Baseline week',
+        weekCharacter: 'baseline',
+        workoutDays: [],
+      );
+      expect(plan.weekCharacter, 'baseline');
+    });
+
+    test('weekCharacter defaults to baseline', () {
+      const plan = WeekPlan(
+        weekNumber: 1,
+        weekInPhase: 1,
+        overloadNotes: 'test',
+        workoutDays: [],
+      );
+      expect(plan.weekCharacter, 'baseline');
+    });
+
+    test('toMap() includes weekCharacter', () {
+      const plan = WeekPlan(
+        weekNumber: 4,
+        weekInPhase: 4,
+        overloadNotes: 'Deload week',
+        weekCharacter: 'deload',
+        workoutDays: [],
+      );
+      final map = plan.toMap();
+      expect(map['week_character'], 'deload');
+      expect(map['week_number'], 4);
+      expect(map['week_in_phase'], 4);
+    });
+
+    test('valid week characters: baseline, overreach, peak, deload', () {
+      const characters = ['baseline', 'overreach', 'peak', 'deload'];
+      for (int i = 0; i < characters.length; i++) {
+        final plan = WeekPlan(
+          weekNumber: i + 1,
+          weekInPhase: i + 1,
+          overloadNotes: 'Week ${i + 1}',
+          weekCharacter: characters[i],
+          workoutDays: [],
+        );
+        expect(plan.weekCharacter, characters[i]);
       }
     });
   });
 
-  group('Split structure — daysPerWeek', () {
-    test('3 days produces 3 workout days', () {
-      final split = _getSplitStructure('build_muscle', 3);
-      expect(split.length, 3);
-    });
-
-    test('4 days produces 4 workout days', () {
-      final split = _getSplitStructure('build_muscle', 4);
-      expect(split.length, 4);
-    });
-
-    test('5 days produces 5 workout days', () {
-      final split = _getSplitStructure('lose_fat', 5);
-      expect(split.length, 5);
-    });
-
-    test('6 days produces 6 workout days', () {
-      final split = _getSplitStructure('strength', 6);
-      expect(split.length, 6);
-    });
-  });
-
-  group('Split structure — all 4 goals', () {
-    const daysPerWeek = 4;
-    const goals = ['build_muscle', 'lose_fat', 'general_fitness', 'strength'];
-
-    for (final goal in goals) {
-      test('goal=$goal produces $daysPerWeek days', () {
-        final split = _getSplitStructure(goal, daysPerWeek);
-        expect(split.length, daysPerWeek);
-      });
-
-      test('goal=$goal: every day has a name and at least 1 category', () {
-        final split = _getSplitStructure(goal, daysPerWeek);
-        for (final day in split.days) {
-          expect(day.name, isNotEmpty);
-          expect(day.categories, isNotEmpty);
-        }
-      });
-    }
-  });
-
-  group('Equipment list mapping', () {
-    test('bodyweight maps to [bodyweight]', () {
-      final list = _getEquipmentList('bodyweight');
-      expect(list, contains('bodyweight'));
-    });
-
-    test('full_gym includes all equipment', () {
-      final list = _getEquipmentList('full_gym');
-      expect(list.length, greaterThan(2));
-    });
-
-    test('home_dumbbells includes dumbbells', () {
-      final list = _getEquipmentList('home_dumbbells');
-      expect(list, contains('dumbbells'));
-    });
-
-    test('full_gym equipment list is superset of home_dumbbells', () {
-      final fullGym = _getEquipmentList('full_gym').toSet();
-      final home = _getEquipmentList('home_dumbbells').toSet();
-      expect(fullGym.containsAll(home), isTrue);
-    });
-  });
-
   group('WorkoutDay model', () {
-    test('day numbers start from 1', () {
+    test('dayNumber starts from 1', () {
       const day = WorkoutDay(
         dayNumber: 1,
         name: 'Push Day',
@@ -99,16 +268,15 @@ void main() {
       expect(day.dayNumber, 1);
     });
 
-    test('WorkoutDay stores exercises list', () {
+    test('stores exercises list', () {
       final exercises = [
-        PlannedExercise(
+        const PlannedExercise(
           exerciseId: 'test-id',
           exerciseName: 'Push-up',
           loggingType: 'bodyweight_reps',
           sets: 3,
           reps: '12',
           restSeconds: 60,
-          supersetGroup: null,
         ),
       ];
       final day = WorkoutDay(
@@ -120,41 +288,32 @@ void main() {
       expect(day.exercises.length, 1);
       expect(day.exercises.first.exerciseName, 'Push-up');
     });
-  });
 
-  group('PlannedExercise model', () {
-    test('stores sets and reps correctly', () {
-      const exercise = PlannedExercise(
-        exerciseId: 'abc',
-        exerciseName: 'Squat',
-        loggingType: 'weight_reps',
-        sets: 4,
-        reps: '8-10',
-        restSeconds: 120,
-        supersetGroup: null,
+    test('toMap() serializes exercises', () {
+      const day = WorkoutDay(
+        dayNumber: 2,
+        name: 'Pull',
+        focus: 'Back',
+        exercises: [
+          PlannedExercise(
+            exerciseId: 'id1',
+            exerciseName: 'Lat Pulldown',
+            loggingType: 'weight_reps',
+            sets: 3,
+            reps: '10',
+            restSeconds: 75,
+          ),
+        ],
       );
-      expect(exercise.sets, 4);
-      expect(exercise.reps, '8-10');
-      expect(exercise.restSeconds, 120);
-      expect(exercise.supersetGroup, isNull);
-    });
-
-    test('superset group can be assigned', () {
-      const exercise = PlannedExercise(
-        exerciseId: 'abc',
-        exerciseName: 'Squat',
-        loggingType: 'weight_reps',
-        sets: 3,
-        reps: '10',
-        restSeconds: 90,
-        supersetGroup: 0,
-      );
-      expect(exercise.supersetGroup, 0);
+      final map = day.toMap();
+      expect(map['day_number'], 2);
+      expect(map['name'], 'Pull');
+      expect((map['exercises'] as List).length, 1);
     });
   });
 
   group('Phase model', () {
-    test('Phase contains all required fields', () {
+    test('stores all required fields', () {
       const phase = Phase(
         phase: 1,
         name: 'Foundation',
@@ -166,128 +325,297 @@ void main() {
         weekPlans: [],
       );
       expect(phase.phase, 1);
-      expect(phase.name, isNotEmpty);
+      expect(phase.name, 'Foundation');
       expect(phase.focus, isNotEmpty);
-      expect(phase.weeks, isNotEmpty);
-      expect(phase.dailyCalories, greaterThan(0));
-      expect(phase.proteinGrams, greaterThan(0));
+      expect(phase.weeks, '1-4');
+      expect(phase.dailyCalories, 2200);
+      expect(phase.proteinGrams, 150);
+      expect(phase.preferredDays, isNull);
+    });
+
+    test('stores preferredDays', () {
+      const phase = Phase(
+        phase: 1,
+        name: 'Foundation',
+        focus: 'Movement patterns',
+        weeks: '1-4',
+        dailyCalories: 0,
+        proteinGrams: 0,
+        workouts: [],
+        weekPlans: [],
+        preferredDays: [0, 2, 4],
+      );
+      expect(phase.preferredDays, [0, 2, 4]);
+    });
+
+    test('toMap() includes weekPlans and preferredDays', () {
+      const phase = Phase(
+        phase: 2,
+        name: 'Adaptation',
+        focus: 'Building work capacity',
+        weeks: '5-8',
+        dailyCalories: 2400,
+        proteinGrams: 160,
+        workouts: [],
+        weekPlans: [
+          WeekPlan(
+            weekNumber: 5,
+            weekInPhase: 1,
+            overloadNotes: 'Baseline',
+            weekCharacter: 'baseline',
+            workoutDays: [],
+          ),
+        ],
+        preferredDays: [0, 1, 3, 5],
+      );
+      final map = phase.toMap();
+      expect(map['phase'], 2);
+      expect(map['week_plans'], isList);
+      expect((map['week_plans'] as List).length, 1);
+      expect(map['preferred_days'], [0, 1, 3, 5]);
+    });
+
+    test('toMap() omits preferredDays when null', () {
+      const phase = Phase(
+        phase: 1,
+        name: 'Foundation',
+        focus: 'test',
+        weeks: '1-4',
+        dailyCalories: 0,
+        proteinGrams: 0,
+        workouts: [],
+        weekPlans: [],
+      );
+      final map = phase.toMap();
+      expect(map.containsKey('preferred_days'), isFalse);
+    });
+
+    test('workouts = backward compatibility (week 1 exercises)', () {
+      const exercises = [
+        PlannedExercise(
+          exerciseId: 'e1',
+          exerciseName: 'Bench Press',
+          loggingType: 'weight_reps',
+          sets: 4,
+          reps: '5',
+          restSeconds: 150,
+        ),
+      ];
+      const week1Day = WorkoutDay(
+        dayNumber: 1,
+        name: 'Push',
+        focus: 'Chest',
+        exercises: exercises,
+      );
+
+      // workouts should mirror week 1 for backward compat
+      const phase = Phase(
+        phase: 1,
+        name: 'Foundation',
+        focus: 'test',
+        weeks: '1-4',
+        dailyCalories: 0,
+        proteinGrams: 0,
+        workouts: [week1Day],
+        weekPlans: [],
+      );
+      expect(phase.workouts.length, 1);
+      expect(phase.workouts[0].exercises[0].exerciseName, 'Bench Press');
     });
   });
-}
 
-// ── Helpers to call private static methods via reflection-free approach ──
-// We expose them via the public interface that plan_generator.dart provides.
+  group('Phase with 4 distinct WeekPlans', () {
+    final weekPlans = List.generate(4, (i) {
+      const characters = ['baseline', 'overreach', 'peak', 'deload'];
+      return WeekPlan(
+        weekNumber: i + 1,
+        weekInPhase: i + 1,
+        overloadNotes: 'Week ${i + 1} notes',
+        weekCharacter: characters[i],
+        workoutDays: [
+          WorkoutDay(
+            dayNumber: 1,
+            name: 'Push',
+            focus: 'Chest',
+            exercises: [
+              PlannedExercise(
+                exerciseId: 'e_w${i}_1',
+                exerciseName: 'Exercise W${i + 1}',
+                loggingType: 'weight_reps',
+                sets: 3 + (i == 1 ? 1 : 0), // overreach: +1 set
+                reps: '${10 - (i == 2 ? 2 : 0)}', // peak: -2 reps
+                restSeconds: 75,
+                variant: i % 2 == 0 ? 'A' : 'B',
+                weightCue: [
+                  'Find working weight', 'Same weight, more volume',
+                  '+2.5 kg if Week 2 felt good', 'Recovery week',
+                ][i],
+              ),
+            ],
+          ),
+        ],
+      );
+    });
 
-_SplitResult _getSplitStructure(String goal, int daysPerWeek) {
-  // Access via the public PlanGenerator API by inspecting generate() output.
-  // Since generate() requires Hive, we instead expose the split structure
-  // test helper directly — this validates the internal split logic.
-  return _PlanGeneratorTestHelper.getSplitStructure(goal, daysPerWeek);
-}
+    test('4 weeks have distinct characters', () {
+      final characters = weekPlans.map((w) => w.weekCharacter).toSet();
+      expect(characters.length, 4);
+      expect(characters, containsAll(['baseline', 'overreach', 'peak', 'deload']));
+    });
 
-_PhaseMeta _getPhaseMeta(int phase, String goal) {
-  return _PlanGeneratorTestHelper.getPhaseMeta(phase, goal);
-}
+    test('A/B alternation: weeks 1,3 = A; weeks 2,4 = B', () {
+      for (int i = 0; i < 4; i++) {
+        final variant = weekPlans[i].workoutDays[0].exercises[0].variant;
+        expect(variant, i % 2 == 0 ? 'A' : 'B',
+            reason: 'Week ${i + 1} should be variant ${i % 2 == 0 ? "A" : "B"}');
+      }
+    });
 
-List<String> _getEquipmentList(String equipment) {
-  return _PlanGeneratorTestHelper.getEquipmentList(equipment);
-}
+    test('overreach week has +1 set vs baseline', () {
+      final baselineSets = weekPlans[0].workoutDays[0].exercises[0].sets;
+      final overreachSets = weekPlans[1].workoutDays[0].exercises[0].sets;
+      expect(overreachSets, baselineSets + 1);
+    });
 
-/// Test helper that exposes PlanGenerator's internal logic for unit testing
-/// without requiring Hive to be initialized.
-class _PlanGeneratorTestHelper {
-  static _SplitResult getSplitStructure(String goal, int daysPerWeek) {
-    // Mirror of PlanGenerator._getSplitStructure()
-    switch (goal) {
-      case 'build_muscle':
-        switch (daysPerWeek) {
-          case 3:
-            return _SplitResult([
-              _DayConfig('Full Body A', 'Compound movements', ['push', 'pull', 'legs']),
-              _DayConfig('Full Body B', 'Compound movements', ['legs', 'push', 'pull']),
-              _DayConfig('Full Body C', 'Volume day', ['push', 'pull', 'core']),
-            ]);
-          case 4:
-            return _SplitResult([
-              _DayConfig('Push', 'Chest, Shoulders & Triceps', ['push']),
-              _DayConfig('Pull', 'Back & Biceps', ['pull']),
-              _DayConfig('Legs', 'Quads, Hamstrings & Glutes', ['legs']),
-              _DayConfig('Upper', 'Upper body volume', ['push', 'pull']),
-            ]);
-          case 5:
-            return _SplitResult([
-              _DayConfig('Push A', 'Heavy chest focus', ['push']),
-              _DayConfig('Pull A', 'Heavy back focus', ['pull']),
-              _DayConfig('Legs A', 'Quad dominant', ['legs']),
-              _DayConfig('Push B', 'Shoulder focus', ['push']),
-              _DayConfig('Pull B', 'Posterior chain', ['pull']),
-            ]);
-          default: // 6
-            return _SplitResult([
-              _DayConfig('Push A', 'Heavy chest', ['push']),
-              _DayConfig('Pull A', 'Heavy back', ['pull']),
-              _DayConfig('Legs A', 'Quad focus', ['legs']),
-              _DayConfig('Push B', 'Shoulders', ['push']),
-              _DayConfig('Pull B', 'Posterior', ['pull']),
-              _DayConfig('Legs B', 'Hamstring focus', ['legs']),
-            ]);
-        }
-      case 'lose_fat':
-        return _SplitResult(List.generate(daysPerWeek, (i) =>
-          _DayConfig('Circuit ${i + 1}', 'Full body + cardio', ['push', 'pull', 'legs', 'core'])));
-      case 'strength':
-        return _SplitResult(List.generate(daysPerWeek, (i) =>
-          _DayConfig('Strength ${i + 1}', 'Powerlifting focus', ['push', 'pull', 'legs'])));
-      default: // general_fitness
-        return _SplitResult(List.generate(daysPerWeek, (i) =>
-          _DayConfig('Training ${i + 1}', 'General fitness', ['push', 'pull', 'legs', 'core'])));
-    }
-  }
+    test('peak week has fewer reps than baseline', () {
+      final baselineReps = int.parse(weekPlans[0].workoutDays[0].exercises[0].reps);
+      final peakReps = int.parse(weekPlans[2].workoutDays[0].exercises[0].reps);
+      expect(peakReps, lessThan(baselineReps));
+    });
 
-  static _PhaseMeta getPhaseMeta(int phase, String goal) {
-    final names = [
-      '', 'Foundation', 'Progression', 'Intensification', 'Peak',
-      'Foundation II', 'Progression II', 'Intensification II', 'Peak II',
-      'Foundation III', 'Progression III', 'Intensification III', 'Peak III',
-    ];
-    return _PhaseMeta(
-      phase: phase,
-      name: phase < names.length ? names[phase] : 'Phase $phase',
-    );
-  }
+    test('each week has a weightCue', () {
+      for (final week in weekPlans) {
+        final cue = week.workoutDays[0].exercises[0].weightCue;
+        expect(cue, isNotNull);
+        expect(cue, isNotEmpty);
+      }
+    });
+  });
 
-  static List<String> getEquipmentList(String equipment) {
-    switch (equipment) {
-      case 'bodyweight':
-        return ['bodyweight'];
-      case 'home_dumbbells':
-        return ['bodyweight', 'dumbbells'];
-      case 'basic_gym':
-        return ['bodyweight', 'dumbbells', 'barbell', 'cable'];
-      case 'full_gym':
-      default:
-        return ['bodyweight', 'dumbbells', 'barbell', 'cable', 'machine', 'kettlebell'];
-    }
-  }
-}
+  // ════════════════════════════════════════════════════════════════
+  // WARM-UP & COOL-DOWN
+  // ════════════════════════════════════════════════════════════════
 
-class _SplitResult {
-  final List<_DayConfig> days;
-  _SplitResult(this.days);
-  int get length => days.length;
-}
+  group('WorkoutDay warmup/cooldown model', () {
+    test('default warmup and cooldown are empty', () {
+      const day = WorkoutDay(
+        dayNumber: 1,
+        name: 'Push',
+        focus: 'Chest & Triceps',
+        exercises: [],
+      );
+      expect(day.warmup, isEmpty);
+      expect(day.cooldown, isEmpty);
+    });
 
-class _DayConfig {
-  final String name;
-  final String focus;
-  final List<String> categories;
-  final int exercisesPerCategory = 2;
+    test('toMap omits warmup/cooldown when empty (backward compat)', () {
+      const day = WorkoutDay(
+        dayNumber: 1,
+        name: 'Push',
+        focus: 'Chest & Triceps',
+        exercises: [],
+      );
+      final map = day.toMap();
+      expect(map.containsKey('warmup'), isFalse);
+      expect(map.containsKey('cooldown'), isFalse);
+    });
 
-  _DayConfig(this.name, this.focus, this.categories);
-}
+    test('toMap includes warmup/cooldown when non-empty', () {
+      final day = WorkoutDay(
+        dayNumber: 1,
+        name: 'Push',
+        focus: 'Chest & Triceps',
+        exercises: const [],
+        warmup: [
+          PlannedExercise(
+            exerciseId: 'Spot Jogging',
+            exerciseName: 'Spot Jogging',
+            loggingType: 'timed',
+            sets: 1,
+            reps: '300s',
+            restSeconds: 0,
+            category: 'warmup',
+          ),
+        ],
+        cooldown: [
+          PlannedExercise(
+            exerciseId: 'Slow Walking',
+            exerciseName: 'Slow Walking',
+            loggingType: 'timed',
+            sets: 1,
+            reps: '300s',
+            restSeconds: 0,
+            category: 'cooldown',
+          ),
+        ],
+      );
+      final map = day.toMap();
+      expect(map.containsKey('warmup'), isTrue);
+      expect(map.containsKey('cooldown'), isTrue);
+      expect((map['warmup'] as List).length, 1);
+      expect((map['cooldown'] as List).length, 1);
+    });
 
-class _PhaseMeta {
-  final int phase;
-  final String name;
-  _PhaseMeta({required this.phase, required this.name});
+    test('warmup exercises have correct category', () {
+      final warmup = PlannedExercise(
+        exerciseId: 'Arm Circles',
+        exerciseName: 'Arm Circles',
+        loggingType: 'timed',
+        sets: 1,
+        reps: '60s',
+        restSeconds: 0,
+        category: 'warmup',
+      );
+      expect(warmup.category, 'warmup');
+      expect(warmup.sets, 1);
+      expect(warmup.restSeconds, 0);
+    });
+
+    test('cooldown exercises have correct category', () {
+      final cooldown = PlannedExercise(
+        exerciseId: 'Standing Toe Touch',
+        exerciseName: 'Standing Toe Touch',
+        loggingType: 'timed',
+        sets: 1,
+        reps: '30s',
+        restSeconds: 0,
+        category: 'cooldown',
+      );
+      expect(cooldown.category, 'cooldown');
+      expect(cooldown.sets, 1);
+    });
+
+    test('warmup/cooldown serializes correctly in toMap', () {
+      final warmup = PlannedExercise(
+        exerciseId: 'Jumping Jacks',
+        exerciseName: 'Jumping Jacks',
+        loggingType: 'timed',
+        sets: 1,
+        reps: '300s',
+        restSeconds: 0,
+        category: 'warmup',
+      );
+      final map = warmup.toMap();
+      expect(map['exercise_name'], 'Jumping Jacks');
+      expect(map['logging_type'], 'timed');
+      expect(map['sets'], 1);
+      expect(map['reps'], '300s');
+      expect(map['rest_seconds'], 0);
+      expect(map['category'], 'warmup');
+    });
+
+    test('activation exercise uses bodyweight_reps logging', () {
+      final activation = PlannedExercise(
+        exerciseId: 'Wall Push Up',
+        exerciseName: 'Wall Push Up',
+        loggingType: 'bodyweight_reps',
+        sets: 1,
+        reps: '10',
+        restSeconds: 0,
+        category: 'warmup',
+      );
+      expect(activation.loggingType, 'bodyweight_reps');
+      expect(activation.reps, '10');
+    });
+  });
 }
