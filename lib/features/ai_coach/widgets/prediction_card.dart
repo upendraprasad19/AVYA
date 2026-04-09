@@ -513,9 +513,12 @@ class _ShareablePredictionSheetState
             ],
           ],
 
-          // Prediction text — no maxLines limit on shareable card
+          // Prediction text — capped at 500 chars for shareable image sizing.
+          // Full text is available in the "Read More" bottom sheet.
           Text(
-            widget.predictionText,
+            widget.predictionText.length > 500
+                ? '${widget.predictionText.substring(0, 500)}...'
+                : widget.predictionText,
             style: GoogleFonts.getFont(
               'DM Sans',
               fontSize: 12,

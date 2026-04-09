@@ -71,10 +71,27 @@ class StatsGrid extends ConsumerWidget {
     );
   }
 
-  /// Build a 2×2 grid from the PR map — keys may be standard lift names
-  /// (bench, squat, etc.) or actual exercise names for dynamic PRs.
+  /// Derive display unit from exercise logging type.
+  static String _unitForLoggingType(String loggingType) {
+    switch (loggingType) {
+      case 'weight_reps':
+      case 'weighted_bodyweight':
+        return 'kg';
+      case 'bodyweight_reps':
+        return 'reps';
+      case 'timed':
+        return 's';
+      case 'cardio':
+      case 'distance':
+        return 'km';
+      default:
+        return 'kg';
+    }
+  }
+
+  /// Build adaptive grid from the PR map — adapts to 1-4 exercises.
+  /// Keys may be standard lift names (bench, squat) or actual exercise names.
   Widget _buildDynamicGrid(Map<String, _PRData> prs) {
-    // Map of standard keys to display labels + emojis
     const standardLabels = {
       'bench': ('🏋️', 'BENCH PRESS'),
       'squat': ('🏋️', 'SQUAT'),
@@ -83,33 +100,54 @@ class StatsGrid extends ConsumerWidget {
     };
 
     final entries = prs.entries.where((e) => e.value.current > 0).toList();
-    // Pad to 4 for the grid (fill empty slots)
-    while (entries.length < 4) {
-      entries.add(MapEntry('—', const _PRData(current: 0, previous: 0)));
-    }
+    if (entries.isEmpty) return const SizedBox.shrink();
 
-    Widget cardFor(MapEntry<String, _PRData> e) {
+    Widget cardFor(MapEntry<String, _PRData> e, {bool expanded = true}) {
       final std = standardLabels[e.key];
       final emoji = std?.$1 ?? '💪';
-      final label = std?.$2 ?? e.key.toUpperCase();
-      return Expanded(child: _StatCard.fromPR(emoji, label, e.value));
+      // Title-case exercise names: "dumbbell curl" → "Dumbbell Curl"
+      final label = std?.$2 ??
+          e.key.split(' ').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+      final child = _StatCard.fromPR(emoji, label, e.value);
+      return expanded ? Expanded(child: child) : child;
     }
 
-    return Column(
-      children: [
+    // Adaptive layout: 1→full, 2→row, 3→2+1, 4→2+2
+    if (entries.length == 1) {
+      return Row(children: [cardFor(entries[0])]);
+    }
+    if (entries.length == 2) {
+      return Row(children: [
+        cardFor(entries[0]),
+        const SizedBox(width: AppSpacing.inlineGap),
+        cardFor(entries[1]),
+      ]);
+    }
+    if (entries.length == 3) {
+      return Column(children: [
         Row(children: [
           cardFor(entries[0]),
           const SizedBox(width: AppSpacing.inlineGap),
           cardFor(entries[1]),
         ]),
         const SizedBox(height: AppSpacing.inlineGap),
-        Row(children: [
-          cardFor(entries[2]),
-          const SizedBox(width: AppSpacing.inlineGap),
-          cardFor(entries[3]),
-        ]),
-      ],
-    );
+        Row(children: [cardFor(entries[2])]),
+      ]);
+    }
+    // 4+
+    return Column(children: [
+      Row(children: [
+        cardFor(entries[0]),
+        const SizedBox(width: AppSpacing.inlineGap),
+        cardFor(entries[1]),
+      ]),
+      const SizedBox(height: AppSpacing.inlineGap),
+      Row(children: [
+        cardFor(entries[2]),
+        const SizedBox(width: AppSpacing.inlineGap),
+        cardFor(entries[3]),
+      ]),
+    ]);
   }
 
   Widget _buildNoDataAlert() {
@@ -178,10 +216,14 @@ class StatsGrid extends ConsumerWidget {
             key, _PRData(current: 0, previous: 0)));
     }
 
-    // Build a dynamic map using exercise names as keys
+    // Build a dynamic map using exercise names as keys, with correct unit
     final result = <String, _PRData>{};
     for (final pr in top4) {
-      result[pr.exerciseName] = _PRData(current: pr.bestValue, previous: 0);
+      result[pr.exerciseName] = _PRData(
+        current: pr.bestValue,
+        previous: 0,
+        unit: _unitForLoggingType(pr.loggingType),
+      );
     }
     return result;
   }
@@ -348,14 +390,15 @@ class StatsGrid extends ConsumerWidget {
 class _PRData {
   final double current;
   final double previous;
+  final String unit; // kg, reps, s, km
 
-  const _PRData({required this.current, required this.previous});
+  const _PRData({required this.current, required this.previous, this.unit = 'kg'});
 
   String get changeText {
     if (current <= 0) return 'No data yet';
     final diff = current - previous;
-    if (diff > 0 && previous > 0) return '\u2191 ${diff.toStringAsFixed(1)}kg this month';
-    if (previous > 0) return 'Last: ${previous.toStringAsFixed(0)}kg';
+    if (diff > 0 && previous > 0) return '\u2191 ${diff.toStringAsFixed(1)} $unit this month';
+    if (previous > 0) return 'Last: ${previous.toStringAsFixed(0)} $unit';
     return 'First logged!';
   }
 
@@ -386,7 +429,9 @@ class _StatCard extends StatelessWidget {
     return _StatCard(
       emoji: emoji,
       label: label,
-      value: pr.current > 0 ? '${pr.current.toStringAsFixed(0)} kg' : '— kg',
+      value: pr.current > 0
+          ? '${pr.current.toStringAsFixed(0)} ${pr.unit}'
+          : '—',
       change: pr.changeText,
       changeColor: pr.changeColor,
     );

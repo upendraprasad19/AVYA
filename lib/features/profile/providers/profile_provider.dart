@@ -369,19 +369,35 @@ class BiometricNotifier extends Notifier<BiometricData> {
       }
     }
 
-    // Also check explicit sleep_log_ key
+    // Also check explicit sleep_log_ key (written by manual logging + cloud restore)
     final sleepLog = healthBox.get('sleep_log_$todayStr');
     if (sleepLog is Map) {
       final hrs = (sleepLog['sleep_hours'] as num?)?.toDouble();
       if (hrs != null) sleepHours = hrs;
     }
 
+    // Also check the shared 'sleep_logs' list (written by AI chat handler).
+    // Only applies if no manual/cloud sleep data exists for today.
+    if (sleepHours == null) {
+      final chatLogs = healthBox.get('sleep_logs');
+      if (chatLogs is List) {
+        for (final entry in chatLogs) {
+          if (entry is Map && entry['date'] == todayStr) {
+            final hrs = (entry['sleep_hours'] as num?)?.toDouble();
+            if (hrs != null && hrs > 0) sleepHours = hrs;
+          }
+        }
+      }
+    }
+
     // Legacy steps_today key has NO date field — only use it if
-    // the companion steps_date key matches today (prevents stale yesterday values).
-    final stepsDate = healthBox.get('steps_date') as String?;
-    if (stepsDate == todayStr) {
-      final stepsVal = healthBox.get('steps_today');
-      if (stepsVal is int && stepsVal > 0) stepsToday = stepsVal;
+    // stepsToday wasn't already found AND steps_date matches today.
+    if (stepsToday == null) {
+      final stepsDate = healthBox.get('steps_date') as String?;
+      if (stepsDate == todayStr) {
+        final stepsVal = healthBox.get('steps_today');
+        if (stepsVal is int && stepsVal > 0) stepsToday = stepsVal;
+      }
     }
 
     return BiometricData(
