@@ -79,8 +79,9 @@ class SubscriptionService {
 
     final expiresAtRaw = configBox.get(_expiresAtKey);
     if (expiresAtRaw == null) {
-      // isPro flag is set but no expiry — treat as PRO (test/dev mode).
-      return true;
+      // isPro flag is set but no expiry — only treat as PRO in debug builds.
+      // In release builds, this is a tampered state (rooted device attack).
+      return kDebugMode;
     }
 
     final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
@@ -93,6 +94,14 @@ class SubscriptionService {
     return true;
   }
 
+  /// High-value features that trigger server-side verification.
+  /// Prevents Hive-spoofing on rooted devices for premium features.
+  static const Set<String> _highValueFeatures = {
+    AppConstants.featurePhases2To12,
+    AppConstants.featureAiCoachUnlimited,
+    AppConstants.featureReasoningTab,
+  };
+
   /// The ONLY way to gate PRO features in the app.
   ///
   /// ```dart
@@ -104,16 +113,30 @@ class SubscriptionService {
   /// ```
   ///
   /// Phase 1 is ALWAYS free — never gate it.
+  /// High-value features trigger server-side verification (cached 5 min).
   void gate(
     String feature, {
     required VoidCallback onPro,
     required VoidCallback onFree,
   }) {
-    if (isPro()) {
-      onPro();
-    } else {
+    if (!isPro()) {
       onFree();
+      return;
     }
+
+    // High-value features: verify server-side (async, cached 5 min)
+    if (_highValueFeatures.contains(feature)) {
+      verifyFromServer().then((verified) {
+        if (verified) {
+          onPro();
+        } else {
+          onFree();
+        }
+      });
+      return;
+    }
+
+    onPro();
   }
 
   /// Polls Supabase `subscriptions` table for the current user and

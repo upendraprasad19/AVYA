@@ -6,6 +6,7 @@ import 'core/router/app_router.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
 import 'core/services/razorpay_service.dart';
+import 'package:flutter/foundation.dart';
 import 'core/services/sync_service.dart';
 
 /// Root widget. Uses ConsumerStatefulWidget so it can attach the
@@ -60,7 +61,9 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      details.exceptionAsString(),
+                      kDebugMode
+                          ? details.exceptionAsString()
+                          : 'Please restart the app. If this persists, contact support.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textSecondary,
                           ),

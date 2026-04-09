@@ -52,23 +52,37 @@ function extractLogActions(rawReply: string): {
  * Fetch an image from a URL and return its base64 representation.
  * Supports Supabase Storage URLs (adds service role auth).
  */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB server-side limit
+const STORAGE_PREFIX = `${SUPABASE_URL}/storage/v1/object/`;
+
 async function fetchImageAsBase64(
   imageUrl: string,
 ): Promise<{ base64: string; mimeType: string }> {
-  const headers: Record<string, string> = {};
-
-  // If the URL is from our Supabase Storage, add auth header
-  if (imageUrl.includes(SUPABASE_URL)) {
-    headers["Authorization"] = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
-    headers["apikey"] = SUPABASE_SERVICE_ROLE_KEY;
+  // Security: only allow Supabase Storage URLs to prevent SSRF
+  if (!imageUrl.startsWith(STORAGE_PREFIX)) {
+    throw new Error("Only Supabase Storage URLs are allowed");
   }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+  };
 
   const response = await fetch(imageUrl, { headers });
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
   }
 
+  // Reject oversized images before reading into memory
+  const contentLength = parseInt(response.headers.get("content-length") ?? "0", 10);
+  if (contentLength > MAX_IMAGE_BYTES) {
+    throw new Error(`Image too large (${contentLength} bytes, max ${MAX_IMAGE_BYTES})`);
+  }
+
   const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error(`Image too large (${arrayBuffer.byteLength} bytes)`);
+  }
   const uint8Array = new Uint8Array(arrayBuffer);
   const base64 = base64Encode(uint8Array);
 
@@ -154,6 +168,17 @@ serve(async (req: Request) => {
     if (!message || typeof message !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing 'message' in request body" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Prevent abuse: reject oversized messages
+    if (message.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "Message too long (max 5000 chars)" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

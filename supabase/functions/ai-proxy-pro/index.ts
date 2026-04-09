@@ -117,6 +117,20 @@ serve(async (req: Request) => {
       });
     }
 
+    // Prevent abuse: reject oversized messages and snapshots
+    if (message.length > 5000) {
+      return new Response(JSON.stringify({ error: "Message too long (max 5000 chars)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (snapshot_json && JSON.stringify(snapshot_json).length > 10000) {
+      return new Response(JSON.stringify({ error: "Snapshot too large" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Phase B: Retrieve relevant long-term memories (PRO only) ──────────
     // Embed the user query → cosine similarity search → inject top 5 memories.
     // Wrapped in try/catch: retrieval failure must never break the chat response.

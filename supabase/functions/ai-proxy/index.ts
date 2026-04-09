@@ -439,6 +439,20 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       });
     }
 
+    // Prevent abuse: reject oversized messages and snapshots
+    if (message.length > 5000) {
+      return new Response(JSON.stringify({ error: "Message too long (max 5000 chars)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (snapshot_json && JSON.stringify(snapshot_json).length > 10000) {
+      return new Response(JSON.stringify({ error: "Snapshot too large" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Trial + rate-limit check for AI chat ─────────────────────────
     const { data: userData, error: userError } = await supabaseClient
       .from("users")
