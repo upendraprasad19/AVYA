@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { cascadeChat } from "../_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +13,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
+// Fallback only — primary is OpenRouter Gemma 4 cascade
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 // ── Coaching Notes Extraction ────────────────────────────────────────────────
 //
@@ -80,23 +82,39 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
 
 If nothing was found, return: {}`;
 
-  const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
-    }),
+  // Primary: OpenRouter Gemma 4 cascade (free, text-only)
+  let rawText = "{}";
+  const { content: orContent } = await cascadeChat({
+    models: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"],
+    systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
+    userPrompt: prompt,
+    maxTokens: 512,
+    temperature: 0.1,
+    timeoutMs: 12000,
+    title: "ICANBEFITTER Coaching Notes",
   });
 
-  if (!geminiRes.ok) {
-    console.error("Gemini extraction error:", await geminiRes.text());
-    return null;
-  }
+  if (orContent) {
+    rawText = orContent;
+  } else {
+    // Fallback: Gemini 2.5 Flash Lite
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+      }),
+    });
 
-  const geminiData = await geminiRes.json();
-  const rawText: string =
-    geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    if (!geminiRes.ok) {
+      console.error("Gemini extraction error:", await geminiRes.text());
+      return null;
+    }
+
+    const geminiData = await geminiRes.json();
+    rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  }
 
   try {
     const cleaned = rawText

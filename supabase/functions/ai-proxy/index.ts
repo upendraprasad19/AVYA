@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
+import { cascadeChat, FREE_VISION_MODELS } from "../_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,72 +149,66 @@ serve(async (req: Request) => {
     const { message, snapshot_json, type, text, context } = body;
 
     // ── Food text analysis (separate path — no trial/rate-limit check) ────
+    // Primary: OpenRouter Gemma 4 cascade (free). Fallback: Gemini 2.5 Flash Lite.
     if (type === "food_text_analysis" && text) {
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (!geminiKey) {
-        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
-          status: 503,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
       const prompt = `You are a nutritionist with deep knowledge of Indian foods. The user says: "${text}"
 
 Analyse this as a meal and return ONLY a JSON object (no markdown, no code block) in this exact format:
-{
-  "meal_name": "short name for the meal",
-  "items": [
-    {
-      "name": "food item name",
-      "quantity": "e.g. 1 scoop, 2 rotis, 100g",
-      "calories": 120,
-      "protein": 25,
-      "carbs": 3,
-      "fat": 2,
-      "fiber": 4
-    }
-  ]
-}
+{"meal_name":"short name for the meal","items":[{"name":"food item name","quantity":"e.g. 1 scoop, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
+Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
-Rules:
-- Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned
-- One item per distinct food
-- All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix
-- IMPORTANT: fiber must reflect the actual dietary fiber content (e.g. broccoli 100g = 2.6g fiber, dal 100g = 8g fiber, roti 1 piece = 1.5g fiber, oats 40g = 3g fiber). Never return 0 for high-fiber foods.
-- If quantity is unclear, assume a typical single serving for an Indian adult
-- Return ONLY the JSON object, nothing else`;
+      // Try OpenRouter free models first
+      const { content: orContent } = await cascadeChat({
+        models: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"],
+        systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
+        userPrompt: prompt,
+        maxTokens: 1024,
+        temperature: 0.2,
+        timeoutMs: 12000,
+        title: "ICANBEFITTER Food Analysis",
+      });
 
-      try {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
-            }),
-          },
-        );
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          // Strip any markdown code fences if present
-          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+      if (orContent) {
+        try {
+          const jsonStr = orContent.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(jsonStr);
           return new Response(JSON.stringify(parsed), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
+        } catch (_) {
+          console.warn("[ai-proxy] OpenRouter food analysis returned non-JSON, falling back to Gemini");
         }
-      } catch (_) {
-        // Fall through to error
+      }
+
+      // Fallback: Gemini 2.5 Flash Lite
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (geminiKey) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+              }),
+            },
+          );
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+            const parsed = JSON.parse(jsonStr);
+            return new Response(JSON.stringify(parsed), {
+              status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        } catch (_) {}
       }
 
       return new Response(JSON.stringify({ error: "Food analysis failed" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -250,7 +245,7 @@ Rules:
 Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -273,7 +268,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
               channel: "scan_meal",
               user_message: "[scan_meal] analysis",
               ai_response: "success",
-              model_used: "Gemini 1.5 Flash",
+              model_used: "Gemini 2.5 Flash Lite",
               tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
               created_at: new Date().toISOString(),
             });
@@ -288,50 +283,80 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
     }
 
     // ── Cart auditor (grocery screenshot analysis) ───────────────────
+    // Primary: OpenRouter Gemma 4 cascade (free, multimodal). Fallback: Gemini 2.5 Flash Lite.
     if (type === "cart_auditor" && body.image) {
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (!geminiKey) {
-        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
-          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       const cartPrompt = `You are a nutrition expert with deep knowledge of Indian grocery products. Analyse this grocery cart, receipt, or shopping screenshot carefully. Identify all food/grocery items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
 {"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
 Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
-      try {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: cartPrompt }] }],
-              generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-            }),
-          },
-        );
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(jsonStr);
 
-          // Log usage for rate limiting
+      let modelUsed = "unknown";
+
+      // Try OpenRouter Gemma free models first (multimodal)
+      const { content: orContent, modelUsed: orModel } = await cascadeChat({
+        models: [...FREE_VISION_MODELS],
+        systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
+        userPrompt: cartPrompt,
+        imageBase64: body.image,
+        imageMimeType: "image/jpeg",
+        maxTokens: 2048,
+        temperature: 0.2,
+        timeoutMs: 15000,
+        title: "ICANBEFITTER Cart Auditor",
+      });
+
+      if (orContent) {
+        try {
+          const jsonStr = orContent.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(jsonStr);
+          modelUsed = orModel ?? "Gemma 4";
+          // Log usage
           try {
             await supabaseClient.from("ai_coach_interactions").insert({
-              user_id: userId,
-              channel: "cart_auditor",
-              user_message: "[cart_auditor] analysis",
-              ai_response: "success",
-              model_used: "Gemini 1.5 Flash",
-              tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
-              created_at: new Date().toISOString(),
+              user_id: userId, channel: "cart_auditor",
+              user_message: "[cart_auditor] analysis", ai_response: "success",
+              model_used: modelUsed, tokens_used: 0, created_at: new Date().toISOString(),
             });
           } catch (_) {}
-
           return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (_) {
+          console.warn("[ai-proxy] OpenRouter cart auditor returned non-JSON, falling back to Gemini");
         }
-      } catch (_) {}
+      }
+
+      // Fallback: Gemini 2.5 Flash Lite
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (geminiKey) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: cartPrompt }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+              }),
+            },
+          );
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
+            const parsed = JSON.parse(jsonStr);
+            try {
+              await supabaseClient.from("ai_coach_interactions").insert({
+                user_id: userId, channel: "cart_auditor",
+                user_message: "[cart_auditor] analysis", ai_response: "success",
+                model_used: "Gemini 2.5 Flash Lite",
+                tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
+                created_at: new Date().toISOString(),
+              });
+            } catch (_) {}
+            return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        } catch (_) {}
+      }
+
       return new Response(JSON.stringify({ error: "Cart analysis failed" }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -1,13 +1,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { cascadeChat, FREE_VISION_MODELS } from "../_shared/openrouter.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Gemini 1.5 Flash — multimodal, fast, cheap.
+// Gemini 2.5 Flash Lite — fallback for vision tasks.
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,42 +122,59 @@ Rules:
 Return ONLY valid JSON — no markdown, no code fences:
 {"bf_low": 18, "bf_high": 22, "confidence": "medium", "suitable": true, "note": "One brief clinical observation"}`;
 
-    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type, data: image_base64 } },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 256 },
-      }),
+    // Primary: OpenRouter Gemma 4 cascade (free, multimodal)
+    let rawText = "";
+    const { content: orContent } = await cascadeChat({
+      models: [...FREE_VISION_MODELS],
+      systemPrompt: "You are a clinical body composition assessment tool. Return ONLY valid JSON.",
+      userPrompt: prompt,
+      imageBase64: image_base64,
+      imageMimeType: mime_type,
+      maxTokens: 256,
+      temperature: 0.1,
+      timeoutMs: 15000,
+      title: "ICANBEFITTER Body Composition",
     });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error("Gemini error:", errText);
-      return json({ error: "AI assessment failed" }, 502);
-    }
+    if (orContent) {
+      rawText = orContent;
+    } else {
+      // Fallback: Gemini 2.5 Flash Lite
+      const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type, data: image_base64 } },
+              ],
+            },
+          ],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 256 },
+        }),
+      });
 
-    const geminiData = await geminiRes.json();
-    const rawText: string =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        console.error("Gemini error:", errText);
+        return json({ error: "AI assessment failed" }, 502);
+      }
+
+      const geminiData = await geminiRes.json();
+      rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    }
 
     let result: Record<string, unknown>;
     try {
-      // Strip markdown code fences if Gemini wraps output anyway
       const cleaned = rawText
         .replace(/```json\n?/g, "")
         .replace(/```\n?/g, "")
         .trim();
       result = JSON.parse(cleaned);
     } catch {
-      console.error("Failed to parse Gemini response:", rawText);
+      console.error("Failed to parse AI response:", rawText);
       return json({ error: "Could not parse AI response" }, 502);
     }
 

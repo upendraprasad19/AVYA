@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
+import { cascadeChat, FREE_VISION_MODELS } from "../_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,9 +14,10 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Fallback only — primary is OpenRouter Gemma 4 cascade
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-const MODEL_LABEL = "Gemini 2.0 Flash (Vision)";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const MODEL_LABEL = "Gemini 2.5 Flash Lite (Vision)";
 
 /**
  * Extract structured log actions from AI response.
@@ -212,55 +214,66 @@ serve(async (req: Request) => {
       media_url,
     );
 
-    // Call Gemini Flash for multimodal analysis
-    const geminiResponse = await fetch(
-      `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: systemPrompt + "\n\nUser: " + message,
-                },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: imageBase64,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: 2048,
-            temperature: 0.7,
-          },
-        }),
-      },
-    );
+    // Primary: OpenRouter Gemma 4 cascade (free, multimodal)
+    let rawReply = "";
+    let tokensUsed = 0;
+    let modelLabel = MODEL_LABEL;
 
-    if (!geminiResponse.ok) {
-      const errorBody = await geminiResponse.text();
-      console.error("Gemini API error:", geminiResponse.status, errorBody);
-      return new Response(
-        JSON.stringify({
-          error: "AI image analysis temporarily unavailable. Please try again.",
-        }),
+    const { content: orContent, modelUsed: orModel, tokensUsed: orTokens } = await cascadeChat({
+      models: [...FREE_VISION_MODELS],
+      systemPrompt,
+      userPrompt: message,
+      imageBase64,
+      imageMimeType: mimeType,
+      maxTokens: 2048,
+      temperature: 0.7,
+      timeoutMs: 15000,
+      title: "ICANBEFITTER Photo Chat",
+    });
+
+    if (orContent) {
+      rawReply = orContent;
+      tokensUsed = orTokens;
+      modelLabel = orModel ?? "Gemma 4 (Vision)";
+    } else {
+      // Fallback: Gemini 2.5 Flash Lite
+      const geminiResponse = await fetch(
+        `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
         {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: systemPrompt + "\n\nUser: " + message },
+                  { inline_data: { mime_type: mimeType, data: imageBase64 } },
+                ],
+              },
+            ],
+            generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+          }),
         },
       );
-    }
 
-    const geminiData = await geminiResponse.json();
-    const rawReply =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const tokensUsed =
-      (geminiData.usageMetadata?.totalTokenCount as number) ?? 0;
+      if (!geminiResponse.ok) {
+        const errorBody = await geminiResponse.text();
+        console.error("Gemini API error:", geminiResponse.status, errorBody);
+        return new Response(
+          JSON.stringify({
+            error: "AI image analysis temporarily unavailable. Please try again.",
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const geminiData = await geminiResponse.json();
+      rawReply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      tokensUsed = (geminiData.usageMetadata?.totalTokenCount as number) ?? 0;
+    }
 
     if (!rawReply) {
       return new Response(
@@ -291,7 +304,7 @@ serve(async (req: Request) => {
       channel: "app",
       user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
       ai_response: extracted.reply,
-      model_used: MODEL_LABEL,
+      model_used: modelLabel,
       tokens_used: tokensUsed,
       created_at: new Date().toISOString(),
     });
@@ -299,7 +312,7 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         reply: extracted.reply,
-        model_used: MODEL_LABEL,
+        model_used: modelLabel,
         tokens_used: tokensUsed,
         actions: extracted.actions,
       }),

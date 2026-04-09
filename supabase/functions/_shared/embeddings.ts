@@ -1,20 +1,21 @@
 /**
- * Shared Gemini text-embedding-004 helper.
+ * Shared gemini-embedding-001 helper.
  *
  * Model specs:
- *   - 768 dimensions (fixed)
- *   - Free tier: 1,500 requests/minute, $0 cost
- *   - Max input: 2,048 tokens
+ *   - 3072 dimensions default, configurable to 768/1536 via outputDimensionality
+ *   - We use 768 to match existing pgvector column width
+ *   - Free tier available, $0.15/1M tokens on paid
  *   - Asymmetric task types: use RETRIEVAL_DOCUMENT when storing,
  *     RETRIEVAL_QUERY when searching. This measurably improves recall.
  *
+ * Migration: text-embedding-004 was shut down Jan 14, 2026.
  * Used by: ai-proxy, ai-proxy-pro, rolling-context
  */
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
 const EMBEDDING_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 
 export type EmbeddingTaskType =
   | "RETRIEVAL_DOCUMENT" // use when storing content into the index
@@ -45,11 +46,12 @@ export async function getEmbedding(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "models/text-embedding-004",
+          model: "models/gemini-embedding-001",
           content: {
             parts: [{ text: cleanedText }],
           },
           taskType,
+          outputDimensionality: 768, // match existing pgvector column width
         }),
       },
     );
