@@ -91,7 +91,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ['Protein', 'Staples', 'Pulses'],
       ),
     ];
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _saved = false);
   }
 
   _MealPlan _generateMeal(
@@ -390,6 +390,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   Future<void> _sharePlanAsPdf() async {
     if (_mealPlans.isEmpty) return;
 
+    try {
     final targets = ref.read(macroTargetsProvider);
     final calorieTarget = targets['calories']?.round() ?? 2400;
     final proteinTarget = targets['protein']?.round() ?? 184;
@@ -470,6 +471,17 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
       subject: 'ICANBEFITTER Diet Plan',
     );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate PDF',
+              style: GoogleFonts.getFont('DM Sans', fontSize: 12)),
+            backgroundColor: AppColors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
