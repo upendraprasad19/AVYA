@@ -182,6 +182,13 @@ class UserRepository {
     await _hive.configBox.put('saved_diet_plan', planData);
   }
 
+  /// Returns the saved diet plan, or null if none exists.
+  Map<String, dynamic>? getSavedDietPlan() {
+    final raw = _hive.configBox.get('saved_diet_plan');
+    if (raw == null) return null;
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
   // ── Clear All Data (Logout) ───────────────────────────────────
 
   /// Clears all user-specific Hive boxes (keeps exerciseBox and foodBox).

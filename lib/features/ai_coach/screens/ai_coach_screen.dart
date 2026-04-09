@@ -104,9 +104,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       onResult: (result) {
         setState(() => _recognizedText = result.recognizedWords);
       },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 3),
+      listenFor: const Duration(seconds: 60),
+      pauseFor: const Duration(seconds: 5),
       localeId: 'en_IN',
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.dictation,
+        partialResults: true,
+      ),
     );
   }
 
@@ -1361,7 +1365,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       }
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final storagePath = 'chat-media/$userId/$timestamp.jpg';
+      final storagePath = '$userId/$timestamp.jpg';
 
       await supabase.client.storage.from('chat-media').uploadBinary(
             storagePath,

@@ -137,33 +137,45 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             ],
           ),
           const Spacer(),
-          // Quick actions
-          _headerAction(
-            icon: Icons.search,
-            onTap: () => showFoodSearchSheet(context),
-          ),
-          const SizedBox(width: 6),
-          _headerAction(
-            icon: Icons.restaurant_menu,
-            onTap: () => context.go('/nutrition/diet-plan'),
-          ),
+          _buildDietPlanButton(),
         ],
       ),
     );
   }
 
-  Widget _headerAction({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildDietPlanButton() {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => context.go('/nutrition/diet-plan'),
       child: Container(
-        width: 34,
-        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
+          color: AppColors.accent.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.30)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent.withValues(alpha: 0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Icon(icon, color: AppColors.textSecondary, size: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.restaurant_menu, color: AppColors.accent, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              'Diet Plan',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -493,30 +505,128 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          // Tab bar — 3 pill buttons
+          // Tab bar — 2 pill buttons
           Row(
             children: [
               _logTab(0, '\u2728 AI'),
               const SizedBox(width: 6),
               _logTab(1, '\uD83D\uDCF7 Scan'),
-              const SizedBox(width: 6),
-              _logTab(2, '\uD83D\uDD0D Search'),
             ],
           ),
           const SizedBox(height: 12),
           // Tab content
           if (_logTabIndex == 0)
-            const FoodLoggerSection()
-          else if (_logTabIndex == 1)
             Column(
-              children: const [
-                ScanMealSection(),
-                SizedBox(height: 12),
-                CartAuditorSection(),
+              children: [
+                const FoodLoggerSection(),
+                const SizedBox(height: 10),
+                // Search 5,000+ foods
+                GestureDetector(
+                  onTap: () => showFoodSearchSheet(context),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.input,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search,
+                            color: AppColors.textSecondary, size: 18),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Search 5,000+ foods...',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Create custom food
+                GestureDetector(
+                  onTap: () => showCustomFoodSheet(context),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                      color: AppColors.accent.withValues(alpha: 0.06),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 18),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Create custom food',
+                          style: GoogleFonts.getFont('DM Sans',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             )
           else
-            _buildSearchTab(context),
+            Column(
+              children: [
+                const ScanMealSection(),
+                const SizedBox(height: 12),
+                const CartAuditorSection(),
+                const SizedBox(height: 10),
+                // Barcode scan
+                GestureDetector(
+                  onTap: () => showBarcodeScanSheet(context),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentTint,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.qr_code_scanner,
+                            color: AppColors.accent, size: 18),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Scan product barcode',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'FREE',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -552,120 +662,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSearchTab(BuildContext context) {
-    return Column(
-      children: [
-        // Barcode scan button
-        GestureDetector(
-          onTap: () => showBarcodeScanSheet(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.accentTint,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.qr_code_scanner,
-                    color: AppColors.accent, size: 18),
-                const SizedBox(width: 10),
-                Text(
-                  'Scan product barcode',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'FREE',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Search button
-        GestureDetector(
-          onTap: () => showFoodSearchSheet(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search,
-                    color: AppColors.textSecondary, size: 18),
-                const SizedBox(width: 10),
-                Text(
-                  'Search 5,000+ foods...',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () => showCustomFoodSheet(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-              color: AppColors.accent.withValues(alpha: 0.06),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 18),
-                const SizedBox(width: 10),
-                Text(
-                  'Create custom food',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.accent),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'FREE \u00B7 No daily limit \u00B7 Indian foods database',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: AppColors.green,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
     );
   }
 

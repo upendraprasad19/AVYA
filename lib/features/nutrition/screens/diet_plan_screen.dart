@@ -1,6 +1,10 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -24,6 +28,7 @@ class DietPlanScreen extends ConsumerStatefulWidget {
 class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   late List<_MealPlan> _mealPlans;
   bool _saved = false;
+  bool _checkedSaved = false;
 
   @override
   void initState() {
@@ -36,6 +41,20 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   }
 
   void _generatePlan() {
+    // Check for saved plan on first entry only
+    if (!_checkedSaved) {
+      _checkedSaved = true;
+      final savedPlan = UserRepository.instance.getSavedDietPlan();
+      if (savedPlan != null) {
+        _showLoadSavedPlanDialog(savedPlan);
+        return;
+      }
+    }
+
+    _generateFreshPlan();
+  }
+
+  void _generateFreshPlan() {
     final targets = ref.read(macroTargetsProvider);
     final calorieTarget = targets['calories']?.round() ?? 2400;
     final proteinTarget = targets['protein']?.round() ?? 184;
@@ -260,6 +279,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                           'protein': i.protein,
                           'carbs': i.carbs,
                           'fat': i.fat,
+                          'category': i.category,
                         })
                     .toList(),
               })
@@ -272,11 +292,183 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Diet plan saved!',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          'Diet plan saved to your device',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
         ),
         backgroundColor: AppColors.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'SHARE AS PDF',
+          textColor: AppColors.accent,
+          onPressed: _sharePlanAsPdf,
+        ),
       ),
+    );
+  }
+
+  void _showLoadSavedPlanDialog(Map<String, dynamic> savedPlan) {
+    final createdAt = savedPlan['created_at'] as String?;
+    String dateLabel = 'a previous session';
+    if (createdAt != null) {
+      final dt = DateTime.tryParse(createdAt);
+      if (dt != null) {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        dateLabel = '${dt.day} ${months[dt.month - 1]}';
+      }
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Saved Diet Plan Found',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'You have a saved plan from $dateLabel. Would you like to load it or generate a fresh one?',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _generateFreshPlan();
+            },
+            child: Text(
+              'Generate New',
+              style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _loadSavedPlan(savedPlan);
+            },
+            child: Text(
+              'Load Saved',
+              style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _loadSavedPlan(Map<String, dynamic> planData) {
+    final meals = (planData['meals'] as List?) ?? [];
+    _mealPlans = meals.map((m) {
+      final mealMap = Map<String, dynamic>.from(m as Map);
+      final items = ((mealMap['items'] as List?) ?? []).map((i) {
+        final item = Map<String, dynamic>.from(i as Map);
+        return _PlanFoodItem(
+          foodId: item['food_id'] as String? ?? '',
+          name: item['name'] as String? ?? '',
+          servingDesc: item['serving_desc'] as String? ?? '',
+          servingG: (item['serving_g'] as num?)?.toDouble() ?? 100,
+          calories: (item['calories'] as num?)?.toInt() ?? 0,
+          protein: (item['protein'] as num?)?.toInt() ?? 0,
+          carbs: (item['carbs'] as num?)?.toInt() ?? 0,
+          fat: (item['fat'] as num?)?.toInt() ?? 0,
+          category: item['category'] as String? ?? '',
+        );
+      }).toList();
+      return _MealPlan(
+        name: mealMap['name'] as String? ?? '',
+        items: items,
+        targetCalories: 0,
+        targetProtein: 0,
+      );
+    }).toList();
+    if (mounted) setState(() => _saved = true);
+  }
+
+  Future<void> _sharePlanAsPdf() async {
+    if (_mealPlans.isEmpty) return;
+
+    final targets = ref.read(macroTargetsProvider);
+    final calorieTarget = targets['calories']?.round() ?? 2400;
+    final proteinTarget = targets['protein']?.round() ?? 184;
+    final carbTarget = targets['carbs']?.round() ?? 0;
+    final fatTarget = targets['fat']?.round() ?? 0;
+
+    final now = DateTime.now();
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final dateStr = '${now.day} ${months[now.month - 1]} ${now.year}';
+
+    final pdf = pw.Document();
+
+    final headerStyle = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold);
+    final subHeaderStyle = pw.TextStyle(fontSize: 12, color: PdfColors.grey700);
+    final mealTitleStyle = pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold);
+    final cellStyle = const pw.TextStyle(fontSize: 10);
+    final cellBoldStyle = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('ICANBEFITTER Diet Plan', style: headerStyle),
+            pw.SizedBox(height: 4),
+            pw.Text('Generated on $dateStr', style: subHeaderStyle),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g',
+              style: subHeaderStyle,
+            ),
+            pw.Divider(),
+          ],
+        ),
+        footer: (context) => pw.Container(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Generated by ICANBEFITTER  \u00B7  www.icanbefitter.com',
+            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+          ),
+        ),
+        build: (context) => _mealPlans.map((meal) {
+          final totalCals = meal.items.fold<int>(0, (s, i) => s + i.calories);
+          final totalProtein = meal.items.fold<int>(0, (s, i) => s + i.protein);
+
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(height: 10),
+              pw.Text('${meal.name}  ($totalCals kcal, ${totalProtein}g protein)', style: mealTitleStyle),
+              pw.SizedBox(height: 6),
+              pw.TableHelper.fromTextArray(
+                headerStyle: cellBoldStyle,
+                cellStyle: cellStyle,
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                headers: ['Food', 'Serving', 'Kcal', 'Protein', 'Carbs', 'Fat'],
+                data: meal.items.map((item) => [
+                  item.name,
+                  item.servingDesc,
+                  '${item.calories}',
+                  '${item.protein}g',
+                  '${item.carbs}g',
+                  '${item.fat}g',
+                ]).toList(),
+              ),
+              pw.SizedBox(height: 8),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+
+    final Uint8List bytes = await pdf.save();
+    await Share.shareXFiles(
+      [XFile.fromData(bytes, name: 'icanbefitter_diet_plan.pdf', mimeType: 'application/pdf')],
+      subject: 'ICANBEFITTER Diet Plan',
     );
   }
 
@@ -306,7 +498,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
             icon: const Icon(Icons.refresh,
                 color: AppColors.textSecondary, size: 22),
             onPressed: () {
-              _generatePlan();
+              _generateFreshPlan();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
