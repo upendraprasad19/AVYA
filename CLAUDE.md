@@ -164,7 +164,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 |-----|--------|-------------|
 | 🏠 Home | Dashboard | Streak, weekly calendar, quick actions, today's workout, nutrition snapshot, weight sparkline, PR snapshot |
 | 🏋️ Train | Workouts | Phase plan, week selector, active workout mode, exercise swap, template builder, copy week |
-| 🥗 Nutrition | Food Logging | BMR/TDEE, food search (5K DB), AI analysis (PRO), saved meals, water tracking, diet plan generator |
+| 🥗 Nutrition | Food Logging | BMR/TDEE, 2-tab Log Food (AI + Scan), food search (5K DB), AI analysis (PRO), saved meals, water tracking, diet plan generator + PDF export |
 | 💬 AI Coach | Chat | In-app chat, Telegram toggle, quick prompt chips, reasoning tab (PRO), photo/video upload (PRO) |
 | 👤 Profile | Settings | Bio stats, goal card, edit profile, health sync, reports, subscription, logout |
 
@@ -781,7 +781,7 @@ Phase {
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding
 - Beat My Coach HIIT challenge — 1 per 2 weeks
-- Diet plan PDF — preview + swap + download (generated from food DB, no AI)
+- Diet plan — preview + swap + save to device + share as PDF (generated from food DB, no AI). Saved plans loadable on re-entry.
 - Exercise coaching cues, common mistakes, pro tips — all visible
 - Workout Receipt PNG (shareable) — after every completed workout
 
@@ -917,3 +917,6 @@ See `.claude/agents/` for full definitions:
 | Daily snapshot not pushing | pushSnapshot() must be wired into checkAndSync(), fires on every app launch |
 | AI chat "Session refreshed" error | JWT auto-retry: on auth error, refresh token + single inline retry (NOT recursive — old recursive caused 30+ duplicates) |
 | Days/week change not rescheduling | `generateAndScheduleFromDate()` in WorkoutScheduleService — deletes future non-completed entries, preserves completed, regenerates from today |
+| Image upload RLS violation | Storage path must be `$userId/$timestamp.jpg`, NOT `chat-media/$userId/...` — bucket name is already set by `.from('chat-media')` |
+| Mic stops after 2-3 seconds | `pauseFor: 5s`, `listenFor: 60s`, `ListenMode.dictation`, `partialResults: true` via `SpeechListenOptions` |
+| PRO chat "Session error" | `ai-proxy-pro` must have `verify_jwt: false` — Supabase gateway bug rejects valid JWTs when `true` |
