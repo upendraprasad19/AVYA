@@ -161,6 +161,7 @@ class UserRepository {
       }
     }
 
+    final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
     final targets = BmrCalculator.calculateTargets(
       weightKg: weightKg,
       heightCm: heightCm,
@@ -168,6 +169,7 @@ class UserRepository {
       gender: gender,
       activityLevel: activityLevel,
       goal: goal,
+      bodyFatPercent: bodyFat,
     );
 
     await updateProfileFields(targets.toMap());

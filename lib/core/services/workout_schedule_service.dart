@@ -122,6 +122,134 @@ class WorkoutScheduleService {
     return plan;
   }
 
+  // ── Reschedule from Today ────────────────────────────────────────
+
+  /// Regenerates the workout plan and reschedules from [fromDate] forward.
+  ///
+  /// Preserves all past entries (completed, skipped, etc.) and replaces
+  /// future non-completed entries with the new plan. Used when the user
+  /// changes days_per_week, goal, or equipment in profile settings.
+  Future<Phase> generateAndScheduleFromDate({
+    required String goal,
+    required String equipment,
+    required int daysPerWeek,
+    required DateTime fromDate,
+    String experienceLevel = 'beginner',
+    int phase = 1,
+  }) async {
+    final exerciseBox = _hive.exerciseBox;
+    if (exerciseBox.isEmpty) {
+      await SeedService.instance.seedIfNeeded();
+    }
+
+    // 1. Generate new plan
+    final plan = PlanGenerator.instance.generate(
+      goal: goal,
+      equipment: equipment,
+      daysPerWeek: daysPerWeek,
+      phase: phase,
+      experienceLevel: experienceLevel,
+    );
+
+    // 2. Delete future non-completed schedule entries
+    final workoutBox = _hive.workoutBox;
+    final today = DateTime(fromDate.year, fromDate.month, fromDate.day);
+    final planEndStr = _hive.configBox.get(_planEndKey) as String?;
+    final planEnd = planEndStr != null ? DateTime.parse(planEndStr) : today.add(const Duration(days: 28));
+
+    for (var d = today; !d.isAfter(planEnd); d = d.add(const Duration(days: 1))) {
+      final key = '$_schedulePrefix${_dateKey(d)}';
+      final existing = workoutBox.get(key);
+      if (existing != null) {
+        final map = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
+        final status = map['status'] as String? ?? '';
+        // Keep completed workouts — delete everything else
+        if (status != 'completed') {
+          await workoutBox.delete(key);
+        }
+      }
+    }
+
+    // 3. Calculate remaining plan duration from today to plan end
+    final monday = _normalizeToMonday(today);
+    final endDate = monday.add(const Duration(days: 27)); // 4 weeks from plan monday
+
+    // Update plan end to match new schedule
+    await _hive.configBox.put(_planStartKey, monday.toIso8601String());
+    await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
+    await workoutBox.put(_planKey, plan.toMap());
+
+    // 4. Assign new workouts from today forward, skipping completed dates
+    final dayPattern = _getDayPattern(daysPerWeek);
+
+    for (int week = 0; week < 4; week++) {
+      final weekStart = monday.add(Duration(days: week * 7));
+      int workoutDayIndex = 0;
+
+      for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+        final date = weekStart.add(Duration(days: dayOfWeek));
+        final dateKey = _dateKey(date);
+        final scheduleKey = '$_schedulePrefix$dateKey';
+
+        // Skip dates before today
+        if (date.isBefore(today)) {
+          if (dayPattern.contains(dayOfWeek) && workoutDayIndex < plan.workouts.length) {
+            workoutDayIndex++;
+          }
+          continue;
+        }
+
+        // Skip dates that already have a completed workout
+        final existing = workoutBox.get(scheduleKey);
+        if (existing != null) {
+          final map = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
+          if (map['status'] == 'completed') {
+            if (dayPattern.contains(dayOfWeek) && workoutDayIndex < plan.workouts.length) {
+              workoutDayIndex++;
+            }
+            continue;
+          }
+        }
+
+        final isWorkoutDay = dayPattern.contains(dayOfWeek);
+        if (isWorkoutDay && workoutDayIndex < plan.workouts.length) {
+          final workoutDay = plan.workouts[workoutDayIndex];
+          await workoutBox.put(scheduleKey, {
+            'date': dateKey,
+            'week': week + 1,
+            'day_of_week': dayOfWeek,
+            'type': 'workout',
+            'workout_day_index': workoutDayIndex,
+            'workout_name': workoutDay.name,
+            'workout_focus': workoutDay.focus,
+            'exercises': workoutDay.exercises.map((e) => e.toMap()).toList(),
+            'status': 'planned',
+            'completed_at': null,
+            'is_swapped': false,
+            'original_date': null,
+          });
+          workoutDayIndex++;
+        } else {
+          await workoutBox.put(scheduleKey, {
+            'date': dateKey,
+            'week': week + 1,
+            'day_of_week': dayOfWeek,
+            'type': 'rest',
+            'workout_name': 'Rest Day',
+            'workout_focus': 'Recovery & mobility',
+            'exercises': <Map<String, dynamic>>[],
+            'status': 'rest',
+            'completed_at': null,
+            'is_swapped': false,
+            'original_date': null,
+          });
+        }
+      }
+    }
+
+    return plan;
+  }
+
   // ── Queries ─────────────────────────────────────────────────────
 
   /// Get scheduled data for a specific date.

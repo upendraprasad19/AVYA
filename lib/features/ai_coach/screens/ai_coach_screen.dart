@@ -55,27 +55,47 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   Future<void> _initSpeech() async {
-    _speechAvailable = await _speech!.initialize(
-      onError: (error) => setState(() => _isRecording = false),
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
+    try {
+      _speechAvailable = await _speech!.initialize(
+        onError: (error) {
+          debugPrint('[STT] error: ${error.errorMsg}');
           setState(() => _isRecording = false);
-          if (_recognizedText.isNotEmpty) {
-            _messageController.text = _recognizedText;
-            _messageController.selection = TextSelection.fromPosition(
-              TextPosition(offset: _recognizedText.length),
-            );
-            _inputFocusNode.requestFocus();
-            _recognizedText = '';
+        },
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isRecording = false);
+            if (_recognizedText.isNotEmpty) {
+              _messageController.text = _recognizedText;
+              _messageController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _recognizedText.length),
+              );
+              _inputFocusNode.requestFocus();
+              _recognizedText = '';
+            }
           }
-        }
-      },
-    );
+        },
+      );
+    } catch (e) {
+      debugPrint('[STT] initialize() failed: $e');
+      _speechAvailable = false;
+    }
     setState(() {});
   }
 
   void _startListening() {
-    if (!_speechAvailable || _speech == null) return;
+    if (_speech == null) return;
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Microphone not available. Check app permissions in Settings.',
+            style: GoogleFonts.getFont('DM Sans'),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
     setState(() {
       _isRecording = true;
       _recognizedText = '';

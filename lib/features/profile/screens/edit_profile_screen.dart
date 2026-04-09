@@ -18,6 +18,7 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -47,6 +48,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _isAssessingBf = false;
   bool _isSaving = false;
   late bool _isMetric; // true = KG/CM, false = LBS/IN
+
+  // Track original plan-affecting values for rescheduling detection
+  late int _originalDaysPerWeek;
+  late String _originalGoal;
+  late String _originalEquipment;
 
   static const _goals = {
     'build_muscle': 'Build Muscle',
@@ -117,6 +123,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       text: bfPercent != null ? bfPercent.toString() : '',
     );
     _bodyFatAssessedAt = profile['body_fat_assessed_at'] as String?;
+
+    // Capture original values for rescheduling detection
+    _originalDaysPerWeek = _daysPerWeek;
+    _originalGoal = _goal;
+    _originalEquipment = _equipment;
   }
 
   @override
@@ -1101,9 +1112,113 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(userFirstNameProvider);
       ref.invalidate(userInitialProvider);
       ref.invalidate(userGreetingProvider);
-      // Refresh train plan if equipment or days_per_week changed.
+
+      // Detect plan-affecting field changes and offer rescheduling
+      final planChanged = _daysPerWeek != _originalDaysPerWeek ||
+          _goal != _originalGoal ||
+          _equipment != _originalEquipment;
+
+      if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
+        final changes = <String>[];
+        if (_daysPerWeek != _originalDaysPerWeek) {
+          changes.add('$_originalDaysPerWeek → $_daysPerWeek days/week');
+        }
+        if (_goal != _originalGoal) {
+          changes.add('Goal: ${_goals[_originalGoal]} → ${_goals[_goal]}');
+        }
+        if (_equipment != _originalEquipment) {
+          changes.add('Equipment: ${_equipmentOptions[_originalEquipment]} → ${_equipmentOptions[_equipment]}');
+        }
+
+        final shouldReschedule = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.cardM),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            title: Text(
+              'Reschedule Workouts?',
+              style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 16, fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You changed:',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                ...changes.map((c) => Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.arrow_forward, size: 12, color: AppColors.accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(c,
+                          style: GoogleFonts.getFont('DM Sans',
+                              fontSize: 12, fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary)),
+                      ),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 10),
+                Text(
+                  'Regenerate future workouts from today? Past completed workouts will be kept.',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Keep Current Plan',
+                    style: GoogleFonts.getFont('DM Sans',
+                        fontSize: 12, color: AppColors.textSecondary)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.accent.withValues(alpha: 0.08),
+                ),
+                child: Text('Reschedule',
+                    style: GoogleFonts.getFont('DM Sans',
+                        fontSize: 12, fontWeight: FontWeight.w700,
+                        color: AppColors.accent)),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldReschedule == true && mounted) {
+          final profile = ref.read(userProfileProvider);
+          final experience = (profile['detected_experience_level'] as String?) ?? 'beginner';
+          final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
+
+          await WorkoutScheduleService.instance.generateAndScheduleFromDate(
+            goal: _goal,
+            equipment: _equipment,
+            daysPerWeek: _daysPerWeek,
+            fromDate: DateTime.now(),
+            experienceLevel: experience,
+            phase: currentPhase,
+          );
+        }
+      }
+
+      // Refresh train plan providers after potential rescheduling.
       ref.invalidate(currentPlanProvider);
       ref.invalidate(todayWorkoutProvider);
+      ref.invalidate(calendarWeekProvider);
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
@@ -1115,7 +1230,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Profile saved',
+              planChanged && WorkoutScheduleService.instance.hasPlan()
+                  ? 'Profile saved & workouts rescheduled'
+                  : 'Profile saved',
               style: GoogleFonts.getFont('DM Sans'),
             ),
             backgroundColor: AppColors.green,

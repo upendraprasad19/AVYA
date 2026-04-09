@@ -165,6 +165,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         final bd = DateTime.tryParse(dob);
         if (bd != null) age = DateTime.now().difference(bd).inDays ~/ 365;
       }
+      final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
       final t = BmrCalculator.calculateTargets(
         weightKg: weightKg,
         heightCm: heightCm,
@@ -172,6 +173,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         gender: gender,
         activityLevel: profile['activity_level'] as String? ?? 'moderate',
         goal: stats.primaryGoal,
+        bodyFatPercent: bodyFat,
       );
       nutritionTargets = {
         'tdee': t.tdee.toDouble(),

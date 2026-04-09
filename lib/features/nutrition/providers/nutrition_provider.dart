@@ -54,6 +54,7 @@ Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
           if (age <= 0) age = 25;
         }
       }
+      final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
       final targets = BmrCalculator.calculateTargets(
         weightKg: weightKg,
         heightCm: heightCm,
@@ -61,6 +62,7 @@ Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
         gender: gender,
         activityLevel: activityLevel,
         goal: goal,
+        bodyFatPercent: bodyFat,
       );
       return {
         'daily_calories': targets.dailyCalories.toDouble(),

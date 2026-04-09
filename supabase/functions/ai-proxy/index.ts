@@ -24,6 +24,13 @@ const FREE_MODEL = "llama3.1-8b";
 const FREE_MODEL_LABEL = "Cerebras Llama 3.1 8B";
 const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
 
+// OpenRouter free models for AI Coach chat (text + image capable).
+const FREE_CHAT_MODELS = [
+  "google/gemma-4-27b-it:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+];
+
 const FREE_DAILY_LIMIT = 15;
 const FREE_TRIAL_DAYS = 30;
 const TIMEOUT_MS = 8000;
@@ -146,7 +153,7 @@ serve(async (req: Request) => {
     // Parse request body early — needed to route food_text_analysis
     // before trial/rate-limit checks (food logging is always free).
     const body = await req.json();
-    const { message, snapshot_json, type, text, context } = body;
+    const { message, snapshot_json, type, text, context, image_base64 } = body;
 
     // ── Food text analysis (separate path — no trial/rate-limit check) ────
     // Primary: OpenRouter Gemma 4 cascade (free). Fallback: Gemini 2.5 Flash Lite.
@@ -375,6 +382,30 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       const systemPrompt = (context?.system_prompt as string) ??
         "You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.";
 
+      // Try OpenRouter Gemma 4 cascade first
+      const { content: predContent, modelUsed: predModel, tokensUsed: predTokens } = await cascadeChat({
+        models: [...FREE_CHAT_MODELS],
+        systemPrompt,
+        userPrompt: message,
+        maxTokens: 1024,
+        temperature: 0.7,
+        timeoutMs: 12000,
+        title: "ICANBEFITTER Prediction",
+      });
+
+      if (predContent) {
+        return new Response(
+          JSON.stringify({
+            reply: predContent,
+            model_used: predModel ?? "Gemma 4 27B",
+            tokens_used: predTokens ?? 0,
+            actions: [],
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Fallback: Cerebras (text-only)
       let result: { reply: string; tokens_used: number } | null = null;
       for (const key of CEREBRAS_KEYS) {
         if (!key) continue;
@@ -526,21 +557,77 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
     }
 
-    // Try all 3 Cerebras keys in order — rotate on rate limit.
-    let result: { reply: string; tokens_used: number } | null = null;
+    // Try OpenRouter Gemma 4 cascade (text + optional image).
+    const { content: orContent, modelUsed: orModel, tokensUsed: orTokens } = await cascadeChat({
+      models: [...FREE_CHAT_MODELS],
+      systemPrompt,
+      userPrompt: message,
+      ...(image_base64 ? { imageBase64: image_base64, imageMimeType: "image/jpeg" } : {}),
+      maxTokens: 1024,
+      temperature: 0.7,
+      timeoutMs: image_base64 ? 15000 : 12000,
+      title: "ICANBEFITTER AI Coach",
+    });
 
-    for (const key of CEREBRAS_KEYS) {
-      if (!key) continue;
-      result = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
-      if (result) break;
-    }
+    if (!orContent) {
+      // Fallback: try Cerebras keys if OpenRouter fails
+      let cerebrasResult: { reply: string; tokens_used: number } | null = null;
+      if (!image_base64) {
+        for (const key of CEREBRAS_KEYS) {
+          if (!key) continue;
+          cerebrasResult = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
+          if (cerebrasResult) break;
+        }
+      }
+      if (!cerebrasResult) {
+        return new Response(
+          JSON.stringify({ error: "AI temporarily unavailable. Please try again." }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // Use Cerebras fallback result
+      const extracted = extractLogActions(cerebrasResult.reply);
+      const modelLabel = FREE_MODEL_LABEL;
 
-    if (!result) {
+      const { data: snapshotData } = await supabaseClient
+        .from("user_daily_snapshots")
+        .select("id")
+        .eq("user_id", userId)
+        .order("snapshot_date", { ascending: false })
+        .limit(1)
+        .single();
+
+      await supabaseClient.from("ai_coach_interactions").insert({
+        user_id: userId,
+        snapshot_id: snapshotData?.id ?? null,
+        channel: "app",
+        user_message: message,
+        ai_response: extracted.reply,
+        model_used: modelLabel,
+        tokens_used: cerebrasResult.tokens_used,
+        created_at: new Date().toISOString(),
+      });
+
+      (async () => {
+        try {
+          const content = `User: ${message}\nCoach: ${extracted.reply}`;
+          const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
+          if (!embedding) return;
+          await supabaseClient.from("memory_embeddings").insert({
+            user_id: userId, embedding, content, source_type: "conversation",
+            metadata: { date: new Date().toISOString().split("T")[0], channel: "app", model: modelLabel },
+          });
+        } catch (e) { console.error("[ai-proxy] Embed store error:", e); }
+      })();
+
       return new Response(
-        JSON.stringify({ error: "AI temporarily unavailable. Please try again." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({ reply: extracted.reply, model_used: modelLabel, tokens_used: cerebrasResult.tokens_used, actions: extracted.actions }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    const result = { reply: orContent, tokens_used: orTokens ?? 0 };
+    const modelLabel = orModel ?? "Gemma 4 27B";
 
     // Extract structured log actions from AI reply
     const extracted = extractLogActions(result.reply);
@@ -561,7 +648,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       channel: "app",
       user_message: message,
       ai_response: extracted.reply,
-      model_used: FREE_MODEL_LABEL,
+      model_used: modelLabel,
       tokens_used: result.tokens_used,
       created_at: new Date().toISOString(),
     });
@@ -583,7 +670,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
           metadata: {
             date: new Date().toISOString().split("T")[0],
             channel: "app",
-            model: FREE_MODEL_LABEL,
+            model: modelLabel,
           },
         });
       } catch (e) {
@@ -594,7 +681,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     return new Response(
       JSON.stringify({
         reply: extracted.reply,
-        model_used: FREE_MODEL_LABEL,
+        model_used: modelLabel,
         tokens_used: result.tokens_used,
         actions: extracted.actions,
       }),

@@ -1,7 +1,12 @@
-/// Mifflin-St Jeor BMR formula with activity multipliers.
+/// Hybrid BMR calculator: Katch-McArdle when body fat % is available,
+/// Mifflin-St Jeor otherwise.
 ///
-/// Male:   BMR = (10 x weight_kg) + (6.25 x height_cm) - (5 x age) + 5
-/// Female: BMR = (10 x weight_kg) + (6.25 x height_cm) - (5 x age) - 161
+/// Katch-McArdle: BMR = 370 + (21.6 x lean_mass_kg)
+///   where lean_mass = weight_kg x (1 - body_fat_pct / 100)
+///
+/// Mifflin-St Jeor:
+///   Male:   BMR = (10 x weight_kg) + (6.25 x height_cm) - (5 x age) + 5
+///   Female: BMR = (10 x weight_kg) + (6.25 x height_cm) - (5 x age) - 161
 ///
 /// TDEE = BMR x activity multiplier
 class BmrCalculator {
@@ -50,12 +55,13 @@ class BmrCalculator {
     'very_active': 1.9,
   };
 
-  /// Calculates Basal Metabolic Rate using Mifflin-St Jeor formula.
+  /// Calculates Basal Metabolic Rate.
   ///
-  /// - [weightKg]: Body weight in kilograms.
-  /// - [heightCm]: Height in centimetres.
-  /// - [age]: Age in years.
-  /// - [gender]: "male" or "female".
+  /// When [bodyFatPercent] is provided (and valid 1-69%), uses Katch-McArdle
+  /// formula based on lean body mass (gender-neutral, more accurate).
+  /// Otherwise falls back to Mifflin-St Jeor.
+  ///
+  /// The [_bmrOffset] (-50 kcal) is applied in both formulas.
   ///
   /// Returns BMR in kcal/day (rounded to nearest integer).
   static double calculateBmr({
@@ -63,6 +69,7 @@ class BmrCalculator {
     required double heightCm,
     required int age,
     required String gender,
+    double? bodyFatPercent,
   }) {
     // Guard against unrealistic inputs that would produce invalid BMR.
     if (weightKg <= 0 || weightKg > 500 ||
@@ -70,8 +77,18 @@ class BmrCalculator {
         age <= 0 || age > 120) {
       return 0;
     }
-    final base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
-    final raw = gender.toLowerCase() == 'male' ? base + 5 : base - 161;
+
+    double raw;
+    if (bodyFatPercent != null && bodyFatPercent > 0 && bodyFatPercent < 70) {
+      // Katch-McArdle: gender-neutral, based on lean mass.
+      final leanMass = weightKg * (1 - bodyFatPercent / 100);
+      raw = 370 + (21.6 * leanMass);
+    } else {
+      // Mifflin-St Jeor: uses gender, height, age.
+      final base = (10 * weightKg) + (6.25 * heightCm) - (5 * age);
+      raw = gender.toLowerCase() == 'male' ? base + 5 : base - 161;
+    }
+
     return (raw + _bmrOffset).roundToDouble();
   }
 
@@ -89,12 +106,14 @@ class BmrCalculator {
     required int age,
     required String gender,
     required String activityLevel,
+    double? bodyFatPercent,
   }) {
     final bmr = calculateBmr(
       weightKg: weightKg,
       heightCm: heightCm,
       age: age,
       gender: gender,
+      bodyFatPercent: bodyFatPercent,
     );
     final multiplier = activityMultipliers[activityLevel] ?? 1.2;
     return (bmr * multiplier + _tdeeOffset).roundToDouble();
@@ -114,12 +133,14 @@ class BmrCalculator {
     required String activityLevel,
     required String goal,
     double? targetWeightKg,
+    double? bodyFatPercent,
   }) {
     final bmr = calculateBmr(
       weightKg: weightKg,
       heightCm: heightCm,
       age: age,
       gender: gender,
+      bodyFatPercent: bodyFatPercent,
     );
 
     final tdee = bmr * (activityMultipliers[activityLevel] ?? 1.2) + _tdeeOffset;

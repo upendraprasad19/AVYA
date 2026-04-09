@@ -361,23 +361,55 @@ class SendMessageNotifier extends Notifier<bool> {
       debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
 
-      // Detect session/auth errors — refresh token proactively but do NOT
-      // retry the send().  The old recursive send() caused an infinite loop
-      // (30+ duplicate messages).  User can simply tap Send again.
+      // Detect session/auth errors — refresh token and auto-retry ONCE.
+      // Single inline retry (not recursive) prevents the old infinite-loop bug.
       final isAuthError = errStr.contains('No active session') ||
           errStr.contains('401') || errStr.contains('unauthorized') ||
           errStr.contains('jwt') || errStr.contains('Session expired');
 
       if (isAuthError) {
-        debugPrint('[AiCoachProvider] Auth error detected, forcing hard token refresh...');
+        debugPrint('[AiCoachProvider] Auth error detected, refreshing token + auto-retry...');
         try {
-          // Force a hard refresh (not just ensureFreshToken which uses a buffer).
-          // After this, the session has a fresh access token.
-          // User can tap Send again without signing out.
           await SupabaseService.instance.client.auth.refreshSession();
-          debugPrint('[AiCoachProvider] Hard refresh succeeded — user can tap Send again.');
-        } catch (refreshErr) {
-          debugPrint('[AiCoachProvider] Hard refresh failed: $refreshErr');
+          debugPrint('[AiCoachProvider] Hard refresh succeeded — retrying once...');
+
+          // Single inline retry after successful token refresh
+          final repo = AiCoachRepository.instance;
+          final retryContext = repo.buildAiContext();
+          final retryEnriched = repo.enrichContextForQuery(message, retryContext);
+
+          AiChatResponse retryResponse;
+          if (mode == 'deep' && isPro) {
+            retryResponse = await AiService.instance.reason(message, retryEnriched);
+          } else if (isPro) {
+            retryResponse = await AiService.instance.chatPro(message, retryEnriched);
+          } else {
+            retryResponse = await AiService.instance.chat(message, retryEnriched);
+          }
+
+          // Retry succeeded — update UI and return
+          chatNotifier.replaceLastMessage(ChatMessage(
+            text: retryResponse.reply,
+            isUser: false,
+            timestamp: DateTime.now(),
+            mode: mode,
+          ));
+          await repo.saveInteraction(
+            userMessage: message,
+            aiResponse: retryResponse.reply,
+            modelUsed: retryResponse.modelUsed,
+            mode: mode,
+          );
+          await repo.extractCoachingNotes();
+          ref.invalidate(coachInsightProvider);
+          limitNotifier.increment();
+          if (retryResponse.actions.isNotEmpty) {
+            ref.read(pendingLogActionsProvider.notifier).addActions(retryResponse.actions, ref);
+          }
+          return; // Success — skip error message below
+        } catch (retryErr) {
+          debugPrint('[AiCoachProvider] Auto-retry after refresh failed: $retryErr');
+          // Fall through to error message
         }
       }
 
@@ -387,7 +419,7 @@ class SendMessageNotifier extends Notifier<bool> {
           errStr.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
       } else if (isAuthError) {
-        errorMsg = 'Session refreshed. Please tap Send to try again.';
+        errorMsg = 'Session error. Please try again.';
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
       } else if (errStr.contains('TRIAL_EXPIRED')) {

@@ -40,6 +40,8 @@ class AiCoachRepository {
         'injuries': profile['injuries'] ?? '',
         'bmr': profile['bmr'] ?? 0,
         'tdee': profile['tdee'] ?? 0,
+        if (profile['city'] != null && (profile['city'] as String).isNotEmpty)
+          'city': profile['city'],
       },
       'progress': {
         'current_phase': progress['current_phase'] ?? 1,
@@ -531,12 +533,20 @@ class AiCoachRepository {
             ? ((waterData['total_ml'] as num?)?.toInt() ?? 0)
             : 0;
 
+    // Get urine colour from healthBox
+    final urineData = healthBox.get('urine_color_$todayStr');
+    String? urineStatus;
+    if (urineData is Map) {
+      urineStatus = urineData['label'] as String?;
+    }
+
     return {
       'calories_logged': calories.round(),
       'protein_g': protein.round(),
       'carbs_g': carbs.round(),
       'fat_g': fat.round(),
       'water_ml': waterMl,
+      if (urineStatus != null) 'urine_status': urineStatus,
     };
   }
 

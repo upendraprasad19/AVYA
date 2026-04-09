@@ -13,6 +13,7 @@ import '../widgets/ai_breakdown_card.dart';
 import '../widgets/todays_meals_card.dart';
 import '../widgets/weekly_chart_card.dart';
 import '../widgets/scan_meal_section.dart';
+import '../widgets/cart_auditor_section.dart';
 import '../widgets/saved_meals_section.dart';
 import '../widgets/food_search_sheet.dart';
 import '../widgets/barcode_scan_sheet.dart';
@@ -33,7 +34,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
 
   bool _isLoading = true;
   bool _isInsightsExpanded = false;
-  bool _isWaterExpanded = false;
+  bool _isWaterExpanded = true;
   int _logTabIndex = 0;
 
   @override
@@ -507,7 +508,13 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           if (_logTabIndex == 0)
             const FoodLoggerSection()
           else if (_logTabIndex == 1)
-            const ScanMealSection()
+            Column(
+              children: const [
+                ScanMealSection(),
+                SizedBox(height: 12),
+                CartAuditorSection(),
+              ],
+            )
           else
             _buildSearchTab(context),
         ],

@@ -69,6 +69,7 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         : (profile['activity_level'] as String? ?? 'moderate');
 
     final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble();
+    final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
 
     final targets = BmrCalculator.calculateTargets(
       weightKg: weight,
@@ -80,6 +81,7 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       targetWeightKg: targetWeight != null && targetWeight > 0
           ? targetWeight
           : null,
+      bodyFatPercent: bodyFat,
     );
 
     // Persist computed targets AND the resolved activity level so downstream

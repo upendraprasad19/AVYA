@@ -218,10 +218,104 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
       return;
     }
 
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+    if (kIsWeb) {
+      // Web: go straight to gallery (camera not available)
+      await _pickAndScan(ImageSource.gallery);
+      return;
+    }
+
+    // Native: show Camera / Gallery bottom sheet
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.cardL),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.border, width: 1),
+            left: BorderSide(color: AppColors.border, width: 1),
+            right: BorderSide(color: AppColors.border, width: 1),
+          ),
+        ),
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.textDisabled,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'Scan Your Meal',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 16, fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 16),
+              _sourceOption(ctx, Icons.camera_alt, 'Camera',
+                  'Take a photo now', ImageSource.camera),
+              const SizedBox(height: 8),
+              _sourceOption(ctx, Icons.photo_library, 'Gallery',
+                  'Choose from photos', ImageSource.gallery),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
     );
+
+    if (source != null) await _pickAndScan(source);
+  }
+
+  Widget _sourceOption(BuildContext ctx, IconData icon, String label,
+      String subtitle, ImageSource source) {
+    return GestureDetector(
+      onTap: () => Navigator.of(ctx).pop(source),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(AppRadius.cardS),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.accentTint,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.accent, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 14, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
+                Text(subtitle, style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 11, color: AppColors.textSecondary)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndScan(ImageSource source) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: source);
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();

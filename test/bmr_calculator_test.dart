@@ -197,4 +197,108 @@ void main() {
       expect(map.containsKey('fat_grams'), isTrue);
     });
   });
+
+  group('Katch-McArdle (body fat % provided)', () {
+    test('uses Katch-McArdle when bodyFatPercent is given', () {
+      // 80kg, 20% BF → lean mass = 64kg
+      // KM BMR = 370 + (21.6 * 64) = 370 + 1382.4 = 1752.4 - 50 = 1702
+      final result = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', bodyFatPercent: 20.0,
+      );
+      expect(result, 1702.0);
+    });
+
+    test('falls back to Mifflin-St Jeor when bodyFatPercent is null', () {
+      final withBf = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', bodyFatPercent: null,
+      );
+      final without = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 30, gender: 'male',
+      );
+      expect(withBf, without);
+    });
+
+    test('Katch-McArdle is gender-neutral (same BF% same weight = same BMR)', () {
+      final male = BmrCalculator.calculateBmr(
+        weightKg: 70, heightCm: 170, age: 25,
+        gender: 'male', bodyFatPercent: 15.0,
+      );
+      final female = BmrCalculator.calculateBmr(
+        weightKg: 70, heightCm: 170, age: 25,
+        gender: 'female', bodyFatPercent: 15.0,
+      );
+      expect(male, female); // KM doesn't use gender
+    });
+
+    test('offset (-50) is applied in Katch-McArdle', () {
+      // 70kg, 15% BF → lean mass = 59.5kg
+      // Raw KM = 370 + (21.6 * 59.5) = 370 + 1285.2 = 1655.2
+      // With offset = 1655.2 - 50 = 1605.2 → 1605
+      final result = BmrCalculator.calculateBmr(
+        weightKg: 70, heightCm: 170, age: 25,
+        gender: 'male', bodyFatPercent: 15.0,
+      );
+      expect(result, 1605.0);
+    });
+
+    test('ignores invalid bodyFatPercent (0, negative, >=70)', () {
+      final baseline = BmrCalculator.calculateBmr(
+        weightKg: 80, heightCm: 175, age: 30, gender: 'male',
+      );
+      expect(
+        BmrCalculator.calculateBmr(
+          weightKg: 80, heightCm: 175, age: 30,
+          gender: 'male', bodyFatPercent: 0,
+        ),
+        baseline,
+      );
+      expect(
+        BmrCalculator.calculateBmr(
+          weightKg: 80, heightCm: 175, age: 30,
+          gender: 'male', bodyFatPercent: -5,
+        ),
+        baseline,
+      );
+      expect(
+        BmrCalculator.calculateBmr(
+          weightKg: 80, heightCm: 175, age: 30,
+          gender: 'male', bodyFatPercent: 70,
+        ),
+        baseline,
+      );
+    });
+
+    test('TDEE passes bodyFatPercent through to BMR', () {
+      final tdeeWithBf = BmrCalculator.calculateTdee(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', activityLevel: 'moderate', bodyFatPercent: 20.0,
+      );
+      final tdeeWithout = BmrCalculator.calculateTdee(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', activityLevel: 'moderate',
+      );
+      // These should differ since BF% changes the BMR formula
+      expect(tdeeWithBf, isNot(equals(tdeeWithout)));
+    });
+
+    test('calculateTargets uses Katch-McArdle when BF% provided', () {
+      final withBf = BmrCalculator.calculateTargets(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', activityLevel: 'moderate',
+        goal: 'build_muscle', bodyFatPercent: 20.0,
+      );
+      final without = BmrCalculator.calculateTargets(
+        weightKg: 80, heightCm: 175, age: 30,
+        gender: 'male', activityLevel: 'moderate',
+        goal: 'build_muscle',
+      );
+      // BMR should differ
+      expect(withBf.bmr, isNot(equals(without.bmr)));
+      // Both should still have valid positive values
+      expect(withBf.dailyCalories, greaterThan(0));
+      expect(withBf.proteinGrams, greaterThan(0));
+    });
+  });
 }
