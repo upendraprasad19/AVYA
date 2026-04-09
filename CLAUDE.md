@@ -638,6 +638,8 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 - Refreshes from Supabase on app launch (if online)
 - If expired and offline → downgrade to free immediately (no grace period)
 - Downgrade = soft lock: keep all data, show paywall on PRO features, read-only on PRO content
+- **Phantom PRO fix:** `localActivationAt` is force-cleared after grace period expires on network error. Prevents stale local timestamp from keeping users in PRO after subscription lapses.
+- **JWT refresh:** `razorpay_service` refreshes JWT before each verify-payment retry to prevent 401 errors during polling.
 
 ---
 
@@ -745,9 +747,9 @@ Phase {
 3. Quick actions: Log Workout | Log Meal | Hydration | Sleep
 4. Today's workout card → Start Workout (or DONE + View Card + stats if completed)
 5. Nutrition snapshot (calories + protein vs target)
-6. AI Coach insight
+6. AI Coach insight (computed from local schedule data — next workout, consistency tips)
 7. Weight sparkline (last 7 entries)
-8. PR snapshot (bench, squat, deadlift)
+8. PR snapshot (dynamic — top 4 exercises by volume when key lifts empty)
 9. Recent logged foods
 10. Step counter (Health Connect)
 ```
@@ -811,8 +813,9 @@ Mifflin-St Jeor BMR formula → adjusted by activity level = TDEE.
 | When | What | Where |
 |------|------|-------|
 | Immediately | Custom foods/exercises added | → Supabase (community contribution) |
-| Daily 11PM IST | user_daily_snapshot (AI context) + coaching_notes extraction | → Supabase |
-| Weekly (app launch if >7d) | Full sync: all logs, progress, preferences | → Supabase |
+| Every app launch | user_daily_snapshot (AI context) via pushSnapshot() | → Supabase |
+| Daily 11PM IST | coaching_notes extraction from that day's conversations | → Hive + Supabase |
+| Daily (app launch if >1d) | Full sync: all logs, progress, preferences | → Supabase |
 | Periodically | Check for new approved community items | ← Supabase → Hive |
 | On restore | Pull full history (all users) | ← Supabase → Hive |
 
@@ -903,3 +906,11 @@ See `.claude/agents/` for full definitions:
 | API key in client | ALL AI calls through Edge Functions |
 | Water not resetting | Check date on app launch, reset if new day |
 | Font fallback | Always use GoogleFonts.getFont('DM Sans', ...), never default font |
+| Phantom PRO status | Force-clear localActivationAt after grace period on network error |
+| Steps/sleep showing stale data | Filter health data by BOTH date AND type (`step_log`, `sleep_log`). Legacy `steps_today` guarded by `stepsToday == null && steps_date == todayStr`. Chat-logged sleep read from `sleep_logs` list as fallback. |
+| AI insight from old chat | Compute insights from local schedule data, not last AI message |
+| Stats grid empty | Fall back to top 4 exercises from allExercisePRs when key lifts (bench/squat/deadlift/OHP) have no data. Unit derived from loggingType (kg/reps/s/km). Adaptive layout: 1→full, 2→row, 3→2+1, 4→2+2. |
+| Prediction card truncated | Home: maxLines 4 + "Read More →" opens full bottom sheet. Shareable: capped at 500 chars. |
+| JWT expired during payment poll | Refresh JWT before each verify-payment retry |
+| Onboarding sync fails silently | Retry sync with JWT refresh on failure |
+| Daily snapshot not pushing | pushSnapshot() must be wired into checkAndSync(), fires on every app launch |
