@@ -97,7 +97,7 @@ Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI �
 | AI Coach Free | Edge Function → Cerebras Llama 3.1 8B free tier (30-day trial, 15 msg/day) |
 | AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function, ~₹1.80/user/month) |
 | AI Reasoning PRO | GLM-4.7 on Cerebras |
-| Food AI | Gemini Flash (PRO only) |
+| Food AI | OpenRouter Gemma 4 cascade (free) → Gemini 2.5 Flash Lite (fallback) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
 | Telegram Bot | Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo |
@@ -668,7 +668,7 @@ Cost per user/month: ~₹1.80
 - Full personalised coaching: photo/video upload, deep analysis
 - Free users see it locked → PRO paywall
 
-### Vision Features (ai-proxy — Gemini Flash)
+### Vision Features (ai-proxy — OpenRouter Gemma 4 + Gemini 2.5 Flash Lite)
 - `food_text_analysis`: Text → nutrition JSON. Always free, no rate limit.
 - `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 15/day abuse cap.
 - `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 15/day abuse cap.
