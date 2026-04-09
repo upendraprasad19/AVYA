@@ -172,6 +172,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   controller: _scrollController,
                   padding: const EdgeInsets.only(top: 6, bottom: 10),
                   children: [
+                    // Warm-up section (collapsible)
+                    if (data.workoutDay?.warmup.isNotEmpty == true)
+                      _WarmupCooldownSection(
+                        title: 'WARM-UP',
+                        icon: Icons.local_fire_department_rounded,
+                        color: AppColors.orange,
+                        exercises: data.workoutDay!.warmup,
+                        initiallyExpanded: !data.isComplete,
+                      ),
+
                     ...data.exercises.asMap().entries.map((entry) {
                       final exIdx = entry.key;
                       final exercise = entry.value;
@@ -278,7 +288,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                     duration: const Duration(seconds: 3),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
-                                      side: BorderSide(color: const Color(0xFFf97316).withValues(alpha: 0.3)),
+                                      side: BorderSide(color: AppColors.orange.withValues(alpha: 0.3)),
                                     ),
                                     content: Text(
                                       'Warm-up set \u2014 not counted in volume',
@@ -286,7 +296,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                         'DM Sans',
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
-                                        color: const Color(0xFFf97316),
+                                        color: AppColors.orange,
                                       ),
                                     ),
                                   ),
@@ -305,6 +315,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                         ],
                       );
                     }),
+
+                    // Cool-down section (collapsible)
+                    if (data.workoutDay?.cooldown.isNotEmpty == true)
+                      _WarmupCooldownSection(
+                        title: 'COOL-DOWN',
+                        icon: Icons.air_rounded,
+                        color: AppColors.blue,
+                        exercises: data.workoutDay!.cooldown,
+                        initiallyExpanded: false,
+                      ),
 
                     // Add Exercise button — disabled in review mode (already saved)
                     Padding(
@@ -454,7 +474,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    'Phase 1 \u00b7 W1 \u00b7 ${data.completedSets}/${data.totalSets} sets',
+                    '${data.completedSets}/${data.totalSets} sets${data.liveVolumeKg > 0 ? ' \u00b7 ${data.liveVolumeKg.toStringAsFixed(0)}kg volume' : ''}',
                     style: GoogleFonts.getFont(
                       'DM Sans',
                       fontSize: 9,
@@ -1487,18 +1507,45 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                           ),
                         ),
 
-                        // Suggested weight line
+                        // Last performance + suggested weight
                         Builder(builder: (_) {
                           final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
-                          if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
-                            return Padding(
+                          if (!lastPerf.hasData) return const SizedBox.shrink();
+
+                          final children = <Widget>[];
+
+                          // "Last: 50.0kg × 10 reps" line
+                          if (lastPerf.lastWeight != null && lastPerf.lastWeight! > 0) {
+                            children.add(Padding(
                               padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.history, size: 10, color: AppColors.textSecondary),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Last: ${lastPerf.lastWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? '?'} reps',
+                                    style: GoogleFonts.getFont(
+                                      'DM Sans',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ));
+                          }
+
+                          // "Try: 52.5kg × 10" suggestion line
+                          if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
+                            children.add(Padding(
+                              padding: const EdgeInsets.only(top: 2),
                               child: Row(
                                 children: [
                                   Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
                                   const SizedBox(width: 3),
                                   Text(
-                                    'Suggested: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
+                                    'Try: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
                                     style: GoogleFonts.getFont(
                                       'DM Sans',
                                       fontSize: 10,
@@ -1508,9 +1555,13 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                   ),
                                 ],
                               ),
-                            );
+                            ));
                           }
-                          return const SizedBox.shrink();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: children,
+                          );
                         }),
 
                         const SizedBox(height: 8),
@@ -2490,6 +2541,178 @@ class _CreateCustomExerciseSheetState
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Warm-up / Cool-down collapsible checklist
+// ══════════════════════════════════════════════════════════════════
+
+class _WarmupCooldownSection extends StatefulWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<ExerciseData> exercises;
+  final bool initiallyExpanded;
+
+  const _WarmupCooldownSection({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.exercises,
+    this.initiallyExpanded = true,
+  });
+
+  @override
+  State<_WarmupCooldownSection> createState() => _WarmupCooldownSectionState();
+}
+
+class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
+  late bool _expanded;
+  late List<bool> _checked;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+    _checked = List.filled(widget.exercises.length, false);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WarmupCooldownSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.exercises.length != _checked.length) {
+      _checked = List.filled(widget.exercises.length, false);
+    }
+  }
+
+  int get _checkedCount => _checked.where((c) => c).length;
+  bool get _allDone => _checkedCount == widget.exercises.length;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.color.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: widget.color.withValues(alpha: _allDone ? 0.3 : 0.12),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Header row (tappable to expand/collapse)
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Icon(widget.icon, size: 16, color: widget.color),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.title,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        color: widget.color,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_checkedCount > 0)
+                      Text(
+                        '$_checkedCount/${widget.exercises.length}',
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: widget.color.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    const Spacer(),
+                    if (_allDone)
+                      Icon(Icons.check_circle, size: 16, color: widget.color)
+                    else
+                      Icon(
+                        _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        size: 18,
+                        color: widget.color.withValues(alpha: 0.5),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Exercise rows (collapsible)
+            if (_expanded)
+              ...widget.exercises.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final ex = entry.value;
+                final done = _checked[idx];
+
+                // Format duration/reps
+                String detail;
+                if (ex.loggingType == 'timed') {
+                  final raw = ex.reps.replaceAll('s', '');
+                  final secs = int.tryParse(raw) ?? 0;
+                  detail = secs >= 60 ? '${secs ~/ 60} min' : '${secs}s';
+                } else {
+                  detail = '${ex.sets} \u00d7 ${ex.reps}';
+                }
+
+                return GestureDetector(
+                  onTap: () => setState(() => _checked[idx] = !_checked[idx]),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                    child: Row(
+                      children: [
+                        Icon(
+                          done ? Icons.check_circle : Icons.circle_outlined,
+                          size: 18,
+                          color: done
+                              ? widget.color
+                              : widget.color.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            ex.name,
+                            style: GoogleFonts.getFont(
+                              'DM Sans',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: done
+                                  ? AppColors.textSecondary
+                                  : AppColors.textPrimary,
+                              decoration: done ? TextDecoration.lineThrough : null,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          detail,
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            if (_expanded) const SizedBox(height: 2),
+          ],
+        ),
       ),
     );
   }

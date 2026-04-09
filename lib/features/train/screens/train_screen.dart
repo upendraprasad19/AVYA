@@ -1279,63 +1279,32 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                                 ),
                               ),
                             ]
-                          : List.generate(day.exercises.length, (index) {
-                              final ex = day.exercises[index];
-                              final restSecs = ex.rest.replaceAll('s', '');
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.accent.withValues(alpha: 0.08),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: GoogleFonts.getFont(
-                                          'DM Sans',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.accent,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            ex.name,
-                                            style: GoogleFonts.getFont(
-                                              'DM Sans',
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            '${ex.sets} sets \u00b7 ${ex.reps} reps \u00b7 ${restSecs}s rest',
-                                            style: GoogleFonts.getFont(
-                                              'DM Sans',
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w400,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
+                          : [
+                              // Warm-up section
+                              if (day.warmup.isNotEmpty) ...[
+                                _buildPreviewSectionLabel('WARM-UP', AppColors.orange),
+                                ...day.warmup.map((ex) => _buildPreviewExerciseRow(
+                                  ex, null, AppColors.orange,
+                                )),
+                                const SizedBox(height: 8),
+                                _buildPreviewSectionLabel('WORKOUT', AppColors.accent),
+                              ],
+                              // Main exercises
+                              ...List.generate(day.exercises.length, (index) {
+                                final ex = day.exercises[index];
+                                return _buildPreviewExerciseRow(
+                                  ex, index + 1, AppColors.accent,
+                                );
+                              }),
+                              // Cool-down section
+                              if (day.cooldown.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                _buildPreviewSectionLabel('COOL-DOWN', AppColors.blue),
+                                ...day.cooldown.map((ex) => _buildPreviewExerciseRow(
+                                  ex, null, AppColors.blue,
+                                )),
+                              ],
+                            ],
                 ),
               ),
             ],
@@ -1343,6 +1312,102 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           ),
         );
       },
+    );
+  }
+
+  // ── Preview sheet helpers ────────────────────────────────────
+
+  Widget _buildPreviewSectionLabel(String label, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: GoogleFonts.getFont(
+          'DM Sans',
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: color.withValues(alpha: 0.7),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewExerciseRow(ExerciseData ex, int? number, Color color) {
+    // Format detail based on logging type
+    String detail;
+    if (ex.loggingType == 'timed') {
+      final reps = ex.reps.replaceAll('s', '');
+      final secs = int.tryParse(reps) ?? 0;
+      if (secs >= 60) {
+        detail = '${secs ~/ 60} min';
+      } else {
+        detail = '${secs}s';
+      }
+    } else {
+      final restSecs = ex.rest.replaceAll('s', '');
+      detail = '${ex.sets} sets · ${ex.reps} reps · ${restSecs}s rest';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          if (number != null)
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '$number',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            )
+          else
+            Icon(
+              Icons.circle,
+              size: 6,
+              color: color.withValues(alpha: 0.5),
+            ),
+          SizedBox(width: number != null ? 10 : 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ex.name,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  detail,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

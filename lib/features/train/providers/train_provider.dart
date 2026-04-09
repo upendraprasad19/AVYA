@@ -48,8 +48,13 @@ LastPerformanceData _getLastPerformance(String exerciseName) {
     if (log['type'] != 'exercise_log') continue;
 
     final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
-    if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
     if (logName.isEmpty) continue;
+    // Exact match first; fuzzy contains only when both names are long enough
+    // to avoid false positives like "Press" matching "Leg Press"
+    if (logName != nameLower) {
+      if (nameLower.length < 6 || logName.length < 6) continue;
+      if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
+    }
 
     final dateStr = log['date'] as String?;
     if (dateStr == null) continue;
@@ -98,8 +103,11 @@ final exerciseHistoryProvider =
     if (log['type'] != 'exercise_log') continue;
 
     final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
-    if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
     if (logName.isEmpty) continue;
+    if (logName != nameLower) {
+      if (nameLower.length < 6 || logName.length < 6) continue;
+      if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
+    }
 
     final weight = (log['weight_kg'] as num?)?.toDouble();
     if (weight == null || weight <= 0) continue;
@@ -198,6 +206,8 @@ class WorkoutDayData {
   final bool isRest;
   final bool isDone;
   final List<ExerciseData> exercises;
+  final List<ExerciseData> warmup;
+  final List<ExerciseData> cooldown;
 
   const WorkoutDayData({
     required this.dayNumber,
@@ -208,6 +218,8 @@ class WorkoutDayData {
     this.isRest = false,
     this.isDone = false,
     this.exercises = const [],
+    this.warmup = const [],
+    this.cooldown = const [],
   });
 
   int get exerciseCount => exercises.length;
@@ -235,6 +247,48 @@ class SwapExerciseData {
 
 // sampleSwapExercises removed — ExerciseSwapSheet queries Hive exerciseBox
 // via ExerciseRepository.instance directly.
+
+// ── Exercise map parser (shared for exercises, warmup, cooldown) ──
+
+List<ExerciseData> _parseExerciseMaps(List? raw) {
+  if (raw == null || raw.isEmpty) return const [];
+  return raw.map((e) {
+    final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+    final equipRaw = m['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
+    String? category = m['category'] as String?;
+    if (category == null || category.isEmpty) {
+      final name = (m['exercise_name'] as String? ?? '').toLowerCase();
+      final exId = m['exercise_id'] as String?;
+      if (exId != null && exId.isNotEmpty) {
+        final libEx = ExerciseRepository.instance.getById(exId);
+        category = libEx?['category'] as String?;
+      }
+      if (category == null || category.isEmpty) {
+        final results = ExerciseRepository.instance.search(name);
+        if (results.isNotEmpty) {
+          category = results.first['category'] as String?;
+        }
+      }
+    }
+
+    return ExerciseData(
+      name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
+      sets: '${m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3}',
+      reps: m['reps'] as String? ?? m['prescribed_reps'] as String? ?? m['default_reps'] as String? ?? '10',
+      weight: '0kg',
+      rest: '${m['rest_seconds'] ?? 60}s',
+      loggingType: m['logging_type'] as String? ?? 'weight_reps',
+      category: category,
+      equipmentNeeded: equipList,
+      exerciseType: m['exercise_type'] as String?,
+      supersetGroup: m['superset_group'] as int?,
+    );
+  }).toList();
+}
 
 // ── Current Plan ─────────────────────────────────────────────────
 
@@ -436,50 +490,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         final type = dayMap['type'] as String? ?? 'rest';
         final isRest = type != 'workout' && type != 'custom_template';
         final status = dayMap['status'] as String? ?? 'planned';
-        final exerciseMaps = dayMap['exercises'] as List? ?? [];
-
-        final exercises = exerciseMaps
-            .map((e) {
-              final m =
-                  e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
-              final equipRaw = m['equipment_needed'];
-              final equipList = equipRaw is List
-                  ? equipRaw.map((e) => e.toString()).toList()
-                  : <String>[];
-
-              // Fallback: if category missing from Hive (old plans), look up
-              // from exercise library by name.
-              String? category = m['category'] as String?;
-              if (category == null || category.isEmpty) {
-                final name = (m['exercise_name'] as String? ?? '').toLowerCase();
-                final exId = m['exercise_id'] as String?;
-                if (exId != null && exId.isNotEmpty) {
-                  final libEx = ExerciseRepository.instance.getById(exId);
-                  category = libEx?['category'] as String?;
-                }
-                if (category == null || category.isEmpty) {
-                  // Search by name as last resort
-                  final results = ExerciseRepository.instance.search(name);
-                  if (results.isNotEmpty) {
-                    category = results.first['category'] as String?;
-                  }
-                }
-              }
-
-              return ExerciseData(
-                name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
-                sets: '${m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3}',
-                reps: m['reps'] as String? ?? m['prescribed_reps'] as String? ?? m['default_reps'] as String? ?? '10',
-                weight: '0kg',
-                rest: '${m['rest_seconds'] ?? 60}s',
-                loggingType: m['logging_type'] as String? ?? 'weight_reps',
-                category: category,
-                equipmentNeeded: equipList,
-                exerciseType: m['exercise_type'] as String?,
-                supersetGroup: m['superset_group'] as int?,
-              );
-            })
-            .toList();
+        final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
+        final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);
+        final cooldown = _parseExerciseMaps(dayMap['cooldown'] as List?);
 
         // Parse date for label and actual DateTime.
         final dateStr = dayMap['date'] as String?;
@@ -513,6 +526,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           isRest: isRest,
           isDone: status == 'completed',
           exercises: exercises,
+          warmup: warmup,
+          cooldown: cooldown,
         ));
       }
 
@@ -723,7 +738,9 @@ class ActiveWorkoutData {
   int get totalSets =>
       exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
 
-  int get completedSets => checkedSets.length;
+  int get completedSets => checkedSets.keys
+      .where((key) => !warmUpSets.containsKey(key))
+      .length;
 
   double get progressPercent =>
       totalSets > 0 ? completedSets / totalSets : 0.0;
@@ -762,6 +779,18 @@ class ActiveWorkoutData {
       }
     }
     return partners;
+  }
+
+  /// Live total volume (kg) from completed working sets (excludes warm-ups).
+  double get liveVolumeKg {
+    double vol = 0;
+    for (final entry in checkedSets.entries) {
+      if (warmUpSets.containsKey(entry.key)) continue;
+      final vals = setInputValues[entry.key];
+      if (vals == null) continue;
+      vol += (vals.weight ?? 0) * (vals.reps ?? 0);
+    }
+    return vol;
   }
 
   /// Color for a superset group index.
@@ -1058,9 +1087,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final hive = HiveService.instance;
     final now = DateTime.now();
 
-    // PR detection: single-scan cache of exercise → best weight (O(n) once,
-    // then O(1) per exercise) instead of O(exercises × logs) nested loop.
+    // PR detection: single-scan cache of exercise → best weight + best reps
+    // (O(n) once, then O(1) per exercise).
     final bestWeightMap = <String, double>{};
+    final bestRepsMap = <String, int>{};
     for (final raw in hive.workoutBox.values) {
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
@@ -1069,20 +1099,15 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       if (name.isEmpty) continue;
       final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
+      final r = (log['reps_completed'] as int?) ?? 0;
+      if (r > (bestRepsMap[name] ?? 0)) bestRepsMap[name] = r;
     }
 
     final prDescriptions = <String>[];
     for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
       final exercise = state.exercises[exIdx];
-      if (exercise.loggingType != 'weight_reps' &&
-          exercise.loggingType != 'weighted_bodyweight') {
-        continue;
-      }
 
-      // Find the best weight from actual set inputs.
-      // Scan checkedSets keys for this exercise to handle dynamically added sets
-      // (user pressed "+") beyond the original template count.
-      double currentWeight = 0;
+      // Scan checkedSets keys for this exercise to handle dynamically added sets.
       int maxSet = int.tryParse(exercise.sets) ?? 3;
       for (final key in state.checkedSets.keys) {
         if (key.startsWith('$exIdx-')) {
@@ -1090,23 +1115,48 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           if (s + 1 > maxSet) maxSet = s + 1;
         }
       }
-      for (int s = 0; s < maxSet; s++) {
-        final key = '$exIdx-$s';
-        if (state.checkedSets.containsKey(key) && !state.warmUpSets.containsKey(key)) {
-          final vals = state.setInputValues[key];
-          if (vals?.weight != null && vals!.weight! > currentWeight) {
-            currentWeight = vals.weight!;
+
+      // Weight PR (weight_reps, weighted_bodyweight)
+      if (exercise.loggingType == 'weight_reps' ||
+          exercise.loggingType == 'weighted_bodyweight') {
+        double currentWeight = 0;
+        for (int s = 0; s < maxSet; s++) {
+          final key = '$exIdx-$s';
+          if (state.checkedSets.containsKey(key) && !state.warmUpSets.containsKey(key)) {
+            final vals = state.setInputValues[key];
+            if (vals?.weight != null && vals!.weight! > currentWeight) {
+              currentWeight = vals.weight!;
+            }
           }
         }
+        if (currentWeight <= 0) continue;
+
+        final bestPrevious = bestWeightMap[exercise.name.toLowerCase()] ?? 0;
+        if (currentWeight > bestPrevious && bestPrevious > 0) {
+          prDescriptions.add(
+              '${exercise.name}: ${currentWeight.toStringAsFixed(1)}kg (was ${bestPrevious.toStringAsFixed(1)}kg)');
+        }
       }
-      if (currentWeight <= 0) continue;
 
-      // O(1) lookup from pre-built cache instead of O(n) per exercise
-      final bestPrevious = bestWeightMap[exercise.name.toLowerCase()] ?? 0;
+      // Rep PR (bodyweight_reps — e.g. push-ups, pull-ups, dips)
+      if (exercise.loggingType == 'bodyweight_reps') {
+        int currentReps = 0;
+        for (int s = 0; s < maxSet; s++) {
+          final key = '$exIdx-$s';
+          if (state.checkedSets.containsKey(key) && !state.warmUpSets.containsKey(key)) {
+            final vals = state.setInputValues[key];
+            if (vals?.reps != null && vals!.reps! > currentReps) {
+              currentReps = vals.reps!;
+            }
+          }
+        }
+        if (currentReps <= 0) continue;
 
-      if (currentWeight > bestPrevious && bestPrevious > 0) {
-        prDescriptions.add(
-            '${exercise.name}: ${currentWeight.toStringAsFixed(1)}kg (was ${bestPrevious.toStringAsFixed(1)}kg)');
+        final bestPrevious = bestRepsMap[exercise.name.toLowerCase()] ?? 0;
+        if (currentReps > bestPrevious && bestPrevious > 0) {
+          prDescriptions.add(
+              '${exercise.name}: $currentReps reps (was $bestPrevious reps)');
+        }
       }
     }
 
