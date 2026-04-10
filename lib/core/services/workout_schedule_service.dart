@@ -19,6 +19,7 @@ class WorkoutScheduleService {
 
   static const String _planKey = 'current_plan';
   static const String _schedulePrefix = 'schedule_'; // schedule_2026-03-24
+  static const String _displacedPrefix = 'displaced_'; // displaced_2026-03-24
   static const String _planStartKey = 'plan_start_date';
   static const String _planEndKey = 'plan_end_date';
   static const String _swapsThisWeekKey = 'swaps_this_week';
@@ -175,7 +176,9 @@ class WorkoutScheduleService {
     final planEnd = planEndStr != null ? DateTime.parse(planEndStr) : today.add(const Duration(days: 28));
 
     for (var d = today; !d.isAfter(planEnd); d = d.add(const Duration(days: 1))) {
-      final key = '$_schedulePrefix${_dateKey(d)}';
+      final dateKey = _dateKey(d);
+      final key = '$_schedulePrefix$dateKey';
+      final displacedKey = '$_displacedPrefix$dateKey';
       final existing = workoutBox.get(key);
       if (existing != null) {
         final map = existing is Map ? Map<String, dynamic>.from(existing) : <String, dynamic>{};
@@ -184,6 +187,12 @@ class WorkoutScheduleService {
         if (status != 'completed') {
           await workoutBox.delete(key);
         }
+      }
+      // Stale displaced backups from the previous plan have no meaning
+      // in the new plan — the auto-plan days they once protected are
+      // about to be rewritten from scratch.
+      if (workoutBox.containsKey(displacedKey)) {
+        await workoutBox.delete(displacedKey);
       }
     }
 
@@ -350,6 +359,18 @@ class WorkoutScheduleService {
     final startStr = _hive.configBox.get(_planStartKey) as String?;
     if (startStr == null) return null;
     return DateTime.parse(startStr);
+  }
+
+  /// Get the plan end date (inclusive — last day of the current Phase).
+  ///
+  /// Written by [generateAndSchedule] and [generateAndScheduleFromDate].
+  /// Template scheduling clamps writes against this value so that a
+  /// user mid-Phase cannot schedule a template past the Phase boundary
+  /// (which would produce orphan entries once the next Phase generates).
+  DateTime? getPlanEndDate() {
+    final endStr = _hive.configBox.get(_planEndKey) as String?;
+    if (endStr == null) return null;
+    return DateTime.tryParse(endStr);
   }
 
   /// Get the current plan from Hive.
@@ -594,13 +615,43 @@ class WorkoutScheduleService {
   // ── Custom Template Assignment ───────────────────────────────────
 
   /// Assign a saved template to a specific calendar date.
-  /// Overwrites any existing plan entry for that date (generated or rest).
-  void assignTemplateToDate(String templateId, DateTime date) {
+  ///
+  /// Backs up any existing non-template schedule entry into a
+  /// `displaced_<date>` sibling key BEFORE overwriting. This allows
+  /// [unscheduleTemplateFromDate] to restore the original workout
+  /// (auto-plan day, rest day, etc.) when the template is later
+  /// edited or deleted.
+  ///
+  /// Refuses to run if the current entry is `completed` — history
+  /// is sacred and must never be overwritten by a template assignment.
+  ///
+  /// Only backs up entries that are NOT already `custom_template`
+  /// (avoids chained displaced entries from template-over-template).
+  Future<void> assignTemplateToDate(String templateId, DateTime date) async {
     final tmpl = _hive.workoutBox.get(templateId);
     if (tmpl == null) return;
 
     final tmplMap = Map<String, dynamic>.from(tmpl as Map);
     final dateKey = _dateKey(date);
+    final scheduleKey = '$_schedulePrefix$dateKey';
+    final displacedKey = '$_displacedPrefix$dateKey';
+
+    // Inspect the current schedule entry for this date.
+    final existing = _hive.workoutBox.get(scheduleKey);
+    if (existing is Map) {
+      final existingMap = Map<String, dynamic>.from(existing);
+      // Never displace a completed workout — history is sacred.
+      if (existingMap['status'] == 'completed') return;
+
+      // Only back up if the displaced entry is an auto-plan entry, NOT
+      // another custom_template. This prevents chained backups when a
+      // user overwrites one template with another.
+      final isAlreadyTemplate = existingMap['type'] == 'custom_template';
+      final alreadyBackedUp = _hive.workoutBox.containsKey(displacedKey);
+      if (!isAlreadyTemplate && !alreadyBackedUp) {
+        await _hive.workoutBox.put(displacedKey, existingMap);
+      }
+    }
 
     // Calculate the correct week number for this date relative to plan start.
     final planStartStr = _hive.configBox.get(_planStartKey) as String?;
@@ -613,7 +664,7 @@ class WorkoutScheduleService {
       }
     }
 
-    _hive.workoutBox.put('$_schedulePrefix$dateKey', {
+    await _hive.workoutBox.put(scheduleKey, {
       'date': dateKey,
       'week': weekNum,
       'type': 'custom_template',
@@ -625,6 +676,78 @@ class WorkoutScheduleService {
       'is_swapped': false,
       'completed_at': null,
     });
+  }
+
+  /// Remove a template assignment from a specific date.
+  ///
+  /// Restore semantics: if a `displaced_<date>` backup exists (written
+  /// by [assignTemplateToDate] when this template originally displaced
+  /// an auto-plan day), restore it to `schedule_<date>` and delete the
+  /// backup. Otherwise simply delete the schedule entry.
+  ///
+  /// History guard: never touches completed entries. A completed
+  /// template workout stays in history forever even if the user later
+  /// deletes the template.
+  Future<void> unscheduleTemplateFromDate(DateTime date) async {
+    final dateKey = _dateKey(date);
+    final scheduleKey = '$_schedulePrefix$dateKey';
+    final displacedKey = '$_displacedPrefix$dateKey';
+
+    final current = _hive.workoutBox.get(scheduleKey);
+    if (current is Map) {
+      final currentMap = Map<String, dynamic>.from(current);
+      if (currentMap['status'] == 'completed') {
+        // History is sacred — don't touch. Also clean up any stale
+        // displaced backup so it doesn't leak into the next regen.
+        if (_hive.workoutBox.containsKey(displacedKey)) {
+          await _hive.workoutBox.delete(displacedKey);
+        }
+        return;
+      }
+    }
+
+    // Restore displaced backup if one exists, otherwise delete.
+    final backup = _hive.workoutBox.get(displacedKey);
+    if (backup is Map) {
+      await _hive.workoutBox.put(
+          scheduleKey, Map<String, dynamic>.from(backup));
+      await _hive.workoutBox.delete(displacedKey);
+    } else {
+      await _hive.workoutBox.delete(scheduleKey);
+    }
+  }
+
+  /// Wipe all future non-completed schedule entries for a template.
+  ///
+  /// Used by edit-template and delete-template flows to clean up old
+  /// scheduled instances of a template before re-writing them (edit)
+  /// or before deleting the template row (delete). Iterates from today
+  /// through `plan_end_date` and calls [unscheduleTemplateFromDate]
+  /// for each matching entry — so displaced originals are restored.
+  Future<void> cleanSyncTemplateSchedule(String templateId) async {
+    final today = DateTime.now();
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+
+    // Loop ceiling — prefer real plan_end_date; fall back to 4 weeks
+    // from today if no plan exists yet (defensive — should not happen
+    // in practice because save flow is gated on plan existing).
+    final planEnd = getPlanEndDate() ??
+        todayMidnight.add(const Duration(days: 28));
+
+    for (var d = todayMidnight;
+        !d.isAfter(planEnd);
+        d = d.add(const Duration(days: 1))) {
+      final key = '$_schedulePrefix${_dateKey(d)}';
+      final entry = _hive.workoutBox.get(key);
+      if (entry is! Map) continue;
+
+      final map = Map<String, dynamic>.from(entry);
+      if (map['type'] != 'custom_template') continue;
+      if (map['template_id'] != templateId) continue;
+      if (map['status'] == 'completed') continue;
+
+      await unscheduleTemplateFromDate(d);
+    }
   }
 
   /// Normalises template exercise objects to the canonical schedule field names.

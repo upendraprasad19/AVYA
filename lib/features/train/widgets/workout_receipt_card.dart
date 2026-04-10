@@ -81,9 +81,12 @@ const _taglinesGeneric = <String>[
   'Discipline hit. Brain still buffering.',
 ];
 
-String _pickTagline(String workoutName) {
+/// Deterministic tagline picker — same (date, workoutName, seed) always
+/// returns the same tagline so the post-completion card and the "View Card"
+/// sheet don't drift.
+String _pickTagline(String workoutName, int seed) {
   final upper = workoutName.toUpperCase();
-  final rng = Random();
+  final rng = Random(seed);
   if (upper.contains('PULL') || upper.contains('BACK') ||
       upper.contains('ROW') || upper.contains('DEADLIFT') ||
       upper.contains('BICEP') || upper.contains('CURL')) {
@@ -112,6 +115,13 @@ String _pickTagline(String workoutName) {
 }
 
 /// Data required to render a Workout Receipt card.
+///
+/// Single source of truth: all three views (post-completion card, Home
+/// "View Card", Train expanded view) read from [fromExerciseLogs] so the
+/// same workout always renders identically. [fromActiveWorkout] is a thin
+/// wrapper that tries [fromExerciseLogs] first (since logs are already in
+/// Hive by the time the post-completion card renders) and falls back to
+/// in-memory aggregation only if the read path returns nothing.
 class WorkoutReceiptData {
   final DateTime date;
   final String workoutName;
@@ -121,6 +131,7 @@ class WorkoutReceiptData {
   final int totalSets;
   final List<String> prs;
   final int streakWeeks;
+  final String tagline; // deterministic — same workout always renders same line
 
   const WorkoutReceiptData({
     required this.date,
@@ -131,30 +142,43 @@ class WorkoutReceiptData {
     required this.totalSets,
     this.prs = const [],
     this.streakWeeks = 0,
+    required this.tagline,
   });
 
   int get totalExercises => exercises.length;
 
-  /// Build from ActiveWorkoutData after completion.
+  /// Deterministic tagline seed — same (date, name, volume, sets) produces
+  /// the same tagline across every render.
+  static int _taglineSeed(
+      DateTime date, String name, double volume, int totalSets) {
+    return date.year * 10000 +
+        date.month * 100 +
+        date.day +
+        volume.round() +
+        totalSets * 31 +
+        name.hashCode;
+  }
+
+  /// Build from ActiveWorkoutData — pure in-memory aggregation using the
+  /// exact same per-logging-type rules as [fromExerciseLogs] so the two
+  /// paths produce identical outputs. No Hive reads (tests don't init Hive).
   factory WorkoutReceiptData.fromActiveWorkout(ActiveWorkoutData data) {
-    final now = DateTime.now();
+    final workoutDate = data.workoutDay?.date ?? DateTime.now();
     double totalVolume = 0;
     int totalSets = 0;
-    final receiptExercises = <ReceiptExercise>[];
+    final seen = <String, ReceiptExercise>{};
 
     for (int exIdx = 0; exIdx < data.exercises.length; exIdx++) {
       final ex = data.exercises[exIdx];
-      final numSets = int.tryParse(ex.sets) ?? 3;
-      final defaultReps = int.tryParse(ex.reps) ?? 10;
 
       double bestWeight = 0;
       int totalReps = 0;
+      int totalDuration = 0;
+      double totalDistance = 0;
       int completedSets = 0;
-      int minReps = 999;
-      int maxReps = 0;
 
       // Scan for dynamically added sets beyond the template's prescribed count.
-      int maxSet = numSets;
+      int maxSet = int.tryParse(ex.sets) ?? 3;
       for (final key in data.checkedSets.keys) {
         if (key.startsWith('$exIdx-')) {
           final s = int.tryParse(key.split('-').last) ?? 0;
@@ -164,94 +188,67 @@ class WorkoutReceiptData {
 
       for (int s = 0; s < maxSet; s++) {
         final key = '$exIdx-$s';
-        if (data.checkedSets.containsKey(key)) {
-          // Skip warm-up sets in volume and rep tracking
-          if (data.warmUpSets.containsKey(key)) continue;
-          completedSets++;
-          final vals = data.setInputValues[key];
-          final reps = vals?.reps ?? defaultReps;
-          final weight = vals?.weight ?? 0.0;
-
-          // Per-set volume: reps × weight for this specific set
-          totalVolume += reps * weight;
-
-          if (weight > bestWeight) bestWeight = weight;
-          totalReps += reps;
-          if (reps < minReps) minReps = reps;
-          if (reps > maxReps) maxReps = reps;
-        }
+        if (!data.checkedSets.containsKey(key)) continue;
+        if (data.warmUpSets.containsKey(key)) continue; // warm-ups excluded
+        completedSets++;
+        final vals = data.setInputValues[key];
+        final reps = vals?.reps ?? 0;
+        final weight = vals?.weight ?? 0.0;
+        final dur = vals?.durationSeconds ?? 0;
+        final dist = vals?.distanceKm ?? 0.0;
+        totalReps += reps;
+        totalDuration += dur;
+        totalDistance += dist;
+        if (weight > bestWeight) bestWeight = weight;
+        totalVolume += reps * weight;
       }
 
-      // Reset min/max to defaults if no sets were completed
-      if (completedSets == 0) {
-        minReps = defaultReps;
-        maxReps = defaultReps;
-      }
-
+      if (completedSets == 0) continue;
       totalSets += completedSets;
-      receiptExercises.add(ReceiptExercise(
-        name: ex.name,
-        sets: completedSets > 0 ? completedSets : numSets,
-        reps: completedSets > 0 ? (totalReps / completedSets.clamp(1, 999)).round() : defaultReps,
-        minReps: minReps == 999 ? defaultReps : minReps,
-        maxReps: maxReps == 0 ? defaultReps : maxReps,
-        weightKg: bestWeight,
-        loggingType: ex.loggingType,
-      ));
-    }
 
-    // Deduplicate: if the plan contains the same exercise twice (e.g. superset
-    // added twice), merge them into one entry — sum sets, max weight, avg reps.
-    final seen = <String, ReceiptExercise>{};
-    for (final ex in receiptExercises) {
+      final entry = ReceiptExercise(
+        name: ex.name,
+        loggingType: ex.loggingType,
+        sets: completedSets,
+        totalReps: totalReps,
+        totalDurationSeconds: totalDuration,
+        totalDistanceKm: totalDistance,
+        maxWeightKg: bestWeight,
+      );
+
       final key = ex.name.toLowerCase().trim();
       final existing = seen[key];
-      if (existing == null) {
-        seen[key] = ex;
-      } else {
-        final mergedSets = existing.sets + ex.sets;
-        final maxWeight = existing.weightKg > ex.weightKg
-            ? existing.weightKg
-            : ex.weightKg;
-        final avgReps = mergedSets > 0
-            ? ((existing.reps * existing.sets + ex.reps * ex.sets) / mergedSets).round()
-            : existing.reps;
-        final mergedMinReps = existing.minReps < ex.minReps ? existing.minReps : ex.minReps;
-        final mergedMaxReps = existing.maxReps > ex.maxReps ? existing.maxReps : ex.maxReps;
-        seen[key] = ReceiptExercise(
-          name: existing.name,
-          sets: mergedSets,
-          reps: avgReps,
-          minReps: mergedMinReps,
-          maxReps: mergedMaxReps,
-          weightKg: maxWeight,
-          loggingType: existing.loggingType,
-        );
-      }
+      seen[key] = existing == null ? entry : existing.mergedWith(entry);
     }
 
+    final workoutName = data.workoutDay?.name ?? 'WORKOUT';
+    final exerciseList = seen.values.toList();
     return WorkoutReceiptData(
-      date: now,
-      workoutName: data.workoutDay?.name ?? 'WORKOUT',
-      exercises: seen.values.toList(),
+      date: workoutDate,
+      workoutName: workoutName,
+      exercises: exerciseList,
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
       prs: data.detectedPRs,
+      tagline: _pickTagline(
+        workoutName,
+        _taglineSeed(workoutDate, workoutName, totalVolume, totalSets),
+      ),
     );
   }
 
   /// Reconstruct receipt data from Hive exercise logs for a given date.
   /// Returns null if no exercise logs are found for that date.
+  ///
+  /// THIS IS THE CANONICAL SOURCE OF TRUTH. All receipt views read from here.
   static WorkoutReceiptData? fromExerciseLogs(DateTime date) {
     final Box wb = HiveService.instance.workoutBox;
     final dateKey = formatDateKey(date);
 
-    // 1. Get log IDs from the date index
     final indexKey = 'exercise_log_index_$dateKey';
     final logIds = wb.get(indexKey);
     if (logIds == null || logIds is! List || logIds.isEmpty) return null;
 
-    // 2. Read each exercise log and build ReceiptExercise list
     double totalVolume = 0;
     int totalSets = 0;
     final prs = <String>[];
@@ -266,14 +263,18 @@ class WorkoutReceiptData {
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
       final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+      final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
-      // Prefer exact stored volume; fall back to approximation for old logs
+      // Prefer exact stored volume; fall back to approximation for old logs.
       final storedVolume = (log['volume_kg'] as num?)?.toDouble();
       final exerciseVolume = storedVolume ?? (weightKg * reps);
 
       if (isPr) {
         if (weightKg > 0) {
           prs.add('$name — ${weightKg.toStringAsFixed(0)}kg');
+        } else if (reps > 0) {
+          prs.add('$name — $reps reps');
         } else {
           prs.add(name);
         }
@@ -282,42 +283,23 @@ class WorkoutReceiptData {
       totalVolume += exerciseVolume;
       totalSets += sets;
 
-      // Merge duplicates (same exercise name)
       final key = name.toLowerCase().trim();
+      final entry = ReceiptExercise(
+        name: name,
+        loggingType: loggingType,
+        sets: sets,
+        totalReps: reps,
+        totalDurationSeconds: duration,
+        totalDistanceKm: distance,
+        maxWeightKg: weightKg,
+      );
       final existing = seen[key];
-      if (existing == null) {
-        seen[key] = ReceiptExercise(
-          name: name,
-          sets: sets,
-          reps: sets > 0 ? (reps / sets).round() : reps,
-          minReps: sets > 0 ? (reps / sets).round() : reps,
-          maxReps: sets > 0 ? (reps / sets).round() : reps,
-          weightKg: weightKg,
-          loggingType: loggingType,
-        );
-      } else {
-        final mergedSets = existing.sets + sets;
-        final maxWeight = existing.weightKg > weightKg
-            ? existing.weightKg
-            : weightKg;
-        final avgReps = mergedSets > 0
-            ? ((existing.reps * existing.sets + (sets > 0 ? (reps / sets).round() : reps) * sets) / mergedSets).round()
-            : existing.reps;
-        seen[key] = ReceiptExercise(
-          name: existing.name,
-          sets: mergedSets,
-          reps: avgReps,
-          minReps: avgReps,
-          maxReps: avgReps,
-          weightKg: maxWeight,
-          loggingType: existing.loggingType,
-        );
-      }
+      seen[key] = existing == null ? entry : existing.mergedWith(entry);
     }
 
     if (seen.isEmpty) return null;
 
-    // 3. Read workout_log for workout name
+    // Read workout_log for workout name.
     String workoutName = 'WORKOUT';
     final allKeys = wb.keys.toList();
     for (final k in allKeys) {
@@ -330,38 +312,57 @@ class WorkoutReceiptData {
       }
     }
 
+    final exerciseList = seen.values.toList();
     return WorkoutReceiptData(
       date: date,
       workoutName: workoutName,
-      exercises: seen.values.toList(),
+      exercises: exerciseList,
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
       prs: prs,
+      tagline: _pickTagline(
+        workoutName,
+        _taglineSeed(date, workoutName, totalVolume, totalSets),
+      ),
     );
   }
 }
 
+/// Per-exercise aggregated summary. Fields are already totals across all
+/// completed sets (reps, duration, distance) or the best across sets (weight).
 class ReceiptExercise {
   final String name;
-  final int sets;
-  final int reps; // kept for backward compat (average reps)
-  final int minReps;
-  final int maxReps;
-  final double weightKg;
   final String loggingType;
+  final int sets; // total completed sets
+  final int totalReps; // summed across sets (0 for timed/cardio-only)
+  final int totalDurationSeconds; // summed (0 for rep-only)
+  final double totalDistanceKm; // summed (0 for non-cardio)
+  final double maxWeightKg; // best weight across sets (0 for bodyweight)
 
   const ReceiptExercise({
     required this.name,
+    required this.loggingType,
     required this.sets,
-    required this.reps,
-    required this.weightKg,
-    this.minReps = 0,
-    this.maxReps = 0,
-    this.loggingType = 'weight_reps',
+    this.totalReps = 0,
+    this.totalDurationSeconds = 0,
+    this.totalDistanceKm = 0,
+    this.maxWeightKg = 0,
   });
 
-  /// Whether all sets had the same rep count.
-  bool get hasUniformReps => minReps == maxReps || minReps <= 0;
+  /// Merge this exercise with another of the same name (supersets etc.).
+  /// Sets, reps, duration, distance add; max weight takes the best.
+  ReceiptExercise mergedWith(ReceiptExercise other) {
+    return ReceiptExercise(
+      name: name,
+      loggingType: loggingType,
+      sets: sets + other.sets,
+      totalReps: totalReps + other.totalReps,
+      totalDurationSeconds: totalDurationSeconds + other.totalDurationSeconds,
+      totalDistanceKm: totalDistanceKm + other.totalDistanceKm,
+      maxWeightKg:
+          maxWeightKg > other.maxWeightKg ? maxWeightKg : other.maxWeightKg,
+    );
+  }
 }
 
 /// Workout Receipt Card — rendered inside a ShareableCard wrapper.
@@ -379,7 +380,7 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagline = _pickTagline(data.workoutName);
+    final tagline = data.tagline;
 
     return ShareableCard(
       repaintKey: repaintKey,
@@ -507,30 +508,38 @@ class WorkoutReceiptCard extends StatelessWidget {
     }).toList();
   }
 
-  /// Formats rep display: shows range if sets had different rep counts.
-  String _repDisplay(ReceiptExercise ex) {
-    if (ex.hasUniformReps) return '${ex.reps}';
-    return '${ex.minReps}-${ex.maxReps}';
+  /// Format a duration in seconds as e.g. "3s", "45s", "2m 0s", "10m".
+  static String _formatDuration(int seconds) {
+    if (seconds < 60) return '${seconds}s';
+    final mins = seconds ~/ 60;
+    final secs = seconds % 60;
+    if (secs == 0) return '${mins}m';
+    return '${mins}m ${secs}s';
   }
 
+  /// Build the per-exercise summary string. Rules per logging type are the
+  /// single source of truth — the same logic backs every view of a workout.
   String _exerciseDetail(ReceiptExercise ex) {
-    final reps = _repDisplay(ex);
     switch (ex.loggingType) {
       case 'bodyweight_reps':
-        return '${ex.sets}\u00d7$reps';
-      case 'timed':
-        return '${ex.sets}\u00d7${reps}s';
-      case 'cardio':
-        return '$reps min';
-      case 'distance':
-        return '$reps km';
+        return '${ex.sets} sets \u00b7 ${ex.totalReps} reps';
       case 'weighted_bodyweight':
-        return '${ex.sets}\u00d7$reps +${ex.weightKg.toStringAsFixed(0)}kg';
+        return '${ex.sets} sets \u00b7 ${ex.totalReps} reps \u00b7 +${ex.maxWeightKg.toStringAsFixed(0)}kg';
+      case 'timed':
+        return '${ex.sets} sets \u00b7 ${_formatDuration(ex.totalDurationSeconds)}';
+      case 'cardio':
+        final mins = ex.totalDurationSeconds ~/ 60;
+        return '$mins min \u00b7 ${ex.totalDistanceKm.toStringAsFixed(1)} km';
+      case 'distance':
+        final dist = '${ex.totalDistanceKm.toStringAsFixed(1)} km';
+        return ex.maxWeightKg > 0
+            ? '$dist \u00b7 ${ex.maxWeightKg.toStringAsFixed(0)}kg'
+            : dist;
       default: // weight_reps
-        if (ex.weightKg > 0) {
-          return '${ex.sets}\u00d7$reps\u00d7${ex.weightKg.toStringAsFixed(0)}kg';
+        if (ex.maxWeightKg > 0) {
+          return '${ex.sets} sets \u00b7 ${ex.totalReps} reps \u00b7 ${ex.maxWeightKg.toStringAsFixed(0)}kg';
         }
-        return '${ex.sets}\u00d7$reps';
+        return '${ex.sets} sets \u00b7 ${ex.totalReps} reps';
     }
   }
 

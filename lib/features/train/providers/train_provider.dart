@@ -1535,6 +1535,39 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     await hive.workoutBox.put(templateId, updated);
     ref.invalidateSelf();
   }
+
+  /// Delete a saved template AND clean up its future schedule entries.
+  ///
+  /// Uses the same backup-restore pattern as the edit flow — any
+  /// future `schedule_<date>` entry owned by this template has its
+  /// displaced original restored before the template row itself is
+  /// deleted. Completed workouts are never touched, so history
+  /// survives intact even if the template is gone.
+  ///
+  /// Invalidates every consumer and fires pushSnapshot so the AI
+  /// coach stops referencing the deleted template immediately.
+  Future<void> deleteTemplate(String templateId) async {
+    final hive = HiveService.instance;
+
+    // Step 1: clean-sync wipes future entries for this template and
+    // restores displaced originals where applicable.
+    await WorkoutScheduleService.instance
+        .cleanSyncTemplateSchedule(templateId);
+
+    // Step 2: delete the template row itself.
+    await hive.workoutBox.delete(templateId);
+
+    // Step 3: refresh every consumer.
+    ref.invalidateSelf();
+    ref.invalidate(currentPlanProvider);
+    ref.invalidate(calendarWeekProvider);
+    ref.invalidate(todayWorkoutProvider);
+    ref.invalidate(workoutStatsProvider);
+    ref.invalidate(streakProvider);
+
+    // Step 4: fire-and-forget snapshot push (AI coach freshness).
+    unawaited(SyncService.instance.pushSnapshot());
+  }
 }
 
 final templatesProvider =

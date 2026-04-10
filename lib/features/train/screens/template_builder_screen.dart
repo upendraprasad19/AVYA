@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,10 +7,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import '../../home/providers/home_provider.dart';
 import '../providers/train_provider.dart';
+import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/exercise_card.dart';
 
 class TemplateBuilderScreen extends ConsumerStatefulWidget {
@@ -400,19 +404,30 @@ class _TemplateBuilderScreenState
       }
 
       // Sync assigned_days to calendar schedule entries.
-      // Uses assignTemplateToDate() which writes COMPLETE entries including
-      // normalised exercises — not bare stubs.
-      // Limits to 4 weeks within the plan boundary (Phase 1 = 4 weeks).
+      //
+      // Flow:
+      //   1. Clean-sync: wipe this template's future non-completed
+      //      entries and restore their displaced originals.
+      //   2. Clamp writes to the real plan_end_date from configBox.
+      //   3. If zero writable days, show the "Phase ends soon"
+      //      snackbar and stop (template is still saved).
+      //   4. On success, invalidate all consumers + fire-and-forget
+      //      pushSnapshot so the AI coach catches up immediately.
+      final scheduleService = WorkoutScheduleService.instance;
+      await scheduleService.cleanSyncTemplateSchedule(templateId);
+
+      int writtenCount = 0;
       if (_selectedDays.isNotEmpty) {
-        final scheduleService = WorkoutScheduleService.instance;
-        final planStart = scheduleService.getPlanStartDate();
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final weekStart = today.subtract(Duration(days: today.weekday - 1));
         const maxWeeks = 4;
-        final planEnd = planStart != null
-            ? planStart.add(const Duration(days: maxWeeks * 7 - 1))
-            : weekStart.add(const Duration(days: maxWeeks * 7 - 1));
+
+        // Clamp against the real plan end. For any user past the halfway
+        // point of Phase 1 (or any future phase), some or all target
+        // dates will fall beyond plan_end_date and must be skipped.
+        final planEnd = scheduleService.getPlanEndDate() ??
+            weekStart.add(const Duration(days: maxWeeks * 7 - 1));
 
         for (int weekOffset = 0; weekOffset < maxWeeks; weekOffset++) {
           for (final dayNum in _selectedDays) {
@@ -421,13 +436,43 @@ class _TemplateBuilderScreenState
                 .add(Duration(days: weekOffset * 7 + dayNum - 1));
             if (targetDate.isBefore(today)) continue;
             if (targetDate.isAfter(planEnd)) continue;
-            scheduleService.assignTemplateToDate(templateId, targetDate);
+            await scheduleService.assignTemplateToDate(templateId, targetDate);
+            writtenCount++;
           }
         }
-        // Refresh calendar providers
-        ref.invalidate(calendarWeekProvider);
-        ref.invalidate(todayWorkoutProvider);
       }
+
+      // Zero-writable-days guard: if the user picked days but none could
+      // land inside the current Phase, tell them so they know why their
+      // template didn't appear on the calendar.
+      if (_selectedDays.isNotEmpty && writtenCount == 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Template saved. No days could be scheduled — your current Phase ends soon. Schedule it manually after your next Phase commences.',
+                style: GoogleFonts.getFont('DM Sans'),
+              ),
+              backgroundColor: AppColors.card,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
+      }
+
+      // Invalidate every consumer of scheduled-workout state so the
+      // Train tab, Home weekly calendar, stats, and streak all refresh
+      // without the user having to restart. This is the Bug 1b fix.
+      ref.invalidate(currentPlanProvider);
+      ref.invalidate(calendarWeekProvider);
+      ref.invalidate(todayWorkoutProvider);
+      ref.invalidate(workoutStatsProvider);
+      ref.invalidate(streakProvider);
+
+      // Fire-and-forget snapshot push so the AI coach sees the new
+      // schedule on the very next message (Bug 1g / Bug #6 fix).
+      // Intentionally unawaited — do not block the UI on network.
+      unawaited(SyncService.instance.pushSnapshot());
 
       if (mounted) {
         context.go('/train');
@@ -468,7 +513,7 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
   @override
   void initState() {
     super.initState();
-    _results = ExerciseRepository.instance.getAll().take(30).toList();
+    _refresh('');
   }
 
   @override
@@ -477,10 +522,55 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
     super.dispose();
   }
 
-  void _search(String query) {
+  /// Merges bundled library with user-created custom exercises.
+  ///
+  /// Custom exercises are shown first so users can find their own
+  /// additions quickly. When no query, caps at 30 bundled + all custom.
+  void _refresh(String query) {
+    final repo = ExerciseRepository.instance;
+    final custom = repo.getCustomExercises();
+
+    List<Map<String, dynamic>> bundled;
+    List<Map<String, dynamic>> matchedCustom;
+
+    if (query.isEmpty) {
+      bundled = repo.getAll().take(30).toList();
+      matchedCustom = custom;
+    } else {
+      final q = query.toLowerCase();
+      bundled = repo.search(query).take(30).toList();
+      matchedCustom = custom.where((e) {
+        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        return name.contains(q);
+      }).toList();
+    }
+
     setState(() {
-      _results = ExerciseRepository.instance.search(query).take(30).toList();
+      _results = [...matchedCustom, ...bundled];
     });
+  }
+
+  void _search(String query) => _refresh(query);
+
+  Future<void> _openCreateCustom() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: CreateCustomExerciseSheet(
+          onCreated: (ex) {
+            // Immediately add the newly-created exercise to the template.
+            widget.onSelect(ex);
+          },
+        ),
+      ),
+    );
+    // Refresh so the new custom exercise is visible in the list even if
+    // the user dismisses without the create sheet's auto-add firing.
+    if (mounted) _refresh(_searchController.text);
   }
 
   @override
@@ -503,6 +593,57 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
             decoration: BoxDecoration(
               color: AppColors.textDisabled,
               borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Title + Create Custom button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 10),
+            child: Row(
+              children: [
+                Text(
+                  'ADD EXERCISE',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _openCreateCustom,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add,
+                            size: 12, color: AppColors.accent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Create Custom',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 

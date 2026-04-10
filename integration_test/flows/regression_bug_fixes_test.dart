@@ -394,7 +394,7 @@ void main() {
 
     expect(benchEntry.sets, equals(5),
         reason: 'Merged sets: 3 + 2 = 5');
-    expect(benchEntry.weightKg, equals(70.0),
+    expect(benchEntry.maxWeightKg, equals(70.0),
         reason: 'Merged weight: max(60, 70) = 70kg');
   });
 

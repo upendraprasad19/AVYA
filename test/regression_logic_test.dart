@@ -115,7 +115,7 @@ void main() {
 
       expect(bench.sets, equals(5),
           reason: 'Merged sets: 3 + 2 = 5');
-      expect(bench.weightKg, equals(70.0),
+      expect(bench.maxWeightKg, equals(70.0),
           reason: 'Merged weight: max(60, 70) = 70kg');
       expect(receipt.exercises.length, equals(1),
           reason: 'Only one exercise after deduplication');

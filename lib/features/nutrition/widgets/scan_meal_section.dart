@@ -23,8 +23,6 @@ class ScanMealSection extends ConsumerStatefulWidget {
 }
 
 class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
-  bool _saving = false;
-
   @override
   Widget build(BuildContext context) {
     final scanState = ref.watch(scanMealProvider);
@@ -155,7 +153,12 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
           else if (scanState.error != null)
             _buildError(scanState.error!)
           else if (scanState.result != null)
-            _buildResult(context, scanState.result!)
+            // Keyed by identity so a fresh scan rebuilds the editor state
+            // cleanly instead of carrying over old controllers.
+            _ScanResultEditor(
+              key: ObjectKey(scanState.result),
+              initialResult: scanState.result!,
+            )
           else
             _buildScanButton(context, remaining),
         ],
@@ -353,119 +356,226 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
     );
   }
 
-  Widget _buildResult(BuildContext context, Map<String, dynamic> result) {
-    final items = (result['items'] as List<dynamic>?) ?? [];
-    final totalKcal = (result['total_calories'] as num?)?.toInt() ?? 0;
+}
 
+/// Editable scan result: makes every item mutable so the user can correct
+/// AI mistakes (wrong food, wrong qty, wrong kcal) before saving. The total
+/// is ALWAYS a live sum of items (with Atwater fallback per-item when kcal
+/// is missing) — fixes the 0-kcal save bug where the top-level total from
+/// the AI response was often missing while per-item kcal was populated.
+class _ScanResultEditor extends ConsumerStatefulWidget {
+  final Map<String, dynamic> initialResult;
+  const _ScanResultEditor({super.key, required this.initialResult});
+
+  @override
+  ConsumerState<_ScanResultEditor> createState() => _ScanResultEditorState();
+}
+
+class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
+  late final TextEditingController _mealNameCtrl;
+  final List<_EditableItem> _items = [];
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mealNameCtrl = TextEditingController(
+      text: (widget.initialResult['meal_name'] as String?) ?? 'Scanned Meal',
+    );
+    final rawItems = (widget.initialResult['items'] as List<dynamic>?) ?? [];
+    for (final raw in rawItems) {
+      if (raw is Map) {
+        _items.add(_EditableItem.fromMap(Map<String, dynamic>.from(raw)));
+      }
+    }
+    // Ensure at least one row so the user has something to edit even if the
+    // AI returned an empty items array.
+    if (_items.isEmpty) {
+      _items.add(_EditableItem.empty());
+    }
+  }
+
+  @override
+  void dispose() {
+    _mealNameCtrl.dispose();
+    for (final item in _items) {
+      item.dispose();
+    }
+    super.dispose();
+  }
+
+  int get _totalKcal {
+    var sum = 0;
+    for (final item in _items) {
+      if (!item.hasContent) continue;
+      sum += item.effectiveKcal().round();
+    }
+    return sum;
+  }
+
+  int _sumMacro(double Function(_EditableItem) fn) {
+    var sum = 0.0;
+    for (final item in _items) {
+      if (!item.hasContent) continue;
+      sum += fn(item);
+    }
+    return sum.round();
+  }
+
+  void _addItem() {
+    setState(() => _items.add(_EditableItem.empty()));
+  }
+
+  void _removeItem(_EditableItem item) {
+    setState(() {
+      _items.remove(item);
+      item.dispose();
+      if (_items.isEmpty) {
+        // Keep at least one row so Save doesn't end up writing nothing.
+        _items.add(_EditableItem.empty());
+      }
+    });
+  }
+
+  void _save() {
+    if (_saving) return;
+    final liveItems = _items.where((i) => i.hasContent).toList();
+    if (liveItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Add at least one item with a name before saving.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final id = 'nlog_${now.millisecondsSinceEpoch}';
+
+    HiveService.instance.nutritionBox.put(id, {
+      'id': id,
+      'date': dateStr,
+      'meal_type': 'snacks',
+      'food_name': _mealNameCtrl.text.trim().isEmpty
+          ? 'Scanned Meal'
+          : _mealNameCtrl.text.trim(),
+      'total_calories': _totalKcal,
+      'total_protein': _sumMacro((i) => i.protein),
+      'total_carbs': _sumMacro((i) => i.carbs),
+      'total_fat': _sumMacro((i) => i.fat),
+      'total_fiber': _sumMacro((i) => i.fiber),
+      'items': liveItems.map((i) => i.toMap()).toList(),
+      'created_at': now.toIso8601String(),
+      'source': 'scan_meal',
+    });
+
+    ref.invalidate(dailyNutritionProvider);
+
+    final messenger = ScaffoldMessenger.of(context);
+    ref.read(scanMealProvider.notifier).clear();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Meal saved ✓'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Result header
+        // Editable meal name + live total
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              'Scan Result',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+            Expanded(
+              child: TextField(
+                controller: _mealNameCtrl,
+                onChanged: (_) => setState(() {}),
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                decoration: _fieldDecoration('Meal name'),
               ),
             ),
-            Text(
-              '$totalKcal kcal',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
+            const SizedBox(width: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.badge),
+              ),
+              child: Text(
+                '$_totalKcal kcal',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.accent,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
 
         // Items list
-        ...items.map((item) {
-          final name = item['name'] as String? ?? 'Unknown';
-          final cals = (item['calories'] as num?)?.toInt() ?? 0;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+        ..._items.map(_buildItemRow),
+        const SizedBox(height: 8),
+
+        // + Add item
+        GestureDetector(
+          onTap: _addItem,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.input,
+              borderRadius: BorderRadius.circular(AppRadius.cardS),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
+                const Icon(Icons.add, size: 14, color: AppColors.accent),
+                const SizedBox(width: 4),
                 Text(
-                  '$cals kcal',
+                  'Add Item',
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.orange,
+                    color: AppColors.accent,
                   ),
                 ),
               ],
             ),
-          );
-        }),
+          ),
+        ),
+        const SizedBox(height: 12),
 
-        const SizedBox(height: 10),
-
-        // Action buttons
+        // Save / Discard
         Row(
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: _saving ? null : () {
-                  if (_saving) return;
-                  setState(() => _saving = true);
-                  final result = ref.read(scanMealProvider).result;
-                  if (result != null) {
-                    final now = DateTime.now();
-                    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-                    final id = 'nlog_${now.millisecondsSinceEpoch}';
-                    final items = result['items'] as List<dynamic>? ?? [];
-                    int totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0;
-                    for (final item in items) {
-                      if (item is Map) {
-                        totalProtein += (item['protein'] as num?)?.toInt() ?? 0;
-                        totalCarbs += (item['carbs'] as num?)?.toInt() ?? 0;
-                        totalFat += (item['fat'] as num?)?.toInt() ?? 0;
-                        totalFiber += (item['fiber'] as num?)?.toInt() ?? 0;
-                      }
-                    }
-                    HiveService.instance.nutritionBox.put(id, {
-                      'id': id,
-                      'date': dateStr,
-                      'meal_type': 'snacks',
-                      'food_name': result['meal_name'] ?? 'Scanned Meal',
-                      'total_calories': (result['total_calories'] as num?)?.toInt() ?? 0,
-                      'total_protein': totalProtein,
-                      'total_carbs': totalCarbs,
-                      'total_fat': totalFat,
-                      'total_fiber': totalFiber,
-                      'created_at': now.toIso8601String(),
-                      'source': 'scan_meal',
-                    });
-                    ref.invalidate(dailyNutritionProvider);
-                  }
-                  ref.read(scanMealProvider.notifier).clear();
-                  if (mounted) setState(() => _saving = false);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Meal saved ✓'), duration: Duration(seconds: 1)),
-                    );
-                  }
-                },
+                onTap: _saving ? null : _save,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
@@ -509,5 +619,225 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
         ),
       ],
     );
+  }
+
+  Widget _buildItemRow(_EditableItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        children: [
+          // Compact row: name | kcal | expand | delete
+          Row(
+            children: [
+              Expanded(
+                flex: 5,
+                child: TextField(
+                  controller: item.nameCtrl,
+                  onChanged: (_) => setState(() {}),
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: _fieldDecoration('Food name'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 58,
+                child: TextField(
+                  controller: item.kcalCtrl,
+                  onChanged: (_) => setState(() {}),
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.orange,
+                  ),
+                  decoration: _fieldDecoration('kcal'),
+                ),
+              ),
+              GestureDetector(
+                onTap: () =>
+                    setState(() => item.expanded = !item.expanded),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    item.expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _removeItem(item),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.close, size: 16, color: AppColors.red),
+                ),
+              ),
+            ],
+          ),
+          // Expanded macros row
+          if (item.expanded) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                    child: _macroField(
+                        item.proteinCtrl, 'P g', AppColors.accent)),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: _macroField(
+                        item.carbsCtrl, 'C g', AppColors.blue)),
+                const SizedBox(width: 6),
+                Expanded(
+                    child:
+                        _macroField(item.fatCtrl, 'F g', AppColors.orange)),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: _macroField(
+                        item.fiberCtrl, 'Fi g', AppColors.green)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _macroField(
+      TextEditingController ctrl, String label, Color color) {
+    return TextField(
+      controller: ctrl,
+      onChanged: (_) => setState(() {}),
+      keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
+      style: GoogleFonts.getFont(
+        'DM Sans',
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+      decoration: _fieldDecoration(label),
+    );
+  }
+
+  InputDecoration _fieldDecoration(String hint) {
+    return InputDecoration(
+      isDense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      filled: true,
+      fillColor: AppColors.input,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.cardS),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.cardS),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.cardS),
+        borderSide:
+            const BorderSide(color: AppColors.accent, width: 1.0),
+      ),
+      hintText: hint,
+      hintStyle: GoogleFonts.getFont(
+        'DM Sans',
+        fontSize: 10,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+}
+
+/// One editable scanned item (name + kcal + macros) with Atwater fallback.
+class _EditableItem {
+  final TextEditingController nameCtrl;
+  final TextEditingController kcalCtrl;
+  final TextEditingController proteinCtrl;
+  final TextEditingController carbsCtrl;
+  final TextEditingController fatCtrl;
+  final TextEditingController fiberCtrl;
+  bool expanded;
+
+  _EditableItem({
+    required this.nameCtrl,
+    required this.kcalCtrl,
+    required this.proteinCtrl,
+    required this.carbsCtrl,
+    required this.fatCtrl,
+    required this.fiberCtrl,
+  }) : expanded = false;
+
+  factory _EditableItem.fromMap(Map<String, dynamic> map) {
+    String numStr(dynamic v) {
+      if (v == null) return '';
+      if (v is num) {
+        if (v == 0) return '';
+        return v == v.truncateToDouble()
+            ? v.toInt().toString()
+            : v.toString();
+      }
+      return v.toString();
+    }
+
+    return _EditableItem(
+      nameCtrl: TextEditingController(text: (map['name'] as String?) ?? ''),
+      kcalCtrl: TextEditingController(text: numStr(map['calories'])),
+      proteinCtrl: TextEditingController(text: numStr(map['protein'])),
+      carbsCtrl: TextEditingController(text: numStr(map['carbs'])),
+      fatCtrl: TextEditingController(text: numStr(map['fat'])),
+      fiberCtrl: TextEditingController(text: numStr(map['fiber'])),
+    );
+  }
+
+  factory _EditableItem.empty() {
+    return _EditableItem(
+      nameCtrl: TextEditingController(),
+      kcalCtrl: TextEditingController(),
+      proteinCtrl: TextEditingController(),
+      carbsCtrl: TextEditingController(),
+      fatCtrl: TextEditingController(),
+      fiberCtrl: TextEditingController(),
+    );
+  }
+
+  bool get hasContent => nameCtrl.text.trim().isNotEmpty;
+
+  double get kcalRaw => double.tryParse(kcalCtrl.text.trim()) ?? 0;
+  double get protein => double.tryParse(proteinCtrl.text.trim()) ?? 0;
+  double get carbs => double.tryParse(carbsCtrl.text.trim()) ?? 0;
+  double get fat => double.tryParse(fatCtrl.text.trim()) ?? 0;
+  double get fiber => double.tryParse(fiberCtrl.text.trim()) ?? 0;
+
+  /// Atwater fallback: if the user or AI left kcal blank but macros are
+  /// present, estimate kcal from 4/4/9. Otherwise use the entered kcal.
+  double effectiveKcal() {
+    final raw = kcalRaw;
+    if (raw > 0) return raw;
+    return (protein * 4) + (carbs * 4) + (fat * 9);
+  }
+
+  Map<String, dynamic> toMap() => {
+        'name': nameCtrl.text.trim(),
+        'calories': effectiveKcal().round(),
+        'protein': protein.round(),
+        'carbs': carbs.round(),
+        'fat': fat.round(),
+        'fiber': fiber.round(),
+      };
+
+  void dispose() {
+    nameCtrl.dispose();
+    kcalCtrl.dispose();
+    proteinCtrl.dispose();
+    carbsCtrl.dispose();
+    fatCtrl.dispose();
+    fiberCtrl.dispose();
   }
 }

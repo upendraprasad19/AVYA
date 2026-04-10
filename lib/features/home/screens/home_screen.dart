@@ -695,8 +695,8 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         double maxW = 0;
         String maxName = '';
         for (final ex in receiptData.exercises) {
-          if (ex.weightKg > maxW) {
-            maxW = ex.weightKg;
+          if (ex.maxWeightKg > maxW) {
+            maxW = ex.maxWeightKg;
             maxName = ex.name;
           }
         }

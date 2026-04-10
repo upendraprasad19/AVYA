@@ -183,6 +183,17 @@ class TodaysMealsCard extends StatelessWidget {
                       ),
                   ],
                 ),
+                // Edit affordance — makes the tap-to-edit target discoverable.
+                // Previously the whole row was tappable but had no visual cue,
+                // so users only found the edit sheet by accident.
+                if (onEdit != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 14,
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
+                  ),
+                ],
               ],
             ),
           ),

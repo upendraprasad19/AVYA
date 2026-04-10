@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
+import 'edit_workout_log_sheet.dart';
 import 'workout_receipt_card.dart';
 
 /// Reusable bottom sheet that displays a WorkoutReceiptCard with share + close.
@@ -74,6 +75,46 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
               ),
             ),
             const SizedBox(height: 8),
+
+            // Edit button — opens EditWorkoutLogSheet for the same date.
+            // Lets users correct logging mistakes (e.g. mis-entered seconds)
+            // without having to redo the whole workout.
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).pop();
+                EditWorkoutLogSheet.show(context, widget.receiptData.date);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentTint,
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.edit_outlined,
+                        size: 15, color: AppColors.accent),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Edit Workout Log',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
 
             // Close
             GestureDetector(

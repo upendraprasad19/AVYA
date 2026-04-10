@@ -51,6 +51,84 @@ class AiService {
     _httpClient = null;
   }
 
+  // ── Error / size helpers ──────────────────────────────────────
+
+  /// Pull a meaningful error message out of the Edge Function response body.
+  ///
+  /// Edge Functions return `{"error": "..."}` on non-200. Without this,
+  /// callers would only see "status 400" and have no idea whether the user
+  /// sent something too long, the snapshot blew past the 10KB limit, or
+  /// the upstream model was actually down.
+  String? _extractError(dynamic data) {
+    try {
+      Map<String, dynamic>? map;
+      if (data is String) {
+        final decoded = json.decode(data);
+        if (decoded is Map) map = Map<String, dynamic>.from(decoded);
+      } else if (data is Map) {
+        map = Map<String, dynamic>.from(data);
+      }
+      if (map == null) return null;
+      final err = map['error'];
+      if (err is String && err.isNotEmpty) return err;
+      final msg = map['message'];
+      if (msg is String && msg.isNotEmpty) return msg;
+    } catch (_) {
+      // Fall through — unparseable body, nothing we can surface.
+    }
+    return null;
+  }
+
+  /// Server-side limit from ai-proxy / ai-proxy-pro (`5d8fc11`).
+  /// We stay a little under to absorb JSON overhead added by the platform.
+  static const int _maxSnapshotBytes = 9500;
+
+  /// Compact the context JSON so it fits inside the server's snapshot limit.
+  ///
+  /// Keeps the core profile / progress / today's data and trims the biggest
+  /// optional fields first. Without this, any historical query that triggers
+  /// `enrichContextForQuery` (exercise history, nutrition/weight trends) can
+  /// easily blow past 10KB and get rejected with a generic 400.
+  Map<String, dynamic> _compactContext(Map<String, dynamic> context) {
+    Map<String, dynamic> working = Map<String, dynamic>.from(context);
+    int size() => json.encode(working).length;
+    if (size() <= _maxSnapshotBytes) return working;
+
+    // Drop order — least load-bearing first.
+    const trimSteps = [
+      'step_history_7d',
+      'weight_trend',
+      'nutrition_trend',
+      'exercise_history',
+      'personal_records',
+      'coach_notices',
+    ];
+    for (final key in trimSteps) {
+      if (size() <= _maxSnapshotBytes) return working;
+      working.remove(key);
+    }
+
+    // Still too big: truncate coaching_notes text, which can grow unbounded.
+    if (size() > _maxSnapshotBytes) {
+      final notes = working['coaching_notes'];
+      if (notes is String && notes.length > 1500) {
+        working['coaching_notes'] = '${notes.substring(0, 1500)}…';
+      } else if (notes is Map) {
+        // Drop everything except the most recent text field if present.
+        final text = notes['text'] ?? notes['notes'];
+        working['coaching_notes'] = text is String && text.length > 1500
+            ? '${text.substring(0, 1500)}…'
+            : text;
+      }
+    }
+
+    // Last-resort: drop fitness_summary too.
+    if (size() > _maxSnapshotBytes) {
+      working.remove('fitness_summary');
+    }
+    return working;
+  }
+
   // ── Response parsing helpers ──────────────────────────────────
 
   /// Parse the Edge Function response into an [AiChatResponse].
@@ -95,30 +173,32 @@ class AiService {
   /// log actions, or throws on failure.
   Future<AiChatResponse> chat(
       String message, Map<String, dynamic> context) async {
+    final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
         'ai-proxy',
         body: {
           'message': message,
-          'context': context,
-          'snapshot_json': context,
+          'context': compact,
+          'snapshot_json': compact,
         },
       );
 
       if (response.status != 200) {
+        final serverError = _extractError(response.data);
         throw AiServiceException(
-          'AI chat failed with status ${response.status}',
+          serverError ?? 'AI chat failed with status ${response.status}',
           statusCode: response.status,
         );
       }
 
       return _parseResponse(response.data);
     } on http.ClientException {
-      return _directHttpCall('ai-proxy', message, context);
+      return _directHttpCall('ai-proxy', message, compact);
     } catch (e) {
       // Web fallback: 'Failed to fetch' is thrown by the browser fetch API
       if (e.toString().contains('Failed to fetch')) {
-        return _directHttpCall('ai-proxy', message, context);
+        return _directHttpCall('ai-proxy', message, compact);
       }
       rethrow;
     }
@@ -131,20 +211,22 @@ class AiService {
   /// message count check and the `ai_coach_interactions` insert.
   Future<AiChatResponse> predict(
       String message, Map<String, dynamic> context) async {
+    final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
         'ai-proxy',
         body: {
           'message': message,
-          'context': context,
-          'snapshot_json': context,
+          'context': compact,
+          'snapshot_json': compact,
           'type': 'prediction',
         },
       );
 
       if (response.status != 200) {
+        final serverError = _extractError(response.data);
         throw AiServiceException(
-          'Prediction failed with status ${response.status}',
+          serverError ?? 'Prediction failed with status ${response.status}',
           statusCode: response.status,
         );
       }
@@ -165,6 +247,7 @@ class AiService {
     final freshToken = await _supabase.ensureFreshToken();
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
+    final compact = _compactContext(context);
     final response = await _client.post(
       Uri.parse(url),
       headers: {
@@ -174,14 +257,21 @@ class AiService {
       },
       body: json.encode({
         'message': message,
-        'context': context,
-        'snapshot_json': context,
+        'context': compact,
+        'snapshot_json': compact,
       }),
     );
 
     if (response.statusCode != 200) {
+      String? serverError;
+      try {
+        final decoded = json.decode(response.body);
+        if (decoded is Map) serverError = _extractError(decoded);
+      } catch (_) {}
       throw AiServiceException(
-          'Direct call failed: ${response.statusCode} ${response.body}');
+        serverError ?? 'Direct call failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
 
     final data = json.decode(response.body) as Map<String, dynamic>;
@@ -199,29 +289,31 @@ class AiService {
   /// log actions, or throws on failure.
   Future<AiChatResponse> chatPro(
       String message, Map<String, dynamic> context) async {
+    final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
         'ai-proxy-pro',
         body: {
           'message': message,
-          'context': context,
-          'snapshot_json': context,
+          'context': compact,
+          'snapshot_json': compact,
         },
       );
 
       if (response.status != 200) {
+        final serverError = _extractError(response.data);
         throw AiServiceException(
-          'PRO AI chat failed with status ${response.status}',
+          serverError ?? 'PRO AI chat failed with status ${response.status}',
           statusCode: response.status,
         );
       }
 
       return _parseResponse(response.data);
     } on http.ClientException {
-      return _directHttpCall('ai-proxy-pro', message, context);
+      return _directHttpCall('ai-proxy-pro', message, compact);
     } catch (e) {
       if (e.toString().contains('Failed to fetch')) {
-        return _directHttpCall('ai-proxy-pro', message, context);
+        return _directHttpCall('ai-proxy-pro', message, compact);
       }
       rethrow;
     }
@@ -243,6 +335,7 @@ class AiService {
     String mediaType,
     Map<String, dynamic> context,
   ) async {
+    final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
         'ai-media-proxy',
@@ -250,24 +343,25 @@ class AiService {
           'message': message,
           'media_url': mediaUrl,
           'media_type': mediaType,
-          'context': context,
-          'snapshot_json': context,
+          'context': compact,
+          'snapshot_json': compact,
         },
       );
 
       if (response.status != 200) {
+        final serverError = _extractError(response.data);
         throw AiServiceException(
-          'Media AI chat failed with status ${response.status}',
+          serverError ?? 'Media AI chat failed with status ${response.status}',
           statusCode: response.status,
         );
       }
 
       return _parseResponse(response.data);
     } on http.ClientException {
-      return _directMediaHttpCall(message, mediaUrl, mediaType, context);
+      return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
     } catch (e) {
       if (e.toString().contains('Failed to fetch')) {
-        return _directMediaHttpCall(message, mediaUrl, mediaType, context);
+        return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
       }
       rethrow;
     }
@@ -286,6 +380,7 @@ class AiService {
     final freshToken = await _supabase.ensureFreshToken();
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
+    final compact = _compactContext(context);
     final response = await _client.post(
       Uri.parse(url),
       headers: {
@@ -297,14 +392,21 @@ class AiService {
         'message': message,
         'media_url': mediaUrl,
         'media_type': mediaType,
-        'context': context,
-        'snapshot_json': context,
+        'context': compact,
+        'snapshot_json': compact,
       }),
     );
 
     if (response.statusCode != 200) {
+      String? serverError;
+      try {
+        final decoded = json.decode(response.body);
+        if (decoded is Map) serverError = _extractError(decoded);
+      } catch (_) {}
       throw AiServiceException(
-          'Direct media call failed: ${response.statusCode} ${response.body}');
+        serverError ?? 'Direct media call failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
 
     final data = json.decode(response.body) as Map<String, dynamic>;
@@ -318,18 +420,20 @@ class AiService {
   /// Used for deep personalised coaching in the Reasoning tab.
   Future<AiChatResponse> reason(
       String message, Map<String, dynamic> context) async {
+    final compact = _compactContext(context);
     final response = await _supabase.callFunction(
       'ai-proxy-pro',
       body: {
         'message': message,
-        'context': context,
+        'context': compact,
         'mode': 'reasoning',
       },
     );
 
     if (response.status != 200) {
+      final serverError = _extractError(response.data);
       throw AiServiceException(
-        'Reasoning failed with status ${response.status}',
+        serverError ?? 'Reasoning failed with status ${response.status}',
         statusCode: response.status,
       );
     }

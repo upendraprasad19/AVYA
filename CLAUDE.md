@@ -269,8 +269,10 @@ lib/
       screens/active_workout_screen.dart
       screens/template_builder_screen.dart
       widgets/
-        workout_receipt_card.dart          # WorkoutReceiptData + WorkoutReceiptCard
-        workout_receipt_sheet.dart         # Reusable receipt bottom sheet (shared)
+        workout_receipt_card.dart          # WorkoutReceiptData + WorkoutReceiptCard (source of truth: fromExerciseLogs)
+        workout_receipt_sheet.dart         # Reusable receipt bottom sheet (shared) — includes Edit button
+        edit_workout_log_sheet.dart        # SINGLE edit surface for completed workouts (4 entry points)
+        create_custom_exercise_sheet.dart  # Custom exercise creator (Hive customBox + Supabase sync)
       providers/train_provider.dart
       repositories/workout_repository.dart
       models/
@@ -338,6 +340,10 @@ supabase/
 13. **All screens must handle:** loading state (skeleton), error state (retry), empty state.
 14. **Never modify `plan_generator.dart`** without explicit instruction.
 15. **Import paths:** Use relative imports within features. Use `package:` imports for shared/ and core/.
+16. **Edge Function SSRF:** Never fetch arbitrary user-supplied URLs server-side. Allowlist Supabase Storage prefix only.
+17. **Release error handling:** Use `kDebugMode` guard — show detailed errors only in debug, generic message in release.
+18. **Edge Function input limits:** Enforce message (5K chars) and snapshot (10K chars) limits server-side on ALL AI endpoints.
+19. **Server-side subscription verification:** High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`) must call `verifyFromServer()` in `gate()`. Local-only check is insufficient.
 
 ---
 
@@ -635,11 +641,23 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 ### isPro() Implementation
 - Reads from Hive configBox: `{isPro: bool, expiresAt: DateTime, plan: String}`
 - Checks local expiry date
+- **kDebugMode guard:** If `expiresAt` is null, returns `true` only in debug mode (`kDebugMode`). In release builds, null expiry = free. Prevents rooted-device Hive tampering from granting PRO.
 - Refreshes from Supabase on app launch (if online)
 - If expired and offline → downgrade to free immediately (no grace period)
 - Downgrade = soft lock: keep all data, show paywall on PRO features, read-only on PRO content
 - **Phantom PRO fix:** `localActivationAt` is force-cleared after grace period expires on network error. Prevents stale local timestamp from keeping users in PRO after subscription lapses.
 - **JWT refresh:** `razorpay_service` refreshes JWT before each verify-payment retry to prevent 401 errors during polling.
+- **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`). Other features use local check only for low latency.
+
+### gate() High-Value Features
+```dart
+static const Set<String> _highValueFeatures = {
+  AppConstants.featurePhases2To12,
+  AppConstants.featureAiCoachUnlimited,
+  AppConstants.featureReasoningTab,
+};
+// gate() checks server for these features, local-only for others
+```
 
 ---
 
@@ -668,6 +686,35 @@ Cost per user/month: ~₹1.80
 - GLM-4.7 on Cerebras
 - Full personalised coaching: photo/video upload, deep analysis
 - Free users see it locked → PRO paywall
+
+### Input Validation (all AI Edge Functions)
+- **Message length:** Max 5,000 chars. Enforced server-side on `ai-proxy`, `ai-proxy-pro`, `ai-media-proxy`.
+- **Snapshot size:** Max 10,000 chars (stringified JSON). Enforced on `ai-proxy`, `ai-proxy-pro`.
+- **Image size:** Max 5MB. Enforced on `ai-media-proxy` via content-length + arrayBuffer check.
+- **SSRF protection:** `ai-media-proxy` only fetches from `${SUPABASE_URL}/storage/v1/object/` prefix. All other URLs rejected.
+
+### Client-Side Context Compaction (`AiService._compactContext`)
+- **Target:** <9,500 bytes (buffer under 10KB server limit for JSON overhead).
+- **Trim order** (least load-bearing first): `step_history_7d` → `weight_trend` → `nutrition_trend` → `exercise_history` → `personal_records` → `coach_notices` → truncate `coaching_notes` (1,500 char cap) → drop `fitness_summary`.
+- Applied on EVERY AI call (`chat`, `chatPro`, `chatWithMedia`, `reason`, `predict`, both direct-HTTP fallbacks). Without this, historical queries that trigger `enrichContextForQuery` get rejected with a 400 from the server.
+
+### Client-Side Error Extraction (`AiService._extractError`)
+- Parses `{"error": "..."}` out of non-200 responses on all AI Edge Functions.
+- Replaces generic "status X" with actionable messages at the provider level (`ai_coach_provider.dart`):
+  - `Message too long` → "Your message is too long (max 5000 chars). Please shorten it and try again."
+  - `Snapshot too large` → "Your coaching context is unusually large. Please try a shorter question."
+  - `Image too large` → "That photo is too large (max 5 MB)."
+  - `Only Supabase Storage URLs are allowed` → "Upload failed — please try picking the photo again."
+  - `PRO subscription required` → "This feature requires PRO."
+  - `502`/`503`/`504` → "The AI model is temporarily unavailable. Please try again in a minute."
+- **Never use "restart the app" copy.** It doesn't fix any of these root causes.
+
+### Edge Function Auth
+- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()`.
+- `ai-proxy-pro`: `verify_jwt: false` (same bug). Manual JWT + subscription check.
+- `ai-media-proxy`: `verify_jwt: true` + manual JWT + PRO subscription check.
+- `validate-promo`: `verify_jwt: true` + manual JWT validation (prevents unauthenticated promo enumeration).
+- `future-prediction`: `verify_jwt: true` + manual JWT validation.
 
 ### Vision Features (ai-proxy — OpenRouter Gemma 4 + Gemini 2.5 Flash Lite)
 - `food_text_analysis`: Text → nutrition JSON. Always free, no rate limit.
@@ -831,6 +878,24 @@ Hybrid BMR: Katch-McArdle when body fat % available (`370 + 21.6 × lean_mass_kg
 - Safety ceiling: 50,000 rows per table to prevent runaway fetches.
 - No hardcoded `.limit(5000)` — truly full-history restore for all users.
 
+### Source of Truth Rules (NON-NEGOTIABLE)
+> Multiple-source bugs are the #1 cause of "UI says X but data says Y" issues. Establish ONE reader per derived concept.
+
+- **Workout receipt:** `WorkoutReceiptData.fromExerciseLogs(date)` (in `workout_receipt_card.dart`) is the ONLY way to build receipt data after the fact. Reads from Hive `exlog_*` keys via `WorkoutRepository.getExerciseLogsForDate()`. Deduplicates by exercise name (sum sets, max weight). Never hand-build receipt data from a widget's in-memory state.
+- **Workout log edit:** `EditWorkoutLogSheet` (in `lib/features/train/widgets/edit_workout_log_sheet.dart`) is the ONLY edit surface. Every entry point (receipt sheet Edit button, Home "View Card", calendar day detail, Train expanded view) routes through it. Save:
+  1. Rewrites the Hive log map in place
+  2. Recomputes `volume_kg = weight_kg × reps_completed`
+  3. Chronologically rescans `is_pr` flags for the exercise (sorts by `date + created_at`, walks forward, strict `>` comparison)
+  4. Invalidates: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`
+  5. Fires `SyncService.instance.syncWorkoutData() + pushSnapshot()` (fire-and-forget)
+- **Exercise logs:** `WorkoutRepository.getExerciseLogsForDate()` is the ONLY read path. Uses O(1) index `exercise_log_index_YYYY-MM-DD` with legacy full-scan fallback. Never iterate `workoutBox.keys` manually to find logs for a date.
+- **Home "View Card" state:** `todayWorkoutProvider` is the single source for the "DONE + View Card" state on home. Always derived from Hive schedule + exercise logs — never cached in the widget.
+- **Scheduled workouts:** `WorkoutScheduleService` owns all schedule mutations (generate, clean-sync on template edit, reschedule on days/week change). Never write `schedule_YYYY-MM-DD` keys directly from a widget or repository.
+- **Nutrition total calories:** After a meal is logged, `total_calories` comes from summing `items[]` with per-item Atwater fallback (`raw > 0 ? raw : 4P+4C+9F`). Never read `result['total_calories']` at the top level of an AI response — it's routinely missing.
+- **AI snapshot:** `AiCoachRepository.buildAiContext()` is the ONE builder. `AiService._compactContext()` is the ONE trimmer. Never construct ad-hoc snapshots in provider code.
+- **Subscription status:** `SubscriptionService.isPro()` + `gate()` are the ONLY entry points. Never read `configBox.get('isPro')` directly from a widget. High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`) go through `verifyFromServer()`.
+- **Provider invalidation after mutation:** Any write that changes workout state (log, edit, delete, complete) MUST invalidate the full batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`. One missing invalidation = stale UI.
+
 ---
 
 ## 16. PAYMENT FLOW
@@ -920,3 +985,20 @@ See `.claude/agents/` for full definitions:
 | Image upload RLS violation | Storage path must be `$userId/$timestamp.jpg`, NOT `chat-media/$userId/...` — bucket name is already set by `.from('chat-media')` |
 | Mic stops after 2-3 seconds | `pauseFor: 5s`, `listenFor: 60s`, `ListenMode.dictation`, `partialResults: true` via `SpeechListenOptions` |
 | PRO chat "Session error" | `ai-proxy-pro` must have `verify_jwt: false` — Supabase gateway bug rejects valid JWTs when `true` |
+| SSRF via ai-media-proxy | Only allow `${SUPABASE_URL}/storage/v1/object/` prefix URLs. Never fetch arbitrary user-supplied URLs server-side. |
+| Null expiry grants PRO | `isPro()` returns `kDebugMode` when `expiresAt` is null — release builds treat null as free. Never remove this guard. |
+| Promo code enumeration | `validate-promo` requires JWT auth. Never expose promo discount_pct to unauthenticated callers. |
+| Subscription bypass via Hive | `gate()` calls `verifyFromServer()` for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`). Never rely on local-only check for these. |
+| Oversized AI payload abuse | All AI Edge Functions enforce message (5K chars) + snapshot (10K chars) limits server-side. Client limits are advisory only. |
+| Error widget leaks stack trace | `ErrorWidget.builder` shows generic message in release (`kDebugMode` guard). Never show `exceptionAsString()` to production users. |
+| future-prediction broken import | Import shared modules as `../_shared/openrouter.ts` in source, but deploy with `./_shared/openrouter.ts` (MCP places files in source/ subdirectory). |
+| Warm-up sets counted in completedSets | `completedSets` getter filters out `warmUpSets` keys. Exercise name matching uses exact-first, fuzzy only for names >= 6 chars. |
+| WarmupCooldownSection RangeError | `didUpdateWidget` resets `_checked` list when `widget.exercises.length` changes. Always guard list length on rebuild. |
+| Workout receipt shows stale/wrong data | `WorkoutReceiptData.fromExerciseLogs(date)` is the SINGLE source of truth. Deduplicates exercises by name, sums sets, takes max weight. Never hand-build receipt data from a widget's local state. |
+| Workout log edit path missing | `EditWorkoutLogSheet` is the single edit surface. Exposed from 4 places: WorkoutReceiptSheet Edit button, Home "View Card", calendar day detail, Train expanded view. Save recomputes `volume_kg`, chronologically rescans PR flags for that exercise, fires `pushSnapshot()` + `syncWorkoutData()`, invalidates all workout/home providers. Never build a second edit path — it will drift from this one. |
+| Scan meal saves 0 kcal | `_ScanResultEditor` always computes `total_calories` from live item sum with per-item Atwater fallback (`kcal > 0 ? kcal : 4P+4C+9F`). Never read `result['total_calories']` directly — AI responses often omit it while per-item kcal is populated. |
+| Scan meal result not editable | `_ScanResultEditor` replaces the old read-only `_buildResult`. All scan results are mutable: editable meal name, per-item name/kcal/P/C/F/Fi, +Add Item, X Delete. Total recomputes on every keystroke via `onChanged: (_) => setState(...)`. |
+| Hidden tap-to-edit targets | Any row that responds to tap-to-edit MUST show a visual affordance (e.g., pencil icon at 14px, `textSecondary.withValues(alpha: 0.7)`). Invisible tap targets will not be discovered. |
+| AI "temporarily unavailable" masks real error | `AiService._extractError()` pulls `{"error": "..."}` from non-200 Edge Function responses. Never throw raw "status X" — the server-side error body contains the actionable reason (message too long, snapshot too large, PRO required). |
+| AI snapshot exceeds 10KB server limit | `AiService._compactContext()` trims in priority order: `step_history_7d` → `weight_trend` → `nutrition_trend` → `exercise_history` → `personal_records` → `coach_notices` → truncate `coaching_notes` → drop `fitness_summary`. Target <9500 bytes for JSON overhead buffer. Historical queries routinely blow past 10KB without this. |
+| "Restart the app" error copy | Never use. Map server errors to actionable user messages in `ai_coach_provider.dart`: `Message too long` → "shorten it", `Snapshot too large` → "try a shorter question", `Image too large` → "max 5 MB", `502/503/504` → "model temporarily unavailable, try in a minute". |

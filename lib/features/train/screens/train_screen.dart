@@ -15,6 +15,7 @@ import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/train_provider.dart';
 import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
+import '../widgets/edit_workout_log_sheet.dart';
 import '../widgets/week_selector.dart';
 import '../widgets/stats_grid.dart';
 
@@ -560,6 +561,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               // Inline expanded exercises for completed days (W5)
               if (expandedIdx == i && weekDays[i].isDone && weekDays[i].date != null)
                 _buildExpandedExercises(weekDays[i]),
+              // Inline expanded preview + Start Workout for today-planned
+              if (expandedIdx == i &&
+                  !weekDays[i].isDone &&
+                  !weekDays[i].isRest &&
+                  weekDays[i].date != null &&
+                  _formatDateKey(weekDays[i].date!) == todayStr)
+                _buildPlannedExpansion(context, weekDays[i]),
               if (i < weekDays.length - 1)
                 Divider(
                   height: 1,
@@ -618,10 +626,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         if (day.isRest) {
           _showRestDaySheet(context);
         } else if (isToday && !day.isDone) {
-          ref
-              .read(activeWorkoutProvider.notifier)
-              .startWorkout(day);
-          context.go('/train/active-workout');
+          // Today's planned workout: expand inline preview with Start Workout button
+          ref.read(expandedDayProvider.notifier).toggle(dayIndex);
         } else if (day.isDone) {
           // Completed days expand inline to show logged exercises (W5)
           ref.read(expandedDayProvider.notifier).toggle(dayIndex);
@@ -696,7 +702,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               // Status indicator
               _buildStatusIndicator(
                 status,
-                isExpanded: status == _RowStatus.done &&
+                isExpanded: (status == _RowStatus.done ||
+                        status == _RowStatus.today) &&
                     ref.watch(expandedDayProvider) == dayIndex,
               ),
             ],
@@ -752,6 +759,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 fontWeight: FontWeight.w700,
                 color: AppColors.accent,
               ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              isExpanded ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: AppColors.accent.withValues(alpha: 0.6),
             ),
           ],
         );
@@ -944,6 +957,45 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       }
     }
 
+    // Edit button — opens the same EditWorkoutLogSheet used by the receipt
+    // sheet, so past completed days can also be corrected inline without
+    // needing to open the receipt first.
+    final editButton = Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: GestureDetector(
+        onTap: () => EditWorkoutLogSheet.show(context, day.date!),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppColors.border,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.edit_outlined,
+                  size: 12, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text(
+                'Edit Log',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return Container(
       color: AppColors.card,
       padding: const EdgeInsets.fromLTRB(50, 2, 14, 10),
@@ -951,7 +1003,102 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...logRows,
+          editButton,
           ?viewCardButton,
+        ],
+      ),
+    );
+  }
+
+  String _formatDateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // ── Planned Expansion (today, not yet started) ──────────────────
+
+  Widget _buildPlannedExpansion(BuildContext context, WorkoutDayData day) {
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(50, 4, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (day.exercises.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No exercises scheduled',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            )
+          else ...[
+            // Warm-up section
+            if (day.warmup.isNotEmpty) ...[
+              _buildPreviewSectionLabel('WARM-UP', AppColors.orange),
+              ...day.warmup.map((ex) =>
+                  _buildPreviewExerciseRow(ex, null, AppColors.orange)),
+              const SizedBox(height: 6),
+              _buildPreviewSectionLabel('WORKOUT', AppColors.accent),
+            ],
+            // Main exercises
+            ...List.generate(day.exercises.length, (index) {
+              final ex = day.exercises[index];
+              return _buildPreviewExerciseRow(
+                  ex, index + 1, AppColors.accent);
+            }),
+            // Cool-down section
+            if (day.cooldown.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _buildPreviewSectionLabel('COOL-DOWN', AppColors.blue),
+              ...day.cooldown.map((ex) =>
+                  _buildPreviewExerciseRow(ex, null, AppColors.blue)),
+            ],
+          ],
+          const SizedBox(height: 10),
+          // START WORKOUT button — the explicit gate
+          GestureDetector(
+            onTap: () {
+              ref.read(activeWorkoutProvider.notifier).startWorkout(day);
+              context.go('/train/active-workout');
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(100),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.play_arrow_rounded,
+                      size: 18, color: Colors.black),
+                  const SizedBox(width: 6),
+                  Text(
+                    'START WORKOUT',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1773,6 +1920,24 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () =>
+                          _confirmDeleteTemplate(context, ref, templateId, name),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.input,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -1780,6 +1945,92 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeleteTemplate(
+      BuildContext context, WidgetRef ref, String templateId, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          side: BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          'Delete "$name"?',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Your originally scheduled workouts will be restored on those days. Completed workouts stay in your history.',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.red,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      await ref.read(templatesProvider.notifier).deleteTemplate(templateId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Template deleted',
+            style: GoogleFonts.getFont('DM Sans'),
+          ),
+          backgroundColor: AppColors.card,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to delete template: $e',
+            style: GoogleFonts.getFont('DM Sans'),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
   }
 
   void _scheduleTemplate(
@@ -1974,7 +2225,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     final sortedDates = selected.toList()..sort();
 
     for (final date in sortedDates) {
-      WorkoutScheduleService.instance.assignTemplateToDate(templateId, date);
+      await WorkoutScheduleService.instance
+          .assignTemplateToDate(templateId, date);
     }
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(currentPlanProvider);

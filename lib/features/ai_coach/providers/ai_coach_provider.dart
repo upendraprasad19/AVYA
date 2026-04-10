@@ -263,8 +263,16 @@ class SendMessageNotifier extends Notifier<bool> {
       final String errorMsg;
       if (errStr2.contains('Failed host lookup') || errStr2.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
-      } else if (errStr2.contains('FunctionException') || errStr2.contains('502') || errStr2.contains('503')) {
-        errorMsg = 'AI media analysis is temporarily unavailable. Please try again.';
+      } else if (errStr2.contains('Image too large') || errStr2.contains('max 5242880')) {
+        errorMsg = 'That photo is too large (max 5 MB). Please pick a smaller one or retake at lower resolution.';
+      } else if (errStr2.contains('Only Supabase Storage URLs are allowed')) {
+        errorMsg = 'Upload failed — please try picking the photo again.';
+      } else if (errStr2.contains('Message too long')) {
+        errorMsg = 'Your caption is too long (max 5000 chars). Please shorten it and try again.';
+      } else if (errStr2.contains('PRO subscription required') || errStr2.contains('subscription required')) {
+        errorMsg = 'Photo analysis is a PRO feature. Upgrade to unlock it.';
+      } else if (errStr2.contains('502') || errStr2.contains('503') || errStr2.contains('504')) {
+        errorMsg = 'The vision model is temporarily unavailable. Please try again in a minute.';
       } else {
         errorMsg = 'Sorry, I couldn\'t analyse that photo. Please try again.';
       }
@@ -426,8 +434,18 @@ class SendMessageNotifier extends Notifier<bool> {
         errorMsg = 'Your 30-day free AI trial has ended. Upgrade to PRO for unlimited coaching.';
       } else if (errStr.contains('RATE_LIMITED')) {
         errorMsg = 'Daily message limit reached (15/day on free plan). Try again tomorrow or upgrade to PRO.';
-      } else if (errStr.contains('FunctionException') || errStr.contains('502') || errStr.contains('503')) {
-        errorMsg = 'AI service is temporarily unavailable. Please restart the app and try again.';
+      } else if (errStr.contains('Message too long')) {
+        errorMsg = 'Your message is too long (max 5000 chars). Please shorten it and try again.';
+      } else if (errStr.contains('Snapshot too large')) {
+        // Shouldn't happen after client-side compaction in AiService._compactContext,
+        // but surface clearly if it ever slips past.
+        errorMsg = 'Your coaching context is unusually large. Please try a shorter question or contact support.';
+      } else if (errStr.contains('PRO subscription required') || errStr.contains('subscription required')) {
+        errorMsg = 'This feature requires PRO. Upgrade to unlock it.';
+      } else if (errStr.contains('502') || errStr.contains('503') || errStr.contains('504')) {
+        errorMsg = 'The AI model is temporarily unavailable. Please try again in a minute.';
+      } else if (errStr.contains('FunctionException')) {
+        errorMsg = 'The AI model is temporarily unavailable. Please try again shortly.';
       } else {
         errorMsg = 'Sorry, something went wrong. Please try again.';
       }
