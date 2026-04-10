@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
@@ -351,6 +353,9 @@ class WaterIntakeNotifier extends Notifier<int> {
 
     state = (state + ml).clamp(0, 5000);
     await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
+    // Fire-and-forget cloud sync + AI coach snapshot refresh.
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 
   Future<void> increment() async => addWater(250);
@@ -363,6 +368,8 @@ class WaterIntakeNotifier extends Notifier<int> {
 
     state = (state - 250).clamp(0, 5000);
     await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 
@@ -415,6 +422,9 @@ class UrineColorNotifier extends Notifier<int> {
       'label': index >= 0 && index < _labels.length ? _labels[index] : 'unknown',
       'recorded_at': now.toIso8601String(),
     });
+    // Refresh AI coach snapshot — urine color is part of the hydration
+    // context the coach uses for dehydration warnings.
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 
@@ -683,6 +693,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    // AI coach snapshot refresh — keeps "what did I eat today?" accurate
+    // without waiting for the next app launch.
+    unawaited(SyncService.instance.pushSnapshot());
 
     state = null;
     ref.invalidate(dailyNutritionProvider);
@@ -752,6 +765,7 @@ class FoodLogNotifier extends Notifier<void> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.pushSnapshot());
 
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
@@ -762,6 +776,9 @@ class FoodLogNotifier extends Notifier<void> {
 
   Future<void> deleteFoodLog(String logId) async {
     await HiveService.instance.nutritionBox.delete(logId);
+    // Delete is a mutation too — AI coach needs to see the correction.
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);
@@ -787,6 +804,7 @@ class FoodLogNotifier extends Notifier<void> {
     updated['total_fiber'] = fiber.round();
     await box.put(logId, updated);
     NutritionRepository.syncLogToSupabase(data: updated);
+    unawaited(SyncService.instance.pushSnapshot());
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
     ref.invalidate(nutritionSummaryProvider);
@@ -872,6 +890,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.pushSnapshot());
 
     // Increment times_used counter on the saved meal
     final savedId = savedMeal['id'] as String?;

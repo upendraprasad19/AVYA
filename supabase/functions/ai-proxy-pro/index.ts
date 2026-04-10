@@ -315,10 +315,17 @@ serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Sanitised 5xx: client gets a generic message + request_id; full detail
+    // is logged server-side only. Never leak raw exception text / upstream
+    // provider responses to the caller.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[ai-proxy-pro] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

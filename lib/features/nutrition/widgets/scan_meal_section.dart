@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:image_picker/image_picker.dart';
@@ -477,6 +480,13 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     });
 
     ref.invalidate(dailyNutritionProvider);
+
+    // Fire-and-forget cloud sync + AI coach context refresh. Hive is the
+    // source of truth; these calls are best-effort durability + freshness.
+    // If either fails silently (offline / token expired) the daily full
+    // sync picks it up on next launch.
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
 
     final messenger = ScaffoldMessenger.of(context);
     ref.read(scanMealProvider.notifier).clear();

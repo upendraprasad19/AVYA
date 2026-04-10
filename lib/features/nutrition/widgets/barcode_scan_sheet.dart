@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:icanbefitter/core/services/barcode_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
 import '../providers/nutrition_provider.dart';
@@ -119,6 +122,10 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
     });
 
     ref.invalidate(dailyNutritionProvider);
+
+    // Fire-and-forget cloud sync + AI coach context refresh.
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
 
     if (mounted) {
       Navigator.of(context).pop();

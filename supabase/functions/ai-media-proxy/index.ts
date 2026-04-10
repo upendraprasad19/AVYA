@@ -347,12 +347,15 @@ serve(async (req: Request) => {
       },
     );
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    console.error("ai-media-proxy error:", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Sanitised 5xx: never leak raw exception / upstream provider text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[ai-media-proxy] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

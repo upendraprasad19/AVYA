@@ -214,8 +214,12 @@ Return ONLY valid JSON — no markdown, no code fences:
       assessed_at: assessedAt,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    console.error("assess-body-composition error:", message);
-    return json({ error: message }, 500);
+    // Sanitised 5xx: never leak raw exception / upstream provider text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[assess-body-composition] request_id=${requestId}`, err);
+    return json(
+      { error: "Internal server error", request_id: requestId },
+      500,
+    );
   }
 });

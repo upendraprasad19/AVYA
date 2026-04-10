@@ -403,12 +403,15 @@ serve(async (req: Request) => {
       },
     );
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    console.error("Verify payment error:", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Sanitised 5xx: never leak raw exception / Razorpay API response.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[verify-payment] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

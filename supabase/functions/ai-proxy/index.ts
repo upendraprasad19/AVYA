@@ -155,9 +155,45 @@ serve(async (req: Request) => {
     const body = await req.json();
     const { message, snapshot_json, type, text, context, image_base64 } = body;
 
-    // ── Food text analysis (separate path — no trial/rate-limit check) ────
+    // ── Food text analysis ─────────────────────────────────────
     // Primary: OpenRouter Gemma 4 cascade (free). Fallback: Gemini 2.5 Flash Lite.
+    //
+    // Server-side daily cap — prevents a modified client from burning the
+    // Gemini fallback key or inflating ai_coach_interactions with
+    // free-tier costs. Counts distinct food_text_analysis rows per user
+    // per UTC day. Client-side limits (advisory) are still the primary
+    // UX; this is a safety ceiling generous enough that genuine users
+    // will never hit it (50/day free, 200/day PRO).
     if (type === "food_text_analysis" && text) {
+      const todayFoodStr = new Date().toISOString().split("T")[0];
+      const { count: foodCount } = await supabaseClient
+        .from("ai_coach_interactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("channel", "food_text_analysis")
+        .gte("created_at", todayFoodStr + "T00:00:00Z");
+
+      // Check PRO for higher cap (server-side verification — don't trust
+      // client state). isPro derived from subscriptions table row.
+      const { data: sub } = await supabaseClient
+        .from("subscriptions")
+        .select("status, end_date")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("end_date", new Date().toISOString())
+        .maybeSingle();
+      const isProUser = sub !== null;
+      const dailyFoodCap = isProUser ? 200 : 50;
+
+      if ((foodCount ?? 0) >= dailyFoodCap) {
+        return new Response(
+          JSON.stringify({
+            error: `Daily food analysis limit reached (${dailyFoodCap}/day). Try again tomorrow.`,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       const prompt = `You are a nutritionist with deep knowledge of Indian foods. The user says: "${text}"
 
 Analyse this as a meal and return ONLY a JSON object (no markdown, no code block) in this exact format:
@@ -175,10 +211,30 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
         title: "ICANBEFITTER Food Analysis",
       });
 
+      // Helper: log a food_text_analysis interaction row so the daily
+      // cap counter sees this call. Fire-and-forget — logging failure
+      // must NOT block the nutrition result.
+      const logFoodInteraction = (modelLabel: string) => {
+        supabaseClient
+          .from("ai_coach_interactions")
+          .insert({
+            user_id: userId,
+            channel: "food_text_analysis",
+            user_message: text.substring(0, 500),
+            ai_response: "",
+            model_used: modelLabel,
+            tokens_used: 0,
+          })
+          .then((r: { error: unknown }) => {
+            if (r.error) console.error("food interaction log failed:", r.error);
+          });
+      };
+
       if (orContent) {
         try {
           const jsonStr = orContent.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(jsonStr);
+          logFoodInteraction("openrouter-gemma-4");
           return new Response(JSON.stringify(parsed), {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -207,6 +263,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
             const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
             const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
             const parsed = JSON.parse(jsonStr);
+            logFoodInteraction("gemini-2.5-flash-lite");
             return new Response(JSON.stringify(parsed), {
               status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
@@ -702,10 +759,15 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Sanitised 5xx: never leak raw exception / upstream provider text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[ai-proxy] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

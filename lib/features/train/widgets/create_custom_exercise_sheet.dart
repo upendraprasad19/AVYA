@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 
 /// Bottom sheet for creating a custom exercise on the fly.
 ///
@@ -71,6 +74,9 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     };
 
     HiveService.instance.customBox.put(key, exercise);
+    // AI coach snapshot refresh — makes the new exercise immediately
+    // available in coaching context without waiting for next launch.
+    unawaited(SyncService.instance.pushSnapshot());
     Navigator.of(context).pop();
     widget.onCreated(exercise);
   }

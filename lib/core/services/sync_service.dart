@@ -200,6 +200,27 @@ class SyncService {
     }
   }
 
+  /// Push nutrition logs + water logs to Supabase.
+  /// Call this after a meal is logged (text AI / scan meal / manual / barcode)
+  /// or after water is updated, so the daily sync isn't the only safety net.
+  ///
+  /// Fire-and-forget: offline failure logs silently and retries on next
+  /// full sync. Never throws to the caller.
+  Future<void> syncNutritionData() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+
+      await Future.wait([
+        _syncNutritionLogs(userId),
+        _syncWaterLogs(userId),
+      ]);
+    } catch (e) {
+      // Offline — will sync on next daily full sync.
+      debugPrint('[SyncService.syncNutritionData] $e');
+    }
+  }
+
   // ── Restore from Cloud (reinstall / new device) ────────────────
 
   /// Checks if local Hive is empty and restores from Supabase if so.

@@ -470,9 +470,12 @@ ${Object.entries(dailyTotals)
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Internal server error";
-    console.error("Weekly report error:", message);
-    return jsonResponse({ error: message }, 500);
+    // Sanitised 5xx: never leak raw exception / SQL text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[weekly-report] request_id=${requestId}`, err);
+    return jsonResponse(
+      { error: "Internal server error", request_id: requestId },
+      500,
+    );
   }
 });

@@ -195,11 +195,15 @@ serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("redeem-referral error:", message);
-    // Return generic error to client — don't leak internals
+    // Already returning a sanitised body — add request_id for log correlation.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[redeem-referral] request_id=${requestId}`, err);
     return new Response(
-      JSON.stringify({ success: false, reason: "Something went wrong. Please try again." }),
+      JSON.stringify({
+        success: false,
+        reason: "Something went wrong. Please try again.",
+        request_id: requestId,
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

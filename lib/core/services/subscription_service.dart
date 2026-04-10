@@ -96,10 +96,16 @@ class SubscriptionService {
 
   /// High-value features that trigger server-side verification.
   /// Prevents Hive-spoofing on rooted devices for premium features.
+  ///
+  /// Progress photos are included because they involve Supabase Storage
+  /// writes to a user-scoped bucket — granting access via a spoofed
+  /// local flag would let a free user persist private photos onto
+  /// infrastructure we pay for.
   static const Set<String> _highValueFeatures = {
     AppConstants.featurePhases2To12,
     AppConstants.featureAiCoachUnlimited,
     AppConstants.featureReasoningTab,
+    AppConstants.featureProgressPhotos,
   };
 
   /// The ONLY way to gate PRO features in the app.

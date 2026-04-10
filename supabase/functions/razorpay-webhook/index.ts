@@ -259,30 +259,55 @@ serve(async (req: Request) => {
       endDate.setDate(endDate.getDate() + 365);
     }
 
-    // Write to subscriptions table
-    const { error: insertError } = await supabaseClient
+    // ── Idempotency ────────────────────────────────────────────
+    // Razorpay retries webhooks on their side (~3 attempts over ~1 hour)
+    // if our 200 is slow or lost. Without idempotency each retry would
+    // create a duplicate subscription row and double the user's PRO
+    // duration. UNIQUE constraint on razorpay_payment_id (migration 010)
+    // lets us upsert with ignoreDuplicates. If a row already exists for
+    // this payment_id we skip the insert entirely but still proceed to
+    // promo redemption / users.subscription_status update (safe because
+    // those are idempotent themselves: RPC uses `used_count + 1` under
+    // the promo_code_uses audit row which is write-once, and the users
+    // update is a pure upsert of the same (status, end_date) pair).
+    const { data: existing } = await supabaseClient
       .from("subscriptions")
-      .insert({
-        user_id: userId,
-        plan,
-        status: "active",
-        start_date: now.toISOString(),
-        end_date: endDate.toISOString(),
-        razorpay_order_id: razorpayOrderId,
-        razorpay_payment_id: razorpayPaymentId,
-        razorpay_signature: razorpaySignature,
-        created_at: now.toISOString(),
-      });
+      .select("id")
+      .eq("razorpay_payment_id", razorpayPaymentId)
+      .maybeSingle();
 
-    if (insertError) {
-      console.error("Failed to insert subscription:", insertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to create subscription record" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+    const alreadyProcessed = existing !== null;
+    if (alreadyProcessed) {
+      console.log(
+        `Idempotent webhook: payment ${razorpayPaymentId} already recorded, skipping insert`,
       );
+    } else {
+      const { error: insertError } = await supabaseClient
+        .from("subscriptions")
+        .insert({
+          user_id: userId,
+          plan,
+          status: "active",
+          start_date: now.toISOString(),
+          end_date: endDate.toISOString(),
+          razorpay_order_id: razorpayOrderId,
+          razorpay_payment_id: razorpayPaymentId,
+          razorpay_signature: razorpaySignature,
+          created_at: now.toISOString(),
+        });
+
+      // 23505 = unique_violation (Postgres). A concurrent webhook racer
+      // beat us to the insert — not an error, the row exists either way.
+      if (insertError && insertError.code !== "23505") {
+        console.error("Failed to insert subscription:", insertError);
+        return new Response(
+          JSON.stringify({ error: "Failed to create subscription record" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
     }
 
     // Update users table
@@ -306,7 +331,10 @@ serve(async (req: Request) => {
     }
 
     // ── Redeem promo code if applied ────────────────────────────
-    if (promoApplied && promoCode) {
+    // Skip on idempotent replay — increment_promo_used_count is NOT
+    // idempotent and would double-count the redemption against
+    // promo_codes.used_count.
+    if (!alreadyProcessed && promoApplied && promoCode) {
       const fullPrice = plan === "monthly" ? MONTHLY_PAISE : YEARLY_PAISE;
       await redeemPromo(
         supabaseClient,
@@ -332,11 +360,15 @@ serve(async (req: Request) => {
       },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    console.error("Webhook error:", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Sanitised 5xx: never leak raw exception / SQL / signature text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[razorpay-webhook] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });
