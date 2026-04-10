@@ -647,7 +647,7 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 - Downgrade = soft lock: keep all data, show paywall on PRO features, read-only on PRO content
 - **Phantom PRO fix:** `localActivationAt` is force-cleared after grace period expires on network error. Prevents stale local timestamp from keeping users in PRO after subscription lapses.
 - **JWT refresh:** `razorpay_service` refreshes JWT before each verify-payment retry to prevent 401 errors during polling.
-- **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`). Other features use local check only for low latency.
+- **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`, `progress_photos`). Other features use local check only for low latency.
 
 ### gate() High-Value Features
 ```dart
@@ -655,9 +655,12 @@ static const Set<String> _highValueFeatures = {
   AppConstants.featurePhases2To12,
   AppConstants.featureAiCoachUnlimited,
   AppConstants.featureReasoningTab,
+  AppConstants.featureProgressPhotos,  // photo writes to user-scoped Storage bucket
 };
 // gate() checks server for these features, local-only for others
 ```
+
+**Why `progress_photos` is high-value:** It triggers Supabase Storage writes to a user-scoped bucket. Granting access via a spoofed local `isPro` flag would let a free user on a rooted device persist private photos onto infrastructure we pay for. Any feature that writes to Storage or spends cloud compute/storage on behalf of the user MUST be server-verified.
 
 ---
 
@@ -717,10 +720,26 @@ Cost per user/month: ~₹1.80
 - `future-prediction`: `verify_jwt: true` + manual JWT validation.
 
 ### Vision Features (ai-proxy — OpenRouter Gemma 4 + Gemini 2.5 Flash Lite)
-- `food_text_analysis`: Text → nutrition JSON. Always free, no rate limit.
+- `food_text_analysis`: Text → nutrition JSON. **Rate limited: 50/day free, 200/day PRO** (server-side abuse cap; client has no hard limit — server is source of truth). Counted via `ai_coach_interactions` rows with `channel='food_text_analysis'`.
 - `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 15/day abuse cap.
 - `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 15/day abuse cap.
 - Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. Client-side limits handle exact free/PRO tiers.
+
+### Edge Function Error Sanitization (ALL functions)
+- **Never leak raw exceptions, stack traces, or database error strings to the client.** Every Edge Function catch block follows this shape:
+  ```ts
+  } catch (err) {
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[function-name] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+  ```
+- Short request IDs (8 hex chars) are logged server-side AND returned to the client so support can grep logs for the exact failure. The client sees a generic message; the logs retain full detail.
+- **Validation errors** (400 responses like "Message too long", "Image too large", "PRO subscription required") ARE safe to return verbatim — they're user-actionable and don't leak internals.
+- Applies to all 19 Edge Functions: `ai-proxy`, `ai-proxy-pro`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `beat-my-coach`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`.
 
 ### Server-Side Workout Analytics
 - `weekly-recalc`: Reads exercise-level data from `workout_log_exercises` (NOT `workout_logs`). Derives date from `completed_at`. Groups exercises by `exercise_id` (= exercise_name) for weight progression tracking. `total_workouts_done` counts distinct dates, not exercise rows.
@@ -861,11 +880,29 @@ Hybrid BMR: Katch-McArdle when body fat % available (`370 + 21.6 × lean_mass_kg
 | When | What | Where |
 |------|------|-------|
 | Immediately | Custom foods/exercises added | → Supabase (community contribution) |
+| Immediately (fire-and-forget) | Every nutrition mutation (log meal, water, urine, edit/delete food, scan meal save, barcode save, custom exercise create) fires `SyncService.syncNutritionData()` + `pushSnapshot()` | → Supabase + AI snapshot |
+| Immediately (fire-and-forget) | Every workout mutation (complete, edit log, template save/delete, schedule change) fires `SyncService.syncWorkoutData()` + `pushSnapshot()` | → Supabase + AI snapshot |
 | Every app launch | user_daily_snapshot (AI context) via pushSnapshot() | → Supabase |
 | Daily 11PM IST | coaching_notes extraction from that day's conversations | → Hive + Supabase |
 | Daily (app launch if >1d) | Full sync: all logs, progress, preferences | → Supabase |
 | Periodically | Check for new approved community items | ← Supabase → Hive |
 | On restore | Pull full history (all users) | ← Supabase → Hive |
+
+### Fire-and-Forget Sync Pattern
+All mutation paths use `unawaited()` from `dart:async` to push changes without blocking UI:
+
+```dart
+import 'dart:async';
+import 'package:icanbefitter/core/services/sync_service.dart';
+
+// In any mutation (logFood, addWater, saveMeal, completeWorkout, etc.):
+await hiveBox.put(key, value);            // 1. Hive-first (blocking)
+ref.invalidate(dependentProvider);        // 2. Refresh UI (blocking)
+unawaited(SyncService.instance.syncNutritionData());  // 3. Push to Supabase (background)
+unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (background)
+```
+
+**Never `await` the sync calls** — they must not block the UI. Failures are logged via `debugPrint` inside the service and silently ignored; the local Hive write is the source of truth. Use `syncWorkoutData()` for workout mutations and `syncNutritionData()` for nutrition mutations (parallels the workout method, syncs `nutrition_logs` + `water_logs` in one batch).
 
 ### Sync Deduplication Rules
 - **Streaks:** `onConflict: 'user_id,week_start'` (UNIQUE constraint in DB). Restore dedupes by `week_start` — cloud row replaces local if conflict found. Never dedup by cloud `id` alone (causes same-week duplicates).
@@ -920,6 +957,11 @@ User taps "Upgrade to PRO"
 2. **Promo-aware amount validation (tolerant):** If `notes.promo_code` exists, Edge Functions look up the promo in `promo_codes` table and compute discounted expected amount from `discount_pct`. **Tolerant:** accepts the discounted amount even if the promo has since expired or exhausted — the promo was valid when checkout opened, and Razorpay capture can take minutes. Only rejects if the promo code doesn't exist at all or the discount math doesn't match. Logs a warning for race-condition cases.
 3. **Promo redemption on success:** After subscription insert, `increment_promo_used_count` RPC atomically increments `used_count`. Audit row written to `promo_code_uses`. This is non-fatal — subscription is already created.
 4. **Two-tier polling:** Client polls by exact `razorpay_payment_id` (attempts 0-11), then falls back to any active subscription created in last 5 minutes (attempts 12-14). Prevents upgrades (monthly→yearly) from resolving against the old stale row.
+5. **Webhook idempotency:** `razorpay-webhook` handles replay attempts safely:
+   - **Pre-SELECT** `subscriptions` table by `razorpay_payment_id` BEFORE the INSERT. If a row exists, return 200 immediately with `alreadyProcessed: true` and skip promo redemption.
+   - **23505 race fallback:** If two webhook replays race past the pre-SELECT, the second INSERT hits the unique constraint on `razorpay_payment_id` → Postgres throws `23505`. The function catches this code specifically and returns 200 (treats as success).
+   - **Promo redemption guard:** `increment_promo_used_count` RPC is ONLY called when `alreadyProcessed === false`. Prevents a replayed webhook from double-incrementing `used_count` and burning the promo for nobody.
+   - Razorpay retries webhooks aggressively (up to 24h on non-200). Without idempotency, every retry would write a duplicate subscription row AND re-redeem the promo. Never remove the pre-SELECT or the 23505 catch.
 
 ---
 
@@ -988,7 +1030,7 @@ See `.claude/agents/` for full definitions:
 | SSRF via ai-media-proxy | Only allow `${SUPABASE_URL}/storage/v1/object/` prefix URLs. Never fetch arbitrary user-supplied URLs server-side. |
 | Null expiry grants PRO | `isPro()` returns `kDebugMode` when `expiresAt` is null — release builds treat null as free. Never remove this guard. |
 | Promo code enumeration | `validate-promo` requires JWT auth. Never expose promo discount_pct to unauthenticated callers. |
-| Subscription bypass via Hive | `gate()` calls `verifyFromServer()` for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`). Never rely on local-only check for these. |
+| Subscription bypass via Hive | `gate()` calls `verifyFromServer()` for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`, `progress_photos`). Never rely on local-only check for these. Any feature that writes to Storage or spends cloud resources on the user's behalf MUST be server-verified. |
 | Oversized AI payload abuse | All AI Edge Functions enforce message (5K chars) + snapshot (10K chars) limits server-side. Client limits are advisory only. |
 | Error widget leaks stack trace | `ErrorWidget.builder` shows generic message in release (`kDebugMode` guard). Never show `exceptionAsString()` to production users. |
 | future-prediction broken import | Import shared modules as `../_shared/openrouter.ts` in source, but deploy with `./_shared/openrouter.ts` (MCP places files in source/ subdirectory). |
@@ -1002,3 +1044,8 @@ See `.claude/agents/` for full definitions:
 | AI "temporarily unavailable" masks real error | `AiService._extractError()` pulls `{"error": "..."}` from non-200 Edge Function responses. Never throw raw "status X" — the server-side error body contains the actionable reason (message too long, snapshot too large, PRO required). |
 | AI snapshot exceeds 10KB server limit | `AiService._compactContext()` trims in priority order: `step_history_7d` → `weight_trend` → `nutrition_trend` → `exercise_history` → `personal_records` → `coach_notices` → truncate `coaching_notes` → drop `fitness_summary`. Target <9500 bytes for JSON overhead buffer. Historical queries routinely blow past 10KB without this. |
 | "Restart the app" error copy | Never use. Map server errors to actionable user messages in `ai_coach_provider.dart`: `Message too long` → "shorten it", `Snapshot too large` → "try a shorter question", `Image too large` → "max 5 MB", `502/503/504` → "model temporarily unavailable, try in a minute". |
+| Edge Function leaks stack trace | Every catch block MUST return `{error: "Internal server error", request_id: <8-char hex>}` and log `console.error("[fn-name] request_id=X", err)` server-side. Never `JSON.stringify(err)` into the response body. Validation errors (400s) are the only exception — they ARE user-actionable and safe to return verbatim. |
+| Webhook double-processes payment | `razorpay-webhook` MUST pre-SELECT by `razorpay_payment_id` before INSERT and catch Postgres 23505 (unique_violation) as success. Promo redemption runs ONLY when `alreadyProcessed === false`. Razorpay retries webhooks for 24h — without this, every retry duplicates the subscription row and burns a promo use. |
+| Nutrition changes don't reach AI coach | Every nutrition mutation (logFood, addWater, decrement, urine color, updateFoodLog, deleteFoodLog, relogSavedMeal, AI breakdown, scan meal save, barcode save) MUST call `unawaited(SyncService.instance.syncNutritionData()) + unawaited(SyncService.instance.pushSnapshot())`. Missing either = AI coach gives advice based on stale/missing meals until next app launch. |
+| Custom exercise invisible to AI coach | `CreateCustomExerciseSheet._save` fires `unawaited(SyncService.instance.pushSnapshot())` after `customBox.put`. Without this, the AI coach doesn't learn about the new exercise until app restart. Same pattern applies to any write that creates a new entity the AI should know about. |
+| food_text_analysis unlimited abuse | `ai-proxy` enforces per-day rate limit on `food_text_analysis` channel (50/day free, 200/day PRO) counted via `ai_coach_interactions` rows. Server is the source of truth; client has no enforcement. Never rely on "it's just text" to skip rate limiting — text calls hit the same Gemini quota as vision. |
