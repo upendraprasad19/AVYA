@@ -256,7 +256,11 @@ class _MainShell extends StatelessWidget {
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
         backgroundColor: AppColors.header,
-        indicatorColor: AppColors.accentTint,
+        // Bug #25 — streetlight beam indicator. indicatorColor is set to
+        // transparent so Material's default pill doesn't paint; the custom
+        // shape IS the selection indicator.
+        indicatorColor: Colors.transparent,
+        indicatorShape: const StreetlightBeamShape(),
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) {
           navigationShell.goBranch(
@@ -294,5 +298,57 @@ class _MainShell extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Bug #25 — Streetlight nav bar indicator ─────────────────────
+//
+// Custom ShapeBorder painted behind the selected NavigationBar destination.
+// Renders a vertical gradient beam that "shines" from the top edge of the
+// nav bar down toward the icon, fading to transparent. Zero pill outline —
+// the beam itself is the selection cue, backed up by the icon color +
+// label weight change already applied per NavigationDestination.
+class StreetlightBeamShape extends ShapeBorder {
+  const StreetlightBeamShape();
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+
+  @override
+  ShapeBorder scale(double t) => const StreetlightBeamShape();
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    // Beam geometry: wider than the default pill (icon + 8dp padding each side
+    // ~= 48dp). Extends vertically to the bottom of the nav bar for the full
+    // "streetlight" silhouette.
+    const beamWidth = 48.0;
+    final beamRect = Rect.fromCenter(
+      center: rect.center,
+      width: beamWidth,
+      height: rect.height,
+    );
+
+    final gradient = const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xE500D4FF), Color(0x0000D4FF)],
+    ).createShader(beamRect);
+
+    final rrect = RRect.fromRectAndCorners(
+      beamRect,
+      topLeft: Radius.zero,
+      topRight: Radius.zero,
+      bottomLeft: const Radius.circular(12),
+      bottomRight: const Radius.circular(12),
+    );
+
+    canvas.drawRRect(rrect, Paint()..shader = gradient);
   }
 }
