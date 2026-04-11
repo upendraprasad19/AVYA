@@ -124,40 +124,46 @@ void main() {
       activityLevel: 'moderate',
     );
 
-    test('build_muscle adds 300 calorie surplus', () {
+    test('build_muscle applies pace-based surplus vs general_fitness', () {
+      // Bug #24 — 75kg male at balanced pace: 75 × 0.005 × 7700 / 7 ≈ 412.5 kcal surplus.
       final muscle = BmrCalculator.calculateTargets(
         weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
         age: baseParams.age, gender: baseParams.gender,
         activityLevel: baseParams.activityLevel, goal: 'build_muscle',
+        pacePreference: 'balanced',
       );
       final general = BmrCalculator.calculateTargets(
         weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
         age: baseParams.age, gender: baseParams.gender,
         activityLevel: baseParams.activityLevel, goal: 'general_fitness',
+        pacePreference: 'balanced',
       );
-      // build_muscle = TDEE + 300, general_fitness = TDEE (maintenance)
-      expect(muscle.dailyCalories, closeTo(general.dailyCalories + 300, 1));
+      expect(muscle.dailyCalories - general.dailyCalories, inInclusiveRange(405, 420));
     });
 
-    test('lose_fat subtracts 500 calorie deficit', () {
+    test('lose_fat applies pace-based deficit vs general_fitness', () {
+      // Bug #24 — 75kg male at balanced pace: 75 × 0.005 × 7700 / 7 ≈ 412.5 kcal deficit.
       final fat = BmrCalculator.calculateTargets(
         weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
         age: baseParams.age, gender: baseParams.gender,
         activityLevel: baseParams.activityLevel, goal: 'lose_fat',
+        pacePreference: 'balanced',
       );
       final general = BmrCalculator.calculateTargets(
         weightKg: baseParams.weightKg, heightCm: baseParams.heightCm,
         age: baseParams.age, gender: baseParams.gender,
         activityLevel: baseParams.activityLevel, goal: 'general_fitness',
+        pacePreference: 'balanced',
       );
-      expect(fat.dailyCalories, closeTo(general.dailyCalories - 500, 1));
+      expect(general.dailyCalories - fat.dailyCalories, inInclusiveRange(405, 420));
     });
 
-    test('calories are always clamped between 1200 and 5000', () {
-      // Extreme low: tiny person, lose_fat
+    test('calories respect gender-aware floor + 5000 ceiling', () {
+      // Bug #24 — female floor is 1200, male floor is 1500.
       final low = BmrCalculator.calculateTargets(
         weightKg: 30, heightCm: 140, age: 70,
         gender: 'female', activityLevel: 'sedentary', goal: 'lose_fat',
+        pacePreference: 'balanced',
       );
       expect(low.dailyCalories, greaterThanOrEqualTo(1200));
 
@@ -165,6 +171,7 @@ void main() {
       final high = BmrCalculator.calculateTargets(
         weightKg: 200, heightCm: 220, age: 20,
         gender: 'male', activityLevel: 'very_active', goal: 'build_muscle',
+        pacePreference: 'balanced',
       );
       expect(high.dailyCalories, lessThanOrEqualTo(5000));
     });
@@ -173,6 +180,7 @@ void main() {
       final targets = BmrCalculator.calculateTargets(
         weightKg: 70, heightCm: 170, age: 28,
         gender: 'male', activityLevel: 'moderate', goal: 'general_fitness',
+        pacePreference: 'balanced',
       );
       expect(targets.bmr, greaterThan(0));
       expect(targets.tdee, greaterThan(0));
@@ -187,6 +195,7 @@ void main() {
       final targets = BmrCalculator.calculateTargets(
         weightKg: 70, heightCm: 170, age: 28,
         gender: 'male', activityLevel: 'moderate', goal: 'general_fitness',
+        pacePreference: 'balanced',
       );
       final map = targets.toMap();
       expect(map.containsKey('bmr'), isTrue);
@@ -287,12 +296,12 @@ void main() {
       final withBf = BmrCalculator.calculateTargets(
         weightKg: 80, heightCm: 175, age: 30,
         gender: 'male', activityLevel: 'moderate',
-        goal: 'build_muscle', bodyFatPercent: 20.0,
+        goal: 'build_muscle', pacePreference: 'balanced', bodyFatPercent: 20.0,
       );
       final without = BmrCalculator.calculateTargets(
         weightKg: 80, heightCm: 175, age: 30,
         gender: 'male', activityLevel: 'moderate',
-        goal: 'build_muscle',
+        goal: 'build_muscle', pacePreference: 'balanced',
       );
       // BMR should differ
       expect(withBf.bmr, isNot(equals(without.bmr)));
