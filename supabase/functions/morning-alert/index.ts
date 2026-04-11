@@ -16,12 +16,16 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 
 const PRO_MODEL = "cerebras/gpt-oss-120b";
-const AI_TIMEOUT_MS = 3000; // 3s hard limit — fail fast, fallback to free template
+// Bug #18 — Bumped from 3000ms → 8000ms. The 3s limit was too aggressive
+// for Cerebras 120B which routinely takes 4-6s on PRO workloads, causing
+// every PRO user to silently fall through to the generic free template.
+const AI_TIMEOUT_MS = 8000;
 const PAGE_SIZE = 200; // Users fetched per page to cap memory
 const CONCURRENCY = 20; // Parallel AI calls within each chunk
 
 // ── Counters (module-level so generateAndStoreAlert can increment) ────
 let proAlerts = 0;
+let proLightAlerts = 0;
 let freeAlerts = 0;
 let errorCount = 0;
 let successCount = 0;
@@ -140,6 +144,36 @@ function generateFreeAlert(
   return message;
 }
 
+/**
+ * Bug #18 — PRO-light fallback. Used when a PRO user has no `user_daily_snapshots`
+ * row for yesterday (e.g. they haven't been active enough for `pushSnapshot()` to fire).
+ * Without this branch, PRO users would silently fall through to the generic free copy
+ * — which is what Upen experienced. Personalised on name + primary_goal only, no AI cost.
+ */
+function generateProLightAlert(name: string, primaryGoal: string | null): string {
+  const firstName = name?.split(" ")[0] ?? "Champion";
+  const goal = (primaryGoal ?? "").toLowerCase();
+
+  if (goal === "build_muscle" || goal.includes("muscle")) {
+    return `Good morning ${firstName}! Muscle is built one rep at a time — and today's another rep on the journey. Train hard, eat enough, and recover well. Let's get after it.`;
+  }
+  if (goal === "lose_fat" || goal.includes("fat") || goal.includes("loss")) {
+    return `Good morning ${firstName}! Fat loss is won at the dinner table and the gym both. Stay disciplined with your calories today and move your body — small daily wins compound fast.`;
+  }
+  if (goal === "strength" || goal.includes("strong")) {
+    return `Good morning ${firstName}! Strength is a long game. Focus on quality reps, log every set, and chase progressive overload. Today is another deposit in the bank.`;
+  }
+  if (goal.includes("endurance") || goal.includes("cardio")) {
+    return `Good morning ${firstName}! Endurance is built mile by mile. Keep showing up, keep moving, and your aerobic base will thank you. Make today count.`;
+  }
+  if (goal === "general_fitness" || goal.includes("general") || goal.includes("fit")) {
+    return `Good morning ${firstName}! Fitness isn't a destination — it's a daily habit. Move your body today, eat well, hydrate, and rest. You've got this.`;
+  }
+
+  // Generic fallback (still better than free copy because it uses the name)
+  return `Good morning ${firstName}! Today is another opportunity to show up for the goals you set. Train smart, eat well, and trust the process. Let's go.`;
+}
+
 async function generateProAlert(
   name: string,
   snapshotJson: Record<string, unknown>,
@@ -250,23 +284,48 @@ async function generateAndStoreAlert(
     const snapshotJson = yesterdaySnap?.snapshot_json ?? null;
 
     let alertMessage: string;
+    let msgType: "pro" | "pro_light" | "free" = "free";
+    let aiSucceeded = false;
 
     if (isPro && snapshotJson) {
-      // PRO: AI-personalised message (3s timeout, immediate fallback)
+      // PRO: AI-personalised message (8s timeout, immediate fallback)
       const proMsg = await generateProAlert(userName, snapshotJson);
       if (proMsg) {
         alertMessage = proMsg;
+        msgType = "pro";
+        aiSucceeded = true;
         proAlerts++;
       } else {
-        // Fallback to free template if AI fails
+        // AI failed — fall back to free template (still has yesterday's data)
         alertMessage = generateFreeAlert(userName, snapshotJson);
+        msgType = "free";
         freeAlerts++;
       }
+    } else if (isPro && !snapshotJson) {
+      // Bug #18 — PRO user with no snapshot (e.g. wasn't active enough yesterday).
+      // Use PRO-light personalised template instead of generic free copy.
+      // Fetch primary_goal from user_profile for goal-aware messaging.
+      const { data: profileRow } = await supabaseClient
+        .from("user_profile")
+        .select("primary_goal")
+        .eq("user_id", user.id)
+        .single();
+
+      const primaryGoal = profileRow?.primary_goal ?? null;
+      alertMessage = generateProLightAlert(userName, primaryGoal);
+      msgType = "pro_light";
+      proLightAlerts++;
     } else {
       // FREE: template message (no AI cost)
       alertMessage = generateFreeAlert(userName, snapshotJson);
+      msgType = "free";
       freeAlerts++;
     }
+
+    // Bug #18 — Structured per-user log line. Greppable for debugging fallback paths.
+    console.log(
+      `[morning-alert] user=${user.id} pro=${isPro} snapshot=${!!snapshotJson} ai_succeeded=${aiSucceeded} msg_type=${msgType}`,
+    );
 
     // Store alert in today's snapshot
     const { data: existingSnapshot } = await supabaseClient
@@ -279,7 +338,7 @@ async function generateAndStoreAlert(
     const updatedJson = {
       ...(existingSnapshot?.snapshot_json ?? {}),
       morning_alert: alertMessage,
-      morning_alert_type: isPro && snapshotJson ? "pro" : "free",
+      morning_alert_type: msgType,
       morning_alert_generated_at: new Date().toISOString(),
     };
 
@@ -479,6 +538,7 @@ serve(async (req: Request) => {
 
     // Reset counters
     proAlerts = 0;
+    proLightAlerts = 0;
     freeAlerts = 0;
     errorCount = 0;
     successCount = 0;
@@ -535,7 +595,7 @@ serve(async (req: Request) => {
     console.log(
       `morning-alert [generate]: completed in ${elapsed}ms, ` +
         `${totalUsers} users across ${batchNum} batches, ` +
-        `${successCount} success, ${proAlerts} pro, ${freeAlerts} free, ${errorCount} errors`,
+        `${successCount} success, ${proAlerts} pro, ${proLightAlerts} pro_light, ${freeAlerts} free, ${errorCount} errors`,
     );
 
     return new Response(
@@ -544,6 +604,7 @@ serve(async (req: Request) => {
         mode: "generate",
         users_processed: successCount,
         pro_alerts: proAlerts,
+        pro_light_alerts: proLightAlerts,
         free_alerts: freeAlerts,
         errors: errorCount,
         total_active: totalUsers,

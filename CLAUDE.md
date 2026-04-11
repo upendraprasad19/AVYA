@@ -229,97 +229,28 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 
 ## 5. DIRECTORY STRUCTURE
 
+> Full annotated tree → `docs/reference/directory-structure.md`. Quick orientation only here.
+
 ```
 lib/
-  main.dart
-  app.dart                              # MaterialApp + theme + GoRouter
-  core/
-    theme/
-      app_theme.dart                    # Dark ThemeData with all tokens
-      colors.dart                       # AppColors static class
-      typography.dart                   # AppTypography text styles
-      spacing.dart                      # AppSpacing + AppRadius constants
-    router/
-      app_router.dart                   # GoRouter config + auth redirect
-    constants/
-      app_constants.dart                # API URLs, feature keys, limits
-    services/
-      supabase_service.dart             # Supabase client singleton
-      ai_service.dart                   # OpenRouter fallback chain
-      subscription_service.dart         # isPro(), gate(), openUpgrade()
-      sync_service.dart                 # Daily snapshot, weekly full sync
-      hive_service.dart                 # Box init, adapter registration
-      seed_service.dart                 # First-launch: parse bundled JSON → Hive
-    utils/
-      bmr_calculator.dart               # Mifflin-St Jeor formula
-      date_utils.dart
-  features/
-    auth/
-      screens/sign_in_screen.dart
-      providers/auth_provider.dart
-    onboarding/
-      screens/onboarding_chat_screen.dart
-      providers/onboarding_provider.dart
-    home/
-      screens/home_screen.dart
-      widgets/
-      providers/home_provider.dart
-    train/
-      screens/train_screen.dart
-      screens/active_workout_screen.dart
-      screens/template_builder_screen.dart
-      widgets/
-        workout_receipt_card.dart          # WorkoutReceiptData + WorkoutReceiptCard (source of truth: fromExerciseLogs)
-        workout_receipt_sheet.dart         # Reusable receipt bottom sheet (shared) — includes Edit button
-        edit_workout_log_sheet.dart        # SINGLE edit surface for completed workouts (4 entry points)
-        create_custom_exercise_sheet.dart  # Custom exercise creator (Hive customBox + Supabase sync)
-      providers/train_provider.dart
-      repositories/workout_repository.dart
-      models/
-    nutrition/
-      screens/nutrition_screen.dart
-      screens/diet_plan_screen.dart
-      widgets/
-      providers/nutrition_provider.dart
-      repositories/nutrition_repository.dart
-    ai_coach/
-      screens/ai_coach_screen.dart
-      widgets/
-      providers/ai_coach_provider.dart
-      repositories/ai_coach_repository.dart
-    profile/
-      screens/profile_screen.dart
-      screens/edit_profile_screen.dart
-      screens/reports_screen.dart
-      widgets/
-      providers/profile_provider.dart
+  core/{theme, router, constants, services, utils}/   # singletons, GoRouter, theme tokens, BMR
+  features/{auth, onboarding, home, train, nutrition, ai_coach, profile}/
+    each: screens/, widgets/, providers/, repositories/, models/
   shared/
-    widgets/
-      paywall_sheet.dart                # Single reusable paywall UI
-      pro_badge.dart                    # Champion Gold badge
-      loading_skeleton.dart
-      hydration_color_card.dart
-    repositories/
-      user_repository.dart
-      exercise_repository.dart
-      food_repository.dart
-      plan_generator.dart               # Dart, local, queries Hive exerciseBox
+    widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
+    repositories/  user, exercise, food, plan_generator (NEVER modify without approval)
 
-assets/
-  data/
-    exercise_library.json               # 200+ exercises, bundled in APK
-    food_database.json                  # 5,000 Indian-first foods, bundled in APK
-  fonts/
-    # DM Sans font loaded via google_fonts package (runtime download)
-
-supabase/
-  migrations/                           # SQL migration files
-  functions/                            # Edge Functions (TypeScript)
-    ai-proxy/index.ts                   # Free: 3-tier fallback. PRO: direct Cerebras 120B
-    razorpay-webhook/index.ts           # HMAC verify → write subscriptions
-    daily-snapshot/index.ts             # Nightly cron
-    weekly-recalc/index.ts              # Experience level recalculation
+assets/data/{exercise_library, food_database}.json    # bundled, seeded into Hive on first launch
+supabase/{migrations, functions}/                     # SQL + Edge Functions (TS)
 ```
+
+**Single-source-of-truth files (don't fork these):**
+- `lib/features/train/widgets/workout_receipt_card.dart` — `WorkoutReceiptData.fromExerciseLogs()` (the only receipt builder)
+- `lib/features/train/widgets/edit_workout_log_sheet.dart` — the only completed-workout edit surface (4 entry points route through it)
+- `lib/core/services/day_rollover_service.dart` — `runRolloverNow()` (canonical "today" provider invalidation list)
+- `lib/core/services/subscription_service.dart` — `isPro()` + `gate()` (never read `configBox.get('isPro')` directly)
+- `lib/core/services/ai_service.dart` — `_compactContext()` (the only snapshot trimmer)
+- `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
 
 ---
 
@@ -349,152 +280,25 @@ supabase/
 
 ## 7. DATABASE SCHEMA (21 Tables — Supabase Postgres)
 
-### IDENTITY
-```sql
-users (id uuid PK, email text UNIQUE, phone text, full_name text,
-  subscription_status text DEFAULT 'free', subscription_expires_at timestamptz,
-  telegram_chat_id text, telegram_connected bool, ai_chat_started_at timestamptz,
-  onboarding_completed bool, last_active_at timestamptz, created_at timestamptz)
+> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
-user_profile (user_id uuid FK→users, date_of_birth date, gender text,
-  height_cm numeric, current_weight_kg numeric, target_weight_kg numeric,
-  primary_goal text, fitness_experience text, days_per_week int,
-  equipment_access text, activity_level text, diet_preference text,
-  injuries text, wake_up_time time, city text, bmr numeric, tdee numeric)
+| Domain | Tables |
+|---|---|
+| Identity (4) | `users`, `user_profile`, `user_preferences`, `user_progress` |
+| Fitness (6) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `user_custom_exercises` |
+| Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
+| Health (5) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs` |
+| AI (2) | `user_daily_snapshots`, `ai_coach_interactions` |
+| Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
 
-user_preferences (user_id uuid FK→users, motivational_style text,
-  biggest_obstacle text, preferred_language text DEFAULT 'English',
-  coaching_notes text)
+**Critical UNIQUE constraints (required for safe re-sync dedup — never remove):**
+- `streaks(user_id, week_start)` — prevents duplicate weeks on restore
+- `water_logs(user_id, date)` — one row per user per day
+- `scheduled_workouts(user_id, scheduled_date)` — one schedule per user per date
 
-user_progress (user_id uuid FK→users, current_phase int DEFAULT 1,
-  current_week int DEFAULT 1, phase_started_at timestamptz,
-  plan_generated_at timestamptz, total_workouts_done int DEFAULT 0,
-  current_streak_weeks int DEFAULT 0, detected_experience_level text,
-  experience_last_calculated timestamptz)
-```
+**Cloud `workout_log_exercises`** — per-exercise summary table written by the Flutter app. Key semantics: `set_number` = total completed sets (NOT "which set"); `weight_kg` = best across sets; `exercise_id` = exercise_name (stable identity for cross-week grouping). See §11 "Exercise Log Cloud Contract".
 
-### FITNESS
-```sql
-exercise_library (id uuid PK, name text, name_aliases text[], category text,
-  movement_pattern text, exercise_type text, primary_muscles text[],
-  secondary_muscles text[], equipment_needed text[], logging_type text NOT NULL,
-  difficulty_level text, suitable_for text[], instructions text,
-  coaching_cues text[], common_mistakes text[], alternative_ids uuid[],
-  regression_id uuid, progression_id uuid, default_sets int, default_reps text,
-  default_rest_secs int, default_duration_secs int, source text,
-  is_active bool, is_indian_context bool)
-
-workout_templates (id uuid PK, user_id uuid FK, name text, description text,
-  workout_type text, estimated_duration_mins int, source text,
-  is_active bool, created_at timestamptz, last_used_at timestamptz)
-
-template_exercises (id uuid PK, template_id uuid FK, exercise_id uuid FK,
-  exercise_name text, order_index int, logging_type text,
-  prescribed_sets int, prescribed_reps text, prescribed_weight text,
-  prescribed_time_secs int, rest_seconds int, notes text)
-
-scheduled_workouts (id uuid PK, user_id uuid FK, template_id uuid FK,
-  scheduled_date date, week_number int, day_of_week int,
-  status text DEFAULT 'planned', completed_at timestamptz,
-  UNIQUE(user_id, scheduled_date))  -- prevents duplicate schedules on sync
-
-workout_logs (id uuid PK, user_id uuid FK, scheduled_workout_id uuid FK,
-  template_id uuid FK, exercise_id uuid FK, exercise_name text,
-  logged_at timestamptz, date date, sets_completed int, reps_completed int,
-  weight_kg numeric, duration_seconds int, distance_km numeric,
-  rpe int, notes text, is_pr bool DEFAULT false)
-
-user_custom_exercises (id uuid PK, user_id uuid FK, name text,
-  logging_type text NOT NULL, category text, primary_muscles text[],
-  equipment_needed text[], notes text, default_sets int, default_reps text,
-  default_rest_secs int, default_duration_secs int,
-  submitted_to_library bool, approved_for_library bool, times_used int)
-```
-
-### NUTRITION
-```sql
-food_database (id uuid PK, name text, category text, calories_per_100g numeric,
-  protein_per_100g numeric, carbs_per_100g numeric, fat_per_100g numeric,
-  fiber_per_100g numeric, standard_serving_desc text, standard_serving_g numeric,
-  calories_std numeric, protein_std numeric, carbs_std numeric, fat_std numeric,
-  common_additions text[], is_indian bool, source text)
-
-nutrition_logs (id uuid PK, user_id uuid FK, date date,
-  total_calories numeric, total_protein numeric, total_carbs numeric,
-  total_fat numeric, meal_type text, created_at timestamptz)
-
-nutrition_log_items (id uuid PK, log_id uuid FK, food_id uuid FK,
-  food_name text, quantity_g numeric, calories numeric, protein numeric,
-  carbs numeric, fat numeric)
-
-user_saved_meals (id uuid PK, user_id uuid FK, name text,
-  items jsonb, total_calories numeric, total_protein numeric,
-  times_used int, created_at timestamptz)
-
-user_custom_foods (id uuid PK, user_id uuid FK, name text,
-  calories_per_100g numeric, protein_per_100g numeric,
-  carbs_per_100g numeric, fat_per_100g numeric, fiber_per_100g numeric,
-  standard_serving_desc text, standard_serving_g numeric,
-  calories_std numeric, protein_std numeric, carbs_std numeric, fat_std numeric,
-  times_logged int, submitted_to_db bool, approved bool, created_at timestamptz)
-```
-
-### HEALTH
-```sql
-weight_logs (id uuid PK, user_id uuid FK, date date, weight_kg numeric,
-  notes text, created_at timestamptz)
-
-body_measurements (id uuid PK, user_id uuid FK, date date,
-  chest numeric, waist numeric, hips numeric, arms numeric,
-  notes text, created_at timestamptz)
-
-streaks (id uuid PK, user_id uuid FK, week_start date,
-  workouts_planned int, workouts_completed int,
-  is_streak_maintained bool, created_at timestamptz,
-  UNIQUE(user_id, week_start))  -- prevents duplicate weeks on restore/sync
-
-water_logs (id uuid PK, user_id uuid FK, date date,
-  total_ml int, urine_color int, urine_status text,
-  updated_at timestamptz, created_at timestamptz,
-  UNIQUE(user_id, date))  -- prevents duplicate water entries on sync
-
-sleep_logs (id uuid PK, user_id uuid FK, date date,
-  duration_hrs numeric, quality text, bed_time time,
-  wake_time time, notes text, created_at timestamptz)
-```
-
-### AI & INTELLIGENCE
-```sql
-user_daily_snapshots (id uuid PK, user_id uuid FK, snapshot_date date,
-  snapshot_json jsonb, created_at timestamptz)
-
-ai_coach_interactions (id uuid PK, user_id uuid FK,
-  snapshot_id uuid FK→user_daily_snapshots, channel text,
-  user_message text, ai_response text, model_used text,
-  tokens_used int, was_helpful bool, created_at timestamptz)
-```
-
-### MONETISATION
-```sql
-subscriptions (id uuid PK, user_id uuid FK, plan text,
-  status text, start_date timestamptz, end_date timestamptz,
-  razorpay_order_id text, razorpay_payment_id text,
-  razorpay_signature text, created_at timestamptz)
-
-promo_codes (code text PK, discount_pct int, valid_until date,
-  max_uses int, used_count int DEFAULT 0, is_active bool, created_at timestamptz)
-
-promo_code_uses (id uuid PK, code text FK→promo_codes, user_id uuid FK→users,
-  plan_purchased text, original_amount int, discount_applied int,
-  final_amount int, used_at timestamptz)
--- RPC: increment_promo_used_count(p_code text) — atomically increments used_count
-
-food_corrections (id uuid PK, user_id uuid FK, food_id uuid FK,
-  original_values jsonb, corrected_values jsonb, created_at timestamptz)
-
-telegram_connections (id uuid PK, user_id uuid FK, phone text,
-  chat_id text, connected_at timestamptz, is_active bool)
-```
+**RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
 
 ---
 
@@ -556,35 +360,19 @@ Label         10px / w700 / tracking +1.2
 Micro          9px / w700 / tracking +0.5
 ```
 
-### Spacing
+### Spacing & Radius (constants live in `lib/core/theme/spacing.dart`)
 ```
-Screen padding    18px
-Card padding      16px
-Section gap       14px
-Grid gap           9px
-Inline gap         8px
-```
-
-### Border Radius
-```
-Button (pill)    100px
-Card L            22px
-Card M            16px
-Card S            14px
-Row               12px
-Badge            100px
+Spacing:   screen 18 / card 16 / section 14 / grid 9 / inline 8
+Radius:    pill 100 / card-L 22 / card-M 16 / card-S 14 / row 12
 ```
 
 ### Component Patterns
-```
-PRIMARY BUTTON:   bg #00D4FF, text #000000 w900, radius 100, padding 14×28, shadow
-SECONDARY BUTTON: bg rgba(0,212,255,0.08), border 1.5 rgba(0,212,255,0.3), text #00D4FF w800
-CARD:             bg #0e1219, border 1 #1c2535, radius 16, padding 16
-ACTIVE CARD:      border 1 rgba(0,212,255,0.2)
-PRO LOCKED CARD:  blur(4), overlay rgba(7,9,14,0.85), gold lock, cyan CTA
-STREAK BADGE:     bg rgba(0,212,255,0.08), text #00D4FF w900, border rgba(0,212,255,0.2)
-PROGRESS BAR:     track #161d28, fill #00D4FF, height 6, radius 3
-```
+- **Primary button:** `accent` bg, black w900 text, pill radius, shadow
+- **Secondary button:** `accentTint` bg, 1.5 `accent`-30% border, `accent` w800 text
+- **Card:** `card` bg, 1 `border` border, radius-M, padding 16. Active variant uses `accent`-20% border.
+- **PRO locked card:** blur(4) + `bg`-85% overlay, gold lock, cyan CTA
+- **Streak badge:** `accentTint` bg, `accent` w900 text, `accent`-20% border
+- **Progress bar:** `input` track, `accent` fill, height 6, radius 3
 
 ---
 
@@ -988,19 +776,7 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 
 ---
 
-## 19. AGENT TEAM
-
-See `.claude/agents/` for full definitions:
-- `manager-agent.md` — Autonomous orchestrator. Reads BUILD_ORDER, spawns agents, runs QA, advances phases.
-- `database-agent.md` — Supabase migrations, RLS, seed data.
-- `backend-agent.md` — Edge Functions (AI proxy, Razorpay, crons).
-- `screen-agent.md` — Build any of the 5 screens (parameterized).
-- `auth-agent.md` — Supabase Auth + onboarding flow.
-- `qa-agent.md` — Read-only reviewer against this CLAUDE.md.
-
----
-
-## 20. COMMON BUGS TO AVOID
+## 19. COMMON BUGS TO AVOID
 
 | Bug | How to Avoid |
 |---|---|

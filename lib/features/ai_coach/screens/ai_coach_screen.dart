@@ -604,6 +604,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           final time =
               '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
+          // Bug #19 — Wire Retry button on failed AI bubbles. The provider
+          // will reuse the same coachBox row (via existingCoachKey) so
+          // history doesn't duplicate on retry.
+          final canRetry = message.isError &&
+              !message.isUser &&
+              message.retryUserMessage != null &&
+              message.retryUserMessage!.isNotEmpty &&
+              message.coachKey != null;
+
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: ChatBubble(
@@ -614,6 +623,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               timestamp: time,
               mediaUrl: message.mediaUrl,
               mediaType: message.mediaType,
+              onRetry: canRetry
+                  ? () {
+                      ref.read(sendMessageProvider.notifier).send(
+                            message.retryUserMessage!,
+                            mode: message.mode ?? 'quick',
+                            existingCoachKey: message.coachKey,
+                          );
+                    }
+                  : null,
             ),
           );
         }

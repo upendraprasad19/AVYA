@@ -229,6 +229,27 @@ class WorkoutRepository {
     return logId;
   }
 
+  /// Bug #12 — Returns the hour-of-day (0-23) for the most recent [limit]
+  /// completed workouts, newest first. Used by the smart streak warning to
+  /// compute a personalised "general workout time" via median (more robust
+  /// than mean against outliers like one late-night session).
+  ///
+  /// Empty list = user hasn't logged enough workouts yet → caller should
+  /// fall back to a sensible default (19:00 IST per Bug #12 spec).
+  List<int> getRecentWorkoutCompletionHours({int limit = 10}) {
+    final hours = <int>[];
+    final logs = getWorkoutLogs();
+    for (final log in logs) {
+      final completedAtRaw = log['completed_at'] as String?;
+      if (completedAtRaw == null || completedAtRaw.isEmpty) continue;
+      final completedAt = DateTime.tryParse(completedAtRaw);
+      if (completedAt == null) continue;
+      hours.add(completedAt.toLocal().hour);
+      if (hours.length >= limit) break;
+    }
+    return hours;
+  }
+
   /// Get all workout logs, optionally filtered by date range.
   List<Map<String, dynamic>> getWorkoutLogs({
     DateTime? from,

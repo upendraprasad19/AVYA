@@ -29,6 +29,10 @@ class ChatBubble extends StatelessWidget {
   /// Media type (e.g. 'image').
   final String? mediaType;
 
+  /// Bug #19 — When non-null AND [isError] is true, render a Retry button
+  /// inside the error bubble. Tap re-sends the original user message.
+  final VoidCallback? onRetry;
+
   const ChatBubble({
     super.key,
     required this.text,
@@ -40,6 +44,7 @@ class ChatBubble extends StatelessWidget {
     this.subText,
     this.mediaUrl,
     this.mediaType,
+    this.onRetry,
   });
 
   @override
@@ -192,6 +197,48 @@ class ChatBubble extends StatelessWidget {
               color: isUser
                   ? Colors.black.withValues(alpha: 0.6)
                   : AppColors.textSecondary,
+            ),
+          ),
+        ],
+
+        // Bug #19 — Retry button on failed AI bubbles. Re-sends the original
+        // user message; the provider reuses the same coachBox row so history
+        // doesn't duplicate.
+        if (isError && onRetry != null) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: onRetry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.accentTint,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.3),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.refresh_rounded,
+                    size: 14,
+                    color: AppColors.accent,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Retry',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.accent,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

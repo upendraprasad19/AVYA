@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -20,14 +23,14 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 ///   - Authenticated + onboarded -> /home
 ///   - Authenticated + not onboarded -> /onboarding
 ///   - Not authenticated -> /sign-in
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final Animation<double> _logoFade;
@@ -79,6 +82,21 @@ class _SplashScreenState extends State<SplashScreen>
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
     await SeedService.instance.seedIfNeeded();
+
+    // Bug #13 — Cold-launch day rollover. Invalidate every "today"-scoped
+    // provider before the user lands on home so the first paint can't show
+    // yesterday's workout / water count / weight badge / AI insight. The
+    // resume-time observer in DayRolloverObserver still uses its gated
+    // `_checkAndRollover` path, so this won't double-invalidate when the
+    // user backgrounds and resumes within the same day.
+    if (mounted) {
+      await DayRolloverObserver.instance.runRolloverNow(ref);
+    }
+
+    // Refresh AI coach context immediately so the next coach query reflects
+    // today's state (covers Bug #6 — "no workout planned today" hallucination
+    // when snapshot was last pushed yesterday).
+    unawaited(SyncService.instance.pushSnapshot());
 
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.

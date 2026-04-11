@@ -1427,29 +1427,37 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                               ),
                             ]
                           : [
-                              // Warm-up section
+                              // Warm-up section (Bug #15a: collapsed by default)
                               if (day.warmup.isNotEmpty) ...[
-                                _buildPreviewSectionLabel('WARM-UP', AppColors.orange),
-                                ...day.warmup.map((ex) => _buildPreviewExerciseRow(
-                                  ex, null, AppColors.orange,
-                                )),
+                                _CollapsibleExerciseSection(
+                                  label: 'WARM-UP',
+                                  color: AppColors.orange,
+                                  exercises: day.warmup,
+                                  buildRow: (ex) => _buildPreviewExerciseRow(
+                                    ex, null, AppColors.orange,
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
                                 _buildPreviewSectionLabel('WORKOUT', AppColors.accent),
                               ],
-                              // Main exercises
+                              // Main exercises (always expanded — focal content)
                               ...List.generate(day.exercises.length, (index) {
                                 final ex = day.exercises[index];
                                 return _buildPreviewExerciseRow(
                                   ex, index + 1, AppColors.accent,
                                 );
                               }),
-                              // Cool-down section
+                              // Cool-down section (Bug #15a: collapsed by default)
                               if (day.cooldown.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                _buildPreviewSectionLabel('COOL-DOWN', AppColors.blue),
-                                ...day.cooldown.map((ex) => _buildPreviewExerciseRow(
-                                  ex, null, AppColors.blue,
-                                )),
+                                _CollapsibleExerciseSection(
+                                  label: 'COOL-DOWN',
+                                  color: AppColors.blue,
+                                  exercises: day.cooldown,
+                                  buildRow: (ex) => _buildPreviewExerciseRow(
+                                    ex, null, AppColors.blue,
+                                  ),
+                                ),
                               ],
                             ],
                 ),
@@ -1484,10 +1492,16 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     // Format detail based on logging type
     String detail;
     if (ex.loggingType == 'timed') {
-      final reps = ex.reps.replaceAll('s', '');
-      final secs = int.tryParse(reps) ?? 0;
+      // ExerciseData.reps is now a clean numeric string for timed exercises
+      // (set by _parseTimedDurationSecs in train_provider.dart). Defensive
+      // fallback to 30s if upstream parsing somehow failed (Bug #16 guard).
+      final raw = ex.reps.replaceAll(RegExp(r'[^0-9]'), '');
+      final parsedSecs = int.tryParse(raw) ?? 0;
+      final secs = parsedSecs > 0 ? parsedSecs : 30;
       if (secs >= 60) {
-        detail = '${secs ~/ 60} min';
+        final mins = secs ~/ 60;
+        final remainder = secs % 60;
+        detail = remainder == 0 ? '${mins}m' : '${mins}m ${remainder}s';
       } else {
         detail = '${secs}s';
       }
@@ -2261,3 +2275,95 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 }
 
 enum _RowStatus { done, today, planned, missed, rest }
+
+/// Bug #15a: Collapsible WARM-UP / COOL-DOWN section in the train preview.
+/// Default state is collapsed — header (label + chevron) is tappable to toggle.
+/// Body uses [AnimatedSize] for a smooth reveal.
+class _CollapsibleExerciseSection extends StatefulWidget {
+  const _CollapsibleExerciseSection({
+    required this.label,
+    required this.color,
+    required this.exercises,
+    required this.buildRow,
+  });
+
+  final String label;
+  final Color color;
+  final List<ExerciseData> exercises;
+  final Widget Function(ExerciseData) buildRow;
+
+  @override
+  State<_CollapsibleExerciseSection> createState() =>
+      _CollapsibleExerciseSectionState();
+}
+
+class _CollapsibleExerciseSectionState
+    extends State<_CollapsibleExerciseSection> {
+  // Default to collapsed — that's the entire point of Bug #15a.
+  bool _expanded = false;
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header — label + count + chevron, tappable
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggle,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text(
+                  widget.label,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: widget.color.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.exercises.length}',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: widget.color.withValues(alpha: 0.4),
+                  ),
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 200),
+                  turns: _expanded ? 0.5 : 0.0,
+                  child: Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: widget.color.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Body — animated reveal
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: _expanded
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: widget.exercises.map(widget.buildRow).toList(),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}

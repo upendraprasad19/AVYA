@@ -17,15 +17,39 @@ class StreakWarningBanner extends StatelessWidget {
   });
 
   /// Returns true if the banner should be displayed.
+  ///
+  /// Bug #12 — Personalised per user. Replaces the old "Sat/Sun-only +
+  /// any-time-of-day" check with a smart rule:
+  ///
+  /// 1. Today must be a workout day (not a rest day).
+  /// 2. Today's workout must NOT already be completed.
+  /// 3. Current time must be ≥ user's median workout hour + 3 hours
+  ///    (with a 15:00 IST hard floor and 23:00 IST hard ceiling).
+  /// 4. User must have a non-zero streak (we don't warn on day 0).
+  ///
+  /// All inputs are computed by [streakWarningEligibilityProvider] in
+  /// `home_provider.dart`. Keep this method pure so it stays unit-testable.
   static bool shouldShow({
     required int streakDays,
-    required int workoutsPlanned,
-    required int workoutsCompleted,
+    required bool isWorkoutDayToday,
+    required bool isTodayCompleted,
+    required int medianWorkoutHour,
+    DateTime? now,
   }) {
     if (streakDays == 0) return false;
-    final dayOfWeek = DateTime.now().weekday; // 1=Mon … 7=Sun
-    final remaining = workoutsPlanned - workoutsCompleted;
-    return dayOfWeek >= 6 && remaining > 0;
+    if (!isWorkoutDayToday) return false;
+    if (isTodayCompleted) return false;
+
+    final clock = now ?? DateTime.now();
+    final currentHour = clock.hour;
+
+    // Median + 3, then clamp to [15, 23]. The clamp prevents pre-3pm warnings
+    // (annoying for users who train in the morning) and post-11pm warnings
+    // (useless — by then it's "tomorrow's problem").
+    final rawThreshold = medianWorkoutHour + 3;
+    final thresholdHour = rawThreshold.clamp(15, 23);
+
+    return currentHour >= thresholdHour;
   }
 
   @override

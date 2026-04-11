@@ -250,6 +250,58 @@ class SwapExerciseData {
 
 // ── Exercise map parser (shared for exercises, warmup, cooldown) ──
 
+/// Parse a duration in seconds for a `timed` exercise.
+///
+/// Reads numeric fields first (`prescribed_time_secs`, `default_duration_secs`),
+/// then falls back to parsing the `default_reps` text field which can take many
+/// shapes in the bundled exercise library:
+///   "30-60 sec"     → 45  (median of range)
+///   "60 sec"        → 60
+///   "3 min rounds"  → 180 (minutes → seconds)
+///   "5-10 sec"      → 7
+///   "45-60 sec each"→ 52
+///   "varies"        → 30  (default fallback)
+///
+/// Returns 30 if everything fails. The UI must NEVER render `0s` for a timed
+/// exercise — that's the Bug #16 regression we're guarding against.
+int _parseTimedDurationSecs(Map<String, dynamic> m) {
+  // 1. Prefer explicit numeric fields if present.
+  final prescribed = m['prescribed_time_secs'];
+  if (prescribed is int && prescribed > 0) return prescribed;
+  if (prescribed is num && prescribed > 0) return prescribed.toInt();
+
+  final defaultSecs = m['default_duration_secs'];
+  if (defaultSecs is int && defaultSecs > 0) return defaultSecs;
+  if (defaultSecs is num && defaultSecs > 0) return defaultSecs.toInt();
+
+  // 2. Parse the text field (`reps`/`prescribed_reps`/`default_reps`).
+  final raw = (m['reps'] as String?) ??
+      (m['prescribed_reps'] as String?) ??
+      (m['default_reps'] as String?) ??
+      '';
+  if (raw.isEmpty) return 30;
+
+  final lower = raw.toLowerCase();
+  // Extract all numbers in the text.
+  final numbers = RegExp(r'\d+')
+      .allMatches(lower)
+      .map((m) => int.tryParse(m.group(0) ?? '') ?? 0)
+      .where((n) => n > 0)
+      .toList();
+  if (numbers.isEmpty) return 30;
+
+  // Compute the average (handles both single value and ranges like "30-60").
+  final avg = numbers.reduce((a, b) => a + b) ~/ numbers.length;
+
+  // Detect time unit. Default unit is seconds.
+  if (lower.contains('min') || lower.contains('m ')) {
+    // Minutes → seconds
+    return avg * 60;
+  }
+  // Anything else (sec, s, "each", "rounds", bare number) → treat as seconds.
+  return avg > 0 ? avg : 30;
+}
+
 List<ExerciseData> _parseExerciseMaps(List? raw) {
   if (raw == null || raw.isEmpty) return const [];
   return raw.map((e) {
@@ -275,13 +327,29 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
       }
     }
 
+    final loggingType = m['logging_type'] as String? ?? 'weight_reps';
+
+    // For timed exercises, normalise `reps` to a clean numeric string of seconds
+    // so downstream UI can parse it without re-deriving from the messy text.
+    // Fixes Bug #16: Plank/Dead Bug previously rendered as "0s" because their
+    // default_reps was "30-60 sec" which int.tryParse() returned null on.
+    final String repsValue;
+    if (loggingType == 'timed') {
+      repsValue = '${_parseTimedDurationSecs(m)}';
+    } else {
+      repsValue = m['reps'] as String? ??
+          m['prescribed_reps'] as String? ??
+          m['default_reps'] as String? ??
+          '10';
+    }
+
     return ExerciseData(
       name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
       sets: '${m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3}',
-      reps: m['reps'] as String? ?? m['prescribed_reps'] as String? ?? m['default_reps'] as String? ?? '10',
+      reps: repsValue,
       weight: '0kg',
       rest: '${m['rest_seconds'] ?? 60}s',
-      loggingType: m['logging_type'] as String? ?? 'weight_reps',
+      loggingType: loggingType,
       category: category,
       equipmentNeeded: equipList,
       exerciseType: m['exercise_type'] as String?,

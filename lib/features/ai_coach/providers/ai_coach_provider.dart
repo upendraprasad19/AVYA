@@ -18,6 +18,13 @@ class ChatMessage {
   final String? mode; // 'quick' or 'deep' for reasoning tab
   final String? mediaUrl; // URL of attached photo (Supabase Storage)
   final String? mediaType; // 'image'
+  /// Bug #19 — Identifies the original user message that produced this error
+  /// bubble. When set, the chat UI shows a Retry button that re-sends this
+  /// text via [SendMessageNotifier.send].
+  final String? retryUserMessage;
+  /// Bug #19 — Coach Hive key for the failed/pending entry. Used so the
+  /// retry path can update the same row instead of creating a duplicate.
+  final String? coachKey;
 
   const ChatMessage({
     required this.text,
@@ -28,10 +35,25 @@ class ChatMessage {
     this.mode,
     this.mediaUrl,
     this.mediaType,
+    this.retryUserMessage,
+    this.coachKey,
   });
 }
 
 // ── Chat History ─────────────────────────────────────────────────
+
+/// Bug #19 — Internal carrier for a coachBox row + its Hive key, so the
+/// chat history loader can attach the key to error bubbles for Retry.
+class _CoachEntry {
+  final String key;
+  final String createdAt;
+  final Map<String, dynamic> data;
+  const _CoachEntry({
+    required this.key,
+    required this.createdAt,
+    required this.data,
+  });
+}
 
 class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   @override
@@ -39,34 +61,84 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
     final coachBox = HiveService.instance.coachBox;
     final messages = <ChatMessage>[];
 
-    final entries = <MapEntry<String, Map<String, dynamic>>>[];
-    for (final raw in coachBox.values) {
+    // Bug #19 — also capture the Hive key alongside the value so we can
+    // surface failed/pending entries with their key (needed for the Retry
+    // button to update the right row instead of inserting a duplicate).
+    final entries = <_CoachEntry>[];
+    for (final key in coachBox.keys) {
+      final raw = coachBox.get(key);
       if (raw is! Map) continue;
+      // The coaching_notes singleton key is not a chat row.
+      if (key.toString() == 'coaching_notes') continue;
       final interaction = Map<String, dynamic>.from(raw);
       final createdAt = interaction['created_at'] as String? ?? '';
-      entries.add(MapEntry(createdAt, interaction));
+      entries.add(_CoachEntry(
+        key: key.toString(),
+        createdAt: createdAt,
+        data: interaction,
+      ));
     }
 
-    entries.sort((a, b) => a.key.compareTo(b.key));
+    entries.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     for (final entry in entries) {
-      final interaction = entry.value;
+      final interaction = entry.data;
       final userMsg = interaction['user_message'] as String?;
       final aiResponse = interaction['ai_response'] as String?;
-      final createdAt = DateTime.tryParse(entry.key) ?? DateTime.now();
+      final mediaUrl = interaction['media_url'] as String?;
+      final mediaType = interaction['media_type'] as String?;
+      final mode = interaction['mode'] as String?;
+      final isPending = interaction['pending'] == true;
+      final isFailed = interaction['failed'] == true;
+      final createdAt = DateTime.tryParse(entry.createdAt) ?? DateTime.now();
 
       if (userMsg != null && userMsg.isNotEmpty) {
         messages.add(ChatMessage(
           text: userMsg,
           isUser: true,
           timestamp: createdAt,
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          mode: mode,
         ));
       }
-      if (aiResponse != null && aiResponse.isNotEmpty) {
+
+      // Bug #19 — Surface the AI side of the conversation in three states:
+      //   1. Success (default): aiResponse is non-empty, pending/failed false
+      //   2. Failed: render as error bubble with Retry button
+      //   3. Pending: leftover from a crash mid-call → render as error bubble
+      //      with the same Retry affordance (the request never completed)
+      if (isFailed) {
+        final errText = (interaction['error_text'] as String?) ??
+            (aiResponse != null && aiResponse.isNotEmpty
+                ? aiResponse
+                : 'Sorry, something went wrong. Tap Retry to try again.');
+        messages.add(ChatMessage(
+          text: errText,
+          isUser: false,
+          timestamp: createdAt.add(const Duration(seconds: 1)),
+          isError: true,
+          mode: mode,
+          retryUserMessage: userMsg,
+          coachKey: entry.key,
+        ));
+      } else if (isPending) {
+        messages.add(ChatMessage(
+          text:
+              'This message didn\'t finish — probably the app closed or the network dropped. Tap Retry to send it again.',
+          isUser: false,
+          timestamp: createdAt.add(const Duration(seconds: 1)),
+          isError: true,
+          mode: mode,
+          retryUserMessage: userMsg,
+          coachKey: entry.key,
+        ));
+      } else if (aiResponse != null && aiResponse.isNotEmpty) {
         messages.add(ChatMessage(
           text: aiResponse,
           isUser: false,
           timestamp: createdAt.add(const Duration(seconds: 1)),
+          mode: mode,
         ));
       }
     }
@@ -81,6 +153,13 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
     }
 
     return messages;
+  }
+
+  /// Bug #19 — Force a rebuild from coachBox after a save/update so the UI
+  /// reflects pending/failed/success transitions immediately. Used by
+  /// [SendMessageNotifier] in addition to its in-memory bubble updates.
+  void refreshFromHive() {
+    state = build();
   }
 
   void addMessage(ChatMessage message) {
@@ -204,10 +283,21 @@ class SendMessageNotifier extends Notifier<bool> {
 
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
     final limitNotifier = ref.read(messageLimitProvider.notifier);
+    final repo = AiCoachRepository.instance;
+    final captionForLog = message.isEmpty ? 'Analyse this photo' : message;
+
+    // Bug #19 — TWO-WRITE PATTERN, step 1: persist the user message + media
+    // thumbnail BEFORE the AI call. Survives restart on crash/network drop.
+    final coachKey = await repo.saveUserMessagePending(
+      userMessage: '[Photo] $captionForLog',
+      mode: 'media',
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+    );
 
     // Add user message with media thumbnail
     chatNotifier.addMessage(ChatMessage(
-      text: message.isEmpty ? 'Analyse this photo' : message,
+      text: captionForLog,
       isUser: true,
       timestamp: DateTime.now(),
       mediaUrl: mediaUrl,
@@ -225,11 +315,10 @@ class SendMessageNotifier extends Notifier<bool> {
     state = true;
 
     try {
-      final repo = AiCoachRepository.instance;
       final context = repo.buildAiContext();
 
       final aiResponse = await AiService.instance.chatWithMedia(
-        message.isEmpty ? 'Analyse this photo' : message,
+        captionForLog,
         mediaUrl,
         mediaType,
         context,
@@ -241,11 +330,11 @@ class SendMessageNotifier extends Notifier<bool> {
         timestamp: DateTime.now(),
       ));
 
-      await repo.saveInteraction(
-        userMessage: '[Photo] ${message.isEmpty ? "Analyse this photo" : message}',
+      // Bug #19 — TWO-WRITE PATTERN, step 2: update the same pending row.
+      await repo.updateInteractionWithResponse(
+        coachKey,
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
-        mode: 'media',
       );
 
       await repo.extractCoachingNotes();
@@ -281,13 +370,27 @@ class SendMessageNotifier extends Notifier<bool> {
         isUser: false,
         timestamp: DateTime.now(),
         isError: true,
+        // Note: media retry uses the original mediaUrl, but we don't surface a
+        // Retry button on media failures yet (the photo upload may have been
+        // garbage-collected from the device picker by then). The persisted row
+        // still survives restart so the user can see what they sent.
+        coachKey: coachKey,
       ));
+      // Bug #19 — Persist the failed state.
+      await repo.updateInteractionWithError(coachKey, errorText: errorMsg);
     } finally {
       state = false;
     }
   }
 
-  Future<void> send(String message, {String mode = 'quick'}) async {
+  Future<void> send(
+    String message, {
+    String mode = 'quick',
+    /// Bug #19 — When non-null, the retry path reuses an existing pending/failed
+    /// coachBox entry instead of creating a new row. This preserves the original
+    /// timestamp and avoids history duplication when the user taps Retry.
+    String? existingCoachKey,
+  }) async {
     if (message.trim().isEmpty) return;
     if (state) return; // Already sending
 
@@ -302,28 +405,68 @@ class SendMessageNotifier extends Notifier<bool> {
     // Free user limit check — silent return; UI already shows the limit.
     if (!isPro && currentLimit >= AppConstants.freeAiMessagesPerDay) return;
 
-    // Add user message
-    chatNotifier.addMessage(ChatMessage(
-      text: message,
-      isUser: true,
-      timestamp: DateTime.now(),
-      mode: mode,
-    ));
+    final repo = AiCoachRepository.instance;
 
-    // Add loading placeholder
-    chatNotifier.addMessage(ChatMessage(
-      text: '',
-      isUser: false,
-      timestamp: DateTime.now(),
-      isLoading: true,
-    ));
+    // Bug #19 — TWO-WRITE PATTERN, step 1: persist the user message to
+    // coachBox BEFORE the AI call. This way, if the app crashes mid-call or
+    // the network drops, the message survives a restart and shows up as a
+    // failed/pending bubble with a Retry button (instead of vanishing).
+    //
+    // On retry, we reuse the existing key so we update the same row instead
+    // of duplicating history.
+    String coachKey;
+    if (existingCoachKey != null) {
+      coachKey = existingCoachKey;
+      // Reset the existing row back to pending state for the retry attempt.
+      final raw = HiveService.instance.coachBox.get(coachKey);
+      if (raw is Map) {
+        final entry = Map<String, dynamic>.from(raw);
+        entry['pending'] = true;
+        entry['failed'] = false;
+        entry['ai_response'] = '';
+        entry.remove('error_text');
+        await HiveService.instance.coachBox.put(coachKey, entry);
+      }
+    } else {
+      coachKey = await repo.saveUserMessagePending(
+        userMessage: message,
+        mode: mode,
+      );
+    }
+
+    // Add user message (skip on retry — the bubble already exists in history)
+    if (existingCoachKey == null) {
+      chatNotifier.addMessage(ChatMessage(
+        text: message,
+        isUser: true,
+        timestamp: DateTime.now(),
+        mode: mode,
+      ));
+    }
+
+    // Add loading placeholder (or replace existing failed bubble with loading)
+    if (existingCoachKey != null) {
+      chatNotifier.refreshFromHive();
+      chatNotifier.addMessage(ChatMessage(
+        text: '',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isLoading: true,
+      ));
+    } else {
+      chatNotifier.addMessage(ChatMessage(
+        text: '',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isLoading: true,
+      ));
+    }
 
     state = true;
 
     try {
       // Build FULL context from all Hive boxes via repository,
       // then enrich with historical data if the message is a historical query.
-      final repo = AiCoachRepository.instance;
       final baseContext = repo.buildAiContext();
       final context = repo.enrichContextForQuery(message, baseContext);
 
@@ -344,12 +487,12 @@ class SendMessageNotifier extends Notifier<bool> {
         mode: mode,
       ));
 
-      // Save to coachBox via repository
-      await repo.saveInteraction(
-        userMessage: message,
+      // Bug #19 — TWO-WRITE PATTERN, step 2: update the same pending entry
+      // with the AI response (don't write a new row).
+      await repo.updateInteractionWithResponse(
+        coachKey,
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
-        mode: mode,
       );
 
       // Extract coaching notes after every AI response
@@ -381,8 +524,9 @@ class SendMessageNotifier extends Notifier<bool> {
           await SupabaseService.instance.client.auth.refreshSession();
           debugPrint('[AiCoachProvider] Hard refresh succeeded — retrying once...');
 
-          // Single inline retry after successful token refresh
-          final repo = AiCoachRepository.instance;
+          // Single inline retry after successful token refresh.
+          // Reuse the outer-scope `repo` (AiCoachRepository.instance) so the
+          // pending coachKey from step 1 stays visible to the success path.
           final retryContext = repo.buildAiContext();
           final retryEnriched = repo.enrichContextForQuery(message, retryContext);
 
@@ -402,11 +546,11 @@ class SendMessageNotifier extends Notifier<bool> {
             timestamp: DateTime.now(),
             mode: mode,
           ));
-          await repo.saveInteraction(
-            userMessage: message,
+          // Bug #19 — update the SAME pending coachBox row, don't insert a new one.
+          await repo.updateInteractionWithResponse(
+            coachKey,
             aiResponse: retryResponse.reply,
             modelUsed: retryResponse.modelUsed,
-            mode: mode,
           );
           await repo.extractCoachingNotes();
           ref.invalidate(coachInsightProvider);
@@ -454,7 +598,12 @@ class SendMessageNotifier extends Notifier<bool> {
         isUser: false,
         timestamp: DateTime.now(),
         isError: true,
+        retryUserMessage: message,
+        coachKey: coachKey,
       ));
+      // Bug #19 — Mark the pending coachBox entry as failed so it survives a
+      // restart and the Retry button knows which row to re-use.
+      await repo.updateInteractionWithError(coachKey, errorText: errorMsg);
     } finally {
       state = false;
     }

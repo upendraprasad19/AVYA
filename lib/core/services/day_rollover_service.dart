@@ -79,11 +79,34 @@ class DayRolloverObserver with WidgetsBindingObserver {
     // ── Date changed! ───────────────────────────────────────────
     debugPrint('[DayRollover] Date changed: $lastKnown → $today');
 
+    await _doRollover(today);
+  }
+
+  /// Bug #13 — Public unconditional rollover. Called from the splash screen
+  /// on cold launch so that providers instantiated during the previous
+  /// launch don't render stale "yesterday" data on first paint of home.
+  ///
+  /// Unlike [_checkAndRollover], this does NOT compare against the stored
+  /// `last_known_date` — it always invalidates the full provider list and
+  /// updates the stored date. The resume-time observer still uses the
+  /// gated path so we don't double-invalidate when the user backgrounds
+  /// and resumes within the same day.
+  ///
+  /// Pass the splash's [WidgetRef] explicitly so we don't depend on
+  /// [init] having been called yet (cold launch hasn't reached home).
+  Future<void> runRolloverNow(WidgetRef ref) async {
+    _ref = ref; // store for any subsequent resume-time invalidations
+    final today = _todayStr();
+    debugPrint('[DayRollover] runRolloverNow (splash cold launch)');
+    await _doRollover(today);
+  }
+
+  Future<void> _doRollover(String today) async {
     // 1. Reset usage counters (AI text logs, scan meal, etc.)
     await UsageCounterService.instance.checkAndResetCounters();
 
     // 2. Store new date
-    await configBox.put(_hiveKey, today);
+    await HiveService.instance.configBox.put(_hiveKey, today);
 
     // 3. Invalidate all daily-scoped providers
     final ref = _ref;

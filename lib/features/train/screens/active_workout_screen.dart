@@ -27,10 +27,64 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   final Map<String, GlobalKey> _exerciseKeys = {};
   bool _hasShownWarmUpHint = false;
 
+  /// Bug #15b — Index of the user-focused (manually expanded) exercise card.
+  /// `null` = no manual override → fall back to "first non-done" computed in
+  /// [_effectiveFocusedIndex]. When the focused exercise becomes done, the
+  /// fallback automatically advances to the next non-done exercise.
+  int? _focusedExerciseIndex;
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Bug #15b — Resolves which exercise card should be expanded right now.
+  /// Manual focus wins, but only while it points to a still-incomplete
+  /// exercise. Otherwise we fall back to the first non-done exercise from the
+  /// start of the list (NOT from focused+1) so that any earlier skipped
+  /// exercise gets surfaced again on completion.
+  int _effectiveFocusedIndex(ActiveWorkoutData data) {
+    final manual = _focusedExerciseIndex;
+    if (manual != null &&
+        manual >= 0 &&
+        manual < data.exercises.length &&
+        !data.isExerciseDone(manual)) {
+      return manual;
+    }
+    for (int i = 0; i < data.exercises.length; i++) {
+      if (!data.isExerciseDone(i)) return i;
+    }
+    // All exercises complete — keep the last card expanded so the screen
+    // never has zero expanded cards.
+    return data.exercises.isEmpty ? 0 : data.exercises.length - 1;
+  }
+
+  /// Bug #15b — Whether the card at [exIdx] should render its set inputs.
+  /// Returns `true` for the focused exercise AND for any superset partner of
+  /// the focused exercise (so paired members expand together).
+  bool _isExerciseExpanded(int exIdx, ActiveWorkoutData data) {
+    if (exIdx < 0 || exIdx >= data.exercises.length) return false;
+    final focused = _effectiveFocusedIndex(data);
+    if (exIdx == focused) return true;
+    final myGroup = data.exercises[exIdx].supersetGroup;
+    if (myGroup == null) return false;
+    if (focused < 0 || focused >= data.exercises.length) return false;
+    final focusedGroup = data.exercises[focused].supersetGroup;
+    return focusedGroup != null && focusedGroup == myGroup;
+  }
+
+  /// Bug #15b — Handler for tap-to-focus on a card header. Sets the manual
+  /// override and triggers a rebuild so the previously focused card collapses
+  /// and the tapped one expands.
+  void _focusExercise(int exIdx) {
+    setState(() {
+      _focusedExerciseIndex = exIdx;
+    });
+    // Smoothly bring the freshly focused card into view.
+    Future.delayed(const Duration(milliseconds: 60), () {
+      if (mounted) _scrollToExercise(exIdx);
+    });
   }
 
   /// Scroll to the exercise at [exerciseIndex] with animation.
@@ -194,6 +248,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                               .where((e) => e.key < exIdx)
                               .any((e) => !data.isExerciseDone(e.key));
 
+                      // Bug #15b — Only the focused exercise (and any of its
+                      // superset partners) renders set inputs. All others
+                      // collapse to header-only with a chevron.
+                      final isExpanded = _isExerciseExpanded(exIdx, data);
+
                       // Ensure a GlobalKey exists for this exercise (keyed by name)
                       _exerciseKeys.putIfAbsent(exercise.name, () => GlobalKey());
 
@@ -254,6 +313,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                             isLastInSupersetGroup: isLastInGroup,
                             isInSupersetGroupMode: data.isSupersetGroupMode,
                             isGroupModeSource: data.supersetGroupingSourceIndex == exIdx,
+                            isExpanded: isExpanded,
+                            onFocus: () => _focusExercise(exIdx),
                             onToggleSet: (setIdx) {
                               final wasChecked =
                                   data.isSetChecked(exIdx, setIdx);
@@ -1088,6 +1149,11 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   final ValueChanged<int> onToggleWarmUp;
   final VoidCallback onSwap;
   final VoidCallback onLongPressHeader;
+  /// Bug #15b — Whether this card's set inputs (and add/remove buttons) are
+  /// rendered. Headers are always visible regardless.
+  final bool isExpanded;
+  /// Bug #15b — Tap-on-header callback to make this card the focused one.
+  final VoidCallback onFocus;
 
   const _ExerciseCard({
     required this.exerciseIndex,
@@ -1104,6 +1170,8 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.onToggleWarmUp,
     required this.onSwap,
     required this.onLongPressHeader,
+    required this.isExpanded,
+    required this.onFocus,
   });
 
   @override
@@ -1398,8 +1466,12 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Exercise header row
+                        // Exercise header row — Bug #15b: tap to focus this
+                        // card (collapses any other expanded card). Long-press
+                        // still triggers superset grouping.
                         GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: widget.onFocus,
                           onLongPress: widget.onLongPressHeader,
                           child: Row(
                             children: [
@@ -1503,10 +1575,28 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     ),
                                   ),
                                 ),
+
+                              // Bug #15b — Expand/collapse chevron. Rotates
+                              // when this card becomes the focused one.
+                              const SizedBox(width: 6),
+                              AnimatedRotation(
+                                turns: widget.isExpanded ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 180),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 18,
+                                  color: AppColors.textSecondary
+                                      .withValues(alpha: 0.7),
+                                ),
+                              ),
                             ],
                           ),
                         ),
 
+                        // Bug #15b — Everything below the header (last-perf
+                        // hint, table, set rows, +/- buttons) is gated on
+                        // isExpanded so collapsed cards stay header-only.
+                        if (widget.isExpanded) ...[
                         // Last performance + suggested weight
                         Builder(builder: (_) {
                           final lastPerf = ref.watch(lastPerformanceProvider(widget.exercise.name));
@@ -1714,6 +1804,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                             ),
                           ],
                         ),
+                        ], // close `if (widget.isExpanded) ...[` (Bug #15b)
                       ],
                     ),
                   ),
@@ -2271,12 +2362,21 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                 final ex = entry.value;
                 final done = _checked[idx];
 
-                // Format duration/reps
+                // Format duration/reps. ExerciseData.reps is now a clean
+                // numeric string for timed exercises (Bug #16 fix). Defensive
+                // fallback to 30s if parsing somehow fails.
                 String detail;
                 if (ex.loggingType == 'timed') {
-                  final raw = ex.reps.replaceAll('s', '');
-                  final secs = int.tryParse(raw) ?? 0;
-                  detail = secs >= 60 ? '${secs ~/ 60} min' : '${secs}s';
+                  final raw = ex.reps.replaceAll(RegExp(r'[^0-9]'), '');
+                  final parsedSecs = int.tryParse(raw) ?? 0;
+                  final secs = parsedSecs > 0 ? parsedSecs : 30;
+                  if (secs >= 60) {
+                    final mins = secs ~/ 60;
+                    final remainder = secs % 60;
+                    detail = remainder == 0 ? '${mins}m' : '${mins}m ${remainder}s';
+                  } else {
+                    detail = '${secs}s';
+                  }
                 } else {
                   detail = '${ex.sets} \u00d7 ${ex.reps}';
                 }

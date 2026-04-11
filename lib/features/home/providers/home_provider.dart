@@ -221,6 +221,117 @@ class StreakFreezeNotifier extends Notifier<int> {
 final streakFreezeProvider =
     NotifierProvider<StreakFreezeNotifier, int>(StreakFreezeNotifier.new);
 
+// ── Streak Warning Eligibility (Bug #12) ─────────────────────────
+
+/// Bug #12 — Derived inputs for the smart streak warning banner.
+///
+/// The old logic fired on Sat/Sun mornings regardless of context, which is
+/// useless for users with mid-week schedules and annoying for early-morning
+/// trainers. This provider replaces it with personalised, time-aware logic:
+///
+/// 1. **Median workout hour** — read from last 10 completed workouts
+///    (more robust than mean against outlier sessions). Falls back to
+///    19:00 IST for new users with <3 logs.
+/// 2. **isWorkoutDayToday** — today's schedule must be a workout entry
+///    (not rest, not none).
+/// 3. **isTodayCompleted** — today's workout must NOT already be done.
+///
+/// The actual show/hide decision lives in [StreakWarningBanner.shouldShow]
+/// which applies a 15:00 floor and 23:00 ceiling on top of (median + 3).
+class StreakWarningEligibility {
+  /// True when ALL guards pass: workout day, not yet completed, time of
+  /// day past the user's personalised threshold.
+  final bool shouldShow;
+  /// Computed median completion hour with cold-start fallback (19:00).
+  /// Useful for diagnostics — and for tests that want to assert the math.
+  final int medianWorkoutHour;
+  /// Whether today is a workout day per Hive schedule.
+  final bool isWorkoutDayToday;
+  /// Whether today's workout is already marked completed.
+  final bool isTodayCompleted;
+
+  const StreakWarningEligibility({
+    required this.shouldShow,
+    required this.medianWorkoutHour,
+    required this.isWorkoutDayToday,
+    required this.isTodayCompleted,
+  });
+}
+
+class StreakWarningEligibilityNotifier
+    extends Notifier<StreakWarningEligibility> {
+  @override
+  StreakWarningEligibility build() {
+    final streakDays = ref.watch(streakProvider);
+    final todaySchedule = ref.watch(todayWorkoutProvider);
+
+    // 1. Is today a workout day? Read from today's schedule entry.
+    //    `workout` and `custom_template` are both real workout days.
+    //    `rest` and missing entries are not.
+    final type = todaySchedule?['type'] as String? ?? 'none';
+    final status = todaySchedule?['status'] as String? ?? 'none';
+    final isWorkoutDayToday = type == 'workout' || type == 'custom_template';
+
+    // 2. Has today's workout already been completed?
+    final isTodayCompleted = status == 'completed';
+
+    // 3. Personalised median workout hour with cold-start fallback.
+    //    <3 logs → 19:00 IST default (sensible "after evening" threshold).
+    //    Otherwise → median of last 10 completion hours.
+    final hours =
+        WorkoutRepository.instance.getRecentWorkoutCompletionHours(limit: 10);
+    final int medianHour;
+    if (hours.length < 3) {
+      medianHour = 19;
+    } else {
+      final sorted = [...hours]..sort();
+      final mid = sorted.length ~/ 2;
+      medianHour = sorted.length.isOdd
+          ? sorted[mid]
+          : ((sorted[mid - 1] + sorted[mid]) / 2).round();
+    }
+
+    // Reuse the pure decision logic in StreakWarningBanner.shouldShow so
+    // the rules stay in one place and remain unit-testable.
+    final show = _evaluate(
+      streakDays: streakDays,
+      isWorkoutDayToday: isWorkoutDayToday,
+      isTodayCompleted: isTodayCompleted,
+      medianWorkoutHour: medianHour,
+    );
+
+    return StreakWarningEligibility(
+      shouldShow: show,
+      medianWorkoutHour: medianHour,
+      isWorkoutDayToday: isWorkoutDayToday,
+      isTodayCompleted: isTodayCompleted,
+    );
+  }
+
+  /// Inline copy of [StreakWarningBanner.shouldShow]'s rule so we don't have
+  /// to import the widget into the provider layer. The widget keeps the
+  /// public method as the canonical reference; this is a passthrough.
+  bool _evaluate({
+    required int streakDays,
+    required bool isWorkoutDayToday,
+    required bool isTodayCompleted,
+    required int medianWorkoutHour,
+  }) {
+    if (streakDays == 0) return false;
+    if (!isWorkoutDayToday) return false;
+    if (isTodayCompleted) return false;
+
+    final currentHour = DateTime.now().hour;
+    final rawThreshold = medianWorkoutHour + 3;
+    final thresholdHour = rawThreshold.clamp(15, 23);
+    return currentHour >= thresholdHour;
+  }
+}
+
+final streakWarningEligibilityProvider = NotifierProvider<
+    StreakWarningEligibilityNotifier,
+    StreakWarningEligibility>(StreakWarningEligibilityNotifier.new);
+
 // ── Today's Workout ──────────────────────────────────────────────
 
 class TodayWorkoutNotifier extends Notifier<Map<String, dynamic>?> {

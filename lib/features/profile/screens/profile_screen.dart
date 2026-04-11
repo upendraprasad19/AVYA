@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +14,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -17,11 +22,11 @@ import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:convert';
-import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
+import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/profile_identity.dart';
 import '../widgets/profile_row.dart';
@@ -46,6 +51,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // Notification preferences (loaded from Hive configBox)
   late Map<String, dynamic> _notifPrefs;
 
+  // Bug #14 — Prediction polling moved from home_screen.dart. The Future
+  // Prediction card now lives in profile, so the fire-and-forget post-
+  // onboarding generation needs a poller here to render the result once
+  // it lands in Hive.
+  Timer? _predictionPollTimer;
+  int _predictionPollCount = 0;
+  static const int _maxPredictionPollAttempts = 10; // 3s × 10 = 30s
+
   @override
   void initState() {
     super.initState();
@@ -53,7 +66,109 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _notifPrefs = _loadNotificationPreferences();
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
+      _startPredictionPollIfNeeded();
     });
+  }
+
+  @override
+  void dispose() {
+    _predictionPollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Polls Hive every 3 seconds (up to 30s) until a prediction is found.
+  /// Once found, invalidates [predictionProvider] so the card renders.
+  void _startPredictionPollIfNeeded() {
+    final existing = HiveService.instance.configBox.get('prediction_text');
+    if (existing != null) return;
+    _predictionPollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _predictionPollCount++;
+      final found = HiveService.instance.configBox.get('prediction_text');
+      if (found != null) {
+        if (mounted) ref.invalidate(predictionProvider);
+        timer.cancel();
+        _predictionPollTimer = null;
+      } else if (_predictionPollCount >= _maxPredictionPollAttempts) {
+        timer.cancel();
+        _predictionPollTimer = null;
+      }
+    });
+  }
+
+  /// PRO monthly prediction refresh — calls AI via the prediction route
+  /// (bypasses daily limits + interaction logging). Moved from home_screen.dart.
+  Future<void> _refreshPrediction() async {
+    final profile = UserRepository.instance.getProfile();
+    final progress = UserRepository.instance.getProgress();
+    if (profile == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        'Generating fresh prediction...',
+        style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+      ),
+      backgroundColor: AppColors.card,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 10),
+    ));
+
+    try {
+      final name = profile['full_name'] ?? 'User';
+      final weight = profile['current_weight_kg'] ?? '?';
+      final target = profile['target_weight_kg'] ?? '?';
+      final goal = profile['primary_goal'] ?? 'general_fitness';
+      final workoutsDone = progress?['total_workouts_done'] ?? 0;
+      final streakDays = progress?['current_streak_days'] ?? 0;
+
+      final prompt = '''Predict realistic 12-week fitness outcomes.
+
+Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
+
+Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+• Weight: current → 4wk → 8wk → 12wk
+• Body fat estimate change
+• Key lift projections
+• One motivational line''';
+
+      final aiContext = {
+        'system_prompt':
+            'You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.',
+      };
+
+      final response = await AiService.instance.predict(prompt, aiContext);
+      if (response.reply.isNotEmpty) {
+        final configBox = HiveService.instance.configBox;
+        await configBox.put('prediction_text', response.reply);
+        await configBox.put('prediction_date', DateTime.now().toIso8601String());
+        if (mounted) {
+          ref.invalidate(predictionProvider);
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              'Prediction updated!',
+              style: GoogleFonts.getFont('DM Sans',
+                  fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Could not refresh prediction. Please try again later.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: AppColors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    }
   }
 
   Map<String, dynamic> _loadNotificationPreferences() {
@@ -268,6 +383,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ));
                 },
                 onTapEdit: () => context.go('/profile/edit'),
+                isPro: isPro,
+                onTapPremium: () {
+                  // Bug #14 — PRO users see subscription detail; free users
+                  // get the paywall sheet. Subscription detail reuses the
+                  // existing _buildSubscriptionSection inside a bottom sheet
+                  // so we don't have to maintain two upgrade surfaces.
+                  if (isPro) {
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: AppColors.card,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(22)),
+                      ),
+                      builder: (_) => SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: AppColors.border,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _buildSubscriptionSection(
+                                  subInfo, isPro, usageService),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  } else {
+                    showPaywallSheet(context, feature: 'PRO Upgrade');
+                  }
+                },
               ),
               const SizedBox(height: 8),
 
@@ -289,14 +445,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: 8),
               ],
 
-              // Achievements (#6 — badge detail already has tap, kept as-is)
-              const SectionHeader('ACHIEVEMENTS'),
-              const BadgesGrid(),
+              // Bug #14 — Future Prediction (moved from home dashboard).
+              const SectionHeader('YOUR PREDICTION'),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.screenPadding),
+                child: _buildPredictionCard(),
+              ),
               const SizedBox(height: 8),
 
-              // #7 Subscription Card (PRO=expiry, Free=rate limits)
-              const SectionHeader('SUBSCRIPTION'),
-              _buildSubscriptionSection(subInfo, isPro, usageService),
+              // Bug #14 — Reports now sit directly after prediction (plan order:
+              // prediction → reports → health sync → share & grow → settings).
+              const SectionHeader('REPORTS'),
+              WeeklyReportCard(
+                isPro: subInfo.isPro,
+                usageWeeks: usageWeeks,
+                hasFirstReport: firstReportViewed,
+                onViewReport: () {
+                  if (!firstReportViewed) {
+                    ref.read(firstReportViewedProvider.notifier).markViewed();
+                  }
+                  context.go('/profile/reports');
+                },
+                onUpgradeTap: () {
+                  SubscriptionService.instance.gate(
+                    AppConstants.featureWeeklyAiReport,
+                    onPro: () => context.go('/profile/reports'),
+                    onFree: () => showPaywallSheet(context, feature: 'Weekly AI Report'),
+                  );
+                },
+              ),
               const SizedBox(height: 8),
 
               // Health Sync
@@ -328,28 +506,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ref.read(biometricProvider.notifier).logSleep(
                     hours: hours,
                     quality: quality,
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-
-              // Reports
-              const SectionHeader('REPORTS'),
-              WeeklyReportCard(
-                isPro: subInfo.isPro,
-                usageWeeks: usageWeeks,
-                hasFirstReport: firstReportViewed,
-                onViewReport: () {
-                  if (!firstReportViewed) {
-                    ref.read(firstReportViewedProvider.notifier).markViewed();
-                  }
-                  context.go('/profile/reports');
-                },
-                onUpgradeTap: () {
-                  SubscriptionService.instance.gate(
-                    AppConstants.featureWeeklyAiReport,
-                    onPro: () => context.go('/profile/reports'),
-                    onFree: () => showPaywallSheet(context, feature: 'Weekly AI Report'),
                   );
                 },
               ),
@@ -427,6 +583,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   onTap: () => _exportData(),
                 ),
               ]),
+              const SizedBox(height: 12),
+
+              // Bug #14 — Subscription moved to the bottom (full upsell banner
+              // in the closing-pitch position). Premium pill at the top is the
+              // primary discoverability surface; this card is the closer.
+              const SectionHeader('SUBSCRIPTION'),
+              _buildSubscriptionSection(subInfo, isPro, usageService),
+              const SizedBox(height: 8),
+
+              // Bug #14 — Achievements moved to the bottom (passive content).
+              const SectionHeader('ACHIEVEMENTS'),
+              const BadgesGrid(),
               const SizedBox(height: 12),
 
               // Sign Out
@@ -820,6 +988,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Bug #14 Prediction Card (moved from home_screen) ────────────
+
+  Widget _buildPredictionCard() {
+    final prediction = ref.watch(predictionProvider);
+    final isPro = SubscriptionService.instance.isPro();
+    return PredictionCard(
+      predictionText: prediction.predictionText,
+      generatedAt: prediction.generatedAt,
+      isPro: isPro,
+      canRefresh: prediction.canRefresh,
+      onRefreshTap: _refreshPrediction,
     );
   }
 

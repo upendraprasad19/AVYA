@@ -227,6 +227,69 @@ class AiCoachRepository {
     return id;
   }
 
+  /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
+  /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
+  /// it as a loading bubble even if the app is killed mid-call. Returns the
+  /// Hive key so the caller can update it on success/failure.
+  Future<String> saveUserMessagePending({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    String? mediaType,
+  }) async {
+    final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
+    await _hive.coachBox.put(id, {
+      'id': id,
+      'user_message': userMessage,
+      'ai_response': '',
+      'model_used': '',
+      'mode': mode,
+      'is_user_message': true,
+      'pending': true,
+      'failed': false,
+      'created_at': DateTime.now().toIso8601String(),
+      'media_url': ?mediaUrl,
+      'media_type': ?mediaType,
+    });
+    return id;
+  }
+
+  /// Bug #19 — Updates a pending interaction with the AI's reply on success.
+  /// Clears the `pending` flag and writes the model used. Used by both
+  /// [SendMessageNotifier.send] and [SendMessageNotifier.sendWithMedia].
+  Future<void> updateInteractionWithResponse(
+    String key, {
+    required String aiResponse,
+    required String modelUsed,
+  }) async {
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['ai_response'] = aiResponse;
+    entry['model_used'] = modelUsed;
+    entry['pending'] = false;
+    entry['failed'] = false;
+    entry.remove('error_text');
+    await _hive.coachBox.put(key, entry);
+  }
+
+  /// Bug #19 — Marks a pending interaction as failed with the error text.
+  /// The user message stays in coachBox so it survives an app restart, and
+  /// [ChatHistoryNotifier] surfaces it as an error bubble with a Retry button.
+  Future<void> updateInteractionWithError(
+    String key, {
+    required String errorText,
+  }) async {
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['ai_response'] = errorText;
+    entry['pending'] = false;
+    entry['failed'] = true;
+    entry['error_text'] = errorText;
+    await _hive.coachBox.put(key, entry);
+  }
+
   /// Counts only user messages sent today (not AI responses).
   int getTodayUserMessageCount() {
     final now = DateTime.now();
@@ -546,7 +609,7 @@ class AiCoachRepository {
       'carbs_g': carbs.round(),
       'fat_g': fat.round(),
       'water_ml': waterMl,
-      if (urineStatus != null) 'urine_status': urineStatus,
+      'urine_status': ?urineStatus,
     };
   }
 

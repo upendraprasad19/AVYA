@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -31,9 +27,6 @@ import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
-import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
-import 'package:icanbefitter/core/services/ai_service.dart';
-import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -45,9 +38,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = true;
   String? _error;
-  Timer? _predictionPollTimer;
-  int _predictionPollCount = 0;
-  static const int _maxPollAttempts = 10; // 3s × 10 = 30s max
   bool _hasInitialized = false;
 
   @override
@@ -71,8 +61,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) setState(() => _isLoading = false);
       // Check if a streak freeze was just consumed and notify the user
       _checkStreakFreezeUsed();
-      // If no prediction yet, poll Hive every 3s (handles fire-and-forget race)
-      _startPredictionPollIfNeeded();
     });
     // After background sync completes (~5s), re-read step data from Hive.
     // HealthSyncService writes steps asynchronously — this ensures the UI
@@ -82,32 +70,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  /// Polls Hive every 3 seconds (up to 30s) until a prediction is found.
-  /// Once found, invalidates predictionProvider so the card renders.
-  void _startPredictionPollIfNeeded() {
-    final existing = HiveService.instance.configBox.get('prediction_text');
-    if (existing != null) return; // Already have one — no polling needed
-
-    _predictionPollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      _predictionPollCount++;
-      final text = HiveService.instance.configBox.get('prediction_text');
-      if (text != null) {
-        // Prediction arrived — refresh provider and stop polling
-        if (mounted) ref.invalidate(predictionProvider);
-        timer.cancel();
-        _predictionPollTimer = null;
-      } else if (_predictionPollCount >= _maxPollAttempts) {
-        timer.cancel();
-        _predictionPollTimer = null;
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _predictionPollTimer?.cancel();
-    super.dispose();
-  }
+  // Bug #14 — Prediction polling moved to ProfileScreen alongside the
+  // Future Prediction card. Home no longer renders the prediction.
 
   void _checkStreakFreezeUsed() {
     final progress = UserRepository.instance.getProgress();
@@ -131,82 +95,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         duration: const Duration(seconds: 4),
       ));
     });
-  }
-
-  /// PRO monthly prediction refresh — calls AI via the prediction route
-  /// (bypasses daily limits + interaction logging).
-  Future<void> _refreshPrediction(WidgetRef ref) async {
-    final profile = UserRepository.instance.getProfile();
-    final progress = UserRepository.instance.getProgress();
-    if (profile == null) return;
-
-    // Show loading indicator
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        'Generating fresh prediction...',
-        style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-      ),
-      backgroundColor: AppColors.card,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 10),
-    ));
-
-    try {
-      final name = profile['full_name'] ?? 'User';
-      final weight = profile['current_weight_kg'] ?? '?';
-      final target = profile['target_weight_kg'] ?? '?';
-      final goal = profile['primary_goal'] ?? 'general_fitness';
-      final workoutsDone = progress?['total_workouts_done'] ?? 0;
-      final streakDays = progress?['current_streak_days'] ?? 0;
-
-      final prompt = '''Predict realistic 12-week fitness outcomes.
-
-Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
-
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
-• Weight: current → 4wk → 8wk → 12wk
-• Body fat estimate change
-• Key lift projections
-• One motivational line''';
-
-      final aiContext = {
-        'system_prompt':
-            'You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.',
-      };
-
-      final response = await AiService.instance.predict(prompt, aiContext);
-      if (response.reply.isNotEmpty) {
-        final configBox = HiveService.instance.configBox;
-        await configBox.put('prediction_text', response.reply);
-        await configBox.put('prediction_date', DateTime.now().toIso8601String());
-        if (mounted) {
-          ref.invalidate(predictionProvider);
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-              'Prediction updated!',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            backgroundColor: AppColors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-          ));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Could not refresh prediction. Please try again later.',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-          ),
-          backgroundColor: AppColors.red,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ));
-      }
-    }
   }
 
   void _retry() {
@@ -312,13 +200,7 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
           child: _buildAiInsight(ref),
         ),
         const SizedBox(height: 10),
-        // Future Prediction card (free: once post-onboarding, PRO: refreshes monthly)
-        _buildSectionLabel('YOUR PREDICTION'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-          child: _buildPredictionCard(ref),
-        ),
-        const SizedBox(height: 10),
+        // Bug #14 — Future Prediction card moved to ProfileScreen.
         _buildSectionLabel('WEIGHT TREND'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
@@ -442,6 +324,15 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
   // -- Streak Warning -------------------------------------------------
 
   Widget _buildStreakWarning(WidgetRef ref) {
+    // Bug #12 — Smart streak warning. Eligibility (workout-day check,
+    // completion check, personalised time-of-day threshold) is computed
+    // by streakWarningEligibilityProvider so the rules stay testable and
+    // the home screen only renders the UI.
+    final eligibility = ref.watch(streakWarningEligibilityProvider);
+    if (!eligibility.shouldShow) {
+      return const SizedBox.shrink();
+    }
+
     final streak = ref.watch(streakProvider);
     final calendarWeek = ref.watch(calendarWeekProvider);
     final workoutsPlanned = calendarWeek
@@ -452,14 +343,6 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         .length;
     final workoutsRemaining =
         (workoutsPlanned - workoutsCompleted).clamp(0, workoutsPlanned).toInt();
-
-    if (!StreakWarningBanner.shouldShow(
-      streakDays: streak,
-      workoutsPlanned: workoutsPlanned,
-      workoutsCompleted: workoutsCompleted,
-    )) {
-      return const SizedBox.shrink();
-    }
 
     return StreakWarningBanner(
       streakDays: streak,
@@ -618,21 +501,6 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         text,
         style: AppTypography.label,
       ),
-    );
-  }
-
-  // -- Prediction Card ------------------------------------------------
-
-  Widget _buildPredictionCard(WidgetRef ref) {
-    final prediction = ref.watch(predictionProvider);
-    final isPro = SubscriptionService.instance.isPro();
-
-    return PredictionCard(
-      predictionText: prediction.predictionText,
-      generatedAt: prediction.generatedAt,
-      isPro: isPro,
-      canRefresh: prediction.canRefresh,
-      onRefreshTap: () => _refreshPrediction(ref),
     );
   }
 

@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import 'exercise_repository.dart';
 
 /// Local Dart plan generator V2. Queries Hive exerciseBox — zero API cost.
@@ -24,11 +26,17 @@ class PlanGenerator {
   final ExerciseRepository _exerciseRepo = ExerciseRepository.instance;
 
   /// Deterministic exercise count per workout: split days × effective experience.
+  ///
+  /// Bug #17 — Hard floor of 5 exercises per workout day. Bumped 5-day and
+  /// 6-day beginners from 4 → 5 so the initial selection meets the floor
+  /// without relying on `_ExerciseSelector._broadenSelection` to top up
+  /// every day. The broadening logic is now the safety net for content
+  /// gaps in the exercise library, not the normal path.
   static const _exerciseCounts = <int, Map<String, int>>{
     3: {'beginner': 5, 'intermediate': 6, 'advanced': 6},
     4: {'beginner': 5, 'intermediate': 5, 'advanced': 6},
-    5: {'beginner': 4, 'intermediate': 5, 'advanced': 5},
-    6: {'beginner': 4, 'intermediate': 4, 'advanced': 5},
+    5: {'beginner': 5, 'intermediate': 5, 'advanced': 5},
+    6: {'beginner': 5, 'intermediate': 5, 'advanced': 5},
   };
 
   /// Generates a workout phase with 4 distinct weeks.
@@ -401,7 +409,7 @@ class _SplitSelector {
           specsB: [_CSpec('Legs', 6, target: ['Hamstring', 'Glute'])],
         ),
         _DaySlot(
-          name: 'Weak Points', focus: 'Shoulders, arms, core',
+          name: 'Shoulders + Arms + Core', focus: 'Shoulders, arms, core',
           dayType: 'upper', intensity: _profiles5[4],
           specsA: [
             _CSpec('Push', 1, target: ['Deltoid', 'Shoulder'], exclude: ['Chest']),
@@ -524,6 +532,49 @@ class _SplitSelector {
 // ══════════════════════════════════════════════════════════════════
 
 class _ExerciseSelector {
+  /// Bug #17 — Hard minimum exercises per workout day for both A and B
+  /// variants. No workout day may ever have fewer than this. If the initial
+  /// filtered selection comes up short, [_broadenSelection] runs a four-step
+  /// retry chain (drop target → drop exclude → drop experience → drop
+  /// equipment). If still short after all retries, [_universalPool] tops the
+  /// variant up to exactly this number with hardcoded universal-bodyweight
+  /// movements that are guaranteed to exist.
+  static const int _hardFloor = 5;
+
+  /// Categories to broaden across when [_broadenSelection] runs out of
+  /// matches for the day's literal specs. Keyed by [_DaySlot.dayType].
+  static const _broadenCategories = <String, List<String>>{
+    'push':           ['Push'],
+    'pull':           ['Pull'],
+    'legs':           ['Legs'],
+    'upper':          ['Push', 'Pull'],
+    'shoulders_arms': ['Push', 'Pull'],
+    'full_body':      ['Push', 'Pull', 'Legs', 'Core'],
+  };
+
+  /// Hardcoded universal-bodyweight pool. The five-deep ordered list per
+  /// day type guarantees we can always reach [_hardFloor] regardless of how
+  /// sparse the user's filtered exercise library is. Names that resolve in
+  /// the seeded library (`exerciseBox`) are upgraded to full metadata via
+  /// [ExerciseRepository.search]; the rest fall back to a minimal
+  /// [PlannedExercise] built by [_buildUniversalFallback].
+  static const _universalPool = <String, List<String>>{
+    'push':           ['Push-Up', 'Incline Push-Up', 'Pike Push-Up', 'Decline Push-Up', 'Wide Push-Up'],
+    'pull':           ['Inverted Row', 'Doorway Row', 'Towel Row', 'Superman Hold', 'Reverse Snow Angel'],
+    'legs':           ['Bodyweight Squat', 'Reverse Lunge', 'Glute Bridge', 'Single-Leg RDL', 'Calf Raise'],
+    'upper':          ['Push-Up', 'Pike Push-Up', 'Inverted Row', 'Superman Hold', 'Doorway Row'],
+    'shoulders_arms': ['Pike Push-Up', 'Wall Handstand Hold', 'Doorway Row', 'Superman Hold', 'Plank'],
+    'full_body':      ['Push-Up', 'Inverted Row', 'Bodyweight Squat', 'Plank', 'Glute Bridge'],
+  };
+
+  /// Universal-pool names that should be logged as `timed` rather than
+  /// `bodyweight_reps` when the repo has no metadata for them. Used by
+  /// [_buildUniversalFallback].
+  static const _timedUniversal = <String>{
+    'Plank', 'Dead Bug', 'Bird Dog', 'Hollow Hold', 'Side Plank',
+    'Superman Hold', 'Wall Handstand Hold', 'Reverse Snow Angel',
+  };
+
   /// Picks exercises for A and B variants of each day.
   static List<_PopulatedDay> pick({
     required List<_DaySlot> splitPlan,
@@ -543,8 +594,19 @@ class _ExerciseSelector {
       final cappedB = _capSpecs(bSpecs, maxPerDay);
 
       // Select Variant A exercises
-      final exercisesA = _selectForSpecs(
+      var exercisesA = _selectForSpecs(
         cappedA, exerciseRepo, equipmentList, effectiveExp, phase,
+      );
+
+      // Bug #17 — Enforce hard floor of 5 on Variant A. Broaden if short.
+      exercisesA = _broadenSelection(
+        current: exercisesA,
+        slot: slot,
+        equipmentList: equipmentList,
+        effectiveExp: effectiveExp,
+        repo: exerciseRepo,
+        variant: 'A',
+        excludeNamesParam: null,
       );
 
       // Select Variant B exercises, excluding A names
@@ -563,26 +625,22 @@ class _ExerciseSelector {
         effectiveExclude = excludeNames;
       }
 
-      final exercisesB = _selectForSpecs(
+      var exercisesB = _selectForSpecs(
         cappedB, exerciseRepo, equipmentList, effectiveExp, phase,
         excludeNames: effectiveExclude,
       );
 
-      // If B couldn't fill enough, allow compound overlap
-      if (exercisesB.length < (maxPerDay * 0.5).ceil() && exercisesB.length < exercisesA.length) {
-        final fallbackB = _selectForSpecs(
-          cappedB, exerciseRepo, equipmentList, effectiveExp, phase,
-        );
-        if (fallbackB.length > exercisesB.length) {
-          result.add(_PopulatedDay(
-            name: slot.name, focus: slot.focus,
-            dayType: slot.dayType, intensity: slot.intensity,
-            exercisesA: exercisesA,
-            exercisesB: fallbackB.map((e) => e.copyWith(variant: 'B')).toList(),
-          ));
-          continue;
-        }
-      }
+      // Bug #17 — Enforce hard floor of 5 on Variant B. The broadening
+      // chain will drop the A-variant exclusion at retry 2 if needed.
+      exercisesB = _broadenSelection(
+        current: exercisesB,
+        slot: slot,
+        equipmentList: equipmentList,
+        effectiveExp: effectiveExp,
+        repo: exerciseRepo,
+        variant: 'B',
+        excludeNamesParam: effectiveExclude,
+      );
 
       result.add(_PopulatedDay(
         name: slot.name, focus: slot.focus,
@@ -594,6 +652,156 @@ class _ExerciseSelector {
       ));
     }
     return result;
+  }
+
+  /// Bug #17 — Top up [current] until it has at least [_hardFloor] exercises.
+  ///
+  /// Runs a four-step broadening retry chain if [current] is under the
+  /// floor. Each retry progressively drops one filter:
+  ///
+  ///   retry 1 → drop targetMuscles
+  ///   retry 2 → drop excludeMuscles AND excludeNamesParam (A-variant names)
+  ///   retry 3 → drop suitableFor (experience level)
+  ///   retry 4 → drop equipment
+  ///
+  /// If after all four retries the variant is still short, falls back to
+  /// the hardcoded [_universalPool] for the day's [dayType] and tops the
+  /// list up to exactly [_hardFloor]. The universal pool entries are
+  /// upgraded with full metadata when found in the exercise library, or
+  /// constructed minimally via [_buildUniversalFallback] otherwise.
+  ///
+  /// Telemetry: [debugPrint] writes a structured line whenever a retry
+  /// past retry 1 fires or whenever the universal pool fallback fires —
+  /// these are signals that the exercise library is too sparse for the
+  /// user's filter combination and content should be added.
+  static List<PlannedExercise> _broadenSelection({
+    required List<PlannedExercise> current,
+    required _DaySlot slot,
+    required List<String> equipmentList,
+    required String effectiveExp,
+    required ExerciseRepository repo,
+    required String variant,
+    required Set<String>? excludeNamesParam,
+  }) {
+    if (current.length >= _hardFloor) return current;
+
+    final result = List<PlannedExercise>.from(current);
+    final pickedNames = result.map((e) => e.exerciseName).toSet();
+    final dayName = slot.name;
+
+    // Categories to query: prefer the literal categories from this day's
+    // specs (preserves day intent — e.g. a Pull day stays in Pull) and
+    // fall back to the [_broadenCategories] map for cross-category days.
+    final specCategories = slot.specsA.map((s) => s.category).toSet().toList();
+    final categories = specCategories.isNotEmpty
+        ? specCategories
+        : (_broadenCategories[slot.dayType] ?? const ['Push', 'Pull', 'Legs', 'Core']);
+
+    // Aggregate target / exclude muscles across all of this day's specs.
+    // Used as a soft preference on retry 0 (kept by default) and dropped
+    // progressively on retries 1+.
+    final allTargets = <String>[
+      for (final s in slot.specsA) ...?s.targetMuscles,
+    ];
+    final allExcludes = <String>[
+      for (final s in slot.specsA) ...?s.excludeMuscles,
+    ];
+
+    for (var retry = 1; retry <= 4 && result.length < _hardFloor; retry++) {
+      // Telemetry — only log when we actually go past retry 1, since
+      // retry 1 alone (drop target) is the most common quick top-up and
+      // not necessarily a content gap.
+      if (retry >= 2) {
+        debugPrint(
+          '[plan_generator] broadening retry=$retry day=$dayName variant=$variant exp=$effectiveExp eq=${equipmentList.length} have=${result.length}',
+        );
+      }
+
+      final dropTarget    = retry >= 1;
+      final dropExclude   = retry >= 2;
+      final dropExp       = retry >= 3;
+      final dropEquipment = retry >= 4;
+
+      for (final cat in categories) {
+        if (result.length >= _hardFloor) break;
+
+        final candidates = repo.query(
+          category: cat,
+          equipment: dropEquipment ? null : equipmentList,
+          suitableFor: dropExp ? null : effectiveExp,
+          targetMuscles:
+              dropTarget ? null : (allTargets.isEmpty ? null : allTargets),
+          excludeMuscles:
+              dropExclude ? null : (allExcludes.isEmpty ? null : allExcludes),
+          limit: 50,
+        );
+
+        for (final c in candidates) {
+          if (result.length >= _hardFloor) break;
+          final name = c['name'] as String? ?? '';
+          if (name.isEmpty || pickedNames.contains(name)) continue;
+          // Honour A-variant exclusion until retry 2 drops it.
+          if (!dropExclude && (excludeNamesParam?.contains(name) ?? false)) {
+            continue;
+          }
+          result.add(_buildExercise(c).copyWith(variant: variant));
+          pickedNames.add(name);
+        }
+      }
+    }
+
+    // Final safety net: hardcoded universal-bodyweight pool. Only fires
+    // when the four broadening retries can't reach the floor — that's a
+    // genuine content gap in the exercise library and worth surfacing.
+    if (result.length < _hardFloor) {
+      debugPrint(
+        '[plan_generator] universal pool fired day=$dayName variant=$variant short=${_hardFloor - result.length} exp=$effectiveExp eq=${equipmentList.join(",")}',
+      );
+      final pool = _universalPool[slot.dayType] ?? _universalPool['upper']!;
+      for (final exName in pool) {
+        if (result.length >= _hardFloor) break;
+        if (pickedNames.contains(exName)) continue;
+        // Prefer real exercise data when available — gives the user
+        // proper coaching cues, primary muscles, etc.
+        final repoMatch = repo.search(exName);
+        if (repoMatch.isNotEmpty) {
+          result.add(_buildExercise(repoMatch.first).copyWith(variant: variant));
+        } else {
+          result.add(_buildUniversalFallback(exName, variant));
+        }
+        pickedNames.add(exName);
+      }
+    }
+
+    return result;
+  }
+
+  /// Build a minimal [PlannedExercise] for a hardcoded universal-pool name
+  /// when the seeded library has no entry for it. Used by
+  /// [_broadenSelection] as the absolute last resort.
+  static PlannedExercise _buildUniversalFallback(String name, String variant) {
+    final isTimed = _timedUniversal.contains(name);
+    return PlannedExercise(
+      exerciseId: name.toLowerCase().replaceAll(' ', '_'),
+      exerciseName: name,
+      loggingType: isTimed ? 'timed' : 'bodyweight_reps',
+      sets: 3,
+      reps: isTimed ? '30s' : '10',
+      restSeconds: 60,
+      durationSeconds: isTimed ? 30 : null,
+      category: _categoryForUniversalName(name),
+      equipmentNeeded: const ['bodyweight'],
+      variant: variant,
+    );
+  }
+
+  /// Map a universal-pool exercise name back to its category for the
+  /// minimal fallback record.
+  static String _categoryForUniversalName(String name) {
+    if (_universalPool['push']!.contains(name)) return 'Push';
+    if (_universalPool['pull']!.contains(name)) return 'Pull';
+    if (_universalPool['legs']!.contains(name)) return 'Legs';
+    return 'Core';
   }
 
   /// Cap spec counts so total doesn't exceed [maxPerDay].

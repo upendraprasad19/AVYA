@@ -6,6 +6,11 @@ import 'package:icanbefitter/core/theme/colors.dart';
 /// Profile identity section: banner (120px, tap to view), avatar overlapping banner,
 /// name, subtitle, edit button.
 /// Tap avatar/banner = view full screen (if exists). Small icon = replace.
+///
+/// Bug #14 — A compact "PRO MEMBER" / "UPGRADE TO PRO" pill renders directly
+/// below the avatar (above the name row). This is the primary discoverability
+/// affordance for subscription state. PRO state shows cyan; free state shows
+/// gold (workspace_premium icon).
 class ProfileIdentity extends StatelessWidget {
   final String name;
   final String subtitle;
@@ -14,6 +19,8 @@ class ProfileIdentity extends StatelessWidget {
   final VoidCallback onReplaceAvatar;
   final VoidCallback onReplaceBanner;
   final VoidCallback onTapEdit;
+  final bool isPro;
+  final VoidCallback onTapPremium;
 
   const ProfileIdentity({
     super.key,
@@ -24,6 +31,8 @@ class ProfileIdentity extends StatelessWidget {
     required this.onReplaceAvatar,
     required this.onReplaceBanner,
     required this.onTapEdit,
+    required this.isPro,
+    required this.onTapPremium,
   });
 
   void _openFullScreen(BuildContext context, String imageUrl, String heroTag) {
@@ -178,6 +187,14 @@ class ProfileIdentity extends StatelessWidget {
 
         const SizedBox(height: 40), // Space for avatar overlap
 
+        // Bug #14 — Premium pill button (PRO MEMBER / UPGRADE TO PRO).
+        // Lives between the avatar overlap and the name row so it sits
+        // directly under the avatar — high discoverability for sub state.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+          child: _buildPremiumPill(),
+        ),
+
         // Name row with edit button
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
@@ -234,6 +251,54 @@ class ProfileIdentity extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Bug #14 — Compact premium pill. PRO = cyan filled, free = gold-tint with
+  /// gold border. Tap behaviour is delegated to [onTapPremium] (parent screen
+  /// opens either the subscription detail sheet or the paywall).
+  Widget _buildPremiumPill() {
+    final bgColor = isPro ? AppColors.accent : AppColors.proGoldTint;
+    final borderColor = isPro ? AppColors.accent : AppColors.proGold;
+    final textColor = isPro ? Colors.black : AppColors.proGold;
+    final iconColor = isPro ? Colors.black : AppColors.proGold;
+    final iconData = isPro ? Icons.check_circle_outline : Icons.workspace_premium;
+    final label = isPro ? 'PRO MEMBER' : 'UPGRADE TO PRO';
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: onTapPremium,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: borderColor,
+              width: isPro ? 0 : 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(iconData, size: 14, color: iconColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                  color: textColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
