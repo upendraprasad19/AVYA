@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
@@ -187,6 +189,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final nutrition = ref.watch(dailyNutritionProvider);
     final breakdown = ref.watch(aiBreakdownProvider);
     final targets = ref.watch(macroTargetsProvider);
+    final profile = ref.watch(userProfileProvider);
     final weeklyData = ref.watch(weeklyNutritionProvider);
     final savedMeals = ref.watch(savedMealsProvider);
 
@@ -200,6 +203,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               horizontal: AppSpacing.screenPadding),
           child: _buildCalorieCard(nutrition, targets: targets),
         ),
+        // Bug #24 — goal projection subtitle
+        _buildProjectionSubtitle(profile),
         const SizedBox(height: 10),
 
         // ── 2. Unified Log Food Card (AI + Scan + Search) ──
@@ -418,6 +423,61 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Bug #24 — projection subtitle below the daily target card.
+  Widget _buildProjectionSubtitle(Map<String, dynamic> profile) {
+    final currentKg = (profile['current_weight_kg'] as num?)?.toDouble();
+    final targetKg = (profile['target_weight_kg'] as num?)?.toDouble();
+    final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
+    final pace = profile['pace_preference'] is String
+        ? profile['pace_preference'] as String
+        : 'balanced';
+
+    if ((goal != 'lose_fat' && goal != 'build_muscle') ||
+        currentKg == null ||
+        targetKg == null ||
+        (currentKg - targetKg).abs() <= 0.1) {
+      return const SizedBox.shrink();
+    }
+
+    final p = BmrCalculator.projectGoalDate(
+      currentKg: currentKg,
+      targetKg: targetKg,
+      pacePreference: pace,
+    );
+
+    String line;
+    if (p.weeks > 104) {
+      line =
+          "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg in >2 years";
+    } else if (p.weeks <= 0) {
+      return const SizedBox.shrink();
+    } else {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      final dateStr = '${months[p.date.month - 1]} ${p.date.day}';
+      line =
+          "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg on $dateStr (~${p.weeks.round()} weeks)";
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenPadding,
+        vertical: 4,
+      ),
+      child: Text(
+        line,
+        style: GoogleFonts.getFont(
+          'DM Sans',
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary,
+        ),
       ),
     );
   }
