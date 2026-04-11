@@ -441,7 +441,14 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
 
               // #8 Nutrition Targets
               if (nutritionTargets != null) ...[
-                _buildNutritionTargets(nutritionTargets),
+                _buildNutritionTargets(
+                  nutritionTargets,
+                  currentKg: weightKg,
+                  targetKg: targetKg,
+                  goal: stats.primaryGoal,
+                  pacePreference:
+                      (profile['pace_preference'] as String?) ?? 'balanced',
+                ),
                 const SizedBox(height: 8),
               ],
 
@@ -1184,31 +1191,179 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
     );
   }
 
-  // ── #8 Nutrition Targets ────────────────────────────────────────
+  // ── #8 Nutrition Targets (Bug #24: + projection subtitle) ──────
 
-  Widget _buildNutritionTargets(Map<String, double> targets) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Text('MY TARGETS', style: GoogleFonts.getFont('DM Sans',
-              fontSize: 10, fontWeight: FontWeight.w700,
-              letterSpacing: 1.0, color: AppColors.textSecondary)),
-          const SizedBox(width: 12),
-          _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
-          const SizedBox(width: 8),
-          _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
-          const SizedBox(width: 8),
-          _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
-        ],
+  Widget _buildNutritionTargets(
+    Map<String, double> targets, {
+    double? currentKg,
+    double? targetKg,
+    required String goal,
+    required String pacePreference,
+  }) {
+    // Bug #24 — compute projection only when we have a real target delta
+    // and a non-maintenance goal. Otherwise hide the subtitle entirely.
+    String? projectionLine;
+    if ((goal == 'lose_fat' || goal == 'build_muscle') &&
+        currentKg != null &&
+        targetKg != null &&
+        (currentKg - targetKg).abs() > 0.1) {
+      final p = BmrCalculator.projectGoalDate(
+        currentKg: currentKg,
+        targetKg: targetKg,
+        pacePreference: pacePreference,
+      );
+      if (p.weeks > 104) {
+        projectionLine =
+            "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg in >2 years";
+      } else if (p.weeks > 0) {
+        final dateStr = '${_monthAbbr(p.date.month)} ${p.date.day}';
+        projectionLine =
+            "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg on $dateStr (~${p.weeks.round()} weeks)";
+      }
+    }
+
+    return GestureDetector(
+      onTap: projectionLine == null
+          ? null
+          : () => _showPaceDetailSheet(
+                currentKg: currentKg!,
+                targetKg: targetKg!,
+                pacePreference: pacePreference,
+                goal: goal,
+              ),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('MY TARGETS', style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0, color: AppColors.textSecondary)),
+                const SizedBox(width: 12),
+                _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
+                const SizedBox(width: 8),
+                _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
+                const SizedBox(width: 8),
+                _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
+              ],
+            ),
+            if (projectionLine != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                projectionLine,
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 11, fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary),
+              ),
+            ],
+          ],
+        ),
       ),
     );
+  }
+
+  static String _monthAbbr(int m) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[(m - 1).clamp(0, 11)];
+  }
+
+  Future<void> _showPaceDetailSheet({
+    required double currentKg,
+    required double targetKg,
+    required String pacePreference,
+    required String goal,
+  }) async {
+    final p = BmrCalculator.projectGoalDate(
+      currentKg: currentKg,
+      targetKg: targetKg,
+      pacePreference: pacePreference,
+    );
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('GOAL PROJECTION',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 10, fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0, color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              Text(
+                  'Current: ${currentKg.toStringAsFixed(1)} kg → Target: ${targetKg.toStringAsFixed(1)} kg',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              Text('Pace: ${pacePreference.toUpperCase()}',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accent)),
+              const SizedBox(height: 12),
+              Text('At this pace, projected ~${p.weeks.round()} weeks to goal.',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: 4),
+              Text(
+                  'Based on ${_paceRateLabel(pacePreference)} body-weight change per week and 7700 kcal ≈ 1 kg.',
+                  style: GoogleFonts.getFont('DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textDisabled)),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.go('/profile/edit');
+                  },
+                  child: Text('Change pace →',
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.accent)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _paceRateLabel(String pace) {
+    switch (pace) {
+      case 'slow':
+        return '0.25%';
+      case 'aggressive':
+        return '0.75%';
+      case 'balanced':
+      default:
+        return '0.5%';
+    }
   }
 
   Widget _targetChip(String value, String label) {
