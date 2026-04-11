@@ -43,6 +43,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   int _daysPerWeek = 4;
   String _lifestyleActivity = 'desk_job';
   String _dietPreference = 'non_veg';
+  String _pacePreference = 'balanced'; // Bug #24
   List<String> _injuries = ['none'];
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
@@ -113,6 +114,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
     _dietPreference = (profile['diet_preference'] as String?) ?? 'non_veg';
+    _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
     final rawInjuries = profile['injuries'];
     if (rawInjuries is List && rawInjuries.isNotEmpty) {
       _injuries = rawInjuries.map((e) => e.toString()).toList();
@@ -245,6 +247,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildDaysSelector(),
               const SizedBox(height: AppSpacing.gridGap),
               _buildLifestyleSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildPaceSelector(),
               const SizedBox(height: AppSpacing.sectionGap),
 
               _sectionHeader('Diet & Health'),
@@ -540,6 +544,98 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final isSelected = _lifestyleActivity == entry.key;
           return GestureDetector(
             onTap: () => setState(() => _lifestyleActivity = entry.key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.only(bottom: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.accentTint : AppColors.input,
+                borderRadius: BorderRadius.circular(AppRadius.row),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.accent.withValues(alpha: 0.4)
+                      : AppColors.border,
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: 18,
+                    color: isSelected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.value,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? AppColors.textPrimary
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        subtitles[entry.key]!,
+                        style: GoogleFonts.getFont(
+                          'DM Sans',
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ── Goal Pace (Bug #24) ──────────────────────────────────────────
+
+  Widget _buildPaceSelector() {
+    const options = {
+      'slow': 'Slow',
+      'balanced': 'Balanced',
+      'aggressive': 'Aggressive',
+    };
+    const subtitles = {
+      'slow': '~0.25%/week — easiest to stick with',
+      'balanced': '~0.5%/week — evidence-based standard',
+      'aggressive': '~0.75%/week — near upper safe limit',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Goal pace',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...options.entries.map((entry) {
+          final isSelected = _pacePreference == entry.key;
+          return GestureDetector(
+            onTap: () => setState(() => _pacePreference = entry.key),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               margin: const EdgeInsets.only(bottom: 6),
@@ -1089,6 +1185,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'primary_goal': _goal,
         'equipment_access': _equipment,
         'lifestyle_activity': _lifestyleActivity,
+        'pace_preference': _pacePreference, // Bug #24
         'activity_level': derivedActivityLevel,
         'days_per_week': _daysPerWeek,
         'diet_preference': _dietPreference,
