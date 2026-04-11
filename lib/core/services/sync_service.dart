@@ -784,6 +784,7 @@ class SyncService {
       if (p['body_fat_percent'] != null) 'body_fat_percent': p['body_fat_percent'],
       if (p['body_fat_assessed_at'] != null) 'body_fat_assessed_at': p['body_fat_assessed_at'],
       if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
+      if (p['pace_preference'] != null) 'pace_preference': p['pace_preference'],
     }, onConflict: 'user_id');
   }
 
