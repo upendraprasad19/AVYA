@@ -33,7 +33,6 @@ import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
-import '../widgets/badges_grid.dart';
 import 'notification_settings_screen.dart';
 import 'package:icanbefitter/shared/widgets/community_review_sheet.dart';
 
@@ -592,10 +591,8 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
               _buildSubscriptionSection(subInfo, isPro, usageService),
               const SizedBox(height: 8),
 
-              // Bug #14 — Achievements moved to the bottom (passive content).
-              const SectionHeader('ACHIEVEMENTS'),
-              const BadgesGrid(),
-              const SizedBox(height: 12),
+              // Bug #21 — Achievements are now rendered as the compact inline
+              // row inside ProfileIdentity. Full grid opens via its chevron.
 
               // Sign Out
               Padding(

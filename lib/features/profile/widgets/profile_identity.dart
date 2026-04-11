@@ -1,16 +1,23 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/profile/widgets/badges_grid.dart';
+import 'package:icanbefitter/shared/widgets/compact_achievements_row.dart';
+import 'package:icanbefitter/shared/widgets/pro_pill_button.dart';
 
 /// Profile identity section: banner (120px, tap to view), avatar overlapping banner,
 /// name, subtitle, edit button.
 /// Tap avatar/banner = view full screen (if exists). Small icon = replace.
 ///
-/// Bug #14 — A compact "PRO MEMBER" / "UPGRADE TO PRO" pill renders directly
-/// below the avatar (above the name row). This is the primary discoverability
-/// affordance for subscription state. PRO state shows cyan; free state shows
-/// gold (workspace_premium icon).
+/// Bug #21 (Layout B) — The banner-overlap row hosts three elements side-by-side:
+/// the 80px avatar on the left, the [CompactAchievementsRow] in the middle,
+/// and the [ProPillButton] on the right. The old standalone PRO pill below
+/// the avatar (Bug #14) and the standalone BadgesGrid section at the bottom
+/// of the profile body were both removed — both concerns now live in this
+/// identity band. The chevron on the achievements row opens the full
+/// [BadgesGrid] in a bottom sheet.
 class ProfileIdentity extends StatelessWidget {
   final String name;
   final String subtitle;
@@ -176,24 +183,41 @@ class ProfileIdentity extends StatelessWidget {
               ),
             ),
 
-            // Avatar positioned to overlap banner
+            // Bug #21 Layout B — horizontal row overlapping the banner.
+            // Left: 80px avatar. Middle: CompactAchievementsRow. Right: ProPillButton.
             Positioned(
               left: 18,
-              bottom: -31,
-              child: _buildAvatar(context),
+              right: 18,
+              bottom: -40,
+              child: Row(
+                children: [
+                  _buildAvatar(context),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        // Pad down so the row visually sits below the banner edge
+                        // to roughly match the avatar's vertical midpoint.
+                        padding: const EdgeInsets.only(top: 40),
+                        child: CompactAchievementsRow(
+                          badges: BadgeService.instance.getAllWithStatus(),
+                          onOpenAll: () => _openBadgesSheet(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: ProPillButton(isPro: isPro, onTap: onTapPremium),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
 
-        const SizedBox(height: 40), // Space for avatar overlap
-
-        // Bug #14 — Premium pill button (PRO MEMBER / UPGRADE TO PRO).
-        // Lives between the avatar overlap and the name row so it sits
-        // directly under the avatar — high discoverability for sub state.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-          child: _buildPremiumPill(),
-        ),
+        const SizedBox(height: 50), // Bug #23: space for larger avatar overlap (40px below banner)
 
         // Name row with edit button
         Padding(
@@ -254,49 +278,20 @@ class ProfileIdentity extends StatelessWidget {
     );
   }
 
-  /// Bug #14 — Compact premium pill. PRO = cyan filled, free = gold-tint with
-  /// gold border. Tap behaviour is delegated to [onTapPremium] (parent screen
-  /// opens either the subscription detail sheet or the paywall).
-  Widget _buildPremiumPill() {
-    final bgColor = isPro ? AppColors.accent : AppColors.proGoldTint;
-    final borderColor = isPro ? AppColors.accent : AppColors.proGold;
-    final textColor = isPro ? Colors.black : AppColors.proGold;
-    final iconColor = isPro ? Colors.black : AppColors.proGold;
-    final iconData = isPro ? Icons.check_circle_outline : Icons.workspace_premium;
-    final label = isPro ? 'PRO MEMBER' : 'UPGRADE TO PRO';
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: onTapPremium,
-        child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: borderColor,
-              width: isPro ? 0 : 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(iconData, size: 14, color: iconColor),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                  color: textColor,
-                ),
-              ),
-            ],
-          ),
+  /// Bug #21 — Opens the full BadgesGrid in a bottom sheet. Entry point from
+  /// the chevron on the CompactAchievementsRow in the identity band.
+  void _openBadgesSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 12),
+          child: SingleChildScrollView(child: BadgesGrid()),
         ),
       ),
     );
@@ -304,8 +299,8 @@ class ProfileIdentity extends StatelessWidget {
 
   Widget _buildAvatar(BuildContext context) {
     return SizedBox(
-      width: 62,
-      height: 62,
+      width: 80,
+      height: 80,
       child: Stack(
         children: [
           // Avatar circle - tap to show options (view/replace) or replace directly
@@ -346,8 +341,8 @@ class ProfileIdentity extends StatelessWidget {
               }
             },
             child: Container(
-              width: 62,
-              height: 62,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 color: avatarUrl == null
                     ? AppColors.accent.withValues(alpha: 0.12)
@@ -362,10 +357,10 @@ class ProfileIdentity extends StatelessWidget {
                         child: CachedNetworkImage(
                           imageUrl: avatarUrl!,
                           fit: BoxFit.cover,
-                          width: 62,
-                          height: 62,
-                          memCacheWidth: 186, // 62 * 3 for retina
-                          memCacheHeight: 186,
+                          width: 80,
+                          height: 80,
+                          memCacheWidth: 240, // 80 * 3 for retina
+                          memCacheHeight: 240,
                           placeholder: (_, url) => const Center(
                             child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
                           ),

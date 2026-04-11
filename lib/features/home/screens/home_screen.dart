@@ -244,8 +244,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           // Avatar
           Container(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: AppColors.accent.withValues(alpha: 0.15),
               shape: BoxShape.circle,
@@ -259,8 +259,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? ClipOval(
                     child: Image.network(
                       avatarUrl,
-                      width: 40,
-                      height: 40,
+                      width: 48,
+                      height: 48,
                       fit: BoxFit.cover,
                       errorBuilder: (_, err, stack) => Text(
                         initial,
