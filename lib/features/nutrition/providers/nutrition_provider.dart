@@ -64,6 +64,7 @@ Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
         gender: gender,
         activityLevel: activityLevel,
         goal: goal,
+        pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
         bodyFatPercent: bodyFat,
       );
       return {

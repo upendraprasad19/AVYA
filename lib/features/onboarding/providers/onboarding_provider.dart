@@ -286,6 +286,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         gender: gender,
         activityLevel: activityLevel,
         goal: primaryGoal,
+        pacePreference: (a['pace_preference'] as String?) ?? 'balanced',
         targetWeightKg: targetWeightKg > 0 ? targetWeightKg : null,
       );
 

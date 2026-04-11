@@ -287,6 +287,7 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         gender: gender,
         activityLevel: profile['activity_level'] as String? ?? 'moderate',
         goal: stats.primaryGoal,
+        pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
         bodyFatPercent: bodyFat,
       );
       nutritionTargets = {

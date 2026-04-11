@@ -21,6 +21,17 @@ class BmrCalculator {
   static const int _bmrOffset = -50;
   static const int _tdeeOffset = -100;
 
+  /// Bug #24 — Pace preference → weekly body-weight change rate.
+  /// Applied in both directions (deficit for lose_fat, surplus for build_muscle).
+  /// Clamped to 1% BW/week max regardless of pace (medical upper bound).
+  static const Map<String, double> _paceRates = {
+    'slow': 0.0025,       // 0.25% BW/week
+    'balanced': 0.005,    // 0.5% BW/week — evidence-based sweet spot
+    'aggressive': 0.0075, // 0.75% BW/week — near upper safe limit
+  };
+  static const double _paceMaxRate = 0.01; // 1% BW/week hard clamp
+  static const double _kcalPerKgBodyWeight = 7700; // Atwater conservative
+
   /// Resolves a TDEE activity level from lifestyle + weekly training frequency.
   ///
   /// More accurate than mapping training days alone. A desk-job engineer who
@@ -132,6 +143,7 @@ class BmrCalculator {
     required String gender,
     required String activityLevel,
     required String goal,
+    required String pacePreference, // Bug #24 — new required arg
     double? targetWeightKg,
     double? bodyFatPercent,
   }) {
@@ -145,37 +157,46 @@ class BmrCalculator {
 
     final tdee = bmr * (activityMultipliers[activityLevel] ?? 1.2) + _tdeeOffset;
 
-    // Calorie adjustment based on goal.
+    // Bug #24 — Back-compute daily kcal delta from pace-based weekly rate.
+    // weekly_kg_delta = current_weight × pace_rate (clamped to 1% BW max)
+    // daily_kcal_delta = weekly_kg_delta × 7700 / 7
+    final rawPaceRate = _paceRates[pacePreference] ?? _paceRates['balanced']!;
+    final paceRate = rawPaceRate.clamp(0.0, _paceMaxRate);
+    final weeklyKgDelta = weightKg * paceRate;
+    final dailyKcalDelta = (weeklyKgDelta * _kcalPerKgBodyWeight) / 7;
+
     double dailyCalories;
     double proteinPerKg;
     double fatPercentage;
 
     switch (goal) {
       case 'build_muscle':
-        dailyCalories = tdee + 300; // Surplus
+        dailyCalories = tdee + dailyKcalDelta; // Surplus scaled by pace
         proteinPerKg = 1.8;
         fatPercentage = 0.25;
         break;
       case 'lose_fat':
-        dailyCalories = tdee - 500; // Deficit
+        dailyCalories = tdee - dailyKcalDelta; // Deficit scaled by pace
         proteinPerKg = 2.0; // Higher protein during cut
         fatPercentage = 0.25;
         break;
       case 'strength':
-        dailyCalories = tdee + 200; // Slight surplus
+        // Strength gets a modest surplus equal to half the pace-derived delta.
+        dailyCalories = tdee + (dailyKcalDelta * 0.5);
         proteinPerKg = 1.8;
         fatPercentage = 0.30;
         break;
       case 'general_fitness':
       default:
-        dailyCalories = tdee; // Maintenance
+        dailyCalories = tdee; // Maintenance — pace has no effect
         proteinPerKg = 1.6;
         fatPercentage = 0.25;
         break;
     }
 
-    // Ensure minimum calories.
-    dailyCalories = dailyCalories.clamp(1200, 5000);
+    // Physiological floor: male 1500 / female 1200 (overrides old 1200 flat).
+    final minKcal = gender.toLowerCase() == 'male' ? 1500.0 : 1200.0;
+    dailyCalories = dailyCalories.clamp(minKcal, 5000);
 
     // For lose_fat, use target weight (if provided and lower than current) so
     // that overweight users don't get inflated protein targets.
@@ -206,6 +227,46 @@ class BmrCalculator {
       proteinGrams: proteinGrams,
       carbGrams: carbGrams.clamp(50, 800),
       fatGrams: fatGrams,
+    );
+  }
+
+  /// Bug #24 — Project when the user will reach `targetKg` at their current
+  /// `pacePreference`. Returns weeks + projected date.
+  ///
+  /// Edge cases:
+  /// - target within 2 kg → clamped to 4-week floor regardless of pace
+  ///   (no point picking aggressive to lose 1 kg).
+  /// - current == target → 0 weeks (caller should hide projection).
+  /// - weeks > 104 (2 years) → caller renders as ">2 years".
+  static ({double weeks, DateTime date}) projectGoalDate({
+    required double currentKg,
+    required double targetKg,
+    required String pacePreference,
+  }) {
+    final gap = (currentKg - targetKg).abs();
+    if (gap == 0) {
+      return (weeks: 0.0, date: DateTime.now());
+    }
+
+    // 2 kg or less → force slow pace with a 4-week floor.
+    if (gap <= 2) {
+      final effRate = _paceRates['slow']!;
+      final weeklyKg = currentKg * effRate;
+      final rawWeeks = gap / weeklyKg;
+      final clampedWeeks = rawWeeks < 4 ? 4.0 : rawWeeks;
+      return (
+        weeks: clampedWeeks,
+        date: DateTime.now().add(Duration(days: (clampedWeeks * 7).round())),
+      );
+    }
+
+    final rate = (_paceRates[pacePreference] ?? _paceRates['balanced']!)
+        .clamp(0.0, _paceMaxRate);
+    final weeklyKg = currentKg * rate;
+    final weeks = gap / weeklyKg;
+    return (
+      weeks: weeks,
+      date: DateTime.now().add(Duration(days: (weeks * 7).round())),
     );
   }
 }

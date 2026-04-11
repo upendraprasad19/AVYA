@@ -169,6 +169,8 @@ class UserRepository {
       gender: gender,
       activityLevel: activityLevel,
       goal: goal,
+      pacePreference: profile['pace_preference'] as String? ?? 'balanced',
+      targetWeightKg: (profile['target_weight_kg'] as num?)?.toDouble(),
       bodyFatPercent: bodyFat,
     );
 

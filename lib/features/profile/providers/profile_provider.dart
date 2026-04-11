@@ -78,6 +78,7 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
       gender: gender,
       activityLevel: resolvedActivity,
       goal: goal,
+      pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
       targetWeightKg: targetWeight != null && targetWeight > 0
           ? targetWeight
           : null,
