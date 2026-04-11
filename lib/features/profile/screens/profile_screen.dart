@@ -446,8 +446,9 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
                   currentKg: weightKg,
                   targetKg: targetKg,
                   goal: stats.primaryGoal,
-                  pacePreference:
-                      (profile['pace_preference'] as String?) ?? 'balanced',
+                  pacePreference: profile['pace_preference'] is String
+                      ? profile['pace_preference'] as String
+                      : 'balanced',
                 ),
                 const SizedBox(height: 8),
               ],
@@ -1258,11 +1259,21 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
             ),
             if (projectionLine != null) ...[
               const SizedBox(height: 8),
-              Text(
-                projectionLine,
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 11, fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      projectionLine,
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 11, fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right,
+                      size: 14,
+                      color: AppColors.textSecondary.withValues(alpha: 0.7)),
+                ],
               ),
             ],
           ],
