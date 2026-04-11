@@ -785,6 +785,29 @@ class FoodLogNotifier extends Notifier<void> {
     ref.invalidate(recentFoodLogsProvider);
   }
 
+  /// Bug #20 — Restores a previously-deleted food log from an undo snackbar.
+  /// Writes at a deterministic key derived from the original `logged_at` +
+  /// `food_name` so repeated undo/delete cycles never produce duplicate keys.
+  /// Fires sync + snapshot so the AI coach sees the correction.
+  Future<void> restoreFoodLog(Map<String, dynamic> log) async {
+    final box = HiveService.instance.nutritionBox;
+    final loggedAt = (log['logged_at'] as String?) ?? DateTime.now().toIso8601String();
+    final foodName = (log['food_name'] as String?) ?? 'unknown';
+    final key = 'flog_${loggedAt}_${foodName.hashCode.abs()}';
+
+    // Preserve original id if present, else use the new key as id.
+    final restored = Map<String, dynamic>.from(log);
+    restored['id'] = key;
+    await box.put(key, restored);
+
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
+    ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(weeklyNutritionProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(recentFoodLogsProvider);
+  }
+
   Future<void> updateFoodLog({
     required String logId,
     required double calories,

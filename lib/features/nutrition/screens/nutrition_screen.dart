@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
@@ -230,9 +231,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               horizontal: AppSpacing.screenPadding),
           child: TodaysMealsCard(
             meals: nutrition.allMeals,
-            onDelete: (logId) {
-              ref.read(foodLogProvider.notifier).deleteFoodLog(logId);
-            },
+            onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
             onEdit: (meal) => _showEditMacrosSheet(context, meal),
           ),
         ),
@@ -660,6 +659,68 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               color: isActive ? AppColors.accent : AppColors.textSecondary,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── Delete Food Log (Confirmation + Undo) ─────────────────────
+
+  /// Bug #20 — Confirmation dialog + 5s undo snackbar for food log delete.
+  Future<void> _confirmAndDeleteFoodLog(String logId) async {
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(logId);
+    if (raw == null) return;
+    final stashed = Map<String, dynamic>.from(raw as Map);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete this meal?',
+          style: GoogleFonts.getFont('DM Sans',
+              fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+        ),
+        content: Text(
+          "This will remove it from today's totals. You'll have 5 seconds to undo.",
+          style: GoogleFonts.getFont('DM Sans',
+              fontSize: 13, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Delete',
+                style: GoogleFonts.getFont('DM Sans',
+                    fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(foodLogProvider.notifier).deleteFoodLog(logId);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Meal deleted'),
+        backgroundColor: AppColors.card,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppColors.accent,
+          onPressed: () {
+            ref.read(foodLogProvider.notifier).restoreFoodLog(stashed);
+          },
         ),
       ),
     );
