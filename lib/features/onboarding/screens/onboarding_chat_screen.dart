@@ -958,6 +958,8 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         return 'Target Weight';
       case 'primary_goal':
         return 'Goal';
+      case 'pace_preference': // Bug #24
+        return 'Pace';
       case 'fitness_experience':
         return 'Experience';
       case 'days_per_week':

@@ -72,6 +72,15 @@ const List<OnboardingStep> onboardingSteps = [
     inputType: OnboardingInputType.chips,
     options: ['build_muscle', 'lose_fat', 'general_fitness', 'strength'],
   ),
+  // Bug #24 — pace picker immediately after primary_goal so "what + how fast"
+  // are grouped as one decision. Default 'balanced' if user skips forward.
+  OnboardingStep(
+    key: 'pace_preference',
+    question:
+        "How fast do you want to get there? Slow is easiest to stick with. Balanced is the evidence-based standard. Aggressive pushes near the upper safe limit.",
+    inputType: OnboardingInputType.chips,
+    options: ['slow', 'balanced', 'aggressive'],
+  ),
   OnboardingStep(
     key: 'fitness_experience',
     question: "How would you describe your fitness experience?",
@@ -298,6 +307,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'current_weight_kg': currentWeightKg,
         'target_weight_kg': targetWeightKg,
         'primary_goal': primaryGoal,
+        'pace_preference': (a['pace_preference'] as String?) ?? 'balanced', // Bug #24
         'fitness_experience': fitnessExperience,
         'days_per_week': daysPerWeek,
         'equipment_access': equipmentAccess,
