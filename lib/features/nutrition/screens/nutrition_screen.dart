@@ -712,7 +712,15 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Meal deleted'),
+        content: Text(
+          'Meal deleted',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
         backgroundColor: AppColors.card,
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
