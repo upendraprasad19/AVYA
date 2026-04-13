@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/home_provider.dart';
 import '../widgets/streak_badge.dart';
@@ -62,11 +63,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Check if a streak freeze was just consumed and notify the user
       _checkStreakFreezeUsed();
     });
-    // After background sync completes (~5s), re-read step data from Hive.
-    // HealthSyncService writes steps asynchronously — this ensures the UI
-    // picks up the data once it's available.
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) ref.invalidate(todayStepsProvider);
+    // Wait for background health sync to finish, then refresh step/weight
+    // providers. This replaces the old fixed 5-second delay which was a
+    // race condition — health sync could take longer than 5s or finish
+    // much sooner. The future completes as soon as Health Connect data
+    // has been written to Hive (or immediately if sync is disabled).
+    SyncService.instance.healthSyncDone.then((_) {
+      if (mounted) {
+        ref.invalidate(todayStepsProvider);
+        ref.invalidate(weightHistoryProvider);
+        ref.invalidate(todayWeightLoggedProvider);
+      }
     });
   }
 
@@ -416,10 +423,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final waterMl = ref.watch(waterIntakeProvider);
     final weightLogged = ref.watch(todayWeightLoggedProvider);
 
-    // Workout: only mark done when the user actually completed it.
-    // Rest days stay idle — showing green on a rest day is misleading.
+    // Workout: mark done when completed, rest-day when rest, idle otherwise.
     final workoutStatus = schedule?['status'] as String? ?? 'planned';
+    final workoutType = schedule?['type'] as String? ?? 'rest';
     final workoutDone = workoutStatus == 'completed';
+    final isRestDay = workoutType != 'workout' && workoutType != 'custom_template';
 
     // Meals: both calories AND protein must hit target
     final proteinProgress = nutrition.proteinTarget > 0
@@ -444,7 +452,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Workout',
             state: workoutDone
                 ? QuickActionState.completed
-                : QuickActionState.idle,
+                : isRestDay
+                    ? QuickActionState.restDay
+                    : QuickActionState.idle,
             onTap: () => context.go('/train'),
           ),
           const SizedBox(width: 7),
@@ -533,6 +543,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final exercises = schedule?['exercises'] as List? ?? [];
     final week = schedule?['week'] as int? ?? 1;
 
+    // Read current phase dynamically from progress (never hardcode phase number)
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final currentPhase = (progress['current_phase'] as int?) ?? 1;
+
     if (isRestDay) {
       return TodayWorkoutCard(
         workoutTag: 'REST DAY \u00B7 WEEK $week',
@@ -574,7 +588,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
 
       return TodayWorkoutCard(
-        workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE 1',
+        workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE $currentPhase',
         workoutName: workoutName.toUpperCase(),
         durationMin: durationSecs > 0 ? (durationSecs / 60).round() : 0,
         exerciseCount: exercises.length,
@@ -609,7 +623,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final estDuration = totalSets > 0 ? (totalSets * 2.5).round() : 45;
 
     return TodayWorkoutCard(
-      workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE 1',
+      workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE $currentPhase',
       workoutName: workoutName.toUpperCase(),
       durationMin: estDuration,
       exerciseCount: exercises.length,

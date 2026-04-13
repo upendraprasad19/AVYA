@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
@@ -45,7 +46,7 @@ class AiCoachRepository {
       },
       'progress': {
         'current_phase': progress['current_phase'] ?? 1,
-        'current_week': progress['current_week'] ?? 1,
+        'current_week': WorkoutScheduleService.instance.getCurrentWeekNumber(),
         'total_workouts_done': progress['total_workouts_done'] ?? 0,
         'current_streak_weeks': progress['current_streak_weeks'] ?? 0,
         'detected_experience': progress['detected_experience_level'] ??
@@ -283,7 +284,7 @@ class AiCoachRepository {
     final raw = _hive.coachBox.get(key);
     if (raw is! Map) return;
     final entry = Map<String, dynamic>.from(raw);
-    entry['ai_response'] = errorText;
+    entry['ai_response'] = '';
     entry['pending'] = false;
     entry['failed'] = true;
     entry['error_text'] = errorText;

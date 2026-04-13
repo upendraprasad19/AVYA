@@ -304,10 +304,11 @@ class _MainShell extends StatelessWidget {
 // ── Bug #25 — Streetlight nav bar indicator ─────────────────────
 //
 // Custom ShapeBorder painted behind the selected NavigationBar destination.
-// Renders a vertical gradient beam that "shines" from the top edge of the
-// nav bar down toward the icon, fading to transparent. Zero pill outline —
-// the beam itself is the selection cue, backed up by the icon color +
-// label weight change already applied per NavigationDestination.
+// Renders a soft, rounded, translucent glow/aura centered behind the icon.
+// Two-layer radial gradient: outer halo (very faint, larger) + inner core
+// (slightly brighter, compact pill). The result is a gentle luminous spot —
+// NOT a tall rectangular beam. Icon color + label weight change remain as
+// redundant a11y cues.
 class StreetlightBeamShape extends ShapeBorder {
   const StreetlightBeamShape();
 
@@ -318,37 +319,44 @@ class StreetlightBeamShape extends ShapeBorder {
   ShapeBorder scale(double t) => const StreetlightBeamShape();
 
   @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      Path()..addRect(rect);
 
   @override
-  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) =>
+      Path()..addRect(rect);
 
   @override
   void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    // Beam geometry: wider than the default pill (icon + 8dp padding each side
-    // ~= 48dp). Extends vertically to the bottom of the nav bar for the full
-    // "streetlight" silhouette.
-    const beamWidth = 48.0;
-    final beamRect = Rect.fromCenter(
+    // ── Layer 1: Outer halo — very faint, larger oval for the soft glow edge
+    final outerRect = Rect.fromCenter(
       center: rect.center,
-      width: beamWidth,
-      height: rect.height,
+      width: 64,
+      height: 36,
     );
+    final outerGradient = const RadialGradient(
+      colors: [
+        Color(0x1800D4FF), // ~9% opacity at center
+        Color(0x0000D4FF), // transparent at edge
+      ],
+    ).createShader(outerRect);
+    canvas.drawOval(outerRect, Paint()..shader = outerGradient);
 
-    final gradient = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xE500D4FF), Color(0x0000D4FF)],
-    ).createShader(beamRect);
-
-    final rrect = RRect.fromRectAndCorners(
-      beamRect,
-      topLeft: Radius.zero,
-      topRight: Radius.zero,
-      bottomLeft: const Radius.circular(12),
-      bottomRight: const Radius.circular(12),
+    // ── Layer 2: Inner core — compact pill, slightly brighter center
+    final innerRect = Rect.fromCenter(
+      center: rect.center,
+      width: 48,
+      height: 28,
     );
-
-    canvas.drawRRect(rrect, Paint()..shader = gradient);
+    final innerGradient = const RadialGradient(
+      colors: [
+        Color(0x2E00D4FF), // ~18% opacity at center
+        Color(0x0800D4FF), // ~3% opacity at edge
+      ],
+    ).createShader(innerRect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(innerRect, const Radius.circular(14)),
+      Paint()..shader = innerGradient,
+    );
   }
 }

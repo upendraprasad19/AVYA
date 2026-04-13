@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -91,6 +92,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // user backgrounds and resumes within the same day.
     if (mounted) {
       await DayRolloverObserver.instance.runRolloverNow(ref);
+    }
+
+    // Sync health data (steps, weight) from Health Connect / HealthKit into
+    // Hive BEFORE navigating to home. This ensures the first paint shows
+    // today's step count and any weight logged via a health wearable.
+    // Non-fatal — health sync failure should never block app launch.
+    if (!kIsWeb && HealthSyncService.isEnabled()) {
+      try {
+        await HealthSyncService.instance.syncToHive();
+      } catch (_) {
+        // Health sync is best-effort; log but don't block navigation.
+      }
     }
 
     // Refresh AI coach context immediately so the next coach query reflects

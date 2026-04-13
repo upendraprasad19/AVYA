@@ -40,16 +40,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   }
 
   /// Bug #15b — Resolves which exercise card should be expanded right now.
-  /// Manual focus wins, but only while it points to a still-incomplete
-  /// exercise. Otherwise we fall back to the first non-done exercise from the
-  /// start of the list (NOT from focused+1) so that any earlier skipped
-  /// exercise gets surfaced again on completion.
+  /// Manual focus wins unconditionally (including Done exercises, so the user
+  /// can tap back to review/edit logged values). When no manual override is
+  /// set we fall back to the first non-done exercise from the start of the
+  /// list (NOT from focused+1) so that any earlier skipped exercise gets
+  /// surfaced again on completion.
   int _effectiveFocusedIndex(ActiveWorkoutData data) {
     final manual = _focusedExerciseIndex;
     if (manual != null &&
         manual >= 0 &&
-        manual < data.exercises.length &&
-        !data.isExerciseDone(manual)) {
+        manual < data.exercises.length) {
       return manual;
     }
     for (int i = 0; i < data.exercises.length; i++) {
@@ -322,17 +322,27 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                   .read(activeWorkoutProvider.notifier)
                                   .toggleSet(exIdx, setIdx);
 
-                              // If checking (not unchecking), smart-scroll to superset partner
+                              // If checking (not unchecking) and the exercise
+                              // just became Done, clear manual focus so
+                              // auto-advance picks the next non-done exercise.
                               if (!wasChecked) {
                                 final updatedData = ref.read(activeWorkoutProvider);
-                                if (updatedData.isExerciseDone(exIdx) && isInSuperset) {
-                                  final partners = updatedData.getSupersetPartners(exIdx);
-                                  for (final partnerIdx in partners) {
-                                    if (!updatedData.isExerciseDone(partnerIdx)) {
-                                      Future.delayed(const Duration(milliseconds: 200), () {
-                                        _scrollToExercise(partnerIdx);
-                                      });
-                                      return;
+                                if (updatedData.isExerciseDone(exIdx)) {
+                                  // Clear manual focus → auto-advance to next
+                                  setState(() {
+                                    _focusedExerciseIndex = null;
+                                  });
+
+                                  // Smart-scroll to superset partner if applicable
+                                  if (isInSuperset) {
+                                    final partners = updatedData.getSupersetPartners(exIdx);
+                                    for (final partnerIdx in partners) {
+                                      if (!updatedData.isExerciseDone(partnerIdx)) {
+                                        Future.delayed(const Duration(milliseconds: 200), () {
+                                          _scrollToExercise(partnerIdx);
+                                        });
+                                        return;
+                                      }
                                     }
                                   }
                                 }
@@ -868,6 +878,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         onDelete: canDelete
             ? () => ref.read(activeWorkoutProvider.notifier).removeExercise(exerciseIndex)
             : null,
+        onAdd: (addEx) {
+          // Sentinel value '__ADD_MODE__' means user tapped the "+ Add Exercise"
+          // button — open the full exercise picker sheet for appending.
+          if (addEx.name == '__ADD_MODE__') {
+            _showExercisePickerSheet(context, ref);
+          }
+        },
       ),
     );
   }
@@ -1526,29 +1543,46 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                         color: AppColors.textSecondary,
                                       ),
                                     ),
+                                    // Bug #6 — hint when reviewing a completed exercise
+                                    if (widget.isDone && widget.isExpanded)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          'Tap to edit values',
+                                          style: GoogleFonts.getFont(
+                                            'DM Sans',
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w400,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
 
                               // Swap or Done badge
                               if (widget.isDone)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 9, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.green.withValues(alpha: 0.1),
-                                    border: Border.all(
-                                      color: AppColors.green.withValues(alpha: 0.25),
+                                GestureDetector(
+                                  onTap: widget.onFocus,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 9, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.green.withValues(alpha: 0.1),
+                                      border: Border.all(
+                                        color: AppColors.green.withValues(alpha: 0.25),
+                                      ),
+                                      borderRadius: BorderRadius.circular(7),
                                     ),
-                                    borderRadius: BorderRadius.circular(7),
-                                  ),
-                                  child: Text(
-                                    '\u2713 Done',
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.green,
+                                    child: Text(
+                                      '\u2713 Done',
+                                      style: GoogleFonts.getFont(
+                                        'DM Sans',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.green,
+                                      ),
                                     ),
                                   ),
                                 )

@@ -176,7 +176,7 @@ class ExerciseRepository {
     for (final raw in customBox.values) {
       if (raw is! Map) continue;
       final ex = Map<String, dynamic>.from(raw);
-      if (ex['type'] == 'exercise' || ex['name'] != null) {
+      if (ex['type'] == 'exercise') {
         results.add(ex);
       }
     }

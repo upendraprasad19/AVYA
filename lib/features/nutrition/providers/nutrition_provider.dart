@@ -977,6 +977,7 @@ class CustomFoodNotifier extends Notifier<void> {
       'carbs_std': (carbsPer100g * factor).round(),
       'fat_std': (fatPer100g * factor).round(),
       'times_logged': 0,
+      'type': 'food',
       'is_custom': true,
       'submitted_to_db': submittedToDb,
       'approved': false,

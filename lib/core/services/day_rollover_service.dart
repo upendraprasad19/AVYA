@@ -13,6 +13,12 @@ import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dar
 // ── AI Coach daily providers ──
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 
+// ── Train providers (workout plan, stats) ──
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
+
+// ── Profile providers (biometrics from health sync) ──
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+
 /// Observes app lifecycle and invalidates all daily-scoped providers
 /// when the calendar date changes (midnight rollover).
 ///
@@ -112,26 +118,37 @@ class DayRolloverObserver with WidgetsBindingObserver {
     final ref = _ref;
     if (ref == null) return;
 
-    // Home screen providers
+    // ── Workout providers ──
+    ref.invalidate(currentPlanProvider);
+    ref.invalidate(todayWorkoutProvider);
+    ref.invalidate(calendarWeekProvider);
+    ref.invalidate(workoutStatsProvider);
+    ref.invalidate(streakProvider);
+    ref.invalidate(allExercisePRsProvider);
+
+    // ── Nutrition providers ──
     ref.invalidate(nutritionSummaryProvider);
     ref.invalidate(recentFoodLogsProvider);
-    ref.invalidate(todayStepsProvider);
-    ref.invalidate(todayWorkoutProvider);
-    ref.invalidate(streakProvider);
-    ref.invalidate(calendarWeekProvider);
-    ref.invalidate(todayWeightLoggedProvider);
-
-    // Nutrition providers
-    ref.invalidate(waterIntakeProvider);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(selectedDateProvider); // reset to today
+    ref.invalidate(waterIntakeProvider);
+
+    // ── Health providers ──
+    ref.invalidate(todayStepsProvider);
+    ref.invalidate(todayWeightLoggedProvider);
+    ref.invalidate(biometricProvider);
+
+    // ── AI providers ──
+    ref.invalidate(aiInsightProvider);
+    ref.invalidate(predictionProvider);
+    ref.invalidate(messageLimitProvider);
+    ref.invalidate(trialInfoProvider);
+
+    // ── Misc daily providers ──
+    ref.invalidate(dailyQuoteProvider);
     ref.invalidate(aiTextLogRemainingProvider);
     ref.invalidate(scanMealRemainingProvider);
     ref.invalidate(cartAuditorRemainingProvider);
-
-    // AI Coach daily limits
-    ref.invalidate(messageLimitProvider);
-    ref.invalidate(trialInfoProvider);
 
     debugPrint('[DayRollover] All daily providers invalidated.');
   }

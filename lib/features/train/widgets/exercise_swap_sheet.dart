@@ -4,14 +4,18 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import '../providers/train_provider.dart';
 
-/// Bottom sheet for swapping an exercise.
-/// Reads from Hive exerciseBox, filtered by same category + equipment.
+/// Bottom sheet for swapping an exercise or adding a new one.
+/// Reads from Hive exerciseBox, with category filter chips and search.
 class ExerciseSwapSheet extends StatefulWidget {
   final String currentExerciseName;
   final String? category;
   final List<String>? equipment;
   final ValueChanged<SwapExerciseData> onSelect;
   final VoidCallback? onDelete;
+
+  /// Called when the user taps "+ Add Exercise" to append (not replace).
+  /// Receives the same [SwapExerciseData] as [onSelect].
+  final ValueChanged<SwapExerciseData>? onAdd;
 
   const ExerciseSwapSheet({
     super.key,
@@ -20,6 +24,7 @@ class ExerciseSwapSheet extends StatefulWidget {
     this.category,
     this.equipment,
     this.onDelete,
+    this.onAdd,
   });
 
   @override
@@ -28,34 +33,45 @@ class ExerciseSwapSheet extends StatefulWidget {
 
 class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
   String _searchQuery = '';
-  late List<Map<String, dynamic>> _libraryExercises;
+  String _selectedCategory = '';
+  late List<Map<String, dynamic>> _allLibraryExercises;
   late List<Map<String, dynamic>> _customExercises;
+
+  static const _categoryChips = [
+    'All',
+    'Push',
+    'Pull',
+    'Legs',
+    'Core',
+    'Cardio',
+    'Flexibility',
+  ];
 
   @override
   void initState() {
     super.initState();
+    // Pre-select the current day's category if it matches a chip, otherwise "All"
+    if (widget.category != null &&
+        _categoryChips
+            .map((c) => c.toLowerCase())
+            .contains(widget.category!.toLowerCase())) {
+      _selectedCategory = _categoryChips.firstWhere(
+        (c) => c.toLowerCase() == widget.category!.toLowerCase(),
+        orElse: () => 'All',
+      );
+    } else {
+      _selectedCategory = 'All';
+    }
     _loadExercises();
   }
 
   void _loadExercises() {
     final repo = ExerciseRepository.instance;
-
-    // Filter by category if available
-    if (widget.category != null && widget.category!.isNotEmpty) {
-      _libraryExercises = repo.query(
-        category: widget.category,
-        equipment: widget.equipment,
-        limit: 20,
-      );
-    } else {
-      _libraryExercises = repo.getAll();
-      if (_libraryExercises.length > 20) {
-        _libraryExercises = _libraryExercises.sublist(0, 20);
-      }
-    }
+    // Load ALL library exercises (no category filter — chips handle that)
+    _allLibraryExercises = repo.getAll();
 
     // Remove the current exercise from the list
-    _libraryExercises.removeWhere((e) =>
+    _allLibraryExercises.removeWhere((e) =>
         (e['name'] as String?)?.toLowerCase() ==
         widget.currentExerciseName.toLowerCase());
 
@@ -64,11 +80,25 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
   }
 
   List<Map<String, dynamic>> get _filteredLibrary {
-    if (_searchQuery.isEmpty) return _libraryExercises;
-    final q = _searchQuery.toLowerCase();
-    return _libraryExercises.where((e) {
-      final name = (e['name'] as String?)?.toLowerCase() ?? '';
-      return name.contains(q);
+    if (_searchQuery.isNotEmpty) {
+      // When searching, ignore the chip filter and search across ALL exercises
+      final q = _searchQuery.toLowerCase();
+      return _allLibraryExercises.where((e) {
+        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        if (name.contains(q)) return true;
+        final aliases = e['name_aliases'];
+        if (aliases is List) {
+          return aliases
+              .any((a) => a.toString().toLowerCase().contains(q));
+        }
+        return false;
+      }).toList();
+    }
+    // No search — apply category chip filter
+    if (_selectedCategory == 'All') return _allLibraryExercises;
+    return _allLibraryExercises.where((e) {
+      final cat = (e['category'] as String?)?.toLowerCase() ?? '';
+      return cat == _selectedCategory.toLowerCase();
     }).toList();
   }
 
@@ -110,7 +140,7 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
             ),
           ),
 
-          // Header
+          // Header row with title + optional Add Exercise button
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
             child: Row(
@@ -126,6 +156,18 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                     ),
                   ),
                 ),
+                if (widget.onAdd != null) ...[
+                  GestureDetector(
+                    onTap: () {
+                      // Use same sheet but in "add" mode —
+                      // show picker, and when user selects, call onAdd
+                      setState(() {
+                        // Switch to "add" mode visually (handled via _isAddMode)
+                      });
+                    },
+                    child: const SizedBox.shrink(),
+                  ),
+                ],
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(),
                   child: Container(
@@ -151,6 +193,46 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
               ],
             ),
           ),
+
+          // "+ Add Exercise" button (when onAdd callback is provided)
+          if (widget.onAdd != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+              child: GestureDetector(
+                onTap: () {
+                  // Pop this sheet, then the parent will show the same picker
+                  // in "add" mode. We use a special sentinel to signal this.
+                  Navigator.of(context).pop();
+                  widget.onAdd!(const SwapExerciseData(
+                    name: '__ADD_MODE__',
+                    detail: '',
+                  ));
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.08),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.25),
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '\uff0b Add Exercise',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // Delete button
           if (widget.onDelete != null)
             Padding(
@@ -219,6 +301,46 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
             ),
           ),
 
+          // Category filter chips
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              itemCount: _categoryChips.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final chip = _categoryChips[i];
+                final isActive = chip == _selectedCategory;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = chip),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color:
+                          isActive ? AppColors.accent : const Color(0xFF161d28),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      chip,
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isActive
+                            ? Colors.black
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
           // Scrollable list
           Flexible(
             child: ListView(
@@ -229,9 +351,11 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
                   child: Text(
-                    widget.category != null
-                        ? 'LIBRARY \u00b7 ${widget.category!.toUpperCase()}'
-                        : 'LIBRARY \u00b7 ALL EXERCISES',
+                    _searchQuery.isNotEmpty
+                        ? 'RESULTS \u00b7 ALL CATEGORIES'
+                        : _selectedCategory == 'All'
+                            ? 'LIBRARY \u00b7 ALL EXERCISES'
+                            : 'LIBRARY \u00b7 ${_selectedCategory.toUpperCase()}',
                     style: GoogleFonts.getFont(
                       'DM Sans',
                       fontSize: 9,

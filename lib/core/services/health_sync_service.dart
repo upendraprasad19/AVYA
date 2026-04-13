@@ -14,6 +14,11 @@ class HealthSyncService {
   Health? _health;
   bool _permissionsGranted = false;
 
+  /// Whether the last [syncToHive] call wrote new step/weight data.
+  /// Checked by callers that need to invalidate UI providers afterward.
+  bool get lastSyncWroteData => _lastSyncWroteData;
+  bool _lastSyncWroteData = false;
+
   /// Supported data types to read from Health Connect / HealthKit.
   static const _types = [
     HealthDataType.STEPS,
@@ -22,34 +27,67 @@ class HealthSyncService {
 
   static final _permissions = _types.map((_) => HealthDataAccess.READ).toList();
 
+  /// Ensure the Health plugin is configured. Safe to call multiple times.
+  /// On cold start, [_health] is null — this re-creates and configures it
+  /// without re-triggering the permission dialog.
+  void _ensureConfigured() {
+    if (_health != null) return;
+    _health = Health();
+    _health!.configure();
+    debugPrint('[HealthSync] Health plugin configured');
+  }
+
   /// Request Health Connect / HealthKit permissions.
   /// Returns true if all requested permissions are granted.
   Future<bool> requestPermissions() async {
     try {
-      _health = Health();
-      _health!.configure();
+      _ensureConfigured();
       _permissionsGranted = await _health!.requestAuthorization(
         _types,
         permissions: _permissions,
       );
-      debugPrint('[HealthSyncService] permissions granted: $_permissionsGranted');
+      debugPrint('[HealthSync] permissions granted: $_permissionsGranted');
       return _permissionsGranted;
     } catch (e) {
-      debugPrint('[HealthSyncService.requestPermissions] $e');
+      debugPrint('[HealthSync] requestPermissions error: $e');
+      return false;
+    }
+  }
+
+  /// Check if permissions were already granted (without showing a dialog).
+  /// Useful on app relaunch to avoid re-prompting the user.
+  Future<bool> _checkPermissionsQuietly() async {
+    try {
+      _ensureConfigured();
+      final hasPerms = await _health!.hasPermissions(
+        _types,
+        permissions: _permissions,
+      );
+      // hasPermissions returns null when the status is unknown (e.g., Health
+      // Connect not installed). Treat null as false.
+      _permissionsGranted = hasPerms == true;
+      debugPrint('[HealthSync] quiet permission check: $_permissionsGranted');
+      return _permissionsGranted;
+    } catch (e) {
+      debugPrint('[HealthSync] quiet permission check error: $e');
       return false;
     }
   }
 
   /// Fetch total steps for today from Health Connect.
   Future<int?> fetchStepsToday() async {
-    if (_health == null || !_permissionsGranted) return null;
+    if (_health == null || !_permissionsGranted) {
+      debugPrint('[HealthSync] fetchStepsToday skipped: health=${_health != null}, perms=$_permissionsGranted');
+      return null;
+    }
     try {
       final now = DateTime.now();
       final midnight = DateTime(now.year, now.month, now.day);
       final steps = await _health!.getTotalStepsInInterval(midnight, now);
+      debugPrint('[HealthSync] fetchStepsToday: $steps (midnight=$midnight, now=$now)');
       return steps;
     } catch (e) {
-      debugPrint('[HealthSyncService.fetchStepsToday] $e');
+      debugPrint('[HealthSync] fetchStepsToday error: $e');
       return null;
     }
   }
@@ -77,17 +115,33 @@ class HealthSyncService {
       }
       return null;
     } catch (e) {
-      debugPrint('[HealthSyncService.fetchLatestWeight] $e');
+      debugPrint('[HealthSync] fetchLatestWeight error: $e');
       return null;
     }
   }
 
   /// Fetches all supported health data and writes to Hive healthBox.
   /// Called on app launch (if enabled) and when the toggle is turned on.
+  ///
+  /// On cold launch the singleton fields [_health] and [_permissionsGranted]
+  /// are reset. This method first tries a quiet permission check (no dialog)
+  /// to recover previously-granted access. If that fails it falls back to
+  /// [requestPermissions] which may show the system dialog.
   Future<void> syncToHive() async {
+    _lastSyncWroteData = false;
+
     if (_health == null || !_permissionsGranted) {
-      final granted = await requestPermissions();
-      if (!granted) return;
+      // First try the quiet path (no dialog). On a relaunch where the user
+      // previously granted access, this will succeed silently.
+      final quietOk = await _checkPermissionsQuietly();
+      if (!quietOk) {
+        // Fall back to the full request (may show system dialog).
+        final granted = await requestPermissions();
+        if (!granted) {
+          debugPrint('[HealthSync] syncToHive aborted: permissions not granted');
+          return;
+        }
+      }
     }
 
     final hive = HiveService.instance;
@@ -110,7 +164,10 @@ class HealthSyncService {
       // Also keep legacy keys for backward compatibility
       await hive.healthBox.put('steps_today', steps);
       await hive.healthBox.put('steps_date', todayStr);
-      debugPrint('[HealthSyncService] synced steps: $steps');
+      _lastSyncWroteData = true;
+      debugPrint('[HealthSync] synced steps: $steps for $todayStr');
+    } else {
+      debugPrint('[HealthSync] no steps data returned from Health Connect');
     }
 
     // ── Weight ───────────────────────────────────────────────
@@ -118,7 +175,8 @@ class HealthSyncService {
     if (weight != null) {
       final weightKey = 'weight_$todayStr';
       // Only write if no manual entry exists for today
-      if (hive.healthBox.get(weightKey) == null) {
+      final existing = hive.healthBox.get(weightKey);
+      if (existing == null) {
         await hive.healthBox.put(weightKey, {
           'type': 'weight_log',
           'date': todayStr,
@@ -126,7 +184,10 @@ class HealthSyncService {
           'source': 'health_connect',
           'created_at': now.toIso8601String(),
         });
-        debugPrint('[HealthSyncService] synced weight: $weight kg');
+        _lastSyncWroteData = true;
+        debugPrint('[HealthSync] synced weight: $weight kg for $todayStr');
+      } else {
+        debugPrint('[HealthSync] weight entry already exists for $todayStr, skipping');
       }
     }
   }

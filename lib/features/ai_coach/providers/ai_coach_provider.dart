@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../repositories/ai_coach_repository.dart';
@@ -663,11 +665,13 @@ class PredictionData {
   final String? predictionText;
   final DateTime? generatedAt;
   final bool canRefresh; // PRO can refresh monthly
+  final bool isStale; // Goal changed since last generation (free users)
 
   const PredictionData({
     this.predictionText,
     this.generatedAt,
     this.canRefresh = false,
+    this.isStale = false,
   });
 }
 
@@ -679,18 +683,42 @@ class PredictionNotifier extends Notifier<PredictionData> {
     final predDateRaw = configBox.get('prediction_date') as String?;
     final predDate =
         predDateRaw != null ? DateTime.tryParse(predDateRaw) : null;
+    final isStale = configBox.get('prediction_stale') == true;
+
+    final isPro = SubscriptionService.instance.isPro();
 
     bool canRefresh = false;
-    if (SubscriptionService.instance.isPro() && predDate != null) {
+    if (isPro && predDate != null) {
       final daysSince = DateTime.now().difference(predDate).inDays;
       canRefresh = daysSince >= 30;
+    }
+
+    // Monthly auto-refresh for PRO: if prediction is >30 days old, trigger
+    // regeneration in a post-frame callback so the UI renders first.
+    final genAtRaw = configBox.get('prediction_generated_at') as String?;
+    final genAt = genAtRaw != null ? DateTime.tryParse(genAtRaw) : predDate;
+    if (isPro && genAt != null) {
+      final daysSinceGen = DateTime.now().difference(genAt).inDays;
+      if (daysSinceGen >= 30) {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _autoRefresh();
+        });
+      }
     }
 
     return PredictionData(
       predictionText: predText,
       generatedAt: predDate,
       canRefresh: canRefresh,
+      isStale: isStale,
     );
+  }
+
+  Future<void> _autoRefresh() async {
+    final success = await PredictionService.instance.regeneratePrediction();
+    if (success) {
+      ref.invalidateSelf();
+    }
   }
 }
 

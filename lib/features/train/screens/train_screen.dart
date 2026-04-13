@@ -15,6 +15,7 @@ import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/train_provider.dart';
 import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
+import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/edit_workout_log_sheet.dart';
 import '../widgets/week_selector.dart';
 import '../widgets/stats_grid.dart';
@@ -201,6 +202,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     // MY TEMPLATES section
                     _buildMyTemplatesSection(context, ref),
+
+                    const SizedBox(height: 20),
+
+                    // CREATE CUSTOM EXERCISE section
+                    _buildCreateCustomExerciseSection(context),
 
                     const SizedBox(height: 20),
                   ],
@@ -1036,12 +1042,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ),
             )
           else ...[
-            // Warm-up section
+            // Warm-up section (collapsed by default)
             if (day.warmup.isNotEmpty) ...[
-              _buildPreviewSectionLabel('WARM-UP', AppColors.orange),
-              ...day.warmup.map((ex) =>
-                  _buildPreviewExerciseRow(ex, null, AppColors.orange)),
-              const SizedBox(height: 6),
+              _CollapsibleExerciseSection(
+                label: 'WARM-UP',
+                color: AppColors.orange,
+                exercises: day.warmup,
+                buildRow: (ex) => _buildPreviewExerciseRow(
+                  ex, null, AppColors.orange,
+                ),
+              ),
+              const SizedBox(height: 8),
               _buildPreviewSectionLabel('WORKOUT', AppColors.accent),
             ],
             // Main exercises
@@ -1050,12 +1061,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               return _buildPreviewExerciseRow(
                   ex, index + 1, AppColors.accent);
             }),
-            // Cool-down section
+            // Cool-down section (collapsed by default)
             if (day.cooldown.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              _buildPreviewSectionLabel('COOL-DOWN', AppColors.blue),
-              ...day.cooldown.map((ex) =>
-                  _buildPreviewExerciseRow(ex, null, AppColors.blue)),
+              const SizedBox(height: 8),
+              _CollapsibleExerciseSection(
+                label: 'COOL-DOWN',
+                color: AppColors.blue,
+                exercises: day.cooldown,
+                buildRow: (ex) => _buildPreviewExerciseRow(
+                  ex, null, AppColors.blue,
+                ),
+              ),
             ],
           ],
           const SizedBox(height: 10),
@@ -2269,6 +2285,89 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ── Create Custom Exercise Section ──────────────────────────────
+
+  Widget _buildCreateCustomExerciseSection(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: GestureDetector(
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (_) => CreateCustomExerciseSheet(
+              onCreated: (exercise) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Exercise created! It\'s now available in all workout pickers.',
+                      style: GoogleFonts.getFont('DM Sans',
+                          fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                    backgroundColor: AppColors.card,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.add_circle_outline,
+                size: 20,
+                color: AppColors.accent,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Create Custom Exercise',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Add your own exercises to use in workouts',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

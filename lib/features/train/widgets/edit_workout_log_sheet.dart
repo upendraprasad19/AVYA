@@ -17,6 +17,10 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 /// flags, invalidates affected providers, and triggers cloud sync +
 /// pushSnapshot so the AI coach sees the correction.
 ///
+/// When `sets_detail` is present in the log (new logs), the sheet renders
+/// individual set rows for per-set editing. For old logs without `sets_detail`,
+/// it falls back to the flattened aggregate view.
+///
 /// This is the **only** edit path for completed workout logs. Entry points:
 ///   - WorkoutReceiptSheet (covers post-completion, Home "View Card",
 ///     calendar day detail)
@@ -86,52 +90,139 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         if (existing is! Map) continue;
         final log = Map<String, dynamic>.from(existing);
 
-        // Parse controller values (parse-or-zero, matches nutrition pattern)
-        final sets = int.tryParse(row.setsCtrl.text) ?? 0;
-        final reps = int.tryParse(row.repsCtrl.text) ?? 0;
-        final weight = double.tryParse(row.weightCtrl.text) ?? 0;
-        final duration = int.tryParse(row.durationCtrl.text) ?? 0;
-        final distance = double.tryParse(row.distanceCtrl.text) ?? 0;
+        if (row.hasPerSetData) {
+          // ── Per-set data path: recompute aggregates from individual sets ──
+          final setsDetail = <Map<String, dynamic>>[];
+          double maxWeight = 0;
+          int totalReps = 0;
+          int totalDuration = 0;
+          double totalDistance = 0;
+          double volumeKg = 0;
+          int bestSingleSetReps = 0;
+          int bestSingleSetDuration = 0;
 
-        // Rebuild the log per logging_type (same shape as completeWorkout).
-        switch (row.loggingType) {
-          case 'weight_reps':
-            log['sets_completed'] = sets;
-            log['reps_completed'] = reps;
-            log['weight_kg'] = weight;
-            log['volume_kg'] = weight * reps;
-            break;
-          case 'bodyweight_reps':
-            log['sets_completed'] = sets;
-            log['reps_completed'] = reps;
-            log['volume_kg'] = 0.0;
-            break;
-          case 'weighted_bodyweight':
-            log['sets_completed'] = sets;
-            log['reps_completed'] = reps;
-            log['weight_kg'] = weight;
-            log['volume_kg'] = weight * reps;
-            break;
-          case 'timed':
-            log['sets_completed'] = sets;
-            log['duration_seconds'] = duration;
-            log['volume_kg'] = 0.0;
-            break;
-          case 'cardio':
-            log['duration_seconds'] = duration;
-            log['distance_km'] = distance;
-            log['volume_kg'] = 0.0;
-            break;
-          case 'distance':
-            log['distance_km'] = distance;
-            log['weight_kg'] = weight;
-            log['volume_kg'] = 0.0;
-            break;
-          default:
-            log['sets_completed'] = sets;
-            log['reps_completed'] = reps;
-            log['weight_kg'] = weight;
-            log['volume_kg'] = weight * reps;
+          for (int i = 0; i < row.setRows.length; i++) {
+            final setRow = row.setRows[i];
+            final reps = int.tryParse(setRow.repsCtrl.text) ?? 0;
+            final weight = double.tryParse(setRow.weightCtrl.text) ?? 0;
+            final duration = int.tryParse(setRow.durationCtrl.text) ?? 0;
+            final distance = double.tryParse(setRow.distanceCtrl.text) ?? 0;
+
+            final setMap = <String, dynamic>{
+              'set_number': i + 1,
+            };
+            if (weight > 0) setMap['weight_kg'] = weight;
+            if (reps > 0) setMap['reps'] = reps;
+            if (duration > 0) setMap['duration_seconds'] = duration;
+            if (distance > 0) setMap['distance_km'] = distance;
+
+            setsDetail.add(setMap);
+
+            // Aggregate
+            if (weight > maxWeight) maxWeight = weight;
+            totalReps += reps;
+            totalDuration += duration;
+            totalDistance += distance;
+            volumeKg += weight * reps;
+            if (reps > bestSingleSetReps) bestSingleSetReps = reps;
+            if (duration > bestSingleSetDuration) {
+              bestSingleSetDuration = duration;
+            }
+          }
+
+          final sets = row.setRows.length;
+
+          // Write aggregates + per-set data
+          switch (row.loggingType) {
+            case 'weight_reps':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = totalReps;
+              log['weight_kg'] = maxWeight;
+              log['volume_kg'] = volumeKg;
+              break;
+            case 'bodyweight_reps':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = totalReps;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'weighted_bodyweight':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = totalReps;
+              log['weight_kg'] = maxWeight;
+              log['volume_kg'] = volumeKg;
+              break;
+            case 'timed':
+              log['sets_completed'] = sets;
+              log['duration_seconds'] = totalDuration;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'cardio':
+              log['duration_seconds'] = totalDuration;
+              log['distance_km'] = totalDistance;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'distance':
+              log['distance_km'] = totalDistance;
+              log['weight_kg'] = maxWeight;
+              log['volume_kg'] = 0.0;
+              break;
+            default:
+              log['sets_completed'] = sets;
+              log['reps_completed'] = totalReps;
+              log['weight_kg'] = maxWeight;
+              log['volume_kg'] = volumeKg;
+          }
+
+          log['sets_detail'] = setsDetail;
+          log['best_single_set_reps'] = bestSingleSetReps;
+          log['best_single_set_duration'] = bestSingleSetDuration;
+        } else {
+          // ── Legacy flattened path (old logs without sets_detail) ──
+          final sets = int.tryParse(row.setsCtrl.text) ?? 0;
+          final reps = int.tryParse(row.repsCtrl.text) ?? 0;
+          final weight = double.tryParse(row.weightCtrl.text) ?? 0;
+          final duration = int.tryParse(row.durationCtrl.text) ?? 0;
+          final distance = double.tryParse(row.distanceCtrl.text) ?? 0;
+
+          switch (row.loggingType) {
+            case 'weight_reps':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = reps;
+              log['weight_kg'] = weight;
+              log['volume_kg'] = weight * reps;
+              break;
+            case 'bodyweight_reps':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = reps;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'weighted_bodyweight':
+              log['sets_completed'] = sets;
+              log['reps_completed'] = reps;
+              log['weight_kg'] = weight;
+              log['volume_kg'] = weight * reps;
+              break;
+            case 'timed':
+              log['sets_completed'] = sets;
+              log['duration_seconds'] = duration;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'cardio':
+              log['duration_seconds'] = duration;
+              log['distance_km'] = distance;
+              log['volume_kg'] = 0.0;
+              break;
+            case 'distance':
+              log['distance_km'] = distance;
+              log['weight_kg'] = weight;
+              log['volume_kg'] = 0.0;
+              break;
+            default:
+              log['sets_completed'] = sets;
+              log['reps_completed'] = reps;
+              log['weight_kg'] = weight;
+              log['volume_kg'] = weight * reps;
+          }
         }
 
         log['edited_at'] = DateTime.now().toIso8601String();
@@ -185,8 +276,10 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   /// Walks every exlog for a given exercise name chronologically and rewrites
   /// the `is_pr` flag. PR rule:
   ///   - `weight_reps` / `weighted_bodyweight`: strict increase in `weight_kg`
-  ///   - `bodyweight_reps`: strict increase in `reps_completed`
-  ///   - `timed`: strict increase in `duration_seconds`
+  ///   - `bodyweight_reps`: strict increase in per-set best reps
+  ///     (reads `best_single_set_reps`, falls back to estimated average)
+  ///   - `timed`: strict increase in per-set best duration
+  ///     (reads `best_single_set_duration`, falls back to estimated average)
   ///   - `cardio` / `distance`: strict increase in `distance_km`
   /// The earliest log with a baseline value is NOT a PR (needs something to
   /// beat). This matches `completeWorkout`'s "must beat prior best" rule.
@@ -227,9 +320,21 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     for (final e in entries) {
       final loggingType = (e.map['logging_type'] as String?) ?? 'weight_reps';
       final weight = (e.map['weight_kg'] as num?)?.toDouble() ?? 0;
-      final reps = (e.map['reps_completed'] as num?)?.toInt() ?? 0;
-      final duration = (e.map['duration_seconds'] as num?)?.toInt() ?? 0;
       final distance = (e.map['distance_km'] as num?)?.toDouble() ?? 0;
+
+      // For reps and duration, use per-set best when available, else estimate
+      final bestReps = (e.map['best_single_set_reps'] as int?) ??
+          (((e.map['reps_completed'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['reps_completed'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
+      final bestDuration = (e.map['best_single_set_duration'] as int?) ??
+          (((e.map['duration_seconds'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['duration_seconds'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
 
       bool isPr = false;
       switch (loggingType) {
@@ -239,14 +344,16 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
           if (weight > runningMaxWeight) runningMaxWeight = weight;
           break;
         case 'bodyweight_reps':
-          if (reps > runningMaxReps && runningMaxReps > 0) isPr = true;
-          if (reps > runningMaxReps) runningMaxReps = reps;
+          if (bestReps > runningMaxReps && runningMaxReps > 0) isPr = true;
+          if (bestReps > runningMaxReps) runningMaxReps = bestReps;
           break;
         case 'timed':
-          if (duration > runningMaxDuration && runningMaxDuration > 0) {
+          if (bestDuration > runningMaxDuration && runningMaxDuration > 0) {
             isPr = true;
           }
-          if (duration > runningMaxDuration) runningMaxDuration = duration;
+          if (bestDuration > runningMaxDuration) {
+            runningMaxDuration = bestDuration;
+          }
           break;
         case 'cardio':
         case 'distance':
@@ -394,10 +501,193 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 10),
-          _buildFieldsForLoggingType(row),
+          if (row.hasPerSetData)
+            _buildPerSetFields(row)
+          else
+            _buildFlattenedFields(row),
         ],
       ),
     );
+  }
+
+  /// Per-set editing: renders a header row + individual set rows.
+  Widget _buildPerSetFields(_ExerciseEditRow row) {
+    return Column(
+      children: [
+        // Header labels
+        _buildSetHeader(row.loggingType),
+        const SizedBox(height: 6),
+        // Individual set rows
+        for (int i = 0; i < row.setRows.length; i++) ...[
+          _buildSetRow(row.setRows[i], i + 1, row.loggingType),
+          if (i < row.setRows.length - 1) const SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSetHeader(String loggingType) {
+    final labels = _fieldsForLoggingType(loggingType);
+    return Padding(
+      padding: const EdgeInsets.only(left: 36),
+      child: Row(
+        children: [
+          for (int i = 0; i < labels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                labels[i],
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Returns the field labels for a given logging type.
+  List<String> _fieldsForLoggingType(String loggingType) {
+    switch (loggingType) {
+      case 'bodyweight_reps':
+        return ['REPS'];
+      case 'weighted_bodyweight':
+        return ['+KG', 'REPS'];
+      case 'timed':
+        return ['SECONDS'];
+      case 'cardio':
+        return ['DURATION (S)', 'DIST (KM)'];
+      case 'distance':
+        return ['DIST (KM)', 'LOAD (KG)'];
+      default: // weight_reps
+        return ['KG', 'REPS'];
+    }
+  }
+
+  Widget _buildSetRow(_SetEditRow setRow, int setNumber, String loggingType) {
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          // Set number badge
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '$setNumber',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Input fields based on logging type
+          ..._buildSetInputFields(setRow, loggingType),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildSetInputFields(_SetEditRow setRow, String loggingType) {
+    switch (loggingType) {
+      case 'bodyweight_reps':
+        return [
+          Expanded(child: _compactField(setRow.repsCtrl)),
+        ];
+      case 'weighted_bodyweight':
+        return [
+          Expanded(child: _compactField(setRow.weightCtrl, allowDecimal: true)),
+          const SizedBox(width: 8),
+          Expanded(child: _compactField(setRow.repsCtrl)),
+        ];
+      case 'timed':
+        return [
+          Expanded(child: _compactField(setRow.durationCtrl)),
+        ];
+      case 'cardio':
+        return [
+          Expanded(child: _compactField(setRow.durationCtrl)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _compactField(setRow.distanceCtrl, allowDecimal: true)),
+        ];
+      case 'distance':
+        return [
+          Expanded(
+              child: _compactField(setRow.distanceCtrl, allowDecimal: true)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _compactField(setRow.weightCtrl, allowDecimal: true)),
+        ];
+      default: // weight_reps
+        return [
+          Expanded(child: _compactField(setRow.weightCtrl, allowDecimal: true)),
+          const SizedBox(width: 8),
+          Expanded(child: _compactField(setRow.repsCtrl)),
+        ];
+    }
+  }
+
+  /// Compact input field for per-set rows — no label, just the value.
+  Widget _compactField(TextEditingController ctrl,
+      {bool allowDecimal = false}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: TextInputType.numberWithOptions(decimal: allowDecimal),
+      inputFormatters: [
+        if (allowDecimal)
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
+        else
+          FilteringTextInputFormatter.digitsOnly,
+      ],
+      textAlign: TextAlign.center,
+      style: GoogleFonts.getFont(
+        'DM Sans',
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textPrimary,
+      ),
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        filled: true,
+        fillColor: AppColors.bg,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  /// Legacy flattened view for old logs without per-set data.
+  Widget _buildFlattenedFields(_ExerciseEditRow row) {
+    return _buildFieldsForLoggingType(row);
   }
 
   Widget _buildFieldsForLoggingType(_ExerciseEditRow row) {
@@ -638,12 +928,61 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 }
 
+/// Per-set controllers for individual set editing.
+class _SetEditRow {
+  final TextEditingController repsCtrl;
+  final TextEditingController weightCtrl;
+  final TextEditingController durationCtrl;
+  final TextEditingController distanceCtrl;
+
+  _SetEditRow({
+    required this.repsCtrl,
+    required this.weightCtrl,
+    required this.durationCtrl,
+    required this.distanceCtrl,
+  });
+
+  factory _SetEditRow.fromSetDetail(Map<String, dynamic> set) {
+    final reps = (set['reps'] as num?)?.toInt() ?? 0;
+    final weight = (set['weight_kg'] as num?)?.toDouble() ?? 0;
+    final duration = (set['duration_seconds'] as num?)?.toInt() ?? 0;
+    final distance = (set['distance_km'] as num?)?.toDouble() ?? 0;
+
+    String fmtDouble(double v) =>
+        v == v.truncateToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+    return _SetEditRow(
+      repsCtrl: TextEditingController(text: reps > 0 ? reps.toString() : ''),
+      weightCtrl:
+          TextEditingController(text: weight > 0 ? fmtDouble(weight) : ''),
+      durationCtrl: TextEditingController(
+          text: duration > 0 ? duration.toString() : ''),
+      distanceCtrl: TextEditingController(
+          text: distance > 0 ? fmtDouble(distance) : ''),
+    );
+  }
+
+  void dispose() {
+    repsCtrl.dispose();
+    weightCtrl.dispose();
+    durationCtrl.dispose();
+    distanceCtrl.dispose();
+  }
+}
+
 /// Carries the original log id + loggingType + controllers for one exlog row.
+/// When `sets_detail` is present, `setRows` is populated and `hasPerSetData`
+/// is true. Otherwise, falls back to aggregate controllers.
 class _ExerciseEditRow {
   final String logId;
   final String exerciseName;
   final String loggingType;
+  final bool hasPerSetData;
 
+  // Per-set rows (populated when sets_detail exists)
+  final List<_SetEditRow> setRows;
+
+  // Legacy aggregate controllers (used when no sets_detail)
   final TextEditingController setsCtrl;
   final TextEditingController repsCtrl;
   final TextEditingController weightCtrl;
@@ -654,6 +993,8 @@ class _ExerciseEditRow {
     required this.logId,
     required this.exerciseName,
     required this.loggingType,
+    required this.hasPerSetData,
+    required this.setRows,
     required this.setsCtrl,
     required this.repsCtrl,
     required this.weightCtrl,
@@ -664,6 +1005,33 @@ class _ExerciseEditRow {
   factory _ExerciseEditRow.fromLog(String logId, Map<String, dynamic> log) {
     final name = (log['exercise_name'] as String?) ?? 'Exercise';
     final type = (log['logging_type'] as String?) ?? 'weight_reps';
+    final setsDetailRaw = log['sets_detail'];
+
+    // Check if per-set data exists and is a non-empty list
+    if (setsDetailRaw is List && setsDetailRaw.isNotEmpty) {
+      final setRows = setsDetailRaw
+          .whereType<Map>()
+          .map((s) => _SetEditRow.fromSetDetail(Map<String, dynamic>.from(s)))
+          .toList();
+
+      if (setRows.isNotEmpty) {
+        return _ExerciseEditRow._(
+          logId: logId,
+          exerciseName: name,
+          loggingType: type,
+          hasPerSetData: true,
+          setRows: setRows,
+          // Aggregate controllers unused but need to be initialized
+          setsCtrl: TextEditingController(),
+          repsCtrl: TextEditingController(),
+          weightCtrl: TextEditingController(),
+          durationCtrl: TextEditingController(),
+          distanceCtrl: TextEditingController(),
+        );
+      }
+    }
+
+    // Fallback: legacy aggregate view
     final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
     final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
     final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
@@ -677,6 +1045,8 @@ class _ExerciseEditRow {
       logId: logId,
       exerciseName: name,
       loggingType: type,
+      hasPerSetData: false,
+      setRows: [],
       setsCtrl: TextEditingController(text: sets > 0 ? sets.toString() : ''),
       repsCtrl: TextEditingController(text: reps > 0 ? reps.toString() : ''),
       weightCtrl:
@@ -689,6 +1059,9 @@ class _ExerciseEditRow {
   }
 
   void dispose() {
+    for (final sr in setRows) {
+      sr.dispose();
+    }
     setsCtrl.dispose();
     repsCtrl.dispose();
     weightCtrl.dispose();

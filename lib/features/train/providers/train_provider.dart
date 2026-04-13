@@ -1155,10 +1155,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final hive = HiveService.instance;
     final now = DateTime.now();
 
-    // PR detection: single-scan cache of exercise → best weight + best reps
+    // PR detection: single-scan cache of exercise → best weight + best per-set reps
     // (O(n) once, then O(1) per exercise).
+    // For reps: use best_single_set_reps when available (new logs), else
+    // estimate per-set average from cumulative reps/sets (old logs).
     final bestWeightMap = <String, double>{};
     final bestRepsMap = <String, int>{};
+    final bestDurationMap = <String, int>{};
     for (final raw in hive.workoutBox.values) {
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
@@ -1167,8 +1170,24 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       if (name.isEmpty) continue;
       final w = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
-      final r = (log['reps_completed'] as int?) ?? 0;
+      // Per-set best reps: prefer stored best, fallback to estimated average
+      final bestSetReps = (log['best_single_set_reps'] as int?);
+      final r = bestSetReps ??
+          (((log['reps_completed'] as int?) ?? 0) > 0 &&
+                  ((log['sets_completed'] as int?) ?? 1) > 0
+              ? ((log['reps_completed'] as int?) ?? 0) ~/
+                  ((log['sets_completed'] as int?) ?? 1)
+              : 0);
       if (r > (bestRepsMap[name] ?? 0)) bestRepsMap[name] = r;
+      // Per-set best duration: prefer stored best, fallback to estimated average
+      final bestSetDur = (log['best_single_set_duration'] as int?);
+      final d = bestSetDur ??
+          (((log['duration_seconds'] as int?) ?? 0) > 0 &&
+                  ((log['sets_completed'] as int?) ?? 1) > 0
+              ? ((log['duration_seconds'] as int?) ?? 0) ~/
+                  ((log['sets_completed'] as int?) ?? 1)
+              : 0);
+      if (d > (bestDurationMap[name] ?? 0)) bestDurationMap[name] = d;
     }
 
     final prDescriptions = <String>[];
@@ -1266,6 +1285,9 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       double volumeKg = 0; // exact per-set volume for receipt reconstruction
       int completedSets = 0;
 
+      // Build per-set detail list for per-set editing + accurate PR detection
+      final setsDetail = <Map<String, dynamic>>[];
+
       for (int s = 0; s < maxSetLog; s++) {
         final key = '$exIdx-$s';
         if (state.checkedSets.containsKey(key)) {
@@ -1284,6 +1306,15 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             totalDistance += vals.distanceKm ?? 0;
             // Accumulate exact per-set volume
             volumeKg += (vals.weight ?? 0) * (vals.reps ?? 0);
+
+            // Capture per-set detail
+            setsDetail.add({
+              'set_number': setsDetail.length + 1,
+              if (vals.weight != null) 'weight_kg': vals.weight,
+              if (vals.reps != null) 'reps': vals.reps,
+              if (vals.durationSeconds != null) 'duration_seconds': vals.durationSeconds,
+              if (vals.distanceKm != null) 'distance_km': vals.distanceKm,
+            });
           }
         }
       }
@@ -1315,6 +1346,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           ? exercise.loggingType
           : 'weight_reps';
 
+      // Compute per-set best values for accurate PR detection on future loads
+      final bestSingleSetReps = setsDetail.fold<int>(0, (max, s) =>
+          ((s['reps'] as int?) ?? 0) > max ? ((s['reps'] as int?) ?? 0) : max);
+      final bestSingleSetDuration = setsDetail.fold<int>(0, (max, s) =>
+          ((s['duration_seconds'] as int?) ?? 0) > max
+              ? ((s['duration_seconds'] as int?) ?? 0)
+              : max);
+
       // Build log map based on logging type
       final logMap = <String, dynamic>{
         'id': logId,
@@ -1326,6 +1365,9 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         'has_warmup_sets': hasWarmUpSets,
         'volume_kg': volumeKg,
         'created_at': now.toIso8601String(),
+        'sets_detail': setsDetail,
+        'best_single_set_reps': bestSingleSetReps,
+        'best_single_set_duration': bestSingleSetDuration,
       };
 
       switch (effectiveLoggingType) {

@@ -14,6 +14,7 @@ class PredictionCard extends StatelessWidget {
   final DateTime? generatedAt;
   final bool isPro;
   final bool canRefresh;
+  final bool isStale;
   final VoidCallback onRefreshTap;
 
   const PredictionCard({
@@ -22,6 +23,7 @@ class PredictionCard extends StatelessWidget {
     this.generatedAt,
     required this.isPro,
     required this.canRefresh,
+    this.isStale = false,
     required this.onRefreshTap,
   });
 
@@ -136,6 +138,39 @@ class PredictionCard extends StatelessWidget {
               ),
             ),
 
+          // Stale prediction badge (free users whose goal changed)
+          if (isStale && hasPrediction) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.proGold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.proGold.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 14, color: AppColors.proGold),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Your goal has changed. Refresh prediction (PRO)',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.proGold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Action buttons
           if (hasPrediction) ...[
             const SizedBox(height: 12),
@@ -174,50 +209,61 @@ class PredictionCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                // Refresh button for PRO
-                if (isPro)
-                  GestureDetector(
-                    onTap: canRefresh ? onRefreshTap : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: canRefresh
-                            ? AppColors.accentTint
-                            : AppColors.textDisabled.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        border: Border.all(
-                          color: canRefresh
-                              ? AppColors.accent.withValues(alpha: 0.3)
-                              : AppColors.border,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.refresh,
-                            size: 13,
-                            color: canRefresh
-                                ? AppColors.accent
-                                : AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            canRefresh ? 'Update' : 'Updated',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: canRefresh
-                                  ? AppColors.accent
-                                  : AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                // Refresh button — PRO: functional, Free: gold PRO indicator
+                GestureDetector(
+                  onTap: isPro
+                      ? (canRefresh ? onRefreshTap : null)
+                      : onRefreshTap, // Free users tap → SnackBar in parent
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isPro
+                          ? (canRefresh
+                              ? AppColors.accentTint
+                              : AppColors.textDisabled.withValues(alpha: 0.3))
+                          : AppColors.proGold.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                        color: isPro
+                            ? (canRefresh
+                                ? AppColors.accent.withValues(alpha: 0.3)
+                                : AppColors.border)
+                            : AppColors.proGold.withValues(alpha: 0.3),
                       ),
                     ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.refresh,
+                          size: 13,
+                          color: isPro
+                              ? (canRefresh
+                                  ? AppColors.accent
+                                  : AppColors.textSecondary)
+                              : AppColors.proGold,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isPro
+                              ? (canRefresh ? 'Update' : 'Updated')
+                              : 'PRO',
+                          style: GoogleFonts.getFont(
+                            'DM Sans',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isPro
+                                ? (canRefresh
+                                    ? AppColors.accent
+                                    : AppColors.textSecondary)
+                                : AppColors.proGold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                ),
               ],
             ),
           ],

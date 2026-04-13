@@ -490,7 +490,7 @@ class AiInsightNotifier extends Notifier<String?> {
       } else if (type == 'workout' || type == 'custom_template') {
         return '$name is scheduled for today — ${exercises.length} exercises. Ready when you are!';
       } else if (type == 'rest') {
-        return 'Rest day today. Recovery is part of the plan 🧘';
+        return 'Rest day! You have earned it! 🎉';
       }
     }
     return 'No workout scheduled for today. A good day for active recovery!';
@@ -509,6 +509,7 @@ class AiInsightNotifier extends Notifier<String?> {
       final interaction = Map<String, dynamic>.from(raw);
       final createdAt = interaction['created_at'] as String? ?? '';
       if (!createdAt.startsWith(todayPrefix)) continue;
+      if (interaction['failed'] == true) continue;
       final response = interaction['ai_response'] as String?;
       if (response != null && createdAt.compareTo(latestDate) > 0) {
         latestDate = createdAt;

@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
@@ -19,6 +20,7 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
 
@@ -36,6 +38,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _weightController;
   late final TextEditingController _targetWeightController;
   late final TextEditingController _cityController;
+  late final TextEditingController _phoneController;
 
   String _gender = 'male';
   String _goal = 'general_fitness';
@@ -55,6 +58,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
+
+  // Track original target weight for prediction invalidation (Bug #12)
+  late double _originalTargetWeight;
 
   static const _goals = {
     'build_muscle': 'Build Muscle',
@@ -106,6 +112,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     _cityController =
         TextEditingController(text: profile['city'] as String? ?? '');
+    _phoneController =
+        TextEditingController(text: profile['phone'] as String? ?? '');
 
     _gender = (profile['gender'] as String?) ?? 'male';
     _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
@@ -131,6 +139,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalDaysPerWeek = _daysPerWeek;
     _originalGoal = _goal;
     _originalEquipment = _equipment;
+    _originalTargetWeight = targetKgRaw ?? 0.0;
   }
 
   @override
@@ -140,6 +149,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _weightController.dispose();
     _targetWeightController.dispose();
     _cityController.dispose();
+    _phoneController.dispose();
     _bodyFatController.dispose();
     super.dispose();
   }
@@ -190,6 +200,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 controller: _nameController,
                 label: 'Full Name',
                 icon: Icons.person,
+              ),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildEmailField(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildTextField(
+                controller: _phoneController,
+                label: 'Phone',
+                icon: Icons.phone,
               ),
               const SizedBox(height: AppSpacing.gridGap),
               _buildGenderSelector(),
@@ -288,6 +306,69 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         letterSpacing: 1.2,
         color: AppColors.textSecondary,
       ),
+    );
+  }
+
+  Widget _buildEmailField() {
+    final email = SupabaseService.instance.currentUser?.email ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(AppRadius.row),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.email_outlined,
+                  color: AppColors.textSecondary, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Email',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email.isNotEmpty ? email : 'Not set',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 14),
+          child: Text(
+            'Used for sign-in',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1191,6 +1272,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'diet_preference': _dietPreference,
         'injuries': _injuries,
         'city': _cityController.text.trim(),
+        'phone': _phoneController.text.trim(),
         if (_bodyFatController.text.isNotEmpty)
           'body_fat_percent': double.tryParse(_bodyFatController.text),
         if (_bodyFatAssessedAt != null)
@@ -1329,6 +1411,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final userId = SupabaseService.instance.currentUser?.id;
       if (userId != null) {
         SyncService.instance.syncProfileNow(userId);
+      }
+
+      // Bug #12: Invalidate/regenerate prediction when target weight changes.
+      final targetWeightChanged =
+          (targetWeight - _originalTargetWeight).abs() > 0.1;
+      if (targetWeightChanged) {
+        final isPro = SubscriptionService.instance.isPro();
+        if (isPro) {
+          // PRO: auto-regenerate prediction with new goal in background.
+          // Don't await — let user proceed while prediction generates.
+          PredictionService.instance.regeneratePrediction().then((success) {
+            if (success && mounted) {
+              ref.invalidate(predictionProvider);
+            }
+          });
+        } else {
+          // FREE: mark cached prediction as stale so UI shows badge.
+          PredictionService.instance.markStale();
+          ref.invalidate(predictionProvider);
+        }
       }
 
       if (mounted) {

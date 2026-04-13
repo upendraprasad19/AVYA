@@ -175,7 +175,17 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
     // Deep mode requires PRO (free users)
     if (reasoningMode == 'deep') {
-      showPaywallSheet(context, feature: 'Deep Analysis');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'PRO feature \u2014 upgrade in Profile \u2192 Subscription',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
@@ -218,8 +228,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // ── Compact Header (avatar + title + mode badge + menu) ──
+                // ── Compact Header (avatar + title + mode tabs + menu) ──
                 _buildCompactHeader(isPro, reasoningMode, channel, telegramConnected),
+
+                // ── Message count indicator ──
+                _buildMessageCountIndicator(isPro, messageCount),
 
                 // ── Trial countdown bar (free users only) ──
                 if (!isPro && trialInfo.isTrialActive)
@@ -373,80 +386,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             ),
           ),
 
-          // Mode badge — tap to toggle Quick / Deep
-          GestureDetector(
-            onTap: () {
-              if (reasoningMode == 'quick') {
-                // Switch to deep — requires PRO
-                SubscriptionService.instance.gate(
-                  AppConstants.featureReasoningTab,
-                  onPro: () => ref
-                      .read(reasoningModeProvider.notifier)
-                      .setMode('deep'),
-                  onFree: () =>
-                      showPaywallSheet(context, feature: 'Deep Analysis'),
-                );
-              } else {
-                ref.read(reasoningModeProvider.notifier).setMode('quick');
-              }
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: reasoningMode == 'deep'
-                    ? AppColors.proGold.withValues(alpha: 0.15)
-                    : AppColors.accentTint,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(
-                  color: reasoningMode == 'deep'
-                      ? AppColors.proGold.withValues(alpha: 0.3)
-                      : AppColors.accent.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    reasoningMode == 'deep' ? '\u{1F9E0}' : '\u{26A1}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    reasoningMode == 'deep' ? 'Deep' : 'Quick',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: reasoningMode == 'deep'
-                          ? AppColors.proGold
-                          : AppColors.accent,
-                    ),
-                  ),
-                  if (reasoningMode == 'deep' && !isPro) ...[
-                    const SizedBox(width: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: AppColors.proGold.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Text(
-                        'PRO',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 7,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.proGold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          // Mode tabs — Chat / PRO
+          _buildModeTabs(isPro, reasoningMode),
           const SizedBox(width: 8),
 
           // Overflow menu — channel switch, telegram, clear, upgrade
@@ -565,6 +506,156 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // MODE TABS — Chat / PRO
+  // ────────────────────────────────────────────────────────────────
+
+  Widget _buildModeTabs(bool isPro, String reasoningMode) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Chat tab
+        GestureDetector(
+          onTap: () {
+            if (reasoningMode != 'quick') {
+              ref.read(reasoningModeProvider.notifier).setMode('quick');
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: reasoningMode == 'quick'
+                  ? AppColors.accentTint
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: reasoningMode == 'quick'
+                    ? AppColors.accent.withValues(alpha: 0.3)
+                    : AppColors.border,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  size: 12,
+                  color: reasoningMode == 'quick'
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Chat',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: reasoningMode == 'quick'
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        // PRO tab
+        GestureDetector(
+          onTap: () {
+            if (isPro) {
+              // PRO users can toggle freely
+              if (reasoningMode == 'quick') {
+                ref.read(reasoningModeProvider.notifier).setMode('deep');
+              } else {
+                ref.read(reasoningModeProvider.notifier).setMode('quick');
+              }
+            } else {
+              // Free users see a message instead of paywall
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'PRO feature \u2014 upgrade in Profile \u2192 Subscription',
+                    style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                  ),
+                  backgroundColor: AppColors.card,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: reasoningMode == 'deep'
+                  ? (isPro
+                      ? AppColors.accentTint
+                      : AppColors.proGold.withValues(alpha: 0.15))
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: reasoningMode == 'deep'
+                    ? (isPro
+                        ? AppColors.accent.withValues(alpha: 0.3)
+                        : AppColors.proGold.withValues(alpha: 0.3))
+                    : AppColors.border,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPro ? Icons.verified : Icons.lock,
+                  size: 14,
+                  color: isPro ? AppColors.accent : AppColors.proGold,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'PRO',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: isPro ? AppColors.accent : AppColors.proGold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // MESSAGE COUNT INDICATOR — below header
+  // ────────────────────────────────────────────────────────────────
+
+  Widget _buildMessageCountIndicator(bool isPro, int messageCount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      color: AppColors.bg,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            isPro
+                ? 'Unlimited'
+                : '$messageCount/${AppConstants.freeAiMessagesPerDay} messages today',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),

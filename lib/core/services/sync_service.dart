@@ -46,6 +46,17 @@ class SyncService {
   /// Active realtime subscription (PRO only, for Telegram cross-channel).
   StreamSubscription? _realtimeSubscription;
 
+  /// Completes when health sync finishes (or immediately if disabled).
+  /// The home screen awaits this to invalidate [todayStepsProvider] at
+  /// exactly the right moment instead of guessing with a fixed delay.
+  Completer<void>? _healthSyncCompleter;
+
+  /// Returns a Future that completes when the current health sync pass
+  /// finishes writing to Hive. Returns an already-completed future when
+  /// no sync is in progress or health sync is disabled.
+  Future<void> get healthSyncDone =>
+      _healthSyncCompleter?.future ?? Future.value();
+
   /// Called on every app launch. Determines what needs syncing and
   /// triggers the appropriate operations in the background.
   ///
@@ -56,6 +67,22 @@ class SyncService {
 
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
+
+      // ── Health sync FIRST — steps/weight are fast local reads from
+      // Health Connect and the user expects to see them immediately on
+      // the home screen. All other sync tasks (restore, full sync,
+      // snapshot push) are slower and can follow afterward.
+      _healthSyncCompleter = Completer<void>();
+      if (HealthSyncService.isEnabled()) {
+        try {
+          await HealthSyncService.instance.syncToHive();
+          debugPrint('[SyncService.checkAndSync] Health sync completed '
+              '(wroteData=${HealthSyncService.instance.lastSyncWroteData})');
+        } catch (e) {
+          debugPrint('[SyncService.checkAndSync] Health sync failed: $e');
+        }
+      }
+      _healthSyncCompleter!.complete();
 
       // On reinstall / new device: if Hive workout data is empty,
       // pull everything from Supabase first.
@@ -90,21 +117,17 @@ class SyncService {
       // Pull approved community foods/exercises.
       await syncCommunityItems();
 
-      // Sync health data (Google Fit / Health Connect) if enabled
-      if (HealthSyncService.isEnabled()) {
-        try {
-          await HealthSyncService.instance.syncToHive();
-        } catch (e) {
-          debugPrint('[SyncService.checkAndSync] Health sync failed: $e');
-        }
-      }
-
       // PRO users: subscribe to realtime for instant Telegram sync.
       if (SubscriptionService.instance.isPro()) {
         subscribeToRealtimeSync();
       }
     } catch (e) {
       // Offline or error — silently skip.
+      // Ensure the health sync completer is resolved even on early failure
+      // so the home screen doesn't hang.
+      if (_healthSyncCompleter != null && !_healthSyncCompleter!.isCompleted) {
+        _healthSyncCompleter!.complete();
+      }
       debugPrint('[SyncService.checkAndSync] $e');
     }
   }

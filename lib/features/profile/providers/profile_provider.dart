@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -280,7 +281,7 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
       currentStreak:
           (progress['current_streak_weeks'] as int?) ?? 0,
       currentPhase: (progress['current_phase'] as int?) ?? 1,
-      currentWeek: (progress['current_week'] as int?) ?? 1,
+      currentWeek: WorkoutScheduleService.instance.getCurrentWeekNumber(),
       primaryGoal:
           (profile['primary_goal'] as String?) ?? 'Not set',
       isPro: SubscriptionService.instance.isPro(),

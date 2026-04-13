@@ -370,12 +370,21 @@ class WorkoutRepository {
           value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
           break;
         case 'bodyweight_reps':
-          value = (log['reps_completed'] as num?)?.toDouble() ?? 0;
+          // Use per-set best reps (not cumulative). Fallback: estimate average for old logs.
+          value = (log['best_single_set_reps'] as num?)?.toDouble() ??
+              (((log['reps_completed'] as num?)?.toDouble() ?? 0) /
+                  ((log['sets_completed'] as num?)?.toDouble() ?? 1)
+                      .clamp(1, 999));
           break;
         case 'timed':
-          value = (log['duration_seconds'] as num?)?.toDouble() ?? 0;
+          // Use per-set best duration (not cumulative). Fallback: estimate average for old logs.
+          value = (log['best_single_set_duration'] as num?)?.toDouble() ??
+              (((log['duration_seconds'] as num?)?.toDouble() ?? 0) /
+                  ((log['sets_completed'] as num?)?.toDouble() ?? 1)
+                      .clamp(1, 999));
           break;
         case 'cardio':
+          // Cardio: keep cumulative — total distance IS the meaningful metric
           final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
           final dur = (log['duration_seconds'] as num?)?.toDouble() ?? 0;
           value = dist > 0 ? dist : dur;

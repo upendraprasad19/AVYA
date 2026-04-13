@@ -12,9 +12,11 @@ import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/badge_service.dart';
+import 'package:icanbefitter/shared/models/achievement_badge.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -96,10 +98,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   /// PRO monthly prediction refresh — calls AI via the prediction route
   /// (bypasses daily limits + interaction logging). Moved from home_screen.dart.
+  /// Now delegates to PredictionService for shared logic.
   Future<void> _refreshPrediction() async {
-    final profile = UserRepository.instance.getProfile();
-    final progress = UserRepository.instance.getProgress();
-    if (profile == null) return;
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
@@ -111,52 +112,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       duration: const Duration(seconds: 10),
     ));
 
-    try {
-      final name = profile['full_name'] ?? 'User';
-      final weight = profile['current_weight_kg'] ?? '?';
-      final target = profile['target_weight_kg'] ?? '?';
-      final goal = profile['primary_goal'] ?? 'general_fitness';
-      final workoutsDone = progress?['total_workouts_done'] ?? 0;
-      final streakDays = progress?['current_streak_days'] ?? 0;
+    final success =
+        await PredictionService.instance.regeneratePrediction();
 
-      final prompt = '''Predict realistic 12-week fitness outcomes.
-
-Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
-
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
-• Weight: current → 4wk → 8wk → 12wk
-• Body fat estimate change
-• Key lift projections
-• One motivational line''';
-
-      final aiContext = {
-        'system_prompt':
-            'You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.',
-      };
-
-      final response = await AiService.instance.predict(prompt, aiContext);
-      if (response.reply.isNotEmpty) {
-        final configBox = HiveService.instance.configBox;
-        await configBox.put('prediction_text', response.reply);
-        await configBox.put('prediction_date', DateTime.now().toIso8601String());
-        if (mounted) {
-          ref.invalidate(predictionProvider);
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-              'Prediction updated!',
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            backgroundColor: AppColors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-          ));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (success) {
+        ref.invalidate(predictionProvider);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Prediction updated!',
+            style: GoogleFonts.getFont('DM Sans',
+                fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: AppColors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ));
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             'Could not refresh prediction. Please try again later.',
@@ -431,12 +404,22 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
               _buildDailyCompletion(stats),
               const SizedBox(height: 8),
 
+              // Bug #15 — Collapsible achievements section (after Daily Completion)
+              const _CollapsibleBadgesSection(),
+              const SizedBox(height: 8),
+
               // #3 Body Stats card
               _buildBodyStats(weightKg, targetKg, bmi, bodyFatPct),
               const SizedBox(height: 8),
 
-              // #4 Journey timeline
-              _buildJourneyTimeline(stats),
+              // #4 Journey timeline — pass profile data to avoid
+              // duplicate UserRepository reads (single source of truth).
+              _buildJourneyTimeline(
+                stats,
+                currentWeightKg: weightKg,
+                targetWeightKg: targetKg,
+                goal: stats.primaryGoal,
+              ),
               const SizedBox(height: 8),
 
               // #8 Nutrition Targets
@@ -807,7 +790,12 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
 
   // ── #4 Journey Timeline ─────────────────────────────────────────
 
-  Widget _buildJourneyTimeline(UserStatsData stats) {
+  Widget _buildJourneyTimeline(
+    UserStatsData stats, {
+    required double? currentWeightKg,
+    required double? targetWeightKg,
+    required String goal,
+  }) {
     // Phase data
     const phaseNames = [
       'Foundation', 'Building', 'Progression', 'Strength',
@@ -818,11 +806,9 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         ? phaseNames[stats.currentPhase - 1]
         : 'Phase ${stats.currentPhase}';
 
-    // Goal insights from profile
-    final profile = UserRepository.instance.getProfile() ?? {};
-    final currentWeight = (profile['current_weight_kg'] as num?)?.toDouble() ?? 0;
-    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble() ?? 0;
-    final goal = profile['primary_goal'] as String? ?? '';
+    // Goal insights — sourced from userProfileProvider (single source of truth)
+    final currentWeight = currentWeightKg ?? 0;
+    final targetWeight = targetWeightKg ?? 0;
 
     // Weight trajectory (from weight logs in healthBox)
     final hive = HiveService.instance;
@@ -1007,7 +993,20 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
       generatedAt: prediction.generatedAt,
       isPro: isPro,
       canRefresh: prediction.canRefresh,
-      onRefreshTap: _refreshPrediction,
+      isStale: prediction.isStale,
+      onRefreshTap: isPro
+          ? _refreshPrediction
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                  'Prediction refresh is a PRO feature. Upgrade in Profile \u2192 Subscription',
+                  style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                ),
+                backgroundColor: AppColors.proGold,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 4),
+              ));
+            },
     );
   }
 
@@ -1832,5 +1831,240 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
     }
   }
 
+}
+
+// ── Bug #15 — Collapsible Achievements Section ──────────────────
+/// Shows the first 4 earned badges by default. "Show All" expands to
+/// display remaining earned + unearned (greyed at 40% opacity).
+class _CollapsibleBadgesSection extends StatefulWidget {
+  const _CollapsibleBadgesSection();
+
+  @override
+  State<_CollapsibleBadgesSection> createState() =>
+      _CollapsibleBadgesSectionState();
+}
+
+class _CollapsibleBadgesSectionState extends State<_CollapsibleBadgesSection> {
+  bool _showAll = false;
+  late List<AchievementBadge> _allBadges;
+
+  @override
+  void initState() {
+    super.initState();
+    BadgeService.instance.checkAll();
+    _allBadges = BadgeService.instance.getAllWithStatus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final earned = _allBadges.where((b) => b.isUnlocked).toList()
+      ..sort((a, b) =>
+          (b.unlockedAt ?? DateTime(0)).compareTo(a.unlockedAt ?? DateTime(0)));
+    final unearned = _allBadges.where((b) => !b.isUnlocked).toList();
+    final earnedCount = earned.length;
+
+    // Badges to show in the default (collapsed) view
+    final defaultBadges = earned.take(4).toList();
+    final hasMore = earnedCount > 4 || unearned.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: "ACHIEVEMENTS . N earned"
+          Row(
+            children: [
+              Text(
+                'ACHIEVEMENTS',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '\u00B7 $earnedCount earned',
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.proGold,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.proGold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                      color: AppColors.proGold.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  '$earnedCount / ${_allBadges.length}',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.proGold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Default: first 4 earned badges (or empty state)
+          if (defaultBadges.isEmpty)
+            _buildEmptyState()
+          else
+            _buildBadgeGrid(defaultBadges, isEarned: true),
+
+          // Expanded: remaining earned + all unearned
+          if (_showAll) ...[
+            if (earned.length > 4) ...[
+              const SizedBox(height: 10),
+              _buildBadgeGrid(earned.skip(4).toList(), isEarned: true),
+            ],
+            if (unearned.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _buildBadgeGrid(unearned, isEarned: false),
+            ],
+          ],
+
+          // "Show All / Show Less" toggle
+          if (hasMore) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => setState(() => _showAll = !_showAll),
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _showAll
+                        ? 'Show Less'
+                        : 'Show All (${_allBadges.length} total)',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _showAll ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: AppColors.accent,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events_outlined, size: 18, color: AppColors.proGold),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Complete workouts to unlock your first badge',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadgeGrid(List<AchievementBadge> badges,
+      {required bool isEarned}) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: badges.length,
+      itemBuilder: (context, i) {
+        final badge = badges[i];
+        return Opacity(
+          opacity: isEarned ? 1.0 : 0.4,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.input,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isEarned
+                    ? AppColors.proGold.withValues(alpha: 0.5)
+                    : AppColors.border,
+                width: isEarned ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(badge.emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(height: 3),
+                Text(
+                  badge.name,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: isEarned
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (isEarned && badge.unlockedAt != null)
+                  Text(
+                    '${badge.unlockedAt!.day}/${badge.unlockedAt!.month}',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      fontSize: 8,
+                      color: AppColors.proGold,
+                    ),
+                  ),
+                if (!isEarned)
+                  Icon(Icons.lock, size: 10, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 

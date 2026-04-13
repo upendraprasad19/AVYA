@@ -10,6 +10,9 @@ enum QuickActionState {
 
   /// Action completed: emerald tint background, emerald icon.
   completed,
+
+  /// Rest day: muted cyan appearance — "nothing to do, you're good".
+  restDay,
 }
 
 /// Compact quick action card on the Home dashboard.
@@ -45,12 +48,28 @@ class QuickActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDone = state == QuickActionState.completed;
-    final bgColor = isDone
-        ? AppColors.emeraldTint
-        : AppColors.card;
-    final borderColor = isDone
-        ? AppColors.emerald.withValues(alpha: 0.28)
-        : AppColors.border;
+    final isRest = state == QuickActionState.restDay;
+    final Color bgColor;
+    final Color borderColor;
+    final Color iconColor;
+    final Color labelColor;
+
+    if (isDone) {
+      bgColor = AppColors.emeraldTint;
+      borderColor = AppColors.emerald.withValues(alpha: 0.28);
+      iconColor = AppColors.emerald;
+      labelColor = AppColors.emerald;
+    } else if (isRest) {
+      bgColor = AppColors.accentTint;
+      borderColor = AppColors.accent.withValues(alpha: 0.18);
+      iconColor = AppColors.accent.withValues(alpha: 0.5);
+      labelColor = AppColors.accent.withValues(alpha: 0.5);
+    } else {
+      bgColor = AppColors.card;
+      borderColor = AppColors.border;
+      iconColor = AppColors.textSecondary;
+      labelColor = AppColors.textSecondary;
+    }
 
     return Expanded(
       child: TapScale(
@@ -71,19 +90,19 @@ class QuickActionButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      icon,
+                      isRest ? Icons.check_circle_outline : icon,
                       size: 17,
-                      color: isDone ? AppColors.emerald : AppColors.textSecondary,
+                      color: iconColor,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      label,
+                      isRest ? 'Rest' : label,
                       style: GoogleFonts.getFont(
                         'DM Sans',
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.2,
-                        color: isDone ? AppColors.emerald : AppColors.textSecondary,
+                        color: labelColor,
                       ),
                       textAlign: TextAlign.center,
                     ),

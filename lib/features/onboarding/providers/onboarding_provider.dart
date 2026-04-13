@@ -476,6 +476,8 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         final configBox = HiveService.instance.configBox;
         await configBox.put('prediction_text', reply);
         await configBox.put('prediction_date', DateTime.now().toIso8601String());
+        await configBox.put(
+            'prediction_generated_at', DateTime.now().toIso8601String());
         debugPrint('[Onboarding] Prediction card generated successfully');
       }
     } catch (e) {
