@@ -45,7 +45,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bench-Press_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=192",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E002",
@@ -93,7 +98,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E003",
@@ -140,7 +148,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Incline-Bench-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E004",
@@ -186,7 +199,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Decline-Bench-Press_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Decline-Bench-Press_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E005",
@@ -234,7 +252,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Push-Up_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=10",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E006",
@@ -281,7 +304,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Flyes_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E007",
@@ -325,7 +351,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E008",
@@ -371,7 +400,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Dip_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E009",
@@ -418,7 +452,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E010",
@@ -464,7 +501,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pike-Push-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E011",
@@ -512,7 +555,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Standing-Military-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E012",
@@ -559,7 +607,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shoulder-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E013",
@@ -606,7 +659,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Raise_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E014",
@@ -655,7 +713,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E015",
@@ -701,7 +762,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Front-Raise_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E016",
@@ -748,7 +812,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Close-Grip-Barbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E017",
@@ -792,7 +862,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Triceps-Pushdown_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E018",
@@ -836,7 +909,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Skull-Crusher_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E019",
@@ -880,7 +958,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lying-Triceps-Extension_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E020",
@@ -926,7 +1009,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Diamond-Push-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E021",
@@ -976,7 +1065,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Deadlift_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=262",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E022",
@@ -1024,7 +1118,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pull-Up_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=31",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E023",
@@ -1072,7 +1169,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bent-Over-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E024",
@@ -1121,7 +1223,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-One-Arm-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E025",
@@ -1168,7 +1273,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lat-Pulldown_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E026",
@@ -1217,7 +1325,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Cable-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E027",
@@ -1264,7 +1375,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/T-Bar-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/T-Bar-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E029",
@@ -1310,7 +1426,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Back-Extension_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Back-Extension_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E030",
@@ -1359,7 +1480,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E031",
@@ -1406,7 +1530,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E032",
@@ -1452,7 +1582,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E033",
@@ -1497,7 +1630,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Hammer-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E034",
@@ -1541,7 +1677,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Concentration-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 2
   },
   {
     "id": "E035",
@@ -1587,7 +1726,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E036",
@@ -1636,7 +1778,14 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Full-Squat_1.jpg",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=99",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee",
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E037",
@@ -1684,7 +1833,15 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Front-Squat_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee",
+      "lower_back",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E038",
@@ -1732,7 +1889,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Goblet-Squat_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E039",
@@ -1779,7 +1942,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E040",
@@ -1824,7 +1990,13 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hack-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hack-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E041",
@@ -1872,7 +2044,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bulgarian-Split-Squat_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E042",
@@ -1920,7 +2098,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Walking-Lunge_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E043",
@@ -1964,7 +2148,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Extension_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E044",
@@ -2012,7 +2201,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Step-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E045",
@@ -2058,7 +2253,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Romanian-Deadlift_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E046",
@@ -2099,7 +2297,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Nordic-Hamstring-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Nordic-Hamstring-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E047",
@@ -2145,7 +2346,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Hip-Thrust_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E048",
@@ -2191,7 +2397,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Glute-Bridge_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E049",
@@ -2235,7 +2444,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lying-Leg-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E050",
@@ -2283,7 +2495,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Deadlift_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E051",
@@ -2329,7 +2546,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Standing-Calf-Raise_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E052",
@@ -2373,7 +2595,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Calf-Raise_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E053",
@@ -2416,7 +2643,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Donkey-Calf-Raise_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Donkey-Calf-Raise_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E054",
@@ -2465,7 +2697,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Plank_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E055",
@@ -2513,7 +2748,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dead-Bug_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E056",
@@ -2558,7 +2796,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crunch_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E057",
@@ -2602,7 +2843,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hanging-Leg-Raise_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E058",
@@ -2650,7 +2894,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Ab-Wheel-Rollout_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E059",
@@ -2696,7 +2945,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Russian-Twist_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E060",
@@ -2741,7 +2993,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Crunch_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E061",
@@ -2786,7 +3041,12 @@
     "image_end_url": "PENDING",
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=8",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E062",
@@ -2831,7 +3091,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E063",
@@ -2876,7 +3139,12 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E064",
@@ -2922,7 +3190,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E065",
@@ -2966,7 +3237,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Burpee_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E066",
@@ -3013,7 +3289,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Jump_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E067",
@@ -3058,7 +3340,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Mountain-Climber_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E068",
@@ -3100,7 +3385,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E069",
@@ -3146,7 +3434,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Muscle-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Muscle-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E070",
@@ -3191,7 +3484,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E071",
@@ -3237,7 +3535,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E072",
@@ -3280,7 +3581,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E073",
@@ -3326,7 +3633,13 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pistol-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pistol-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E074",
@@ -3370,7 +3683,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dragon-Flag_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dragon-Flag_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E075",
@@ -3415,7 +3731,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dip_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dip_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E076",
@@ -3464,7 +3785,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E077",
@@ -3513,7 +3839,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E078",
@@ -3558,7 +3890,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E079",
@@ -3599,7 +3934,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E080",
@@ -3646,7 +3984,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E081",
@@ -3691,7 +4032,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E082",
@@ -3735,7 +4079,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E083",
@@ -3783,7 +4130,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E084",
@@ -3826,7 +4176,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E085",
@@ -3874,7 +4227,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E086",
@@ -3916,7 +4272,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Power-Clean_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Power-Clean_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E087",
@@ -3965,7 +4326,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Trap-Bar-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Trap-Bar-Deadlift_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E088",
@@ -4012,7 +4376,14 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee",
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E089",
@@ -4061,7 +4432,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Farmers-Walk_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Farmers-Walk_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E090",
@@ -4109,7 +4483,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E091",
@@ -4155,7 +4532,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Single-Leg-Romanian-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Single-Leg-Romanian-Deadlift_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E092",
@@ -4199,7 +4579,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Good-Morning_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Good-Morning_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E093",
@@ -4245,7 +4630,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Band-Pull-Apart_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E094",
@@ -4288,7 +4676,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E095",
@@ -4332,7 +4723,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Preacher-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E096",
@@ -4375,7 +4771,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Tricep-Kickback_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Tricep-Kickback_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E097",
@@ -4419,7 +4818,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Overhead-Tricep-Extension_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Overhead-Tricep-Extension_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E098",
@@ -4465,7 +4869,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Fly_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Fly_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E099",
@@ -4508,7 +4915,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Wrist-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Wrist-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E100",
@@ -4551,7 +4963,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Wrist-Curl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Wrist-Curl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E101",
@@ -4596,7 +5013,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-To-Bar-Pull-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-To-Bar-Pull-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E102",
@@ -4642,7 +5062,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Push-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Push-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E103",
@@ -4689,7 +5114,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Push-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Push-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E104",
@@ -4736,7 +5166,12 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Arnold-Dumbbell-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E105",
@@ -4782,7 +5217,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Upright-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Upright-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E106",
@@ -4826,7 +5266,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shrug_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E107",
@@ -4870,7 +5313,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E108",
@@ -4913,7 +5359,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E109",
@@ -4959,7 +5408,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Glute-Kickback_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Glute-Kickback_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E110",
@@ -5003,7 +5455,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E111",
@@ -5045,7 +5500,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E112",
@@ -5094,7 +5554,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Squat_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E113",
@@ -5142,7 +5608,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Single-Arm-Dumbbell-Bench-Press_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E114",
@@ -5189,7 +5658,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E115",
@@ -5234,7 +5708,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E116",
@@ -5281,7 +5760,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E117",
@@ -5325,7 +5807,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E118",
@@ -5370,7 +5855,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pec-Deck-Flyes_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pec-Deck-Flyes_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E119",
@@ -5414,7 +5902,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E120",
@@ -5456,7 +5947,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E121",
@@ -5503,7 +5997,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Renegade-Row_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Renegade-Row_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E122",
@@ -5546,7 +6043,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E123",
@@ -5593,7 +6093,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chin-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E124",
@@ -5641,7 +6144,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inverted-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E125",
@@ -5688,7 +6194,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E126",
@@ -5734,7 +6243,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E127",
@@ -5778,7 +6293,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E128",
@@ -5825,7 +6343,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Snatch-Grip-Deadlift_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Snatch-Grip-Deadlift_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E129",
@@ -5874,7 +6397,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Rack-Pull_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Rack-Pull_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E130",
@@ -5917,7 +6445,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E131",
@@ -5959,7 +6492,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E132",
@@ -6003,7 +6539,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E133",
@@ -6050,7 +6589,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E134",
@@ -6092,7 +6634,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 1
   },
   {
     "id": "E135",
@@ -6139,7 +6684,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bear-Crawl_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bear-Crawl_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E136",
@@ -6184,7 +6732,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E137",
@@ -6225,7 +6776,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 5
   },
   {
     "id": "E138",
@@ -6271,7 +6827,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E139",
@@ -6316,7 +6875,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E140",
@@ -6363,7 +6927,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Swing_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Swing_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E141",
@@ -6406,7 +6975,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Turkish-Get-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Turkish-Get-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E142",
@@ -6451,7 +7023,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Medicine-Ball-Slam_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Medicine-Ball-Slam_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E143",
@@ -6497,7 +7072,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E144",
@@ -6546,7 +7127,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Lunge_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E145",
@@ -6595,7 +7182,13 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Lunge_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E146",
@@ -6642,7 +7235,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E147",
@@ -6690,7 +7289,13 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E148",
@@ -6733,7 +7338,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E149",
@@ -6780,7 +7388,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E150",
@@ -6824,7 +7438,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E151",
@@ -6872,7 +7489,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inchworm_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E152",
@@ -6918,7 +7538,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E153",
@@ -6963,7 +7586,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E154",
@@ -7007,7 +7633,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E155",
@@ -7052,7 +7681,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E156",
@@ -7097,7 +7729,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E157",
@@ -7143,7 +7780,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E158",
@@ -7186,7 +7826,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E159",
@@ -7233,7 +7876,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E160",
@@ -7280,7 +7926,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E161",
@@ -7325,7 +7974,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E162",
@@ -7370,7 +8022,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E163",
@@ -7413,7 +8068,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E164",
@@ -7457,7 +8115,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E165",
@@ -7501,7 +8162,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E166",
@@ -7544,7 +8208,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E167",
@@ -7588,7 +8255,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E168",
@@ -7634,7 +8304,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E169",
@@ -7678,7 +8351,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E170",
@@ -7724,7 +8400,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E171",
@@ -7770,7 +8449,12 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Pullover_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Pullover_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E172",
@@ -7813,7 +8497,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Side-Bend_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Side-Bend_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E173",
@@ -7858,7 +8545,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Crunch_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Crunch_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E174",
@@ -7903,7 +8593,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Crunch_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E175",
@@ -7949,7 +8642,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bicycle-Crunch_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E176",
@@ -7993,7 +8689,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/V-Up_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/V-Up_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E177",
@@ -8037,7 +8736,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": true
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E178",
@@ -8079,7 +8781,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E179",
@@ -8122,7 +8829,10 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Toes-To-Bar_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Toes-To-Bar_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E180",
@@ -8165,7 +8875,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E181",
@@ -8209,7 +8922,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E182",
@@ -8251,7 +8967,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E183",
@@ -8296,7 +9017,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E184",
@@ -8338,7 +9062,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 4
   },
   {
     "id": "E185",
@@ -8382,7 +9111,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E186",
@@ -8426,7 +9160,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E187",
@@ -8472,7 +9209,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E188",
@@ -8519,7 +9259,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E189",
@@ -8565,7 +9311,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E190",
@@ -8612,7 +9363,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E191",
@@ -8659,7 +9413,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2
   },
   {
     "id": "E192",
@@ -8705,7 +9462,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E193",
@@ -8751,7 +9513,13 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Jump-Squat_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Jump-Squat_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E194",
@@ -8793,7 +9561,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E195",
@@ -8839,7 +9613,14 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle",
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E196",
@@ -8884,7 +9665,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E197",
@@ -8929,7 +9716,13 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3
   },
   {
     "id": "E198",
@@ -8975,7 +9768,13 @@
     "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lunge_0.jpg",
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lunge_1.jpg",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1
   },
   {
     "id": "E199",
@@ -9020,7 +9819,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E200",
@@ -9063,7 +9865,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 3
   },
   {
     "id": "E201",
@@ -9071,12 +9876,20 @@
     "category": "warmup",
     "movement_pattern": "cardio",
     "exercise_type": "cardio",
-    "primary_muscles": ["Full Body"],
+    "primary_muscles": [
+      "Full Body"
+    ],
     "secondary_muscles": [],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "300s",
     "default_rest_secs": 0,
@@ -9084,8 +9897,12 @@
     "met_value": 8.0,
     "cal_per_set_est": 8.0,
     "breathing_cue": "Breathe naturally, steady rhythm",
-    "coaching_cues": ["Land softly on the balls of your feet; keep knees slightly bent; pump arms naturally"],
-    "common_mistakes": ["Landing flat-footed; holding breath; hunching shoulders"],
+    "coaching_cues": [
+      "Land softly on the balls of your feet; keep knees slightly bent; pump arms naturally"
+    ],
+    "common_mistakes": [
+      "Landing flat-footed; holding breath; hunching shoulders"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Start slow for 30 seconds, then gradually increase pace",
     "is_indian_context": false,
@@ -9094,7 +9911,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E202",
@@ -9102,12 +9924,23 @@
     "category": "warmup",
     "movement_pattern": "cardio",
     "exercise_type": "cardio",
-    "primary_muscles": ["Full Body"],
-    "secondary_muscles": ["Shoulders", "Calves"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Full Body"
+    ],
+    "secondary_muscles": [
+      "Shoulders",
+      "Calves"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "300s",
     "default_rest_secs": 0,
@@ -9115,8 +9948,12 @@
     "met_value": 8.0,
     "cal_per_set_est": 8.0,
     "breathing_cue": "Inhale arms up, exhale arms down",
-    "coaching_cues": ["Jump feet wide as arms go overhead; land softly; keep a steady rhythm"],
-    "common_mistakes": ["Not fully extending arms; landing with locked knees"],
+    "coaching_cues": [
+      "Jump feet wide as arms go overhead; land softly; keep a steady rhythm"
+    ],
+    "common_mistakes": [
+      "Not fully extending arms; landing with locked knees"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Great for getting your heart rate up quickly — just like school PE class",
     "is_indian_context": false,
@@ -9125,7 +9962,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E203",
@@ -9133,12 +9973,24 @@
     "category": "warmup",
     "movement_pattern": "cardio",
     "exercise_type": "cardio",
-    "primary_muscles": ["Hip Flexors", "Quads"],
-    "secondary_muscles": ["Calves", "Core"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Hip Flexors",
+      "Quads"
+    ],
+    "secondary_muscles": [
+      "Calves",
+      "Core"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9146,8 +9998,12 @@
     "met_value": 8.0,
     "cal_per_set_est": 6.0,
     "breathing_cue": "Breathe rhythmically with each knee lift",
-    "coaching_cues": ["Drive knees to hip height; pump arms opposite to legs; stay on balls of feet"],
-    "common_mistakes": ["Leaning back; knees not reaching hip height; flat-footed landing"],
+    "coaching_cues": [
+      "Drive knees to hip height; pump arms opposite to legs; stay on balls of feet"
+    ],
+    "common_mistakes": [
+      "Leaning back; knees not reaching hip height; flat-footed landing"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Focus on speed for cardio, or height for muscle activation",
     "is_indian_context": false,
@@ -9156,7 +10012,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E204",
@@ -9164,12 +10023,23 @@
     "category": "warmup",
     "movement_pattern": "cardio",
     "exercise_type": "cardio",
-    "primary_muscles": ["Hamstrings"],
-    "secondary_muscles": ["Calves", "Glutes"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Calves",
+      "Glutes"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9177,8 +10047,12 @@
     "met_value": 8.0,
     "cal_per_set_est": 6.0,
     "breathing_cue": "Breathe naturally, steady rhythm",
-    "coaching_cues": ["Kick heels towards glutes; keep torso upright; pump arms naturally"],
-    "common_mistakes": ["Leaning forward; not reaching glutes; going too slow"],
+    "coaching_cues": [
+      "Kick heels towards glutes; keep torso upright; pump arms naturally"
+    ],
+    "common_mistakes": [
+      "Leaning forward; not reaching glutes; going too slow"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Pair with High Knees for a complete lower body warm-up",
     "is_indian_context": false,
@@ -9187,7 +10061,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E205",
@@ -9195,12 +10072,22 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Shoulders"],
-    "secondary_muscles": ["Upper Back"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Shoulders"
+    ],
+    "secondary_muscles": [
+      "Upper Back"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9208,8 +10095,12 @@
     "met_value": 2.5,
     "cal_per_set_est": 2.0,
     "breathing_cue": "Breathe naturally throughout",
-    "coaching_cues": ["Start with small circles, gradually increase size; do 30s forward then 30s backward; keep arms straight"],
-    "common_mistakes": ["Moving too fast; bending elbows; only doing one direction"],
+    "coaching_cues": [
+      "Start with small circles, gradually increase size; do 30s forward then 30s backward; keep arms straight"
+    ],
+    "common_mistakes": [
+      "Moving too fast; bending elbows; only doing one direction"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Essential before any pressing or overhead movement",
     "is_indian_context": false,
@@ -9218,7 +10109,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E206",
@@ -9226,12 +10120,22 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Neck"],
-    "secondary_muscles": ["Upper Back"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Neck"
+    ],
+    "secondary_muscles": [
+      "Upper Back"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9239,8 +10143,12 @@
     "met_value": 1.5,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe slowly and steadily",
-    "coaching_cues": ["Slow, controlled circles; do both clockwise and counter-clockwise; keep shoulders relaxed"],
-    "common_mistakes": ["Moving too fast; jerky movements; tensing shoulders"],
+    "coaching_cues": [
+      "Slow, controlled circles; do both clockwise and counter-clockwise; keep shoulders relaxed"
+    ],
+    "common_mistakes": [
+      "Moving too fast; jerky movements; tensing shoulders"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Especially important before pull and upper body days",
     "is_indian_context": false,
@@ -9249,7 +10157,12 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [
+      "neck"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E207",
@@ -9257,12 +10170,23 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Core"],
-    "secondary_muscles": ["Lower Back", "Obliques"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Core"
+    ],
+    "secondary_muscles": [
+      "Lower Back",
+      "Obliques"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9270,8 +10194,12 @@
     "met_value": 2.5,
     "cal_per_set_est": 2.0,
     "breathing_cue": "Exhale as you twist, inhale back to center",
-    "coaching_cues": ["Stand feet shoulder-width; arms at chest level; rotate from the waist, not hips; look in the direction you twist"],
-    "common_mistakes": ["Moving hips instead of torso; going too fast; not engaging core"],
+    "coaching_cues": [
+      "Stand feet shoulder-width; arms at chest level; rotate from the waist, not hips; look in the direction you twist"
+    ],
+    "common_mistakes": [
+      "Moving hips instead of torso; going too fast; not engaging core"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Great for loosening up the spine before any pressing movement",
     "is_indian_context": false,
@@ -9280,7 +10208,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E208",
@@ -9288,12 +10219,23 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Hip Flexors"],
-    "secondary_muscles": ["Glutes", "Lower Back"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Hip Flexors"
+    ],
+    "secondary_muscles": [
+      "Glutes",
+      "Lower Back"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9301,8 +10243,12 @@
     "met_value": 2.5,
     "cal_per_set_est": 2.0,
     "breathing_cue": "Breathe naturally throughout",
-    "coaching_cues": ["Hands on hips; make large circles with your hips; do both directions; keep upper body still"],
-    "common_mistakes": ["Circles too small; only doing one direction; bending knees"],
+    "coaching_cues": [
+      "Hands on hips; make large circles with your hips; do both directions; keep upper body still"
+    ],
+    "common_mistakes": [
+      "Circles too small; only doing one direction; bending knees"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Essential before squats, lunges, and any leg exercise",
     "is_indian_context": false,
@@ -9311,7 +10257,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E209",
@@ -9319,12 +10268,24 @@
     "category": "warmup",
     "movement_pattern": "dynamic",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Hip Flexors", "Hamstrings"],
-    "secondary_muscles": ["Glutes", "Quads"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Hip Flexors",
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Glutes",
+      "Quads"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9332,8 +10293,12 @@
     "met_value": 3.0,
     "cal_per_set_est": 2.5,
     "breathing_cue": "Breathe naturally, exhale on the swing",
-    "coaching_cues": ["Hold a wall for balance; swing one leg forward and back; do front-to-back then side-to-side; keep standing leg slightly bent"],
-    "common_mistakes": ["Swinging too aggressively; losing balance; rounding the back"],
+    "coaching_cues": [
+      "Hold a wall for balance; swing one leg forward and back; do front-to-back then side-to-side; keep standing leg slightly bent"
+    ],
+    "common_mistakes": [
+      "Swinging too aggressively; losing balance; rounding the back"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Do 15 swings each direction per leg for best hip mobility",
     "is_indian_context": false,
@@ -9342,7 +10307,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E210",
@@ -9350,12 +10318,20 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Forearms"],
+    "primary_muscles": [
+      "Forearms"
+    ],
     "secondary_muscles": [],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9363,8 +10339,12 @@
     "met_value": 1.5,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe naturally",
-    "coaching_cues": ["Interlace fingers and rotate wrists in circles; do both directions; gentle and controlled"],
-    "common_mistakes": ["Moving too fast; skipping this before heavy gripping exercises"],
+    "coaching_cues": [
+      "Interlace fingers and rotate wrists in circles; do both directions; gentle and controlled"
+    ],
+    "common_mistakes": [
+      "Moving too fast; skipping this before heavy gripping exercises"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Critical before deadlifts, pull-ups, and any heavy grip work",
     "is_indian_context": false,
@@ -9373,7 +10353,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E211",
@@ -9381,12 +10364,20 @@
     "category": "warmup",
     "movement_pattern": "rotation",
     "exercise_type": "dynamic_stretch",
-    "primary_muscles": ["Calves"],
+    "primary_muscles": [
+      "Calves"
+    ],
     "secondary_muscles": [],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9394,8 +10385,12 @@
     "met_value": 1.5,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe naturally",
-    "coaching_cues": ["Lift one foot; rotate ankle clockwise then counter-clockwise; switch feet"],
-    "common_mistakes": ["Skipping this; not doing both directions"],
+    "coaching_cues": [
+      "Lift one foot; rotate ankle clockwise then counter-clockwise; switch feet"
+    ],
+    "common_mistakes": [
+      "Skipping this; not doing both directions"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Prevents ankle sprains — important before any standing exercise",
     "is_indian_context": false,
@@ -9404,7 +10399,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E212",
@@ -9412,12 +10410,21 @@
     "category": "warmup",
     "movement_pattern": "horizontal_push",
     "exercise_type": "activation",
-    "primary_muscles": ["Chest"],
-    "secondary_muscles": ["Triceps", "Front Deltoid"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Chest"
+    ],
+    "secondary_muscles": [
+      "Triceps",
+      "Front Deltoid"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner"],
+    "suitable_for": [
+      "Beginner"
+    ],
     "default_sets": 1,
     "default_reps": "10",
     "default_rest_secs": 0,
@@ -9425,8 +10432,12 @@
     "met_value": 3.0,
     "cal_per_set_est": 2.0,
     "breathing_cue": "Inhale down, exhale on push",
-    "coaching_cues": ["Stand arm's length from wall; place hands shoulder-width on wall; lower chest towards wall; push back"],
-    "common_mistakes": ["Standing too close; flaring elbows; not engaging core"],
+    "coaching_cues": [
+      "Stand arm's length from wall; place hands shoulder-width on wall; lower chest towards wall; push back"
+    ],
+    "common_mistakes": [
+      "Standing too close; flaring elbows; not engaging core"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Perfect warm-up for beginners before any pushing exercise",
     "is_indian_context": false,
@@ -9435,7 +10446,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E213",
@@ -9443,12 +10457,23 @@
     "category": "warmup",
     "movement_pattern": "static",
     "exercise_type": "activation",
-    "primary_muscles": ["Lats", "Forearms"],
-    "secondary_muscles": ["Shoulders", "Core"],
-    "equipment_needed": ["Pull-Up Bar"],
+    "primary_muscles": [
+      "Lats",
+      "Forearms"
+    ],
+    "secondary_muscles": [
+      "Shoulders",
+      "Core"
+    ],
+    "equipment_needed": [
+      "Pull-Up Bar"
+    ],
     "logging_type": "timed",
     "difficulty_level": "intermediate",
-    "suitable_for": ["Intermediate", "Advanced"],
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9456,8 +10481,12 @@
     "met_value": 3.5,
     "cal_per_set_est": 3.0,
     "breathing_cue": "Breathe deeply and steadily while hanging",
-    "coaching_cues": ["Grip bar shoulder-width; let body hang fully; relax shoulders down; engage core slightly"],
-    "common_mistakes": ["Shrugging shoulders up; holding breath; swinging"],
+    "coaching_cues": [
+      "Grip bar shoulder-width; let body hang fully; relax shoulders down; engage core slightly"
+    ],
+    "common_mistakes": [
+      "Shrugging shoulders up; holding breath; swinging"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Decompresses spine and builds grip strength — great before any pull exercise",
     "is_indian_context": false,
@@ -9466,7 +10495,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E214",
@@ -9474,12 +10506,20 @@
     "category": "cooldown",
     "movement_pattern": "cardio",
     "exercise_type": "cardio",
-    "primary_muscles": ["Full Body"],
+    "primary_muscles": [
+      "Full Body"
+    ],
     "secondary_muscles": [],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "300s",
     "default_rest_secs": 0,
@@ -9487,8 +10527,12 @@
     "met_value": 2.5,
     "cal_per_set_est": 3.0,
     "breathing_cue": "Slow deep breaths — in through nose, out through mouth",
-    "coaching_cues": ["Walk at a relaxed pace; let heart rate come down gradually; shake out arms gently"],
-    "common_mistakes": ["Stopping suddenly after intense exercise; sitting down immediately"],
+    "coaching_cues": [
+      "Walk at a relaxed pace; let heart rate come down gradually; shake out arms gently"
+    ],
+    "common_mistakes": [
+      "Stopping suddenly after intense exercise; sitting down immediately"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Walking after a workout helps clear lactic acid and prevents dizziness",
     "is_indian_context": false,
@@ -9497,7 +10541,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E215",
@@ -9505,12 +10552,23 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Hamstrings"],
-    "secondary_muscles": ["Lower Back", "Calves"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Lower Back",
+      "Calves"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9518,8 +10576,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Exhale as you fold forward, breathe steadily while holding",
-    "coaching_cues": ["Stand with feet together; bend forward from hips; reach for toes; keep knees slightly bent if needed"],
-    "common_mistakes": ["Bouncing; rounding upper back excessively; locking knees"],
+    "coaching_cues": [
+      "Stand with feet together; bend forward from hips; reach for toes; keep knees slightly bent if needed"
+    ],
+    "common_mistakes": [
+      "Bouncing; rounding upper back excessively; locking knees"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Hold for 30 seconds — don't bounce. You'll go deeper with each exhale",
     "is_indian_context": false,
@@ -9528,7 +10590,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E216",
@@ -9536,12 +10601,22 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Quads"],
-    "secondary_muscles": ["Hip Flexors"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Quads"
+    ],
+    "secondary_muscles": [
+      "Hip Flexors"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9549,8 +10624,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe deeply and steadily while holding",
-    "coaching_cues": ["Stand on one leg; grab opposite foot behind you; pull heel to glute; keep knees together; hold a wall for balance"],
-    "common_mistakes": ["Arching lower back; knee pointing outward; not holding long enough"],
+    "coaching_cues": [
+      "Stand on one leg; grab opposite foot behind you; pull heel to glute; keep knees together; hold a wall for balance"
+    ],
+    "common_mistakes": [
+      "Arching lower back; knee pointing outward; not holding long enough"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Hold 15 seconds each leg — essential after squats and lunges",
     "is_indian_context": false,
@@ -9559,7 +10638,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E217",
@@ -9567,12 +10649,23 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Shoulders"],
-    "secondary_muscles": ["Lats", "Triceps"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Shoulders"
+    ],
+    "secondary_muscles": [
+      "Lats",
+      "Triceps"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9580,8 +10673,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe deeply, reach higher on each exhale",
-    "coaching_cues": ["Interlace fingers; push palms to ceiling; stretch tall; lean gently to each side"],
-    "common_mistakes": ["Not fully extending arms; holding breath; arching lower back"],
+    "coaching_cues": [
+      "Interlace fingers; push palms to ceiling; stretch tall; lean gently to each side"
+    ],
+    "common_mistakes": [
+      "Not fully extending arms; holding breath; arching lower back"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Add a gentle side lean for a lat stretch bonus",
     "is_indian_context": false,
@@ -9590,7 +10687,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E218",
@@ -9598,12 +10698,23 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Obliques"],
-    "secondary_muscles": ["Lats", "Lower Back"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Obliques"
+    ],
+    "secondary_muscles": [
+      "Lats",
+      "Lower Back"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9611,8 +10722,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Inhale upright, exhale into the side bend",
-    "coaching_cues": ["Stand tall; raise one arm overhead; lean to the opposite side; hold 15s each side"],
-    "common_mistakes": ["Leaning forward instead of sideways; not holding long enough"],
+    "coaching_cues": [
+      "Stand tall; raise one arm overhead; lean to the opposite side; hold 15s each side"
+    ],
+    "common_mistakes": [
+      "Leaning forward instead of sideways; not holding long enough"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Keep hips square — feel the stretch along your entire side",
     "is_indian_context": false,
@@ -9621,7 +10736,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E219",
@@ -9629,12 +10747,22 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Rear Deltoid"],
-    "secondary_muscles": ["Upper Back"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Rear Deltoid"
+    ],
+    "secondary_muscles": [
+      "Upper Back"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9642,8 +10770,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe deeply while holding the stretch",
-    "coaching_cues": ["Bring one arm across your chest; use opposite hand to press above the elbow; hold 15s each arm"],
-    "common_mistakes": ["Pressing on the elbow joint; shrugging the shoulder; rotating the torso"],
+    "coaching_cues": [
+      "Bring one arm across your chest; use opposite hand to press above the elbow; hold 15s each arm"
+    ],
+    "common_mistakes": [
+      "Pressing on the elbow joint; shrugging the shoulder; rotating the torso"
+    ],
     "warmup_protocol": "",
     "pro_tip": "A must-do after any pressing or shoulder workout",
     "is_indian_context": false,
@@ -9652,7 +10784,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E220",
@@ -9660,12 +10795,23 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "static_stretch",
-    "primary_muscles": ["Chest"],
-    "secondary_muscles": ["Front Deltoid", "Biceps"],
-    "equipment_needed": ["Bodyweight"],
+    "primary_muscles": [
+      "Chest"
+    ],
+    "secondary_muscles": [
+      "Front Deltoid",
+      "Biceps"
+    ],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "30s",
     "default_rest_secs": 0,
@@ -9673,8 +10819,12 @@
     "met_value": 2.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Breathe deeply, lean slightly further on each exhale",
-    "coaching_cues": ["Place forearm on a doorframe or wall at 90 degrees; step forward until you feel the chest stretch; hold 15s each side"],
-    "common_mistakes": ["Arm too high or too low; arching the lower back; not holding long enough"],
+    "coaching_cues": [
+      "Place forearm on a doorframe or wall at 90 degrees; step forward until you feel the chest stretch; hold 15s each side"
+    ],
+    "common_mistakes": [
+      "Arm too high or too low; arching the lower back; not holding long enough"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Counters the rounded posture from bench press and desk work",
     "is_indian_context": false,
@@ -9683,7 +10833,10 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   },
   {
     "id": "E221",
@@ -9691,12 +10844,20 @@
     "category": "cooldown",
     "movement_pattern": "static",
     "exercise_type": "recovery",
-    "primary_muscles": ["Core"],
+    "primary_muscles": [
+      "Core"
+    ],
     "secondary_muscles": [],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "Bodyweight"
+    ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
-    "suitable_for": ["Beginner", "Intermediate", "Advanced"],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
     "default_sets": 1,
     "default_reps": "60s",
     "default_rest_secs": 0,
@@ -9704,8 +10865,12 @@
     "met_value": 1.0,
     "cal_per_set_est": 1.0,
     "breathing_cue": "Inhale 4 counts through nose, hold 2 counts, exhale 6 counts through mouth",
-    "coaching_cues": ["Stand or sit comfortably; place one hand on chest, one on belly; belly should rise on inhale; slow controlled exhales"],
-    "common_mistakes": ["Shallow chest breathing; rushing the exhale; not relaxing shoulders"],
+    "coaching_cues": [
+      "Stand or sit comfortably; place one hand on chest, one on belly; belly should rise on inhale; slow controlled exhales"
+    ],
+    "common_mistakes": [
+      "Shallow chest breathing; rushing the exhale; not relaxing shoulders"
+    ],
     "warmup_protocol": "",
     "pro_tip": "Box breathing (4-4-4-4) activates parasympathetic recovery — perfect end to any workout",
     "is_indian_context": false,
@@ -9714,6 +10879,9 @@
     "image_start_url": "PENDING",
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
-    "is_active": true
+    "is_active": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 1
   }
 ]

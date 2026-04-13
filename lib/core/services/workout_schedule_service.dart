@@ -43,6 +43,11 @@ class WorkoutScheduleService {
     String experienceLevel = 'beginner',
     int phase = 1,
     List<int>? preferredDays,
+    // V3 parameters (optional — callers thread when profile has them)
+    List<String> injuries = const [],
+    List<String> bodyFocus = const [],
+    int? sessionDuration,
+    String? cardioPreference,
   }) async {
     // Guard: ensure exercise data is seeded before generation.
     // If exerciseBox is empty, PlanGenerator will produce 0-exercise workouts.
@@ -59,6 +64,10 @@ class WorkoutScheduleService {
       phase: phase,
       experienceLevel: experienceLevel,
       preferredDays: preferredDays,
+      injuries: injuries,
+      bodyFocus: bodyFocus,
+      sessionDuration: sessionDuration,
+      cardioPreference: cardioPreference,
     );
 
     // 2. Get the day assignment pattern for the week
@@ -109,6 +118,8 @@ class WorkoutScheduleService {
               'warmup': workoutDay.warmup.map((e) => e.toMap()).toList(),
             if (workoutDay.cooldown.isNotEmpty)
               'cooldown': workoutDay.cooldown.map((e) => e.toMap()).toList(),
+            if (workoutDay.finisher.isNotEmpty)
+              'finisher': workoutDay.finisher.map((e) => e.toMap()).toList(),
             'week_character': weekPlan.weekCharacter,
             'status': 'planned', // planned | completed | skipped | shifted
             'completed_at': null,
@@ -153,6 +164,11 @@ class WorkoutScheduleService {
     String experienceLevel = 'beginner',
     int phase = 1,
     List<int>? preferredDays,
+    // V3 parameters
+    List<String> injuries = const [],
+    List<String> bodyFocus = const [],
+    int? sessionDuration,
+    String? cardioPreference,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -167,6 +183,10 @@ class WorkoutScheduleService {
       phase: phase,
       experienceLevel: experienceLevel,
       preferredDays: preferredDays,
+      injuries: injuries,
+      bodyFocus: bodyFocus,
+      sessionDuration: sessionDuration,
+      cardioPreference: cardioPreference,
     );
 
     // 2. Delete future non-completed schedule entries
