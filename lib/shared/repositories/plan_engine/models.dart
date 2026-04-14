@@ -199,6 +199,21 @@ class PlannedExercise {
 // INTERNAL PIPELINE DATA CLASSES
 // ══════════════════════════════════════════════════════════════════
 
+/// Valid V4 movement patterns — the 11 irreducible categories.
+const kMovementPatterns = <String>{
+  'horizontal_push',
+  'vertical_push',
+  'horizontal_pull',
+  'vertical_pull',
+  'knee_dominant',
+  'hip_dominant',
+  'core',
+  'elbow_flexion',
+  'elbow_extension',
+  'shoulder_isolation',
+  'hip_isolation',
+};
+
 /// Category spec for exercise queries.
 class CSpec {
   final String category;
@@ -210,6 +225,50 @@ class CSpec {
     List<String>? target,
     List<String>? exclude,
   }) : targetMuscles = target, excludeMuscles = exclude;
+}
+
+/// V4: Muscle-level exercise slot with cascading fallback support.
+/// Replaces CSpec for trainer-quality exercise selection.
+class MuscleSlot {
+  final String targetMuscle;    // e.g., 'Lats', 'Biceps', 'Quads'
+  final String? subFocus;       // e.g., 'width', 'short_head', 'thickness'
+  final String movementPattern; // e.g., 'vertical_pull' — NEVER dropped in cascade
+  final String exerciseType;    // 'compound' | 'isolation'
+  final int priority;           // 1=primary, 2=secondary, 3=accessory
+  final int count;              // exercises to fill for this slot (usually 1)
+
+  const MuscleSlot({
+    required this.targetMuscle,
+    this.subFocus,
+    required this.movementPattern,
+    required this.exerciseType,
+    required this.priority,
+    this.count = 1,
+  });
+
+  @override
+  String toString() =>
+      'MuscleSlot($targetMuscle${subFocus != null ? "/$subFocus" : ""}, '
+      '$movementPattern, $exerciseType, P$priority, x$count)';
+}
+
+/// V4: A workout day defined by MuscleSlots instead of CSpecs.
+class MuscleSlotDay {
+  final String name;
+  final String focus;
+  final String dayType;     // push, pull, legs, upper, full_body, shoulders_arms
+  final String intensity;   // strength, hypertrophy, endurance
+  final List<MuscleSlot> slotsA;
+  final List<MuscleSlot>? slotsB; // null = same as A
+
+  const MuscleSlotDay({
+    required this.name,
+    required this.focus,
+    required this.dayType,
+    required this.intensity,
+    required this.slotsA,
+    this.slotsB,
+  });
 }
 
 /// A day slot in the split plan.
