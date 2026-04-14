@@ -2393,6 +2393,7 @@
     "cns_demand": 3,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2613,6 +2614,7 @@
     "cns_demand": 3,
     "target_focus": "Hamstrings",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2726,6 +2728,7 @@
     "cns_demand": 2,
     "target_focus": "Glutes",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3005,6 +3008,7 @@
     "cns_demand": 2,
     "target_focus": "Calves",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3350,6 +3354,7 @@
     "cns_demand": 1,
     "target_focus": "Core",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3404,6 +3409,7 @@
     "cns_demand": 1,
     "target_focus": "Core",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4428,6 +4434,7 @@
     "cns_demand": 3,
     "target_focus": "full body",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4534,6 +4541,7 @@
     "cns_demand": 1,
     "target_focus": "Hip",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4588,6 +4596,7 @@
     "cns_demand": 1,
     "target_focus": "Glutes",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4813,6 +4822,7 @@
     "cns_demand": 1,
     "target_focus": "spine",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5764,6 +5774,7 @@
     "cns_demand": 2,
     "target_focus": "Upper Chest",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5822,6 +5833,7 @@
     "cns_demand": 2,
     "target_focus": "Upper Chest",
     "equipment_tier": [
+      "bodyweight",
       "home_dumbbells",
       "basic_gym",
       "full_gym"
@@ -6262,6 +6274,7 @@
     "cns_demand": 2,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6992,6 +7005,7 @@
     "cns_demand": 3,
     "target_focus": "Mid Back (Thickness)",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8117,6 +8131,7 @@
     "cns_demand": 3,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8178,6 +8193,7 @@
     "cns_demand": 3,
     "target_focus": "Hip",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8237,6 +8253,7 @@
     "cns_demand": 3,
     "target_focus": "Glutes",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8297,6 +8314,7 @@
     "cns_demand": 3,
     "target_focus": "Hip",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8349,6 +8367,7 @@
     "cns_demand": 3,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8462,6 +8481,7 @@
     "cns_demand": 1,
     "target_focus": "thoracic spine",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8634,6 +8654,7 @@
     "cns_demand": 1,
     "target_focus": "Calves",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8741,6 +8762,7 @@
     "cns_demand": 1,
     "target_focus": "Mid Chest",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8963,6 +8985,7 @@
     "cns_demand": 1,
     "target_focus": "Lower Back",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9019,6 +9042,7 @@
     "cns_demand": 1,
     "target_focus": "Hamstrings",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9073,6 +9097,7 @@
     "cns_demand": 1,
     "target_focus": "Calves",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9127,6 +9152,7 @@
     "cns_demand": 1,
     "target_focus": "piriformis",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9562,6 +9588,7 @@
     "cns_demand": 1,
     "target_focus": "thoracic spine",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9783,6 +9810,7 @@
     "cns_demand": 1,
     "target_focus": "Core",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9838,6 +9866,7 @@
     "cns_demand": 1,
     "target_focus": "Core",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9891,6 +9920,7 @@
     "cns_demand": 1,
     "target_focus": "Core",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11073,6 +11103,7 @@
     "cns_demand": 3,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11131,6 +11162,7 @@
     "cns_demand": 1,
     "target_focus": "Quads",
     "equipment_tier": [
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "",
