@@ -32,6 +32,7 @@ import '../widgets/profile_identity.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/slim_achievements_card.dart';
+import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
 import 'notification_settings_screen.dart';
@@ -401,6 +402,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   }
                 },
               ),
+              const SizedBox(height: 8),
+
+              // Profile completeness (shows until 100%)
+              const ProfileCompletenessCard(),
               const SizedBox(height: 8),
 
               // #2 Daily Completion summary
