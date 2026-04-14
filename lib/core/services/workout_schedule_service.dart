@@ -2,7 +2,6 @@ import '../services/hive_service.dart';
 import '../services/seed_service.dart';
 import '../utils/date_utils.dart';
 import '../../shared/repositories/plan_generator.dart';
-import '../../shared/repositories/plan_engine/models.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
 /// Maps generated plan days to real calendar dates and persists to Hive.
@@ -691,18 +690,97 @@ class WorkoutScheduleService {
       }
     }
 
-    await _hive.workoutBox.put(scheduleKey, {
+    final workoutName = tmplMap['name'] as String? ?? 'Custom Workout';
+    final normalizedExercises = _normalizeExercises(tmplMap['exercises'] as List? ?? []);
+
+    // V4: Auto-inject warmup/cooldown for custom templates
+    final templateEntry = <String, dynamic>{
       'date': dateKey,
       'week': weekNum,
       'type': 'custom_template',
       'template_id': templateId,
-      'workout_name': tmplMap['name'] as String? ?? 'Custom Workout',
+      'workout_name': workoutName,
       'workout_focus': 'Custom',
-      'exercises': _normalizeExercises(tmplMap['exercises'] as List? ?? []),
+      'exercises': normalizedExercises,
       'status': 'planned',
       'is_swapped': false,
       'completed_at': null,
-    });
+    };
+
+    if (normalizedExercises.isNotEmpty) {
+      // Detect day type from exercise categories to drive warm-up selection
+      final dayType = _detectDayTypeFromExercises(normalizedExercises);
+
+      // Get user profile for experience level and equipment
+      final profile = _hive.userBox.get('profile');
+      final profileMap = profile is Map ? Map<String, dynamic>.from(profile) : <String, dynamic>{};
+      final experience = (profileMap['fitness_experience'] as String?) ?? 'intermediate';
+      final equipmentStr = (profileMap['equipment_access'] as String?) ?? 'full_gym';
+
+      // WarmupCooldownSelector.attach expects List<String> for equipment
+      final equipmentList = [equipmentStr];
+
+      // Build a temporary single-day WeekPlan so WarmupCooldownSelector can
+      // attach exercises. The day name drives inferDayType inside the selector.
+      final tempDay = WorkoutDay(
+        dayNumber: 1,
+        name: workoutName,
+        focus: dayType,
+        exercises: const [],
+      );
+      final tempWeek = WeekPlan(
+        weekNumber: 1,
+        weekInPhase: 1,
+        overloadNotes: '',
+        weekCharacter: 'baseline',
+        workoutDays: [tempDay],
+      );
+
+      final withWarmup = WarmupCooldownSelector.attach(
+        [tempWeek],
+        experience,
+        equipmentList,
+      );
+
+      final enrichedDay = withWarmup.first.workoutDays.first;
+      if (enrichedDay.warmup.isNotEmpty) {
+        templateEntry['warmup'] = enrichedDay.warmup
+            .map((e) => e.toMap()..['auto_generated'] = true)
+            .toList();
+      }
+      if (enrichedDay.cooldown.isNotEmpty) {
+        templateEntry['cooldown'] = enrichedDay.cooldown
+            .map((e) => e.toMap()..['auto_generated'] = true)
+            .toList();
+      }
+    }
+
+    await _hive.workoutBox.put(scheduleKey, templateEntry);
+  }
+
+  /// Detect workout day type from exercise categories.
+  ///
+  /// Returns one of: push | pull | legs | upper | full_body — matching the
+  /// keys expected by [WarmupCooldownSelector].
+  String _detectDayTypeFromExercises(List exercises) {
+    final categories = <String>[];
+    for (final ex in exercises) {
+      if (ex is Map) {
+        final cat = ex['category'] as String? ?? '';
+        if (cat.isNotEmpty) categories.add(cat.toLowerCase());
+      }
+    }
+    if (categories.isEmpty) return 'full_body';
+
+    final pushCount = categories.where((c) => c == 'push').length;
+    final pullCount = categories.where((c) => c == 'pull').length;
+    final legsCount = categories.where((c) => c == 'legs').length;
+
+    if (legsCount > pushCount && legsCount > pullCount) return 'legs';
+    if (pushCount > pullCount) return 'push';
+    if (pullCount > pushCount) return 'pull';
+    if (pushCount > 0 && pullCount > 0) return 'upper';
+    return 'full_body';
   }
 
   /// Remove a template assignment from a specific date.
