@@ -1,23 +1,16 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/features/profile/widgets/badges_grid.dart';
-import 'package:icanbefitter/shared/widgets/compact_achievements_row.dart';
 import 'package:icanbefitter/shared/widgets/pro_pill_button.dart';
 
 /// Profile identity section: banner (120px, tap to view), avatar overlapping banner,
 /// name, subtitle, edit button.
 /// Tap avatar/banner = view full screen (if exists). Small icon = replace.
 ///
-/// Bug #21 (Layout B) — The banner-overlap row hosts three elements side-by-side:
-/// the 80px avatar on the left, the [CompactAchievementsRow] in the middle,
-/// and the [ProPillButton] on the right. The old standalone PRO pill below
-/// the avatar (Bug #14) and the standalone BadgesGrid section at the bottom
-/// of the profile body were both removed — both concerns now live in this
-/// identity band. The chevron on the achievements row opens the full
-/// [BadgesGrid] in a bottom sheet.
+/// The banner-overlap row hosts two elements: the 80px avatar on the left
+/// and the [ProPillButton] on the right. Achievements now live in the separate
+/// [SlimAchievementsCard] below the Daily Completion section.
 class ProfileIdentity extends StatelessWidget {
   final String name;
   final String subtitle;
@@ -183,8 +176,7 @@ class ProfileIdentity extends StatelessWidget {
               ),
             ),
 
-            // Bug #21 Layout B — horizontal row overlapping the banner.
-            // Left: 80px avatar. Middle: CompactAchievementsRow. Right: ProPillButton.
+            // Banner-overlap row: avatar on the left, PRO pill on the right.
             Positioned(
               left: 18,
               right: 18,
@@ -192,21 +184,7 @@ class ProfileIdentity extends StatelessWidget {
               child: Row(
                 children: [
                   _buildAvatar(context),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        // Pad down so the row visually sits below the banner edge
-                        // to roughly match the avatar's vertical midpoint.
-                        padding: const EdgeInsets.only(top: 40),
-                        child: CompactAchievementsRow(
-                          badges: BadgeService.instance.getAllWithStatus(),
-                          onOpenAll: () => _openBadgesSheet(context),
-                        ),
-                      ),
-                    ),
-                  ),
+                  const Spacer(),
                   Padding(
                     padding: const EdgeInsets.only(top: 40),
                     child: ProPillButton(isPro: isPro, onTap: onTapPremium),
@@ -275,25 +253,6 @@ class ProfileIdentity extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  /// Bug #21 — Opens the full BadgesGrid in a bottom sheet. Entry point from
-  /// the chevron on the CompactAchievementsRow in the identity band.
-  void _openBadgesSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) => const SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(top: 12, bottom: 12),
-          child: SingleChildScrollView(child: BadgesGrid()),
-        ),
-      ),
     );
   }
 
