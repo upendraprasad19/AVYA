@@ -2,6 +2,8 @@ import '../services/hive_service.dart';
 import '../services/seed_service.dart';
 import '../utils/date_utils.dart';
 import '../../shared/repositories/plan_generator.dart';
+import '../../shared/repositories/plan_engine/models.dart';
+import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
 /// Maps generated plan days to real calendar dates and persists to Hive.
 ///
@@ -220,9 +222,14 @@ class WorkoutScheduleService {
     final monday = _normalizeToMonday(today);
     final endDate = monday.add(const Duration(days: 27)); // 4 weeks from plan monday
 
-    // Update plan end to match new schedule
-    await _hive.configBox.put(_planStartKey, monday.toIso8601String());
-    await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
+    // Preserve plan_start_date on reschedule — only write if this is the
+    // first-time generation (no existing start date). Overwriting on a
+    // days-per-week change resets getCurrentWeekNumber() back to Week 1.
+    final existingStart = _hive.configBox.get(_planStartKey) as String?;
+    if (existingStart == null) {
+      await _hive.configBox.put(_planStartKey, monday.toIso8601String());
+      await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
+    }
     await workoutBox.put(_planKey, plan.toMap());
     if (preferredDays != null) {
       await _hive.configBox.put('preferred_training_days', preferredDays);
