@@ -25,18 +25,18 @@ class ExerciseSelector {
 
   /// Hardcoded universal-bodyweight pool.
   static const _universalPool = <String, List<String>>{
-    'push':           ['Push-Up', 'Incline Push-Up', 'Pike Push-Up', 'Decline Push-Up', 'Wide Push-Up'],
-    'pull':           ['Inverted Row', 'Doorway Row', 'Towel Row', 'Superman Hold', 'Reverse Snow Angel'],
-    'legs':           ['Bodyweight Squat', 'Reverse Lunge', 'Glute Bridge', 'Single-Leg RDL', 'Calf Raise'],
-    'upper':          ['Push-Up', 'Pike Push-Up', 'Inverted Row', 'Superman Hold', 'Doorway Row'],
-    'shoulders_arms': ['Pike Push-Up', 'Wall Handstand Hold', 'Doorway Row', 'Superman Hold', 'Plank'],
-    'full_body':      ['Push-Up', 'Inverted Row', 'Bodyweight Squat', 'Plank', 'Glute Bridge'],
+    'push':           ['Push Up', 'Incline Push Up', 'Pike Push Up', 'Decline Push Up', 'Wall Push Up'],
+    'pull':           ['Inverted Row', 'TRX Row', 'Inverted Row', 'Plank', 'Dead Bug'],
+    'legs':           ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Glute Bridge', 'Single Leg Romanian Deadlift', 'Standing Calf Raise'],
+    'upper':          ['Push Up', 'Pike Push Up', 'Inverted Row', 'Plank', 'Inverted Row'],
+    'shoulders_arms': ['Pike Push Up', 'Handstand Hold', 'Inverted Row', 'Plank', 'Plank'],
+    'full_body':      ['Push Up', 'Inverted Row', 'Baithak (Hindu Squat)', 'Plank', 'Glute Bridge'],
   };
 
   /// Timed universal names.
   static const _timedUniversal = <String>{
-    'Plank', 'Dead Bug', 'Bird Dog', 'Hollow Hold', 'Side Plank',
-    'Superman Hold', 'Wall Handstand Hold', 'Reverse Snow Angel',
+    'Plank', 'Dead Bug', 'Hollow Body Hold', 'Side Plank',
+    'Handstand Hold', 'Copenhagen Plank',
   };
 
   /// Session duration → exercise count guideline.
@@ -182,15 +182,15 @@ class ExerciseSelector {
     final names = exercises.map((e) => e.exerciseName.toLowerCase()).toSet();
     final result = List<PlannedExercise>.from(exercises);
 
-    // Inject Bodyweight Squat if no squat variant present
+    // Inject Baithak (Hindu Squat) if no squat variant present
     if (!names.any((n) => n.contains('squat'))) {
-      final squat = repo.search('Bodyweight Squat');
+      final squat = repo.search('Baithak (Hindu Squat)');
       if (squat.isNotEmpty) {
         result.insert(0, _buildExercise(squat.first));
       } else {
         result.insert(0, PlannedExercise(
-          exerciseId: 'bodyweight_squat',
-          exerciseName: 'Bodyweight Squat',
+          exerciseId: 'baithak_hindu_squat',
+          exerciseName: 'Baithak (Hindu Squat)',
           loggingType: 'bodyweight_reps',
           sets: 3, reps: '10', restSeconds: 60,
           category: 'Legs',
@@ -199,15 +199,15 @@ class ExerciseSelector {
       }
     }
 
-    // Inject Push-Up if no push-up variant present
+    // Inject Push Up if no push-up variant present
     if (!names.any((n) => n.contains('push-up') || n.contains('push up') || n.contains('pushup'))) {
-      final pushup = repo.search('Push-Up');
+      final pushup = repo.search('Push Up');
       if (pushup.isNotEmpty) {
         result.insert(1, _buildExercise(pushup.first));
       } else {
         result.insert(1, PlannedExercise(
           exerciseId: 'push_up',
-          exerciseName: 'Push-Up',
+          exerciseName: 'Push Up',
           loggingType: 'bodyweight_reps',
           sets: 3, reps: '10', restSeconds: 60,
           category: 'Push',
@@ -491,17 +491,17 @@ class ExerciseSelector {
   /// V4 universal bodyweight pool — keyed by movement pattern.
   /// Used as Attempt 5 (last resort) in the cascade.
   static const universalPoolV4 = <String, List<String>>{
-    'horizontal_push':    ['Push-Up', 'Incline Push-Up', 'Wide Push-Up', 'Decline Push-Up', 'Diamond Push-Up'],
-    'vertical_push':      ['Pike Push-Up', 'Wall Handstand Hold', 'Hindu Push-Up'],
-    'horizontal_pull':    ['Inverted Row', 'Doorway Row', 'Towel Row', 'Superman Hold'],
+    'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
+    'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
+    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Inverted Row', 'Dead Bug'],
     'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
-    'knee_dominant':      ['Bodyweight Squat', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
-    'hip_dominant':       ['Glute Bridge', 'Single-Leg RDL', 'Good Morning'],
-    'core':               ['Plank', 'Dead Bug', 'Bird Dog', 'Bicycle Crunches', 'Mountain Climbers'],
+    'knee_dominant':      ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
+    'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
+    'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
     'elbow_flexion':      ['Chin Up', 'Inverted Row'],
-    'elbow_extension':    ['Diamond Push-Up', 'Bench Dips', 'Tricep Dips'],
-    'shoulder_isolation': ['Pike Push-Up', 'Arm Circles', 'Band Pull Apart'],
-    'hip_isolation':      ['Glute Bridge', 'Clamshell', 'Fire Hydrant'],
+    'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
+    'shoulder_isolation': ['Pike Push Up', 'Arm Circles', 'Band Pull Apart'],
+    'hip_isolation':      ['Glute Bridge', 'Side Plank', 'Glute Bridge'],
   };
 
   /// V4: Pick exercises for MuscleSlotDays using 5-attempt cascading fallback.
