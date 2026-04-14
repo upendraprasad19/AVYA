@@ -50,7 +50,14 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Dumbbell Bench Press",
+    "priority_tier": 1
   },
   {
     "id": "E002",
@@ -101,7 +108,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Push-Up",
+    "priority_tier": 1
   },
   {
     "id": "E003",
@@ -153,7 +168,14 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Upper Chest",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E004",
@@ -204,7 +226,13 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lower Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E005",
@@ -257,7 +285,16 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E006",
@@ -307,7 +344,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E007",
@@ -354,7 +399,14 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E008",
@@ -405,7 +457,13 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lower Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E009",
@@ -455,7 +513,13 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E010",
@@ -507,7 +571,16 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E011",
@@ -560,7 +633,14 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E012",
@@ -612,13 +692,21 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E013",
     "name": "Lateral Raise",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "shoulder_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Side Deltoid"
@@ -664,13 +752,21 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Lateral Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E014",
     "name": "Face Pull",
     "category": "pull",
-    "movement_pattern": "horizontal_pull",
+    "movement_pattern": "shoulder_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Rear Deltoid",
@@ -716,7 +812,14 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Rear Delts",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Band Pull Apart",
+    "priority_tier": 2
   },
   {
     "id": "E015",
@@ -765,7 +868,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E016",
@@ -818,13 +929,20 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E017",
     "name": "Tricep Pushdown (Cable)",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "elbow_extension",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Triceps"
@@ -865,13 +983,20 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E018",
     "name": "Skull Crusher",
     "category": "push",
-    "movement_pattern": "horizontal_push",
+    "movement_pattern": "elbow_extension",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Triceps"
@@ -914,13 +1039,20 @@
       "elbow"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E019",
     "name": "Overhead Tricep Extension",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "elbow_extension",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Triceps (long head)"
@@ -963,7 +1095,15 @@
       "elbow"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps (Long Head)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E020",
@@ -1015,13 +1155,22 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E021",
     "name": "Deadlift",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Lower Back",
@@ -1070,7 +1219,14 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "Lower Back",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Trap Bar Deadlift",
+    "priority_tier": 1
   },
   {
     "id": "E022",
@@ -1121,7 +1277,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Width)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Inverted Row",
+    "priority_tier": 1
   },
   {
     "id": "E023",
@@ -1174,7 +1338,14 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Dumbbell Row",
+    "priority_tier": 1
   },
   {
     "id": "E024",
@@ -1226,7 +1397,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Inverted Row",
+    "priority_tier": 1
   },
   {
     "id": "E025",
@@ -1276,7 +1455,14 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Width)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Pull Up",
+    "priority_tier": 1
   },
   {
     "id": "E026",
@@ -1328,7 +1514,14 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Back (Thickness)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Chest Supported Row",
+    "priority_tier": 1
   },
   {
     "id": "E027",
@@ -1380,13 +1573,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E029",
     "name": "Hyperextension",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Lower Back"
@@ -1431,7 +1630,13 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Lower Back",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Good Morning",
+    "priority_tier": 3
   },
   {
     "id": "E030",
@@ -1483,13 +1688,20 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Back (Thickness)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E031",
     "name": "Barbell Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps"
@@ -1536,13 +1748,20 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Dumbbell Curl",
+    "priority_tier": 2
   },
   {
     "id": "E032",
     "name": "Dumbbell Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps"
@@ -1585,13 +1804,21 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E033",
     "name": "Hammer Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps (brachialis)",
@@ -1633,13 +1860,21 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Brachialis",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E034",
     "name": "Concentration Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps"
@@ -1680,13 +1915,21 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E035",
     "name": "Cable Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps"
@@ -1729,13 +1972,20 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Dumbbell Curl",
+    "priority_tier": 2
   },
   {
     "id": "E036",
     "name": "Barbell Back Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -1785,13 +2035,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Goblet Squat",
+    "priority_tier": 1
   },
   {
     "id": "E037",
     "name": "Front Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads"
@@ -1841,13 +2097,19 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E038",
     "name": "Goblet Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -1895,13 +2157,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E039",
     "name": "Leg Press",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -1945,13 +2213,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Bulgarian Split Squat",
+    "priority_tier": 1
   },
   {
     "id": "E040",
     "name": "Hack Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads"
@@ -1996,13 +2270,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Leg Press",
+    "priority_tier": 1
   },
   {
     "id": "E041",
     "name": "Bulgarian Split Squat",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -2050,13 +2330,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E042",
     "name": "Walking Lunge",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -2104,13 +2390,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E043",
     "name": "Leg Extension",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Quads"
@@ -2153,13 +2445,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Squat",
+    "priority_tier": 2
   },
   {
     "id": "E044",
     "name": "Step Up",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -2207,13 +2505,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E045",
     "name": "Romanian Deadlift",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Hamstrings",
@@ -2256,13 +2560,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Dumbbell Romanian Deadlift",
+    "priority_tier": 1
   },
   {
     "id": "E046",
     "name": "Nordic Curl",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Hamstrings"
@@ -2300,13 +2610,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E047",
     "name": "Hip Thrust",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Glutes"
@@ -2351,13 +2667,20 @@
       "hip"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E048",
     "name": "Glute Bridge",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Glutes"
@@ -2400,13 +2723,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E049",
     "name": "Leg Curl (Lying)",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Hamstrings"
@@ -2447,13 +2776,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E050",
     "name": "Sumo Deadlift",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Adductors",
@@ -2500,13 +2835,20 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E051",
     "name": "Standing Calf Raise",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves (Gastrocnemius)"
@@ -2551,13 +2893,19 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Calf Raise",
+    "priority_tier": 2
   },
   {
     "id": "E052",
     "name": "Seated Calf Raise",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves (Soleus)"
@@ -2600,13 +2948,19 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E053",
     "name": "Donkey Calf Raise",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves"
@@ -2648,13 +3002,19 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E054",
     "name": "Plank",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -2700,13 +3060,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E055",
     "name": "Dead Bug",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -2751,13 +3120,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E056",
     "name": "Cable Crunch",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs"
@@ -2799,13 +3177,20 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Plank",
+    "priority_tier": 2
   },
   {
     "id": "E057",
     "name": "Hanging Leg Raise",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -2846,13 +3231,21 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E058",
     "name": "Ab Wheel Rollout",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -2899,13 +3292,19 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E059",
     "name": "Russian Twist",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Obliques"
@@ -2948,13 +3347,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E060",
     "name": "Reverse Crunch",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Lower Abs"
@@ -2996,13 +3401,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E061",
     "name": "Running (Treadmill)",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3046,13 +3457,19 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E062",
     "name": "Cycling (Stationary)",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Legs",
@@ -3094,13 +3511,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "legs",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E063",
     "name": "Jump Rope",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body",
@@ -3144,13 +3567,19 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E064",
     "name": "Rowing Machine",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3193,13 +3622,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E065",
     "name": "Burpee",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3242,13 +3677,22 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E066",
     "name": "Box Jump",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -3295,13 +3739,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E067",
     "name": "Mountain Climber",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Core",
@@ -3343,13 +3793,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E068",
     "name": "Assault Bike",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3388,7 +3847,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E069",
@@ -3439,13 +3904,21 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E070",
     "name": "Front Lever Hold",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Lats",
@@ -3489,13 +3962,21 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E071",
     "name": "L-Sit Hold",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -3538,7 +4019,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E072",
@@ -3587,13 +4074,19 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E073",
     "name": "Pistol Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -3639,13 +4132,22 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E074",
     "name": "Dragon Flag",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -3686,7 +4188,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E075",
@@ -3736,7 +4244,13 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E076",
@@ -3790,13 +4304,22 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E077",
     "name": "Baithak (Hindu Squat)",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -3845,13 +4368,22 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E078",
     "name": "Surya Namaskar",
     "category": "full_body",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body"
@@ -3893,13 +4425,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E079",
     "name": "Malkhamb Pole Exercise",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body"
@@ -3937,13 +4475,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E080",
     "name": "Hip Flexor Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hip Flexors"
@@ -3987,13 +4531,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E081",
     "name": "Pigeon Pose",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Glutes",
@@ -4035,13 +4585,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E082",
     "name": "Thoracic Extension (Foam Roller)",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -4082,13 +4638,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "thoracic spine",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E083",
     "name": "World's Greatest Stretch",
     "category": "flexibility",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hip Flexors",
@@ -4133,13 +4695,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E084",
     "name": "Ankle Circles",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Ankles"
@@ -4179,13 +4750,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "ankles",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E085",
     "name": "Cat-Cow Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Spine"
@@ -4230,13 +4810,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "spine",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E086",
     "name": "Power Clean",
     "category": "full_body",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Body",
@@ -4277,13 +4863,20 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E087",
     "name": "Trap Bar Deadlift",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -4329,13 +4922,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E088",
     "name": "Zercher Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -4383,13 +4982,20 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E089",
     "name": "Farmers Carry",
     "category": "full_body",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Grip",
@@ -4435,13 +5041,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "grip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E090",
     "name": "Suitcase Carry",
     "category": "full_body",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Core",
@@ -4486,13 +5098,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E091",
     "name": "Single Leg Romanian Deadlift",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Hamstrings",
@@ -4535,13 +5153,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E092",
     "name": "Good Morning",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Hamstrings",
@@ -4584,13 +5210,20 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E093",
     "name": "Band Pull Apart",
     "category": "pull",
-    "movement_pattern": "horizontal_pull",
+    "movement_pattern": "shoulder_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Rear Deltoid",
@@ -4633,13 +5266,21 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Rear Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E094",
     "name": "Incline Dumbbell Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps (long head)"
@@ -4679,13 +5320,20 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps (Long Head)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E095",
     "name": "Preacher Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps (short head)"
@@ -4728,13 +5376,19 @@
       "elbow"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps (Short Head)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E096",
     "name": "Cable Tricep Kickback",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "elbow_extension",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Triceps"
@@ -4774,13 +5428,20 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E097",
     "name": "Overhead Tricep Cable Extension",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "elbow_extension",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Triceps (long head)"
@@ -4823,13 +5484,20 @@
       "elbow"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Triceps (Long Head)",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E098",
     "name": "Reverse Fly",
     "category": "pull",
-    "movement_pattern": "horizontal_pull",
+    "movement_pattern": "shoulder_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Rear Deltoid",
@@ -4872,13 +5540,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Rear Delts",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E099",
     "name": "Wrist Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Forearms"
@@ -4920,13 +5594,19 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Forearms",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E100",
     "name": "Reverse Wrist Curl",
     "category": "push",
-    "movement_pattern": "vertical_push",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Forearms (extensors)"
@@ -4968,7 +5648,13 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Forearms",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E101",
@@ -5016,7 +5702,15 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lats (Width)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E102",
@@ -5067,7 +5761,13 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Upper Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E103",
@@ -5119,7 +5819,15 @@
       "wrist"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Upper Chest",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E104",
@@ -5171,7 +5879,15 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E105",
@@ -5222,13 +5938,19 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Traps",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E106",
     "name": "Shrug",
     "category": "pull",
-    "movement_pattern": "carry",
+    "movement_pattern": "shoulder_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Traps"
@@ -5269,13 +5991,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Upper Traps",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E107",
     "name": "Hip Abduction Machine",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abductors",
@@ -5316,13 +6044,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E108",
     "name": "Hip Adduction Machine",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Adductors"
@@ -5362,13 +6096,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E109",
     "name": "Glute Kickback (Cable)",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Glutes"
@@ -5411,13 +6151,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E110",
     "name": "Lateral Band Walk",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Glutes (medius)",
@@ -5458,13 +6204,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E111",
     "name": "Sissy Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Quads"
@@ -5505,13 +6259,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E112",
     "name": "Box Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Glutes",
@@ -5560,7 +6320,13 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E113",
@@ -5611,7 +6377,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E114",
@@ -5663,7 +6437,13 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Upper Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E115",
@@ -5713,7 +6493,13 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E116",
@@ -5763,7 +6549,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E117",
@@ -5810,7 +6602,14 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E118",
@@ -5858,7 +6657,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E119",
@@ -5905,7 +6710,15 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E120",
@@ -5950,7 +6763,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E121",
@@ -6000,13 +6819,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E122",
     "name": "Spider Curl",
     "category": "pull",
-    "movement_pattern": "vertical_pull",
+    "movement_pattern": "elbow_flexion",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Biceps"
@@ -6046,7 +6873,14 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E123",
@@ -6096,7 +6930,15 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Biceps",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E124",
@@ -6147,7 +6989,13 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Back (Thickness)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E125",
@@ -6197,7 +7045,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Mid Back (Thickness)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E126",
@@ -6249,13 +7103,20 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Triceps",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E127",
     "name": "Reverse Hyper",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Glutes",
@@ -6296,13 +7157,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E128",
     "name": "Snatch Grip Deadlift",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Back",
@@ -6348,13 +7215,20 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "full back",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E129",
     "name": "Rack Pull",
     "category": "pull",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Lower Back",
@@ -6402,13 +7276,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Lower Back",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E130",
     "name": "Jefferson Curl",
     "category": "flexibility",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lower Back",
@@ -6450,13 +7330,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lower Back",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E131",
     "name": "Janda Sit Up",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs"
@@ -6495,13 +7381,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E132",
     "name": "Pallof Press",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Core (anti-rotation)"
@@ -6542,13 +7437,20 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E133",
     "name": "Landmine Rotation",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Obliques",
@@ -6592,13 +7494,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E134",
     "name": "Copenhagen Plank",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Adductors",
@@ -6637,13 +7545,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E135",
     "name": "Bear Crawl",
     "category": "core",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Core",
@@ -6687,13 +7601,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E136",
     "name": "Crab Walk",
     "category": "core",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Core",
@@ -6735,13 +7658,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E137",
     "name": "Tire Flip",
     "category": "full_body",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Body"
@@ -6781,13 +7713,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 5
+    "cns_demand": 5,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E138",
     "name": "Sled Push",
     "category": "cardio",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -6830,13 +7768,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E139",
     "name": "Battle Ropes",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Shoulders",
@@ -6880,13 +7824,19 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E140",
     "name": "Kettlebell Swing",
     "category": "full_body",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Glutes",
@@ -6932,13 +7882,21 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E141",
     "name": "Kettlebell Turkish Get Up",
     "category": "full_body",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Body",
@@ -6978,13 +7936,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E142",
     "name": "Medicine Ball Slam",
     "category": "full_body",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Core",
@@ -7026,13 +7992,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E143",
     "name": "Skater Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -7078,13 +8050,22 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E144",
     "name": "Reverse Lunge",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -7133,13 +8114,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E145",
     "name": "Lateral Lunge",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Adductors",
@@ -7188,13 +8175,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E146",
     "name": "Curtsy Lunge",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Glutes (medius)",
@@ -7241,13 +8234,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E147",
     "name": "Sumo Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Adductors",
@@ -7295,13 +8294,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E148",
     "name": "Reverse Nordic Curl",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Quads (eccentric)"
@@ -7341,13 +8346,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E149",
     "name": "Jefferson Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -7394,13 +8405,20 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E150",
     "name": "Thoracic Rotation",
     "category": "flexibility",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine"
@@ -7441,13 +8459,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "thoracic spine",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E151",
     "name": "Inchworm",
     "category": "flexibility",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -7492,13 +8516,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E152",
     "name": "Squat to Stand",
     "category": "flexibility",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -7541,13 +8574,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E153",
     "name": "Ankle Dorsiflexion Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Calves",
@@ -7589,13 +8631,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E154",
     "name": "Lat Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lats",
@@ -7636,13 +8684,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E155",
     "name": "Chest Opener",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Chest",
@@ -7684,13 +8738,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E156",
     "name": "Shoulder Dislocate",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Shoulders",
@@ -7734,13 +8794,19 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E157",
     "name": "Psoas March",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Hip Flexors (Psoas)"
@@ -7783,13 +8849,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E158",
     "name": "Thoracic Bridge",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -7829,13 +8901,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "thoracic spine",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E159",
     "name": "Child's Pose",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lower Back",
@@ -7879,13 +8960,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lower Back",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E160",
     "name": "Downward Dog",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -7929,13 +9016,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E161",
     "name": "Calf Stretch (Wall)",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Calves",
@@ -7977,13 +9070,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E162",
     "name": "Piriformis Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Piriformis",
@@ -8025,13 +9124,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "piriformis",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E163",
     "name": "Foam Roll IT Band",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "IT Band (lateral thigh)"
@@ -8071,13 +9176,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E164",
     "name": "Foam Roll Upper Back",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -8118,13 +9229,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "thoracic spine",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E165",
     "name": "Quad Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Quads",
@@ -8165,13 +9282,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E166",
     "name": "Hamstring Stretch (Standing)",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings"
@@ -8211,13 +9337,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E167",
     "name": "Cross Body Shoulder Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Rear Deltoid",
@@ -8258,13 +9393,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Rear Delts",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E168",
     "name": "Doorway Chest Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Chest",
@@ -8307,13 +9451,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E169",
     "name": "Seated Piriformis Stretch",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Piriformis",
@@ -8354,13 +9504,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "piriformis",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E170",
     "name": "Wall Angels",
     "category": "flexibility",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -8403,7 +9559,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "thoracic spine",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E171",
@@ -8454,13 +9616,21 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E172",
     "name": "Dumbbell Side Bend",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Obliques (lateral flexion)"
@@ -8500,13 +9670,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E173",
     "name": "Decline Sit Up",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs"
@@ -8548,13 +9726,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E174",
     "name": "Crunches",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs"
@@ -8596,13 +9780,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E175",
     "name": "Bicycle Crunch",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs",
@@ -8645,13 +9835,19 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E176",
     "name": "V-Up",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Abs",
@@ -8692,13 +9888,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E177",
     "name": "Hollow Body Hold",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -8739,13 +9941,22 @@
     "is_foundational": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E178",
     "name": "GHD Sit Up",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Abs",
@@ -8786,13 +9997,19 @@
       "hip"
     ],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E179",
     "name": "Toes to Bar",
     "category": "core",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Abs",
@@ -8832,13 +10049,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E180",
     "name": "Windshield Wiper",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Obliques",
@@ -8878,13 +10103,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E181",
     "name": "Zercher Carry",
     "category": "full_body",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Core",
@@ -8925,13 +10158,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E182",
     "name": "Yoke Walk",
     "category": "full_body",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Body",
@@ -8972,13 +10211,19 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E183",
     "name": "Prowler Push",
     "category": "cardio",
-    "movement_pattern": "carry",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -9020,13 +10265,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E184",
     "name": "Sandbag Clean",
     "category": "full_body",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Full Body"
@@ -9067,7 +10318,13 @@
       "lower_back"
     ],
     "is_bilateral": true,
-    "cns_demand": 4
+    "cns_demand": 4,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 1
   },
   {
     "id": "E185",
@@ -9116,7 +10373,15 @@
       "shoulder"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E186",
@@ -9163,7 +10428,15 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Front Delts",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E187",
@@ -9212,13 +10485,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Lats (Thickness)",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E188",
     "name": "Banded Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -9265,13 +10546,21 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E189",
     "name": "Banded Hip Thrust",
     "category": "legs",
-    "movement_pattern": "hip_hinge",
+    "movement_pattern": "hip_dominant",
     "exercise_type": "compound",
     "primary_muscles": [
       "Glutes"
@@ -9316,7 +10605,15 @@
       "hip"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Glutes",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E190",
@@ -9366,7 +10663,13 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Back (Thickness)",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E191",
@@ -9416,13 +10719,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 2
+    "cns_demand": 2,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E192",
     "name": "Battle Rope Wave",
     "category": "cardio",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Shoulders",
@@ -9467,13 +10776,19 @@
       "shoulder"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E193",
     "name": "Jump Squat",
     "category": "legs",
-    "movement_pattern": "squat",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -9519,13 +10834,22 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E194",
     "name": "Depth Jump",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body",
@@ -9567,13 +10891,19 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E195",
     "name": "Split Jump",
     "category": "legs",
-    "movement_pattern": "lunge",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -9620,13 +10950,22 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E196",
     "name": "Broad Jump",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -9671,13 +11010,22 @@
       "knee"
     ],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E197",
     "name": "Single Leg Box Jump",
     "category": "legs",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -9722,13 +11070,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E198",
     "name": "Lunge with Twist",
     "category": "core",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -9774,13 +11128,19 @@
       "knee"
     ],
     "is_bilateral": false,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E199",
     "name": "Turkish Get Up (Half)",
     "category": "full_body",
-    "movement_pattern": "isometric",
+    "movement_pattern": "core",
     "exercise_type": "compound",
     "primary_muscles": [
       "Core",
@@ -9822,13 +11182,19 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E200",
     "name": "Hindu Warrior Flow",
     "category": "full_body",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body"
@@ -9868,13 +11234,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 3
+    "cns_demand": 3,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2
   },
   {
     "id": "E201",
     "name": "Spot Jogging",
     "category": "warmup",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -9916,13 +11291,22 @@
       "ankle"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E202",
     "name": "Jumping Jacks",
     "category": "warmup",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -9965,13 +11349,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E203",
     "name": "High Knees",
     "category": "warmup",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Hip Flexors",
@@ -10015,13 +11408,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E204",
     "name": "Butt Kicks",
     "category": "warmup",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Hamstrings"
@@ -10064,13 +11466,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E205",
     "name": "Arm Circles",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Shoulders"
@@ -10112,13 +11523,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E206",
     "name": "Neck Rotations",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Neck"
@@ -10162,13 +11582,22 @@
       "neck"
     ],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "neck",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E207",
     "name": "Torso Twists",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Core"
@@ -10211,13 +11640,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E208",
     "name": "Hip Circles",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Hip Flexors"
@@ -10260,13 +11698,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E209",
     "name": "Leg Swings",
     "category": "warmup",
-    "movement_pattern": "dynamic",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Hip Flexors",
@@ -10310,13 +11757,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hip",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E210",
     "name": "Wrist Rotations",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Forearms"
@@ -10356,13 +11812,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Forearms",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E211",
     "name": "Ankle Rotations",
     "category": "warmup",
-    "movement_pattern": "rotation",
+    "movement_pattern": "core",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Calves"
@@ -10402,7 +11867,16 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Calves",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E212",
@@ -10449,13 +11923,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E213",
     "name": "Dead Hang",
     "category": "warmup",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "activation",
     "primary_muscles": [
       "Lats",
@@ -10498,13 +11981,21 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Lats",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E214",
     "name": "Slow Walking",
     "category": "cooldown",
-    "movement_pattern": "cardio",
+    "movement_pattern": "core",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -10544,13 +12035,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "full body",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E215",
     "name": "Standing Toe Touch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Hamstrings"
@@ -10593,13 +12093,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Hamstrings",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E216",
     "name": "Standing Quad Stretch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Quads"
@@ -10641,13 +12150,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Quads",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E217",
     "name": "Overhead Stretch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Shoulders"
@@ -10690,13 +12208,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Shoulders",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E218",
     "name": "Side Bend Stretch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Obliques"
@@ -10739,13 +12266,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E219",
     "name": "Cross-body Shoulder Stretch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Rear Deltoid"
@@ -10787,13 +12323,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Rear Delts",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E220",
     "name": "Chest Doorway Stretch",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Chest"
@@ -10836,13 +12381,22 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Mid Chest",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   },
   {
     "id": "E221",
     "name": "Deep Breathing",
     "category": "cooldown",
-    "movement_pattern": "static",
+    "movement_pattern": "core",
     "exercise_type": "recovery",
     "primary_muscles": [
       "Core"
@@ -10882,6 +12436,15 @@
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
-    "cns_demand": 1
+    "cns_demand": 1,
+    "target_focus": "Core",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3
   }
 ]
