@@ -486,6 +486,164 @@ class ExerciseSelector {
     return exercises;
   }
 
+  // ── V4: Muscle-slot architecture ─────────────────────────────────
+
+  /// V4 universal bodyweight pool — keyed by movement pattern.
+  /// Used as Attempt 5 (last resort) in the cascade.
+  static const universalPoolV4 = <String, List<String>>{
+    'horizontal_push':    ['Push-Up', 'Incline Push-Up', 'Wide Push-Up', 'Decline Push-Up', 'Diamond Push-Up'],
+    'vertical_push':      ['Pike Push-Up', 'Wall Handstand Hold', 'Hindu Push-Up'],
+    'horizontal_pull':    ['Inverted Row', 'Doorway Row', 'Towel Row', 'Superman Hold'],
+    'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
+    'knee_dominant':      ['Bodyweight Squat', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
+    'hip_dominant':       ['Glute Bridge', 'Single-Leg RDL', 'Good Morning'],
+    'core':               ['Plank', 'Dead Bug', 'Bird Dog', 'Bicycle Crunches', 'Mountain Climbers'],
+    'elbow_flexion':      ['Chin Up', 'Inverted Row'],
+    'elbow_extension':    ['Diamond Push-Up', 'Bench Dips', 'Tricep Dips'],
+    'shoulder_isolation': ['Pike Push-Up', 'Arm Circles', 'Band Pull Apart'],
+    'hip_isolation':      ['Glute Bridge', 'Clamshell', 'Fire Hydrant'],
+  };
+
+  /// V4: Pick exercises for MuscleSlotDays using 5-attempt cascading fallback.
+  /// movement_pattern is NEVER dropped across all 5 attempts.
+  static List<PopulatedDay> pickV4({
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    List<String> injuries = const [],
+  }) {
+    final result = <PopulatedDay>[];
+
+    for (final day in slotDays) {
+      // Fill variant A
+      final exercisesA = _fillSlots(
+        day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
+        injuries: injuries, excludeNames: {},
+      );
+
+      // Fill variant B: use slotsB if defined, exclude A names for variety
+      List<PlannedExercise> exercisesB;
+      if (day.slotsB != null) {
+        final aNames = exercisesA.map((e) => e.exerciseName).toSet();
+        exercisesB = _fillSlots(
+          day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
+          injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
+        );
+      } else {
+        exercisesB = exercisesA;
+      }
+
+      result.add(PopulatedDay(
+        name: day.name, focus: day.focus,
+        dayType: day.dayType, intensity: day.intensity,
+        exercisesA: exercisesA, exercisesB: exercisesB,
+      ));
+    }
+    return result;
+  }
+
+  /// Fill a list of MuscleSlots with exercises via 5-attempt cascade.
+  static List<PlannedExercise> _fillSlots(
+    List<MuscleSlot> slots,
+    ExerciseRepository repo,
+    String equipmentTier,
+    String effectiveExp,
+    int phase, {
+    required List<String> injuries,
+    required Set<String> excludeNames,
+  }) {
+    final exercises = <PlannedExercise>[];
+    final pickedNames = Set<String>.from(excludeNames);
+
+    for (final slot in slots) {
+      for (var i = 0; i < slot.count; i++) {
+        final exercise = _cascadeFill(
+          slot, repo, equipmentTier, effectiveExp, phase,
+          injuries: injuries, pickedNames: pickedNames,
+        );
+        if (exercise != null) {
+          exercises.add(exercise);
+          pickedNames.add(exercise.exerciseName);
+        }
+      }
+    }
+    return exercises;
+  }
+
+  /// 5-attempt cascade for a single MuscleSlot.
+  /// movement_pattern is NEVER dropped.
+  static PlannedExercise? _cascadeFill(
+    MuscleSlot slot,
+    ExerciseRepository repo,
+    String equipmentTier,
+    String effectiveExp,
+    int phase, {
+    required List<String> injuries,
+    required Set<String> pickedNames,
+  }) {
+    // Attempt 1: Exact target + subFocus + equipment + type + experience
+    var candidates = repo.queryV4(
+      movementPattern: slot.movementPattern,
+      targetFocus: slot.subFocus != null
+          ? '${slot.targetMuscle} (${slot.subFocus})'
+          : null,
+      targetMuscle: slot.targetMuscle,
+      equipmentTier: equipmentTier,
+      exerciseType: slot.exerciseType,
+      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+      foundationalOnly: phase == 1,
+      excludeNames: pickedNames,
+      injuryExclusions: injuries.isEmpty ? null : injuries,
+    );
+    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+
+    // Attempt 2: Drop subFocus (broader target within same muscle)
+    candidates = repo.queryV4(
+      movementPattern: slot.movementPattern,
+      targetMuscle: slot.targetMuscle,
+      equipmentTier: equipmentTier,
+      exerciseType: slot.exerciseType,
+      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+      excludeNames: pickedNames,
+      injuryExclusions: injuries.isEmpty ? null : injuries,
+    );
+    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+
+    // Attempt 3: Drop target + exercise type (any exercise in movement pattern with equipment)
+    candidates = repo.queryV4(
+      movementPattern: slot.movementPattern,
+      equipmentTier: equipmentTier,
+      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+      excludeNames: pickedNames,
+      injuryExclusions: injuries.isEmpty ? null : injuries,
+    );
+    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+
+    // Attempt 4: Drop equipment (allow any equipment in the movement pattern)
+    candidates = repo.queryV4(
+      movementPattern: slot.movementPattern,
+      suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+      excludeNames: pickedNames,
+      injuryExclusions: injuries.isEmpty ? null : injuries,
+    );
+    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+
+    // Attempt 5: Universal bodyweight pool
+    final pool = universalPoolV4[slot.movementPattern] ?? [];
+    for (final name in pool) {
+      if (pickedNames.contains(name)) continue;
+      final match = repo.search(name);
+      if (match.isNotEmpty) return _buildExercise(match.first);
+      // If exercise not in library, create a minimal placeholder
+      return _buildUniversalFallback(name, 'A');
+    }
+
+    return null; // Should never happen if universal pool is complete
+  }
+
   /// Build a PlannedExercise from an exercise map.
   static PlannedExercise _buildExercise(Map<String, dynamic> ex) {
     final equipRaw = ex['equipment_needed'];
