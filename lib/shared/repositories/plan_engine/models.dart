@@ -116,6 +116,8 @@ class PlannedExercise {
   // V3 fields
   final double? suggestedWeight; // from ProgressionResolver (kg)
   final bool warmupSet; // true for set 1 of compounds (annotation)
+  // V4 fields
+  final String? repRange; // exercise-specific range from library e.g. "8-12", "5-8", "30-60"
 
   const PlannedExercise({
     required this.exerciseId,
@@ -136,6 +138,7 @@ class PlannedExercise {
     this.primaryMuscles,
     this.suggestedWeight,
     this.warmupSet = false,
+    this.repRange,
   });
 
   PlannedExercise copyWith({
@@ -150,6 +153,7 @@ class PlannedExercise {
     List<String>? primaryMuscles,
     double? suggestedWeight,
     bool? warmupSet,
+    String? repRange,
   }) {
     return PlannedExercise(
       exerciseId: exerciseId,
@@ -170,6 +174,7 @@ class PlannedExercise {
       primaryMuscles: primaryMuscles ?? this.primaryMuscles,
       suggestedWeight: suggestedWeight ?? this.suggestedWeight,
       warmupSet: warmupSet ?? this.warmupSet,
+      repRange: repRange ?? this.repRange,
     );
   }
 
@@ -192,6 +197,7 @@ class PlannedExercise {
         if (primaryMuscles != null) 'primary_muscles': primaryMuscles,
         if (suggestedWeight != null) 'suggested_weight': suggestedWeight,
         if (warmupSet) 'warmup_set': warmupSet,
+        if (repRange != null) 'rep_range': repRange,
       };
 }
 

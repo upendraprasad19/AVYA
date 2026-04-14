@@ -57,7 +57,8 @@
       "full_gym"
     ],
     "standard_swap": "Dumbbell Bench Press",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E002",
@@ -116,7 +117,8 @@
       "full_gym"
     ],
     "standard_swap": "Push-Up",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E003",
@@ -175,7 +177,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E004",
@@ -232,7 +235,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E005",
@@ -294,7 +298,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E006",
@@ -352,7 +357,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E007",
@@ -406,7 +412,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E008",
@@ -463,7 +470,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E009",
@@ -519,7 +527,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E010",
@@ -580,7 +589,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E011",
@@ -640,7 +650,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E012",
@@ -700,7 +711,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E013",
@@ -760,7 +772,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E014",
@@ -819,7 +832,8 @@
       "full_gym"
     ],
     "standard_swap": "Band Pull Apart",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E015",
@@ -876,7 +890,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E016",
@@ -936,7 +951,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E017",
@@ -990,7 +1006,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E018",
@@ -1046,7 +1063,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E019",
@@ -1103,7 +1121,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E020",
@@ -1164,7 +1183,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E021",
@@ -1226,7 +1246,8 @@
       "full_gym"
     ],
     "standard_swap": "Trap Bar Deadlift",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E022",
@@ -1285,7 +1306,8 @@
       "full_gym"
     ],
     "standard_swap": "Inverted Row",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E023",
@@ -1345,7 +1367,8 @@
       "full_gym"
     ],
     "standard_swap": "Dumbbell Row",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E024",
@@ -1405,7 +1428,8 @@
       "full_gym"
     ],
     "standard_swap": "Inverted Row",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E025",
@@ -1462,7 +1486,8 @@
       "full_gym"
     ],
     "standard_swap": "Pull Up",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E026",
@@ -1521,7 +1546,8 @@
       "full_gym"
     ],
     "standard_swap": "Chest Supported Row",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E027",
@@ -1579,7 +1605,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E029",
@@ -1636,7 +1663,8 @@
       "full_gym"
     ],
     "standard_swap": "Good Morning",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E030",
@@ -1695,7 +1723,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E031",
@@ -1755,7 +1784,8 @@
       "full_gym"
     ],
     "standard_swap": "Dumbbell Curl",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E032",
@@ -1812,7 +1842,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E033",
@@ -1868,7 +1899,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E034",
@@ -1923,7 +1955,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E035",
@@ -1979,7 +2012,8 @@
       "full_gym"
     ],
     "standard_swap": "Dumbbell Curl",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E036",
@@ -2041,7 +2075,8 @@
       "full_gym"
     ],
     "standard_swap": "Goblet Squat",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E037",
@@ -2103,7 +2138,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E038",
@@ -2163,7 +2199,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E039",
@@ -2219,7 +2256,8 @@
       "full_gym"
     ],
     "standard_swap": "Bulgarian Split Squat",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E040",
@@ -2276,7 +2314,8 @@
       "full_gym"
     ],
     "standard_swap": "Leg Press",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E041",
@@ -2336,7 +2375,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E042",
@@ -2397,7 +2437,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E043",
@@ -2452,7 +2493,8 @@
       "full_gym"
     ],
     "standard_swap": "Bodyweight Squat",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E044",
@@ -2512,7 +2554,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E045",
@@ -2567,7 +2610,8 @@
       "full_gym"
     ],
     "standard_swap": "Dumbbell Romanian Deadlift",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E046",
@@ -2618,7 +2662,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E047",
@@ -2676,7 +2721,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E048",
@@ -2732,7 +2778,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E049",
@@ -2785,7 +2832,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E050",
@@ -2845,7 +2893,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E051",
@@ -2902,7 +2951,8 @@
       "full_gym"
     ],
     "standard_swap": "Bodyweight Calf Raise",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E052",
@@ -2957,7 +3007,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E053",
@@ -3012,7 +3063,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E054",
@@ -3073,7 +3125,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "30-60"
   },
   {
     "id": "E055",
@@ -3133,7 +3186,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "30-60"
   },
   {
     "id": "E056",
@@ -3188,7 +3242,8 @@
       "full_gym"
     ],
     "standard_swap": "Plank",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E057",
@@ -3243,7 +3298,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "12-20"
   },
   {
     "id": "E058",
@@ -3302,7 +3358,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "12-20"
   },
   {
     "id": "E059",
@@ -3358,7 +3415,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E060",
@@ -3413,7 +3471,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E061",
@@ -3469,7 +3528,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E062",
@@ -3523,7 +3583,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E063",
@@ -3579,7 +3640,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E064",
@@ -3634,7 +3696,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E065",
@@ -3692,7 +3755,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E066",
@@ -3751,7 +3815,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "20-30"
   },
   {
     "id": "E067",
@@ -3808,7 +3873,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "20-30"
   },
   {
     "id": "E068",
@@ -3859,7 +3925,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "20-30"
   },
   {
     "id": "E069",
@@ -3918,7 +3985,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E070",
@@ -3976,7 +4044,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E071",
@@ -4031,7 +4100,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E072",
@@ -4086,7 +4156,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E073",
@@ -4147,7 +4218,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E074",
@@ -4200,7 +4272,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E075",
@@ -4256,7 +4329,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E076",
@@ -4319,7 +4393,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E077",
@@ -4383,7 +4458,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E078",
@@ -4438,7 +4514,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "10-15"
   },
   {
     "id": "E079",
@@ -4488,7 +4565,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E080",
@@ -4545,7 +4623,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E081",
@@ -4600,7 +4679,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E082",
@@ -4653,7 +4733,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E083",
@@ -4713,7 +4794,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E084",
@@ -4768,7 +4850,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E085",
@@ -4826,7 +4909,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E086",
@@ -4880,7 +4964,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E087",
@@ -4938,7 +5023,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E088",
@@ -4999,7 +5085,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E089",
@@ -5057,7 +5144,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "12-20"
   },
   {
     "id": "E090",
@@ -5114,7 +5202,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E091",
@@ -5171,7 +5260,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "5-8"
   },
   {
     "id": "E092",
@@ -5227,7 +5317,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E093",
@@ -5284,7 +5375,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E094",
@@ -5337,7 +5429,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E095",
@@ -5392,7 +5485,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E096",
@@ -5445,7 +5539,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E097",
@@ -5501,7 +5596,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E098",
@@ -5556,7 +5652,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E099",
@@ -5610,7 +5707,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E100",
@@ -5664,7 +5762,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E101",
@@ -5720,7 +5819,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E102",
@@ -5778,7 +5878,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E103",
@@ -5839,7 +5940,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E104",
@@ -5899,7 +6001,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E105",
@@ -5956,7 +6059,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E106",
@@ -6009,7 +6113,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E107",
@@ -6062,7 +6167,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E108",
@@ -6114,7 +6220,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E109",
@@ -6169,7 +6276,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E110",
@@ -6224,7 +6332,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E111",
@@ -6278,7 +6387,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E112",
@@ -6339,7 +6449,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E113",
@@ -6398,7 +6509,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E114",
@@ -6456,7 +6568,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E115",
@@ -6512,7 +6625,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E116",
@@ -6568,7 +6682,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E117",
@@ -6622,7 +6737,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E118",
@@ -6676,7 +6792,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E119",
@@ -6731,7 +6848,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E120",
@@ -6782,7 +6900,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E121",
@@ -6840,7 +6959,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E122",
@@ -6893,7 +7013,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E123",
@@ -6951,7 +7072,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E124",
@@ -7009,7 +7131,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E125",
@@ -7065,7 +7188,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E126",
@@ -7124,7 +7248,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E127",
@@ -7177,7 +7302,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E128",
@@ -7236,7 +7362,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E129",
@@ -7296,7 +7423,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E130",
@@ -7350,7 +7478,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "10-15"
   },
   {
     "id": "E131",
@@ -7404,7 +7533,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-20"
   },
   {
     "id": "E132",
@@ -7458,7 +7588,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E133",
@@ -7514,7 +7645,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E134",
@@ -7565,7 +7697,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E135",
@@ -7624,7 +7757,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E136",
@@ -7681,7 +7815,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E137",
@@ -7733,7 +7868,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E138",
@@ -7788,7 +7924,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E139",
@@ -7844,7 +7981,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E140",
@@ -7904,7 +8042,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E141",
@@ -7958,7 +8097,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E142",
@@ -8012,7 +8152,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E143",
@@ -8073,7 +8214,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E144",
@@ -8135,7 +8277,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E145",
@@ -8197,7 +8340,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E146",
@@ -8257,7 +8401,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E147",
@@ -8318,7 +8463,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E148",
@@ -8371,7 +8517,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-15"
   },
   {
     "id": "E149",
@@ -8431,7 +8578,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E150",
@@ -8485,7 +8633,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E151",
@@ -8545,7 +8694,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "10-15"
   },
   {
     "id": "E152",
@@ -8603,7 +8753,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "10-15"
   },
   {
     "id": "E153",
@@ -8658,7 +8809,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E154",
@@ -8711,7 +8863,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E155",
@@ -8766,7 +8919,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E156",
@@ -8822,7 +8976,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "10-15"
   },
   {
     "id": "E157",
@@ -8877,7 +9032,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "10-15"
   },
   {
     "id": "E158",
@@ -8932,7 +9088,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E159",
@@ -8989,7 +9146,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E160",
@@ -9046,7 +9204,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E161",
@@ -9101,7 +9260,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E162",
@@ -9156,7 +9316,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E163",
@@ -9208,7 +9369,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E164",
@@ -9261,7 +9423,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E165",
@@ -9317,7 +9480,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E166",
@@ -9372,7 +9536,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E167",
@@ -9428,7 +9593,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E168",
@@ -9483,7 +9649,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E169",
@@ -9536,7 +9703,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E170",
@@ -9592,7 +9760,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "10-15"
   },
   {
     "id": "E171",
@@ -9651,7 +9820,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E172",
@@ -9705,7 +9875,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-20"
   },
   {
     "id": "E173",
@@ -9759,7 +9930,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-20"
   },
   {
     "id": "E174",
@@ -9814,7 +9986,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E175",
@@ -9870,7 +10043,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E176",
@@ -9924,7 +10098,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "12-20"
   },
   {
     "id": "E177",
@@ -9980,7 +10155,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "30-60"
   },
   {
     "id": "E178",
@@ -10033,7 +10209,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E179",
@@ -10087,7 +10264,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E180",
@@ -10141,7 +10319,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E181",
@@ -10194,7 +10373,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "12-20"
   },
   {
     "id": "E182",
@@ -10247,7 +10427,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "12-20"
   },
   {
     "id": "E183",
@@ -10301,7 +10482,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "20-30"
   },
   {
     "id": "E184",
@@ -10354,7 +10536,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 1
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E185",
@@ -10411,7 +10594,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E186",
@@ -10466,7 +10650,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E187",
@@ -10523,7 +10708,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E188",
@@ -10584,7 +10770,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E189",
@@ -10643,7 +10830,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E190",
@@ -10699,7 +10887,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E191",
@@ -10755,7 +10944,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E192",
@@ -10812,7 +11002,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "30-60"
   },
   {
     "id": "E193",
@@ -10873,7 +11064,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E194",
@@ -10927,7 +11119,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E195",
@@ -10989,7 +11182,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E196",
@@ -11049,7 +11243,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E197",
@@ -11107,7 +11302,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E198",
@@ -11166,7 +11362,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E199",
@@ -11220,7 +11417,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "12-20"
   },
   {
     "id": "E200",
@@ -11275,7 +11473,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 2
+    "priority_tier": 2,
+    "rep_range": "10-15"
   },
   {
     "id": "E201",
@@ -11332,7 +11531,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E202",
@@ -11390,7 +11590,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E203",
@@ -11449,7 +11650,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E204",
@@ -11507,7 +11709,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E205",
@@ -11564,7 +11767,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E206",
@@ -11623,7 +11827,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E207",
@@ -11681,7 +11886,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E208",
@@ -11739,7 +11945,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E209",
@@ -11798,7 +12005,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E210",
@@ -11853,7 +12061,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E211",
@@ -11908,7 +12117,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E212",
@@ -11964,7 +12174,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "10-15"
   },
   {
     "id": "E213",
@@ -12021,7 +12232,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E214",
@@ -12076,7 +12288,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E215",
@@ -12134,7 +12347,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E216",
@@ -12191,7 +12405,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E217",
@@ -12249,7 +12464,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E218",
@@ -12307,7 +12523,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E219",
@@ -12364,7 +12581,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E220",
@@ -12422,7 +12640,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "id": "E221",
@@ -12477,7 +12696,8 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3
+    "priority_tier": 3,
+    "rep_range": "30-60"
   },
   {
     "name": "Kas Glute Bridge",
@@ -12541,6 +12761,7 @@
     ],
     "standard_swap": "Hip Thrust",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E222"
   },
   {
@@ -12604,6 +12825,7 @@
     ],
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E223"
   },
   {
@@ -12667,6 +12889,7 @@
     ],
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E224"
   },
   {
@@ -12729,6 +12952,7 @@
     ],
     "standard_swap": "Banded Lateral Walk",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E225"
   },
   {
@@ -12791,6 +13015,7 @@
     ],
     "standard_swap": "Kas Glute Bridge",
     "priority_tier": 3,
+    "rep_range": "12-15",
     "id": "E226"
   },
   {
@@ -12855,6 +13080,7 @@
     ],
     "standard_swap": "Bulgarian Split Squat",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E227"
   },
   {
@@ -12920,6 +13146,7 @@
     ],
     "standard_swap": "Reverse Lunge",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E228"
   },
   {
@@ -12983,6 +13210,7 @@
     ],
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
+    "rep_range": "5-8",
     "id": "E229"
   },
   {
@@ -13043,6 +13271,7 @@
     ],
     "standard_swap": "Prone Leg Curl",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E230"
   },
   {
@@ -13106,6 +13335,7 @@
     ],
     "standard_swap": "Dumbbell Bench Press",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E231"
   },
   {
@@ -13169,6 +13399,7 @@
     ],
     "standard_swap": "Cable Fly",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E232"
   },
   {
@@ -13234,6 +13465,7 @@
     ],
     "standard_swap": "Push-Up",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E233"
   },
   {
@@ -13296,6 +13528,7 @@
     ],
     "standard_swap": "Dumbbell Bench Press",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E234"
   },
   {
@@ -13356,6 +13589,7 @@
     ],
     "standard_swap": "Dumbbell Lateral Raise",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E235"
   },
   {
@@ -13418,6 +13652,7 @@
     ],
     "standard_swap": "Dumbbell Front Raise",
     "priority_tier": 3,
+    "rep_range": "12-15",
     "id": "E236"
   },
   {
@@ -13477,6 +13712,7 @@
     ],
     "standard_swap": "Dumbbell Lateral Raise",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E237"
   },
   {
@@ -13541,6 +13777,7 @@
     ],
     "standard_swap": "Tricep Dips",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E238"
   },
   {
@@ -13602,6 +13839,7 @@
     ],
     "standard_swap": "Tricep Pushdown",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E239"
   },
   {
@@ -13663,6 +13901,7 @@
     ],
     "standard_swap": "Overhead Dumbbell Extension",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E240"
   },
   {
@@ -13727,6 +13966,7 @@
     ],
     "standard_swap": "Tricep Dips",
     "priority_tier": 2,
+    "rep_range": "5-8",
     "id": "E241"
   },
   {
@@ -13790,6 +14030,7 @@
     ],
     "standard_swap": "Hammer Curl",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E242"
   },
   {
@@ -13849,6 +14090,7 @@
     ],
     "standard_swap": "Barbell Curl",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E243"
   },
   {
@@ -13913,6 +14155,7 @@
     ],
     "standard_swap": "Barbell Row",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E244"
   },
   {
@@ -13974,6 +14217,7 @@
     ],
     "standard_swap": "Lat Pulldown",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E245"
   },
   {
@@ -14036,6 +14280,7 @@
     ],
     "standard_swap": "Cable Seated Row",
     "priority_tier": 2,
+    "rep_range": "8-12",
     "id": "E246"
   },
   {
@@ -14099,6 +14344,7 @@
     ],
     "standard_swap": "Lat Pulldown",
     "priority_tier": 2,
+    "rep_range": "12-15",
     "id": "E247"
   },
   {
@@ -14161,6 +14407,7 @@
     ],
     "standard_swap": "Hanging Leg Raise",
     "priority_tier": 2,
+    "rep_range": "12-20",
     "id": "E248"
   },
   {
@@ -14224,6 +14471,7 @@
     ],
     "standard_swap": "Sit-Up",
     "priority_tier": 2,
+    "rep_range": "12-20",
     "id": "E249"
   },
   {
@@ -14288,6 +14536,7 @@
     ],
     "standard_swap": "Plank",
     "priority_tier": 2,
+    "rep_range": "30-60",
     "id": "E250"
   },
   {
@@ -14354,6 +14603,7 @@
     ],
     "standard_swap": "Plank",
     "priority_tier": 2,
+    "rep_range": "30-60",
     "id": "E251"
   }
 ]

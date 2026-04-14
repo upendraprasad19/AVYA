@@ -659,6 +659,9 @@ class ExerciseSelector {
     final cues = ex['coaching_cues'];
     final notes = (cues is List && cues.isNotEmpty) ? cues.first.toString() : null;
 
+    // V4: carry exercise-specific rep range through the pipeline
+    final repRange = ex['rep_range'] as String?;
+
     return PlannedExercise(
       exerciseId: ex['id'] as String? ?? '',
       exerciseName: ex['name'] as String? ?? 'Unknown',
@@ -673,6 +676,7 @@ class ExerciseSelector {
       equipmentNeeded: equipList,
       primaryMuscles: muscles,
       variant: 'A',
+      repRange: repRange,
     );
   }
 }
