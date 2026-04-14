@@ -2848,7 +2848,7 @@
     "id": "E051",
     "name": "Standing Calf Raise",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves (Gastrocnemius)"
@@ -2905,7 +2905,7 @@
     "id": "E052",
     "name": "Seated Calf Raise",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves (Soleus)"
@@ -2960,7 +2960,7 @@
     "id": "E053",
     "name": "Donkey Calf Raise",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Calves"
@@ -3413,7 +3413,7 @@
     "id": "E061",
     "name": "Running (Treadmill)",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3469,7 +3469,7 @@
     "id": "E062",
     "name": "Cycling (Stationary)",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Legs",
@@ -3523,7 +3523,7 @@
     "id": "E063",
     "name": "Jump Rope",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body",
@@ -3579,7 +3579,7 @@
     "id": "E064",
     "name": "Rowing Machine",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3634,7 +3634,7 @@
     "id": "E065",
     "name": "Burpee",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -3692,7 +3692,7 @@
     "id": "E066",
     "name": "Box Jump",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -3751,7 +3751,7 @@
     "id": "E067",
     "name": "Mountain Climber",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Core",
@@ -3808,7 +3808,7 @@
     "id": "E068",
     "name": "Assault Bike",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -4383,7 +4383,7 @@
     "id": "E078",
     "name": "Surya Namaskar",
     "category": "full_body",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body"
@@ -4487,7 +4487,7 @@
     "id": "E080",
     "name": "Hip Flexor Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hip Flexors"
@@ -4543,7 +4543,7 @@
     "id": "E081",
     "name": "Pigeon Pose",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Glutes",
@@ -4597,7 +4597,7 @@
     "id": "E082",
     "name": "Thoracic Extension (Foam Roller)",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -4650,7 +4650,7 @@
     "id": "E083",
     "name": "World's Greatest Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hip Flexors",
@@ -4710,7 +4710,7 @@
     "id": "E084",
     "name": "Ankle Circles",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Ankles"
@@ -4765,7 +4765,7 @@
     "id": "E085",
     "name": "Cat-Cow Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Spine"
@@ -6056,7 +6056,7 @@
     "id": "E108",
     "name": "Hip Adduction Machine",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "hip_isolation",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Adductors"
@@ -7288,7 +7288,7 @@
     "id": "E130",
     "name": "Jefferson Curl",
     "category": "flexibility",
-    "movement_pattern": "hip_dominant",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lower Back",
@@ -7725,7 +7725,7 @@
     "id": "E138",
     "name": "Sled Push",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -7780,7 +7780,7 @@
     "id": "E139",
     "name": "Battle Ropes",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "compound",
     "primary_muscles": [
       "Shoulders",
@@ -8418,7 +8418,7 @@
     "id": "E150",
     "name": "Thoracic Rotation",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine"
@@ -8471,7 +8471,7 @@
     "id": "E151",
     "name": "Inchworm",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -8531,7 +8531,7 @@
     "id": "E152",
     "name": "Squat to Stand",
     "category": "flexibility",
-    "movement_pattern": "knee_dominant",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -8589,7 +8589,7 @@
     "id": "E153",
     "name": "Ankle Dorsiflexion Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Calves",
@@ -8643,7 +8643,7 @@
     "id": "E154",
     "name": "Lat Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lats",
@@ -8696,7 +8696,7 @@
     "id": "E155",
     "name": "Chest Opener",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Chest",
@@ -8750,7 +8750,7 @@
     "id": "E156",
     "name": "Shoulder Dislocate",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Shoulders",
@@ -8806,7 +8806,7 @@
     "id": "E157",
     "name": "Psoas March",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "isolation",
     "primary_muscles": [
       "Hip Flexors (Psoas)"
@@ -8861,7 +8861,7 @@
     "id": "E158",
     "name": "Thoracic Bridge",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -8916,7 +8916,7 @@
     "id": "E159",
     "name": "Child's Pose",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Lower Back",
@@ -8972,7 +8972,7 @@
     "id": "E160",
     "name": "Downward Dog",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings",
@@ -9028,7 +9028,7 @@
     "id": "E161",
     "name": "Calf Stretch (Wall)",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Calves",
@@ -9082,7 +9082,7 @@
     "id": "E162",
     "name": "Piriformis Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Piriformis",
@@ -9136,7 +9136,7 @@
     "id": "E163",
     "name": "Foam Roll IT Band",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "IT Band (lateral thigh)"
@@ -9188,7 +9188,7 @@
     "id": "E164",
     "name": "Foam Roll Upper Back",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -9241,7 +9241,7 @@
     "id": "E165",
     "name": "Quad Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Quads",
@@ -9297,7 +9297,7 @@
     "id": "E166",
     "name": "Hamstring Stretch (Standing)",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Hamstrings"
@@ -9352,7 +9352,7 @@
     "id": "E167",
     "name": "Cross Body Shoulder Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Rear Deltoid",
@@ -9408,7 +9408,7 @@
     "id": "E168",
     "name": "Doorway Chest Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Chest",
@@ -9463,7 +9463,7 @@
     "id": "E169",
     "name": "Seated Piriformis Stretch",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Piriformis",
@@ -9516,7 +9516,7 @@
     "id": "E170",
     "name": "Wall Angels",
     "category": "flexibility",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "flexibility",
     "primary_muscles": [
       "Thoracic Spine",
@@ -10223,7 +10223,7 @@
     "id": "E183",
     "name": "Prowler Push",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "compound",
     "primary_muscles": [
       "Quads",
@@ -10731,7 +10731,7 @@
     "id": "E192",
     "name": "Battle Rope Wave",
     "category": "cardio",
-    "movement_pattern": "core",
+    "movement_pattern": "cardio",
     "exercise_type": "compound",
     "primary_muscles": [
       "Shoulders",
@@ -10849,7 +10849,7 @@
     "id": "E194",
     "name": "Depth Jump",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body",
@@ -10965,7 +10965,7 @@
     "id": "E196",
     "name": "Broad Jump",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -11025,7 +11025,7 @@
     "id": "E197",
     "name": "Single Leg Box Jump",
     "category": "legs",
-    "movement_pattern": "core",
+    "movement_pattern": "knee_dominant",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Quads",
@@ -11194,7 +11194,7 @@
     "id": "E200",
     "name": "Hindu Warrior Flow",
     "category": "full_body",
-    "movement_pattern": "core",
+    "movement_pattern": "flexibility",
     "exercise_type": "calisthenics",
     "primary_muscles": [
       "Full Body"
@@ -11249,7 +11249,7 @@
     "id": "E201",
     "name": "Spot Jogging",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -11306,7 +11306,7 @@
     "id": "E202",
     "name": "Jumping Jacks",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -11364,7 +11364,7 @@
     "id": "E203",
     "name": "High Knees",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Hip Flexors",
@@ -11423,7 +11423,7 @@
     "id": "E204",
     "name": "Butt Kicks",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Hamstrings"
@@ -11481,7 +11481,7 @@
     "id": "E205",
     "name": "Arm Circles",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Shoulders"
@@ -11538,7 +11538,7 @@
     "id": "E206",
     "name": "Neck Rotations",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Neck"
@@ -11597,7 +11597,7 @@
     "id": "E207",
     "name": "Torso Twists",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Core"
@@ -11655,7 +11655,7 @@
     "id": "E208",
     "name": "Hip Circles",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Hip Flexors"
@@ -11713,7 +11713,7 @@
     "id": "E209",
     "name": "Leg Swings",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Hip Flexors",
@@ -11772,7 +11772,7 @@
     "id": "E210",
     "name": "Wrist Rotations",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Forearms"
@@ -11827,7 +11827,7 @@
     "id": "E211",
     "name": "Ankle Rotations",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "dynamic_stretch",
     "primary_muscles": [
       "Calves"
@@ -11882,7 +11882,7 @@
     "id": "E212",
     "name": "Wall Push Up",
     "category": "warmup",
-    "movement_pattern": "horizontal_push",
+    "movement_pattern": "warmup",
     "exercise_type": "activation",
     "primary_muscles": [
       "Chest"
@@ -11938,7 +11938,7 @@
     "id": "E213",
     "name": "Dead Hang",
     "category": "warmup",
-    "movement_pattern": "core",
+    "movement_pattern": "warmup",
     "exercise_type": "activation",
     "primary_muscles": [
       "Lats",
@@ -11995,7 +11995,7 @@
     "id": "E214",
     "name": "Slow Walking",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "cardio",
     "primary_muscles": [
       "Full Body"
@@ -12050,7 +12050,7 @@
     "id": "E215",
     "name": "Standing Toe Touch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Hamstrings"
@@ -12108,7 +12108,7 @@
     "id": "E216",
     "name": "Standing Quad Stretch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Quads"
@@ -12165,7 +12165,7 @@
     "id": "E217",
     "name": "Overhead Stretch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Shoulders"
@@ -12223,7 +12223,7 @@
     "id": "E218",
     "name": "Side Bend Stretch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Obliques"
@@ -12281,7 +12281,7 @@
     "id": "E219",
     "name": "Cross-body Shoulder Stretch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Rear Deltoid"
@@ -12338,7 +12338,7 @@
     "id": "E220",
     "name": "Chest Doorway Stretch",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "static_stretch",
     "primary_muscles": [
       "Chest"
@@ -12396,7 +12396,7 @@
     "id": "E221",
     "name": "Deep Breathing",
     "category": "cooldown",
-    "movement_pattern": "core",
+    "movement_pattern": "cooldown",
     "exercise_type": "recovery",
     "primary_muscles": [
       "Core"
