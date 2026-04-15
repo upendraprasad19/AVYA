@@ -269,6 +269,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
 - `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 slot trimming
 - `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
+- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
 
 ---
 
