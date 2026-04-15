@@ -5,6 +5,7 @@ import 'v4_diagnostic/query_v4_mirror.dart';
 import 'v4_diagnostic/library_integrity.dart';
 import 'v4_diagnostic/cascade_tracer.dart';
 import 'v4_diagnostic/combos.dart';
+import 'v4_diagnostic/markdown_writer.dart';
 
 void main() {
   group('V4 Diagnostic Harness', () {
@@ -178,6 +179,36 @@ void main() {
       test('combo #10 exercises all 4 week characters', () {
         final c = DiagnosticCombos.all[9];
         expect(c.weekCharacters, ['baseline', 'overreach', 'peak', 'deload']);
+      });
+    });
+
+    group('DiagnosticMarkdownWriter', () {
+      final library = LibraryLoader.loadFromAssets();
+
+      test('renders a full report for combo #1 (bug-repro)', () {
+        final combo = DiagnosticCombos.all.first;
+        final md = DiagnosticMarkdownWriter.renderCombo(combo, library);
+        // Required section headers
+        expect(md, contains('## Combo: '));
+        expect(md, contains('### Day '));
+        expect(md, contains('PRE-VolumeFilter:'));
+        expect(md, contains('POST-VolumeFilter:'));
+        expect(md, contains('excludeNames-in ('));
+        // Attempts logged
+        expect(md, contains('A1 ('));
+        expect(md, contains('A5'));
+        // Input echo
+        expect(md, contains('effectiveExp='));
+        expect(md, contains('equipmentTier=full_gym'));
+      });
+
+      test('renders all 4 week characters for combo #10', () {
+        final combo = DiagnosticCombos.all[9];
+        final md = DiagnosticMarkdownWriter.renderCombo(combo, library);
+        expect(md, contains('Week baseline'));
+        expect(md, contains('Week overreach'));
+        expect(md, contains('Week peak'));
+        expect(md, contains('Week deload'));
       });
     });
 }
