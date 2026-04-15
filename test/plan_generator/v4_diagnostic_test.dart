@@ -4,6 +4,7 @@ import 'v4_diagnostic/library_loader.dart';
 import 'v4_diagnostic/query_v4_mirror.dart';
 import 'v4_diagnostic/library_integrity.dart';
 import 'v4_diagnostic/cascade_tracer.dart';
+import 'v4_diagnostic/combos.dart';
 
 void main() {
   group('V4 Diagnostic Harness', () {
@@ -153,6 +154,30 @@ void main() {
         }
         // trace MUST yield either a library pick OR explicit universal-pool fallback
         expect(trace.finalPick, isNotNull);
+      });
+    });
+
+    group('Combos', () {
+      test('combos list has exactly 10 entries', () {
+        expect(DiagnosticCombos.all.length, 10);
+      });
+
+      test('combo #1 is the bug-repro baseline', () {
+        final c = DiagnosticCombos.all.first;
+        expect(c.label, contains('bug-repro'));
+        expect(c.goal, 'build_muscle');
+        expect(c.equipment, 'full_gym');
+        expect(c.daysPerWeek, 5);
+        expect(c.experience, 'advanced');
+        expect(c.phase, 1);
+        expect(c.sessionDuration, isNull);
+        expect(c.injuries, isEmpty);
+        expect(c.weekCharacters, ['baseline']);
+      });
+
+      test('combo #10 exercises all 4 week characters', () {
+        final c = DiagnosticCombos.all[9];
+        expect(c.weekCharacters, ['baseline', 'overreach', 'peak', 'deload']);
       });
     });
 }
