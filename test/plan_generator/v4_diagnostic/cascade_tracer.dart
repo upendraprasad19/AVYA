@@ -196,9 +196,18 @@ class CascadeTracer {
     if (pick == null) {
       for (final name in pool) {
         if (pickedNames.contains(name)) continue;
-        final libraryMatch = library.where(
-          (e) => (e['name'] as String?) == name,
-        );
+        // Mirror of ExerciseRepository.search (exercise_repository.dart:43-58):
+        // case-insensitive substring match on name + name_aliases.
+        final q = name.toLowerCase();
+        final libraryMatch = library.where((e) {
+          final n = (e['name'] as String?)?.toLowerCase() ?? '';
+          if (n.contains(q)) return true;
+          final aliases = e['name_aliases'];
+          if (aliases is List) {
+            return aliases.any((a) => a.toString().toLowerCase().contains(q));
+          }
+          return false;
+        });
         if (libraryMatch.isNotEmpty) {
           pick = CascadePick(name, CascadePickSource.universalPool);
         } else {
