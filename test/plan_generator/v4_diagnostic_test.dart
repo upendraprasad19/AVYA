@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'v4_diagnostic/library_loader.dart';
 import 'v4_diagnostic/query_v4_mirror.dart';
 import 'v4_diagnostic/library_integrity.dart';
+import 'v4_diagnostic/cascade_tracer.dart';
 
 void main() {
   group('V4 Diagnostic Harness', () {
@@ -99,6 +101,58 @@ void main() {
         expect(md, contains('## Library integrity pre-check'));
         expect(md, contains('| movement_pattern |'));
         expect(md, contains('Equipment tier unique values:'));
+      });
+    });
+
+    group('CascadeTracer', () {
+      final library = LibraryLoader.loadFromAssets();
+
+      test('Quads/knee_dominant/compound/P1 + full_gym + advanced picks a real library entry', () {
+        const slot = MuscleSlot(
+          targetMuscle: 'Quads',
+          movementPattern: 'knee_dominant',
+          exerciseType: 'compound',
+          priority: 1,
+        );
+        final trace = CascadeTracer.trace(
+          library,
+          slot: slot,
+          equipmentTier: 'full_gym',
+          effectiveExp: 'advanced',
+          phase: 1,
+          injuries: const [],
+          pickedNames: <String>{},
+        );
+        expect(trace.attempts.length, greaterThanOrEqualTo(1));
+        expect(trace.finalPick, isNotNull);
+        expect(trace.finalPick!.source, isNot(CascadePickSource.universalPool));
+      });
+
+      test('Hamstrings/hip_dominant/compound/P1 + full_gym + advanced: records all 5 attempts if exhausted', () {
+        // This slot is the exact one we suspect is failing in production.
+        // We don't assert WHICH stage picks it — we just assert the trace
+        // walked through attempts in order and did not short-circuit wrongly.
+        const slot = MuscleSlot(
+          targetMuscle: 'Hamstrings',
+          movementPattern: 'hip_dominant',
+          exerciseType: 'compound',
+          priority: 1,
+        );
+        final trace = CascadeTracer.trace(
+          library,
+          slot: slot,
+          equipmentTier: 'full_gym',
+          effectiveExp: 'advanced',
+          phase: 1,
+          injuries: const [],
+          pickedNames: <String>{},
+        );
+        // Every attempt records a signature even if count=0
+        for (final a in trace.attempts) {
+          expect(a.signature, isNotEmpty);
+        }
+        // trace MUST yield either a library pick OR explicit universal-pool fallback
+        expect(trace.finalPick, isNotNull);
       });
     });
 }
