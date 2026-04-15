@@ -28,6 +28,7 @@ lib/
     utils/
       bmr_calculator.dart               # Mifflin-St Jeor formula
       date_utils.dart
+      exercise_display.dart             # Experience-level-aware exercise label formatter (V4)
   features/
     auth/
       screens/sign_in_screen.dart
@@ -39,6 +40,7 @@ lib/
     home/
       screens/home_screen.dart          # No prediction card (moved to profile in Bug #14)
       widgets/
+        profile_nudge_card.dart         # Dismissible profile completeness nudge card
       providers/home_provider.dart      # streakWarningEligibilityProvider (Bug #12)
     train/
       screens/train_screen.dart         # Collapsible warmup/cooldown (Bug #15)
@@ -69,8 +71,12 @@ lib/
       screens/edit_profile_screen.dart
       screens/reports_screen.dart
       widgets/
+        profile_completeness_card.dart  # Progress bar + missing fields on profile screen
         profile_identity.dart           # Premium pill button (Bug #14)
-      providers/profile_provider.dart
+        slim_achievements_card.dart     # Single-line achievements with badges + chevron
+      providers/
+        profile_completeness_provider.dart  # Tier 1/2 weighted completeness calculation
+        profile_provider.dart
   shared/
     widgets/
       paywall_sheet.dart                # Single reusable paywall UI
@@ -83,13 +89,21 @@ lib/
       exercise_repository.dart
       food_repository.dart
       plan_generator.dart               # Hard floor 5 + retry chain (Bug #17). NEVER modify without explicit approval.
+      plan_engine/
+        volume_filter.dart              # Stage 1.5: trims MuscleSlot lists by duration/experience/phase
 
 assets/
   data/
-    exercise_library.json               # 200+ exercises, bundled in APK. Timed entries have default_duration_secs (Bug #16)
+    exercise_library.json               # 250 exercises with V4 fields (movement_pattern, target_focus, equipment_tier, rep_range, priority_tier). Timed entries have default_duration_secs (Bug #16)
     food_database.json                  # 5,000 Indian-first foods, bundled in APK
   fonts/
     # DM Sans font loaded via google_fonts package (runtime download)
+
+scripts/
+  enrich_exercise_library.py           # One-shot: add V4 fields to exercise library
+  add_new_exercises.py                 # Add ~30 new exercises for gap coverage
+  add_rep_ranges.py                    # Add exercise-specific rep ranges
+  validate_exercise_library.py         # Coverage matrix validation
 
 supabase/
   migrations/                           # SQL migration files

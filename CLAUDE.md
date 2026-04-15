@@ -234,11 +234,27 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 ```
 lib/
   core/{theme, router, constants, services, utils}/   # singletons, GoRouter, theme tokens, BMR
+      utils/exercise_display.dart    # Experience-aware exercise labels
   features/{auth, onboarding, home, train, nutrition, ai_coach, profile}/
     each: screens/, widgets/, providers/, repositories/, models/
+      profile/providers/profile_completeness_provider.dart  # Tier 1/2 weighted calculation
+      profile/widgets/profile_completeness_card.dart  # Progress bar + missing fields
+      profile/widgets/slim_achievements_card.dart     # Single-line badges row
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
     repositories/  user, exercise, food, plan_generator (NEVER modify without approval)
+      plan_generator.dart (re-export shim)
+      plan_engine/             # V4 modular pipeline
+        models.dart            # MuscleSlot, MuscleSlotDay, CSpec (legacy)
+        split_resolver.dart    # Trainer-wisdom splits → MuscleSlotDay[]
+        volume_filter.dart     # Stage 1.5: trim by duration/experience/phase
+        exercise_selector.dart # 5-attempt cascading fallback
+        plan_generator.dart    # Pipeline orchestrator (generateV4)
+        periodization_engine.dart # DUP + exercise-specific rep_range
+        sequencing_engine.dart # CNS ordering
+        superset_engine.dart   # Pairing
+        cardio_finisher.dart   # Cardio append
+        warmup_cooldown_selector.dart # Warmup/cooldown inject
 
 assets/data/{exercise_library, food_database}.json    # bundled, seeded into Hive on first launch
 supabase/{migrations, functions}/                     # SQL + Edge Functions (TS)
@@ -251,6 +267,8 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `lib/core/services/subscription_service.dart` — `isPro()` + `gate()` (never read `configBox.get('isPro')` directly)
 - `lib/core/services/ai_service.dart` — `_compactContext()` (the only snapshot trimmer)
 - `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
+- `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 slot trimming
+- `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
 
 ---
 
@@ -592,6 +610,26 @@ Phase {
 
 **FREE:** Phase 1 only (4 weeks). **PRO:** Generate new phases 2-12.
 
+### V4 Pipeline (MuscleSlot Architecture)
+
+**Key change:** CSpec (category-based) replaced by MuscleSlot (muscle-level targeting).
+
+Pipeline stages:
+1. **Split Resolver** → `MuscleSlotDay[]` with granular muscle slots per day
+2. **Volume Filter** (NEW) → Trims slots by session_duration (30/45/60min), experience, phase
+3. **Exercise Selector** → 5-attempt cascade within movement patterns (NEVER crosses boundaries)
+4. **Sequencing Engine** → Orders by priority, then compound-first
+5. **Periodization Engine** → Uses exercise-specific `rep_range` + archetype-based wave
+6. **Superset Pairer** → Unchanged
+7. **Cardio Finisher** → Unchanged
+8. **Warmup/Cooldown** → Now also auto-injects for custom templates
+
+**Movement patterns (11):** horizontal_push, vertical_push, horizontal_pull, vertical_pull, knee_dominant, hip_dominant, core, elbow_flexion, elbow_extension, shoulder_isolation, hip_isolation
+
+**Cascade attempts:** Exact match → drop subFocus → any in pattern+equipment → drop equipment → universal bodyweight pool
+
+**A/B variants:** slotsB alternates anterior/posterior emphasis weekly (e.g., A=chest-heavy push, B=shoulder-heavy push)
+
 ---
 
 ## 13. HOME SCREEN LAYOUT (Priority Order)
@@ -755,12 +793,21 @@ User taps "Upgrade to PRO"
 
 ## 17. EXERCISE LIBRARY
 
-200+ exercises seeded in bundled JSON. Categories:
+250 exercises seeded in bundled JSON. Categories:
 - Push (~35), Pull (~35), Legs (~40), Core (~25)
 - Cardio (~20), Flexibility (~30), Calisthenics (~10)
 - Indian Traditional (5): Dand, Baithak, Surya Namaskar, Malkhamb, Hindu Warrior Flow
 
 Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protocol, pro_tip, MET_value, logging_type, difficulty, suitable_for, regression/progression links, image URLs.
+
+### V4 Fields (on every exercise)
+| Field | Type | Purpose |
+|-------|------|---------|
+| `movement_pattern` | string | One of 11 pipeline patterns (+ cardio/warmup/cooldown/flexibility for non-pipeline) |
+| `target_focus` | string | Granular muscle target (e.g., "Lats (Width)", "Biceps (Short Head)") |
+| `equipment_tier` | string[] | Subset of: bodyweight, home_dumbbells, basic_gym, full_gym |
+| `rep_range` | string | Exercise-specific rep prescription (e.g., "5-8", "8-12", "12-15") |
+| `priority_tier` | int | 1 (primary compound), 2 (secondary), 3 (accessory isolation) |
 
 ---
 
