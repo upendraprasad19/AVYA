@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'v4_diagnostic/library_loader.dart';
 import 'v4_diagnostic/query_v4_mirror.dart';
+import 'v4_diagnostic/library_integrity.dart';
 
 void main() {
   group('V4 Diagnostic Harness', () {
@@ -74,4 +75,30 @@ void main() {
       }
     });
   });
+
+    group('Library integrity pre-check', () {
+      final library = LibraryLoader.loadFromAssets();
+
+      test('emits unique equipment_tier string values', () {
+        final tiers = LibraryIntegrity.uniqueEquipmentTiers(library);
+        expect(tiers, isNotEmpty);
+        // Basic sanity: the canonical four tiers should be present
+        expect(tiers, contains('full_gym'));
+        expect(tiers, contains('basic_gym'));
+      });
+
+      test('produces triplet counts covering all 11 movement patterns', () {
+        final rows = LibraryIntegrity.tripletCounts(library);
+        final patterns = rows.map((r) => r.movementPattern).toSet();
+        // The 11 V4 patterns
+        expect(patterns.length, greaterThanOrEqualTo(11));
+      });
+
+      test('renders a Markdown table', () {
+        final md = LibraryIntegrity.renderMarkdown(library);
+        expect(md, contains('## Library integrity pre-check'));
+        expect(md, contains('| movement_pattern |'));
+        expect(md, contains('Equipment tier unique values:'));
+      });
+    });
 }
