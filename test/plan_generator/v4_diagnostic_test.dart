@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'v4_diagnostic/library_loader.dart';
@@ -211,4 +213,34 @@ void main() {
         expect(md, contains('Week deload'));
       });
     });
+
+  test('end-to-end: generate v4_diagnostic_output.md', () {
+    final library = LibraryLoader.loadFromAssets();
+
+    final buf = StringBuffer();
+    buf.writeln('# V4 Diagnostic — ${DateTime.now().toIso8601String().split("T").first}');
+    buf.writeln();
+    buf.writeln('Run from: `flutter test test/plan_generator/v4_diagnostic_test.dart`');
+    buf.writeln();
+
+    // Pre-check
+    buf.write(LibraryIntegrity.renderMarkdown(library));
+
+    // All combos
+    for (final combo in DiagnosticCombos.all) {
+      buf.write(DiagnosticMarkdownWriter.renderCombo(combo, library));
+    }
+
+    final outFile = File('test/plan_generator/v4_diagnostic_output.md');
+    outFile.writeAsStringSync(buf.toString());
+
+    // Asserts
+    expect(outFile.existsSync(), isTrue);
+    final content = outFile.readAsStringSync();
+    expect(content, contains('## Library integrity pre-check'));
+    for (final combo in DiagnosticCombos.all) {
+      expect(content, contains(combo.label),
+          reason: 'Combo "${combo.label}" missing from report');
+    }
+  });
 }
