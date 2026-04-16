@@ -89,8 +89,16 @@ lib/
       exercise_repository.dart
       food_repository.dart
       plan_generator.dart               # Hard floor 5 + retry chain (Bug #17). NEVER modify without explicit approval.
-      plan_engine/
-        volume_filter.dart              # Stage 1.5: trims MuscleSlot lists by duration/experience/phase
+      plan_engine/                      # V4 modular pipeline
+        models.dart                     # MuscleSlot, MuscleSlotDay
+        split_resolver.dart             # Stage 1: muscle-level day splits (8-10 P1-P5 slots/day)
+        volume_filter.dart              # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        exercise_selector.dart          # Stage 2: 5-attempt cascade within movement patterns
+        sequencing_engine.dart          # Stage 3: CNS ordering
+        periodization_engine.dart       # Stage 4: DUP + exercise-specific rep_range
+        superset_engine.dart            # Stage 5: pairing
+        cardio_finisher.dart            # Stage 6: cardio append
+        warmup_cooldown_selector.dart   # Stage 7: warmup/cooldown injection
 
 assets/
   data/
@@ -120,4 +128,26 @@ supabase/
     weekly-report/index.ts              # PRO weekly nutrition report
     future-prediction/index.ts          # Prediction card AI generation
     rolling-context/index.ts            # AI coach context refresh
+
+.claude/
+  commands/                              # Slash-command skills (auto-discovered)
+    add-edge-function.md                 # Scaffold Supabase Edge Function
+    add-migration.md                     # Create SQL migration file
+    add-repository.md                    # Create Hive-first repository
+    build-apk.md                         # Automated APK build pipeline (pre-flight, clean, build, verify)
+    build.md                             # Autonomous multi-phase build pipeline
+    design-review.md                     # Widget design system audit
+    gate-feature.md                      # Wire PRO subscription gate
+    pre-commit-check.md                  # QA checklist before commit
+    scaffold-screen.md                   # Generate feature folder + screen template
+    seed-data.md                         # Generate exercise/food seed data
+  agents/                                # Subagent role definitions
+    auth-agent.md                        # Auth + onboarding scope
+    backend-agent.md                     # Edge Functions scope
+    database-agent.md                    # Supabase DB scope
+    manager-agent.md                     # Pipeline orchestrator
+    qa-agent.md                          # QA + testing scope
+    screen-agent.md                      # Flutter screen scope
+  tasks/                                 # Build pipeline phase files
+    BUILD_ORDER.md                       # Phase dependency graph
 ```
