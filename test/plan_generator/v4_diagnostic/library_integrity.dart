@@ -20,6 +20,13 @@ class LibraryIntegrity {
   static const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
   static const _levels = ['beginner', 'intermediate', 'advanced'];
 
+  /// Returns true if [field] (String or List<String>) contains [value] (case-insensitive exact).
+  static bool _fieldContains(dynamic field, String value) {
+    final v = value.toLowerCase();
+    if (field is List) return field.any((e) => e.toString().toLowerCase() == v);
+    return (field as String?)?.toLowerCase() == v;
+  }
+
   /// Unique raw values seen in any exercise's `equipment_tier` list.
   /// Flags string-mismatch bugs (e.g. "full gym" space vs "full_gym" underscore).
   static List<String> uniqueEquipmentTiers(List<Map<String, dynamic>> lib) {
@@ -45,8 +52,7 @@ class LibraryIntegrity {
         for (final level in _levels) {
           for (final foundational in [true, false]) {
             final count = lib.where((e) {
-              if ((e['movement_pattern'] as String?)?.toLowerCase() !=
-                  pattern.toLowerCase()) return false;
+              if (!_fieldContains(e['movement_pattern'], pattern)) return false;
               final tiers = e['equipment_tier'];
               if (tiers is! List ||
                   !tiers.any((t) => t.toString().toLowerCase() == tier)) {
