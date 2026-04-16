@@ -417,6 +417,7 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
         ],
       ),
       MuscleSlotDay(
@@ -427,6 +428,7 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
         ],
       ),
       MuscleSlotDay(
@@ -437,6 +439,7 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
         ],
       ),
     ];
@@ -449,6 +452,7 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 3),
         ],
       ));
     }
@@ -466,6 +470,11 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
+          const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Full Body B', focus: 'Strength + conditioning', dayType: 'full_body', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -473,6 +482,11 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
+          const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Full Body C', focus: 'Volume + core', dayType: 'full_body', intensity: 'endurance', slotsA: [
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -480,6 +494,11 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
+          const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 5),
         ]),
       ];
     }
@@ -491,12 +510,22 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ], slotsB: [
         const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 1),
         const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Upper Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ]),
       MuscleSlotDay(name: 'Pull + Core', focus: 'Back, biceps', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -504,12 +533,22 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ], slotsB: [
         const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Mid Back', subFocus: 'thickness', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ]),
       MuscleSlotDay(name: 'Legs', focus: 'Quads, hamstrings, glutes', dayType: 'legs', intensity: 'endurance', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -517,12 +556,22 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
       ], slotsB: [
         const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
       ]),
     ];
   }
@@ -539,6 +588,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 1),
@@ -546,6 +598,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Upper Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'lateral_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Pull', focus: 'Back, biceps', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -554,6 +609,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Mid Back', subFocus: 'thickness', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
@@ -561,6 +619,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 3),
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Legs', focus: 'Quads, hams, glutes', dayType: 'legs', intensity: 'strength', slotsA: [
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -569,6 +630,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
@@ -576,6 +640,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Upper', focus: 'Shoulders, back, arms', dayType: 'upper', intensity: 'endurance', slotsA: [
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
@@ -583,12 +650,20 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 1),
           const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ]),
       ];
     }
@@ -600,12 +675,20 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Bench Day', focus: 'Bench + upper push', dayType: 'push', intensity: 'strength', slotsA: [
           const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 1),
@@ -613,12 +696,20 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Upper Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'Deadlift Day', focus: 'Deadlift + back', dayType: 'pull', intensity: 'strength', slotsA: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
@@ -626,12 +717,20 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ]),
         MuscleSlotDay(name: 'OHP Day', focus: 'Overhead press + accessories', dayType: 'push', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
@@ -639,12 +738,20 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Upper Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
         ]),
       ];
     }
@@ -656,6 +763,10 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Upper Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 2),
         const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ]),
       MuscleSlotDay(name: 'Lower Body', focus: 'Legs + conditioning', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -663,6 +774,10 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 5),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ]),
       MuscleSlotDay(name: 'Upper Pull', focus: 'Back, biceps', dayType: 'pull', intensity: 'strength', slotsA: [
         const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -670,6 +785,10 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 5),
       ]),
       MuscleSlotDay(name: 'Full Body + Core', focus: 'Total body + core', dayType: 'full_body', intensity: 'endurance', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -677,6 +796,10 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 5),
       ]),
     ];
   }
@@ -693,6 +816,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Chest', subFocus: 'cable', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
         ]),
         // Day 2: Back — THE KEY FIX (was curls-on-back-day)
         MuscleSlotDay(name: 'Back', focus: 'Back focus', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
@@ -701,6 +827,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
         ]),
         // Day 3: Shoulders + Arms
         MuscleSlotDay(name: 'Shoulders + Arms', focus: 'Delts, biceps, triceps', dayType: 'shoulders_arms', intensity: 'endurance', slotsA: [
@@ -709,6 +838,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Lateral Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
         ]),
         // Day 4: Legs
         MuscleSlotDay(name: 'Legs', focus: 'Quads, hams, glutes', dayType: 'legs', intensity: 'strength', slotsA: [
@@ -717,12 +849,18 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
         ], slotsB: [
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Quads', subFocus: 'isolation', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
         ]),
         // Day 5: Upper + Core
         MuscleSlotDay(name: 'Upper + Core', focus: 'Shoulders, arms, core', dayType: 'upper', intensity: 'hypertrophy', slotsA: [
@@ -730,6 +868,10 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
         ]),
       ];
     }
@@ -742,6 +884,8 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Pull', focus: 'Back, biceps', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -750,6 +894,8 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Rear Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Legs', focus: 'Quads, hamstrings, glutes', dayType: 'legs', intensity: 'endurance', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -758,6 +904,8 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Upper', focus: 'Shoulders, back, arms', dayType: 'upper', intensity: 'strength', slotsA: [
         const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
@@ -765,6 +913,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Lower + Core', focus: 'Legs, core, conditioning', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -772,6 +923,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 3),
+        const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
       ]),
     ];
   }
@@ -789,6 +943,8 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Front Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 4),
         ]),
         // Pull A: Heavy back
         MuscleSlotDay(name: 'Pull A', focus: 'Heavy back focus', dayType: 'pull', intensity: 'strength', slotsA: [
@@ -798,6 +954,8 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
         ]),
         // Legs A: Quad dominant
         MuscleSlotDay(name: 'Legs A', focus: 'Quad dominant', dayType: 'legs', intensity: 'strength', slotsA: [
@@ -807,15 +965,19 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Calves', subFocus: 'soleus', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
         ]),
         // Push B: Volume shoulders + triceps
         MuscleSlotDay(name: 'Push B', focus: 'Volume shoulders + triceps', dayType: 'push', intensity: 'hypertrophy', slotsA: [
           const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
           const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 1),
           const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 2),
-          const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
+          const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'compound', priority: 2),
           const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Lateral Delts', subFocus: 'cable', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 4),
         ]),
         // Pull B: Volume back + biceps
         MuscleSlotDay(name: 'Pull B', focus: 'Volume back + biceps', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
@@ -824,6 +986,9 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 3),
+          const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'short_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
         ]),
         // Legs B: Hamstring + glute
         MuscleSlotDay(name: 'Legs B', focus: 'Hamstring + glute focus', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
@@ -833,6 +998,8 @@ class SplitResolver {
           const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 2),
           const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
           const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+          const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
+          const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
         ]),
       ];
     }
@@ -845,6 +1012,8 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Mid Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Pull', focus: 'Back, biceps', dayType: 'pull', intensity: 'strength', slotsA: [
         const MuscleSlot(targetMuscle: 'Lats', subFocus: 'width', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 1),
@@ -852,6 +1021,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 2),
         const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Mid Back', subFocus: 'thickness', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
       ]),
       MuscleSlotDay(name: 'Legs', focus: 'Quads, hamstrings, glutes', dayType: 'legs', intensity: 'strength', slotsA: [
         const MuscleSlot(targetMuscle: 'Quads', movementPattern: 'knee_dominant', exerciseType: 'compound', priority: 1),
@@ -860,6 +1032,8 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Push + Core', focus: 'Upper push + core', dayType: 'push', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Shoulders', movementPattern: 'vertical_push', exerciseType: 'compound', priority: 1),
@@ -867,6 +1041,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Triceps', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lateral Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Triceps', subFocus: 'long_head', movementPattern: 'elbow_extension', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Lower Chest', movementPattern: 'horizontal_push', exerciseType: 'isolation', priority: 4),
       ]),
       MuscleSlotDay(name: 'Pull + Core', focus: 'Upper pull + conditioning', dayType: 'pull', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Lats', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 1),
@@ -874,6 +1051,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Rear Delts', movementPattern: 'shoulder_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Biceps', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Biceps', subFocus: 'long_head', movementPattern: 'elbow_flexion', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Lats', subFocus: 'lower', movementPattern: 'vertical_pull', exerciseType: 'compound', priority: 4),
+        const MuscleSlot(targetMuscle: 'Mid Back', movementPattern: 'horizontal_pull', exerciseType: 'compound', priority: 4),
       ]),
       MuscleSlotDay(name: 'Legs + Core', focus: 'Lower body + core', dayType: 'legs', intensity: 'hypertrophy', slotsA: [
         const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'hip_dominant', exerciseType: 'compound', priority: 1),
@@ -881,6 +1061,9 @@ class SplitResolver {
         const MuscleSlot(targetMuscle: 'Core', movementPattern: 'core', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Glutes', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 2),
         const MuscleSlot(targetMuscle: 'Calves', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Hamstrings', movementPattern: 'knee_dominant', exerciseType: 'isolation', priority: 3),
+        const MuscleSlot(targetMuscle: 'Core', subFocus: 'obliques', movementPattern: 'core', exerciseType: 'isolation', priority: 4),
+        const MuscleSlot(targetMuscle: 'Hip', movementPattern: 'hip_isolation', exerciseType: 'isolation', priority: 4),
       ]),
     ];
   }

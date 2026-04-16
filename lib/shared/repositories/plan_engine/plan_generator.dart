@@ -77,10 +77,9 @@ class PlanGenerator {
     final splitDays = SplitResolver.selectV4(goal, daysPerWeek,
         experienceLevel: effectiveExp);
 
-    // Stage 1.5: Volume Filter — trim slots before exercise selection
+    // Stage 1.5: Volume Filter — trim slots by experience + frequency
     final filteredDays = VolumeFilter.filterDays(
       splitDays,
-      sessionMinutes: sessionDuration,
       experience: effectiveExp,
       weekCharacter: 'baseline', // first-pass uses baseline
     );

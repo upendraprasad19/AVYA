@@ -1,70 +1,80 @@
 import 'models.dart';
 
-/// Stage 1.5: Trims MuscleSlot lists based on session duration,
-/// experience level, and phase archetype (week character).
+/// Stage 1.5: Trims MuscleSlot lists based on experience level and
+/// training frequency (days per week).
 ///
-/// Priority is hardcoded in the split spec (trainer wisdom).
-/// The CUTOFF (which priorities survive) is dynamic.
+/// Slots are ordered by priority in the split spec (trainer wisdom).
+/// This filter takes the first N slots where N = f(experience, daysPerWeek).
+///
+/// Inverse scaling: fewer training days → more exercises per session.
+/// More experience → more volume per session.
 class VolumeFilter {
+  /// Target exercise count per day based on experience and training frequency.
+  ///
+  /// | Experience   | 3-day | 4-day | 5/6-day |
+  /// |-------------|-------|-------|---------|
+  /// | Beginner     |   6   |   5   |    4    |
+  /// | Intermediate |   8   |   7   |    6    |
+  /// | Advanced     |  10   |   9   |    8    |
+  static int targetCount(String experience, int daysPerWeek) {
+    if (experience == 'beginner') {
+      if (daysPerWeek <= 3) return 6;
+      if (daysPerWeek == 4) return 5;
+      return 4; // 5/6-day
+    }
+    if (experience == 'intermediate') {
+      if (daysPerWeek <= 3) return 8;
+      if (daysPerWeek == 4) return 7;
+      return 6; // 5/6-day
+    }
+    // advanced
+    if (daysPerWeek <= 3) return 10;
+    if (daysPerWeek == 4) return 9;
+    return 8; // 5/6-day
+  }
+
   /// Filter a flat list of MuscleSlots down to what fits the user's constraints.
   ///
-  /// [sessionMinutes] — user's session duration (default 45 if null).
   /// [experience] — beginner | intermediate | advanced.
   /// [weekCharacter] — baseline | overreach | peak | deload.
+  /// [daysPerWeek] — training days per week (3-6).
   static List<MuscleSlot> filter(
     List<MuscleSlot> slots, {
-    required int? sessionMinutes,
     required String experience,
     required String weekCharacter,
+    required int daysPerWeek,
   }) {
-    final minutes = sessionMinutes ?? 45;
-
-    // Deload: P1 only regardless of time/experience
+    // Deload: P1 only regardless of experience/frequency
     if (weekCharacter == 'deload') {
       return slots.where((s) => s.priority == 1).toList();
     }
 
-    // Determine max priority based on time
-    int maxPriority;
-    if (minutes >= 60) {
-      maxPriority = 3; // all
-    } else if (minutes >= 45) {
-      maxPriority = 2; // P1 + P2
-    } else {
-      maxPriority = 1; // P1 only
-    }
-
-    // Beginner override: max P2, and only 1 P2 slot
-    if (experience == 'beginner') {
-      maxPriority = maxPriority.clamp(1, 2);
-      final p1 = slots.where((s) => s.priority == 1).toList();
-      if (maxPriority >= 2) {
-        final firstP2 = slots.where((s) => s.priority == 2).take(1);
-        return [...p1, ...firstP2];
-      }
-      return p1;
-    }
-
-    return slots.where((s) => s.priority <= maxPriority).toList();
+    final target = targetCount(experience, daysPerWeek);
+    // Slots are already in priority order from split_resolver.
+    // Take the first N to match the target count.
+    // If fewer slots exist than target, return all (split defines the ceiling).
+    if (slots.length <= target) return slots;
+    return slots.take(target).toList();
   }
 
   /// Apply volume filter to every day in a MuscleSlotDay list.
+  /// Infers daysPerWeek from the length of [days].
   static List<MuscleSlotDay> filterDays(
     List<MuscleSlotDay> days, {
-    required int? sessionMinutes,
     required String experience,
     required String weekCharacter,
   }) {
+    final daysPerWeek = days.length;
     return days.map((day) {
       final filteredA = filter(day.slotsA,
-          sessionMinutes: sessionMinutes,
           experience: experience,
-          weekCharacter: weekCharacter);
+          weekCharacter: weekCharacter,
+          daysPerWeek: daysPerWeek);
       final filteredB = day.slotsB != null
           ? filter(day.slotsB!,
-              sessionMinutes: sessionMinutes,
               experience: experience,
-              weekCharacter: weekCharacter)
+              weekCharacter: weekCharacter,
+              daysPerWeek: daysPerWeek)
           : null;
       return MuscleSlotDay(
         name: day.name,
