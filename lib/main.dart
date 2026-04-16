@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'app.dart';
 
@@ -23,6 +24,12 @@ Future<void> main() async {
 
   // 3. Initialize Razorpay checkout handler (no-op on web).
   RazorpayService.instance.initialize();
+
+  // 4. Register SyncQueue op executors. No-op unless
+  //    sync_reliability_v1 feature flag is on. Must run AFTER Hive init
+  //    (queue persists to syncBox). Queue drain is deferred to the
+  //    splash screen, which waits for Supabase auth before firing.
+  SyncService.instance.initQueue();
 
   // Supabase, SeedService, and OneSignal are deferred to SplashScreen
   // so the UI appears immediately instead of after a 30-50s black screen.

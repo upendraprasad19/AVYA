@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_error.dart';
+import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
 /// Handles background data sync between Hive (local) and Supabase (cloud).
@@ -39,6 +43,88 @@ class SyncService {
 
   static String _deterministicId(String localKey) {
     return _uuidGen.v5(_syncNamespace, localKey);
+  }
+
+  // ── Sync Reliability (feature-flagged) ─────────────────────
+
+  /// When true, failed Supabase writes are enqueued in `SyncQueue` and
+  /// retried with exponential backoff. Dead-lettered failures are reported
+  /// to the `log-client-error` Edge Function.
+  ///
+  /// When false (default): existing fire-and-forget behavior is preserved —
+  /// failures are logged to `debugPrint` only. This is a safety flag for
+  /// the sync-reliability rollout; flip to `true` after dark-launch
+  /// validation.
+  bool get _syncReliabilityEnabled =>
+      _hive.configBox.get('sync_reliability_v1', defaultValue: false) as bool;
+
+  /// One-time queue initialization — registers op executors and the
+  /// dead-letter telemetry hook. Must be called AFTER Hive init and
+  /// BEFORE any sync path runs. Safe to call multiple times (idempotent).
+  bool _queueInitialized = false;
+  void initQueue() {
+    if (_queueInitialized) return;
+    _queueInitialized = true;
+
+    SyncQueue.instance.registerExecutor(
+      'upsert_user_profile',
+      _executeUserProfileUpsert,
+    );
+
+    SyncQueue.instance.onDeadLetter = _sendDeadLetterTelemetry;
+  }
+
+  /// Executor for `upsert_user_profile` ops. The payload is the full
+  /// column map (keys already mirror `user_profile` column names).
+  /// Returns a typed `Result` — success or classified `SyncError`.
+  Future<Result<void, SyncError>> _executeUserProfileUpsert(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      await _supabase.client
+          .from('user_profile')
+          .upsert(payload, onConflict: 'user_id');
+      return Result.ok(null);
+    } catch (e) {
+      return Result.err(SyncError.classify(e));
+    }
+  }
+
+  /// Posts a dead-letter record to `log-client-error` Edge Function.
+  /// Non-fatal — telemetry failure is swallowed (queue has already
+  /// removed the op).
+  Future<void> _sendDeadLetterTelemetry(PendingSyncOp op) async {
+    try {
+      await _supabase.client.functions.invoke(
+        'log-client-error',
+        body: {
+          'error_code': op.lastErrorCode ?? 'UnknownError',
+          'error_message': op.lastErrorMessage,
+          'op_type': op.opType,
+          'retry_count': op.retryCount,
+          'client_version': _currentClientVersion(),
+          'platform': _currentPlatform(),
+        },
+      );
+    } catch (e) {
+      debugPrint('[SyncService] dead-letter telemetry failed: $e');
+    }
+  }
+
+  static String _currentPlatform() {
+    if (kIsWeb) return 'web';
+    try {
+      if (Platform.isAndroid) return 'android';
+      if (Platform.isIOS) return 'ios';
+    } catch (_) {/* Platform unavailable on web */}
+    return 'web';
+  }
+
+  /// Placeholder — wire up `package_info_plus` in a follow-up. For now
+  /// return a sentinel so server-side analytics can distinguish dev
+  /// builds from release builds without adding a new dependency.
+  static String _currentClientVersion() {
+    return kDebugMode ? '0.0.0+dev' : '0.0.0+release';
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -791,7 +877,7 @@ class SyncService {
     // user_profile column. Columns added in migration 017 (lifestyle_activity,
     // session_duration_minutes, physique_focus, body_fat_percent,
     // body_fat_assessed_at) were previously silently dropped.
-    await _supabase.client.from('user_profile').upsert({
+    final payload = <String, dynamic>{
       'user_id': userId,
       if (p['date_of_birth'] != null) 'date_of_birth': p['date_of_birth'],
       if (p['gender'] != null) 'gender': p['gender'],
@@ -817,7 +903,30 @@ class SyncService {
       if (p['avatar_url'] != null) 'avatar_url': p['avatar_url'],
       if (p['banner_url'] != null) 'banner_url': p['banner_url'],
       if (p['wake_up_time'] != null) 'wake_up_time': p['wake_up_time'],
-    }, onConflict: 'user_id');
+    };
+
+    if (_syncReliabilityEnabled) {
+      // Route through the queue: on failure the op is persisted to Hive
+      // and retried with exponential backoff instead of disappearing.
+      final result = await _executeUserProfileUpsert(payload);
+      if (result.isErr) {
+        final err = (result as Err<void, SyncError>).error;
+        debugPrint('[SyncService._syncUserProfile] enqueue after ${err.code}: '
+            '${err.message}');
+        await SyncQueue.instance.enqueue(
+          opType: 'upsert_user_profile',
+          payload: payload,
+          initialError: err,
+        );
+      }
+      return;
+    }
+
+    // Legacy path — preserves existing behavior when flag is off.
+    // Failures bubble up uncaught (caller's try/catch → debugPrint).
+    await _supabase.client
+        .from('user_profile')
+        .upsert(payload, onConflict: 'user_id');
   }
 
   /// Pushes user-created custom foods and exercises to Supabase

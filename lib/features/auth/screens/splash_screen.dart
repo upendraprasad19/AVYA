@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
+import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -114,6 +115,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
     SyncService.instance.checkAndSync();
+
+    // Drain any persisted sync-queue ops left over from a previous session
+    // (app killed while offline, JWT expired mid-flight, etc.). No-op when
+    // sync_reliability_v1 feature flag is off — the queue is empty then.
+    unawaited(SyncQueue.instance.drain());
 
     // OneSignal — fire and forget; don't block navigation on OS permission dialog.
     if (!kIsWeb) {

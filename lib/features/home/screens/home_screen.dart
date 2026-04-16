@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
+import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../providers/home_provider.dart';
 import '../widgets/streak_badge.dart';
 import '../widgets/weekly_calendar.dart';
@@ -131,11 +132,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: _buildBody(),
-          ),
+        child: Column(
+          children: [
+            const SyncBanner(),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: _buildBody(),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

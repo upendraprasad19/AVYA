@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
+import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:share_plus/share_plus.dart';
@@ -286,14 +287,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Center(
+      body: Column(
+        children: [
+          SizedBox(height: MediaQuery.of(context).padding.top),
+          const SyncBanner(),
+          Expanded(
+            child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
               // Safe area
-              SizedBox(height: MediaQuery.of(context).padding.top + 10),
+              const SizedBox(height: 10),
 
               // 1. Profile identity with banner + avatar
               ProfileIdentity(
@@ -623,6 +629,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ],
           ),
         ),
+      ),
+          ),
+        ],
       ),
     );
   }
