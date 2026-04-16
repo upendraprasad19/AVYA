@@ -271,7 +271,8 @@ class ExerciseSelector {
       // Filter for isolation exercises not already in the list
       for (final c in candidates) {
         final name = c['name'] as String? ?? '';
-        final type = c['exercise_type'] as String? ?? '';
+        final rawType = c['exercise_type'];
+        final type = rawType is List ? (rawType.isNotEmpty ? rawType.first.toString() : '') : (rawType as String? ?? '');
         if (name.isEmpty || pickedNames.contains(name)) continue;
         if (type != 'isolation') continue;
 
@@ -645,6 +646,11 @@ class ExerciseSelector {
   }
 
   /// Build a PlannedExercise from an exercise map.
+  static String? _extractFirst(dynamic field) {
+    if (field is List) return field.isNotEmpty ? field.first.toString() : null;
+    return field as String?;
+  }
+
   static PlannedExercise _buildExercise(Map<String, dynamic> ex) {
     final equipRaw = ex['equipment_needed'];
     final equipList = equipRaw is List
@@ -671,7 +677,7 @@ class ExerciseSelector {
       restSeconds: ex['default_rest_secs'] as int? ?? 60,
       durationSeconds: ex['default_duration_secs'] as int?,
       notes: notes,
-      exerciseType: ex['exercise_type'] as String?,
+      exerciseType: _extractFirst(ex['exercise_type']),
       category: ex['category'] as String?,
       equipmentNeeded: equipList,
       primaryMuscles: muscles,

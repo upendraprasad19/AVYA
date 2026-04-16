@@ -45,7 +45,7 @@ void main() {
         movementPattern: 'horizontal_push',
         equipmentTier: 'full_gym',
       );
-      expect(results.first['exercise_type'], 'compound');
+      expect(results.first['exercise_type'], contains('compound'));
     });
 
     test('excludeNames removes matching exercises', () {

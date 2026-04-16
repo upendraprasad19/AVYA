@@ -49,7 +49,7 @@ class SeedService {
   /// stored version is less than this, exercises are re-seeded. putAll() is
   /// idempotent — existing entries are overwritten with the same data while
   /// new entries are added.
-  static const int _exerciseLibraryVersion = 2;
+  static const int _exerciseLibraryVersion = 3;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   final HiveService _hive = HiveService.instance;

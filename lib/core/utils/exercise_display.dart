@@ -8,7 +8,8 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 class ExerciseDisplay {
   static String formatMuscleLabel(Map<String, dynamic> exercise) {
     final experience = UserRepository.instance.getProfile()?['fitness_experience'] as String? ?? 'intermediate';
-    final targetFocus = exercise['target_focus'] as String? ?? '';
+    final rawTf = exercise['target_focus'];
+    final targetFocus = rawTf is List ? rawTf.join(', ') : (rawTf as String? ?? '');
     final category = exercise['category'] as String? ?? '';
 
     switch (experience) {
