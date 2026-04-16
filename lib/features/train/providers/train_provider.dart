@@ -9,6 +9,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/exercise_display.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
@@ -142,6 +143,7 @@ class ExerciseData {
   final List<String>? equipmentNeeded;
   final String? exerciseType; // 'compound' or 'isolation'
   final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
+  final String? muscleLabel; // experience-appropriate muscle label (e.g. "Back", "Lats", "Lats (Width)")
 
   const ExerciseData({
     required this.name,
@@ -154,6 +156,7 @@ class ExerciseData {
     this.equipmentNeeded,
     this.exerciseType,
     this.supersetGroup,
+    this.muscleLabel,
   });
 
   ExerciseData copyWith({
@@ -167,6 +170,7 @@ class ExerciseData {
     List<String>? equipmentNeeded,
     String? exerciseType,
     int? Function()? supersetGroup,
+    String? Function()? muscleLabel,
   }) {
     return ExerciseData(
       name: name ?? this.name,
@@ -179,6 +183,7 @@ class ExerciseData {
       equipmentNeeded: equipmentNeeded ?? this.equipmentNeeded,
       exerciseType: exerciseType ?? this.exerciseType,
       supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
+      muscleLabel: muscleLabel != null ? muscleLabel() : this.muscleLabel,
     );
   }
 
@@ -343,6 +348,24 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
           '10';
     }
 
+    // Resolve muscle label using the exercise library entry when available,
+    // falling back to the parsed category so beginners at minimum see "Back".
+    String? muscleLabel;
+    final exerciseName = (m['exercise_name'] as String? ?? m['name'] as String? ?? '').toLowerCase();
+    Map<String, dynamic>? libEntry;
+    final exId = m['exercise_id'] as String?;
+    if (exId != null && exId.isNotEmpty) {
+      libEntry = ExerciseRepository.instance.getById(exId);
+    }
+    libEntry ??= ExerciseRepository.instance.search(exerciseName).firstOrNull;
+    if (libEntry != null) {
+      muscleLabel = ExerciseDisplay.formatMuscleLabel(libEntry);
+    } else if (category != null && category.isNotEmpty) {
+      // No library entry — synthesise a minimal map so formatMuscleLabel
+      // can still return the category-level label for beginner/intermediate.
+      muscleLabel = ExerciseDisplay.formatMuscleLabel({'category': category, 'target_focus': ''});
+    }
+
     return ExerciseData(
       name: m['exercise_name'] as String? ?? m['name'] as String? ?? 'Unknown',
       sets: '${m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3}',
@@ -352,8 +375,11 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
       loggingType: loggingType,
       category: category,
       equipmentNeeded: equipList,
-      exerciseType: m['exercise_type'] as String?,
+      exerciseType: m['exercise_type'] is List
+          ? (m['exercise_type'] as List).first.toString()
+          : m['exercise_type'] as String?,
       supersetGroup: m['superset_group'] as int?,
+      muscleLabel: muscleLabel,
     );
   }).toList();
 }

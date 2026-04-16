@@ -7,6 +7,7 @@ import 'progression_resolver.dart';
 import 'sequencing_engine.dart';
 import 'split_resolver.dart';
 import 'superset_pairer.dart';
+import 'volume_filter.dart';
 import 'warmup_cooldown.dart';
 
 /// Plan Generator V3 — Orchestrator.
@@ -21,8 +22,6 @@ class PlanGenerator {
   PlanGenerator._();
   static final PlanGenerator _instance = PlanGenerator._();
   static PlanGenerator get instance => _instance;
-
-  final ExerciseRepository _exerciseRepo = ExerciseRepository.instance;
 
   /// Generates a workout phase with 4 distinct weeks.
   ///
@@ -42,87 +41,121 @@ class PlanGenerator {
     String? cardioPreference,
     Map<String, double>? previousWeights,
   }) {
+    return generateV4(
+      goal: goal,
+      equipment: equipment,
+      daysPerWeek: daysPerWeek,
+      phase: phase,
+      experienceLevel: experienceLevel,
+      preferredDays: preferredDays,
+      injuries: injuries,
+      bodyFocus: bodyFocus,
+      sessionDuration: sessionDuration,
+      cardioPreference: cardioPreference,
+      previousWeights: previousWeights,
+    );
+  }
+
+  /// V4 pipeline: MuscleSlot-based exercise selection with cascading fallback.
+  Phase generateV4({
+    required String goal,
+    required String equipment,
+    required int daysPerWeek,
+    int phase = 1,
+    String experienceLevel = 'beginner',
+    List<int>? preferredDays,
+    List<String> injuries = const [],
+    List<String> bodyFocus = const [],
+    int? sessionDuration,
+    String? cardioPreference,
+    Map<String, double>? previousWeights,
+  }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
 
-    // Resolve max exercises per day (session duration or defaults)
-    final maxPerDay = ExerciseSelector.resolveMaxPerDay(
-      daysPerWeek: daysPerWeek,
-      effectiveExp: effectiveExp,
-      sessionDuration: sessionDuration,
+    // Stage 1: Split resolution → MuscleSlotDay[]
+    final splitDays = SplitResolver.selectV4(goal, daysPerWeek,
+        experienceLevel: effectiveExp);
+
+    // Stage 1.5: Volume Filter — trim slots by experience + frequency
+    final filteredDays = VolumeFilter.filterDays(
+      splitDays,
+      experience: effectiveExp,
+      weekCharacter: 'baseline', // first-pass uses baseline
     );
 
-    // Stage 1: Split structure
-    final splitPlan = SplitResolver.select(
-      goal, daysPerWeek,
-      experienceLevel: effectiveExp,
-    );
-
-    // Stage 2: Exercise selection (with injury filter, body focus, non-negotiables)
-    final populated = ExerciseSelector.pick(
-      splitPlan: splitPlan,
-      exerciseRepo: _exerciseRepo,
-      equipmentList: equipmentList,
+    // Stage 2: Exercise selection with filtered slots
+    final populated = ExerciseSelector.pickV4(
+      slotDays: filteredDays,
+      exerciseRepo: ExerciseRepository.instance,
+      equipmentTier: equipment,
       effectiveExp: effectiveExp,
       phase: phase,
-      maxPerDay: maxPerDay,
       goal: goal,
       injuries: injuries,
-      bodyFocus: bodyFocus,
     );
 
-    // Stage 0: Progression — resolve suggested weights for Phase 2+
-    // Done after exercise selection so we know which exercise names to look up.
-    final resolvedWeights = previousWeights ?? (phase >= 2
-        ? ProgressionResolver.resolve(
-            phase: phase,
-            exerciseNames: populated
-                .expand((d) => [...d.exercisesA, ...d.exercisesB])
-                .map((e) => e.exerciseName)
-                .toSet()
-                .toList(),
-          )
-        : <String, double>{});
+    // Stage 0: Progression (Phase 2+ weight suggestions)
+    final allNames = populated
+        .expand((d) => [...d.exercisesA, ...d.exercisesB])
+        .map((e) => e.exerciseName)
+        .toSet()
+        .toList();
+    Map<String, double>? weights = previousWeights;
+    if (weights == null && phase >= 2) {
+      weights = ProgressionResolver.resolve(
+        phase: phase,
+        exerciseNames: allNames,
+      );
+    }
 
-    // Stage 4: Periodization (V3 archetypes + volume wave + body focus + weights)
-    var weeks = PeriodizationEngine.apply(
+    // Stage 4: Periodization → WeekPlan[]
+    var weekPlans = PeriodizationEngine.apply(
       populated: populated,
       phase: phase,
       is6Day: daysPerWeek == 6,
       effectiveExp: effectiveExp,
       bodyFocus: bodyFocus,
-      previousWeights: resolvedWeights.isNotEmpty ? resolvedWeights : null,
+      previousWeights: weights,
     );
 
-    // Stage 3: Sequencing (compound→isolation, bilateral→unilateral, CNS ordering)
-    weeks = SequencingEngine.sequence(weeks);
+    // Stage 3: Sequencing
+    weekPlans = SequencingEngine.sequence(weekPlans);
 
-    // Stage 5: Antagonist superset pairing
-    weeks = SupersetPairer.pair(weeks);
+    // Stage 5: Superset pairing
+    weekPlans = SupersetPairer.pair(weekPlans);
 
-    // Stage 6: Cardio finisher (fat_loss / general_fitness only)
-    weeks = CardioFinisher.attach(
-      weeks: weeks,
-      goal: goal,
-      cardioPreference: cardioPreference,
-      equipmentList: equipmentList,
+    // Stage 6: Cardio finisher
+    if (goal == 'lose_fat' || goal == 'general_fitness') {
+      weekPlans = CardioFinisher.attach(
+        weeks: weekPlans,
+        goal: goal,
+        cardioPreference: cardioPreference,
+        equipmentList: equipmentList,
+      );
+    }
+
+    // Stage 7: Warmup/cooldown
+    weekPlans = WarmupCooldownSelector.attach(
+      weekPlans,
+      effectiveExp,
+      equipmentList,
     );
-
-    // Stage 7: Warmup + Cooldown
-    weeks = WarmupCooldownSelector.attach(weeks, effectiveExp, equipmentList);
 
     // Build Phase output
     final meta = _getPhaseMeta(phase, goal);
+    final weekStart = (phase - 1) * 4 + 1;
+    final weekEnd = weekStart + 3;
 
     return Phase(
       phase: phase,
       name: meta.name,
       focus: meta.focus,
-      weeks: '${(phase - 1) * 4 + 1}-${phase * 4}',
+      weeks: '$weekStart-$weekEnd',
       dailyCalories: meta.dailyCalories,
       proteinGrams: meta.proteinGrams,
-      workouts: weeks[0].workoutDays, // backward compat: week 1
-      weekPlans: weeks,
+      workouts: weekPlans.isNotEmpty ? weekPlans.first.workoutDays : [],
+      weekPlans: weekPlans,
       preferredDays: preferredDays,
     );
   }

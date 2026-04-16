@@ -12,8 +12,6 @@ import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/badge_service.dart';
-import 'package:icanbefitter/shared/models/achievement_badge.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
@@ -33,6 +31,8 @@ import '../providers/profile_provider.dart';
 import '../widgets/profile_identity.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
+import '../widgets/slim_achievements_card.dart';
+import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
 import 'notification_settings_screen.dart';
@@ -235,8 +235,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final bodyFatPct = (profile['body_fat_percent'] as num?)?.toDouble();
     final dob = profile['date_of_birth'] as String?;
 
+    final experience = profile['fitness_experience'] as String? ?? '';
+    final expLabel = experience.isNotEmpty
+        ? ' \u00B7 ${experience[0].toUpperCase()}${experience.substring(1)}'
+        : '';
     final subtitle =
-        'Phase ${stats.currentPhase} \u00B7 Week ${stats.currentWeek} \u00B7 ${_formatGoal(stats.primaryGoal)}';
+        'Phase ${stats.currentPhase} \u00B7 Week ${stats.currentWeek} \u00B7 ${_formatGoal(stats.primaryGoal)}$expLabel';
 
     // BMI calculation
     double? bmi;
@@ -400,12 +404,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 8),
 
+              // Profile completeness (shows until 100%)
+              const ProfileCompletenessCard(),
+              const SizedBox(height: 8),
+
               // #2 Daily Completion summary
               _buildDailyCompletion(stats),
               const SizedBox(height: 8),
 
-              // Bug #15 — Collapsible achievements section (after Daily Completion)
-              const _CollapsibleBadgesSection(),
+              // Slim single-row achievements card (after Daily Completion)
+              const SlimAchievementsCard(),
               const SizedBox(height: 8),
 
               // #3 Body Stats card
@@ -1831,240 +1839,5 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-}
-
-// ── Bug #15 — Collapsible Achievements Section ──────────────────
-/// Shows the first 4 earned badges by default. "Show All" expands to
-/// display remaining earned + unearned (greyed at 40% opacity).
-class _CollapsibleBadgesSection extends StatefulWidget {
-  const _CollapsibleBadgesSection();
-
-  @override
-  State<_CollapsibleBadgesSection> createState() =>
-      _CollapsibleBadgesSectionState();
-}
-
-class _CollapsibleBadgesSectionState extends State<_CollapsibleBadgesSection> {
-  bool _showAll = false;
-  late List<AchievementBadge> _allBadges;
-
-  @override
-  void initState() {
-    super.initState();
-    BadgeService.instance.checkAll();
-    _allBadges = BadgeService.instance.getAllWithStatus();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final earned = _allBadges.where((b) => b.isUnlocked).toList()
-      ..sort((a, b) =>
-          (b.unlockedAt ?? DateTime(0)).compareTo(a.unlockedAt ?? DateTime(0)));
-    final unearned = _allBadges.where((b) => !b.isUnlocked).toList();
-    final earnedCount = earned.length;
-
-    // Badges to show in the default (collapsed) view
-    final defaultBadges = earned.take(4).toList();
-    final hasMore = earnedCount > 4 || unearned.isNotEmpty;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: "ACHIEVEMENTS . N earned"
-          Row(
-            children: [
-              Text(
-                'ACHIEVEMENTS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '\u00B7 $earnedCount earned',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.proGold,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.proGold.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(100),
-                  border: Border.all(
-                      color: AppColors.proGold.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  '$earnedCount / ${_allBadges.length}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.proGold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Default: first 4 earned badges (or empty state)
-          if (defaultBadges.isEmpty)
-            _buildEmptyState()
-          else
-            _buildBadgeGrid(defaultBadges, isEarned: true),
-
-          // Expanded: remaining earned + all unearned
-          if (_showAll) ...[
-            if (earned.length > 4) ...[
-              const SizedBox(height: 10),
-              _buildBadgeGrid(earned.skip(4).toList(), isEarned: true),
-            ],
-            if (unearned.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _buildBadgeGrid(unearned, isEarned: false),
-            ],
-          ],
-
-          // "Show All / Show Less" toggle
-          if (hasMore) ...[
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: () => setState(() => _showAll = !_showAll),
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _showAll
-                        ? 'Show Less'
-                        : 'Show All (${_allBadges.length} total)',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _showAll ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: AppColors.accent,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.emoji_events_outlined, size: 18, color: AppColors.proGold),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Complete workouts to unlock your first badge',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBadgeGrid(List<AchievementBadge> badges,
-      {required bool isEarned}) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.85,
-      ),
-      itemCount: badges.length,
-      itemBuilder: (context, i) {
-        final badge = badges[i];
-        return Opacity(
-          opacity: isEarned ? 1.0 : 0.4,
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isEarned
-                    ? AppColors.proGold.withValues(alpha: 0.5)
-                    : AppColors.border,
-                width: isEarned ? 1.5 : 1,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(badge.emoji, style: const TextStyle(fontSize: 24)),
-                const SizedBox(height: 3),
-                Text(
-                  badge.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: isEarned
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (isEarned && badge.unlockedAt != null)
-                  Text(
-                    '${badge.unlockedAt!.day}/${badge.unlockedAt!.month}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 8,
-                      color: AppColors.proGold,
-                    ),
-                  ),
-                if (!isEarned)
-                  Icon(Icons.lock, size: 10, color: AppColors.textSecondary),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 

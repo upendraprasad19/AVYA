@@ -42,6 +42,15 @@ flutter run --dart-define-from-file=.env -d chrome
 flutter build web --dart-define-from-file=.env
 ```
 
+### Gradle Configuration
+`android/gradle.properties` controls JVM memory. Current safe defaults for 16GB system:
+- `-Xmx4G` heap (NOT 8G — causes silent OOM crash)
+- `-XX:MaxMetaspaceSize=2G`
+- `-XX:ReservedCodeCacheSize=256m`
+- `org.gradle.parallel=true` + `org.gradle.caching=true`
+
+If build hangs silently with no output, check `android/hs_err_*.log` for JVM crash dumps. Use `/build-apk` skill for the full automated pipeline.
+
 ### Tests
 ```bash
 # All unit tests (no device required)
@@ -234,11 +243,27 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 ```
 lib/
   core/{theme, router, constants, services, utils}/   # singletons, GoRouter, theme tokens, BMR
+      utils/exercise_display.dart    # Experience-aware exercise labels
   features/{auth, onboarding, home, train, nutrition, ai_coach, profile}/
     each: screens/, widgets/, providers/, repositories/, models/
+      profile/providers/profile_completeness_provider.dart  # Tier 1/2 weighted calculation
+      profile/widgets/profile_completeness_card.dart  # Progress bar + missing fields
+      profile/widgets/slim_achievements_card.dart     # Single-line badges row
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
     repositories/  user, exercise, food, plan_generator (NEVER modify without approval)
+      plan_generator.dart (re-export shim)
+      plan_engine/             # V4 modular pipeline
+        models.dart            # MuscleSlot, MuscleSlotDay, CSpec (legacy)
+        split_resolver.dart    # Trainer-wisdom splits → MuscleSlotDay[]
+        volume_filter.dart     # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        exercise_selector.dart # 5-attempt cascading fallback
+        plan_generator.dart    # Pipeline orchestrator (generateV4)
+        periodization_engine.dart # DUP + exercise-specific rep_range
+        sequencing_engine.dart # CNS ordering
+        superset_engine.dart   # Pairing
+        cardio_finisher.dart   # Cardio append
+        warmup_cooldown_selector.dart # Warmup/cooldown inject
 
 assets/data/{exercise_library, food_database}.json    # bundled, seeded into Hive on first launch
 supabase/{migrations, functions}/                     # SQL + Edge Functions (TS)
@@ -251,6 +276,9 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `lib/core/services/subscription_service.dart` — `isPro()` + `gate()` (never read `configBox.get('isPro')` directly)
 - `lib/core/services/ai_service.dart` — `_compactContext()` (the only snapshot trimmer)
 - `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
+- `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 target-count trimming (`targetCount(experience, daysPerWeek)`)
+- `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
+- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
 
 ---
 
@@ -592,6 +620,49 @@ Phase {
 
 **FREE:** Phase 1 only (4 weeks). **PRO:** Generate new phases 2-12.
 
+### V4 Pipeline (MuscleSlot Architecture)
+
+**Key change:** CSpec (category-based) replaced by MuscleSlot (muscle-level targeting).
+
+Pipeline stages:
+1. **Split Resolver** → `MuscleSlotDay[]` with granular muscle slots per day (8-10 P1-P5 slots per day, ordered by priority)
+2. **Volume Filter** → Trims slots to `targetCount(experience, daysPerWeek)` by `slots.take(N)` — depends on split_resolver ordering
+3. **Exercise Selector** → 5-attempt cascade within movement patterns (NEVER crosses boundaries)
+4. **Sequencing Engine** → Orders by priority, then compound-first
+5. **Periodization Engine** → Uses exercise-specific `rep_range` + archetype-based wave
+6. **Superset Pairer** → Unchanged
+7. **Cardio Finisher** → Unchanged
+8. **Warmup/Cooldown** → Now also auto-injects for custom templates
+
+**Exercise count targets (per day):**
+
+| Experience | 3-day | 4-day | 5-day | 6-day |
+|---|---|---|---|---|
+| Beginner | 6 | 5 | 4 | 4 |
+| Intermediate | 8 | 7 | 6 | 6 |
+| Advanced | 10 | 9 | 8 | 8 |
+
+Inverse pattern: fewer training days → more exercises per session. More experience → more total volume. Defined in `VolumeFilter.targetCount(experience, daysPerWeek)`.
+
+**Movement patterns (11):** horizontal_push, vertical_push, horizontal_pull, vertical_pull, knee_dominant, hip_dominant, core, elbow_flexion, elbow_extension, shoulder_isolation, hip_isolation
+
+**Cascade attempts:**
+1. `attempt1Exact` — all fields match (movement_pattern + target_focus + exercise_type + subFocus + suitable_for + foundational)
+2. `attempt2DropSubFocus` — drop subFocus
+3. `attempt3DropTypeAndTarget` — drop target_focus + exercise_type (keep movement_pattern only)
+4. `attempt4DropEquipment` — drop equipment_tier
+5. `universalPool` — hardcoded bodyweight fallback (`exercise_selector.dart:493-505`, mirrored in `cascade_tracer.dart`)
+
+**Slot capacity rule:** No muscle/pattern/type triple should appear in more slots per week than its exercise library pool depth supports. E.g., Rear Delts/shoulder_isolation/isolation has 3 library exercises → max 3 slots/week. Over-allocation → `universalPool` picks (Pike Push Up for rear delt slots) or `(none)` failures.
+
+**Beginner-foundational pool constraint:** For Phase 1, `queryV4` requires BOTH `suitable_for` contains "Beginner" AND `is_foundational: true`. When adding/removing exercises from these pools, audit with `dart run test/plan_generator/sample_plans_report.dart`.
+
+**A/B variants:** slotsB alternates anterior/posterior emphasis weekly (e.g., A=chest-heavy push, B=shoulder-heavy push)
+
+**Verification tools:**
+- `test/plan_generator/sample_plans_report.dart` — generates all 12 combos (3×experience × 4×days) for build_muscle/full_gym, emits `sample_plans_output.md`. Target: 0 attempt3/universalPool/none.
+- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart mirror of production cascade; run when changing `exercise_repository.queryV4` or `exercise_selector._cascadeFill`.
+
 ---
 
 ## 13. HOME SCREEN LAYOUT (Priority Order)
@@ -755,12 +826,21 @@ User taps "Upgrade to PRO"
 
 ## 17. EXERCISE LIBRARY
 
-200+ exercises seeded in bundled JSON. Categories:
+250 exercises seeded in bundled JSON. Categories:
 - Push (~35), Pull (~35), Legs (~40), Core (~25)
 - Cardio (~20), Flexibility (~30), Calisthenics (~10)
 - Indian Traditional (5): Dand, Baithak, Surya Namaskar, Malkhamb, Hindu Warrior Flow
 
 Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protocol, pro_tip, MET_value, logging_type, difficulty, suitable_for, regression/progression links, image URLs.
+
+### V4 Fields (on every exercise)
+| Field | Type | Purpose |
+|-------|------|---------|
+| `movement_pattern` | string | One of 11 pipeline patterns (+ cardio/warmup/cooldown/flexibility for non-pipeline) |
+| `target_focus` | string | Granular muscle target (e.g., "Lats (Width)", "Biceps (Short Head)") |
+| `equipment_tier` | string[] | Subset of: bodyweight, home_dumbbells, basic_gym, full_gym |
+| `rep_range` | string | Exercise-specific rep prescription (e.g., "5-8", "8-12", "12-15") |
+| `priority_tier` | int | 1 (primary compound), 2 (secondary), 3 (accessory isolation) |
 
 ---
 
@@ -828,3 +908,7 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | Fixed-delta kcal ignores user pace | `BmrCalculator.calculateTargets` requires `pacePreference` (slow/balanced/aggressive). Deficit/surplus back-computed from `current_kg × pace_rate × 7700 / 7`. Never reintroduce fixed `+300 / -500` deltas — they ignore the user's chosen pace. |
 | Missing projection on MY TARGETS | Both `profile_screen._buildNutritionTargets` and `nutrition_screen._buildProjectionSubtitle` must read `current_weight_kg`, `target_weight_kg`, and `pace_preference` from the user profile. Projection only shown for `lose_fat`/`build_muscle` goals with non-zero gap. |
 | Food log delete with no undo | `nutrition_screen._confirmAndDeleteFoodLog` is the ONLY delete surface. Stashes log before delete; `restoreFoodLog` writes back at deterministic key `flog_<loggedAt>_<foodNameHash>`. Never call `deleteFoodLog` directly from a widget. |
+| Gradle build hangs silently | Check `android/gradle.properties` — `-Xmx` must be ≤4G on 16GB system. 8G causes OOM with no terminal output. Check for `android/hs_err_*.log` crash dumps. Also remove stale `flutter/bin/cache/lockfile` if Flutter commands hang on lock. Use `/build-apk` skill. |
+| Plan generator picks wrong-target exercise | Cascade attempt3 drops `target_focus` + `exercise_type`, keeping only `movement_pattern` — results in a push instead of a chest-specific push. Root causes: (a) exercise library pool too shallow for the slot's triple, or (b) for Phase 1 beginners, `suitable_for` too restrictive (needs "Beginner" + `is_foundational: true`). Fix: either expand library `suitable_for` on the missing exercise OR adjust `split_resolver.dart` slot ordering so beginners don't hit the shallow pool at P1/P2. Verify with `dart run test/plan_generator/sample_plans_report.dart` (target: 0 attempt3/universalPool/none). |
+| Plan generator returns wrong number of exercises | `VolumeFilter` uses `slots.take(targetCount(experience, daysPerWeek))` — depends on `split_resolver` emitting enough P1-P5 slots in priority order. If a split returns fewer slots than the advanced target (10 for 3-day), users get truncated output silently. When adding/reordering a split, count slots and confirm it covers the advanced case. |
+| Pike Push Up assigned to rear delt slot | Sign that cascade exhausted `attempt1-4` and fell to `universalPool`. Indicates too many slots of the same muscle/pattern/type across the week — library pool depth insufficient. Cap rear delt slots to 3/week, lateral delt to 3/week, front delt to 1/week (current library depth). Fix in `split_resolver.dart`, NOT by editing the universal pool. |

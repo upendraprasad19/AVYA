@@ -47,6 +47,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _lifestyleActivity = 'desk_job';
   String _dietPreference = 'non_veg';
   String _pacePreference = 'balanced'; // Bug #24
+  int? _sessionDuration; // 30, 45, 60, 90
+  String _physiqueFocus = 'balanced'; // balanced, glutes_legs, chest_shoulders_arms, strength
+  String _fitnessExperience = 'intermediate'; // beginner, intermediate, advanced
   List<String> _injuries = ['none'];
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
@@ -123,6 +126,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
     _dietPreference = (profile['diet_preference'] as String?) ?? 'non_veg';
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
+    _sessionDuration = profile['session_duration_minutes'] as int?;
+    _physiqueFocus = (profile['physique_focus'] as String?) ?? 'balanced';
+    _fitnessExperience = (profile['fitness_experience'] as String?) ?? 'intermediate';
     final rawInjuries = profile['injuries'];
     if (rawInjuries is List && rawInjuries.isNotEmpty) {
       _injuries = rawInjuries.map((e) => e.toString()).toList();
@@ -267,6 +273,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildLifestyleSelector(),
               const SizedBox(height: AppSpacing.gridGap),
               _buildPaceSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildSessionDurationSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildPhysiqueFocusSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildExperienceSelector(),
               const SizedBox(height: AppSpacing.sectionGap),
 
               _sectionHeader('Diet & Health'),
@@ -779,6 +791,192 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  // ── Session Duration ─────────────────────────────────────────────
+
+  Widget _buildSessionDurationSelector() {
+    const options = [30, 45, 60, 90];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Session Duration',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((min) {
+            final selected = _sessionDuration == min;
+            return GestureDetector(
+              onTap: () => setState(() => _sessionDuration = min),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.accent.withValues(alpha: 0.15)
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.accent.withValues(alpha: 0.5)
+                        : AppColors.border,
+                  ),
+                ),
+                child: Text(
+                  '$min min',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Physique Focus ───────────────────────────────────────────────
+
+  Widget _buildPhysiqueFocusSelector() {
+    const options = <(String, String)>[
+      ('balanced', 'Balanced'),
+      ('glutes_legs', 'Glutes & Legs'),
+      ('chest_shoulders_arms', 'Chest & Shoulders'),
+      ('strength', 'Strength'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Physique Focus',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((opt) {
+            final selected = _physiqueFocus == opt.$1;
+            return GestureDetector(
+              onTap: () => setState(() => _physiqueFocus = opt.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.accent.withValues(alpha: 0.15)
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.accent.withValues(alpha: 0.5)
+                        : AppColors.border,
+                  ),
+                ),
+                child: Text(
+                  opt.$2,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Experience Level ─────────────────────────────────────────────
+
+  Widget _buildExperienceSelector() {
+    const options = <(String, String)>[
+      ('beginner', 'Beginner'),
+      ('intermediate', 'Intermediate'),
+      ('advanced', 'Advanced'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Experience Level',
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((opt) {
+            final selected = _fitnessExperience == opt.$1;
+            return GestureDetector(
+              onTap: () => setState(() => _fitnessExperience = opt.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.accent.withValues(alpha: 0.15)
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.accent.withValues(alpha: 0.5)
+                        : AppColors.border,
+                  ),
+                ),
+                child: Text(
+                  opt.$2,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   // ── Diet Preference ──────────────────────────────────────────────
 
   Widget _buildDietPreferenceChips() {
@@ -1277,6 +1475,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           'body_fat_percent': double.tryParse(_bodyFatController.text),
         if (_bodyFatAssessedAt != null)
           'body_fat_assessed_at': _bodyFatAssessedAt,
+        if (_sessionDuration != null)
+          'session_duration_minutes': _sessionDuration,
+        'physique_focus': _physiqueFocus,
+        'fitness_experience': _fitnessExperience,
       };
 
       await ref.read(userProfileProvider.notifier).updateProfile(updates);

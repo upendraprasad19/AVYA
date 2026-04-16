@@ -834,7 +834,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   loggingType:
                       exerciseData['logging_type'] as String? ?? 'weight_reps',
                   exerciseType:
-                      exerciseData['exercise_type'] as String? ?? 'isolation',
+                      (exerciseData['exercise_type'] is List
+                          ? (exerciseData['exercise_type'] as List).first.toString()
+                          : exerciseData['exercise_type'] as String?) ?? 'isolation',
                   category: exerciseData['category'] as String? ?? '',
                   equipmentNeeded: (exerciseData['equipment_needed'] as List?)
                           ?.cast<String>() ??

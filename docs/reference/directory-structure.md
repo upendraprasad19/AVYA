@@ -28,6 +28,7 @@ lib/
     utils/
       bmr_calculator.dart               # Mifflin-St Jeor formula
       date_utils.dart
+      exercise_display.dart             # Experience-level-aware exercise label formatter (V4)
   features/
     auth/
       screens/sign_in_screen.dart
@@ -39,6 +40,7 @@ lib/
     home/
       screens/home_screen.dart          # No prediction card (moved to profile in Bug #14)
       widgets/
+        profile_nudge_card.dart         # Dismissible profile completeness nudge card
       providers/home_provider.dart      # streakWarningEligibilityProvider (Bug #12)
     train/
       screens/train_screen.dart         # Collapsible warmup/cooldown (Bug #15)
@@ -69,8 +71,12 @@ lib/
       screens/edit_profile_screen.dart
       screens/reports_screen.dart
       widgets/
+        profile_completeness_card.dart  # Progress bar + missing fields on profile screen
         profile_identity.dart           # Premium pill button (Bug #14)
-      providers/profile_provider.dart
+        slim_achievements_card.dart     # Single-line achievements with badges + chevron
+      providers/
+        profile_completeness_provider.dart  # Tier 1/2 weighted completeness calculation
+        profile_provider.dart
   shared/
     widgets/
       paywall_sheet.dart                # Single reusable paywall UI
@@ -83,13 +89,29 @@ lib/
       exercise_repository.dart
       food_repository.dart
       plan_generator.dart               # Hard floor 5 + retry chain (Bug #17). NEVER modify without explicit approval.
+      plan_engine/                      # V4 modular pipeline
+        models.dart                     # MuscleSlot, MuscleSlotDay
+        split_resolver.dart             # Stage 1: muscle-level day splits (8-10 P1-P5 slots/day)
+        volume_filter.dart              # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        exercise_selector.dart          # Stage 2: 5-attempt cascade within movement patterns
+        sequencing_engine.dart          # Stage 3: CNS ordering
+        periodization_engine.dart       # Stage 4: DUP + exercise-specific rep_range
+        superset_engine.dart            # Stage 5: pairing
+        cardio_finisher.dart            # Stage 6: cardio append
+        warmup_cooldown_selector.dart   # Stage 7: warmup/cooldown injection
 
 assets/
   data/
-    exercise_library.json               # 200+ exercises, bundled in APK. Timed entries have default_duration_secs (Bug #16)
+    exercise_library.json               # 250 exercises with V4 fields (movement_pattern, target_focus, equipment_tier, rep_range, priority_tier). Timed entries have default_duration_secs (Bug #16)
     food_database.json                  # 5,000 Indian-first foods, bundled in APK
   fonts/
     # DM Sans font loaded via google_fonts package (runtime download)
+
+scripts/
+  enrich_exercise_library.py           # One-shot: add V4 fields to exercise library
+  add_new_exercises.py                 # Add ~30 new exercises for gap coverage
+  add_rep_ranges.py                    # Add exercise-specific rep ranges
+  validate_exercise_library.py         # Coverage matrix validation
 
 supabase/
   migrations/                           # SQL migration files
@@ -106,4 +128,26 @@ supabase/
     weekly-report/index.ts              # PRO weekly nutrition report
     future-prediction/index.ts          # Prediction card AI generation
     rolling-context/index.ts            # AI coach context refresh
+
+.claude/
+  commands/                              # Slash-command skills (auto-discovered)
+    add-edge-function.md                 # Scaffold Supabase Edge Function
+    add-migration.md                     # Create SQL migration file
+    add-repository.md                    # Create Hive-first repository
+    build-apk.md                         # Automated APK build pipeline (pre-flight, clean, build, verify)
+    build.md                             # Autonomous multi-phase build pipeline
+    design-review.md                     # Widget design system audit
+    gate-feature.md                      # Wire PRO subscription gate
+    pre-commit-check.md                  # QA checklist before commit
+    scaffold-screen.md                   # Generate feature folder + screen template
+    seed-data.md                         # Generate exercise/food seed data
+  agents/                                # Subagent role definitions
+    auth-agent.md                        # Auth + onboarding scope
+    backend-agent.md                     # Edge Functions scope
+    database-agent.md                    # Supabase DB scope
+    manager-agent.md                     # Pipeline orchestrator
+    qa-agent.md                          # QA + testing scope
+    screen-agent.md                      # Flutter screen scope
+  tasks/                                 # Build pipeline phase files
+    BUILD_ORDER.md                       # Phase dependency graph
 ```

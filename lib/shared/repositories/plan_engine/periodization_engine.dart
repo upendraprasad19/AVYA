@@ -80,6 +80,7 @@ class PeriodizationEngine {
           var exercise = _applyWave(
             ex, weekIdx, baseSets, baseReps, baseRest, day.intensity,
             isBeginner: isBeginner, isDeload: isDeload, multiplier: multiplier,
+            archetype: archetype,
           );
 
           // V3: Body focus — +1 set on matching exercises
@@ -125,12 +126,15 @@ class PeriodizationEngine {
   /// Apply DUP profile + volume wave to a single exercise.
   ///
   /// V3: Applies 4-set minimum for intermediate+, cycle multiplier.
+  /// V4: Uses exercise-specific rep_range when available; archetype selects
+  ///     which end of that range to lean toward instead of fixed DUP reps.
   static PlannedExercise _applyWave(
     PlannedExercise ex, int weekIdx,
     int baseSets, int baseReps, int baseRest, String intensity, {
     required bool isBeginner,
     required bool isDeload,
     required double multiplier,
+    required String archetype,
   }) {
     final lt = ex.loggingType;
     final isRepBased = lt == 'weight_reps' || lt == 'bodyweight_reps' ||
@@ -155,7 +159,36 @@ class PeriodizationEngine {
       sets = max(4, sets);
     }
 
-    final reps = _waveReps(baseReps, weekIdx, intensity);
+    // V4: Use exercise-specific rep range when available.
+    // Archetype determines which side of the range to lean toward:
+    //   strength   → lower end (min reps, heavier weight)
+    //   hypertrophy → midpoint
+    //   metabolic  → upper end (more reps, lighter weight)
+    //   deload     → midpoint (same range, reduced sets & load)
+    final exRepRange = ex.repRange;
+    int reps;
+    if (exRepRange != null && exRepRange.contains('-')) {
+      final parts = exRepRange.split('-');
+      final minReps = int.tryParse(parts[0].trim()) ?? baseReps;
+      final maxReps = int.tryParse(parts[1].trim()) ?? baseReps;
+      final midReps = ((minReps + maxReps) / 2).round();
+
+      reps = switch (archetype) {
+        'strength'    => minReps,
+        'metabolic'   => maxReps,
+        'deload'      => midReps,
+        _             => midReps, // 'hypertrophy' and any unknown
+      };
+
+      // Apply wave modifier on top of archetype selection
+      reps = _waveReps(reps, weekIdx, intensity);
+      // Clamp to keep within library-defined bounds (wave can nudge but not escape)
+      reps = reps.clamp(minReps, maxReps);
+    } else {
+      // Fallback: legacy DUP baseReps path (no rep_range in library)
+      reps = _waveReps(baseReps, weekIdx, intensity);
+    }
+
     final rest = baseRest;
 
     return ex.copyWith(

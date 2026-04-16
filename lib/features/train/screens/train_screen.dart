@@ -1572,7 +1572,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  detail,
+                  ex.muscleLabel != null ? '${ex.muscleLabel} · $detail' : detail,
                   style: GoogleFonts.getFont(
                     'DM Sans',
                     fontSize: 10,

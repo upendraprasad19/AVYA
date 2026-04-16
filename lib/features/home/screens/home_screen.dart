@@ -13,6 +13,7 @@ import '../widgets/streak_badge.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
+import '../widgets/profile_nudge_card.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
@@ -200,6 +201,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: 10),
         _buildQuickActions(context),
+        const SizedBox(height: 10),
+        const ProfileNudgeCard(),  // V4: profile completeness nudge
         const SizedBox(height: 10),
         // AI Coach insight
         Padding(
