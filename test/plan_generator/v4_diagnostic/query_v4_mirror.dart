@@ -8,14 +8,14 @@
 /// lib/shared/repositories/exercise_repository.dart:177-295 — any change there
 /// requires an equivalent change here + an updated spot-check test.
 class QueryV4Mirror {
-  /// Returns true if [field] (String or List<String>) contains [value] (case-insensitive exact).
+  /// Returns true if [field] (String or List of String) contains [value] (case-insensitive exact).
   static bool _fieldContains(dynamic field, String value) {
     final v = value.toLowerCase();
     if (field is List) return field.any((e) => e.toString().toLowerCase() == v);
     return (field as String?)?.toLowerCase() == v;
   }
 
-  /// Returns true if any element in [field] (String or List<String>) contains [substring] (case-insensitive).
+  /// Returns true if any element in [field] (String or List of String) contains [substring] (case-insensitive).
   static bool _fieldSubstringMatch(dynamic field, String substring) {
     final s = substring.toLowerCase();
     if (field is List) return field.any((e) => e.toString().toLowerCase().contains(s));
