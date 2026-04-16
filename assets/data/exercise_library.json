@@ -156,6 +156,7 @@
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
     "suitable_for": [
+      "Beginner",
       "Intermediate",
       "Advanced"
     ],
@@ -685,6 +686,7 @@
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
     "suitable_for": [
+      "Beginner",
       "Intermediate",
       "Advanced"
     ],
@@ -7894,6 +7896,7 @@
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
     "suitable_for": [
+      "Beginner",
       "Intermediate",
       "Advanced"
     ],

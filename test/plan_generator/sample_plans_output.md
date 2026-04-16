@@ -1,5 +1,5 @@
 # Sample Workout Plans — All Experience × Day Splits
-Generated: 2026-04-16
+Generated: 2026-04-17
 
 ---
 ## BEGINNER / 3 days / build_muscle / full_gym
@@ -8,7 +8,7 @@ Generated: 2026-04-16
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Mid Chest/horizontal_push/compound/P1 | **Barbell Bench Press** | attempt1Exact |
-| 2 | Shoulders/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
+| 2 | Shoulders/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 3 | Lats/horizontal_pull/compound/P1 | **Dumbbell Row** | attempt1Exact |
 | 4 | Quads/knee_dominant/compound/P1 | **Goblet Squat** | attempt1Exact |
 | 5 | Core/core/isolation/P2 | **Cable Crunch** | attempt1Exact |
@@ -43,7 +43,7 @@ Generated: 2026-04-16
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Mid Chest/horizontal_push/compound/P1 | **Barbell Bench Press** | attempt1Exact |
-| 2 | Shoulders/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
+| 2 | Shoulders/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 3 | Lats/horizontal_pull/compound/P1 | **Dumbbell Row** | attempt1Exact |
 | 4 | Quads/knee_dominant/compound/P1 | **Goblet Squat** | attempt1Exact |
 | 5 | Core/core/isolation/P2 | **Cable Crunch** | attempt1Exact |
@@ -69,8 +69,8 @@ Generated: 2026-04-16
 ### Day 4: Full Body D (Balanced — core & conditioning)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Shoulders/vertical_push/compound/P1 | **Kettlebell Goblet Press** | attempt3DropTypeAndTarget |
-| 2 | Lats/vertical_pull/compound/P1 | **Machine High Row** | attempt2DropSubFocus |
+| 1 | Shoulders/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
+| 2 | Lats/vertical_pull/compound/P1 | **Chin Up** | attempt1Exact |
 | 3 | Quads/knee_dominant/compound/P1 | **Step Up** | attempt1Exact |
 | 4 | Core/core/isolation/P2 | **Pallof Press** | attempt1Exact |
 | 5 | Core/core/isolation/P2 | **Crunches** | attempt2DropSubFocus |
@@ -84,7 +84,7 @@ Generated: 2026-04-16
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Mid Chest/horizontal_push/compound/P1 | **Barbell Bench Press** | attempt1Exact |
-| 2 | Upper Chest/horizontal_push/compound/P1 | **Dumbbell Bench Press** | attempt3DropTypeAndTarget |
+| 2 | Upper Chest/horizontal_push/compound/P1 | **Incline Barbell Bench Press** | attempt1Exact |
 | 3 | Lower Chest/horizontal_push/isolation/P2 | **Dumbbell Fly** | attempt1Exact |
 | 4 | Lateral Delts/shoulder_isolation/isolation/P2 | **Lateral Raise** | attempt1Exact |
 
@@ -93,13 +93,13 @@ Generated: 2026-04-16
 |---|------|----------------|--------|
 | 1 | Lats/vertical_pull/compound/P1 | **Lat Pulldown** | attempt1Exact |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Dumbbell Row** | attempt1Exact |
-| 3 | Lats/vertical_pull/compound/P2 | **Machine High Row** | attempt2DropSubFocus |
+| 3 | Lats/vertical_pull/compound/P2 | **Chin Up** | attempt2DropSubFocus |
 | 4 | Rear Delts/shoulder_isolation/isolation/P2 | **Face Pull** | attempt1Exact |
 
 ### Day 3: Shoulders + Arms (Delts, biceps, triceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Front Delts/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
+| 1 | Front Delts/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 2 | Lateral Delts/shoulder_isolation/isolation/P1 | **Machine Lateral Raise** | attempt2DropSubFocus |
 | 3 | Rear Delts/shoulder_isolation/isolation/P2 | **Band Pull Apart** | attempt1Exact |
 | 4 | Biceps/elbow_flexion/isolation/P2 | **Barbell Curl** | attempt1Exact |
@@ -115,7 +115,7 @@ Generated: 2026-04-16
 ### Day 5: Upper + Core (Shoulders, arms, core)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Shoulders/vertical_push/compound/P1 | **Kettlebell Goblet Press** | attempt3DropTypeAndTarget |
+| 1 | Shoulders/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
 | 2 | Lats/horizontal_pull/compound/P1 | **Chest Supported Row** | attempt1Exact |
 | 3 | Core/core/isolation/P2 | **Cable Crunch** | attempt1Exact |
 | 4 | Core/core/isolation/P2 | **Russian Twist** | attempt2DropSubFocus |
@@ -129,7 +129,7 @@ Generated: 2026-04-16
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Mid Chest/horizontal_push/compound/P1 | **Barbell Bench Press** | attempt1Exact |
-| 2 | Upper Chest/horizontal_push/compound/P1 | **Dumbbell Bench Press** | attempt3DropTypeAndTarget |
+| 2 | Upper Chest/horizontal_push/compound/P1 | **Incline Barbell Bench Press** | attempt1Exact |
 | 3 | Lateral Delts/shoulder_isolation/isolation/P2 | **Lateral Raise** | attempt1Exact |
 | 4 | Triceps/elbow_extension/isolation/P2 | **Tricep Pushdown (Cable)** | attempt1Exact |
 
@@ -138,7 +138,7 @@ Generated: 2026-04-16
 |---|------|----------------|--------|
 | 1 | Lats/vertical_pull/compound/P1 | **Lat Pulldown** | attempt1Exact |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Dumbbell Row** | attempt1Exact |
-| 3 | Lats/vertical_pull/compound/P2 | **Machine High Row** | attempt2DropSubFocus |
+| 3 | Lats/vertical_pull/compound/P2 | **Chin Up** | attempt2DropSubFocus |
 | 4 | Rear Delts/shoulder_isolation/isolation/P2 | **Face Pull** | attempt1Exact |
 
 ### Day 3: Legs A (Quad dominant)
@@ -152,15 +152,15 @@ Generated: 2026-04-16
 ### Day 4: Push B (Volume shoulders + triceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Shoulders/vertical_push/compound/P1 | **Dumbbell Shoulder Press** | attempt1Exact |
+| 1 | Shoulders/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 2 | Lateral Delts/shoulder_isolation/isolation/P1 | **Machine Lateral Raise** | attempt2DropSubFocus |
-| 3 | Mid Chest/horizontal_push/compound/P2 | **Machine Chest Press** | attempt1Exact |
-| 4 | Lower Chest/horizontal_push/compound/P2 | **Floor Press** | attempt3DropTypeAndTarget |
+| 3 | Mid Chest/horizontal_push/compound/P2 | **Dumbbell Bench Press** | attempt1Exact |
+| 4 | Triceps/elbow_extension/isolation/P2 | **Overhead Tricep Extension** | attempt1Exact |
 
 ### Day 5: Pull B (Volume back + biceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Lats/vertical_pull/compound/P1 | **Straight-Arm Pulldown** | attempt3DropTypeAndTarget |
+| 1 | Lats/vertical_pull/compound/P1 | **Machine High Row** | attempt2DropSubFocus |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Seated Cable Row** | attempt1Exact |
 | 3 | Rear Delts/shoulder_isolation/isolation/P2 | **Band Pull Apart** | attempt1Exact |
 | 4 | Biceps/elbow_flexion/isolation/P2 | **Barbell Curl** | attempt1Exact |
@@ -359,8 +359,8 @@ Generated: 2026-04-16
 | 1 | Shoulders/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 2 | Lateral Delts/shoulder_isolation/isolation/P1 | **Machine Lateral Raise** | attempt2DropSubFocus |
 | 3 | Mid Chest/horizontal_push/compound/P2 | **Dumbbell Bench Press** | attempt1Exact |
-| 4 | Lower Chest/horizontal_push/compound/P2 | **Decline Barbell Bench Press** | attempt2DropSubFocus |
-| 5 | Triceps/elbow_extension/isolation/P3 | **Overhead Tricep Extension** | attempt1Exact |
+| 4 | Triceps/elbow_extension/isolation/P2 | **Overhead Tricep Extension** | attempt1Exact |
+| 5 | Lower Chest/horizontal_push/compound/P3 | **Decline Barbell Bench Press** | attempt2DropSubFocus |
 | 6 | Triceps/elbow_extension/isolation/P3 | **Dumbbell Kickback** | attempt2DropSubFocus |
 
 ### Day 5: Pull B (Volume back + biceps)
@@ -599,8 +599,8 @@ Generated: 2026-04-16
 | 1 | Shoulders/vertical_push/compound/P1 | **Barbell Overhead Press** | attempt1Exact |
 | 2 | Lateral Delts/shoulder_isolation/isolation/P1 | **Machine Lateral Raise** | attempt2DropSubFocus |
 | 3 | Mid Chest/horizontal_push/compound/P2 | **Dumbbell Bench Press** | attempt1Exact |
-| 4 | Lower Chest/horizontal_push/compound/P2 | **Decline Barbell Bench Press** | attempt2DropSubFocus |
-| 5 | Triceps/elbow_extension/isolation/P3 | **Overhead Tricep Extension** | attempt1Exact |
+| 4 | Triceps/elbow_extension/isolation/P2 | **Overhead Tricep Extension** | attempt1Exact |
+| 5 | Lower Chest/horizontal_push/compound/P3 | **Decline Barbell Bench Press** | attempt2DropSubFocus |
 | 6 | Triceps/elbow_extension/isolation/P3 | **Dumbbell Kickback** | attempt2DropSubFocus |
 | 7 | Mid Chest/horizontal_push/isolation/P4 | **Cable Crossover** | attempt2DropSubFocus |
 | 8 | Lateral Delts/shoulder_isolation/isolation/P4 | **Egyptian Lateral Raise** | attempt2DropSubFocus |
