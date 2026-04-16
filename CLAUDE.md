@@ -222,7 +222,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `foodBox` | food_database (seeded from bundled JSON) |
 | `customBox` | user_custom_exercises, user_custom_foods |
 | `coachBox` | ai_coach_interactions, coaching_notes |
-| `syncBox` | last_sync_timestamps, pending_sync_queue |
+| `syncBox` | last_sync_timestamps (pending_sync_queue is **planned** — see `docs/superpowers/specs/2026-04-17-sync-reliability.md`, not yet implemented) |
 | `configBox` | subscription status, feature flags, app config |
 
 #### workoutBox Key Patterns
