@@ -787,7 +787,10 @@ class SyncService {
 
     final p = Map<String, dynamic>.from(profile as Map);
 
-    // Only send columns that exist in the user_profile Supabase table.
+    // Mirrors every field stored in the Hive profile map that has a matching
+    // user_profile column. Columns added in migration 017 (lifestyle_activity,
+    // session_duration_minutes, physique_focus, body_fat_percent,
+    // body_fat_assessed_at) were previously silently dropped.
     await _supabase.client.from('user_profile').upsert({
       'user_id': userId,
       if (p['date_of_birth'] != null) 'date_of_birth': p['date_of_birth'],
@@ -800,14 +803,20 @@ class SyncService {
       if (p['days_per_week'] != null) 'days_per_week': p['days_per_week'],
       if (p['equipment_access'] != null) 'equipment_access': p['equipment_access'],
       if (p['activity_level'] != null) 'activity_level': p['activity_level'],
+      if (p['lifestyle_activity'] != null) 'lifestyle_activity': p['lifestyle_activity'],
+      if (p['pace_preference'] != null) 'pace_preference': p['pace_preference'],
+      if (p['diet_preference'] != null) 'diet_preference': p['diet_preference'],
+      if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
+      if (p['city'] != null) 'city': p['city'],
       if (p['bmr'] != null) 'bmr': p['bmr'],
       if (p['tdee'] != null) 'tdee': p['tdee'],
-      if (p['diet_preference'] != null) 'diet_preference': p['diet_preference'],
-      if (p['city'] != null) 'city': p['city'],
       if (p['body_fat_percent'] != null) 'body_fat_percent': p['body_fat_percent'],
       if (p['body_fat_assessed_at'] != null) 'body_fat_assessed_at': p['body_fat_assessed_at'],
-      if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
-      if (p['pace_preference'] != null) 'pace_preference': p['pace_preference'],
+      if (p['session_duration_minutes'] != null) 'session_duration_minutes': p['session_duration_minutes'],
+      if (p['physique_focus'] != null) 'physique_focus': p['physique_focus'],
+      if (p['avatar_url'] != null) 'avatar_url': p['avatar_url'],
+      if (p['banner_url'] != null) 'banner_url': p['banner_url'],
+      if (p['wake_up_time'] != null) 'wake_up_time': p['wake_up_time'],
     }, onConflict: 'user_id');
   }
 
