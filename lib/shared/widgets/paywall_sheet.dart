@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -177,17 +179,23 @@ class _PaywallSheetState extends State<PaywallSheet> {
     if (!mounted) return;
 
     Navigator.of(context).pop();
-    RazorpayService.instance.openCheckout(
+    // openCheckout is now async (waits for server-side order creation).
+    // Fire-and-forget — the paywall sheet is dismissed above, and Razorpay
+    // SDK callbacks fire from its own channel (not this future).
+    unawaited(RazorpayService.instance.openCheckout(
       plan: _selectedPlan,
       promoCode: _promoApplied ? _promoController.text.trim() : null,
       discountPct: _promoApplied ? _promoDiscountPct : null,
       onSuccess: () {
-        // PRO activated via RazorpayService polling
+        // PRO activated optimistically by RazorpayService._handlePaymentSuccess;
+        // background confirmation happens automatically.
       },
       onFailure: () {
-        // Payment failed — user can retry from any PRO feature tap
+        // Payment failed or order creation failed — user can retry from any
+        // PRO feature tap. RazorpayService already showed an appropriate
+        // error snackbar.
       },
-    );
+    ));
   }
 
   Future<void> _handleRestore() async {

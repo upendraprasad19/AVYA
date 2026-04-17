@@ -44,15 +44,25 @@ class RazorpayService {
 
   /// Opens the Razorpay checkout for the given [plan] ("monthly" or "yearly").
   ///
+  /// Flow (fix from the 2026-04-17 stuck-at-authorized bug):
+  ///   1. Call our `create-razorpay-order` Edge Function server-side
+  ///      to create the Razorpay Order with `payment_capture: 1`.
+  ///      This guarantees auto-capture on authorization — the order-less
+  ///      checkout path used previously would occasionally leave UPI /
+  ///      wallet payments stuck in `authorized` status because Razorpay
+  ///      was waiting for an explicit /capture call that never came.
+  ///   2. Open Razorpay WebView with the server-created `order_id`.
+  ///   3. On PAYMENT_SUCCESS → poll Supabase for webhook confirmation.
+  ///
   /// Annual plan is pre-selected in PaywallSheet, showing "Save 28%".
   /// Optional [promoCode] and [discountPct] apply a discount to the amount.
-  void openCheckout({
+  Future<void> openCheckout({
     required String plan,
     String? promoCode,
     int? discountPct,
     VoidCallback? onSuccess,
     VoidCallback? onFailure,
-  }) {
+  }) async {
     final keyId = AppConstants.razorpayKeyId;
     if (keyId.isEmpty || keyId.contains('REPLACE')) {
       debugPrint('RazorpayService: invalid key ID — aborting checkout');
@@ -64,37 +74,77 @@ class RazorpayService {
     _onFailure = onFailure;
     _pendingPlan = plan;
 
-    int baseAmount = plan == 'yearly'
-        ? AppConstants.yearlyPriceInr
-        : AppConstants.monthlyPriceInr;
-
-    // Apply promo discount if provided.
-    if (promoCode != null && discountPct != null && discountPct > 0) {
-      baseAmount = (baseAmount * (100 - discountPct) / 100).round();
+    final user = SupabaseService.instance.currentUser;
+    if (user == null) {
+      debugPrint('RazorpayService: no user — aborting checkout');
+      onFailure?.call();
+      return;
     }
 
-    final amount = baseAmount * 100; // Razorpay expects paise
-    debugPrint('RazorpayService: opening checkout — plan=$plan, amount=$amount paise, key=${keyId.substring(0, 12)}...');
+    // Step 1 — create server-side order. Derives price + promo server-side
+    // (client never dictates amount), returns order_id + key_id.
+    int amountPaise = 0;
+    String? orderId;
+    try {
+      final resp = await SupabaseService.instance.callFunction(
+        'create-razorpay-order',
+        body: {
+          'plan': plan,
+          if (promoCode != null && promoCode.isNotEmpty) 'promo_code': promoCode,
+        },
+      );
 
-    final user = SupabaseService.instance.currentUser;
+      if (resp.status != 200 || resp.data == null) {
+        debugPrint('RazorpayService: create-razorpay-order failed '
+            'status=${resp.status} data=${resp.data}');
+        _showOrderCreationFailure();
+        onFailure?.call();
+        return;
+      }
 
+      final data = resp.data is Map
+          ? resp.data as Map<String, dynamic>
+          : <String, dynamic>{};
+      orderId = data['order_id'] as String?;
+      amountPaise = (data['amount'] as num?)?.toInt() ?? 0;
+
+      if (orderId == null || orderId.isEmpty || amountPaise == 0) {
+        debugPrint('RazorpayService: order response missing fields: $data');
+        _showOrderCreationFailure();
+        onFailure?.call();
+        return;
+      }
+    } catch (e) {
+      debugPrint('RazorpayService: create-razorpay-order threw: $e');
+      _showOrderCreationFailure();
+      onFailure?.call();
+      return;
+    }
+
+    debugPrint('RazorpayService: opening checkout — plan=$plan, '
+        'order_id=$orderId, amount=$amountPaise paise');
+
+    // Step 2 — open Razorpay checkout with the server-created order.
+    // Passing `order_id` ensures Razorpay uses the order's
+    // `payment_capture: 1` flag → payment is captured automatically
+    // the instant it's authorized. No more stuck-at-authorized bug.
     final notes = <String, String>{
-      'user_id': user?.id ?? '',
+      'user_id': user.id,
       'plan': plan,
     };
-
-    if (promoCode != null) {
+    if (promoCode != null && promoCode.isNotEmpty) {
       notes['promo_code'] = promoCode;
     }
 
     final options = {
-      'key': AppConstants.razorpayKeyId,
-      'amount': amount,
+      'key': keyId,
+      'order_id': orderId,
+      'amount': amountPaise,
       'name': AppConstants.appName,
       'description': 'PRO ${plan == 'yearly' ? 'Yearly' : 'Monthly'} Plan',
       'currency': 'INR',
       'prefill': {
-        'email': user?.email ?? '',
+        'email': user.email ?? '',
       },
       'notes': notes,
       'theme': {
@@ -104,6 +154,25 @@ class RazorpayService {
 
     if (kIsWeb) return;
     _razorpay?.open(options);
+  }
+
+  /// Shows a non-blocking snackbar when server-side order creation fails
+  /// before Razorpay checkout even opens. The user hasn't paid yet, so
+  /// this is a recoverable "try again" state.
+  void _showOrderCreationFailure() {
+    final ctx = navigatorKey?.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Couldn\'t start payment. Check your connection and try again.',
+          style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF2a1a1a),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
@@ -124,40 +193,61 @@ class RazorpayService {
       debugPrint('RazorpayService: session refresh failed (non-fatal): $e');
     }
 
-    // Show "verifying" snackbar immediately so user isn't staring at nothing.
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Verifying payment...',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF0e1219),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 15),
-      ),
-    );
+    // Fix 2 (2026-04-17) · OPTIMISTIC LOCAL ACTIVATION.
+    //
+    // Activate PRO in Hive IMMEDIATELY — the user sees the PRO badge the
+    // instant Razorpay says the payment succeeded. Server-side confirmation
+    // happens in the background via _pollAndActivate. Even if polling and
+    // verify-payment both fail, we already have:
+    //   - Hive `isPro=true` + `localActivationAt` timestamp (grace period)
+    //   - SubscriptionService.gate() server-verifies high-value features
+    //     so a compromised local state still can't unlock paid content
+    //     (see CLAUDE.md §10 — verifyFromServer cache TTL 5 min).
+    //
+    // Before this fix, if Phase 1 polling + Phase 2 verify both failed or
+    // threw, the Phase 3 local fallback was ALSO skipped (it lived at the
+    // end of _pollAndActivate) — leaving the user stuck without PRO even
+    // though their payment went through. Now Phase 3 runs first + poll
+    // confirms it afterwards.
+    final fallbackPlan = _pendingPlan ?? 'monthly';
+    final optimisticEndDate = _computeEndDate(fallbackPlan);
+    try {
+      await SubscriptionService.instance.writeSubscriptionState(
+        isPro: true,
+        expiresAt: optimisticEndDate,
+        plan: fallbackPlan,
+      );
+      await HiveService.instance.configBox.put(
+        'localActivationAt',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (e) {
+      debugPrint('RazorpayService: optimistic activation write failed: $e');
+    }
 
-    await _pollAndActivate(
-      paymentId: response.paymentId ?? '',
-      orderId: response.orderId ?? '',
-      signature: response.signature ?? '',
-    );
-
-    // Clear the "verifying" snackbar before showing success
-    messenger?.clearSnackBars();
-
-    _onSuccess?.call();
+    // Announce PRO to the user right away — no more 45s "Verifying..." wait.
     _showProActivatedFeedback();
+    _onSuccess?.call();
+
+    // Background confirmation. Wrapped in try/catch so Razorpay's success
+    // callback thread never throws an unhandled exception that kills the
+    // whole payment path.
+    try {
+      await _pollAndActivate(
+        paymentId: response.paymentId ?? '',
+        orderId: response.orderId ?? '',
+        signature: response.signature ?? '',
+      );
+    } catch (e) {
+      debugPrint('RazorpayService: _pollAndActivate threw: $e');
+      // Local state is already PRO; background verify retries will keep
+      // trying via _scheduleVerificationRetry inside _pollAndActivate's
+      // normal flow, or via refreshFromSupabase on next app launch.
+    }
+
+    // Clear any leftover "Verifying" snackbar (safety — we no longer show
+    // one on this path, but legacy callers might).
+    messenger?.clearSnackBars();
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
@@ -246,7 +336,6 @@ class RazorpayService {
     final userId = SupabaseService.instance.currentUser?.id;
     if (userId == null) return;
 
-    final hive = HiveService.instance;
     final fallbackPlan = _pendingPlan ?? 'monthly';
 
     // Phase 1: Poll Supabase with exponential backoff (15 attempts).
@@ -332,28 +421,23 @@ class RazorpayService {
       }
     }
 
-    // Phase 3: Local-only fallback — activate PRO so user isn't stuck.
-    debugPrint('RazorpayService: all verification exhausted — activating local fallback for plan=$fallbackPlan');
-    await SubscriptionService.instance.writeSubscriptionState(
-      isPro: true,
-      expiresAt: _computeEndDate(fallbackPlan),
-      plan: fallbackPlan,
-    );
-    await hive.configBox.put('localActivationAt', DateTime.now().toIso8601String());
-
-    // SECURITY: Do NOT write subscriptions/users tables from the client.
-    // Per CLAUDE.md: Supabase is written ONLY by the webhook Edge Function
-    // (server-side HMAC verification). The client only polls + reads.
+    // Phase 3 was already done optimistically in _handlePaymentSuccess
+    // before we were called. All we need to do now is schedule the
+    // background verification retries so the server-side row gets written
+    // eventually (either by webhook or by verify-payment).
     //
-    // Schedule background retries of the verify-payment Edge Function,
-    // which has the Razorpay secret key and validates payment server-side.
+    // If Phase 1 + Phase 2 both failed above, hive still has PRO from the
+    // optimistic write. These retries will reconcile when connectivity /
+    // Razorpay / webhook recover.
+    debugPrint(
+      'RazorpayService: Phase 1+2 exhausted — local PRO already active, scheduling background retries');
     _scheduleVerificationRetry(
       paymentId: paymentId,
       orderId: orderId,
       plan: fallbackPlan,
     );
 
-    // Queue delayed re-checks in case webhook arrives late
+    // Also refresh from Supabase a few times in case the webhook arrives late.
     Future.delayed(const Duration(seconds: 60), () {
       SubscriptionService.instance.refreshFromSupabase();
     });

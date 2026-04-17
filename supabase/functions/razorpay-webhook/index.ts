@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
 const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -163,9 +165,16 @@ serve(async (req: Request) => {
 
     const payload = JSON.parse(rawBody);
 
-    // Razorpay sends event-based webhooks
+    // Razorpay sends event-based webhooks. We handle two events:
+    //   - payment.captured: the normal happy path (money moved, we record)
+    //   - payment.authorized: UPI/wallet payment that auth'd but wasn't
+    //     auto-captured by Razorpay. Happens in test mode and occasionally
+    //     in live mode when the payment was created WITHOUT
+    //     `payment_capture: 1` at order time. We call Razorpay's capture
+    //     API server-side, then proceed as if it were captured. This is
+    //     the belt-and-braces fix for the 2026-04-17 stuck-payment bug.
     const event = payload.event;
-    if (event !== "payment.captured") {
+    if (event !== "payment.captured" && event !== "payment.authorized") {
       // Acknowledge non-payment events without processing
       return new Response(JSON.stringify({ status: "ignored", event }), {
         status: 200,
@@ -184,6 +193,80 @@ serve(async (req: Request) => {
     const razorpayOrderId = paymentEntity.order_id;
     const razorpayPaymentId = paymentEntity.id;
     const razorpaySignature = signature;
+
+    // If this is a payment.authorized event, capture the payment now so
+    // it becomes final. Razorpay will fire a second payment.captured
+    // event after our capture call, which we handle idempotently below
+    // (UNIQUE(razorpay_payment_id) on subscriptions makes the second
+    // webhook a no-op).
+    if (event === "payment.authorized" && paymentEntity.captured === false) {
+      if (!RAZORPAY_KEY_ID) {
+        console.error(
+          "[razorpay-webhook] RAZORPAY_KEY_ID missing — cannot auto-capture authorized payment",
+        );
+        return new Response(
+          JSON.stringify({
+            error: "Server mis-config: cannot auto-capture",
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      try {
+        const credentials = base64Encode(
+          new TextEncoder().encode(
+            `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
+          ),
+        );
+        const captureResp = await fetch(
+          `https://api.razorpay.com/v1/payments/${razorpayPaymentId}/capture`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Basic ${credentials}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              amount: paymentEntity.amount,
+              currency: paymentEntity.currency ?? "INR",
+            }),
+          },
+        );
+        if (!captureResp.ok) {
+          const body = await captureResp.text();
+          console.error(
+            `[razorpay-webhook] capture failed for ${razorpayPaymentId}: ${captureResp.status} ${body}`,
+          );
+          // Don't fail the whole webhook — Razorpay will retry
+          // payment.authorized; next try may succeed. Return 5xx so
+          // Razorpay keeps retrying.
+          return new Response(
+            JSON.stringify({ error: "Capture failed, will retry" }),
+            {
+              status: 502,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+        console.log(
+          `[razorpay-webhook] auto-captured authorized payment ${razorpayPaymentId}`,
+        );
+        // We continue below to write the subscription. Razorpay will also
+        // send payment.captured later — that call will hit the UNIQUE
+        // constraint and be a no-op (idempotent).
+      } catch (e) {
+        console.error(`[razorpay-webhook] capture threw for ${razorpayPaymentId}:`, e);
+        return new Response(
+          JSON.stringify({ error: "Capture failed, will retry" }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
 
     // Extract user_id and plan from notes (set during checkout creation)
     const notes = paymentEntity.notes ?? {};

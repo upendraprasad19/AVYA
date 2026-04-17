@@ -249,7 +249,47 @@ serve(async (req: Request) => {
       );
     }
 
-    const payment = await razorpayResponse.json();
+    let payment = await razorpayResponse.json();
+
+    // If the payment is authorized but not captured (UPI test VPAs,
+    // orders created without payment_capture: 1, rare live-mode wallet
+    // delays), capture it now from the server side. Same capability the
+    // razorpay-webhook gained on 2026-04-17 — keeps verify-payment
+    // in lock-step so the client fallback path recovers too.
+    if (payment.status === "authorized" && payment.captured === false) {
+      const captureResp = await fetch(
+        `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${credentials}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: payment.amount,
+            currency: payment.currency ?? "INR",
+          }),
+        },
+      );
+      if (!captureResp.ok) {
+        const body = await captureResp.text();
+        console.error(
+          `[verify-payment] capture failed for ${paymentId}: ${captureResp.status} ${body}`,
+        );
+        return new Response(
+          JSON.stringify({
+            verified: false,
+            error: "Payment authorized but capture failed. Please try again.",
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      payment = await captureResp.json();
+      console.log(`[verify-payment] auto-captured ${paymentId}`);
+    }
 
     // Verify payment is captured
     if (payment.status !== "captured") {
