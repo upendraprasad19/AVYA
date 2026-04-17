@@ -306,23 +306,29 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (21 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (26 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
 | Domain | Tables |
 |---|---|
 | Identity (4) | `users`, `user_profile`, `user_preferences`, `user_progress` |
-| Fitness (6) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `user_custom_exercises` |
+| Fitness (7) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets` *(new — F4)*, `user_custom_exercises` |
 | Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
-| Health (5) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs` |
+| Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` *(new — F20)* |
+| Visual (1) | `progress_photos` *(new — F19)* |
 | AI (2) | `user_daily_snapshots`, `ai_coach_interactions` |
+| Telemetry (1) | `client_errors` |
 | Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
+| Community (1) | `community_reviews` |
 
 **Critical UNIQUE constraints (required for safe re-sync dedup — never remove):**
 - `streaks(user_id, week_start)` — prevents duplicate weeks on restore
 - `water_logs(user_id, date)` — one row per user per day
 - `scheduled_workouts(user_id, scheduled_date)` — one schedule per user per date
+- `workout_log_sets(workout_log_id, exercise_id, set_number)` — idempotent per-set upsert
+- `daily_steps(user_id, date)` — one step total per user per day
+- `user_custom_exercises.id` and `user_custom_foods.id` — must be a deterministic v5 UUID computed from `(user_id, type, lower(name))` so cross-device upserts dedupe instead of duplicating. Generation namespace: `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`. Migration 020 dedupes legacy rows via `uuid_generate_v5`.
 
 **Cloud `workout_log_exercises`** — per-exercise summary table written by the Flutter app. Key semantics: `set_number` = total completed sets (NOT "which set"); `weight_kg` = best across sets; `exercise_id` = exercise_name (stable identity for cross-week grouping). See §11 "Exercise Log Cloud Contract".
 
