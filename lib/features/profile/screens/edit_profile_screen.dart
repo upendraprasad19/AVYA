@@ -23,6 +23,7 @@ import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
+import '../providers/profile_completeness_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -1489,6 +1490,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(nutritionSummaryProvider);
       ref.invalidate(dailyNutritionProvider);
       ref.invalidate(macroTargetsProvider);
+      // Profile completeness nudge caches its tier-1/tier-2 count until
+      // invalidated. Without this, the progress bar stays at the pre-save
+      // value until the app is force-restarted. Observed 2026-04-17 on
+      // icanbefitter@gmail.com — bar stuck at 61% until a kill-and-relaunch.
+      ref.invalidate(profileCompletenessProvider);
       // Refresh home screen name/greeting — these are separate providers
       // in home_provider.dart that cache the name independently.
       ref.invalidate(userFirstNameProvider);

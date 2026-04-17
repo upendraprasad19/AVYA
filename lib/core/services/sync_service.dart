@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Handles background data sync between Hive (local) and Supabase (cloud).
 ///
@@ -264,6 +265,13 @@ class SyncService {
       // pull everything from Supabase first.
       await _restoreIfNeeded(userId);
 
+      // Self-heal path for the silent onboarding-sync failures observed
+      // 2026-04-17 on icanbefitter@gmail.com. If `completeOnboarding`
+      // couldn't land the first two upserts (user_profile + user_progress),
+      // it leaves `pending_onboarding_sync = true` in configBox. Replay
+      // once per launch until it sticks.
+      await _replayPendingOnboardingSync(userId);
+
       // Pull recent cross-channel logs (Telegram → Hive, last 24h).
       await pullRecentCrossChannelLogs();
 
@@ -429,6 +437,100 @@ class SyncService {
   }
 
   // ── Restore from Cloud (reinstall / new device) ────────────────
+
+  /// If `completeOnboarding` left `pending_onboarding_sync = true` in
+  /// configBox, replay the Hive → Supabase push. Clears the flag on
+  /// success; leaves it set for the next launch on failure.
+  ///
+  /// Safe no-op when:
+  ///   - The flag is unset (normal healthy case).
+  ///   - Hive has no profile row (logged out between attempts).
+  ///
+  /// This is the true safety net for the "user_profile stays all-NULL"
+  /// failure mode that the inline 10 s retry misses when the user taps
+  /// through to the Home screen before the retry fires.
+  Future<void> _replayPendingOnboardingSync(String userId) async {
+    try {
+      final pending = _hive.configBox.get('pending_onboarding_sync');
+      if (pending != true) return;
+
+      final profile = _hive.userBox.get('profile');
+      final progress = _hive.userBox.get('progress');
+      if (profile == null) {
+        debugPrint('[SyncService._replayPendingOnboardingSync] '
+            'flag set but Hive profile missing — clearing flag');
+        await _hive.configBox.delete('pending_onboarding_sync');
+        return;
+      }
+
+      final p = Map<String, dynamic>.from(profile as Map);
+      final pr = progress == null
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(progress as Map);
+
+      await UserRepository.syncOnboardingToSupabase(
+        userId: userId,
+        userData: {
+          'email': _supabase.currentUser?.email,
+          'full_name': p['full_name'],
+          'onboarding_completed': true,
+          'last_active_at': DateTime.now().toIso8601String(),
+        },
+        profileData: {
+          'date_of_birth': p['date_of_birth'],
+          'gender': p['gender'],
+          'height_cm': p['height_cm'],
+          'current_weight_kg': p['current_weight_kg'],
+          'target_weight_kg': p['target_weight_kg'],
+          'primary_goal': p['primary_goal'],
+          'fitness_experience': p['fitness_experience'],
+          'days_per_week': p['days_per_week'],
+          'equipment_access': p['equipment_access'],
+          'activity_level': p['activity_level'],
+          'lifestyle_activity': p['lifestyle_activity'],
+          'pace_preference': p['pace_preference'],
+          'diet_preference': p['diet_preference'],
+          'injuries': p['injuries']?.toString(),
+          'city': p['city'],
+          'bmr': p['bmr'],
+          'tdee': p['tdee'],
+          'body_fat_percent': p['body_fat_percent'],
+          'body_fat_assessed_at': p['body_fat_assessed_at'],
+          'session_duration_minutes': p['session_duration_minutes'],
+          'physique_focus': p['physique_focus'],
+          'avatar_url': p['avatar_url'],
+          'banner_url': p['banner_url'],
+          'wake_up_time': p['wake_up_time'],
+          'daily_calories': p['daily_calories'],
+          'protein_grams': p['protein_grams'],
+          'carbs_grams': p['carbs_grams'],
+          'fat_grams': p['fat_grams'],
+          'water_target_ml': p['water_target_ml'],
+        },
+        progressData: {
+          'current_phase': pr['current_phase'] ?? 1,
+          'current_week': pr['current_week'] ?? 1,
+          'total_workouts_done': pr['total_workouts_done'] ?? 0,
+          'current_streak_weeks': pr['current_streak_weeks'] ?? 0,
+          'phase_started_at':
+              pr['phase_started_at'] ?? DateTime.now().toIso8601String(),
+          'plan_generated_at':
+              pr['plan_generated_at'] ?? DateTime.now().toIso8601String(),
+          'detected_experience_level': p['fitness_experience'],
+        },
+      );
+
+      await _hive.configBox.delete('pending_onboarding_sync');
+      debugPrint('[SyncService._replayPendingOnboardingSync] success — flag cleared');
+    } catch (e) {
+      debugPrint('[SyncService._replayPendingOnboardingSync] failed: $e '
+          '— flag left set; will retry next launch');
+      unawaited(_reportSyncFailure(
+        opType: 'onboarding_sync_replay',
+        error: e,
+      ));
+    }
+  }
 
   /// Checks if local Hive is empty and restores from Supabase if so.
   /// Called automatically by checkAndSync() on app launch.
@@ -1046,7 +1148,72 @@ class SyncService {
 
   /// Immediately pushes the local Hive profile to Supabase user_profile.
   /// Safe to call from anywhere — only sends columns that exist in the schema.
-  Future<void> syncProfileNow(String userId) => _syncUserProfile(userId);
+  ///
+  /// Wraps `_syncUserProfile` in a catch so fire-and-forget callers (e.g.
+  /// `edit_profile_screen._save` line ~1615) can't leave the UI blind to a
+  /// silent upsert failure. On exception, logs locally AND posts a
+  /// `client_errors` telemetry row via the `log-client-error` Edge Function
+  /// — this is what the old silent path was missing when all 24 onboarding
+  /// fields stayed NULL on fresh signups.
+  Future<void> syncProfileNow(String userId) async {
+    try {
+      await _syncUserProfile(userId);
+    } catch (e, st) {
+      debugPrint('[SyncService.syncProfileNow] user_profile upsert failed: '
+          '$e\n$st');
+      unawaited(_reportSyncFailure(
+        opType: 'upsert_user_profile',
+        error: e,
+      ));
+    }
+  }
+
+  /// Public wrapper for [_reportSyncFailure] so other modules (e.g. the
+  /// onboarding flow's custom catch block) can emit `client_errors`
+  /// telemetry through the same code path.
+  Future<void> reportSyncFailure({
+    required String opType,
+    required Object error,
+    int retryCount = 0,
+  }) => _reportSyncFailure(
+        opType: opType,
+        error: error,
+        retryCount: retryCount,
+      );
+
+  /// Fire-and-forget telemetry for a sync failure. Sends one row to
+  /// `client_errors` via the `log-client-error` Edge Function so we stop
+  /// being blind to payload-rejection failures in prod.
+  Future<void> _reportSyncFailure({
+    required String opType,
+    required Object error,
+    int retryCount = 0,
+  }) async {
+    try {
+      final code = error.runtimeType.toString();
+      // Truncate to keep the Edge Function request body reasonable — some
+      // PostgrestException messages include the full echoed row which can
+      // be several KB on user_profile.
+      var message = error.toString();
+      if (message.length > 2000) {
+        message = '${message.substring(0, 2000)}…(truncated)';
+      }
+      await _supabase.client.functions.invoke(
+        'log-client-error',
+        body: {
+          'error_code': code,
+          'error_message': message,
+          'op_type': opType,
+          'retry_count': retryCount,
+          'client_version': _currentClientVersion(),
+          'platform': _currentPlatform(),
+        },
+      );
+    } catch (_) {
+      // Telemetry must never throw — swallow everything. Local debugPrint
+      // above has already left a breadcrumb for dev builds.
+    }
+  }
 
   /// Immediately pushes user_progress to Supabase (total_workouts_done, streaks, etc.).
   /// Called fire-and-forget after every workout completion.
@@ -1067,45 +1234,68 @@ class SyncService {
 
     final p = Map<String, dynamic>.from(profile as Map);
 
-    // Mirrors every field stored in the Hive profile map that has a matching
-    // user_profile column. Columns added in migration 017 (lifestyle_activity,
-    // session_duration_minutes, physique_focus, body_fat_percent,
-    // body_fat_assessed_at) were previously silently dropped.
+    // Build a payload that is safe for Postgres to accept.
+    //
+    // Historical bug (diagnosed 2026-04-17): this payload was blind to two
+    // common Hive states that PostgREST rejects outright — causing the whole
+    // upsert to 400 and the caller's fire-and-forget Future to swallow the
+    // error. Result: user_profile stayed all-NULL for brand-new accounts
+    // even though onboarding + Edit Profile "succeeded" from the UI's POV.
+    //
+    // The two offenders:
+    //   1. Empty string in strict-typed columns (date, time, numeric,
+    //      integer, timestamptz). e.g. `date_of_birth = ""` →
+    //      "invalid input syntax for type date". Existing null-guard didn't
+    //      filter empty strings written by onboarding when the user skipped
+    //      DOB / wake-up-time.
+    //   2. Dart `double` values landing in Postgres `integer` columns
+    //      (daily_calories / protein_grams / carbs_grams / fat_grams /
+    //      water_target_ml). These are normally int (NutritionTargets uses
+    //      int fields), but stale Hive rows written before migration 021
+    //      could hold doubles, and any future refactor on the compute side
+    //      could reintroduce the mismatch silently.
+    //
+    // Fix: blank filter for strict columns + explicit .round() on integers.
     final payload = <String, dynamic>{
       'user_id': userId,
-      if (p['date_of_birth'] != null) 'date_of_birth': p['date_of_birth'],
-      if (p['gender'] != null) 'gender': p['gender'],
-      if (p['height_cm'] != null) 'height_cm': p['height_cm'],
-      if (p['current_weight_kg'] != null) 'current_weight_kg': p['current_weight_kg'],
-      if (p['target_weight_kg'] != null) 'target_weight_kg': p['target_weight_kg'],
-      if (p['primary_goal'] != null) 'primary_goal': p['primary_goal'],
-      if (p['fitness_experience'] != null) 'fitness_experience': p['fitness_experience'],
-      if (p['days_per_week'] != null) 'days_per_week': p['days_per_week'],
-      if (p['equipment_access'] != null) 'equipment_access': p['equipment_access'],
-      if (p['activity_level'] != null) 'activity_level': p['activity_level'],
-      if (p['lifestyle_activity'] != null) 'lifestyle_activity': p['lifestyle_activity'],
-      if (p['pace_preference'] != null) 'pace_preference': p['pace_preference'],
-      if (p['diet_preference'] != null) 'diet_preference': p['diet_preference'],
-      if (p['injuries'] != null) 'injuries': p['injuries']?.toString(),
-      if (p['city'] != null) 'city': p['city'],
-      if (p['bmr'] != null) 'bmr': p['bmr'],
-      if (p['tdee'] != null) 'tdee': p['tdee'],
-      if (p['body_fat_percent'] != null) 'body_fat_percent': p['body_fat_percent'],
-      if (p['body_fat_assessed_at'] != null) 'body_fat_assessed_at': p['body_fat_assessed_at'],
-      if (p['session_duration_minutes'] != null) 'session_duration_minutes': p['session_duration_minutes'],
-      if (p['physique_focus'] != null) 'physique_focus': p['physique_focus'],
-      if (p['avatar_url'] != null) 'avatar_url': p['avatar_url'],
-      if (p['banner_url'] != null) 'banner_url': p['banner_url'],
-      if (p['wake_up_time'] != null) 'wake_up_time': p['wake_up_time'],
-      // F17 · Computed nutrition targets (columns added in migration 021).
-      // Written to Hive at onboarding + every profile edit that changes
-      // weight/goal/pace. Syncing them preserves exact numbers across
-      // devices (BMR formula tweaks won't silently shift user targets).
-      if (p['daily_calories'] != null) 'daily_calories': p['daily_calories'],
-      if (p['protein_grams'] != null) 'protein_grams': p['protein_grams'],
-      if (p['carbs_grams'] != null) 'carbs_grams': p['carbs_grams'],
-      if (p['fat_grams'] != null) 'fat_grams': p['fat_grams'],
-      if (p['water_target_ml'] != null) 'water_target_ml': p['water_target_ml'],
+      if (_hasValue(p['date_of_birth'])) 'date_of_birth': p['date_of_birth'],
+      if (_hasValue(p['gender'])) 'gender': p['gender'],
+      if (_hasNumber(p['height_cm'])) 'height_cm': p['height_cm'],
+      if (_hasNumber(p['current_weight_kg'])) 'current_weight_kg': p['current_weight_kg'],
+      if (_hasNumber(p['target_weight_kg'])) 'target_weight_kg': p['target_weight_kg'],
+      if (_hasValue(p['primary_goal'])) 'primary_goal': p['primary_goal'],
+      if (_hasValue(p['fitness_experience'])) 'fitness_experience': p['fitness_experience'],
+      if (_hasNumber(p['days_per_week'])) 'days_per_week': (p['days_per_week'] as num).round(),
+      if (_hasValue(p['equipment_access'])) 'equipment_access': p['equipment_access'],
+      if (_hasValue(p['activity_level'])) 'activity_level': p['activity_level'],
+      if (_hasValue(p['lifestyle_activity'])) 'lifestyle_activity': p['lifestyle_activity'],
+      if (_hasValue(p['pace_preference'])) 'pace_preference': p['pace_preference'],
+      if (_hasValue(p['diet_preference'])) 'diet_preference': p['diet_preference'],
+      if (_hasValue(p['injuries'])) 'injuries': p['injuries'].toString(),
+      if (_hasValue(p['city'])) 'city': p['city'],
+      if (_hasNumber(p['bmr'])) 'bmr': (p['bmr'] as num).round(),
+      if (_hasNumber(p['tdee'])) 'tdee': (p['tdee'] as num).round(),
+      if (_hasNumber(p['body_fat_percent'])) 'body_fat_percent': p['body_fat_percent'],
+      if (_hasValue(p['body_fat_assessed_at'])) 'body_fat_assessed_at': p['body_fat_assessed_at'],
+      if (_hasNumber(p['session_duration_minutes']))
+        'session_duration_minutes': (p['session_duration_minutes'] as num).round(),
+      if (_hasValue(p['physique_focus'])) 'physique_focus': p['physique_focus'],
+      if (_hasValue(p['avatar_url'])) 'avatar_url': p['avatar_url'],
+      if (_hasValue(p['banner_url'])) 'banner_url': p['banner_url'],
+      if (_hasValue(p['wake_up_time'])) 'wake_up_time': p['wake_up_time'],
+      // F17 · Computed nutrition targets (integer columns added migration 021).
+      // Coerce to int — NutritionTargets uses ints today but defensively round
+      // in case a caller ever stores a double here.
+      if (_hasNumber(p['daily_calories']))
+        'daily_calories': (p['daily_calories'] as num).round(),
+      if (_hasNumber(p['protein_grams']))
+        'protein_grams': (p['protein_grams'] as num).round(),
+      if (_hasNumber(p['carbs_grams']))
+        'carbs_grams': (p['carbs_grams'] as num).round(),
+      if (_hasNumber(p['fat_grams']))
+        'fat_grams': (p['fat_grams'] as num).round(),
+      if (_hasNumber(p['water_target_ml']))
+        'water_target_ml': (p['water_target_ml'] as num).round(),
     };
 
     if (_syncReliabilityEnabled) {
@@ -1130,6 +1320,25 @@ class SyncService {
     await _supabase.client
         .from('user_profile')
         .upsert(payload, onConflict: 'user_id');
+  }
+
+  /// True if `v` is a non-null, non-empty-string value.
+  /// PostgREST rejects `""` for strict-typed columns (date, time, timestamptz,
+  /// numeric) with "invalid input syntax" — callers must omit the field
+  /// entirely rather than send the empty string.
+  static bool _hasValue(dynamic v) {
+    if (v == null) return false;
+    if (v is String && v.trim().isEmpty) return false;
+    return true;
+  }
+
+  /// True if `v` is a finite number. Excludes empty strings, NaN, and
+  /// infinities that would otherwise corrupt an integer/numeric column.
+  static bool _hasNumber(dynamic v) {
+    if (v == null) return false;
+    if (v is! num) return false;
+    if (v is double && (v.isNaN || v.isInfinite)) return false;
+    return true;
   }
 
   /// Pushes user-created custom foods and exercises to Supabase

@@ -379,24 +379,52 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // The dead 'ai_chat_started_at' local key was removed — nothing reads it.
 
       // Sync onboarding flag + profile to Supabase.
-      // Awaited so failures are caught and logged — non-fatal: Hive is already
-      // saved and SyncService will retry on next launch if offline.
+      //
+      // Set a persistent `pending_onboarding_sync` flag in configBox BEFORE
+      // the first attempt. Any bootstrap on the next app launch can read
+      // this and replay the sync if it didn't land (fixes the "user_profile
+      // stays all-NULL" bug observed 2026-04-17 on icanbefitter@gmail.com).
+      //
+      // We clear the flag only after a confirmed successful upsert. The
+      // 10 s inline retry stays — it catches the common "JWT warm-up"
+      // miss right after sign-up — but the flag is the real safety net.
+      await _hive.configBox.put('pending_onboarding_sync', true);
       try {
         await _syncOnboardingToSupabase(profile);
+        await _hive.configBox.delete('pending_onboarding_sync');
       } catch (syncErr) {
         // Visible in debug console for testing; not shown to the user.
         debugPrint('[Onboarding] Supabase sync failed: $syncErr — scheduling retry');
+        // Telemetry — surface silent upsert failures to `client_errors`.
+        unawaited(SyncService.instance.reportSyncFailure(
+          opType: 'onboarding_sync',
+          error: syncErr,
+        ));
         // Retry once after 10s — JWT may need refresh after sign-up flow.
         Future.delayed(const Duration(seconds: 10), () async {
           try {
             await SupabaseService.instance.client.auth.refreshSession();
             await _syncOnboardingToSupabase(profile);
+            await _hive.configBox.delete('pending_onboarding_sync');
             debugPrint('[Onboarding] Retry succeeded');
           } catch (e) {
-            debugPrint('[Onboarding] Retry also failed: $e — will sync on next daily sync');
+            debugPrint('[Onboarding] Retry also failed: $e — '
+                'pending_onboarding_sync flag left set; bootstrap will replay on next launch');
+            unawaited(SyncService.instance.reportSyncFailure(
+              opType: 'onboarding_sync_retry',
+              error: e,
+              retryCount: 1,
+            ));
           }
         });
       }
+
+      // P3 · Push the schedule rows to Supabase immediately so the first
+      // `weekly-recalc` Edge Function run has real data to reason about,
+      // and the cross-device restore picks up the correct dates. Without
+      // this, `scheduled_workouts` stays at 0 rows until the user either
+      // completes a workout or hits the next weekly-sync window.
+      unawaited(SyncService.instance.syncWorkoutData());
 
       // Refresh the AI-context snapshot in the cloud. The splash screen
       // already pushed a snapshot earlier in this session, but it ran BEFORE

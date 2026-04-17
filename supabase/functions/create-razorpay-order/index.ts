@@ -16,9 +16,17 @@
  *      immediately (no `payment.authorized` wait).
  *
  * Security:
- *   - verify_jwt: true → Supabase gateway rejects anon traffic
- *   - We also manually validate the JWT and use the authenticated user_id
- *     in order.notes — never trust client-supplied user_id.
+ *   - verify_jwt: false — the Supabase gateway's JWT check is buggy
+ *     (same issue CLAUDE.md §11 documents for ai-proxy / ai-proxy-pro):
+ *     valid client JWTs are rejected with 401 before the function runs.
+ *     We flip the gateway flag off and do the JWT validation ourselves
+ *     via `supabase.auth.getUser(token)` below — that is the real gate.
+ *     Observed 2026-04-17 as four consecutive 401s on icanbefitter@gmail.com
+ *     trying to upgrade to PRO with a fresh valid JWT; other functions
+ *     using `SupabaseService.callFunction` (ai-proxy) returned 200 in the
+ *     same second with the same auth token.
+ *   - We manually validate the JWT and use the authenticated user_id in
+ *     order.notes — never trust client-supplied user_id.
  *   - Price is derived server-side from the plan + promo lookup — never
  *     trust client-supplied amount.
  */

@@ -229,12 +229,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final firstReportViewed = ref.watch(firstReportViewedProvider);
 
     final name = profile['full_name'] as String? ?? 'User';
-    final gender = profile['gender'] as String? ?? '';
     final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
     final targetKg = (profile['target_weight_kg'] as num?)?.toDouble();
     final heightCm = (profile['height_cm'] as num?)?.toDouble();
     final bodyFatPct = (profile['body_fat_percent'] as num?)?.toDouble();
-    final dob = profile['date_of_birth'] as String?;
 
     final experience = profile['fitness_experience'] as String? ?? '';
     final expLabel = experience.isNotEmpty
@@ -250,30 +248,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     // Nutrition targets
-    Map<String, double>? nutritionTargets;
-    if (weightKg != null && heightCm != null && gender.isNotEmpty) {
-      int age = 25;
-      if (dob != null) {
-        final bd = DateTime.tryParse(dob);
-        if (bd != null) age = DateTime.now().difference(bd).inDays ~/ 365;
-      }
-      final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
-      final t = BmrCalculator.calculateTargets(
-        weightKg: weightKg,
-        heightCm: heightCm,
-        age: age,
-        gender: gender,
-        activityLevel: profile['activity_level'] as String? ?? 'moderate',
-        goal: stats.primaryGoal,
-        pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
-        bodyFatPercent: bodyFat,
-      );
-      nutritionTargets = {
-        'tdee': t.tdee.toDouble(),
-        'calories': t.dailyCalories.toDouble(),
-        'protein': t.proteinGrams.toDouble(),
-      };
-    }
+    //
+    // Source of truth (CLAUDE.md §15): `macroTargetsProvider` is the ONE
+    // reader for BMR / TDEE / calories / P / C / F across Home, Nutrition,
+    // and Profile. It prefers the stored targets in the Hive profile map
+    // (written at onboarding and on every Edit Profile save) and falls
+    // back to `BmrCalculator.calculateTargets` only when they're missing.
+    //
+    // Profile used to call BmrCalculator directly here, which diverged
+    // from Home/Nutrition whenever `activity_level` was stale or defaulted
+    // to 'moderate' — observed 2026-04-17 with icanbefitter@gmail.com.
+    final macros = ref.watch(macroTargetsProvider);
+    final Map<String, double>? nutritionTargets = (macros['calories'] ?? 0) > 0
+        ? {
+            'tdee': macros['tdee'] ?? 0,
+            'calories': macros['calories'] ?? 0,
+            'protein': macros['protein'] ?? 0,
+          }
+        : null;
 
     // Usage counts for free users
     final usageService = UsageCounterService.instance;

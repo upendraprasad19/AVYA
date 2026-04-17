@@ -268,7 +268,7 @@ class UserRepository {
 
     await supabase.from('users').upsert({
       'id': userId,
-      ...userData,
+      ..._sanitize(userData),
     });
 
     // CRITICAL — both `user_profile` and `user_progress` have `id uuid` as
@@ -281,14 +281,63 @@ class UserRepository {
     // up with `users.onboarding_completed = true` but an all-null
     // user_profile row and zero rows in user_progress after a fresh
     // sign-up test on 2026-04-17.
+    //
+    // Second bug fixed in the same 2026-04-17 pass: the caller hands us a
+    // profileData map that can contain empty-string values for strict-typed
+    // Postgres columns (date_of_birth = "", wake_up_time = "", etc.).
+    // PostgREST responds 400 "invalid input syntax for type date" and the
+    // entire row is rejected. `_sanitize` drops those entries so the upsert
+    // succeeds with whatever the user did provide.
     await supabase.from('user_profile').upsert({
       'user_id': userId,
-      ...profileData,
+      ..._sanitize(profileData),
     }, onConflict: 'user_id');
 
     await supabase.from('user_progress').upsert({
       'user_id': userId,
-      ...progressData,
+      ..._sanitize(progressData),
     }, onConflict: 'user_id');
+  }
+
+  /// Strips empty strings and non-finite numbers from a payload map.
+  /// Null values are preserved (PostgREST happily stores NULL in nullable
+  /// columns) but empty strings on strict-typed columns (date, time, numeric,
+  /// integer, timestamptz) would otherwise reject the entire upsert.
+  ///
+  /// Also coerces the five integer-only target columns
+  /// (daily_calories / protein_grams / carbs_grams / fat_grams /
+  /// water_target_ml) via `.round()` — NutritionTargets stores them as int
+  /// today, but a stale Hive row from a pre-migration-021 client could hold a
+  /// double and tank the whole row.
+  static const _integerOnlyColumns = <String>{
+    'daily_calories',
+    'protein_grams',
+    'carbs_grams',
+    'fat_grams',
+    'water_target_ml',
+    'days_per_week',
+    'session_duration_minutes',
+    'bmr',
+    'tdee',
+  };
+
+  static Map<String, dynamic> _sanitize(Map<String, dynamic> input) {
+    final out = <String, dynamic>{};
+    input.forEach((key, value) {
+      if (value is String && value.trim().isEmpty) {
+        // Drop empty string — column is either nullable (fine to omit) or
+        // strict-typed and would reject the whole row.
+        return;
+      }
+      if (value is double && (value.isNaN || value.isInfinite)) {
+        return;
+      }
+      if (_integerOnlyColumns.contains(key) && value is num) {
+        out[key] = value.round();
+      } else {
+        out[key] = value;
+      }
+    });
+    return out;
   }
 }

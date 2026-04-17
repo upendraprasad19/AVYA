@@ -51,9 +51,16 @@ final profileCompletenessProvider = Provider<ProfileCompletenessData>((ref) {
     if (val == null) {
       isFilled = false;
     } else if (field.key == 'injuries') {
-      // injuries = ['none'] counts as not filled (default)
+      // Any non-empty selection counts — including `['none']`, which is
+      // how the UI encodes "No injuries" (a valid, plan-relevant answer).
+      //
+      // Previously this treated `['none']` as "unfilled default" and left
+      // the nudge card visible forever, which confused users who had
+      // explicitly selected "No injuries". Observed 2026-04-17 on
+      // icanbefitter@gmail.com — profile completeness stuck at 87% with
+      // "Injuries" called out despite the user picking "No injuries".
       final list = val is List ? val : [];
-      isFilled = list.isNotEmpty && !(list.length == 1 && list.first.toString() == 'none');
+      isFilled = list.isNotEmpty;
     } else if (val is String) {
       isFilled = val.isNotEmpty;
     } else if (val is num) {
