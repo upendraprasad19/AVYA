@@ -45,6 +45,53 @@ class SyncService {
     return _uuidGen.v5(_syncNamespace, localKey);
   }
 
+  /// Namespace for custom-entity stable IDs (F8/F22).
+  /// Must match the namespace used in `CreateCustomExerciseSheet` and
+  /// `NutritionNotifier.addCustomFood`.
+  static const _customEntityNamespace = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+
+  /// Deterministic id for a custom entity (exercise or food).
+  /// Same (userId, type, lowercased name) → same id across devices.
+  static String _customEntityId(String userId, String type, String name) {
+    return _uuidGen.v5(
+      _customEntityNamespace,
+      '$userId|$type|${name.toLowerCase()}',
+    );
+  }
+
+  /// One-shot backfill: iterate customBox, assign deterministic ids to
+  /// entries that have none (entries created before F8/F22 shipped).
+  /// Fire-and-forget from `initQueue()`.
+  Future<void> _backfillCustomEntityIds() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      final box = _hive.customBox;
+      var repaired = 0;
+      for (final key in box.keys.toList()) {
+        final raw = box.get(key);
+        if (raw is! Map) continue;
+        final map = Map<String, dynamic>.from(raw);
+        final existingId = map['id'] as String?;
+        if (existingId != null && existingId.isNotEmpty) continue;
+        final name = map['name'] as String?;
+        if (name == null || name.isEmpty) continue;
+        final type = map['type'] as String?;
+        final entityType = type == 'food' ? 'food' : 'exercise';
+        map['id'] = _customEntityId(userId, entityType, name);
+        await box.put(key, map);
+        repaired++;
+      }
+      if (repaired > 0) {
+        debugPrint('[SyncService] backfilled $repaired custom entity ids');
+        // Trigger one re-sync so cloud rows pick up the stable ids.
+        unawaited(_syncCustomItems());
+      }
+    } catch (e) {
+      debugPrint('[SyncService._backfillCustomEntityIds] $e');
+    }
+  }
+
   // ── Sync Reliability (feature-flagged) ─────────────────────
 
   /// When true, failed Supabase writes are enqueued in `SyncQueue` and
@@ -169,6 +216,10 @@ class SyncService {
         }
       }
       _healthSyncCompleter!.complete();
+
+      // Backfill custom-entity ids for pre-F8/F22 entries. Runs at most
+      // once — the scan is O(customBox.length) and quick.
+      await _backfillCustomEntityIds();
 
       // On reinstall / new device: if Hive workout data is empty,
       // pull everything from Supabase first.

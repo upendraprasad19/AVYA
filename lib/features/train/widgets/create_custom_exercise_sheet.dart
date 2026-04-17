@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:uuid/uuid.dart';
 
 /// Bottom sheet for creating a custom exercise on the fly.
 ///
@@ -57,9 +59,16 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
 
-    final key =
-        'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
+    // Stable id (F8): deterministic v5 from (user_id, 'exercise', lower(name)).
+    // Makes cloud upserts idempotent — same exercise from multiple devices
+    // collapses to one row instead of creating duplicates on every sync.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final id = const Uuid().v5(customNs, '$userId|exercise|${name.toLowerCase()}');
+
+    final key = 'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
     final exercise = <String, dynamic>{
+      'id': id,
       'name': name,
       'category': _category,
       'logging_type': _loggingType,

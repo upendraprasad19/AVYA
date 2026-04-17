@@ -270,6 +270,16 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> signOut() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+
+    // Atomic logout (F16): set a marker BEFORE wiping Hive. If the app is
+    // force-killed mid-clear (OS eviction, power loss), `main.dart` will
+    // detect the marker on next launch and re-run `clearAllData` before any
+    // other code reads a half-wiped box.
+    final hive = HiveService.instance;
+    try {
+      await hive.configBox.put('logout_in_progress', true);
+    } catch (_) {/* configBox not open yet / unavailable — best effort */}
+
     // 1. Terminate session (local scope always works offline).
     try {
       await _supabase.client.auth.signOut(scope: SignOutScope.global);
@@ -280,6 +290,12 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
     // 2. Clear all user data after session is gone.
     await UserRepository.instance.clearAllData();
+
+    // 3. Atomic logout complete — clear the marker.
+    try {
+      await hive.configBox.delete('logout_in_progress');
+    } catch (_) {/* configBox was just cleared; flag is already gone */}
+
     state = const AuthState2(status: AuthStatus.idle);
   }
 

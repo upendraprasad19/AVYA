@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -959,7 +960,13 @@ class CustomFoodNotifier extends Notifier<void> {
     bool submittedToDb = false,
   }) async {
     final now = DateTime.now();
-    final id = 'custom_food_${now.millisecondsSinceEpoch}';
+    // Stable id (F22): deterministic v5 from (user_id, 'food', lower(name)).
+    // Cloud upserts now dedupe correctly instead of inserting a new row on
+    // every sync from every device.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final id = const Uuid().v5(customNs, '$userId|food|${name.toLowerCase()}');
+    final hiveKey = 'custom_food_${now.millisecondsSinceEpoch}';
     final factor = (servingG ?? 100) / 100.0;
 
     final food = {
@@ -984,10 +991,12 @@ class CustomFoodNotifier extends Notifier<void> {
       'created_at': now.toIso8601String(),
     };
 
-    // Save to customBox
-    await HiveService.instance.customBox.put(id, food);
+    // Save to customBox (keyed by timestamp for chronological iteration;
+    // the `id` field is the stable deterministic uuid used for cloud sync).
+    await HiveService.instance.customBox.put(hiveKey, food);
 
-    // Also add to foodBox so it appears in search
+    // Also add to foodBox so it appears in search (keyed by stable id for
+    // dedupe against future imports of the same food).
     await HiveService.instance.foodBox.put(id, food);
 
     // Background sync to Supabase
