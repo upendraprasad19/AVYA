@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import '../providers/train_provider.dart';
+import '../../home/providers/home_provider.dart';
 import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/exercise_swap_sheet.dart';
 import '../widgets/set_input_row.dart';
@@ -875,6 +877,12 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   equipmentNeeded: currentExercise.equipmentNeeded,
                 ),
               );
+          // F11 · Ensure Home and Calendar immediately reflect the swap —
+          // they read today's schedule/plan, which swapExercise has already
+          // mutated in Hive, but Riverpod caches the last-read snapshot.
+          ref.invalidate(todayWorkoutProvider);
+          ref.invalidate(currentPlanProvider);
+          ref.invalidate(calendarWeekProvider);
           Navigator.of(ctx).pop();
         },
         onDelete: canDelete
@@ -2314,18 +2322,49 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
   late bool _expanded;
   late List<bool> _checked;
 
+  /// Hive key used to persist the check list across widget rebuilds (scroll,
+  /// keyboard, parent rebuild). F10 · without this, scrolling the workout
+  /// screen clears every warmup check.
+  String get _hiveKey {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final slug = widget.title.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    return 'warmup_checks_${today}_$slug';
+  }
+
   @override
   void initState() {
     super.initState();
     _expanded = widget.initiallyExpanded;
-    _checked = List.filled(widget.exercises.length, false);
+    _checked = _loadChecks();
+  }
+
+  List<bool> _loadChecks() {
+    try {
+      final raw = HiveService.instance.workoutBox.get(_hiveKey);
+      if (raw is List) {
+        final restored = raw
+            .map((v) => v == true)
+            .toList();
+        // Adjust length if exercise count changed since last session.
+        if (restored.length == widget.exercises.length) return restored;
+      }
+    } catch (_) {/* hive corrupt — fall through */}
+    return List.filled(widget.exercises.length, false);
+  }
+
+  Future<void> _persistChecks() async {
+    try {
+      await HiveService.instance.workoutBox.put(_hiveKey, _checked);
+    } catch (_) {/* non-fatal — UI still shows the tick */}
   }
 
   @override
   void didUpdateWidget(covariant _WarmupCooldownSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.exercises.length != _checked.length) {
-      _checked = List.filled(widget.exercises.length, false);
+      // Exercise count changed — reload from Hive (may still match),
+      // else reset.
+      _checked = _loadChecks();
     }
   }
 
@@ -2418,7 +2457,10 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                 }
 
                 return GestureDetector(
-                  onTap: () => setState(() => _checked[idx] = !_checked[idx]),
+                  onTap: () {
+                    setState(() => _checked[idx] = !_checked[idx]);
+                    _persistChecks(); // F10 · survive scroll rebuild
+                  },
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),

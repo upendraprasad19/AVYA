@@ -531,12 +531,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: 'Review Community Items',
                   subtitle: 'Approve foods & exercises from users',
                   trailing: const ProfileRowChevron(),
-                  showBorder: false,
                   onTap: () => showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => const CommunityReviewSheet(),
+                  ),
+                ),
+                // F9 — user-visible status of their own submissions
+                ProfileRow(
+                  icon: Icons.workspace_premium_outlined,
+                  title: 'My Submissions',
+                  subtitle: 'Track approval status of foods & exercises you shared',
+                  trailing: const ProfileRowChevron(),
+                  // F19 — progress photos entry (PRO-gated at tap time)
+                  showBorder: true,
+                  onTap: () => context.go('/profile/my-submissions'),
+                ),
+                ProfileRow(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Progress Photos',
+                  subtitle: subInfo.isPro
+                      ? 'Track your transformation visually'
+                      : 'PRO \u2014 visual progress timeline',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => SubscriptionService.instance.gate(
+                    AppConstants.featureProgressPhotos,
+                    onPro: () => context.go('/profile/progress-photos'),
+                    onFree: () =>
+                        showPaywallSheet(context, feature: 'Progress Photos'),
                   ),
                 ),
               ]),

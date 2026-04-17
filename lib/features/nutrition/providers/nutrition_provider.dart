@@ -253,31 +253,28 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
     final dateStr =
         '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
 
-    final nutritionBox = HiveService.instance.nutritionBox;
-    double calories = 0;
-    double protein = 0;
-    double carbs = 0;
-    double fat = 0;
-    double fiber = 0;
+    // F7 · Single source of truth for summed macros.
+    final macros = NutritionRepository.instance.dailyMacros(selectedDate);
+    final calories = macros['calories']!;
+    final protein = macros['protein']!;
+    final carbs = macros['carbs']!;
+    final fat = macros['fat']!;
+    final fiber = macros['fiber']!;
 
+    // Build meal breakdown (this provider's unique responsibility — not
+    // relevant to Home). Same box, same date filter.
+    final nutritionBox = HiveService.instance.nutritionBox;
     final meals = <String, List<Map<String, dynamic>>>{
       'breakfast': [],
       'lunch': [],
       'dinner': [],
       'snacks': [],
     };
-
     for (final raw in nutritionBox.values) {
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       if (log['date'] != dateStr) continue;
-
-      calories += (log['total_calories'] as num?)?.toDouble() ?? 0;
-      protein += (log['total_protein'] as num?)?.toDouble() ?? 0;
-      carbs += (log['total_carbs'] as num?)?.toDouble() ?? 0;
-      fat += (log['total_fat'] as num?)?.toDouble() ?? 0;
-      fiber += (log['total_fiber'] as num?)?.toDouble() ?? 0;
-
+      if (log['is_saved_meal'] == true) continue;
       final mealType =
           (log['meal_type'] as String?)?.toLowerCase() ?? 'snacks';
       final key = meals.containsKey(mealType) ? mealType : 'snacks';

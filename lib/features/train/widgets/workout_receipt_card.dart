@@ -266,9 +266,34 @@ class WorkoutReceiptData {
       final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
-      // Prefer exact stored volume; fall back to approximation for old logs.
-      final storedVolume = (log['volume_kg'] as num?)?.toDouble();
-      final exerciseVolume = storedVolume ?? (weightKg * reps);
+
+      // F13 · Volume math — prefer exact sum of per-set volumes over the
+      // misleading `max_weight × total_reps` fallback. Priority order:
+      //   1. `sets_detail` list (F4 per-set restore) — sum(weight × reps).
+      //   2. `volume_kg` stored directly at log time (new logs since v4).
+      //   3. Approximation `weight × reps` — only for legacy pre-v4 logs.
+      double exerciseVolume;
+      final setsDetail = log['sets_detail'];
+      final perSetBreakdown = <ReceiptSet>[];
+      if (setsDetail is List && setsDetail.isNotEmpty) {
+        double sum = 0;
+        for (final s in setsDetail) {
+          if (s is! Map) continue;
+          final w = (s['weight_kg'] as num?)?.toDouble() ?? 0;
+          final r = (s['reps'] as num?)?.toInt() ?? 0;
+          final d = (s['duration_seconds'] as num?)?.toInt() ?? 0;
+          sum += w * r;
+          perSetBreakdown.add(ReceiptSet(
+            weightKg: w > 0 ? w : null,
+            reps: r > 0 ? r : null,
+            durationSeconds: d > 0 ? d : null,
+          ));
+        }
+        exerciseVolume = sum;
+      } else {
+        final storedVolume = (log['volume_kg'] as num?)?.toDouble();
+        exerciseVolume = storedVolume ?? (weightKg * reps);
+      }
 
       if (isPr) {
         if (weightKg > 0) {
@@ -292,6 +317,7 @@ class WorkoutReceiptData {
         totalDurationSeconds: duration,
         totalDistanceKm: distance,
         maxWeightKg: weightKg,
+        perSetBreakdown: perSetBreakdown,
       );
       final existing = seen[key];
       seen[key] = existing == null ? entry : existing.mergedWith(entry);
@@ -328,6 +354,16 @@ class WorkoutReceiptData {
   }
 }
 
+/// One completed set within an exercise. Used for the F13 expandable
+/// per-set breakdown on the receipt card.
+class ReceiptSet {
+  final double? weightKg;
+  final int? reps;
+  final int? durationSeconds;
+
+  const ReceiptSet({this.weightKg, this.reps, this.durationSeconds});
+}
+
 /// Per-exercise aggregated summary. Fields are already totals across all
 /// completed sets (reps, duration, distance) or the best across sets (weight).
 class ReceiptExercise {
@@ -339,6 +375,10 @@ class ReceiptExercise {
   final double totalDistanceKm; // summed (0 for non-cardio)
   final double maxWeightKg; // best weight across sets (0 for bodyweight)
 
+  /// F13 · Per-set detail for the tap-to-expand breakdown on the receipt.
+  /// Empty for legacy logs that predate per-set persistence.
+  final List<ReceiptSet> perSetBreakdown;
+
   const ReceiptExercise({
     required this.name,
     required this.loggingType,
@@ -347,6 +387,7 @@ class ReceiptExercise {
     this.totalDurationSeconds = 0,
     this.totalDistanceKm = 0,
     this.maxWeightKg = 0,
+    this.perSetBreakdown = const [],
   });
 
   /// Merge this exercise with another of the same name (supersets etc.).
@@ -361,6 +402,7 @@ class ReceiptExercise {
       totalDistanceKm: totalDistanceKm + other.totalDistanceKm,
       maxWeightKg:
           maxWeightKg > other.maxWeightKg ? maxWeightKg : other.maxWeightKg,
+      perSetBreakdown: [...perSetBreakdown, ...other.perSetBreakdown],
     );
   }
 }

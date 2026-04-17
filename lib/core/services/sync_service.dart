@@ -59,32 +59,64 @@ class SyncService {
     );
   }
 
-  /// One-shot backfill: iterate customBox, assign deterministic ids to
-  /// entries that have none (entries created before F8/F22 shipped).
-  /// Fire-and-forget from `initQueue()`.
+  /// One-shot backfill: iterate customBox, (a) assign deterministic ids to
+  /// entries that have none (F8/F22 pre-existing entries), and (b) repair
+  /// custom exercises with null/missing `logging_type` (F12). Fire-and-
+  /// forget from `checkAndSync()`.
   Future<void> _backfillCustomEntityIds() async {
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
       final box = _hive.customBox;
-      var repaired = 0;
+      var idRepaired = 0;
+      var loggingTypeRepaired = 0;
       for (final key in box.keys.toList()) {
         final raw = box.get(key);
         if (raw is! Map) continue;
         final map = Map<String, dynamic>.from(raw);
-        final existingId = map['id'] as String?;
-        if (existingId != null && existingId.isNotEmpty) continue;
         final name = map['name'] as String?;
         if (name == null || name.isEmpty) continue;
         final type = map['type'] as String?;
         final entityType = type == 'food' ? 'food' : 'exercise';
-        map['id'] = _customEntityId(userId, entityType, name);
-        await box.put(key, map);
-        repaired++;
+
+        var mutated = false;
+        // F8/F22 — stable id
+        final existingId = map['id'] as String?;
+        if (existingId == null || existingId.isEmpty) {
+          map['id'] = _customEntityId(userId, entityType, name);
+          mutated = true;
+          idRepaired++;
+        }
+        // F12 — logging_type repair (exercises only)
+        if (entityType == 'exercise') {
+          final lt = map['logging_type'] as String?;
+          if (lt == null || lt.isEmpty) {
+            final nLower = name.toLowerCase();
+            String inferred;
+            if (nLower.contains('hold') || nLower.contains('plank') ||
+                nLower.contains('handstand') || nLower.contains('l-sit')) {
+              inferred = 'timed';
+            } else if (nLower.contains('run') || nLower.contains('row') ||
+                nLower.contains('bike') || nLower.contains('walk')) {
+              inferred = 'cardio';
+            } else {
+              final equipment = map['equipment_needed'];
+              final isBodyweight = equipment is List && equipment.isEmpty;
+              inferred = isBodyweight ? 'bodyweight_reps' : 'weight_reps';
+            }
+            map['logging_type'] = inferred;
+            mutated = true;
+            loggingTypeRepaired++;
+          }
+        }
+
+        if (mutated) {
+          await box.put(key, map);
+        }
       }
-      if (repaired > 0) {
-        debugPrint('[SyncService] backfilled $repaired custom entity ids');
-        // Trigger one re-sync so cloud rows pick up the stable ids.
+      if (idRepaired > 0 || loggingTypeRepaired > 0) {
+        debugPrint('[SyncService] backfilled ids=$idRepaired '
+            'loggingType=$loggingTypeRepaired');
         unawaited(_syncCustomItems());
       }
     } catch (e) {

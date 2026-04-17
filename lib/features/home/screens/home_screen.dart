@@ -9,8 +9,12 @@ import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
+import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
+import '../../train/providers/train_provider.dart';
 import '../widgets/streak_badge.dart';
+import '../widgets/streak_explainer_sheet.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
@@ -135,6 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           children: [
             const SyncBanner(),
+            const CompletenessNudge(),
             Expanded(
               child: Center(
                 child: ConstrainedBox(
@@ -197,7 +202,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               );
             },
             onDayLongPress: (date, schedule) {
-              SwapSheet.show(context, sourceDate: date);
+              SwapSheet.show(
+                context,
+                sourceDate: date,
+                onSwapComplete: () {
+                  // F11 · Invalidate all views that read schedule state so
+                  // the swap shows up immediately on Home, Calendar, Plan.
+                  ref.invalidate(todayWorkoutProvider);
+                  ref.invalidate(currentPlanProvider);
+                  ref.invalidate(calendarWeekProvider);
+                },
+              );
             },
           ),
         ),
@@ -330,9 +345,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           // Streak badge with freeze count
-          StreakBadge(
-            days: streak,
-            freezesAvailable: ref.watch(streakFreezeProvider),
+          GestureDetector(
+            // F14 · Tap to open the streak explainer modal.
+            onTap: () => StreakExplainerSheet.show(
+              context,
+              freezesAvailable: ref.read(streakFreezeProvider),
+              isPro: SubscriptionService.instance.isPro(),
+            ),
+            child: StreakBadge(
+              days: streak,
+              freezesAvailable: ref.watch(streakFreezeProvider),
+            ),
           ),
         ],
       ),

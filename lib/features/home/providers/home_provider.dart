@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
@@ -373,29 +374,10 @@ class NutritionSummaryData {
 class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
   @override
   NutritionSummaryData build() {
-    final hive = HiveService.instance;
-    final nutritionBox = hive.nutritionBox;
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    // F7 · Single source of truth — Home + Nutrition screens sum
+    // identically via NutritionRepository.dailyMacros.
+    final macros = NutritionRepository.instance.dailyMacros(DateTime.now());
 
-    double calories = 0;
-    double protein = 0;
-    double carbs = 0;
-    double fat = 0;
-
-    for (final raw in nutritionBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if (log['date'] == todayStr) {
-        calories += (log['total_calories'] as num?)?.toDouble() ?? 0;
-        protein += (log['total_protein'] as num?)?.toDouble() ?? 0;
-        carbs += (log['total_carbs'] as num?)?.toDouble() ?? 0;
-        fat += (log['total_fat'] as num?)?.toDouble() ?? 0;
-      }
-    }
-
-    // Get targets from profile
     final profile = UserRepository.instance.getProfile();
     final calorieTarget =
         (profile?['daily_calories'] as num?)?.toDouble() ?? 2000;
@@ -405,10 +387,10 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
     final fatTarget = (profile?['fat_grams'] as num?)?.toDouble() ?? 65;
 
     return NutritionSummaryData(
-      calories: calories,
-      protein: protein,
-      carbs: carbs,
-      fat: fat,
+      calories: macros['calories']!,
+      protein: macros['protein']!,
+      carbs: macros['carbs']!,
+      fat: macros['fat']!,
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
       carbTarget: carbTarget,

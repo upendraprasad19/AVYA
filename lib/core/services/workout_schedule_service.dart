@@ -864,18 +864,72 @@ class WorkoutScheduleService {
   List<Map<String, dynamic>> _normalizeExercises(List raw) {
     return raw.map((e) {
       final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+      final exerciseName =
+          (m['exercise_name'] ?? m['name'] ?? 'Unknown').toString();
       return {
-        'exercise_name': (m['exercise_name'] ?? m['name'] ?? 'Unknown').toString(),
+        'exercise_name': exerciseName,
         'sets': m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3,
         'reps': (m['reps'] ?? m['prescribed_reps'] ?? m['default_reps'] ?? '10').toString(),
         'rest_seconds': m['rest_seconds'] ?? m['default_rest_secs'] ?? 60,
-        'logging_type': (m['logging_type'] ?? 'weight_reps').toString(),
+        'logging_type': _resolveLoggingType(m, exerciseName),
         'category': m['category'],
         'exercise_type': m['exercise_type'],
         'equipment_needed': m['equipment_needed'],
         'superset_group': m['superset_group'],
       };
     }).toList();
+  }
+
+  /// F12 · Resolves `logging_type` robustly instead of silently defaulting
+  /// to `weight_reps` when the field is missing/null. Resolution order:
+  ///   1. Explicit value on the input map.
+  ///   2. exerciseBox (seed library) lookup by exact name.
+  ///   3. customBox lookup (for user-created exercises).
+  ///   4. Fallback heuristic based on name keywords ("hold" / "plank" →
+  ///      timed; "run" / "walk" → cardio; otherwise weight_reps).
+  String _resolveLoggingType(
+      Map<String, dynamic> m, String exerciseName) {
+    final explicit = m['logging_type'];
+    if (explicit is String && explicit.isNotEmpty) return explicit;
+
+    final hive = HiveService.instance;
+
+    // Try the seeded exercise library first.
+    try {
+      final libEntry = hive.exerciseBox.get(exerciseName);
+      if (libEntry is Map) {
+        final lt = libEntry['logging_type'];
+        if (lt is String && lt.isNotEmpty) return lt;
+      }
+    } catch (_) {/* continue */}
+
+    // Try customBox (user-created exercises).
+    try {
+      for (final key in hive.customBox.keys) {
+        if (key is! String || !key.startsWith('custom_exercise_')) continue;
+        final raw = hive.customBox.get(key);
+        if (raw is! Map) continue;
+        if (raw['name']?.toString().toLowerCase() ==
+            exerciseName.toLowerCase()) {
+          final lt = raw['logging_type'];
+          if (lt is String && lt.isNotEmpty) return lt;
+        }
+      }
+    } catch (_) {/* continue */}
+
+    // Last resort — heuristic on the name.
+    final n = exerciseName.toLowerCase();
+    if (n.contains('hold') ||
+        n.contains('plank') ||
+        n.contains('handstand') ||
+        n.contains('l-sit')) {
+      return 'timed';
+    }
+    if (n.contains('run') || n.contains('row') || n.contains('bike') ||
+        n.contains('cycle') || n.contains('walk')) {
+      return 'cardio';
+    }
+    return 'weight_reps';
   }
 
   // ── Helpers ─────────────────────────────────────────────────────

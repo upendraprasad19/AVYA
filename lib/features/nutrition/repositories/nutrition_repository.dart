@@ -13,6 +13,53 @@ class NutritionRepository {
 
   final HiveService _hive = HiveService.instance;
 
+  // ── Daily Macros (single source of truth, F7) ─────────────────
+
+  /// Returns summed macros for [date]. Single source of truth shared by
+  /// the Home nutrition card (`nutritionSummaryProvider`) and the Nutrition
+  /// screen (`dailyNutritionProvider`). F7 · Previously each feature
+  /// summed independently — same math, but small divergences (per-item
+  /// Atwater fallback, meal_type filtering) could produce mismatched
+  /// totals. Centralising prevents drift.
+  ///
+  /// Values come from `nutritionBox` entries whose `date` field matches
+  /// the given date in `YYYY-MM-DD` format. Each log's `total_calories`
+  /// etc. are already computed at log time with per-item Atwater fallback
+  /// (see `_ScanResultEditor` and `logFoodItem`).
+  Map<String, double> dailyMacros(DateTime date) {
+    final dateStr = '${date.year}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+
+    double calories = 0;
+    double protein = 0;
+    double carbs = 0;
+    double fat = 0;
+    double fiber = 0;
+
+    for (final raw in _hive.nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['date'] != dateStr) continue;
+      // Exclude saved-meal templates — they're not actual logs.
+      if (log['is_saved_meal'] == true) continue;
+
+      calories += (log['total_calories'] as num?)?.toDouble() ?? 0;
+      protein += (log['total_protein'] as num?)?.toDouble() ?? 0;
+      carbs += (log['total_carbs'] as num?)?.toDouble() ?? 0;
+      fat += (log['total_fat'] as num?)?.toDouble() ?? 0;
+      fiber += (log['total_fiber'] as num?)?.toDouble() ?? 0;
+    }
+
+    return {
+      'calories': calories,
+      'protein': protein,
+      'carbs': carbs,
+      'fat': fat,
+      'fiber': fiber,
+    };
+  }
+
   // ── Weight Trend ──────────────────────────────────────────────
 
   /// Returns the last [limit] weight entries sorted by date ascending.
