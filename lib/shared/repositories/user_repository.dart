@@ -271,14 +271,24 @@ class UserRepository {
       ...userData,
     });
 
+    // CRITICAL — both `user_profile` and `user_progress` have `id uuid` as
+    // primary key and a separate UNIQUE constraint on `user_id`. Supabase
+    // Dart's `.upsert()` defaults to conflict-on-primary-key, so without
+    // `onConflict: 'user_id'` the client generates a fresh `id` each call,
+    // tries to INSERT, and trips the UNIQUE(user_id) constraint → 23505
+    // throws. When that exception fires on user_profile the subsequent
+    // user_progress upsert never executes — which is exactly how we ended
+    // up with `users.onboarding_completed = true` but an all-null
+    // user_profile row and zero rows in user_progress after a fresh
+    // sign-up test on 2026-04-17.
     await supabase.from('user_profile').upsert({
       'user_id': userId,
       ...profileData,
-    });
+    }, onConflict: 'user_id');
 
     await supabase.from('user_progress').upsert({
       'user_id': userId,
       ...progressData,
-    });
+    }, onConflict: 'user_id');
   }
 }

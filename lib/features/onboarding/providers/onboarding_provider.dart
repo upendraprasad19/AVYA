@@ -5,7 +5,9 @@ import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
@@ -317,8 +319,15 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'tdee': targets.tdee,
         'daily_calories': targets.dailyCalories,
         'protein_grams': targets.proteinGrams,
+        // `carb_grams` (legacy) kept for backwards compat with older Hive
+        // readers; `carbs_grams` (plural) matches the Supabase column and
+        // the F17 sync mapping. Both point at the same value.
         'carb_grams': targets.carbGrams,
+        'carbs_grams': targets.carbGrams,
         'fat_grams': targets.fatGrams,
+        // F17 · Water target (derived from body weight). Previously never
+        // set anywhere, so the sync always pushed null.
+        'water_target_ml': (currentWeightKg * 35).round(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -388,6 +397,13 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
           }
         });
       }
+
+      // Refresh the AI-context snapshot in the cloud. The splash screen
+      // already pushed a snapshot earlier in this session, but it ran BEFORE
+      // onboarding answers existed in Hive — so the cloud snapshot is
+      // stale-empty. Pushing now overwrites that row with the real profile,
+      // progress, and computed targets. Fire-and-forget.
+      unawaited(SyncService.instance.pushSnapshot());
 
       // Fire-and-forget: generate AI prediction card in background.
       // Non-blocking — user proceeds to home screen immediately.
