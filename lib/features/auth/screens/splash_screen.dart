@@ -11,9 +11,12 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 /// Full-screen splash with AVYA logo, tagline, and a 3-dot loading animation.
@@ -39,9 +42,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final Animation<double> _taglineFade;
   late final AnimationController _dotController;
 
+  StreamSubscription<void>? _restoreSub;
+
   @override
   void initState() {
     super.initState();
+
+    // F5 · When SyncService finishes a restore pass (logs, templates,
+    // profile all refreshed from cloud), invalidate the home + train
+    // providers so the UI reflects the new data immediately — critical
+    // for PRs (recomputed from logs), today's workout, stats grid, etc.
+    _restoreSub = SyncService.instance.onRestoreComplete.listen((_) {
+      if (!mounted) return;
+      ref.invalidate(allExercisePRsProvider);
+      ref.invalidate(currentPlanProvider);
+      ref.invalidate(workoutStatsProvider);
+      ref.invalidate(calendarWeekProvider);
+      ref.invalidate(todayWorkoutProvider);
+    });
 
     _fadeController = AnimationController(
       vsync: this,
@@ -116,6 +134,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Fire-and-forget — checkAndSync() has its own try-catch.
     SyncService.instance.checkAndSync();
 
+    // F1 · Refresh subscription state on every app launch so PRO survives
+    // logout/login and cross-device sessions without requiring a PRO-feature
+    // tap to trigger verifyFromServer().
+    unawaited(SubscriptionService.instance.refreshFromSupabase());
+
     // Drain any persisted sync-queue ops left over from a previous session
     // (app killed while offline, JWT expired mid-flight, etc.). No-op when
     // sync_reliability_v1 feature flag is off — the queue is empty then.
@@ -169,6 +192,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
+    _restoreSub?.cancel();
     _fadeController.dispose();
     _dotController.dispose();
     super.dispose();

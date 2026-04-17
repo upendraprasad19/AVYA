@@ -531,6 +531,12 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         'avatar_url': profile['avatar_url'],
         'banner_url': profile['banner_url'],
         'wake_up_time': profile['wake_up_time'],
+        // F17 · Computed nutrition targets (migration 021).
+        'daily_calories': profile['daily_calories'],
+        'protein_grams': profile['protein_grams'],
+        'carbs_grams': profile['carbs_grams'],
+        'fat_grams': profile['fat_grams'],
+        'water_target_ml': profile['water_target_ml'],
       },
       progressData: {
         'current_phase': 1,
@@ -539,6 +545,11 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         'current_streak_weeks': 0,
         'phase_started_at': DateTime.now().toIso8601String(),
         'plan_generated_at': DateTime.now().toIso8601String(),
+        // F21 · Seed detected_experience_level from the onboarding answer.
+        // Later AI detection may overwrite if it diverges; for now, having
+        // any value is better than having none (it was previously null
+        // until first AI detection ran, leaving user_progress incomplete).
+        'detected_experience_level': profile['fitness_experience'],
       },
     );
   }

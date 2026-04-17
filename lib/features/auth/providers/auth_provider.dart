@@ -6,6 +6,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -348,90 +349,99 @@ class AuthNotifier extends Notifier<AuthState2> {
       // Non-fatal for sign-in, but AI chat may fail if row is missing.
     }
 
-    if (existing == null) {
-      // No local profile — could be first login OR re-login after sign-out.
-      // Check Supabase for existing user data.
-      try {
-        final supabase = _supabase.client;
-        final profileRows = await supabase
-            .from('user_profile')
-            .select()
-            .eq('user_id', user.id)
-            .limit(1);
+    // F2/F3 · Always pull the cloud profile on sign-in and merge into Hive.
+    // Previously guarded by `if (existing == null)` — which meant a same-user
+    // re-login kept stale Hive data (avatar_url/banner_url etc.) and never
+    // refreshed. Now we always pull; merge logic below picks the right source
+    // per field.
+    try {
+      final supabase = _supabase.client;
+      final profileRows = await supabase
+          .from('user_profile')
+          .select()
+          .eq('user_id', user.id)
+          .limit(1);
 
-        if (profileRows.isNotEmpty) {
-          // Verify the remote profile has real onboarding data.
-          // An empty row (all NULLs) can be created by sync errors and
-          // should NOT be treated as a valid returning-user profile.
-          final remoteProfile = Map<String, dynamic>.from(profileRows.first);
-          final hasRealData = remoteProfile['primary_goal'] != null ||
-              remoteProfile['height_cm'] != null;
-          if (!hasRealData) {
-            // Empty row — delete it and proceed as a new user.
-            try {
-              await supabase
-                  .from('user_profile')
-                  .delete()
-                  .eq('user_id', user.id);
-            } catch (_) {}
-          }
-        }
-        if (profileRows.isNotEmpty &&
-            (profileRows.first['primary_goal'] != null ||
-             profileRows.first['height_cm'] != null)) {
-          // Returning user — restore profile and onboarding flag.
-          final remoteProfile = Map<String, dynamic>.from(profileRows.first);
-          remoteProfile['id'] = user.id;
-          remoteProfile['email'] = user.email;
-          await userBox.put('profile', remoteProfile);
-          await configBox.put('onboarding_completed', true);
+      // Does the cloud row have any real onboarding-provided data? An all-null
+      // row can exist because an old sync mapped only 12 fields or a failed
+      // write created an empty row. "Real data" = goal set OR height known.
+      final cloudHasRealData = profileRows.isNotEmpty &&
+          (profileRows.first['primary_goal'] != null ||
+              profileRows.first['height_cm'] != null);
 
-          // Also try to restore progress data.
+      // Does Hive already have real data? (email-only stubs don't count.)
+      final existingMap =
+          existing is Map ? Map<String, dynamic>.from(existing) : null;
+      final hiveHasRealData = existingMap != null &&
+          (existingMap['primary_goal'] != null ||
+              existingMap['height_cm'] != null);
+
+      if (cloudHasRealData) {
+        // Merge cloud → Hive. Cloud wins for every non-null field it provides;
+        // Hive values survive for fields the cloud left null (covers mid-flight
+        // local edits that haven't synced back up yet). F2 behaviour.
+        final cloud = Map<String, dynamic>.from(profileRows.first);
+        final merged = <String, dynamic>{
+          ...?existingMap,
+          for (final e in cloud.entries)
+            if (e.value != null) e.key: e.value,
+        };
+        merged['id'] = user.id;
+        merged['email'] = user.email;
+        await userBox.put('profile', merged);
+        await configBox.put('onboarding_completed', true);
+
+        // Also pull progress (same merge semantics — rare to have local
+        // progress before login anyway).
+        try {
           final progressRows = await supabase
               .from('user_progress')
               .select()
               .eq('user_id', user.id)
               .limit(1);
           if (progressRows.isNotEmpty) {
-            await userBox.put(
-                'progress', Map<String, dynamic>.from(progressRows.first));
+            final existingProgress = userBox.get('progress');
+            final existingProgressMap = existingProgress is Map
+                ? Map<String, dynamic>.from(existingProgress)
+                : <String, dynamic>{};
+            final cloudProgress =
+                Map<String, dynamic>.from(progressRows.first);
+            final mergedProgress = <String, dynamic>{
+              ...existingProgressMap,
+              for (final e in cloudProgress.entries)
+                if (e.value != null) e.key: e.value,
+            };
+            await userBox.put('progress', mergedProgress);
           }
 
           // Hydrate AI trial start from server (preserves trial across devices).
-          // The server sets users.ai_chat_started_at on first AI chat message.
-          try {
-            final userRows = await supabase
-                .from('users')
-                .select('ai_chat_started_at')
-                .eq('id', user.id)
-                .limit(1);
-            if (userRows.isNotEmpty) {
-              final serverTrialStart =
-                  userRows.first['ai_chat_started_at'] as String?;
-              if (serverTrialStart != null) {
-                await configBox.put('ai_trial_start', serverTrialStart);
-              }
+          final userRows = await supabase
+              .from('users')
+              .select('ai_chat_started_at')
+              .eq('id', user.id)
+              .limit(1);
+          if (userRows.isNotEmpty) {
+            final serverTrialStart =
+                userRows.first['ai_chat_started_at'] as String?;
+            if (serverTrialStart != null) {
+              await configBox.put('ai_trial_start', serverTrialStart);
             }
-          } catch (e) {
-            debugPrint('AI trial hydration failed: $e');
           }
 
-          // Regenerate workout schedule locally only if plan is missing AND
-          // user has completed onboarding. This avoids overwriting progress
-          // for returning users and avoids generating before onboarding
-          // for new users (onboarding_provider handles that case).
+          // Regenerate workout schedule locally if plan is missing.
           if (!WorkoutScheduleService.instance.hasPlan() &&
               configBox.get('onboarding_completed') == true) {
-            final goal = remoteProfile['primary_goal'] as String? ?? 'general_fitness';
-            final equipment = remoteProfile['equipment_access'] as String? ?? 'basic_gym';
-            final daysPerWeek = (remoteProfile['days_per_week'] as num?)?.toInt() ?? 4;
-            final experience = remoteProfile['fitness_experience'] as String? ?? 'beginner';
+            final goal = merged['primary_goal'] as String? ?? 'general_fitness';
+            final equipment =
+                merged['equipment_access'] as String? ?? 'basic_gym';
+            final daysPerWeek =
+                (merged['days_per_week'] as num?)?.toInt() ?? 4;
+            final experience =
+                merged['fitness_experience'] as String? ?? 'beginner';
             final phase = progressRows.isNotEmpty
                 ? ((progressRows.first['current_phase'] as int?) ?? 1)
                 : 1;
 
-            // Determine start date: use plan_generated_at from progress if
-            // available, otherwise start from this Monday.
             DateTime startDate;
             if (progressRows.isNotEmpty) {
               final genStr = progressRows.first['phase_started_at'] as String?;
@@ -442,8 +452,6 @@ class AuthNotifier extends Notifier<AuthState2> {
               startDate = DateTime.now();
             }
 
-            // Use a separate try-catch so plan generation failures are NOT
-            // swallowed by the outer Supabase-offline catch block.
             try {
               await WorkoutScheduleService.instance.generateAndSchedule(
                 goal: goal,
@@ -455,49 +463,67 @@ class AuthNotifier extends Notifier<AuthState2> {
               );
             } catch (genErr) {
               debugPrint('Plan generation failed on login restore: $genErr');
-              // Non-fatal — train screen will show "generating" state and
-              // retry plan generation on first load.
             }
           }
-
-          return;
+        } catch (e) {
+          debugPrint('Progress/trial restore failed: $e');
         }
-
-        // Also check users table for onboarding flag.
+      } else if (hiveHasRealData) {
+        // F3 · Hive is the source of truth; cloud is stale or empty. Push
+        // Hive → cloud to repair the row instead of falsely routing the user
+        // to onboarding. Treat as onboarded since Hive has real data.
+        await configBox.put('onboarding_completed', true);
+        unawaited(SyncService.instance.syncProfileNow(user.id));
+      } else {
+        // Neither Hive nor cloud has real data → genuine new user.
+        // Fall through: minimal profile creation below will run.
+        if (profileRows.isNotEmpty) {
+          // Delete the empty cloud row so onboarding's upsert creates fresh.
+          try {
+            await supabase
+                .from('user_profile')
+                .delete()
+                .eq('user_id', user.id);
+          } catch (_) {}
+        }
+        // Also read users.onboarding_completed to handle edge cases where
+        // the users row has the flag but user_profile got wiped.
         final userRows = await supabase
             .from('users')
             .select('onboarding_completed')
             .eq('id', user.id)
             .limit(1);
-
-        if (userRows.isNotEmpty) {
-          final onboarded =
-              (userRows.first['onboarding_completed'] as bool?) ?? false;
-          if (onboarded) {
-            await configBox.put('onboarding_completed', true);
-          }
+        if (userRows.isNotEmpty &&
+            (userRows.first['onboarding_completed'] as bool?) == true) {
+          await configBox.put('onboarding_completed', true);
         }
-      } catch (_) {
-        // Supabase query failed (offline or table doesn't exist yet).
-        // Fall through to create minimal local profile.
       }
-
-      // Create minimal local profile if nothing was restored.
-      if (userBox.get('profile') == null) {
-        await userBox.put('profile', {
-          'id': user.id,
-          'email': user.email,
-          'created_at': DateTime.now().toIso8601String(),
-        });
-      }
+    } catch (e) {
+      // Supabase query failed (offline or table missing). Proceed with
+      // whatever Hive has; next sync cycle will reconcile.
+      debugPrint('[Auth] Supabase restore query failed: $e');
     }
 
-    // Gap detection: if local profile exists but Supabase user_profile is
-    // missing, push immediately. Recovers from a failed onboarding sync
-    // without requiring a 7-day wait for the weekly full sync.
-    if (existing != null) {
-      _pushProfileToSupabaseIfMissing(user.id);
+    // Create minimal local profile if nothing was restored and Hive is still
+    // empty (genuine new user, or offline with no prior local data).
+    if (userBox.get('profile') == null) {
+      await userBox.put('profile', {
+        'id': user.id,
+        'email': user.email,
+        'created_at': DateTime.now().toIso8601String(),
+      });
     }
+
+    // Last-ditch gap closer: if cloud still has no user_profile row, push
+    // Hive now. Rare — the F3 branch above already handled the main case.
+    _pushProfileToSupabaseIfMissing(user.id);
+
+    // F1 · Refresh subscription state from server after every sign-in.
+    // Without this, a user who bought PRO on a previous session and then
+    // logs out/in sees themselves as free until they tap a PRO feature
+    // that happens to call `verifyFromServer()`. Fire-and-forget — UI
+    // reads Hive cache until the refresh lands.
+    unawaited(SubscriptionService.instance.refreshFromSupabase());
 
     // Bind OneSignal external_id to Supabase user UUID for push targeting.
     if (!kIsWeb) {

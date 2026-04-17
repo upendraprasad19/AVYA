@@ -184,6 +184,13 @@ class SyncService {
   /// exactly the right moment instead of guessing with a fixed delay.
   Completer<void>? _healthSyncCompleter;
 
+  /// F5 · Broadcasts after `checkAndSync` completes a restore pass so
+  /// screens can invalidate cached providers (PRs, plan, stats). Emits
+  /// on every successful sync cycle, not just restore-from-empty.
+  final StreamController<void> _restoreCompleteController =
+      StreamController<void>.broadcast();
+  Stream<void> get onRestoreComplete => _restoreCompleteController.stream;
+
   /// Returns a Future that completes when the current health sync pass
   /// finishes writing to Hive. Returns an already-completed future when
   /// no sync is in progress or health sync is disabled.
@@ -258,6 +265,13 @@ class SyncService {
       if (SubscriptionService.instance.isPro()) {
         subscribeToRealtimeSync();
       }
+
+      // F5 · Broadcast restore-complete so screens can invalidate cached
+      // providers (PRs recomputed from refreshed logs, plan from latest
+      // templates, etc.).
+      if (!_restoreCompleteController.isClosed) {
+        _restoreCompleteController.add(null);
+      }
     } catch (e) {
       // Offline or error — silently skip.
       // Ensure the health sync completer is resolved even on early failure
@@ -319,6 +333,7 @@ class SyncService {
         _syncWeightLogs(userId),
         _syncMeasurements(userId),
         _syncSleepLogs(userId),
+        _syncStepsLogs(userId), // F20
         _syncStreaks(userId),
         _syncUserProfile(userId),
         _syncUrineColorLogs(userId),
@@ -399,6 +414,32 @@ class SyncService {
 
     if (!hasLocalData) {
       await restoreFromCloud(userId);
+    } else {
+      // F6 · Even when Hive has workout data, pull lightweight pieces that
+      // may have changed on another device or via an admin action —
+      // custom items, templates, profile, progress. These are cheap
+      // (small, indexed by user_id) and inexpensive to merge.
+      await restoreLightweightAlways(userId);
+    }
+  }
+
+  /// F6 · Lightweight restore that fires on every sign-in regardless of
+  /// whether Hive has workout history. Pulls the small, frequently-drifting
+  /// datasets: profile, progress, subscription-adjacent state, customs,
+  /// templates. Bulk history (workout/nutrition logs) stays gated on
+  /// empty-Hive so we don't re-download GBs every launch.
+  Future<void> restoreLightweightAlways(String userId) async {
+    try {
+      await Future.wait([
+        _restoreUserProfile(userId),
+        _restoreUserProgress(userId),
+        _restoreCustomExercises(userId),
+        _restoreCustomFoods(userId),
+        _restoreWorkoutTemplates(userId),
+        _restoreUserPreferences(userId),
+      ]);
+    } catch (e) {
+      debugPrint('[SyncService.restoreLightweightAlways] $e');
     }
   }
 
@@ -420,6 +461,7 @@ class SyncService {
         _restoreCustomExercises(userId),
         _restoreCustomFoods(userId),
         _restoreWeightLogs(userId, since),
+        _restoreStepsLogs(userId, since), // F20
         _restoreNutritionLogs(userId, since),
         _restoreMeasurements(userId, since),
         _restoreUserProfile(userId),
@@ -640,7 +682,10 @@ class SyncService {
   }
 
   /// Pushes individual exercise logs (exlog_* keys) to
-  /// Supabase workout_log_exercises table.
+  /// Supabase workout_log_exercises (summary) + workout_log_sets (per-set).
+  ///
+  /// F4 · Per-set rows preserve granular weight/reps/duration across devices.
+  /// The summary row (workout_log_exercises) stays for AI features + analytics.
   Future<void> _syncExerciseLogs(String userId) async {
     final workoutBox = _hive.workoutBox;
     for (final key in workoutBox.keys) {
@@ -650,18 +695,18 @@ class SyncService {
       final log = Map<String, dynamic>.from(raw);
 
       try {
-        // Each row is a per-exercise SUMMARY (1 row per exercise, not per set).
-        // set_number = total completed sets for this exercise.
-        // reps = cumulative reps across all sets.
-        // weight_kg = best (max) weight across sets.
-        // workout_log_id = deterministic from date → groups exercises by workout.
-        // exercise_id = exercise_name → stable identity for cross-week grouping.
+        // ── SUMMARY ROW ──
+        // 1 row per exercise. weight_kg = best; reps = cumulative; set_number = total.
         final date = log['date'] as String? ?? '';
+        final workoutLogId = _deterministicId('workout_$date');
+        final exerciseId =
+            (log['exercise_name'] as String?) ?? key; // stable identity
+
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
-          'workout_log_id': _deterministicId('workout_$date'),
+          'workout_log_id': workoutLogId,
           'user_id': userId,
-          'exercise_id': log['exercise_name'] ?? key,
+          'exercise_id': exerciseId,
           'exercise_name': log['exercise_name'] ?? '',
           'logging_type': log['logging_type'],
           'set_number': log['sets_completed'] ?? 1,
@@ -673,6 +718,44 @@ class SyncService {
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
           'completed_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
+
+        // ── PER-SET ROWS (F4) ──
+        // Upserts a row per set from the Hive `sets_detail` list. Natural key
+        // is (workout_log_id, exercise_id, set_number) → idempotent across
+        // re-syncs and retries.
+        final setsDetail = log['sets_detail'];
+        if (setsDetail is List && setsDetail.isNotEmpty) {
+          final completedAt = log['created_at'] as String? ??
+              DateTime.now().toIso8601String();
+          final rows = <Map<String, dynamic>>[];
+          for (final s in setsDetail) {
+            if (s is! Map) continue;
+            final sm = Map<String, dynamic>.from(s);
+            final setNum = (sm['set_number'] as num?)?.toInt();
+            if (setNum == null) continue;
+            rows.add({
+              'user_id': userId,
+              'workout_log_id': workoutLogId,
+              'exercise_id': exerciseId,
+              'set_number': setNum,
+              'weight_kg': sm['weight_kg'],
+              'reps': sm['reps'],
+              'duration_secs': sm['duration_seconds'],
+              'distance_km': sm['distance_km'],
+              'completed_at': completedAt,
+            });
+          }
+          if (rows.isNotEmpty) {
+            try {
+              await _supabase.client
+                  .from('workout_log_sets')
+                  .upsert(rows, onConflict: 'workout_log_id,exercise_id,set_number');
+            } catch (e) {
+              debugPrint(
+                  '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
+            }
+          }
+        }
       } catch (e) {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
       }
@@ -831,6 +914,34 @@ class SyncService {
     }
   }
 
+  /// F20 · Pushes daily step totals to Supabase `daily_steps`.
+  Future<void> _syncStepsLogs(String userId) async {
+    final healthBox = _hive.healthBox;
+    // Writers use per-day keys like 'step_2026-04-07' with
+    // {type:'step_log', date, steps, source}.
+    for (final key in healthBox.keys) {
+      if (key is! String || !key.startsWith('step_')) continue;
+      final raw = healthBox.get(key);
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['type'] != 'step_log') continue;
+      final date = log['date'] as String?;
+      final steps = (log['steps'] as num?)?.toInt();
+      if (date == null || steps == null) continue;
+      try {
+        await _supabase.client.from('daily_steps').upsert({
+          'user_id': userId,
+          'date': date,
+          'steps': steps,
+          'source': log['source'] ?? 'health_connect',
+          'synced_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,date');
+      } catch (e) {
+        debugPrint('[SyncService._syncStepsLogs] $key: $e');
+      }
+    }
+  }
+
   Future<void> _syncUrineColorLogs(String userId) async {
     // Urine color data is now merged into the water_logs table
     // (health_metrics table does not exist).
@@ -954,6 +1065,15 @@ class SyncService {
       if (p['avatar_url'] != null) 'avatar_url': p['avatar_url'],
       if (p['banner_url'] != null) 'banner_url': p['banner_url'],
       if (p['wake_up_time'] != null) 'wake_up_time': p['wake_up_time'],
+      // F17 · Computed nutrition targets (columns added in migration 021).
+      // Written to Hive at onboarding + every profile edit that changes
+      // weight/goal/pace. Syncing them preserves exact numbers across
+      // devices (BMR formula tweaks won't silently shift user targets).
+      if (p['daily_calories'] != null) 'daily_calories': p['daily_calories'],
+      if (p['protein_grams'] != null) 'protein_grams': p['protein_grams'],
+      if (p['carbs_grams'] != null) 'carbs_grams': p['carbs_grams'],
+      if (p['fat_grams'] != null) 'fat_grams': p['fat_grams'],
+      if (p['water_target_ml'] != null) 'water_target_ml': p['water_target_ml'],
     };
 
     if (_syncReliabilityEnabled) {
@@ -1102,6 +1222,29 @@ class SyncService {
         dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
       );
 
+      // F4 · Pre-fetch all per-set rows once and index by
+      // (workout_log_id, exercise_id) so we can reconstruct the Hive
+      // `sets_detail` list without a per-exercise round-trip.
+      final setsByLogExercise = <String, List<Map<String, dynamic>>>{};
+      try {
+        final setRows = await _fetchAllRows(
+          'workout_log_sets', userId,
+          dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+        );
+        for (final raw in setRows) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          final wlId = m['workout_log_id'] as String? ?? '';
+          final exId = m['exercise_id'] as String? ?? '';
+          final groupKey = '$wlId|$exId';
+          setsByLogExercise
+              .putIfAbsent(groupKey, () => <Map<String, dynamic>>[])
+              .add(m);
+        }
+      } catch (e) {
+        // Non-fatal — falls back to summary-only restore.
+        debugPrint('[SyncService._restoreExerciseLogs] per-set fetch failed: $e');
+      }
+
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final completedAt = map['completed_at'] as String? ?? '';
@@ -1139,6 +1282,46 @@ class SyncService {
         }
         if (map['distance_km'] != null) {
           logMap['distance_km'] = (map['distance_km'] as num).toDouble();
+        }
+
+        // F4 · Reconstruct `sets_detail` from the workout_log_sets join.
+        final workoutLogId = map['workout_log_id'] as String? ?? '';
+        final exerciseId = map['exercise_id'] as String? ?? name;
+        final groupKey = '$workoutLogId|$exerciseId';
+        final setsForThisExercise = setsByLogExercise[groupKey];
+        if (setsForThisExercise != null && setsForThisExercise.isNotEmpty) {
+          setsForThisExercise.sort((a, b) =>
+              ((a['set_number'] as num?)?.toInt() ?? 0)
+                  .compareTo(((b['set_number'] as num?)?.toInt() ?? 0)));
+          final setsDetail = setsForThisExercise.map((s) {
+            final out = <String, dynamic>{
+              'set_number': (s['set_number'] as num?)?.toInt() ?? 0,
+            };
+            if (s['weight_kg'] != null) {
+              out['weight_kg'] = (s['weight_kg'] as num).toDouble();
+            }
+            if (s['reps'] != null) {
+              out['reps'] = (s['reps'] as num).toInt();
+            }
+            if (s['duration_secs'] != null) {
+              out['duration_seconds'] = (s['duration_secs'] as num).toInt();
+            }
+            if (s['distance_km'] != null) {
+              out['distance_km'] = (s['distance_km'] as num).toDouble();
+            }
+            return out;
+          }).toList();
+          logMap['sets_detail'] = setsDetail;
+
+          // Recompute exact per-set volume from the detail list (the
+          // summary row's weight_kg × reps was a lossy max×cumulative).
+          double volume = 0;
+          for (final s in setsDetail) {
+            final w = (s['weight_kg'] as num?)?.toDouble() ?? 0;
+            final r = (s['reps'] as num?)?.toInt() ?? 0;
+            volume += w * r;
+          }
+          logMap['volume_kg'] = volume;
         }
 
         await _hive.workoutBox.put(logId, logMap);
@@ -1372,9 +1555,6 @@ class SyncService {
 
   Future<void> _restoreUserProfile(String userId) async {
     try {
-      // Only restore if local profile is missing
-      if (_hive.userBox.get('profile') != null) return;
-
       final rows = await _supabase.client
           .from('user_profile')
           .select()
@@ -1382,9 +1562,24 @@ class SyncService {
           .limit(1);
 
       if (rows.isEmpty) return;
-      final map = Map<String, dynamic>.from(rows.first as Map);
-      map.remove('user_id'); // Don't store user_id inside the profile map
-      await _hive.userBox.put('profile', map);
+      final cloud = Map<String, dynamic>.from(rows.first as Map);
+      cloud.remove('user_id'); // Don't store user_id inside the profile map
+
+      // F2 · Merge semantics — cloud non-null fields overwrite Hive; cloud
+      // nulls don't wipe Hive values (preserves local-only edits that
+      // haven't synced up yet). Previously gated by
+      // `if (_hive.userBox.get('profile') != null) return;` which meant
+      // stale Hive never got refreshed on re-login.
+      final existing = _hive.userBox.get('profile');
+      final existingMap = existing is Map
+          ? Map<String, dynamic>.from(existing)
+          : <String, dynamic>{};
+      final merged = <String, dynamic>{
+        ...existingMap,
+        for (final e in cloud.entries)
+          if (e.value != null) e.key: e.value,
+      };
+      await _hive.userBox.put('profile', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProfile] $e');
     }
@@ -1392,9 +1587,6 @@ class SyncService {
 
   Future<void> _restoreUserProgress(String userId) async {
     try {
-      // Only restore if local progress is missing
-      if (_hive.userBox.get('progress') != null) return;
-
       final rows = await _supabase.client
           .from('user_progress')
           .select()
@@ -1402,9 +1594,20 @@ class SyncService {
           .limit(1);
 
       if (rows.isEmpty) return;
-      final map = Map<String, dynamic>.from(rows.first as Map);
-      map.remove('user_id');
-      await _hive.userBox.put('progress', map);
+      final cloud = Map<String, dynamic>.from(rows.first as Map);
+      cloud.remove('user_id');
+
+      // F6 · Merge semantics (same as _restoreUserProfile).
+      final existing = _hive.userBox.get('progress');
+      final existingMap = existing is Map
+          ? Map<String, dynamic>.from(existing)
+          : <String, dynamic>{};
+      final merged = <String, dynamic>{
+        ...existingMap,
+        for (final e in cloud.entries)
+          if (e.value != null) e.key: e.value,
+      };
+      await _hive.userBox.put('progress', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProgress] $e');
     }
@@ -1476,6 +1679,39 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreSleepLogs] $e');
+    }
+  }
+
+  /// F20 · Restore daily step totals from Supabase into healthBox.
+  Future<void> _restoreStepsLogs(String userId, String since) async {
+    try {
+      final sinceDate = since.length >= 10 ? since.substring(0, 10) : since;
+      final rows = await _fetchAllRows(
+        'daily_steps', userId,
+        dateColumn: 'date', since: sinceDate, orderBy: 'date',
+      );
+      if (rows.isEmpty) return;
+      final healthBox = _hive.healthBox;
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['date'] as String?;
+        final steps = (map['steps'] as num?)?.toInt();
+        if (date == null || steps == null) continue;
+        final key = 'step_$date';
+        // Only restore if local doesn't already have a step entry for this
+        // date (covers the case where Health Connect will repopulate on
+        // device-local sync).
+        if (healthBox.get(key) != null) continue;
+        await healthBox.put(key, {
+          'type': 'step_log',
+          'date': date,
+          'steps': steps,
+          'source': map['source'] ?? 'cloud_restore',
+          'created_at': map['created_at'],
+        });
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreStepsLogs] $e');
     }
   }
 
@@ -1587,6 +1823,10 @@ class SyncService {
         if (p['plan_generated_at'] != null) 'plan_generated_at': p['plan_generated_at'],
         if (p['total_workouts_done'] != null) 'total_workouts_done': p['total_workouts_done'],
         if (p['current_streak_weeks'] != null) 'current_streak_weeks': p['current_streak_weeks'],
+        // F21 · detected_experience_level — seeded from onboarding answer,
+        // may be overwritten by AI detection.
+        if (p['detected_experience_level'] != null)
+          'detected_experience_level': p['detected_experience_level'],
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncUserProgress] $e');
@@ -1767,7 +2007,10 @@ class SyncService {
         final id = map['id'] as String? ?? '';
         if (id.isEmpty) continue;
         final hiveKey = id.startsWith('tmpl_') ? id : 'tmpl_${id.hashCode}';
-        if (_hive.workoutBox.get(hiveKey) != null) continue;
+        // F6 · Always refresh template content from cloud — covers the case
+        // where the user edited a template on another device. Previous
+        // `if (workoutBox.get(hiveKey) != null) continue;` kept the stale
+        // local version.
 
         // Sort exercises by order_index
         final exerciseRows = map['template_exercises'] as List? ?? [];
@@ -1963,8 +2206,6 @@ class SyncService {
   /// Restores user preferences from Supabase.
   Future<void> _restoreUserPreferences(String userId) async {
     try {
-      if (_hive.userBox.get('preferences') != null) return;
-
       final rows = await _supabase.client
           .from('user_preferences')
           .select()
@@ -1972,9 +2213,20 @@ class SyncService {
           .limit(1);
 
       if (rows.isEmpty) return;
-      final map = Map<String, dynamic>.from(rows.first as Map);
-      map.remove('user_id');
-      await _hive.userBox.put('preferences', map);
+      final cloud = Map<String, dynamic>.from(rows.first as Map);
+      cloud.remove('user_id');
+
+      // F6 · Merge semantics — cloud non-null wins, Hive preserved for nulls.
+      final existing = _hive.userBox.get('preferences');
+      final existingMap = existing is Map
+          ? Map<String, dynamic>.from(existing)
+          : <String, dynamic>{};
+      final merged = <String, dynamic>{
+        ...existingMap,
+        for (final e in cloud.entries)
+          if (e.value != null) e.key: e.value,
+      };
+      await _hive.userBox.put('preferences', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
     }
