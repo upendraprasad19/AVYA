@@ -110,5 +110,6 @@ export function renderCoachMemoryBlock(mem: CoachMemory | null): string {
   if (mem.last_proactive_type) {
     lines.push(`- Last proactive nudge sent today: ${mem.last_proactive_type} — do not repeat this type.`);
   }
+  if (lines.length === 1) return "";
   return lines.join("\n");
 }
