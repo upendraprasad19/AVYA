@@ -44,8 +44,13 @@ Future<void> main() async {
   await HiveService.instance.init();
 
   // One-time backfill of coach_memory from legacy coaching_notes.
-  // Safe to call on every launch — idempotent.
-  await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
+  // Safe to call on every launch — idempotent. Guarded so a Hive write
+  // failure (disk full / corrupted box) cannot crash app launch.
+  try {
+    await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
+  } catch (e) {
+    debugPrint('[main] coach_memory backfill failed: $e');
+  }
 
   // 1a. Atomic-logout recovery (F16). If a previous session was killed
   //     mid-logout, finish the wipe before anything else reads Hive.
