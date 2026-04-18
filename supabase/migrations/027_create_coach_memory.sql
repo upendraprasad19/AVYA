@@ -48,12 +48,15 @@ CREATE INDEX IF NOT EXISTS idx_coach_memory_dropout_risk
 -- RLS
 ALTER TABLE public.coach_memory ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users_read_own_coach_memory" ON public.coach_memory;
 CREATE POLICY "users_read_own_coach_memory" ON public.coach_memory
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "users_update_own_coach_memory" ON public.coach_memory;
 CREATE POLICY "users_update_own_coach_memory" ON public.coach_memory
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "users_insert_own_coach_memory" ON public.coach_memory;
 CREATE POLICY "users_insert_own_coach_memory" ON public.coach_memory
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
@@ -68,6 +71,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_coach_memory_touch ON public.coach_memory;
 CREATE TRIGGER trg_coach_memory_touch
   BEFORE UPDATE ON public.coach_memory
   FOR EACH ROW EXECUTE FUNCTION public.touch_coach_memory_updated_at();
