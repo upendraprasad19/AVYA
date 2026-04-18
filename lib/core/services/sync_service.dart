@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -334,7 +335,10 @@ class SyncService {
     };
   }
 
-  /// Pushes the daily snapshot to Supabase `user_daily_snapshots` table.
+  /// Pushes the daily snapshot to Supabase via the `daily-snapshot` Edge
+  /// Function. The function upserts `user_daily_snapshots`, runs coaching
+  /// notes extraction, and returns the latest `coach_memory` row, which
+  /// we mirror into Hive `coachBox['coach_memory']` for local readers.
   Future<void> pushSnapshot() async {
     try {
       final userId = _supabase.currentUser?.id;
@@ -342,12 +346,30 @@ class SyncService {
 
       final snapshot = compileDailySnapshot();
 
-      await _supabase.client.from('user_daily_snapshots').upsert({
-        'user_id': userId,
-        'snapshot_date': snapshot['snapshot_date'],
-        'snapshot_json': snapshot,
-        'created_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'user_id,snapshot_date');
+      final response = await _supabase.client.functions.invoke(
+        'daily-snapshot',
+        body: {'snapshot_json': snapshot},
+      );
+
+      // Mirror coach_memory from the response into Hive (Layer 4/5 identity).
+      // Wrapped defensively — a malformed/changed schema must NEVER crash sync.
+      if (response.status == 200 && response.data is Map) {
+        try {
+          final data = response.data as Map;
+          final memJson = data['coach_memory'];
+          if (memJson is Map) {
+            final mem = CoachMemory.fromJson(memJson);
+            await mem.writeToBox(_hive.coachBox);
+            debugPrint(
+              '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
+            );
+          }
+        } catch (memErr) {
+          debugPrint(
+            '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
+          );
+        }
+      }
 
       await _setTimestamp(_lastSnapshotKey);
     } catch (e) {
