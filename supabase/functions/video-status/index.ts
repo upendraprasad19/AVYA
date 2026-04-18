@@ -1,41 +1,43 @@
-import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+/**
+ * video-status — deprecated 2026-04-18. Returns 410 Gone.
+ *
+ * Used to be the polling endpoint for Remotion/Lambda video render jobs
+ * (shareable workout highlight reels). The video-share feature is
+ * DEFERRED per CLAUDE.md §10 "Shareable Cards" table — hidden until
+ * post-launch. The old implementation had zero auth (used
+ * SERVICE_ROLE_KEY without auth.getUser or user_id filter), which meant
+ * anyone knowing a jobId could poll anyone else's render status (IDOR).
+ *
+ * Rather than half-fix the auth on a dormant feature, we're 410-Gone
+ * stubbing it. When the video-share feature is un-deferred, rewrite
+ * this function with proper JWT + user_id filter before deploying.
+ *
+ * Same pattern used for `ai-proxy-pro` (retired 2026-04-18) and
+ * `admin-verify-payment` (one-off admin tool, retired earlier).
+ */
+
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-
-  const url = new URL(req.url)
-  const jobId = url.searchParams.get('jobId')
-
-  if (!jobId) {
-    return new Response(JSON.stringify({ error: 'jobId required' }), {
-      status: 400, headers: corsHeaders,
-    })
+serve((req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  )
-
-  const { data, error } = await supabase
-    .from('video_renders')
-    .select('status, output_url, expires_at')
-    .eq('job_id', jobId)
-    .single()
-
-  if (error) {
-    return new Response(JSON.stringify({ error: 'Not found' }), {
-      status: 404, headers: corsHeaders,
-    })
-  }
-
-  return new Response(JSON.stringify(data), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-})
+  return new Response(
+    JSON.stringify({
+      error:
+        "video-status is deprecated. The video-share feature is deferred.",
+      deprecated_at: "2026-04-18",
+    }),
+    {
+      status: 410,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+});

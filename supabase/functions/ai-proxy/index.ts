@@ -146,27 +146,48 @@ serve(async (req: Request) => {
     const { message, snapshot_json, type, text, context, image_base64 } = body;
 
     // ── Food text analysis ────────────────────────────────────────
-    // Free: 50/day  ·  PRO: 200/day. Counted via ai_coach_interactions
-    // rows with channel='food_text_analysis'. Server-side cap — client
-    // limits are advisory only.
+    // Free: 50/day  ·  PRO: 200/day. Enforced atomically by Postgres
+    // trigger `trg_food_text_rate_limit` (migration 024) on the
+    // `ai_coach_interactions` table — not by a check-then-insert dance
+    // inside this handler. The old TOCTOU race (two simultaneous
+    // requests both seeing count=49 and both inserting) is closed.
+    //
+    // Flow:
+    //   1. Insert a placeholder row with channel='food_text_analysis'
+    //      (awaited). Trigger raises P0001 if over cap — we catch and
+    //      return 429 without calling Gemini, saving tokens.
+    //   2. Call Gemini on the valid reservation.
+    //   3. UPDATE the row with the response + model + tokens.
     if (type === "food_text_analysis" && text) {
-      const todayFoodStr = new Date().toISOString().split("T")[0];
-      const { count: foodCount } = await supabaseClient
+      // Step 1 — reserve a slot (or get rejected by the trigger).
+      const { data: reservation, error: insertErr } = await supabaseClient
         .from("ai_coach_interactions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("channel", "food_text_analysis")
-        .gte("created_at", todayFoodStr + "T00:00:00Z");
+        .insert({
+          user_id: userId,
+          channel: "food_text_analysis",
+          user_message: text.substring(0, 500),
+          ai_response: "",
+          model_used: "pending",
+          tokens_used: 0,
+        })
+        .select("id")
+        .single();
 
-      const isProUser = await checkPro(supabaseClient, userId);
-      const dailyFoodCap = isProUser ? 200 : 50;
-
-      if ((foodCount ?? 0) >= dailyFoodCap) {
-        return err(
-          429,
-          `Daily food analysis limit reached (${dailyFoodCap}/day). Try again tomorrow.`,
-        );
+      if (insertErr) {
+        const msg = String(insertErr.message ?? "");
+        if (msg.includes("food_text_daily_limit_reached")) {
+          const isProUser = await checkPro(supabaseClient, userId);
+          const cap = isProUser ? 200 : 50;
+          return err(
+            429,
+            `Daily food analysis limit reached (${cap}/day). Try again tomorrow.`,
+          );
+        }
+        console.error("[ai-proxy.food] reservation insert failed:", insertErr);
+        return err(500, "Food analysis unavailable");
       }
+
+      const reservationId = reservation?.id as string | undefined;
 
       const prompt = `You are a nutritionist with deep knowledge of Indian foods. The user says: "${text}"
 
@@ -174,6 +195,7 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
 {"meal_name":"short name for the meal","items":[{"name":"food item name","quantity":"e.g. 1 scoop, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
+      // Step 2 — call Gemini on the valid reservation.
       const { content, modelUsed, tokensUsed } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
@@ -188,20 +210,20 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        // Fire-and-forget logging for the daily-cap counter.
-        supabaseClient
-          .from("ai_coach_interactions")
-          .insert({
-            user_id: userId,
-            channel: "food_text_analysis",
-            user_message: text.substring(0, 500),
-            ai_response: "",
-            model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
-            tokens_used: tokensUsed,
-          })
-          .then((r: { error: unknown }) => {
-            if (r.error) console.error("food interaction log failed:", r.error);
-          });
+        // Step 3 — update the reserved row with real telemetry. Fire-and-forget
+        // so the response doesn't block on this final write.
+        if (reservationId) {
+          supabaseClient
+            .from("ai_coach_interactions")
+            .update({
+              model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+              tokens_used: tokensUsed,
+            })
+            .eq("id", reservationId)
+            .then((r: { error: unknown }) => {
+              if (r.error) console.error("food interaction update failed:", r.error);
+            });
+        }
 
         return new Response(JSON.stringify(parsed), {
           status: 200,

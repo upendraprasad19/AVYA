@@ -190,6 +190,34 @@ serve(async (req: Request) => {
       });
     }
 
+    // Replay protection — reject webhooks older than 5 minutes.
+    //
+    // Razorpay's own retry policy sends webhooks within seconds (and
+    // re-fires failures for up to 24h, but each retry bumps the event's
+    // created_at forward). Anything 5+ minutes old reaching us here is
+    // either (a) a replay attack by an adversary who captured a valid
+    // webhook request, or (b) a delayed webhook for an event our
+    // idempotency (pre-SELECT + 23505 catch) has already processed.
+    // Both cases are safe to reject. `paymentEntity.created_at` is epoch
+    // seconds (Razorpay standard). If the field is missing we skip the
+    // check (defensive — never fail closed on missing telemetry).
+    const createdAtSec = paymentEntity.created_at as number | undefined;
+    if (typeof createdAtSec === "number" && createdAtSec > 0) {
+      const ageSec = Math.abs(Date.now() / 1000 - createdAtSec);
+      if (ageSec > 300) {
+        console.warn(
+          `[razorpay-webhook] rejecting replay: payment_id=${paymentEntity.id} age=${Math.round(ageSec)}s`,
+        );
+        return new Response(
+          JSON.stringify({ error: "Webhook too old", age_seconds: Math.round(ageSec) }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
     const razorpayOrderId = paymentEntity.order_id;
     const razorpayPaymentId = paymentEntity.id;
     const razorpaySignature = signature;

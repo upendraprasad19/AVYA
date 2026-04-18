@@ -4,7 +4,24 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
+import '../../../core/services/subscription_service.dart';
 import '../../../core/services/supabase_service.dart';
+
+/// Thrown when a user hits their daily progress-photo upload quota.
+/// The UI catches this and surfaces the appropriate paywall / retry-
+/// tomorrow snackbar.
+class PhotoQuotaException implements Exception {
+  final int dailyCap;
+  final bool isPro;
+  final String message;
+  const PhotoQuotaException({
+    required this.dailyCap,
+    required this.isPro,
+    required this.message,
+  });
+  @override
+  String toString() => message;
+}
 
 /// Progress photos — cloud-primary (F19).
 ///
@@ -21,6 +38,12 @@ class ProgressPhotoRepository {
   static final ProgressPhotoRepository instance = ProgressPhotoRepository._();
 
   static const String _bucket = 'progress-photos';
+
+  /// Daily upload caps — enforced at capture time.
+  /// Free: 2/day. PRO: 5/day.
+  /// (Lifetime cap is deferred; revisit at 10K users.)
+  static const int _freeDailyCap = 2;
+  static const int _proDailyCap = 5;
 
   SupabaseService get _s => SupabaseService.instance;
 
@@ -45,12 +68,44 @@ class ProgressPhotoRepository {
       return null;
     }
 
+    // Daily cap check (audit H8). Count today's existing photos for this
+    // user before picking. If over-cap, throw and let the UI surface
+    // the paywall / try-tomorrow snackbar.
+    final isPro = SubscriptionService.instance.isPro();
+    final dailyCap = isPro ? _proDailyCap : _freeDailyCap;
     try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day).toUtc().toIso8601String();
+      final todays = await _s.client
+          .from('progress_photos')
+          .select('id')
+          .eq('user_id', userId)
+          .gte('taken_at', startOfDay);
+      if (todays.length >= dailyCap) {
+        throw PhotoQuotaException(
+          dailyCap: dailyCap,
+          isPro: isPro,
+          message: isPro
+              ? 'Daily limit reached ($dailyCap/day). Come back tomorrow.'
+              : 'Daily limit reached ($dailyCap/day). Upgrade to PRO for $_proDailyCap/day.',
+        );
+      }
+    } on PhotoQuotaException {
+      rethrow;
+    } catch (e) {
+      // Cap-check failure is non-fatal; fall through to upload attempt.
+      debugPrint('[ProgressPhotoRepository.capture] cap-check failed: $e');
+    }
+
+    try {
+      // Tier-differentiated image quality at pick time (audit H8).
+      // Free → 2048 / 85%  (~500 KB, retina-sharp on phones).
+      // PRO  → 3000 / 95%  (~1.5 MB, headroom for future video render).
       final picker = ImagePicker();
       final xfile = await picker.pickImage(
         source: source,
-        imageQuality: 85,
-        maxWidth: 2048,
+        imageQuality: isPro ? 95 : 85,
+        maxWidth: isPro ? 3000 : 2048,
       );
       if (xfile == null) return null;
 

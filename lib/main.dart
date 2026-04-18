@@ -1,3 +1,6 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -14,6 +17,26 @@ Future<void> main() async {
 
   // Environment variables are now injected at build time via
   // --dart-define-from-file=.env (never bundled in the APK).
+
+  // 0. Firebase + Crashlytics — initialized FIRST so any subsequent
+  //    crash during startup is captured. Guarded so unit tests and
+  //    local dev without google-services.json don't blow up.
+  try {
+    await Firebase.initializeApp();
+    // Route uncaught framework errors → Crashlytics fatal.
+    FlutterError.onError =
+        FirebaseCrashlytics.instance.recordFlutterFatalError;
+    // Route uncaught async platform errors → Crashlytics fatal.
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+    // Disable collection in debug to avoid spamming dashboard during dev.
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+  } catch (e) {
+    debugPrint('[main] Firebase/Crashlytics init failed: $e');
+  }
 
   // 1. Initialize Hive — registers adapters and opens all 10 boxes.
   //    Must complete before runApp() so Riverpod providers can read boxes.

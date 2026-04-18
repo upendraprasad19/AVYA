@@ -1514,8 +1514,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     BadgeService.instance.checkAll();
 
     // Fire-and-forget cloud sync of workout data + progress (non-blocking).
-    SyncService.instance.syncWorkoutData();
-    SyncService.instance.syncProgressNow();
+    // `unawaited()` suppresses the unhandled-Future lint; either call
+    // throwing in the background must never reach the UI.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.syncProgressNow());
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

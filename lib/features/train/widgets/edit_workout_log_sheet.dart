@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -254,9 +256,10 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     ref.invalidate(allExercisePRsProvider);
 
     // Fire-and-forget cloud sync so the corrected log reaches Supabase and
-    // the AI coach snapshot catches up.
-    SyncService.instance.syncWorkoutData();
-    SyncService.instance.pushSnapshot();
+    // the AI coach snapshot catches up. `unawaited()` suppresses the
+    // unhandled-Future lint; either future's error must not surface to UI.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
 
     // Capture the messenger before pop — context becomes invalid after.
     final messenger = ScaffoldMessenger.of(context);

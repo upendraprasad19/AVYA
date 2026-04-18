@@ -112,10 +112,19 @@ class GraduationScreen extends ConsumerWidget {
                 _buildCta(context),
                 const SizedBox(height: 12),
 
-                // Stay on Phase 1 link
+                // Stay on Phase 1 link — runs redoWeek4() first so the
+                // user actually HAS workouts to land on. Before the
+                // 2026-04-18 fix (audit M22) this button routed to
+                // /train on an exhausted Phase 1 schedule → empty page
+                // → dead link.
                 Center(
                   child: GestureDetector(
-                    onTap: () => context.go('/train'),
+                    onTap: () async {
+                      try {
+                        await WorkoutScheduleService.instance.redoWeek4();
+                      } catch (_) {}
+                      if (context.mounted) context.go('/train');
+                    },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(

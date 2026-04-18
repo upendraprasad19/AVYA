@@ -1,0 +1,273 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/app_events_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+
+/// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
+/// elapsed. Three doors:
+///
+///   1. Primary · Upgrade to PRO   → opens paywall sheet (phases_2_to_12)
+///   2. Secondary · Build your own → navigates to template builder
+///   3. Tertiary · Re-do Week 4   → copies last week's schedule forward
+///
+/// Analytics:
+///   - `phase_1_day_29_expired_seen` fires once per day the card renders.
+///   - CTA taps fire `phase_1_day_29_{upgrade,template_builder,redo_week_4}_tapped`.
+///   - `phase_1_cycle_repeat_started` after redoWeek4() writes the new schedule.
+///
+/// Used by:
+///   - `home_screen.dart` when today has no scheduled workout AND phase expired.
+///   - `train_screen.dart` (today tab) same condition.
+///
+/// Part of audit H9 (day-29 dead-end fix, 2026-04-18).
+class PlanExpiredCard extends ConsumerStatefulWidget {
+  final VoidCallback? onRedoComplete;
+
+  const PlanExpiredCard({super.key, this.onRedoComplete});
+
+  @override
+  ConsumerState<PlanExpiredCard> createState() => _PlanExpiredCardState();
+}
+
+class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
+  bool _seenLogged = false;
+  bool _redoing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Log the impression once per mount. Good enough for beta —
+    // daily-unique counting can be a post-beta refinement.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_seenLogged) {
+        _seenLogged = true;
+        AppEventsService.instance.log('phase_1_day_29_expired_seen');
+      }
+    });
+  }
+
+  Future<void> _handleRedoWeek4() async {
+    if (_redoing) return;
+    setState(() => _redoing = true);
+    AppEventsService.instance.log('phase_1_day_29_redo_week_4_tapped');
+    try {
+      await WorkoutScheduleService.instance.redoWeek4();
+      AppEventsService.instance.log('phase_1_cycle_repeat_started');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Week 4 scheduled again. Keep going.',
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      widget.onRedoComplete?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Couldn't schedule again. Please try again.",
+            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          ),
+          backgroundColor: AppColors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _redoing = false);
+    }
+  }
+
+  void _handleUpgrade() {
+    AppEventsService.instance.log('phase_1_day_29_upgrade_tapped');
+    showPaywallSheet(context, feature: AppConstants.featurePhases2To12);
+  }
+
+  void _handleTemplateBuilder() {
+    AppEventsService.instance.log('phase_1_day_29_template_builder_tapped');
+    context.go('/train/template-builder');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Text(
+                '🎉',
+                style: GoogleFonts.getFont('DM Sans', fontSize: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Phase 1 complete',
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Phase 2 brings new exercises, supersets, and progressive overload. Ready when you are.',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // Primary — Upgrade to PRO
+          _primaryCta(),
+          const SizedBox(height: 12),
+
+          // Secondary / tertiary section header
+          Text(
+            'OR KEEP TRAINING FREE',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Secondary — Build your own plan
+          _secondaryLink(
+            icon: Icons.build_outlined,
+            label: 'Build your own workout plan',
+            onTap: _handleTemplateBuilder,
+          ),
+          const SizedBox(height: 8),
+
+          // Tertiary — Re-do Week 4
+          _secondaryLink(
+            icon: Icons.replay_outlined,
+            label: 'Re-do Week 4 for another round',
+            onTap: _redoing ? null : _handleRedoWeek4,
+            trailing: _redoing
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _primaryCta() {
+    return GestureDetector(
+      onTap: _handleUpgrade,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.accent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accent.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            'Upgrade to PRO  →',
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: Colors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _secondaryLink({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.row),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: enabled
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: enabled
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+              ),
+            ),
+            trailing ??
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.textSecondary.withValues(alpha: 0.7),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}

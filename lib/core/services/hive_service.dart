@@ -1,11 +1,19 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 /// Singleton service that manages all Hive boxes.
 ///
 /// Registers adapters and opens all 10 boxes on app startup.
 /// All reads/writes go through Hive first (offline-first architecture).
-class HiveService {
+///
+/// Also implements [WidgetsBindingObserver] to trigger periodic
+/// `box.compact()` on app pause (added 2026-04-18 per audit H1).
+/// Hive's underlying file is append-only — deletes and overwrites leave
+/// "dead" bytes that can inflate box size 30-60% over months of use.
+/// Compaction rewrites the file, keeping only live entries. Gated at
+/// once per 7 days via `configBox['last_compact_at']` to avoid
+/// compacting on every short background → foreground cycle.
+class HiveService with WidgetsBindingObserver {
   HiveService._();
   static final HiveService _instance = HiveService._();
   static HiveService get instance => _instance;
@@ -62,6 +70,77 @@ class HiveService {
     );
 
     _initialized = true;
+
+    // Register lifecycle observer for periodic compact on pause.
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {
+      // Not running inside a Flutter binding (e.g. unit tests) — skip.
+    }
+  }
+
+  // ── Lifecycle-driven compaction ──────────────────────────────
+
+  /// Boxes that see frequent writes/deletes and benefit most from compact.
+  /// exerciseBox + foodBox are seed-only (ship with the APK, barely
+  /// mutated) so we skip them — pure waste of CPU.
+  static const List<String> _compactableBoxNames = [
+    userBoxName,
+    workoutBoxName,
+    nutritionBoxName,
+    healthBoxName,
+    customBoxName,
+    coachBoxName,
+    syncBoxName,
+    // configBox stays excluded — tiny and we store `last_compact_at`
+    // there, which would churn the compaction state itself.
+  ];
+
+  /// Minimum interval between compact passes. Runs at most once per week
+  /// even if the user pauses the app dozens of times in between.
+  static const Duration _compactInterval = Duration(days: 7);
+
+  /// Key in `configBox` holding the last successful compact timestamp.
+  static const String _lastCompactKey = 'last_compact_at';
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Compact on `paused` — the app is still in memory but the user has
+    // left it. Safe window to do background IO. We specifically skip
+    // `detached` (app's about to be killed; no point starting work).
+    if (state == AppLifecycleState.paused) {
+      _maybeCompact();
+    }
+  }
+
+  /// Runs `box.compact()` on the mutation-heavy boxes if >= 7 days since
+  /// the last pass. Fire-and-forget — never blocks caller. Errors are
+  /// logged but swallowed (a failed compact is harmless).
+  Future<void> _maybeCompact() async {
+    if (!_initialized) return;
+    try {
+      final cfg = configBox;
+      final lastStr = cfg.get(_lastCompactKey) as String?;
+      if (lastStr != null) {
+        final last = DateTime.tryParse(lastStr);
+        if (last != null && DateTime.now().difference(last) < _compactInterval) {
+          return;
+        }
+      }
+
+      for (final name in _compactableBoxNames) {
+        try {
+          await Hive.box(name).compact();
+        } catch (e) {
+          debugPrint('[HiveService._maybeCompact] $name: $e');
+        }
+      }
+
+      await cfg.put(_lastCompactKey, DateTime.now().toIso8601String());
+      debugPrint('[HiveService] compact pass complete');
+    } catch (e) {
+      debugPrint('[HiveService._maybeCompact] $e');
+    }
   }
 
   /// Opens a Hive box safely.

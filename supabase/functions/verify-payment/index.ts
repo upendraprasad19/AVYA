@@ -176,6 +176,53 @@ serve(async (req: Request) => {
 
     const userId = user.id;
 
+    // ── Per-user rate limit (20 calls / 10 min) ─────────────────
+    //
+    // Protects Razorpay API quota from a runaway client that keeps
+    // polling verify-payment on every tick. Added 2026-04-18 (audit
+    // C4b). Counter lives in `ai_coach_interactions` with
+    // channel='verify_payment_attempt' — reusing the existing table
+    // so no schema change.
+    const cutoff10Min = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { count: recentAttempts } = await supabase
+      .from("ai_coach_interactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("channel", "verify_payment_attempt")
+      .gte("created_at", cutoff10Min);
+
+    if ((recentAttempts ?? 0) >= 20) {
+      return new Response(
+        JSON.stringify({
+          error: "Too many verification attempts. Try again in a few minutes.",
+          retry_after_seconds: 600,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": "600",
+          },
+        },
+      );
+    }
+
+    // Record this attempt (fire-and-forget — never block on telemetry).
+    supabase
+      .from("ai_coach_interactions")
+      .insert({
+        user_id: userId,
+        channel: "verify_payment_attempt",
+        user_message: "[verify-payment]",
+        ai_response: "",
+        model_used: "n/a",
+        tokens_used: 0,
+      })
+      .then((r: { error: unknown }) => {
+        if (r.error) console.error("[verify-payment] attempt log failed:", r.error);
+      });
+
     // ── Parse body ─────────────────────────────────────────────
     const body = await req.json();
     const paymentId = body.payment_id as string;

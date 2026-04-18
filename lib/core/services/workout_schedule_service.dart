@@ -380,6 +380,126 @@ class WorkoutScheduleService {
     return (diff ~/ 7 + 1).clamp(1, 4);
   }
 
+  /// Day number within the current Phase (1-based). Returns 0 if no plan
+  /// has been generated yet, and N where N > 28 when the phase has
+  /// elapsed. Used by the day-25..28 reminders and the day-29+ expired
+  /// screen (audit H9).
+  int getCurrentDayInPhase() {
+    final start = getPlanStartDate();
+    if (start == null) return 0;
+    final today = DateTime.now();
+    final startMidnight = DateTime(start.year, start.month, start.day);
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+    return todayMidnight.difference(startMidnight).inDays + 1;
+  }
+
+  /// True if the current Phase has run its course (today > plan_end_date).
+  /// FREE users stay here until they upgrade or re-do Week 4; PRO users
+  /// get auto-generated into the next Phase.
+  bool isPhaseExpired() {
+    final end = getPlanEndDate();
+    if (end == null) return false;
+    final today = DateTime.now();
+    return today.isAfter(end);
+  }
+
+  /// Copies the last week of the current Phase (Week 4) forward by 7
+  /// days starting today. Used by the free-tier "Re-do Week 4" escape
+  /// valve (audit H9 / B1).
+  ///
+  /// Behaviour:
+  ///   - Reads `schedule_<date>` keys for the 7 days ending at
+  ///     `plan_end_date` (Week 4).
+  ///   - Writes the same workout payloads under new date keys for the
+  ///     next 7 days.
+  ///   - Same exercises, same prescribed weights — no progressive
+  ///     overload (that stays a PRO benefit).
+  ///   - Extends `plan_end_date` by 7 days so UI + sync paths keep
+  ///     working. Phase number stays at 1.
+  ///
+  /// Safe to call multiple times; each call extends another week.
+  Future<void> redoWeek4() async {
+    final planEnd = getPlanEndDate();
+    if (planEnd == null) return;
+
+    final workoutBox = _hive.workoutBox;
+    final configBox = _hive.configBox;
+
+    // Week 4 spans plan_end_date back 7 days (inclusive).
+    final week4Start = planEnd.subtract(const Duration(days: 6));
+
+    // Start the re-do at tomorrow (or today if user tapped late and plan
+    // already expired). Either way, don't overwrite past days.
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final rollStart = todayMidnight.isAfter(planEnd)
+        ? todayMidnight
+        : planEnd.add(const Duration(days: 1));
+
+    for (int offset = 0; offset < 7; offset++) {
+      final sourceDate = week4Start.add(Duration(days: offset));
+      final targetDate = rollStart.add(Duration(days: offset));
+      final sourceKey = '$_schedulePrefix${_dateKey(sourceDate)}';
+      final targetKey = '$_schedulePrefix${_dateKey(targetDate)}';
+
+      final raw = workoutBox.get(sourceKey);
+      if (raw is! Map) continue;
+
+      final copy = Map<String, dynamic>.from(raw);
+      // Re-stamp the date + reset completion state for the new day.
+      copy['date'] = _dateKey(targetDate);
+      copy['status'] = copy['type'] == 'rest' ? 'rest' : 'planned';
+      copy['completed_at'] = null;
+      copy['is_swapped'] = false;
+      copy['original_date'] = null;
+
+      await workoutBox.put(targetKey, copy);
+    }
+
+    // Extend the plan end by 7 days so downstream clamping stays valid.
+    final newEnd = rollStart.add(const Duration(days: 6));
+    await configBox.put(_planEndKey, newEnd.toIso8601String());
+  }
+
+  /// PRO-only: if the current Phase has expired, generate the next
+  /// Phase (Phase N+1) starting today. Called from the app-launch
+  /// bootstrap for PRO users. Free users hit the [PlanExpiredCard]
+  /// instead — no auto-generation.
+  ///
+  /// Reads `current_phase` from the user_progress map and bumps it.
+  /// Caller must have loaded profile + be signed in.
+  Future<bool> autoGenerateNextPhaseIfNeeded({
+    required String goal,
+    required String equipment,
+    required int daysPerWeek,
+    String experienceLevel = 'intermediate',
+    int currentPhase = 1,
+    List<int>? preferredDays,
+    List<String> injuries = const [],
+    List<String> bodyFocus = const [],
+    int? sessionDuration,
+    String? cardioPreference,
+  }) async {
+    if (!isPhaseExpired()) return false;
+    if (currentPhase >= 12) return false; // 12-phase ceiling
+
+    final today = DateTime.now();
+    await generateAndSchedule(
+      goal: goal,
+      equipment: equipment,
+      daysPerWeek: daysPerWeek,
+      startDate: today,
+      experienceLevel: experienceLevel,
+      phase: currentPhase + 1,
+      preferredDays: preferredDays,
+      injuries: injuries,
+      bodyFocus: bodyFocus,
+      sessionDuration: sessionDuration,
+      cardioPreference: cardioPreference,
+    );
+    return true;
+  }
+
   /// Get the plan start date.
   DateTime? getPlanStartDate() {
     final startStr = _hive.configBox.get(_planStartKey) as String?;

@@ -21,3 +21,14 @@
 
 # Keep the app's MainActivity (already kept by manifest, but explicit is safer)
 -keep class com.icanbefitter.icanbefitter.MainActivity { *; }
+
+# ── Firebase Crashlytics (added 2026-04-18) ──────────────────────
+# Keep Crashlytics APIs + all annotations so obfuscated stack traces
+# still symbolicate correctly. Firebase provides these canonical
+# keep rules — see https://firebase.google.com/docs/crashlytics/get-started.
+-keepattributes SourceFile,LineNumberTable
+-keep public class * extends java.lang.Exception
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.common.internal.safeparcel.SafeParcelable { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**

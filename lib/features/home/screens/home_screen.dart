@@ -22,6 +22,8 @@ import '../widgets/profile_nudge_card.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/train/widgets/plan_expired_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import '../widgets/pr_snapshot.dart';
@@ -568,6 +570,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildTodayRow(BuildContext context, WidgetRef ref) {
     final schedule = ref.watch(todayWorkoutProvider);
     final nutrition = ref.watch(nutritionSummaryProvider);
+
+    // Day-29 dead-end fix (audit H9): if today has no scheduled entry
+    // AND the Phase's plan_end_date has passed, free users see the
+    // 3-door PlanExpiredCard (upgrade / template builder / re-do
+    // Week 4). PRO users never land here — the app-launch bootstrap
+    // auto-generates the next Phase for them before this provider
+    // reads. This branch is free-only by construction.
+    if (schedule == null &&
+        WorkoutScheduleService.instance.isPhaseExpired()) {
+      return PlanExpiredCard(
+        onRedoComplete: () {
+          ref.invalidate(todayWorkoutProvider);
+          ref.invalidate(currentPlanProvider);
+        },
+      );
+    }
 
     final type = schedule?['type'] as String? ?? 'rest';
     final status = schedule?['status'] as String? ?? 'planned';

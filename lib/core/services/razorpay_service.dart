@@ -371,13 +371,19 @@ class RazorpayService {
               .eq('status', 'active')
               .maybeSingle();
         } else {
-          // Fallback: any active subscription created in the last 5 minutes
+          // Fallback: any active subscription for THIS PLAN created in the
+          // last 5 minutes. Plan filter is the critical safety rail:
+          // without it, a monthly→yearly upgrade could match the stale
+          // monthly row created minutes ago, granting 30 days instead of
+          // 365. The plan column on `subscriptions` is set by the webhook
+          // from `payment.amount_paise` (never trusted from client).
           final cutoff = DateTime.now().subtract(const Duration(minutes: 5)).toUtc().toIso8601String();
           row = await SupabaseService.instance.client
               .from('subscriptions')
               .select()
               .eq('user_id', userId)
               .eq('status', 'active')
+              .eq('plan', fallbackPlan)
               .gte('created_at', cutoff)
               .order('created_at', ascending: false)
               .limit(1)
