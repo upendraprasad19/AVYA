@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
+import '../models/coach_memory.dart';
 
 /// Repository for AI Coach data access.
 ///
@@ -413,6 +415,35 @@ class AiCoachRepository {
       'notes': existingNotes,
       'last_extracted': now.toIso8601String(),
     });
+  }
+
+  /// One-time migration: convert legacy coachBox['coaching_notes'] string
+  /// list into coach_memory.coach_notes. Idempotent — no-op if coach_memory
+  /// already exists in Hive.
+  Future<void> backfillCoachMemoryIfNeeded() async {
+    final coachBox = Hive.box('coachBox');
+    if (CoachMemory.readFromBox(coachBox) != null) return;
+
+    final userId = Hive.box('userBox').get('user_id') as String?;
+    if (userId == null || userId.isEmpty) return;
+
+    final legacy = coachBox.get('coaching_notes');
+    String? merged;
+    if (legacy is Map) {
+      final notes = legacy['notes'];
+      if (notes is List && notes.isNotEmpty) {
+        merged = notes.map((n) => n.toString()).join('\n');
+      }
+    }
+
+    final mem = CoachMemory(
+      userId: userId,
+      coachNotes: merged,
+      lastExtractionAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await mem.writeToBox(coachBox);
+    debugPrint('[AiCoachRepository] backfilled coach_memory from legacy coaching_notes');
   }
 
   /// Returns contextual quick prompts based on user's current state.
