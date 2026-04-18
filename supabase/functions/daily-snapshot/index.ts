@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { upsertCoachMemory, fetchCoachMemory } from "../_shared/coach_memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +32,12 @@ interface ExtractedFacts {
   supplement_use?: string;
   motivation_notes?: string;
   lifestyle_activity?: string; // desk_job | lightly_active | very_active_job
+  // Layer 5 identity fields (Task 8)
+  preferred_name?: string;
+  communication_style?: string;
+  humor_tolerance?: string;
+  depth_preference?: string;
+  motivation_style?: string;
 }
 
 async function extractCoachingNotes(
@@ -76,7 +83,12 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
   "food_preferences": "foods they like, dislike, or are allergic to",
   "schedule_constraints": "schedule constraints they mentioned (e.g. travels on Fridays)",
   "supplement_use": "supplements they mentioned taking",
-  "motivation_notes": "motivation patterns, obstacles, or triggers they mentioned"
+  "motivation_notes": "motivation patterns, obstacles, or triggers they mentioned",
+  "preferred_name": "name the user uses for themselves (e.g. 'Upen' if they say 'call me Upen')",
+  "communication_style": "hinglish|english|formal|casual — based on the user's own language register",
+  "humor_tolerance": "high|low|none — based on whether they joke back or stay serious",
+  "depth_preference": "explanation_seeker|action_taker — do they ask 'why' (explanation_seeker) or just 'tell me what to do' (action_taker)",
+  "motivation_style": "tough_love|gentle|data_driven — what kind of coaching tone landed best in this conversation"
 }
 
 If nothing was found, return: {}`;
@@ -155,6 +167,26 @@ async function mergeCoachingNotes(
     await supabase
       .from("user_profile")
       .upsert({ user_id: userId, ...profileUpdates }, { onConflict: "user_id" });
+  }
+}
+
+async function mergeCoachMemoryFields(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  extracted: ExtractedFacts,
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (extracted.preferred_name) patch.preferred_name = extracted.preferred_name;
+  if (extracted.communication_style) patch.communication_style = extracted.communication_style;
+  if (extracted.humor_tolerance) patch.humor_tolerance = extracted.humor_tolerance;
+  if (extracted.depth_preference) patch.depth_preference = extracted.depth_preference;
+  if (extracted.motivation_style) patch.motivation_style = extracted.motivation_style;
+  if (extracted.injuries) patch.injuries = extracted.injuries;
+  if (extracted.food_preferences) patch.food_preferences = { raw: extracted.food_preferences };
+  patch.last_extraction_at = new Date().toISOString();
+
+  if (Object.keys(patch).length > 1) {
+    await upsertCoachMemory(supabase, userId, patch);
   }
 }
 
@@ -259,10 +291,23 @@ serve(async (req: Request) => {
       );
       if (extractedFacts) {
         await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
+        try {
+          await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
+        } catch (memErr) {
+          // coach_memory write failure must not break the response.
+          console.error("coach_memory upsert error (non-fatal):", memErr);
+        }
       }
     } catch (extractErr) {
       // Never let extraction failure affect the snapshot response.
       console.error("Coaching extraction error (non-fatal):", extractErr);
+    }
+
+    let memory = null;
+    try {
+      memory = await fetchCoachMemory(supabaseClient, userId);
+    } catch (fetchErr) {
+      console.error("coach_memory fetch error (non-fatal):", fetchErr);
     }
 
     return new Response(
@@ -270,6 +315,7 @@ serve(async (req: Request) => {
         status: "success",
         snapshot_date: snapshotDate,
         coaching_extracted: extractedFacts !== null,
+        coach_memory: memory,
       }),
       {
         status: 200,
