@@ -4,8 +4,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-# ICANBEFITTER Master Reference
+# Avya Master Reference
 > Single source of truth for all coding agents. Read this before touching any file.
+
+> **Branch `feat/wardroom-redesign`** — Wardroom visual redesign in progress. See `Knowledgebase/Avya App redesign/design_handoff_wardroom/` for full spec. Design token changes (colors, typography, spacing, radii) cascade everywhere — update via `lib/core/theme/` files, never inline.
+
+---
+
+## WARDROOM DESIGN SYSTEM (this branch only)
+
+### Active on this branch
+This branch implements the **Wardroom** redesign — a full visual rebrand from Electric Cyan / round-corner / DM-Sans-only to Campaign Gold / sharp-corner / Fraunces+JetBrains-Mono.
+
+### New Token Rules (OVERRIDE §6 rules 10–12 on this branch)
+- **Primary accent: Campaign Gold `#D4B270`** (replaces Electric Cyan `#00D4FF`)
+- **Background base: `#0A1020` deep navy** (replaces `#07090e`)
+- **Primary text: `#FFF7E0` warm parchment** (replaces `#eef2f7`)
+- **Card radius: 6px** (replaces 16px)
+- **Button radius: 2px sharp** (replaces 100px pill)
+- **Display font: Fraunces** (serif, variable opsz) for all headers + numbers
+- **Mono font: JetBrains Mono** for all eyebrows, labels, metadata
+- **Body font: DM Sans** — unchanged for prose/body copy
+
+### Wardroom Token Files
+- `lib/core/theme/colors.dart` — Wardroom palette
+- `lib/core/theme/typography.dart` — 3-font system (Fraunces + DM Sans + JetBrains Mono)
+- `lib/core/theme/spacing.dart` — Wardroom spacing + radii
+- `lib/core/theme/app_theme.dart` — ThemeData wired to Wardroom tokens
+
+### Wardroom Shared Widgets
+All new widgets live in `lib/shared/widgets/wardroom/`:
+- `ward_frame.dart` — screen shell (grain overlay, gutters, bottom padding)
+- `ward_letterhead.dart` — gold eyebrow + Fraunces title + double rule
+- `ward_eyebrow.dart` — JetBrains Mono uppercase section label
+- `ward_card.dart` — default / hero / inset card variants
+- `ward_big_number.dart` — Fraunces tabular-nums stat display
+- `ward_button.dart` — primary / outline / ghost / danger variants
+- `ward_chip.dart` — 6-tone status pill
+- `ward_kv_row.dart` — key-value row with dashed divider
+- `ward_ring.dart` — animated CustomPainter progress ring
+- `ward_rule.dart` — single + double gold hairline
+- `ward_avatar.dart` — gold ring avatar
+- `ward_glyphs.dart` — Anchor, CompassRose, Seal, TierChevrons, RankBar
+
+### Gold usage rules
+- Gold ONLY on: CTAs, active state, progression meters, hero rules, section kickers
+- NEVER gold on regular card borders — use `AppColors.line2`
+- `ok` (green `#7FB586`) and `warn` (amber `#D9A04C`) are the only secondary chroma
+
+---
 
 ---
 
@@ -87,7 +134,7 @@ Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI �
 
 ## 1. PROJECT IDENTITY
 
-**App:** ICANBEFITTER — personalised fitness & nutrition platform for young professionals (22-35) in India.
+**App:** Avya — personalised fitness & nutrition platform for young professionals (22-35) in India.
 **Model:** Freemium. ₹349/month or ₹2,999/year for PRO.
 **Architecture:** Offline-first. Hive = primary. Supabase = backup + AI + community growth.
 
@@ -292,9 +339,9 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 7. **PaywallSheet** is the ONLY paywall UI. Never create custom paywall modals.
 8. **Plan generator = local Dart.** Queries Hive exerciseBox. Never calls any API.
 9. **Never expose API keys client-side.** All AI calls go through Supabase Edge Functions.
-10. **DM Sans font everywhere.** No system fonts. Use `GoogleFonts.getFont('DM Sans', ...)`.
-11. **Electric Cyan #00D4FF** for all accent/CTA. Never use green (#00e5a0) — that's the old spec.
-12. **Dark theme only.** Background hierarchy: `#07090e` (bg) > `#0e1219` (card) > `#161d28` (input).
+10. **Three fonts only:** `Fraunces` for display/numbers, `DM Sans` for body/UI, `JetBrains Mono` for labels/metadata. No system fonts.
+11. **Campaign Gold `#D4B270`** for all accent/CTA. Never use Electric Cyan (`#00D4FF`) — that's the old spec. Never use old green `#00e5a0`.
+12. **Dark theme only.** Background hierarchy: `#0A1020` (bg) > `#111826` (card) > `#141B2E` (input/rail). Never pure black; never gray.
 13. **All screens must handle:** loading state (skeleton), error state (retry), empty state.
 14. **Never modify `plan_generator.dart`** without explicit instruction.
 15. **Import paths:** Use relative imports within features. Use `package:` imports for shared/ and core/.
