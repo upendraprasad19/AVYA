@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
 /// Animated plan generation screen shown at end of onboarding.
@@ -101,16 +102,19 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Spacer(flex: 1),
-                  // Title
+                  // Wardroom mono eyebrow — gold caps
                   Text(
-                    'BUILDING YOUR PLAN',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                    'COMMISSIONING PLAN',
+                    style: AppTypography.mono.copyWith(
                       color: AppColors.accent,
-                      letterSpacing: 2,
+                      letterSpacing: 3,
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Fraunces serif subtitle
+                  Text(
+                    'Building your plan',
+                    style: AppTypography.h2,
                   ),
                   const SizedBox(height: 32),
                   // Steps list
@@ -205,13 +209,16 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
           child: Column(
             children: [
               Text(
-                'YOUR PLAN IS READY \u{1F389}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
+                'ORDERS RECEIVED',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 3,
                 ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Your plan is ready',
+                style: AppTypography.h2,
               ),
               const SizedBox(height: 12),
               Text(

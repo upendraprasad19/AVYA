@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -71,8 +72,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: onboardingState.isFirstStep && !_showSummary
             ? null
             : IconButton(
@@ -85,9 +87,22 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                   }
                 },
               ),
-        title: Text(
-          'Getting Started',
-          style: AppTypography.titleM.copyWith(color: AppColors.textPrimary),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ENLISTMENT',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Getting started',
+              style: AppTypography.h3,
+            ),
+          ],
         ),
         centerTitle: true,
         bottom: PreferredSize(
@@ -142,20 +157,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   }
 
   Widget _buildProgressBar(OnboardingState state) {
-    return Container(
-      width: double.infinity,
-      height: 4,
-      color: AppColors.input,
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: state.progress,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: WardBar(pct: state.progress, height: 4),
     );
   }
 
