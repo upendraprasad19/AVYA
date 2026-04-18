@@ -21,6 +21,7 @@ class AiCoachRepository {
 
   final HiveService _hive = HiveService.instance;
   final IdentitySignalDetector _identityDetector = IdentitySignalDetector();
+  String? _lastIdentityUserId;
 
   /// Builds the full AI context map from all Hive boxes.
   /// This is the user_daily_snapshot that gets sent with every AI message.
@@ -234,25 +235,39 @@ class AiCoachRepository {
 
   /// Runs the identity heuristics on a single user message and patches
   /// Hive coach_memory in place. No-op if no signals detected.
-  void detectAndPersistIdentitySignals(String userMessage) {
+  Future<void> detectAndPersistIdentitySignals(String userMessage) async {
     final signals = _identityDetector.detect(userMessage);
     if (signals.communicationStyle == null && signals.preferredName == null) {
       return;
     }
 
-    final coachBox = Hive.box('coachBox');
     final userId = Hive.box('userBox').get('user_id') as String?;
     if (userId == null || userId.isEmpty) return;
 
-    final existing =
-        CoachMemory.readFromBox(coachBox) ?? CoachMemory(userId: userId);
-    final patched = existing.merge(CoachMemory(
-      userId: userId,
-      communicationStyle: signals.communicationStyle,
-      preferredName: signals.preferredName,
-      updatedAt: DateTime.now(),
-    ));
-    patched.writeToBox(coachBox);
+    // Reset detector streak when the active user changes — the singleton
+    // detector would otherwise leak Hinglish streak state across sessions.
+    if (_lastIdentityUserId != null && _lastIdentityUserId != userId) {
+      _identityDetector.resetStreak();
+    }
+    _lastIdentityUserId = userId;
+
+    try {
+      final coachBox = Hive.box('coachBox');
+      final existing =
+          CoachMemory.readFromBox(coachBox) ?? CoachMemory(userId: userId);
+      final patched = existing.merge(CoachMemory(
+        userId: userId,
+        communicationStyle: signals.communicationStyle,
+        preferredName: signals.preferredName,
+        updatedAt: DateTime.now(),
+      ));
+      await patched.writeToBox(coachBox);
+    } catch (e) {
+      // A corrupt coach_memory blob must never crash the message-send hot
+      // path. Log and continue — the next successful write will heal it.
+      debugPrint('[AiCoachRepository] identity persist failed: $e');
+      return;
+    }
   }
 
   /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
@@ -267,7 +282,7 @@ class AiCoachRepository {
   }) async {
     // Run cheap on-device identity heuristics on every outbound user message.
     // Patches Hive coach_memory in place; no-op if no signals detected.
-    detectAndPersistIdentitySignals(userMessage);
+    await detectAndPersistIdentitySignals(userMessage);
 
     final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
     await _hive.coachBox.put(id, {
