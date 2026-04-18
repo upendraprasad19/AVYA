@@ -48,6 +48,9 @@ app.*.map.json
 .env
 .env.dev
 .env.prod
+
+# Claude Code worktrees
+.claude/worktrees/
 .env.local
 supabase/.env
 
