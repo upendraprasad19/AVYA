@@ -6,6 +6,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
+import '../services/identity_signal_detector.dart';
 import '../models/coach_memory.dart';
 
 /// Repository for AI Coach data access.
@@ -19,6 +20,7 @@ class AiCoachRepository {
   static AiCoachRepository get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+  final IdentitySignalDetector _identityDetector = IdentitySignalDetector();
 
   /// Builds the full AI context map from all Hive boxes.
   /// This is the user_daily_snapshot that gets sent with every AI message.
@@ -230,6 +232,29 @@ class AiCoachRepository {
     return id;
   }
 
+  /// Runs the identity heuristics on a single user message and patches
+  /// Hive coach_memory in place. No-op if no signals detected.
+  void detectAndPersistIdentitySignals(String userMessage) {
+    final signals = _identityDetector.detect(userMessage);
+    if (signals.communicationStyle == null && signals.preferredName == null) {
+      return;
+    }
+
+    final coachBox = Hive.box('coachBox');
+    final userId = Hive.box('userBox').get('user_id') as String?;
+    if (userId == null || userId.isEmpty) return;
+
+    final existing =
+        CoachMemory.readFromBox(coachBox) ?? CoachMemory(userId: userId);
+    final patched = existing.merge(CoachMemory(
+      userId: userId,
+      communicationStyle: signals.communicationStyle,
+      preferredName: signals.preferredName,
+      updatedAt: DateTime.now(),
+    ));
+    patched.writeToBox(coachBox);
+  }
+
   /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
   /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
   /// it as a loading bubble even if the app is killed mid-call. Returns the
@@ -240,6 +265,10 @@ class AiCoachRepository {
     String? mediaUrl,
     String? mediaType,
   }) async {
+    // Run cheap on-device identity heuristics on every outbound user message.
+    // Patches Hive coach_memory in place; no-op if no signals detected.
+    detectAndPersistIdentitySignals(userMessage);
+
     final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
     await _hive.coachBox.put(id, {
       'id': id,
