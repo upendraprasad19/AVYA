@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -127,6 +128,12 @@ class AiService {
       working.remove('fitness_summary');
     }
     return working;
+  }
+
+  /// Test-only seam exposing the private compaction routine.
+  @visibleForTesting
+  static Map<String, dynamic> compactForTest(Map<String, dynamic> ctx) {
+    return AiService._instance._compactContext(ctx);
   }
 
   // ── Response parsing helpers ──────────────────────────────────
