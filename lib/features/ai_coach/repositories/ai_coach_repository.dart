@@ -804,9 +804,14 @@ class AiCoachRepository {
   /// Returns the coach_memory JSON snapshot for context injection, or
   /// null when private_mode is on / no memory exists.
   Map<String, dynamic>? _getCoachMemoryForContext() {
-    final mem = CoachMemory.readFromBox(Hive.box('coachBox'));
-    if (mem == null || mem.privateMode) return null;
-    return mem.toJson();
+    try {
+      final mem = CoachMemory.readFromBox(_hive.coachBox);
+      if (mem == null || mem.privateMode) return null;
+      return mem.toJson();
+    } catch (e) {
+      debugPrint('[AiCoachRepository] coach_memory read failed: $e');
+      return null;
+    }
   }
 
   /// Returns the rolling conversation summary from coachBox.
