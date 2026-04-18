@@ -490,6 +490,35 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
     if (currentAnswer is String && currentAnswer.isNotEmpty) {
       initial = DateTime.tryParse(currentAnswer);
     }
+    final seededInitial = initial ?? DateTime(1998, 1, 1);
+
+    // Bug fix 2026-04-18: ScrollDatePicker's `onDateChanged` fires ONLY
+    // when the user actively scrolls the wheels. If they see the default
+    // displayed date (1 Jan 1998) and tap Next without scrolling — which
+    // is what most users do when the default matches — the answer state
+    // stays empty and `date_of_birth` lands in Hive as `""`. That's why
+    // icanbefitter@gmail.com had `date_of_birth = NULL` in Supabase and
+    // profile completeness stuck at 94% despite completing onboarding.
+    //
+    // Seed the answer map with the initial date as soon as this step
+    // mounts, so Next always persists something valid even without
+    // interaction. If the user does scroll, `onDateChanged` overwrites.
+    if (currentAnswer is! String || currentAnswer.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Guard against race: only seed if the step is still the DOB
+        // step and the answer is still unset. setAnswer is safe to
+        // re-call with the same value (idempotent).
+        final stillEmpty = state.answers[state.currentStepData.key] == null ||
+            (state.answers[state.currentStepData.key] is String &&
+                (state.answers[state.currentStepData.key] as String).isEmpty);
+        if (stillEmpty && state.currentStepData.key == 'date_of_birth') {
+          notifier.setAnswer(
+            state.currentStepData.key,
+            seededInitial.toIso8601String().split('T').first,
+          );
+        }
+      });
+    }
 
     return Column(
       children: [
@@ -513,7 +542,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           ),
         ),
         ScrollDatePicker(
-          initialDate: initial ?? DateTime(1998, 1, 1),
+          initialDate: seededInitial,
           firstDate: DateTime(1940),
           lastDate: DateTime.now().subtract(const Duration(days: 365 * 16)),
           onDateChanged: (picked) {
