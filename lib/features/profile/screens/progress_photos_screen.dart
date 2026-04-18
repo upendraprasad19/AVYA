@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../shared/widgets/error_state.dart';
 import '../repositories/progress_photo_repository.dart';
 
@@ -130,13 +131,24 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.bg,
-        title: Text('Progress Photos',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'DOSSIER \u00B7 PLATES',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text('Progress photos', style: AppTypography.h3),
+          ],
+        ),
       ),
       floatingActionButton: _uploading
           ? const FloatingActionButton(

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../shared/widgets/error_state.dart';
 
 /// F9 · "My Submissions" — user-visible view of their own community
@@ -93,13 +94,24 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.bg,
-        title: Text('My Submissions',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'COMMUNITY \u00B7 FILINGS',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text('My submissions', style: AppTypography.h3),
+          ],
+        ),
       ),
       body: _buildBody(),
     );
