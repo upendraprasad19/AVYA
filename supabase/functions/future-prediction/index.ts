@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { cascadeChat, FREE_MODELS } from "../_shared/openrouter.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +12,8 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const PRO_MODEL = "cerebras/gpt-oss-120b";
+// 2026-04-18 · Migrated to Gemini 2.5 Flash (was cerebras/gpt-oss-120b).
+// Flash handles the short structured-JSON prediction comfortably.
 
 /**
  * Call AI to generate a 90-day fitness prediction via cascadeChat.
@@ -47,19 +48,14 @@ async function generatePrediction(
     `goal (${profile.primary_goal}), training frequency (${profile.days_per_week} days/week), ` +
     `and experience level (${progress.detected_experience_level ?? "beginner"}).`;
 
-  // Cascade: PRO model first, then free fallbacks
-  const { content } = await cascadeChat({
-    models: [
-      PRO_MODEL,
-      "qwen/qwen3.6-plus:free",
-      "nvidia/nemotron-3-super-120b-a12b:free",
-    ],
+  const { content } = await geminiChat({
+    model: MODEL_FLASH,
     systemPrompt,
     userPrompt,
     maxTokens: 500,
     temperature: 0.3,
-    timeoutMs: 15000,
-    title: "ICANBEFITTER Prediction",
+    timeoutMs: 15_000,
+    jsonMode: true,
   });
 
   if (!content) return null;

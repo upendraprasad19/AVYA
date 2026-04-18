@@ -151,53 +151,36 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   void _sendMessage(String text) {
     if (text.trim().isEmpty) return;
 
+    // 2026-04-18 · Chat/Reasoning toggle removed. Single coach experience.
+    // PRO users bypass limits; free users hit paywall when trial expires
+    // or daily cap is reached. Server (ai-proxy) enforces same gates.
     final isPro = SubscriptionService.instance.isPro();
     final trialInfo = ref.read(trialInfoProvider);
     final messageCount = ref.read(messageLimitProvider);
-    final reasoningMode = ref.read(reasoningModeProvider);
 
-    // PRO users bypass all limits — send directly
     if (isPro) {
-      _doSend(text, mode: reasoningMode);
+      _doSend(text);
       return;
     }
 
-    // If trial expired and not PRO, gate
     if (trialInfo.isTrialExpired) {
       showPaywallSheet(context, feature: 'Unlimited AI Coach');
       return;
     }
 
-    // If daily limit reached and not PRO
     if (messageCount >= AppConstants.freeAiMessagesPerDay) {
       showPaywallSheet(context, feature: 'Unlimited AI Coach');
       return;
     }
 
-    // Deep mode requires PRO (free users)
-    if (reasoningMode == 'deep') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PRO feature \u2014 upgrade in Profile \u2192 Subscription',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-          ),
-          backgroundColor: AppColors.card,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    _doSend(text, mode: reasoningMode);
+    _doSend(text);
   }
 
-  void _doSend(String text, {String mode = 'quick'}) {
+  void _doSend(String text) {
     if (_localSending) return; // Block rapid double-taps synchronously
     setState(() => _localSending = true);
     _messageController.clear();
-    ref.read(sendMessageProvider.notifier).send(text, mode: mode).whenComplete(() {
+    ref.read(sendMessageProvider.notifier).send(text).whenComplete(() {
       if (mounted) setState(() => _localSending = false);
     });
     _scrollToBottom();
@@ -217,7 +200,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final telegramConnected = ref.watch(telegramConnectionProvider);
     final channel = ref.watch(channelProvider);
-    final reasoningMode = ref.watch(reasoningModeProvider);
     final trialInfo = ref.watch(trialInfoProvider);
 
     // Scroll when messages change or log actions appear
@@ -236,7 +218,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             child: Column(
               children: [
                 // ── Compact Header (avatar + title + mode tabs + menu) ──
-                _buildCompactHeader(isPro, reasoningMode, channel, telegramConnected),
+                _buildCompactHeader(isPro, channel, telegramConnected),
 
                 // ── Message count indicator ──
                 _buildMessageCountIndicator(isPro, messageCount),
@@ -330,7 +312,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildCompactHeader(
-      bool isPro, String reasoningMode, String channel, bool telegramConnected) {
+      bool isPro, String channel, bool telegramConnected) {
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenPadding, vertical: 10),
@@ -393,8 +375,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             ),
           ),
 
-          // Mode tabs — Chat / PRO
-          _buildModeTabs(isPro, reasoningMode),
+          // Single status pill — PRO users see informational gold badge;
+          // free users see a tappable "Upgrade to PRO" pill that opens
+          // the paywall sheet. Replaced the old Chat / Reasoning toggle
+          // on 2026-04-18 as part of the UI simplification (one AI coach
+          // experience, free/PRO differentiation handled server-side by
+          // the 15-msg daily cap).
+          _buildStatusPill(isPro),
           const SizedBox(width: 8),
 
           // Overflow menu — channel switch, telegram, clear, upgrade
@@ -520,125 +507,80 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // MODE TABS — Chat / PRO
+  // STATUS PILL — non-tappable gold "PRO" badge for PRO users,
+  // tappable accent "Upgrade to PRO" for free users.
+  //
+  // 2026-04-18 · Replaced the Chat / Reasoning two-tab toggle. Per user
+  // feedback the two backends (ai-proxy + ai-proxy-pro) were merged into
+  // a single Gemini-backed endpoint, so there's no user-facing choice to
+  // make here any more — free vs PRO differentiation is entirely the
+  // 15-msg daily cap enforced server-side.
   // ────────────────────────────────────────────────────────────────
 
-  Widget _buildModeTabs(bool isPro, String reasoningMode) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Chat tab
-        GestureDetector(
-          onTap: () {
-            if (reasoningMode != 'quick') {
-              ref.read(reasoningModeProvider.notifier).setMode('quick');
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: reasoningMode == 'quick'
-                  ? AppColors.accentTint
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(
-                color: reasoningMode == 'quick'
-                    ? AppColors.accent.withValues(alpha: 0.3)
-                    : AppColors.border,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 12,
-                  color: reasoningMode == 'quick'
-                      ? AppColors.accent
-                      : AppColors.textSecondary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Chat',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: reasoningMode == 'quick'
-                        ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildStatusPill(bool isPro) {
+    if (isPro) {
+      // Informational badge only — no tap handler. Users manage their
+      // subscription from Profile → Subscription.
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.proGoldTint,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: AppColors.proGold.withValues(alpha: 0.4),
           ),
         ),
-        const SizedBox(width: 6),
-        // PRO tab
-        GestureDetector(
-          onTap: () {
-            if (isPro) {
-              // PRO users can toggle freely
-              if (reasoningMode == 'quick') {
-                ref.read(reasoningModeProvider.notifier).setMode('deep');
-              } else {
-                ref.read(reasoningModeProvider.notifier).setMode('quick');
-              }
-            } else {
-              // Free users see a message instead of paywall
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'PRO feature \u2014 upgrade in Profile \u2192 Subscription',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-                  ),
-                  backgroundColor: AppColors.card,
-                  behavior: SnackBarBehavior.floating,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: reasoningMode == 'deep'
-                  ? (isPro
-                      ? AppColors.accentTint
-                      : AppColors.proGold.withValues(alpha: 0.15))
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(
-                color: reasoningMode == 'deep'
-                    ? (isPro
-                        ? AppColors.accent.withValues(alpha: 0.3)
-                        : AppColors.proGold.withValues(alpha: 0.3))
-                    : AppColors.border,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.workspace_premium,
+                size: 14, color: AppColors.proGold),
+            const SizedBox(width: 4),
+            Text(
+              'PRO',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: AppColors.proGold,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isPro ? Icons.verified : Icons.lock,
-                  size: 14,
-                  color: isPro ? AppColors.accent : AppColors.proGold,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'PRO',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: isPro ? AppColors.accent : AppColors.proGold,
-                  ),
-                ),
-              ],
-            ),
+          ],
+        ),
+      );
+    }
+
+    // Free user — tap opens paywall.
+    return GestureDetector(
+      onTap: () =>
+          showPaywallSheet(context, feature: 'Unlimited AI Coach'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.accentTint,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.4),
           ),
         ),
-      ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_upward,
+                size: 12, color: AppColors.accent),
+            const SizedBox(width: 4),
+            Text(
+              'Upgrade',
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.accent,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -725,7 +667,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   ? () {
                       ref.read(sendMessageProvider.notifier).send(
                             message.retryUserMessage!,
-                            mode: message.mode ?? 'quick',
                             existingCoachKey: message.coachKey,
                           );
                     }

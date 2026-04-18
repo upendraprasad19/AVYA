@@ -387,7 +387,6 @@ class SendMessageNotifier extends Notifier<bool> {
 
   Future<void> send(
     String message, {
-    String mode = 'quick',
     /// Bug #19 — When non-null, the retry path reuses an existing pending/failed
     /// coachBox entry instead of creating a new row. This preserves the original
     /// timestamp and avoids history duplication when the user taps Retry.
@@ -399,9 +398,10 @@ class SendMessageNotifier extends Notifier<bool> {
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
     final limitNotifier = ref.read(messageLimitProvider.notifier);
     final currentLimit = ref.read(messageLimitProvider);
-    // isPro() is intentional here — this is provider-level routing (which
-    // AI model to call), not a UI feature gate. The paywall is shown by the
-    // AI Coach screen widget before send() is called, not inside the provider.
+    // 2026-04-18 · `isPro` is only used for the client-side pre-send guard
+    // below. The actual model + rate-limit enforcement now lives inside the
+    // single `ai-proxy` Edge Function — no client-side routing between
+    // chat / chatPro / reason any more.
     final isPro = SubscriptionService.instance.isPro();
 
     // Free user limit check — silent return; UI already shows the limit.
@@ -432,7 +432,7 @@ class SendMessageNotifier extends Notifier<bool> {
     } else {
       coachKey = await repo.saveUserMessagePending(
         userMessage: message,
-        mode: mode,
+        mode: 'quick',
       );
     }
 
@@ -442,7 +442,6 @@ class SendMessageNotifier extends Notifier<bool> {
         text: message,
         isUser: true,
         timestamp: DateTime.now(),
-        mode: mode,
       ));
     }
 
@@ -472,21 +471,16 @@ class SendMessageNotifier extends Notifier<bool> {
       final baseContext = repo.buildAiContext();
       final context = repo.enrichContextForQuery(message, baseContext);
 
-      AiChatResponse aiResponse;
-      if (mode == 'deep' && isPro) {
-        aiResponse = await AiService.instance.reason(message, context);
-      } else if (isPro) {
-        aiResponse = await AiService.instance.chatPro(message, context);
-      } else {
-        aiResponse = await AiService.instance.chat(message, context);
-      }
+      // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
+      // 2026-04-18 onward. Free/PRO differentiation is the 15/day server-side
+      // cap + trial window — the client no longer picks a backend.
+      final aiResponse = await AiService.instance.chat(message, context);
 
       // Replace loading with actual response
       chatNotifier.replaceLastMessage(ChatMessage(
         text: aiResponse.reply,
         isUser: false,
         timestamp: DateTime.now(),
-        mode: mode,
       ));
 
       // Bug #19 — TWO-WRITE PATTERN, step 2: update the same pending entry
@@ -532,21 +526,14 @@ class SendMessageNotifier extends Notifier<bool> {
           final retryContext = repo.buildAiContext();
           final retryEnriched = repo.enrichContextForQuery(message, retryContext);
 
-          AiChatResponse retryResponse;
-          if (mode == 'deep' && isPro) {
-            retryResponse = await AiService.instance.reason(message, retryEnriched);
-          } else if (isPro) {
-            retryResponse = await AiService.instance.chatPro(message, retryEnriched);
-          } else {
-            retryResponse = await AiService.instance.chat(message, retryEnriched);
-          }
+          final retryResponse =
+              await AiService.instance.chat(message, retryEnriched);
 
           // Retry succeeded — update UI and return
           chatNotifier.replaceLastMessage(ChatMessage(
             text: retryResponse.reply,
             isUser: false,
             timestamp: DateTime.now(),
-            mode: mode,
           ));
           // Bug #19 — update the SAME pending coachBox row, don't insert a new one.
           await repo.updateInteractionWithResponse(
@@ -647,17 +634,12 @@ class ChannelNotifier extends Notifier<String> {
 final channelProvider =
     NotifierProvider<ChannelNotifier, String>(ChannelNotifier.new);
 
-// ── Reasoning Mode ───────────────────────────────────────────────
-
-class ReasoningModeNotifier extends Notifier<String> {
-  @override
-  String build() => 'quick'; // 'quick' or 'deep'
-
-  void setMode(String mode) => state = mode;
-}
-
-final reasoningModeProvider =
-    NotifierProvider<ReasoningModeNotifier, String>(ReasoningModeNotifier.new);
+// ── Reasoning Mode (retired 2026-04-18) ──────────────────────────
+//
+// The `reasoningModeProvider` used to back a Chat/Reasoning toggle in
+// the AI coach header. Both modes were merged into the single
+// Gemini-backed `ai-proxy` endpoint on 2026-04-18. Any lingering
+// callers are a migration bug — report to maintainer.
 
 // ── Prediction Card ──────────────────────────────────────────────
 

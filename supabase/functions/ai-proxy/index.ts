@@ -1,7 +1,40 @@
+/**
+ * ai-proxy — single Gemini-backed endpoint for all AI coach traffic.
+ *
+ * Rewrite history (2026-04-18):
+ *   Collapsed the previous three-tier stack (Cerebras direct +
+ *   OpenRouter Gemma cascade + Gemini vision fallback) down to a
+ *   single Google Gemini provider. Also merged the separate
+ *   `ai-proxy-pro` endpoint into this one — the PRO branch used to
+ *   require a distinct function for unlimited chat, but since both
+ *   paths now target the same provider, a single function with an
+ *   `isPro` gate is simpler.
+ *
+ * Routing table (set by request body `type`):
+ *   food_text_analysis  → gemini-2.5-flash, JSON mode, 50/day free · 200/day PRO
+ *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
+ *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
+ *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
+ *   (default)           → gemini-2.5-flash, chat — 15/day free cap, PRO unlimited
+ *
+ * Gating (server-side, never trust client):
+ *   isPro = SELECT 1 FROM subscriptions WHERE user_id AND status='active' AND end_date > now()
+ *   Free-tier chat: 15/day in `ai_coach_interactions` (channel='app') + 30-day trial window
+ *   PRO: no daily cap, no trial window
+ *
+ * Auth: verify_jwt is DISABLED on this function's gateway config because
+ * of the Supabase middleware bug that 401's valid JWTs. We validate the
+ * bearer token ourselves via `auth.getUser(token)`.
+ */
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
-import { cascadeChat, FREE_VISION_MODELS } from "../_shared/openrouter.ts";
+import {
+  geminiChat,
+  MODEL_FLASH,
+  MODEL_FLASH_LITE,
+} from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,75 +43,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// 3 Cerebras keys → rotate on rate limit → triples effective free quota.
-const CEREBRAS_KEYS = [
-  Deno.env.get("CEREBRAS_API_KEY_1")!,
-  Deno.env.get("CEREBRAS_API_KEY_2")!,
-  Deno.env.get("CEREBRAS_API_KEY_3")!,
-];
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const FREE_MODEL = "llama3.1-8b";
-const FREE_MODEL_LABEL = "Cerebras Llama 3.1 8B";
-const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
-
-// OpenRouter free models for AI Coach chat (text + image capable).
-const FREE_CHAT_MODELS = [
-  "google/gemma-4-27b-it:free",
-  "google/gemma-4-31b-it:free",
-  "google/gemma-4-26b-a4b-it:free",
-];
-
 const FREE_DAILY_LIMIT = 15;
 const FREE_TRIAL_DAYS = 30;
-const TIMEOUT_MS = 8000;
 const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
-async function callCerebras(
-  apiKey: string,
-  systemPrompt: string,
-  userMessage: string,
-  timeoutMs: number,
-): Promise<{ reply: string; tokens_used: number } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+// Human-readable labels for the ai_coach_interactions.model_used column.
+const LABEL_FLASH = "Gemini 2.5 Flash";
+const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
 
+/**
+ * Check if a user holds an active PRO subscription. Returns false on any
+ * error (fail closed — cheaper to incorrectly gate a PRO user than to
+ * leak unlimited chat to a free user).
+ */
+async function checkPro(
+  client: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
   try {
-    const response = await fetch(CEREBRAS_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: FREE_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-        max_tokens: 1024,
-        temperature: 0.7,
-      }),
-      signal: controller.signal,
-    });
-
-    // 429 = rate limited on this key — caller will try next key.
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-
-    return {
-      reply: content,
-      tokens_used: data.usage?.total_tokens ?? 0,
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+    const { data } = await client
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .gt("end_date", new Date().toISOString())
+      .maybeSingle();
+    return data !== null;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -111,59 +106,49 @@ function extractLogActions(rawReply: string): {
   return { reply: cleanReply, actions };
 }
 
+/** Strip markdown code fences before JSON.parse. Gemini sometimes wraps. */
+function stripJsonFences(raw: string): string {
+  return raw
+    .replace(/```json?\n?/gi, "")
+    .replace(/```/g, "")
+    .trim();
+}
+
+/** Uniform error response shape. */
+function err(status: number, message: string, extra: Record<string, unknown> = {}) {
+  return new Response(
+    JSON.stringify({ error: message, ...extra }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
-
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (req.method !== "POST") return err(405, "Method not allowed");
 
   try {
-    // Validate JWT via Supabase Auth (server-side signature verification).
-    // verify_jwt is DISABLED on this function's config because the Supabase
-    // gateway middleware was silently rejecting valid JWTs (100% 401 rate).
-    // Instead, we use supabaseClient.auth.getUser() which validates the
-    // JWT signature + expiry via the Auth API — same pattern as ai-proxy-pro.
+    // ── JWT ──
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!authHeader) return err(401, "Missing authorization header");
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser(token);
+    const { data: { user: authUser }, error: authError } =
+      await supabaseClient.auth.getUser(token);
 
-    if (authError || !authUser) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    if (authError || !authUser) return err(401, "Invalid or expired token");
     const userId = authUser.id;
 
-    // Parse request body early — needed to route food_text_analysis
-    // before trial/rate-limit checks (food logging is always free).
+    // ── Body ──
     const body = await req.json();
     const { message, snapshot_json, type, text, context, image_base64 } = body;
 
-    // ── Food text analysis ─────────────────────────────────────
-    // Primary: OpenRouter Gemma 4 cascade (free). Fallback: Gemini 2.5 Flash Lite.
-    //
-    // Server-side daily cap — prevents a modified client from burning the
-    // Gemini fallback key or inflating ai_coach_interactions with
-    // free-tier costs. Counts distinct food_text_analysis rows per user
-    // per UTC day. Client-side limits (advisory) are still the primary
-    // UX; this is a safety ceiling generous enough that genuine users
-    // will never hit it (50/day free, 200/day PRO).
+    // ── Food text analysis ────────────────────────────────────────
+    // Free: 50/day  ·  PRO: 200/day. Counted via ai_coach_interactions
+    // rows with channel='food_text_analysis'. Server-side cap — client
+    // limits are advisory only.
     if (type === "food_text_analysis" && text) {
       const todayFoodStr = new Date().toISOString().split("T")[0];
       const { count: foodCount } = await supabaseClient
@@ -173,24 +158,13 @@ serve(async (req: Request) => {
         .eq("channel", "food_text_analysis")
         .gte("created_at", todayFoodStr + "T00:00:00Z");
 
-      // Check PRO for higher cap (server-side verification — don't trust
-      // client state). isPro derived from subscriptions table row.
-      const { data: sub } = await supabaseClient
-        .from("subscriptions")
-        .select("status, end_date")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .gt("end_date", new Date().toISOString())
-        .maybeSingle();
-      const isProUser = sub !== null;
+      const isProUser = await checkPro(supabaseClient, userId);
       const dailyFoodCap = isProUser ? 200 : 50;
 
       if ((foodCount ?? 0) >= dailyFoodCap) {
-        return new Response(
-          JSON.stringify({
-            error: `Daily food analysis limit reached (${dailyFoodCap}/day). Try again tomorrow.`,
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        return err(
+          429,
+          `Daily food analysis limit reached (${dailyFoodCap}/day). Try again tomorrow.`,
         );
       }
 
@@ -200,21 +174,21 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
 {"meal_name":"short name for the meal","items":[{"name":"food item name","quantity":"e.g. 1 scoop, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
-      // Try OpenRouter free models first
-      const { content: orContent } = await cascadeChat({
-        models: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"],
+      const { content, modelUsed, tokensUsed } = await geminiChat({
+        model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: prompt,
         maxTokens: 1024,
         temperature: 0.2,
-        timeoutMs: 12000,
-        title: "ICANBEFITTER Food Analysis",
+        timeoutMs: 15_000,
+        jsonMode: true,
       });
 
-      // Helper: log a food_text_analysis interaction row so the daily
-      // cap counter sees this call. Fire-and-forget — logging failure
-      // must NOT block the nutrition result.
-      const logFoodInteraction = (modelLabel: string) => {
+      if (!content) return err(502, "Food analysis failed");
+
+      try {
+        const parsed = JSON.parse(stripJsonFences(content));
+        // Fire-and-forget logging for the daily-cap counter.
         supabaseClient
           .from("ai_coach_interactions")
           .insert({
@@ -222,63 +196,23 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
             channel: "food_text_analysis",
             user_message: text.substring(0, 500),
             ai_response: "",
-            model_used: modelLabel,
-            tokens_used: 0,
+            model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+            tokens_used: tokensUsed,
           })
           .then((r: { error: unknown }) => {
             if (r.error) console.error("food interaction log failed:", r.error);
           });
-      };
 
-      if (orContent) {
-        try {
-          const jsonStr = orContent.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(jsonStr);
-          logFoodInteraction("openrouter-gemma-4");
-          return new Response(JSON.stringify(parsed), {
-            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        } catch (_) {
-          console.warn("[ai-proxy] OpenRouter food analysis returned non-JSON, falling back to Gemini");
-        }
+        return new Response(JSON.stringify(parsed), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (_) {
+        return err(502, "Food analysis returned invalid JSON");
       }
-
-      // Fallback: Gemini 2.5 Flash Lite
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (geminiKey) {
-        try {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
-              }),
-            },
-          );
-          if (geminiRes.ok) {
-            const geminiData = await geminiRes.json();
-            const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-            const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-            const parsed = JSON.parse(jsonStr);
-            logFoodInteraction("gemini-2.5-flash-lite");
-            return new Response(JSON.stringify(parsed), {
-              status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        } catch (_) {}
-      }
-
-      return new Response(JSON.stringify({ error: "Food analysis failed" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
-    // Client-side limits handle exact free/PRO tiers; this is a server-side
-    // safety net to prevent modified clients from unlimited Gemini calls.
     if (type === "scan_meal" || type === "cart_auditor") {
       const todayVisionStr = new Date().toISOString().split("T")[0];
       const { count: visionCount } = await supabaseClient
@@ -289,287 +223,199 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
         .gte("created_at", todayVisionStr + "T00:00:00Z");
 
       if ((visionCount ?? 0) >= 15) {
-        return new Response(
-          JSON.stringify({ error: "Daily vision analysis limit reached. Try again tomorrow." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
       }
     }
 
-    // ── Scan meal (image analysis) ────────────────────────────────────
+    // ── Scan meal (image → nutrition JSON) ────────────────────────
     if (type === "scan_meal" && body.image) {
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (!geminiKey) {
-        return new Response(JSON.stringify({ error: "Food AI unavailable" }), {
-          status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const scanPrompt = `You are a nutritionist with deep knowledge of Indian foods. Look at this food photo carefully. Identify all food items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
+      const scanPrompt =
+        `You are a nutritionist with deep knowledge of Indian foods. Look at this food photo carefully. Identify all food items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
 {"meal_name":"short name describing the meal","items":[{"name":"food item name","quantity":"estimated quantity e.g. 1 bowl, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
-      try {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: scanPrompt }] }],
-              generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
-            }),
-          },
-        );
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-          const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(jsonStr);
 
-          // Log usage for rate limiting
-          try {
-            await supabaseClient.from("ai_coach_interactions").insert({
-              user_id: userId,
-              channel: "scan_meal",
-              user_message: "[scan_meal] analysis",
-              ai_response: "success",
-              model_used: "Gemini 2.5 Flash Lite",
-              tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
-              created_at: new Date().toISOString(),
-            });
-          } catch (_) {}
-
-          return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-      } catch (_) {}
-      return new Response(JSON.stringify({ error: "Image analysis failed" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { content, tokensUsed } = await geminiChat({
+        model: MODEL_FLASH_LITE,
+        systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
+        userPrompt: scanPrompt,
+        imageBase64: body.image,
+        imageMimeType: "image/jpeg",
+        maxTokens: 1024,
+        temperature: 0.2,
+        timeoutMs: 20_000,
+        jsonMode: true,
+        fallbackToLite: false, // already Flash-Lite; no point
       });
+
+      if (!content) return err(502, "Image analysis failed");
+
+      try {
+        const parsed = JSON.parse(stripJsonFences(content));
+        try {
+          await supabaseClient.from("ai_coach_interactions").insert({
+            user_id: userId,
+            channel: "scan_meal",
+            user_message: "[scan_meal] analysis",
+            ai_response: "success",
+            model_used: LABEL_FLASH_LITE,
+            tokens_used: tokensUsed,
+            created_at: new Date().toISOString(),
+          });
+        } catch (_) {}
+        return new Response(JSON.stringify(parsed), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (_) {
+        return err(502, "Image analysis returned invalid JSON");
+      }
     }
 
-    // ── Cart auditor (grocery screenshot analysis) ───────────────────
-    // Primary: OpenRouter Gemma 4 cascade (free, multimodal). Fallback: Gemini 2.5 Flash Lite.
+    // ── Cart auditor (grocery screenshot → audit JSON) ────────────
     if (type === "cart_auditor" && body.image) {
-      const cartPrompt = `You are a nutrition expert with deep knowledge of Indian grocery products. Analyse this grocery cart, receipt, or shopping screenshot carefully. Identify all food/grocery items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
+      const cartPrompt =
+        `You are a nutrition expert with deep knowledge of Indian grocery products. Analyse this grocery cart, receipt, or shopping screenshot carefully. Identify all food/grocery items visible and return ONLY a JSON object (no markdown, no code block) in this exact format:
 {"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
 Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
 
-      let modelUsed = "unknown";
-
-      // Try OpenRouter Gemma free models first (multimodal)
-      const { content: orContent, modelUsed: orModel } = await cascadeChat({
-        models: [...FREE_VISION_MODELS],
+      const { content, tokensUsed } = await geminiChat({
+        model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
         userPrompt: cartPrompt,
         imageBase64: body.image,
         imageMimeType: "image/jpeg",
         maxTokens: 2048,
         temperature: 0.2,
-        timeoutMs: 15000,
-        title: "ICANBEFITTER Cart Auditor",
+        timeoutMs: 25_000,
+        jsonMode: true,
+        fallbackToLite: false,
       });
 
-      if (orContent) {
-        try {
-          const jsonStr = orContent.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(jsonStr);
-          modelUsed = orModel ?? "Gemma 4";
-          // Log usage
-          try {
-            await supabaseClient.from("ai_coach_interactions").insert({
-              user_id: userId, channel: "cart_auditor",
-              user_message: "[cart_auditor] analysis", ai_response: "success",
-              model_used: modelUsed, tokens_used: 0, created_at: new Date().toISOString(),
-            });
-          } catch (_) {}
-          return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        } catch (_) {
-          console.warn("[ai-proxy] OpenRouter cart auditor returned non-JSON, falling back to Gemini");
-        }
-      }
+      if (!content) return err(502, "Cart analysis failed");
 
-      // Fallback: Gemini 2.5 Flash Lite
-      const geminiKey = Deno.env.get("GEMINI_API_KEY");
-      if (geminiKey) {
+      try {
+        const parsed = JSON.parse(stripJsonFences(content));
         try {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: body.image } }, { text: cartPrompt }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-              }),
-            },
-          );
-          if (geminiRes.ok) {
-            const geminiData = await geminiRes.json();
-            const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-            const jsonStr = rawText.replace(/```json?\n?/gi, "").replace(/```/g, "").trim();
-            const parsed = JSON.parse(jsonStr);
-            try {
-              await supabaseClient.from("ai_coach_interactions").insert({
-                user_id: userId, channel: "cart_auditor",
-                user_message: "[cart_auditor] analysis", ai_response: "success",
-                model_used: "Gemini 2.5 Flash Lite",
-                tokens_used: geminiData?.usageMetadata?.totalTokenCount ?? 0,
-                created_at: new Date().toISOString(),
-              });
-            } catch (_) {}
-            return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-          }
+          await supabaseClient.from("ai_coach_interactions").insert({
+            user_id: userId,
+            channel: "cart_auditor",
+            user_message: "[cart_auditor] analysis",
+            ai_response: "success",
+            model_used: LABEL_FLASH_LITE,
+            tokens_used: tokensUsed,
+            created_at: new Date().toISOString(),
+          });
         } catch (_) {}
+        return new Response(JSON.stringify(parsed), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (_) {
+        return err(502, "Cart analysis returned invalid JSON");
       }
-
-      return new Response(JSON.stringify({ error: "Cart analysis failed" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    // ── Prediction handler — bypasses daily limits + interaction logging ──
-    // Used for onboarding predictions and PRO monthly refreshes.
-    // This is a FREE system function, not an AI Coach message.
+    // ── Prediction handler ────────────────────────────────────────
+    // Onboarding predictions + PRO monthly refreshes. Free system
+    // function; no daily limits, no interaction logging.
     if (type === "prediction") {
       if (!message || typeof message !== "string") {
-        return new Response(JSON.stringify({ error: "Missing 'message' for prediction" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return err(400, "Missing 'message' for prediction");
       }
 
       const systemPrompt = (context?.system_prompt as string) ??
         "You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.";
 
-      // Try OpenRouter Gemma 4 cascade first
-      const { content: predContent, modelUsed: predModel, tokensUsed: predTokens } = await cascadeChat({
-        models: [...FREE_CHAT_MODELS],
+      const { content, modelUsed, tokensUsed } = await geminiChat({
+        model: MODEL_FLASH,
         systemPrompt,
         userPrompt: message,
         maxTokens: 1024,
         temperature: 0.7,
-        timeoutMs: 12000,
-        title: "ICANBEFITTER Prediction",
+        timeoutMs: 15_000,
+        jsonMode: true,
       });
 
-      if (predContent) {
-        return new Response(
-          JSON.stringify({
-            reply: predContent,
-            model_used: predModel ?? "Gemma 4 27B",
-            tokens_used: predTokens ?? 0,
-            actions: [],
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+      if (!content) return err(502, "AI temporarily unavailable");
 
-      // Fallback: Cerebras (text-only)
-      let result: { reply: string; tokens_used: number } | null = null;
-      for (const key of CEREBRAS_KEYS) {
-        if (!key) continue;
-        result = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
-        if (result) break;
-      }
-
-      if (!result) {
-        return new Response(
-          JSON.stringify({ error: "AI temporarily unavailable" }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      // No daily limit check. No ai_coach_interactions logging.
       return new Response(
         JSON.stringify({
-          reply: result.reply,
-          model_used: FREE_MODEL_LABEL,
-          tokens_used: result.tokens_used,
+          reply: content,
+          model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+          tokens_used: tokensUsed,
           actions: [],
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
+    // ── AI coach chat (free + PRO via single function) ────────────
     if (!message || typeof message !== "string") {
-      return new Response(JSON.stringify({ error: "Missing 'message' in request body" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return err(400, "Missing 'message' in request body");
     }
-
-    // Prevent abuse: reject oversized messages and snapshots
     if (message.length > 5000) {
-      return new Response(JSON.stringify({ error: "Message too long (max 5000 chars)" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return err(400, "Message too long (max 5000 chars)");
     }
     if (snapshot_json && JSON.stringify(snapshot_json).length > 10000) {
-      return new Response(JSON.stringify({ error: "Snapshot too large" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return err(400, "Snapshot too large");
     }
 
-    // ── Trial + rate-limit check for AI chat ─────────────────────────
-    const { data: userData, error: userError } = await supabaseClient
-      .from("users")
-      .select("ai_chat_started_at")
-      .eq("id", userId)
-      .single();
+    // ── isPro gate: PRO → no trial, no daily cap. Free → trial + 15/day. ──
+    const isProUser = await checkPro(supabaseClient, userId);
 
-    if (userError || !userData) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    let aiChatStartedAt = userData.ai_chat_started_at;
-    if (!aiChatStartedAt) {
-      const now = new Date().toISOString();
-      await supabaseClient
+    if (!isProUser) {
+      // Free-tier gates: start/bump trial window, count today's messages.
+      const { data: userData, error: userError } = await supabaseClient
         .from("users")
-        .update({ ai_chat_started_at: now })
-        .eq("id", userId);
-      aiChatStartedAt = now;
-    }
+        .select("ai_chat_started_at")
+        .eq("id", userId)
+        .single();
 
-    const daysSinceStart = Math.floor(
-      (Date.now() - new Date(aiChatStartedAt).getTime()) / (1000 * 60 * 60 * 24),
-    );
+      if (userError || !userData) return err(404, "User not found");
 
-    if (daysSinceStart > FREE_TRIAL_DAYS) {
-      return new Response(
-        JSON.stringify({ error: "Free AI trial expired", code: "TRIAL_EXPIRED", days_used: daysSinceStart }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      let aiChatStartedAt = userData.ai_chat_started_at as string | null;
+      if (!aiChatStartedAt) {
+        const now = new Date().toISOString();
+        await supabaseClient
+          .from("users")
+          .update({ ai_chat_started_at: now })
+          .eq("id", userId);
+        aiChatStartedAt = now;
+      }
+
+      const daysSinceStart = Math.floor(
+        (Date.now() - new Date(aiChatStartedAt).getTime()) /
+          (1000 * 60 * 60 * 24),
       );
+
+      if (daysSinceStart > FREE_TRIAL_DAYS) {
+        return err(403, "Free AI trial expired", {
+          code: "TRIAL_EXPIRED",
+          days_used: daysSinceStart,
+        });
+      }
+
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+
+      const { count: msgCount, error: countError } = await supabaseClient
+        .from("ai_coach_interactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("channel", "app")
+        .gte("created_at", todayStart.toISOString());
+
+      if (countError) return err(500, "Failed to check rate limit");
+
+      if ((msgCount ?? 0) >= FREE_DAILY_LIMIT) {
+        return err(429, "Daily message limit reached", {
+          code: "RATE_LIMITED",
+          limit: FREE_DAILY_LIMIT,
+        });
+      }
     }
 
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-
-    const { count: msgCount, error: countError } = await supabaseClient
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("channel", "app")
-      .gte("created_at", todayStart.toISOString());
-
-    if (countError) {
-      return new Response(JSON.stringify({ error: "Failed to check rate limit" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if ((msgCount ?? 0) >= FREE_DAILY_LIMIT) {
-      return new Response(
-        JSON.stringify({ error: "Daily message limit reached", code: "RATE_LIMITED", limit: FREE_DAILY_LIMIT }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // ── Deduplication: return cached response if same user sent same message recently ──
+    // ── Deduplication: return cached response for same user+message in last 30s ──
     const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
     const { data: recentDup } = await supabaseClient
       .from("ai_coach_interactions")
@@ -584,11 +430,11 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
 
     if (recentDup?.ai_response) {
       console.log(`[ai-proxy] Dedup hit for user ${userId} — returning cached response`);
-      const extracted = extractLogActions(recentDup.ai_response);
+      const extracted = extractLogActions(recentDup.ai_response as string);
       return new Response(
         JSON.stringify({
           reply: extracted.reply,
-          model_used: recentDup.model_used ?? FREE_MODEL_LABEL,
+          model_used: recentDup.model_used ?? LABEL_FLASH,
           tokens_used: recentDup.tokens_used ?? 0,
           actions: extracted.actions,
           deduplicated: true,
@@ -597,7 +443,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       );
     }
 
-    // Build system prompt
+    // ── Build system prompt ───────────────────────────────────────
     let systemPrompt =
       "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
       "for young professionals in India — like a father who has been watching closely. " +
@@ -628,80 +474,25 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
     }
 
-    // Try OpenRouter Gemma 4 cascade (text + optional image).
-    const { content: orContent, modelUsed: orModel, tokensUsed: orTokens } = await cascadeChat({
-      models: [...FREE_CHAT_MODELS],
+    // ── Single Gemini call (Flash, with image if present) ─────────
+    const { content, modelUsed, tokensUsed } = await geminiChat({
+      model: MODEL_FLASH,
       systemPrompt,
       userPrompt: message,
-      ...(image_base64 ? { imageBase64: image_base64, imageMimeType: "image/jpeg" } : {}),
       maxTokens: 1024,
       temperature: 0.7,
-      timeoutMs: image_base64 ? 15000 : 12000,
-      title: "ICANBEFITTER AI Coach",
+      timeoutMs: image_base64 ? 25_000 : 15_000,
+      ...(image_base64 ? { imageBase64: image_base64, imageMimeType: "image/jpeg" } : {}),
     });
 
-    if (!orContent) {
-      // Fallback: try Cerebras keys if OpenRouter fails
-      let cerebrasResult: { reply: string; tokens_used: number } | null = null;
-      if (!image_base64) {
-        for (const key of CEREBRAS_KEYS) {
-          if (!key) continue;
-          cerebrasResult = await callCerebras(key, systemPrompt, message, TIMEOUT_MS);
-          if (cerebrasResult) break;
-        }
-      }
-      if (!cerebrasResult) {
-        return new Response(
-          JSON.stringify({ error: "AI temporarily unavailable. Please try again." }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      // Use Cerebras fallback result
-      const extracted = extractLogActions(cerebrasResult.reply);
-      const modelLabel = FREE_MODEL_LABEL;
-
-      const { data: snapshotData } = await supabaseClient
-        .from("user_daily_snapshots")
-        .select("id")
-        .eq("user_id", userId)
-        .order("snapshot_date", { ascending: false })
-        .limit(1)
-        .single();
-
-      await supabaseClient.from("ai_coach_interactions").insert({
-        user_id: userId,
-        snapshot_id: snapshotData?.id ?? null,
-        channel: "app",
-        user_message: message,
-        ai_response: extracted.reply,
-        model_used: modelLabel,
-        tokens_used: cerebrasResult.tokens_used,
-        created_at: new Date().toISOString(),
-      });
-
-      (async () => {
-        try {
-          const content = `User: ${message}\nCoach: ${extracted.reply}`;
-          const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
-          if (!embedding) return;
-          await supabaseClient.from("memory_embeddings").insert({
-            user_id: userId, embedding, content, source_type: "conversation",
-            metadata: { date: new Date().toISOString().split("T")[0], channel: "app", model: modelLabel },
-          });
-        } catch (e) { console.error("[ai-proxy] Embed store error:", e); }
-      })();
-
-      return new Response(
-        JSON.stringify({ reply: extracted.reply, model_used: modelLabel, tokens_used: cerebrasResult.tokens_used, actions: extracted.actions }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!content) {
+      return err(502, "AI temporarily unavailable. Please try again.");
     }
 
-    const result = { reply: orContent, tokens_used: orTokens ?? 0 };
-    const modelLabel = orModel ?? "Gemma 4 27B";
+    const modelLabel = modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH;
 
     // Extract structured log actions from AI reply
-    const extracted = extractLogActions(result.reply);
+    const extracted = extractLogActions(content);
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -720,28 +511,28 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       user_message: message,
       ai_response: extracted.reply,
       model_used: modelLabel,
-      tokens_used: result.tokens_used,
+      tokens_used: tokensUsed,
       created_at: new Date().toISOString(),
     });
 
-    // ── Phase A: Silent embedding accumulation (FREE tier) ─────────────────
-    // FREE users do NOT get retrieval — no latency hit, no PRO feature leak.
-    // Their embeddings silently accumulate so memory is rich if they upgrade.
-    // Fire-and-forget: Response is already built above; this runs after.
+    // Silent embedding accumulation for both free + PRO tiers. Free
+    // users don't get retrieval (no latency), but their memory is
+    // ready if they upgrade. Fire-and-forget.
     (async () => {
       try {
-        const content = `User: ${message}\nCoach: ${extracted.reply}`;
-        const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
+        const content_ = `User: ${message}\nCoach: ${extracted.reply}`;
+        const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
         if (!embedding) return;
         await supabaseClient.from("memory_embeddings").insert({
           user_id: userId,
           embedding,
-          content,
+          content: content_,
           source_type: "conversation",
           metadata: {
             date: new Date().toISOString().split("T")[0],
             channel: "app",
             model: modelLabel,
+            is_pro: isProUser,
           },
         });
       } catch (e) {
@@ -753,21 +544,15 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       JSON.stringify({
         reply: extracted.reply,
         model_used: modelLabel,
-        tokens_used: result.tokens_used,
+        tokens_used: tokensUsed,
         actions: extracted.actions,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err) {
+  } catch (err_) {
     // Sanitised 5xx: never leak raw exception / upstream provider text.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[ai-proxy] request_id=${requestId}`, err);
-    return new Response(
-      JSON.stringify({ error: "Internal server error", request_id: requestId }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    console.error(`[ai-proxy] request_id=${requestId}`, err_);
+    return err(500, "Internal server error", { request_id: requestId });
   }
 });

@@ -12,8 +12,11 @@ class AppConstants {
   static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   // Edge Function names (invoked via Supabase client).
+  // `ai-proxy-pro` was merged into `ai-proxy` on 2026-04-18 (single
+  // Gemini endpoint, server-side free/PRO gate). The deployed function
+  // still serves 410 Gone for orphan clients; do not re-introduce the
+  // constant.
   static const String aiProxyFunction = 'ai-proxy';
-  static const String aiProxyProFunction = 'ai-proxy-pro';
   static const String razorpayWebhookFunction = 'razorpay-webhook';
   static const String dailySnapshotFunction = 'daily-snapshot';
   static const String weeklyRecalcFunction = 'weekly-recalc';
@@ -34,7 +37,8 @@ class AppConstants {
   static const String featurePhases2To12 = 'phases_2_to_12';
   static const String featureActiveWorkoutMode = 'active_workout_mode';
   static const String featureAiCoachUnlimited = 'ai_coach_unlimited';
-  static const String featureReasoningTab = 'reasoning_tab';
+  // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle
+  // deleted from UI, single AI coach backend, no separate reasoning gate.
   static const String featureWeeklyAiReport = 'weekly_ai_report';
   static const String featureProgressPhotos = 'progress_photos';
   static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)

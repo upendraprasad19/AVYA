@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "./_shared/embeddings.ts";
-import { cascadeChat, FREE_MODELS } from "./_shared/openrouter.ts";
+import { geminiChat, MODEL_FLASH } from "./_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,13 +10,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Use cheap Llama 3.1 8B for summarization — ~₹0.01/user/run
-const SUMMARY_MODEL = "cerebras/llama-3.1-8b";
-const SUMMARY_MODEL_LABEL = "Cerebras Llama 3.1 8B";
+// 2026-04-18 · Migrated from Cerebras Llama 3.1 8B (via OpenRouter) to
+// Gemini 2.5 Flash as part of the single-provider consolidation. Flash
+// handles the ~200-token summary well within Gemini quota.
+const SUMMARY_MODEL_LABEL = "Gemini 2.5 Flash";
 
 const MESSAGE_THRESHOLD = 50;
 const KEEP_RECENT = 10;
@@ -66,16 +66,12 @@ async function summarizeMessages(
     "- Key coaching advice given\n" +
     "Output ONLY the summary text, no preamble.";
 
-  const { content } = await cascadeChat({
-    models: [
-      SUMMARY_MODEL,
-      ...FREE_MODELS,
-    ],
+  const { content } = await geminiChat({
+    model: MODEL_FLASH,
     systemPrompt,
     userPrompt: `Summarize this fitness coaching conversation:\n\n${conversationText}`,
     maxTokens: 300,
-    timeoutMs: 10000,
-    title: "ICANBEFITTER Rolling Context",
+    timeoutMs: 15_000,
   });
 
   return content;

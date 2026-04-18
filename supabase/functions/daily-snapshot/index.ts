@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { cascadeChat } from "../_shared/openrouter.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,11 +11,10 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
-// Fallback only — primary is OpenRouter Gemma 4 cascade
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+// 2026-04-18 · Migrated from OpenRouter Gemma cascade (+ Gemini fallback)
+// to Gemini 2.5 Flash only. The geminiChat helper already has built-in
+// Flash → Flash-Lite fallback so we retain single-provider resilience.
 
 // ── Coaching Notes Extraction ────────────────────────────────────────────────
 //
@@ -82,38 +81,19 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
 
 If nothing was found, return: {}`;
 
-  // Primary: OpenRouter Gemma 4 cascade (free, text-only)
-  let rawText = "{}";
-  const { content: orContent } = await cascadeChat({
-    models: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"],
+  const { content: rawText } = await geminiChat({
+    model: MODEL_FLASH,
     systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
     userPrompt: prompt,
     maxTokens: 512,
     temperature: 0.1,
-    timeoutMs: 12000,
-    title: "ICANBEFITTER Coaching Notes",
+    timeoutMs: 15_000,
+    jsonMode: true,
   });
 
-  if (orContent) {
-    rawText = orContent;
-  } else {
-    // Fallback: Gemini 2.5 Flash Lite
-    const geminiRes = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
-      }),
-    });
-
-    if (!geminiRes.ok) {
-      console.error("Gemini extraction error:", await geminiRes.text());
-      return null;
-    }
-
-    const geminiData = await geminiRes.json();
-    rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  if (!rawText) {
+    console.error("[daily-snapshot] Gemini extraction returned null");
+    return null;
   }
 
   try {
@@ -271,15 +251,14 @@ serve(async (req: Request) => {
     // EdgeRuntime.waitUntil keeps the process alive until completion.
     let extractedFacts: ExtractedFacts | null = null;
     try {
-      if (GEMINI_API_KEY) {
-        extractedFacts = await extractCoachingNotes(
-          supabaseClient,
-          userId,
-          snapshotDate,
-        );
-        if (extractedFacts) {
-          await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
-        }
+      // Helper guards its own missing-key case; just call it unconditionally.
+      extractedFacts = await extractCoachingNotes(
+        supabaseClient,
+        userId,
+        snapshotDate,
+      );
+      if (extractedFacts) {
+        await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
       }
     } catch (extractErr) {
       // Never let extraction failure affect the snapshot response.

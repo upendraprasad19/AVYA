@@ -103,10 +103,9 @@ Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI �
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (21 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI Coach Free | Edge Function → OpenRouter Gemma 4 27B cascade (text+image, 30-day trial, 15 msg/day) |
-| AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function, ~₹1.80/user/month) |
-| AI Reasoning PRO | GLM-4.7 on Cerebras |
-| Food AI | OpenRouter Gemma 4 cascade (free) → Gemini 2.5 Flash Lite (fallback) |
+| AI Coach (all tiers) | Single Edge Function `ai-proxy` → Gemini 2.5 Flash. Free: 30-day trial 15 msg/day. PRO: unlimited. Server-side gate. |
+| Food AI | Gemini 2.5 Flash (text analysis) + Gemini 2.5 Flash Lite (scan meal, cart auditor) |
+| Weekly AI Report | Gemini 2.5 Pro (PRO-only, deepest reasoning) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
 | Telegram Bot | Separate project (OpenClaw VPS, @ICanbeFitterBot) — NOT in this repo |
@@ -302,7 +301,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 16. **Edge Function SSRF:** Never fetch arbitrary user-supplied URLs server-side. Allowlist Supabase Storage prefix only.
 17. **Release error handling:** Use `kDebugMode` guard — show detailed errors only in debug, generic message in release.
 18. **Edge Function input limits:** Enforce message (5K chars) and snapshot (10K chars) limits server-side on ALL AI endpoints.
-19. **Server-side subscription verification:** High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`) must call `verifyFromServer()` in `gate()`. Local-only check is insufficient.
+19. **Server-side subscription verification:** High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) must call `verifyFromServer()` in `gate()`. Local-only check is insufficient.
 
 ---
 
@@ -417,7 +416,6 @@ Radius:    pill 100 / card-L 22 / card-M 16 / card-S 14 / row 12
 phases_2_to_12         → auto-generate new 4-week plan after Week 4
 active_workout_mode    → active workout logging screen
 ai_coach_unlimited     → unlimited AI messages (free = 15/day for 30 days)
-reasoning_tab          → deep coaching tab (GLM-4.7 on Cerebras)
 weekly_ai_report       → weekly nutrition report ongoing (free = first report only)
 progress_photos        → full photo timeline
 scan_meal_pro          → 3 scans/day (free = 3/month)
@@ -469,14 +467,13 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 - Downgrade = soft lock: keep all data, show paywall on PRO features, read-only on PRO content
 - **Phantom PRO fix:** `localActivationAt` is force-cleared after grace period expires on network error. Prevents stale local timestamp from keeping users in PRO after subscription lapses.
 - **JWT refresh:** `razorpay_service` refreshes JWT before each verify-payment retry to prevent 401 errors during polling.
-- **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`, `progress_photos`). Other features use local check only for low latency.
+- **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`). Other features use local check only for low latency.
 
 ### gate() High-Value Features
 ```dart
 static const Set<String> _highValueFeatures = {
   AppConstants.featurePhases2To12,
   AppConstants.featureAiCoachUnlimited,
-  AppConstants.featureReasoningTab,
   AppConstants.featureProgressPhotos,  // photo writes to user-scoped Storage bucket
 };
 // gate() checks server for these features, local-only for others
@@ -488,40 +485,59 @@ static const Set<String> _highValueFeatures = {
 
 ## 11. AI ARCHITECTURE
 
-### Free Users (30-day trial, 15 msg/day)
-```
-Client → Edge Function (ai-proxy)
-  → Try OpenRouter Gemma 4 27B cascade (text + image):
-      google/gemma-4-27b-it:free → gemma-4-31b-it:free → gemma-4-26b-a4b-it:free
-  → If all fail → Cerebras Llama 3.1 8B (text-only fallback)
-  ← Response to client
-  JWT auto-retry: on 401/session error, refresh token + single inline retry
-Cost at 10K users: ~₹0 (all free-tier models)
-```
+Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter were retired on 2026-04-18 — one key to rotate, one billing line, one source of truth.
 
-### PRO Users (unlimited)
-```
-Client → Edge Function (ai-proxy-pro)
-  → Cerebras gpt-oss-120B (direct)
-  ← Response to client
-Cost per user/month: ~₹1.80
-```
+### Model matrix
+| Edge Function | Model | Purpose |
+|---|---|---|
+| `ai-proxy` (chat + food text + prediction) | `gemini-2.5-flash` | Free + PRO coach, food text analysis, prediction card |
+| `ai-proxy` (scan_meal, cart_auditor) | `gemini-2.5-flash-lite` | Vision: nutrition JSON from photos |
+| `ai-media-proxy` | `gemini-2.5-flash-lite` | PRO photo-upload chat |
+| `assess-body-composition` | `gemini-2.5-flash-lite` | Body-fat % from photo |
+| `daily-snapshot` (coaching notes) | `gemini-2.5-flash` | Extract facts from daily conversations |
+| `morning-alert` | `gemini-2.5-flash` | Personalised morning push |
+| `rolling-context` | `gemini-2.5-flash` | Nightly conversation summary |
+| `future-prediction` | `gemini-2.5-flash` | 90-day forecast card |
+| `weekly-report` | `gemini-2.5-pro` | Deepest reasoning, PRO-only weekly |
+| `_shared/embeddings.ts` | `gemini-embedding-001` | Memory retrieval vectors |
 
-### Reasoning Tab (PRO)
-- GLM-4.7 on Cerebras
-- Full personalised coaching: photo/video upload, deep analysis
-- Free users see it locked → PRO paywall
+### Shared helper: `_shared/gemini.ts`
+`geminiChat({model, systemPrompt, userPrompt, maxTokens, temperature, imageBase64, jsonMode, fallbackToLite})` is the ONE interface for all Gemini calls. Handles:
+- Message translation from OpenAI-style `{system, user}` to Gemini's `{systemInstruction, contents}`.
+- Vision input via `inline_data` parts.
+- `responseMimeType: application/json` when `jsonMode=true`.
+- **Built-in fallback:** on 5xx / 429 / empty content, automatically retries once on `gemini-2.5-flash-lite`. Pass `fallbackToLite: false` when primary is already Flash-Lite.
+
+### Single AI coach endpoint — no client-side routing
+```
+Client (free + PRO) → ai-proxy (Gemini 2.5 Flash)
+  JWT → auth.getUser(token)
+  isPro = SELECT 1 FROM subscriptions WHERE user_id AND active AND end_date > now()
+  If !isPro: enforce 30-day trial window + 15/day cap via ai_coach_interactions
+  If  isPro: no cap, no trial
+  ← Response + model_used + tokens_used
+```
+The old separate `ai-proxy-pro` function returns **410 Gone** for any orphan clients still calling it.
+
+### Cost estimates (Gemini pricing at 2026-04-18)
+| Scale | Cost/month (coach + vision + weekly Pro) |
+|---|---|
+| 50 beta users | ~$3 |
+| 1,000 users | ~$70 |
+| 10,000 users | ~$700 |
+
+Input $0.075/M · output $0.30/M for Flash; $1.25/M · $10/M for Pro; Flash-Lite is the cheapest tier.
 
 ### Input Validation (all AI Edge Functions)
-- **Message length:** Max 5,000 chars. Enforced server-side on `ai-proxy`, `ai-proxy-pro`, `ai-media-proxy`.
-- **Snapshot size:** Max 10,000 chars (stringified JSON). Enforced on `ai-proxy`, `ai-proxy-pro`.
+- **Message length:** Max 5,000 chars. Enforced server-side on `ai-proxy`, `ai-media-proxy`.
+- **Snapshot size:** Max 10,000 chars (stringified JSON). Enforced on `ai-proxy`.
 - **Image size:** Max 5MB. Enforced on `ai-media-proxy` via content-length + arrayBuffer check.
 - **SSRF protection:** `ai-media-proxy` only fetches from `${SUPABASE_URL}/storage/v1/object/` prefix. All other URLs rejected.
 
 ### Client-Side Context Compaction (`AiService._compactContext`)
 - **Target:** <9,500 bytes (buffer under 10KB server limit for JSON overhead).
 - **Trim order** (least load-bearing first): `step_history_7d` → `weight_trend` → `nutrition_trend` → `exercise_history` → `personal_records` → `coach_notices` → truncate `coaching_notes` (1,500 char cap) → drop `fitness_summary`.
-- Applied on EVERY AI call (`chat`, `chatPro`, `chatWithMedia`, `reason`, `predict`, both direct-HTTP fallbacks). Without this, historical queries that trigger `enrichContextForQuery` get rejected with a 400 from the server.
+- Applied on EVERY AI call (`chat`, `chatWithMedia`, `predict`, direct-HTTP fallbacks). Without this, historical queries that trigger `enrichContextForQuery` get rejected with a 400 from the server.
 
 ### Client-Side Error Extraction (`AiService._extractError`)
 - Parses `{"error": "..."}` out of non-200 responses on all AI Edge Functions.
@@ -530,18 +546,16 @@ Cost per user/month: ~₹1.80
   - `Snapshot too large` → "Your coaching context is unusually large. Please try a shorter question."
   - `Image too large` → "That photo is too large (max 5 MB)."
   - `Only Supabase Storage URLs are allowed` → "Upload failed — please try picking the photo again."
-  - `PRO subscription required` → "This feature requires PRO."
   - `502`/`503`/`504` → "The AI model is temporarily unavailable. Please try again in a minute."
 - **Never use "restart the app" copy.** It doesn't fix any of these root causes.
 
 ### Edge Function Auth
-- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()`.
-- `ai-proxy-pro`: `verify_jwt: false` (same bug). Manual JWT + subscription check.
+- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()` + server-side `isPro` check for unlimited tier.
 - `ai-media-proxy`: `verify_jwt: true` + manual JWT + PRO subscription check.
 - `validate-promo`: `verify_jwt: true` + manual JWT validation (prevents unauthenticated promo enumeration).
 - `future-prediction`: `verify_jwt: true` + manual JWT validation.
 
-### Vision Features (ai-proxy — OpenRouter Gemma 4 + Gemini 2.5 Flash Lite)
+### Vision Features (ai-proxy — Gemini 2.5 Flash Lite)
 - `food_text_analysis`: Text → nutrition JSON. **Rate limited: 50/day free, 200/day PRO** (server-side abuse cap; client has no hard limit — server is source of truth). Counted via `ai_coach_interactions` rows with `channel='food_text_analysis'`.
 - `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 15/day abuse cap.
 - `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 15/day abuse cap.
@@ -561,7 +575,7 @@ Cost per user/month: ~₹1.80
   ```
 - Short request IDs (8 hex chars) are logged server-side AND returned to the client so support can grep logs for the exact failure. The client sees a generic message; the logs retain full detail.
 - **Validation errors** (400 responses like "Message too long", "Image too large", "PRO subscription required") ARE safe to return verbatim — they're user-actionable and don't leak internals.
-- Applies to all 19 Edge Functions: `ai-proxy`, `ai-proxy-pro`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `beat-my-coach`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`.
+- Applies to all 18 live Edge Functions: `ai-proxy`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `beat-my-coach`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`. (`ai-proxy-pro` is a 410-Gone stub — retired 2026-04-18 — excluded.)
 
 ### Server-Side Workout Analytics
 - `weekly-recalc`: Reads exercise-level data from `workout_log_exercises` (NOT `workout_logs`). Derives date from `completed_at`. Groups exercises by `exercise_id` (= exercise_name) for weight progression tracking. `total_workouts_done` counts distinct dates, not exercise rows.
@@ -706,7 +720,7 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 - Weight + body measurements tracking
 - Streak counter + water tracking
 - Steps + sleep sync (Google Fit / Health Connect)
-- AI Coach — 30 days free (15 msg/day, OpenRouter Gemma 4 27B)
+- AI Coach — 30 days free (15 msg/day, Gemini 2.5 Flash)
 - Telegram bot — 30 days free
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
@@ -724,8 +738,7 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 - Weekly AI nutrition report + Telegram push (ongoing)
 - Future Prediction card — fresh AI prediction every month
 - Progress photos (full timeline)
-- Unlimited AI coach (Cerebras gpt-oss-120B)
-- Reasoning tab (deep personalised coaching — GLM-4.7 on Cerebras)
+- Unlimited AI coach (Gemini 2.5 Flash — no daily cap, no trial window)
 - Audio-First UI (voice notes to AI coach)
 - Morning alert — AI-personalised message with yesterday's data
 - Adaptive workout recommendations from biometric data (Phase 2)
@@ -795,7 +808,7 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Scheduled workouts:** `WorkoutScheduleService` owns all schedule mutations (generate, clean-sync on template edit, reschedule on days/week change). Never write `schedule_YYYY-MM-DD` keys directly from a widget or repository.
 - **Nutrition total calories:** After a meal is logged, `total_calories` comes from summing `items[]` with per-item Atwater fallback (`raw > 0 ? raw : 4P+4C+9F`). Never read `result['total_calories']` at the top level of an AI response — it's routinely missing.
 - **AI snapshot:** `AiCoachRepository.buildAiContext()` is the ONE builder. `AiService._compactContext()` is the ONE trimmer. Never construct ad-hoc snapshots in provider code.
-- **Subscription status:** `SubscriptionService.isPro()` + `gate()` are the ONLY entry points. Never read `configBox.get('isPro')` directly from a widget. High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`) go through `verifyFromServer()`.
+- **Subscription status:** `SubscriptionService.isPro()` + `gate()` are the ONLY entry points. Never read `configBox.get('isPro')` directly from a widget. High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) go through `verifyFromServer()`.
 - **Provider invalidation after mutation:** Any write that changes workout state (log, edit, delete, complete) MUST invalidate the full batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`. One missing invalidation = stale UI.
 
 ---
@@ -888,11 +901,11 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | Days/week change not rescheduling | `generateAndScheduleFromDate()` in WorkoutScheduleService — deletes future non-completed entries, preserves completed, regenerates from today |
 | Image upload RLS violation | Storage path must be `$userId/$timestamp.jpg`, NOT `chat-media/$userId/...` — bucket name is already set by `.from('chat-media')` |
 | Mic stops after 2-3 seconds | `pauseFor: 5s`, `listenFor: 60s`, `ListenMode.dictation`, `partialResults: true` via `SpeechListenOptions` |
-| PRO chat "Session error" | `ai-proxy-pro` must have `verify_jwt: false` — Supabase gateway bug rejects valid JWTs when `true` |
+| Stale "Chat/Reasoning" toggle in AI coach header | Removed 2026-04-18. If you see this pill in a fresh APK, the `_buildStatusPill` in `ai_coach_screen.dart` didn't ship — single-pill header is the current design. |
 | SSRF via ai-media-proxy | Only allow `${SUPABASE_URL}/storage/v1/object/` prefix URLs. Never fetch arbitrary user-supplied URLs server-side. |
 | Null expiry grants PRO | `isPro()` returns `kDebugMode` when `expiresAt` is null — release builds treat null as free. Never remove this guard. |
 | Promo code enumeration | `validate-promo` requires JWT auth. Never expose promo discount_pct to unauthenticated callers. |
-| Subscription bypass via Hive | `gate()` calls `verifyFromServer()` for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `reasoning_tab`, `progress_photos`). Never rely on local-only check for these. Any feature that writes to Storage or spends cloud resources on the user's behalf MUST be server-verified. |
+| Subscription bypass via Hive | `gate()` calls `verifyFromServer()` for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`). Never rely on local-only check for these. Any feature that writes to Storage or spends cloud resources on the user's behalf MUST be server-verified. |
 | Oversized AI payload abuse | All AI Edge Functions enforce message (5K chars) + snapshot (10K chars) limits server-side. Client limits are advisory only. |
 | Error widget leaks stack trace | `ErrorWidget.builder` shows generic message in release (`kDebugMode` guard). Never show `exceptionAsString()` to production users. |
 | future-prediction broken import | Import shared modules as `../_shared/openrouter.ts` in source, but deploy with `./_shared/openrouter.ts` (MCP places files in source/ subdirectory). |

@@ -16,10 +16,10 @@
 ## AI Model Stack
 | Tier | Model | Notes |
 |------|-------|-------|
-| Free (30 days) | Cerebras Llama 3.1 8B | Free tier. After 30 days, AI locks → PRO upsell |
-| PRO | Cerebras gpt-oss-120B | Direct via Edge Function, ~₹1.80/user/month |
-| Reasoning Tab (PRO) | GLM-4.7 on Cerebras | Deep coaching, hard token cap per session |
-| Vision / Food AI | Gemini Flash | Scan Meal + Cart Auditor only |
+| AI Coach (free + PRO, merged 2026-04-18) | Gemini 2.5 Flash via single `ai-proxy` endpoint | Free: 30-day trial, 15 msg/day. PRO: unlimited. Server-side gate. |
+| Reasoning Tab | RETIRED 2026-04-18 | Chat/Reasoning toggle removed from UI; single coach experience. |
+| Weekly Report (PRO) | Gemini 2.5 Pro | Deepest reasoning, once per week per user |
+| Vision / Food AI | Gemini 2.5 Flash Lite | Scan Meal + Cart Auditor + body composition + media proxy |
 
 Claude Sonnet as primary coach → **REJECTED** (destroys unit economics at scale).
 WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
@@ -40,7 +40,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Future Prediction Card | One AI forecast card post-onboarding. Bold 90-day prediction |
 | Steps + Sleep Sync | Google Fit / Health Connect basic sync. Display only |
 | Basic Morning Alert | Generic push notification at 7AM. "Time to train — Push Day scheduled." |
-| AI Coach (30-day trial) | 15 messages/day for 30 days on Cerebras Llama 3.1 8B |
+| AI Coach (30-day trial) | 15 messages/day for 30 days on Gemini 2.5 Flash |
 | First Weekly Nutrition Report | First report after Week 1 only. Subsequent reports → PRO |
 | AI Food Text Analysis | 3 logs/day. User types food in plain English → AI parses macros |
 | Scan Meal Camera | 3 scans/month. Point camera at plate → Gemini Vision logs macros |
@@ -54,11 +54,11 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Feature | Key | Details |
 |---------|-----|---------|
 | Phases 2-12 | `phases_2_to_12` | Auto-generate new 4-week plans after Week 4. Unlimited progression |
-| Unlimited AI Coach | `ai_coach_unlimited` | Unlimited messages on Cerebras 120B |
+| Unlimited AI Coach | `ai_coach_unlimited` | Unlimited messages on Gemini 2.5 Flash (same model as free, just no daily cap) |
 | AI-Personalised Morning Alert | `morning_alert_pro` | 7AM push referencing specific yesterday's data (weight, workout, streak) |
 | Weekly AI Nutrition Report | `weekly_ai_report` | Every week via Telegram + in-app (free = first report only) |
 | Monthly Future Prediction | `prediction_monthly` | Fresh AI prediction card every month (free = once at onboarding) |
-| Reasoning Tab | `reasoning_tab` | Deep coaching with GLM-4.7 on Cerebras. Hard token cap per session |
+| ~~Reasoning Tab~~ | ~~`reasoning_tab`~~ | RETIRED 2026-04-18 — Chat/Reasoning toggle removed; single AI coach backend. |
 | Progress Photos | `progress_photos` | Full photo timeline in Supabase Storage |
 | Voice Notes to AI Coach | `voice_notes` | Push-to-talk in AI Coach screen |
 | Scan Meal Camera (PRO) | `scan_meal_pro` | 3 scans/day (soft cap warning at 2/3). Free = 3/month |

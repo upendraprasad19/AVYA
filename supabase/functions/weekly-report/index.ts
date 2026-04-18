@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { cascadeChat } from "./_shared/openrouter.ts";
+import { geminiChat, MODEL_PRO } from "./_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,8 +12,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const PRO_MODEL = "cerebras/gpt-oss-120b";
-const PRO_MODEL_LABEL = "Cerebras gpt-oss-120B";
+// 2026-04-18 · Migrated from Cerebras gpt-oss-120b (via OpenRouter) to
+// Gemini 2.5 Pro. Weekly report is the ONLY surface using Pro — deepest
+// reasoning needed, runs at most once per week per user.
+const PRO_MODEL_LABEL = "Gemini 2.5 Pro";
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -360,20 +362,15 @@ ${Object.entries(dailyTotals)
 - Streak: ${userProgress?.current_streak_weeks ?? 0} weeks
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
-    // ── Call AI via cascade (PRO model → free fallbacks) ──────────
-    const { content: aiContent, modelUsed, tokensUsed } = await cascadeChat({
-      models: [
-        PRO_MODEL,
-        "qwen/qwen3.6-plus:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "minimax/minimax-m2.5:free",
-      ],
+    // ── Call Gemini 2.5 Pro (Flash-Lite fallback on 5xx/429) ──────
+    const { content: aiContent, modelUsed, tokensUsed } = await geminiChat({
+      model: MODEL_PRO,
       systemPrompt,
       userPrompt: userMessage,
       maxTokens: 1500,
       temperature: 0.7,
-      timeoutMs: 15000,
-      title: "ICANBEFITTER PRO Weekly Report",
+      timeoutMs: 40_000,
+      jsonMode: true,
     });
 
     if (!aiContent) {

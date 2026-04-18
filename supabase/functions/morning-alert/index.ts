@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "./_shared/send_notification.ts";
-import { cascadeChat } from "./_shared/openrouter.ts";
+import { geminiChat, MODEL_FLASH } from "./_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,16 +10,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 
-const PRO_MODEL = "cerebras/gpt-oss-120b";
-// Bug #18 — Bumped from 3000ms → 8000ms. The 3s limit was too aggressive
-// for Cerebras 120B which routinely takes 4-6s on PRO workloads, causing
-// every PRO user to silently fall through to the generic free template.
-const AI_TIMEOUT_MS = 8000;
+// 2026-04-18 · Migrated to Gemini 2.5 Flash (was cerebras/gpt-oss-120b via
+// OpenRouter). Part of the single-provider consolidation.
+const AI_TIMEOUT_MS = 15_000;
 const PAGE_SIZE = 200; // Users fetched per page to cap memory
 const CONCURRENCY = 20; // Parallel AI calls within each chunk
 
@@ -188,16 +185,12 @@ async function generateProAlert(
   const userPrompt =
     `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;
 
-  const { content } = await cascadeChat({
-    models: [
-      PRO_MODEL,
-      "qwen/qwen3.6-plus:free",
-    ],
+  const { content } = await geminiChat({
+    model: MODEL_FLASH,
     systemPrompt,
     userPrompt,
     maxTokens: 150,
     timeoutMs: AI_TIMEOUT_MS,
-    title: "ICANBEFITTER Morning Alert",
   });
 
   return content;

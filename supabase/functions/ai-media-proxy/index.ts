@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { cascadeChat, FREE_VISION_MODELS } from "../_shared/openrouter.ts";
+import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,13 +10,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Fallback only — primary is OpenRouter Gemma 4 cascade
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+// 2026-04-18 · Migrated off OpenRouter Gemma cascade. Now Flash-Lite only
+// via the shared _shared/gemini.ts helper.
 const MODEL_LABEL = "Gemini 2.5 Flash Lite (Vision)";
 
 /**
@@ -239,70 +237,27 @@ serve(async (req: Request) => {
       media_url,
     );
 
-    // Primary: OpenRouter Gemma 4 cascade (free, multimodal)
-    let rawReply = "";
-    let tokensUsed = 0;
-    let modelLabel = MODEL_LABEL;
-
-    const { content: orContent, modelUsed: orModel, tokensUsed: orTokens } = await cascadeChat({
-      models: [...FREE_VISION_MODELS],
+    // Single Gemini call (Flash Lite is the vision SKU). No fallback —
+    // already on the cheapest Gemini SKU; falling back to the same model
+    // wouldn't add resilience.
+    const { content: rawReply, tokensUsed } = await geminiChat({
+      model: MODEL_FLASH_LITE,
       systemPrompt,
       userPrompt: message,
       imageBase64,
       imageMimeType: mimeType,
       maxTokens: 2048,
       temperature: 0.7,
-      timeoutMs: 15000,
-      title: "ICANBEFITTER Photo Chat",
+      timeoutMs: 25_000,
+      fallbackToLite: false,
     });
-
-    if (orContent) {
-      rawReply = orContent;
-      tokensUsed = orTokens;
-      modelLabel = orModel ?? "Gemma 4 (Vision)";
-    } else {
-      // Fallback: Gemini 2.5 Flash Lite
-      const geminiResponse = await fetch(
-        `${GEMINI_URL}?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: systemPrompt + "\n\nUser: " + message },
-                  { inline_data: { mime_type: mimeType, data: imageBase64 } },
-                ],
-              },
-            ],
-            generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-          }),
-        },
-      );
-
-      if (!geminiResponse.ok) {
-        const errorBody = await geminiResponse.text();
-        console.error("Gemini API error:", geminiResponse.status, errorBody);
-        return new Response(
-          JSON.stringify({
-            error: "AI image analysis temporarily unavailable. Please try again.",
-          }),
-          {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-
-      const geminiData = await geminiResponse.json();
-      rawReply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      tokensUsed = (geminiData.usageMetadata?.totalTokenCount as number) ?? 0;
-    }
+    const modelLabel = MODEL_LABEL;
 
     if (!rawReply) {
       return new Response(
-        JSON.stringify({ error: "AI returned an empty response." }),
+        JSON.stringify({
+          error: "AI image analysis temporarily unavailable. Please try again.",
+        }),
         {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

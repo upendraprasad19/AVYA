@@ -31,7 +31,7 @@ class AiChatResponse {
 /// Free users: Edge Function `ai-proxy` with 3-tier fallback
 ///   Cerebras Llama 3.1 8B -> Groq Llama 4 -> Gemini 2.0 Flash Lite
 ///
-/// PRO users: Edge Function `ai-proxy-pro`
+/// All users: single Edge Function `ai-proxy` (Gemini 2.5 Flash)
 ///   Cerebras Llama 3.3 70B (direct)
 class AiService {
   AiService._();
@@ -79,7 +79,7 @@ class AiService {
     return null;
   }
 
-  /// Server-side limit from ai-proxy / ai-proxy-pro (`5d8fc11`).
+  /// Server-side snapshot limit (ai-proxy, unified 2026-04-18).
   /// We stay a little under to absorb JSON overhead added by the platform.
   static const int _maxSnapshotBytes = 9500;
 
@@ -278,46 +278,15 @@ class AiService {
     return _buildResponse(data);
   }
 
-  // ── PRO tier ──────────────────────────────────────────────────
-
-  /// Send a message to the PRO-tier AI coach (Cerebras Llama 3.3 70B).
-  ///
-  /// Requires active PRO subscription. The [context] map should
-  /// contain the user's daily snapshot for personalised responses.
-  ///
-  /// Returns an [AiChatResponse] with reply text and any detected
-  /// log actions, or throws on failure.
-  Future<AiChatResponse> chatPro(
-      String message, Map<String, dynamic> context) async {
-    final compact = _compactContext(context);
-    try {
-      final response = await _supabase.callFunction(
-        'ai-proxy-pro',
-        body: {
-          'message': message,
-          'context': compact,
-          'snapshot_json': compact,
-        },
-      );
-
-      if (response.status != 200) {
-        final serverError = _extractError(response.data);
-        throw AiServiceException(
-          serverError ?? 'PRO AI chat failed with status ${response.status}',
-          statusCode: response.status,
-        );
-      }
-
-      return _parseResponse(response.data);
-    } on http.ClientException {
-      return _directHttpCall('ai-proxy-pro', message, compact);
-    } catch (e) {
-      if (e.toString().contains('Failed to fetch')) {
-        return _directHttpCall('ai-proxy-pro', message, compact);
-      }
-      rethrow;
-    }
-  }
+  // ── PRO tier (retired 2026-04-18) ─────────────────────────────
+  //
+  // `chatPro` and `reason` used to route PRO traffic to the separate
+  // `ai-proxy-pro` Edge Function (Cerebras Llama 3.3 70B) and the
+  // reasoning backend (GLM-4.7 plan, never shipped). Both were merged
+  // into the single Gemini-backed `ai-proxy` endpoint on 2026-04-18.
+  // Callers should use `chat()` — server-side `isPro` gate handles
+  // unlimited-vs-capped differentiation. `ai-proxy-pro` now returns
+  // 410 Gone for any stragglers.
 
   // ── Media (PRO — Photo Analysis) ──────────────────────────────
 
@@ -413,33 +382,6 @@ class AiService {
     return _buildResponse(data);
   }
 
-  // ── Reasoning ─────────────────────────────────────────────────
-
-  /// Send a message to the PRO reasoning engine (GLM-4.7 on Cerebras).
-  ///
-  /// Used for deep personalised coaching in the Reasoning tab.
-  Future<AiChatResponse> reason(
-      String message, Map<String, dynamic> context) async {
-    final compact = _compactContext(context);
-    final response = await _supabase.callFunction(
-      'ai-proxy-pro',
-      body: {
-        'message': message,
-        'context': compact,
-        'mode': 'reasoning',
-      },
-    );
-
-    if (response.status != 200) {
-      final serverError = _extractError(response.data);
-      throw AiServiceException(
-        serverError ?? 'Reasoning failed with status ${response.status}',
-        statusCode: response.status,
-      );
-    }
-
-    return _parseResponse(response.data);
-  }
 }
 
 /// Exception thrown by [AiService] when an Edge Function call fails.
