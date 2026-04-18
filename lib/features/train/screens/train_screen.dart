@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -233,81 +235,39 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
     final progressPercent = (progress * 100).round();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        WardLetterhead(
+          eyebrow: 'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
+          title: 'Week $selectedWeek of ${plan.weeks.length}',
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
+          divider: false,
+          showAnchor: true,
+          trailing: WardChip(
+            label: '$completedDays/$totalWorkoutDays',
+            tone: WardChipTone.gold,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Phase title
-          Text(
-            'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 3),
-
-          // Subtitle with completion count
-          Text(
-            'Week $selectedWeek of ${plan.weeks.length} \u00b7 $completedDays/$totalWorkoutDays workouts done',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Progress bar
-          Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+          child: Row(
             children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: Container(
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161d28),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: progress,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: WardBar(pct: progress, height: 4)),
               const SizedBox(width: 10),
               Text(
                 '$progressPercent%',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                style: AppTypography.mono.copyWith(
                   color: AppColors.accent,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const WardRule(doubleRule: true, margin: EdgeInsets.symmetric(horizontal: 22)),
+      ],
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
@@ -107,42 +108,12 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Header ─────────────────────────────────────────────────────
 
   Widget _buildHeader(DateTime now) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'NUTRITION',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Today \u00B7 ${now.day} ${_months[now.month - 1]}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          _buildDietPlanButton(),
-        ],
-      ),
+    return WardLetterhead(
+      eyebrow: 'GALLEY \u00B7 ${_months[now.month - 1].toUpperCase()} ${now.day}',
+      title: 'Nutrition',
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+      divider: true,
+      trailing: _buildDietPlanButton(),
     );
   }
 

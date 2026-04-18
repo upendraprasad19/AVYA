@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -314,11 +315,14 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   Widget _buildCompactHeader(
       bool isPro, String channel, bool telegramConnected) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenPadding, vertical: 10),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      padding: const EdgeInsets.fromLTRB(22, 12, 14, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.accent.withValues(alpha: 0.33),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -362,16 +366,25 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           ),
           const SizedBox(width: 10),
 
-          // Title
+          // Title — Wardroom mono eyebrow + Fraunces name
           Expanded(
-            child: Text(
-              'AVYA COACH',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'WARDROOM',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.accent,
+                    letterSpacing: 2.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Coach',
+                  style: AppTypography.h3.copyWith(height: 1.0),
+                ),
+              ],
             ),
           ),
 

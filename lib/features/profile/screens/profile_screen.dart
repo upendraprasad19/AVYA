@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -290,7 +291,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // Safe area
+              // Wardroom letterhead — mono eyebrow + Fraunces title above identity card
+              const WardLetterhead(
+                eyebrow: 'OFFICER \u00B7 DOSSIER',
+                title: 'Profile',
+                padding: EdgeInsets.fromLTRB(22, 14, 22, 12),
+                divider: true,
+              ),
               const SizedBox(height: 10),
 
               // 1. Profile identity with banner + avatar
