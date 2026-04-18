@@ -132,6 +132,13 @@ class CoachMemory {
 
   /// Returns a new CoachMemory with non-null fields from [patch] overlaid
   /// on top of this instance.
+  ///
+  /// Collection fields are overlaid only when the patch's collection is
+  /// non-empty (an explicit empty patch cannot clear an existing collection
+  /// — use direct construction for that).
+  ///
+  /// Privacy fields ([consentVersion], [privateMode]) are NEVER mutated by
+  /// merge() — modifying them requires direct construction.
   CoachMemory merge(CoachMemory patch) => CoachMemory(
         userId: userId,
         preferredName: patch.preferredName ?? preferredName,
@@ -161,8 +168,11 @@ class CoachMemory {
         signalsComputedAt: patch.signalsComputedAt ?? signalsComputedAt,
         lastProactiveType: patch.lastProactiveType ?? lastProactiveType,
         lastExtractionAt: patch.lastExtractionAt ?? lastExtractionAt,
-        consentVersion: patch.consentVersion,
-        privateMode: patch.privateMode,
+        // Privacy + consent fields are NEVER overlaid by merge().
+        // Defaults on the patch constructor would silently flip privateMode=true
+        // → false. Mutate these fields via direct construction only.
+        consentVersion: consentVersion,
+        privateMode: privateMode,
         coachNotes: patch.coachNotes ?? coachNotes,
         updatedAt: patch.updatedAt ?? updatedAt,
       );

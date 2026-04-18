@@ -36,5 +36,24 @@ void main() {
       expect(merged.preferredName, 'Upen');
       expect(merged.communicationStyle, 'hinglish');
     });
+
+    test('merge() preserves privateMode when patch defaults it to false', () {
+      final base = CoachMemory(userId: 'u1', privateMode: true);
+      final patch = CoachMemory(userId: 'u1', preferredName: 'Upen');
+      final merged = base.merge(patch);
+      expect(merged.privateMode, isTrue,
+          reason: 'merge must never silently disable private_mode');
+      expect(merged.preferredName, 'Upen');
+    });
+
+    test('merge() collection patch with empty list does not clear base', () {
+      final base = CoachMemory(
+        userId: 'u1',
+        injuries: [{'part': 'shoulder'}],
+      );
+      final patch = CoachMemory(userId: 'u1');
+      final merged = base.merge(patch);
+      expect(merged.injuries, hasLength(1));
+    });
   });
 }
