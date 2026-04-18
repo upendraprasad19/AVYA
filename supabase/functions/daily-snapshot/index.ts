@@ -175,6 +175,12 @@ async function mergeCoachMemoryFields(
   userId: string,
   extracted: ExtractedFacts,
 ): Promise<void> {
+  // Privacy: if user has opted out, never persist extracted identity facts.
+  // renderCoachMemoryBlock short-circuits prompt rendering, but without this
+  // guard the extracted personality data still lands in coach_memory.
+  const existing = await fetchCoachMemory(supabase, userId);
+  if (existing?.private_mode) return;
+
   const patch: Record<string, unknown> = {};
   if (extracted.preferred_name) patch.preferred_name = extracted.preferred_name;
   if (extracted.communication_style) patch.communication_style = extracted.communication_style;
