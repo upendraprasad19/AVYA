@@ -21,7 +21,7 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
-    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.gms.google-services") version "4.4.2" apply false
     // Crashlytics Gradle plugin — required for NDK symbol upload +
     // automatic mapping-file upload on release builds. Added 2026-04-18.
     id("com.google.firebase.crashlytics") version "3.0.2" apply false
