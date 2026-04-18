@@ -64,6 +64,7 @@ class AiCoachRepository {
       'latest_weight': _getLatestWeight(),
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
+      'coach_memory': _getCoachMemoryForContext(),
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
@@ -798,6 +799,14 @@ class AiCoachRepository {
       }
     }
     return [];
+  }
+
+  /// Returns the coach_memory JSON snapshot for context injection, or
+  /// null when private_mode is on / no memory exists.
+  Map<String, dynamic>? _getCoachMemoryForContext() {
+    final mem = CoachMemory.readFromBox(Hive.box('coachBox'));
+    if (mem == null || mem.privateMode) return null;
+    return mem.toJson();
   }
 
   /// Returns the rolling conversation summary from coachBox.
