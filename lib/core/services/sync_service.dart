@@ -934,32 +934,63 @@ class SyncService {
       if (raw == null) continue;
       final log = Map<String, dynamic>.from(raw as Map);
       try {
-        // Push aggregate nutrition_logs row
-        final logForSupabase = Map<String, dynamic>.from(log);
-        logForSupabase.remove('items'); // Don't store items list in the parent table
-        await _supabase.client.from("nutrition_logs").upsert({
-          ...logForSupabase, "user_id": userId,
-        }, onConflict: "id");
+        // Diagnosed 2026-04-18: the parent-table payload used to spread
+        // the full Hive map into the upsert, which included the Hive
+        // string id (`nlog_<ms>`) AND extra columns (food_id, food_name,
+        // quantity_g, total_fiber, source) that don't exist on
+        // nutrition_logs. PostgREST 400-rejected every call and the
+        // catch below swallowed it. Result: `nutrition_logs` stayed at
+        // 0 rows despite dozens of food logs in Hive.
+        //
+        // Now we explicitly project the schema-matching columns and
+        // coerce the id to a deterministic v5 UUID via _deterministicId.
+        // NutritionRepository.syncLogToSupabase (the hot-path writer)
+        // uses the same namespace so immediate writes + this replay
+        // collapse to the same row.
+        final logCloudId = _deterministicId(key);
+        final parentPayload = <String, dynamic>{
+          'id': logCloudId,
+          'user_id': userId,
+          if (log['date'] != null) 'date': log['date'],
+          if (log['meal_type'] != null) 'meal_type': log['meal_type'],
+          if (log['total_calories'] != null)
+            'total_calories': log['total_calories'],
+          if (log['total_protein'] != null)
+            'total_protein': log['total_protein'],
+          if (log['total_carbs'] != null)
+            'total_carbs': log['total_carbs'],
+          if (log['total_fat'] != null) 'total_fat': log['total_fat'],
+          if (log['created_at'] != null) 'created_at': log['created_at'],
+        };
+        await _supabase.client.from("nutrition_logs").upsert(
+          parentPayload,
+          onConflict: "id",
+        );
 
-        // Push individual nutrition_log_items (Gap 5)
+        // Push individual nutrition_log_items. Same schema trap — id,
+        // log_id, food_id are uuid columns. The bundled food database
+        // uses string IDs like `food_indian_aloo_gobi` which are not
+        // valid uuids, so we skip food_id entirely (column is nullable)
+        // and use a deterministic v5 UUID for id + the parent's cloud
+        // id for log_id.
         final items = log['items'];
         if (items is List) {
-          final logId = log['id'] as String? ?? key;
           for (int i = 0; i < items.length; i++) {
             final item = items[i] is Map
                 ? Map<String, dynamic>.from(items[i] as Map)
                 : <String, dynamic>{};
+            final itemCloudId = _deterministicId('${key}_item_$i');
             try {
               await _supabase.client.from('nutrition_log_items').upsert({
-                'id': '${logId}_item_$i',
-                'log_id': logId,
-                'food_id': item['food_id'],
+                'id': itemCloudId,
+                'log_id': logCloudId,
                 'food_name': item['name'] ?? item['food_name'] ?? '',
-                'quantity_g': item['serving_g'] ?? item['quantity_g'],
-                'calories': item['calories'],
-                'protein': item['protein'],
-                'carbs': item['carbs'],
-                'fat': item['fat'],
+                if (item['serving_g'] != null || item['quantity_g'] != null)
+                  'quantity_g': item['serving_g'] ?? item['quantity_g'],
+                if (item['calories'] != null) 'calories': item['calories'],
+                if (item['protein'] != null) 'protein': item['protein'],
+                if (item['carbs'] != null) 'carbs': item['carbs'],
+                if (item['fat'] != null) 'fat': item['fat'],
               }, onConflict: 'id');
             } catch (itemErr) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
@@ -1390,19 +1421,17 @@ class SyncService {
 
         if (key.startsWith('custom_exercise_')) {
           try {
-            await _supabase.client.from('user_custom_exercises').upsert({
-              ...Map<String, dynamic>.from(raw),
-              'user_id': userId,
-            }, onConflict: 'id');
+            await _supabase.client
+                .from('user_custom_exercises')
+                .upsert(_projectCustomExercise(raw, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] exercise $key: $e');
           }
         } else if (key.startsWith('custom_food_')) {
           try {
-            await _supabase.client.from('user_custom_foods').upsert({
-              ...Map<String, dynamic>.from(raw),
-              'user_id': userId,
-            }, onConflict: 'id');
+            await _supabase.client
+                .from('user_custom_foods')
+                .upsert(_projectCustomFood(raw, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] food $key: $e');
           }
@@ -1416,10 +1445,9 @@ class SyncService {
       if (legacyExercises is List) {
         for (final item in legacyExercises.cast<Map>()) {
           try {
-            await _supabase.client.from('user_custom_exercises').upsert({
-              ...Map<String, dynamic>.from(item),
-              'user_id': userId,
-            }, onConflict: 'id');
+            await _supabase.client
+                .from('user_custom_exercises')
+                .upsert(_projectCustomExercise(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
           }
@@ -1429,10 +1457,9 @@ class SyncService {
       if (legacyFoods is List) {
         for (final item in legacyFoods.cast<Map>()) {
           try {
-            await _supabase.client.from('user_custom_foods').upsert({
-              ...Map<String, dynamic>.from(item),
-              'user_id': userId,
-            }, onConflict: 'id');
+            await _supabase.client
+                .from('user_custom_foods')
+                .upsert(_projectCustomFood(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy food: $e');
           }
@@ -1443,6 +1470,94 @@ class SyncService {
     } catch (e) {
       debugPrint('[SyncService._syncCustomItems] $e');
     }
+  }
+
+  /// Projects a Hive custom-exercise map to ONLY the columns that exist
+  /// on the `user_custom_exercises` Supabase table. The Hive map carries
+  /// extras (`is_custom`, `type`) that PostgREST 400-rejects; before
+  /// 2026-04-18 the sync spread them verbatim into the upsert and every
+  /// call silently failed, which is why user_custom_exercises stayed at
+  /// 0 rows even after the list-vs-per-key wiring fix.
+  ///
+  /// Schema reminder (DB truth, verified via information_schema):
+  ///   id uuid NOT NULL, user_id uuid NOT NULL, name text NOT NULL,
+  ///   logging_type text NOT NULL, category text, primary_muscles
+  ///   text[], equipment_needed text[], notes text, default_sets int,
+  ///   default_reps text, default_rest_secs int, default_duration_secs
+  ///   int, submitted_to_library bool, approved_for_library bool,
+  ///   times_used int, created_at timestamptz.
+  Map<String, dynamic> _projectCustomExercise(
+    Map source,
+    String userId,
+  ) {
+    final src = Map<String, dynamic>.from(source);
+    final defaultDur = src['default_duration_seconds'] ?? src['default_duration_secs'];
+    return <String, dynamic>{
+      'id': src['id'],
+      'user_id': userId,
+      if (src['name'] != null) 'name': src['name'],
+      if (src['logging_type'] != null) 'logging_type': src['logging_type'],
+      if (src['category'] != null) 'category': src['category'],
+      if (src['primary_muscles'] is List)
+        'primary_muscles': (src['primary_muscles'] as List).cast<String>(),
+      if (src['equipment_needed'] is List)
+        'equipment_needed': (src['equipment_needed'] as List).cast<String>(),
+      if (src['notes'] != null) 'notes': src['notes'],
+      if (src['default_sets'] != null) 'default_sets': src['default_sets'],
+      if (src['default_reps'] != null)
+        'default_reps': src['default_reps'].toString(),
+      if (src['default_rest_secs'] != null)
+        'default_rest_secs': src['default_rest_secs'],
+      'default_duration_secs': ?defaultDur,
+      if (src['submitted_to_library'] != null)
+        'submitted_to_library': src['submitted_to_library'],
+      if (src['approved_for_library'] != null)
+        'approved_for_library': src['approved_for_library'],
+      if (src['times_used'] != null) 'times_used': src['times_used'],
+      if (src['created_at'] != null) 'created_at': src['created_at'],
+    };
+  }
+
+  /// Projects a Hive custom-food map to the `user_custom_foods` schema:
+  ///   id uuid NOT NULL, user_id uuid NOT NULL, name text NOT NULL,
+  ///   calories_per_100g numeric, protein_per_100g numeric,
+  ///   carbs_per_100g numeric, fat_per_100g numeric, fiber_per_100g
+  ///   numeric, standard_serving_desc text, standard_serving_g numeric,
+  ///   calories_std numeric, protein_std numeric, carbs_std numeric,
+  ///   fat_std numeric, times_logged int, submitted_to_db bool,
+  ///   approved bool, created_at timestamptz.
+  Map<String, dynamic> _projectCustomFood(
+    Map source,
+    String userId,
+  ) {
+    final src = Map<String, dynamic>.from(source);
+    return <String, dynamic>{
+      'id': src['id'],
+      'user_id': userId,
+      if (src['name'] != null) 'name': src['name'],
+      if (src['calories_per_100g'] != null)
+        'calories_per_100g': src['calories_per_100g'],
+      if (src['protein_per_100g'] != null)
+        'protein_per_100g': src['protein_per_100g'],
+      if (src['carbs_per_100g'] != null)
+        'carbs_per_100g': src['carbs_per_100g'],
+      if (src['fat_per_100g'] != null) 'fat_per_100g': src['fat_per_100g'],
+      if (src['fiber_per_100g'] != null)
+        'fiber_per_100g': src['fiber_per_100g'],
+      if (src['standard_serving_desc'] != null)
+        'standard_serving_desc': src['standard_serving_desc'],
+      if (src['standard_serving_g'] != null)
+        'standard_serving_g': src['standard_serving_g'],
+      if (src['calories_std'] != null) 'calories_std': src['calories_std'],
+      if (src['protein_std'] != null) 'protein_std': src['protein_std'],
+      if (src['carbs_std'] != null) 'carbs_std': src['carbs_std'],
+      if (src['fat_std'] != null) 'fat_std': src['fat_std'],
+      if (src['times_logged'] != null) 'times_logged': src['times_logged'],
+      if (src['submitted_to_db'] != null)
+        'submitted_to_db': src['submitted_to_db'],
+      if (src['approved'] != null) 'approved': src['approved'],
+      if (src['created_at'] != null) 'created_at': src['created_at'],
+    };
   }
 
   // ── Paginated Fetch Helper ──────────────────────────────────
@@ -2250,21 +2365,37 @@ class SyncService {
       if (tmpl['type'] != 'template') continue;
 
       try {
-        final tmplId = tmpl['id']?.toString() ?? key;
+        // Diagnosed 2026-04-18: the Hive template id (`tmpl_<ms>`) is a
+        // raw string, but Supabase `workout_templates.id` is uuid NOT
+        // NULL. Every upsert used to 400-reject. Same for child rows in
+        // `template_exercises` (id + template_id + exercise_id are all
+        // uuid columns; the Hive shape stores string ids from the
+        // bundled exercise library). Observed: workout_templates stayed
+        // at 0 rows despite a successfully saved template.
+        //
+        // Fix: coerce id + template_id to deterministic v5 UUIDs, and
+        // skip exercise_id entirely unless it's already a valid uuid
+        // (it's nullable, and the string library ids aren't meaningful
+        // cross-device). exercise_name carries the real identity.
+        final hiveId = tmpl['id']?.toString() ?? key;
+        final cloudTmplId = _deterministicId(hiveId);
         final exercises = tmpl['exercises'] as List? ?? [];
 
         // Upsert template header
         await _supabase.client.from('workout_templates').upsert({
-          'id': tmplId,
+          'id': cloudTmplId,
           'user_id': userId,
           'name': tmpl['name'] ?? 'Untitled',
-          'description': tmpl['description'],
-          'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'],
-          'estimated_duration_mins': tmpl['estimated_duration_mins'],
+          if (tmpl['description'] != null) 'description': tmpl['description'],
+          'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'] ?? 'custom',
+          if (tmpl['estimated_duration_mins'] != null)
+            'estimated_duration_mins': tmpl['estimated_duration_mins'],
           'source': 'user',
           'is_active': true,
-          'created_at': tmpl['created_at'] ?? DateTime.now().toIso8601String(),
-          'last_used_at': tmpl['last_used_at'],
+          'created_at':
+              tmpl['created_at'] ?? DateTime.now().toIso8601String(),
+          if (tmpl['last_used_at'] != null)
+            'last_used_at': tmpl['last_used_at'],
         }, onConflict: 'id');
 
         // Upsert child exercises
@@ -2272,20 +2403,33 @@ class SyncService {
           final ex = exercises[i] is Map
               ? Map<String, dynamic>.from(exercises[i] as Map)
               : <String, dynamic>{};
+          final rawExerciseId = ex['exercise_id']?.toString() ?? ex['id']?.toString();
+          final isUuid = rawExerciseId != null &&
+              RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+                  .hasMatch(rawExerciseId);
           try {
             await _supabase.client.from('template_exercises').upsert({
-              'id': '${tmplId}_ex_$i',
-              'template_id': tmplId,
-              'exercise_id': ex['exercise_id'] ?? ex['id'],
+              'id': _deterministicId('${hiveId}_ex_$i'),
+              'template_id': cloudTmplId,
+              if (isUuid) 'exercise_id': rawExerciseId,
               'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
               'order_index': i,
               'logging_type': ex['logging_type'] ?? 'weight_reps',
-              'prescribed_sets': ex['sets'] is int ? ex['sets'] : int.tryParse(ex['sets']?.toString() ?? ''),
-              'prescribed_reps': ex['reps']?.toString(),
-              'prescribed_weight': ex['weight_kg']?.toString() ?? ex['prescribed_weight']?.toString(),
-              'prescribed_time_secs': ex['time_secs'] ?? ex['prescribed_time_secs'],
-              'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
-              'notes': ex['notes'],
+              if (ex['sets'] != null)
+                'prescribed_sets': ex['sets'] is int
+                    ? ex['sets']
+                    : int.tryParse(ex['sets'].toString()),
+              if (ex['reps'] != null) 'prescribed_reps': ex['reps'].toString(),
+              if (ex['weight_kg'] != null || ex['prescribed_weight'] != null)
+                'prescribed_weight': (ex['weight_kg'] ??
+                        ex['prescribed_weight'])
+                    .toString(),
+              if (ex['time_secs'] != null || ex['prescribed_time_secs'] != null)
+                'prescribed_time_secs':
+                    ex['time_secs'] ?? ex['prescribed_time_secs'],
+              if (ex['rest_seconds'] != null || ex['rest_secs'] != null)
+                'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
+              if (ex['notes'] != null) 'notes': ex['notes'],
             }, onConflict: 'id');
           } catch (exErr) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');

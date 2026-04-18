@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:uuid/uuid.dart';
 
 /// Repository for all nutrition-related Hive reads/writes.
 ///
@@ -506,18 +507,60 @@ class NutritionRepository {
 
   // ── Supabase Sync (background, fire-and-forget) ──────────────────
 
+  /// Namespace used to derive a stable UUID from the Hive key. Must match
+  /// SyncService._syncNamespace so the full sync + the immediate per-log
+  /// sync agree on the same row id (no duplicates on replay).
+  static const _nutritionSyncNamespace =
+      '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
   /// Syncs a nutrition log to the Supabase `nutrition_logs` table.
   ///
   /// Fire-and-forget: catches all errors and logs them via debugPrint.
   /// The caller should have already written to Hive before calling this.
+  ///
+  /// Schema contract (verified 2026-04-18 — see diagnosis commit):
+  /// Supabase `nutrition_logs` has these columns — NOTHING else:
+  /// `id uuid, user_id uuid, date date, total_calories numeric,
+  ///  total_protein numeric, total_carbs numeric, total_fat numeric,
+  ///  meal_type text, created_at timestamptz`.
+  ///
+  /// Hive stores the richer map (food_id, food_name, quantity_g,
+  /// total_fiber, source) for local UI, but those columns don't exist
+  /// on the cloud table. Before this fix, the client sent the full map
+  /// AND the Hive key string as `id`; Postgres rejected both the extra
+  /// columns and the non-uuid id, silently 400-ing every write. Result:
+  /// nutrition_logs stayed at 0 rows for the test user despite dozens
+  /// of food logs. We now project to schema-matching columns only and
+  /// coerce the id to a deterministic v5 UUID.
   static Future<void> syncLogToSupabase({
     required Map<String, dynamic> data,
   }) async {
     try {
       final userId = SupabaseService.instance.currentUser?.id;
       if (userId == null) return;
+
+      final localKey = data['id'] as String? ?? '';
+      if (localKey.isEmpty) return;
+      final cloudId =
+          const Uuid().v5(_nutritionSyncNamespace, localKey);
+
+      final payload = <String, dynamic>{
+        'id': cloudId,
+        'user_id': userId,
+        if (data['date'] != null) 'date': data['date'],
+        if (data['meal_type'] != null) 'meal_type': data['meal_type'],
+        if (data['total_calories'] != null)
+          'total_calories': data['total_calories'],
+        if (data['total_protein'] != null)
+          'total_protein': data['total_protein'],
+        if (data['total_carbs'] != null)
+          'total_carbs': data['total_carbs'],
+        if (data['total_fat'] != null) 'total_fat': data['total_fat'],
+        if (data['created_at'] != null) 'created_at': data['created_at'],
+      };
+
       await SupabaseService.instance.client.from('nutrition_logs').upsert(
-        {...data, 'user_id': userId},
+        payload,
         onConflict: 'id',
       );
     } catch (e) {
