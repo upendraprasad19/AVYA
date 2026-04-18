@@ -284,28 +284,34 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── Coaching notes extraction (fire-and-forget, non-blocking) ──
-    // Run after responding to the client so latency is unaffected.
-    // EdgeRuntime.waitUntil keeps the process alive until completion.
+    // Coaching notes extraction (gated): skip if we already extracted within
+    // the last 6h. pushSnapshot fires per-mutation, so without this guard
+    // Gemini Flash burns once per logFood/addWater/completeWorkout call.
     let extractedFacts: ExtractedFacts | null = null;
     try {
-      // Helper guards its own missing-key case; just call it unconditionally.
-      extractedFacts = await extractCoachingNotes(
-        supabaseClient,
-        userId,
-        snapshotDate,
-      );
-      if (extractedFacts) {
-        await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
-        try {
-          await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
-        } catch (memErr) {
-          // coach_memory write failure must not break the response.
-          console.error("coach_memory upsert error (non-fatal):", memErr);
+      const existing = await fetchCoachMemory(supabaseClient, userId);
+      const lastExtraction = existing?.last_extraction_at
+        ? new Date(existing.last_extraction_at).getTime()
+        : 0;
+      const sixHoursMs = 6 * 60 * 60 * 1000;
+      const isStale = (Date.now() - lastExtraction) > sixHoursMs;
+
+      if (isStale) {
+        extractedFacts = await extractCoachingNotes(
+          supabaseClient,
+          userId,
+          snapshotDate,
+        );
+        if (extractedFacts) {
+          await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
+          try {
+            await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
+          } catch (memErr) {
+            console.error("Coach memory merge error (non-fatal):", memErr);
+          }
         }
       }
     } catch (extractErr) {
-      // Never let extraction failure affect the snapshot response.
       console.error("Coaching extraction error (non-fatal):", extractErr);
     }
 

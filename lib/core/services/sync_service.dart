@@ -351,6 +351,12 @@ class SyncService {
         body: {'snapshot_json': snapshot},
       );
 
+      if (response.status != 200) {
+        debugPrint(
+          '[SyncService.pushSnapshot] non-200 from daily-snapshot: ${response.status}',
+        );
+      }
+
       // Mirror coach_memory from the response into Hive (Layer 4/5 identity).
       // Wrapped defensively — a malformed/changed schema must NEVER crash sync.
       if (response.status == 200 && response.data is Map) {
