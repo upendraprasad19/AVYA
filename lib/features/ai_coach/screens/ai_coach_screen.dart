@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -207,7 +208,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final messages = ref.watch(chatHistoryProvider);
     final isSending = ref.watch(sendMessageProvider);
     final messageCount = ref.watch(messageLimitProvider);
-    final isPro = SubscriptionService.instance.isPro();
+    // Watch the provider so this screen rebuilds the instant a Razorpay
+    // success invalidates subscriptionInfoProvider. The direct
+    // SubscriptionService.instance.isPro() read Hive fresh but didn't
+    // trigger a Riverpod rebuild, so the "PRO" pill + trial counter
+    // stayed stale until a full app restart. Observed 2026-04-18 on
+    // icanbefitter@gmail.com post-PRO-purchase.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final telegramConnected = ref.watch(telegramConnectionProvider);
     final channel = ref.watch(channelProvider);
     final reasoningMode = ref.watch(reasoningModeProvider);

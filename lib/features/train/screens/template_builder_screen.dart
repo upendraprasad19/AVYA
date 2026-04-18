@@ -474,6 +474,18 @@ class _TemplateBuilderScreenState
       // Intentionally unawaited — do not block the UI on network.
       unawaited(SyncService.instance.pushSnapshot());
 
+      // Push the template itself (and its exercises + assigned-day
+      // schedule entries) to Supabase immediately.
+      //
+      // Added 2026-04-18: pushSnapshot only refreshes AI context; it does
+      // NOT touch `workout_templates`, `template_exercises`, or
+      // `scheduled_workouts`. Before this change, those tables only
+      // filled on the weekly full-sync path — meaning a custom template
+      // created today wouldn't appear in cloud (or "My Submissions") for
+      // up to 7 days. Observed on icanbefitter@gmail.com — custom
+      // template saved, workout_templates stayed at 0 rows.
+      unawaited(SyncService.instance.syncWorkoutData());
+
       if (mounted) {
         context.go('/train');
       }

@@ -52,6 +52,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _physiqueFocus = 'balanced'; // balanced, glutes_legs, chest_shoulders_arms, strength
   String _fitnessExperience = 'intermediate'; // beginner, intermediate, advanced
   List<String> _injuries = ['none'];
+
+  // Added 2026-04-18: date of birth + wake-up time were collected during
+  // onboarding but had no edit surface, so users couldn't retroactively
+  // fill them. Observed: profile completeness stuck at 94% because DOB
+  // was still null on a post-onboarding account.
+  DateTime? _dateOfBirth; // stored as ISO date string in Hive/Supabase
+  TimeOfDay? _wakeUpTime; // stored as 'HH:MM:SS' string in Hive/Supabase
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
   bool _isAssessingBf = false;
@@ -142,6 +149,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
     _bodyFatAssessedAt = profile['body_fat_assessed_at'] as String?;
 
+    // Date of birth: stored as "YYYY-MM-DD" string. Parse if present.
+    final dobStr = (profile['date_of_birth'] as String?)?.trim() ?? '';
+    if (dobStr.isNotEmpty) {
+      _dateOfBirth = DateTime.tryParse(dobStr);
+    }
+
+    // Wake-up time: stored as "HH:MM" or "HH:MM:SS" string. Parse if present.
+    final wakeStr = (profile['wake_up_time'] as String?)?.trim() ?? '';
+    if (wakeStr.isNotEmpty) {
+      final parts = wakeStr.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h != null && m != null) {
+          _wakeUpTime = TimeOfDay(hour: h, minute: m);
+        }
+      }
+    }
+
     // Capture original values for rescheduling detection
     _originalDaysPerWeek = _daysPerWeek;
     _originalGoal = _goal;
@@ -218,6 +244,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
               const SizedBox(height: AppSpacing.gridGap),
               _buildGenderSelector(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildDateOfBirthField(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildWakeUpTimeField(),
               const SizedBox(height: AppSpacing.sectionGap),
 
               _sectionHeader('Body'),
@@ -436,6 +466,116 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ),
       ),
     );
+  }
+
+  /// Date-of-birth picker row. Renders as a tappable field matching the
+  /// _buildTextField visual style. Tap opens a standard Material
+  /// showDatePicker with reasonable bounds (13 yrs ago as most-recent,
+  /// 100 yrs ago as oldest).
+  Widget _buildDateOfBirthField() {
+    final displayText = _dateOfBirth == null
+        ? 'Date of Birth'
+        : '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}';
+    return InkWell(
+      onTap: _pickDateOfBirth,
+      borderRadius: BorderRadius.circular(AppRadius.row),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(AppRadius.row),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.cake, color: AppColors.textSecondary, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayText,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: _dateOfBirth == null
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final min = DateTime(now.year - 100, now.month, now.day);
+    final max = DateTime(now.year - 13, now.month, now.day);
+    final initial = _dateOfBirth ?? DateTime(now.year - 25, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(max) ? max : initial,
+      firstDate: min,
+      lastDate: max,
+    );
+    if (picked != null && mounted) {
+      setState(() => _dateOfBirth = picked);
+    }
+  }
+
+  /// Wake-up time picker row — same visual pattern as DOB.
+  Widget _buildWakeUpTimeField() {
+    final displayText = _wakeUpTime == null
+        ? 'Wake-up Time'
+        : _wakeUpTime!.format(context);
+    return InkWell(
+      onTap: _pickWakeUpTime,
+      borderRadius: BorderRadius.circular(AppRadius.row),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(AppRadius.row),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.wb_sunny_outlined,
+                color: AppColors.textSecondary, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayText,
+                style: GoogleFonts.getFont(
+                  'DM Sans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: _wakeUpTime == null
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickWakeUpTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _wakeUpTime ?? const TimeOfDay(hour: 7, minute: 0),
+    );
+    if (picked != null && mounted) {
+      setState(() => _wakeUpTime = picked);
+    }
   }
 
   Widget _buildGenderSelector() {
@@ -1456,6 +1596,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final derivedActivityLevel =
           BmrCalculator.resolveActivityLevel(_lifestyleActivity, _daysPerWeek);
 
+      // DOB + wake-up-time: format for storage ("YYYY-MM-DD" + "HH:MM:SS").
+      // Empty string for un-set values — sync_service._sanitize/_hasValue
+      // will drop them before Postgres sees the empty column write.
+      final dobIso = _dateOfBirth == null
+          ? null
+          : '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}';
+      final wakeIso = _wakeUpTime == null
+          ? null
+          : '${_wakeUpTime!.hour.toString().padLeft(2, '0')}:${_wakeUpTime!.minute.toString().padLeft(2, '0')}:00';
+
       final updates = <String, dynamic>{
         'full_name': name,
         'gender': _gender,
@@ -1472,6 +1622,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'injuries': _injuries,
         'city': _cityController.text.trim(),
         'phone': _phoneController.text.trim(),
+        'date_of_birth': ?dobIso,
+        'wake_up_time': ?wakeIso,
         if (_bodyFatController.text.isNotEmpty)
           'body_fat_percent': double.tryParse(_bodyFatController.text),
         if (_bodyFatAssessedAt != null)

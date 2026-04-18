@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Food logger input field with AI analysis button and usage counter.
@@ -86,7 +87,9 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     final isAnalysing = ref.watch(aiAnalysingProvider);
     final canAnalyse = _controller.text.trim().length >= 3 && !isAnalysing;
     final remaining = ref.watch(aiTextLogRemainingProvider);
-    final isPro = SubscriptionService.instance.isPro();
+    // Provider watch (not direct service call) so this tile rebuilds
+    // immediately when Razorpay success invalidates subscriptionInfoProvider.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = AppConstants.freeAiTextLogsPerDay;
 
     return Container(

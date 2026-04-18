@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
@@ -671,6 +675,22 @@ class WeightLogNotifier extends Notifier<void> {
     profile['current_weight_kg'] = weightKg;
     userBox.put('profile', profile);
     BadgeService.instance.checkAll();
+
+    // Immediate cloud sync (CLAUDE.md §15 "fire-and-forget sync pattern").
+    // Before this, weight_logs only synced during weeklyFullSync, leaving
+    // cloud empty for hours/days after the user logged weight. Observed
+    // 2026-04-18 on icanbefitter@gmail.com: logged 75.9 kg, weight_logs
+    // table still had 0 rows at test time.
+    //
+    // `syncWeightNow` pushes just weight_logs (cheap, single table).
+    // `pushSnapshot` refreshes AI coach context with the new weight.
+    // Also re-sync the profile row since current_weight_kg changed.
+    unawaited(SyncService.instance.syncWeightNow());
+    unawaited(SyncService.instance.pushSnapshot());
+    final userId = SupabaseService.instance.currentUser?.id;
+    if (userId != null && userId.isNotEmpty) {
+      unawaited(SyncService.instance.syncProfileNow(userId));
+    }
   }
 }
 

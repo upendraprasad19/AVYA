@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Camera-based meal scanning card with usage counter.
@@ -30,7 +31,10 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
   Widget build(BuildContext context) {
     final scanState = ref.watch(scanMealProvider);
     final remaining = ref.watch(scanMealRemainingProvider);
-    final isPro = SubscriptionService.instance.isPro();
+    // Watch the provider so Razorpay success triggers a rebuild — direct
+    // isPro() reads Hive fresh but don't notify Riverpod, so the card
+    // previously stayed in free-tier state until a restart.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = isPro
         ? AppConstants.proScanMealPerDay
         : AppConstants.freeScanMealPerDay;

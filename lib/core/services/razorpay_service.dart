@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 
 /// Handles Razorpay checkout flow:
 ///   1. Open Razorpay WebView checkout (₹349/month or ₹2,999/year)
@@ -282,10 +283,22 @@ class RazorpayService {
     final context = navigatorKey?.currentContext;
     if (context == null) return;
 
-    // Invalidate subscription provider so UI updates immediately
+    // Invalidate subscription + trial providers so every tab's PRO-gated
+    // UI rebuilds the moment the user returns from Razorpay.
+    //
+    // The widget-side fix (2026-04-18) switched AI coach + nutrition
+    // tiles from direct SubscriptionService.isPro() calls to
+    // ref.watch(subscriptionInfoProvider).isPro, so invalidating
+    // subscriptionInfoProvider cascades into those rebuilds.
+    //
+    // Trial + message-limit providers cache free-tier counters; PRO
+    // users shouldn't see those at all, so invalidate them too to
+    // avoid a stale "15 msgs left today" sliver on the AI coach screen.
     try {
       final container = ProviderScope.containerOf(context, listen: false);
       container.invalidate(subscriptionInfoProvider);
+      container.invalidate(trialInfoProvider);
+      container.invalidate(messageLimitProvider);
     } catch (_) {}
 
     // Show success snackbar

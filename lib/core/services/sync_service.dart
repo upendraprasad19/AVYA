@@ -972,6 +972,22 @@ class SyncService {
     }
   }
 
+  /// Immediately pushes Hive weight logs to Supabase. Safe to call
+  /// fire-and-forget from anywhere — catches its own errors.
+  ///
+  /// Added 2026-04-18: the weight-log save path (home_provider.logWeight)
+  /// now fires this directly so the cloud `weight_logs` table fills in
+  /// seconds instead of waiting for the next weekly full sync.
+  Future<void> syncWeightNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncWeightLogs(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncWeightNow] $e');
+    }
+  }
+
   Future<void> _syncWeightLogs(String userId) async {
     final healthBox = _hive.healthBox;
     // Writers use per-day keys like 'weight_2026-04-07', NOT a single list key.
@@ -1341,8 +1357,24 @@ class SyncService {
     return true;
   }
 
+  /// Public wrapper so immediate-save call sites (the create-custom-exercise
+  /// sheet, the create-custom-food sheet) can push to Supabase without
+  /// waiting for the next weekly sync. Catches its own errors.
+  Future<void> syncCustomItemsNow() => _syncCustomItems();
+
   /// Pushes user-created custom foods and exercises to Supabase
   /// for community contribution.
+  ///
+  /// Historical bug fixed 2026-04-18: the writer
+  /// (`create_custom_exercise_sheet._save`, line 85) stores each exercise
+  /// at its own Hive key `custom_exercise_<ms>`, but this function used to
+  /// only look at a list key `customBox.get('custom_exercises')` — a
+  /// single aggregate List that nobody ever wrote to. Result: custom
+  /// exercises never synced. Observed 2026-04-18 on icanbefitter@gmail.com
+  /// after creating "L Sit" — user_custom_exercises stayed at 0 rows.
+  ///
+  /// New behavior: iterate `customBox.keys` by prefix. Falls back to the
+  /// legacy list-key path for any old-shape boxes still in the wild.
   Future<void> _syncCustomItems() async {
     try {
       final userId = _supabase.currentUser?.id;
@@ -1350,33 +1382,65 @@ class SyncService {
 
       final customBox = _hive.customBox;
 
-      // Custom exercises
-      final customExercises = customBox.get('custom_exercises');
-      if (customExercises != null) {
-        final items = (customExercises as List).cast<Map>();
-        for (final item in items) {
-          await _supabase.client.from('user_custom_exercises').upsert({
-            ...Map<String, dynamic>.from(item),
-            'user_id': userId,
-          }, onConflict: 'id');
+      // ── Primary path: per-key entries ──
+      for (final key in customBox.keys) {
+        if (key is! String) continue;
+        final raw = customBox.get(key);
+        if (raw is! Map) continue;
+
+        if (key.startsWith('custom_exercise_')) {
+          try {
+            await _supabase.client.from('user_custom_exercises').upsert({
+              ...Map<String, dynamic>.from(raw),
+              'user_id': userId,
+            }, onConflict: 'id');
+          } catch (e) {
+            debugPrint('[SyncService._syncCustomItems] exercise $key: $e');
+          }
+        } else if (key.startsWith('custom_food_')) {
+          try {
+            await _supabase.client.from('user_custom_foods').upsert({
+              ...Map<String, dynamic>.from(raw),
+              'user_id': userId,
+            }, onConflict: 'id');
+          } catch (e) {
+            debugPrint('[SyncService._syncCustomItems] food $key: $e');
+          }
         }
       }
 
-      // Custom foods
-      final customFoods = customBox.get('custom_foods');
-      if (customFoods != null) {
-        final items = (customFoods as List).cast<Map>();
-        for (final item in items) {
-          await _supabase.client.from('user_custom_foods').upsert({
-            ...Map<String, dynamic>.from(item),
-            'user_id': userId,
-          }, onConflict: 'id');
+      // ── Legacy path: aggregate list keys ──
+      // Kept for back-compat with devices that still have the old shape
+      // (never-shipped but safe guard).
+      final legacyExercises = customBox.get('custom_exercises');
+      if (legacyExercises is List) {
+        for (final item in legacyExercises.cast<Map>()) {
+          try {
+            await _supabase.client.from('user_custom_exercises').upsert({
+              ...Map<String, dynamic>.from(item),
+              'user_id': userId,
+            }, onConflict: 'id');
+          } catch (e) {
+            debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
+          }
+        }
+      }
+      final legacyFoods = customBox.get('custom_foods');
+      if (legacyFoods is List) {
+        for (final item in legacyFoods.cast<Map>()) {
+          try {
+            await _supabase.client.from('user_custom_foods').upsert({
+              ...Map<String, dynamic>.from(item),
+              'user_id': userId,
+            }, onConflict: 'id');
+          } catch (e) {
+            debugPrint('[SyncService._syncCustomItems] legacy food: $e');
+          }
         }
       }
 
       await _setTimestamp(_lastCustomSyncKey);
     } catch (e) {
-      // Silently skip.
       debugPrint('[SyncService._syncCustomItems] $e');
     }
   }

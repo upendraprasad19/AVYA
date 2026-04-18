@@ -414,22 +414,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SlimAchievementsCard(),
               const SizedBox(height: 8),
 
-              // #3 Body Stats card
-              _buildBodyStats(weightKg, targetKg, bmi, bodyFatPct),
-              const SizedBox(height: 8),
-
-              // #4 Journey timeline — pass profile data to avoid
-              // duplicate UserRepository reads (single source of truth).
+              // AT A GLANCE — combined Journey + Body Stats + My Targets.
+              //
+              // Previously rendered as three separate cards with
+              // `SizedBox(height: 8)` gaps between them. User feedback
+              // 2026-04-18 asked to collapse them into a single visual
+              // group (less vertical space). Order: Journey → Body Stats
+              // → My Targets. Each card keeps its own styling; the gaps
+              // between them collapse to zero so the trio reads as one
+              // block in the scroll.
               _buildJourneyTimeline(
                 stats,
                 currentWeightKg: weightKg,
                 targetWeightKg: targetKg,
                 goal: stats.primaryGoal,
               ),
-              const SizedBox(height: 8),
-
-              // #8 Nutrition Targets
-              if (nutritionTargets != null) ...[
+              _buildBodyStats(weightKg, targetKg, bmi, bodyFatPct),
+              if (nutritionTargets != null)
                 _buildNutritionTargets(
                   nutritionTargets,
                   currentKg: weightKg,
@@ -439,8 +440,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ? profile['pace_preference'] as String
                       : 'balanced',
                 ),
-                const SizedBox(height: 8),
-              ],
+              const SizedBox(height: 8),
 
               // Bug #14 — Future Prediction (moved from home dashboard).
               const SectionHeader('YOUR PREDICTION'),
@@ -451,8 +451,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Bug #14 — Reports now sit directly after prediction (plan order:
-              // prediction → reports → health sync → share & grow → settings).
+              // Reports now hosts BOTH the weekly AI report AND progress
+              // photos (moved here from SHARE & GROW per 2026-04-18 user
+              // feedback). Progress Photos is still PRO-gated at tap.
               const SectionHeader('REPORTS'),
               WeeklyReportCard(
                 isPro: subInfo.isPro,
@@ -472,43 +473,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 8),
-
-              // Health Sync
-              const SectionHeader('HEALTH SYNC'),
-              BiometricSyncCard(
-                stepsToday: biometric.stepsToday,
-                sleepHours: biometric.sleepHours,
-                isSyncEnabled: biometric.isSyncEnabled,
-                onToggleSync: () async {
-                  final newValue = !biometric.isSyncEnabled;
-                  ref.read(biometricProvider.notifier).toggleSync(newValue);
-                  if (newValue && mounted) {
-                    // Invalidate home screen step provider so it re-reads
-                    // the freshly synced Hive data immediately.
-                    ref.invalidate(todayStepsProvider);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Health Connect sync enabled.',
-                          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-                        ),
-                        backgroundColor: AppColors.card,
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                },
-                onLogSleep: (hours, quality) {
-                  ref.read(biometricProvider.notifier).logSleep(
-                    hours: hours,
-                    quality: quality,
-                  );
-                },
-              ),
+              const SizedBox(height: 6),
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Progress Photos',
+                  subtitle: subInfo.isPro
+                      ? 'Track your transformation visually'
+                      : 'PRO \u2014 visual progress timeline',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => SubscriptionService.instance.gate(
+                    AppConstants.featureProgressPhotos,
+                    onPro: () => context.go('/profile/progress-photos'),
+                    onFree: () =>
+                        showPaywallSheet(context, feature: 'Progress Photos'),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 8),
 
               // #4b Invite Friends (referral)
+              //
+              // Progress Photos moved up to REPORTS. Health Sync row added
+              // into SETTINGS (see below) — its standalone section was
+              // removed.
               const SectionHeader('SHARE & GROW'),
               _buildCard([
                 ProfileRow(
@@ -536,24 +525,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: 'My Submissions',
                   subtitle: 'Track approval status of foods & exercises you shared',
                   trailing: const ProfileRowChevron(),
-                  // F19 — progress photos entry (PRO-gated at tap time)
-                  showBorder: true,
-                  onTap: () => context.go('/profile/my-submissions'),
-                ),
-                ProfileRow(
-                  icon: Icons.photo_library_outlined,
-                  title: 'Progress Photos',
-                  subtitle: subInfo.isPro
-                      ? 'Track your transformation visually'
-                      : 'PRO \u2014 visual progress timeline',
-                  trailing: const ProfileRowChevron(),
                   showBorder: false,
-                  onTap: () => SubscriptionService.instance.gate(
-                    AppConstants.featureProgressPhotos,
-                    onPro: () => context.go('/profile/progress-photos'),
-                    onFree: () =>
-                        showPaywallSheet(context, feature: 'Progress Photos'),
-                  ),
+                  onTap: () => context.go('/profile/my-submissions'),
                 ),
               ]),
               const SizedBox(height: 8),
@@ -587,6 +560,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       UserRepository.instance.setUnitsMetric(metric);
                     },
                   ),
+                ),
+                // Health Sync moved here from its own top-level section
+                // (2026-04-18 user feedback). Tap opens a sheet with the
+                // full BiometricSyncCard (steps / sleep / toggle / manual
+                // sleep log). Keeping the rich widget live instead of
+                // re-implementing it as individual rows.
+                ProfileRow(
+                  icon: Icons.favorite_outline,
+                  title: 'Health Sync',
+                  subtitle: _buildHealthSyncSubtitle(biometric),
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => _showHealthSyncSheet(biometric),
                 ),
                 ProfileRow(
                   icon: Icons.shield_outlined,
@@ -1442,6 +1427,62 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.red)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Health Sync (moved into SETTINGS row, 2026-04-18) ───────────
+
+  /// Concise subtitle rendered next to the Health Sync row in settings.
+  /// Collapses the live BiometricSyncCard metrics into one line so the
+  /// list stays dense.
+  String _buildHealthSyncSubtitle(BiometricData b) {
+    if (!b.isSyncEnabled) return 'Connect Google Fit / Health Connect';
+    final parts = <String>[];
+    if (b.stepsToday != null) parts.add('${b.stepsToday} steps');
+    if (b.sleepHours != null) parts.add('${b.sleepHours!.toStringAsFixed(1)}h sleep');
+    return parts.isEmpty ? 'Connected' : parts.join(' \u00B7 ');
+  }
+
+  /// Opens the full BiometricSyncCard inside a bottom sheet so the rich
+  /// widget (toggle, sleep-log button, live steps/sleep readouts) stays
+  /// intact after the reorg.
+  void _showHealthSyncSheet(BiometricData b) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetCtx).viewInsets.bottom,
+        ),
+        child: Container(
+          margin: const EdgeInsets.all(AppSpacing.screenPadding),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          padding: const EdgeInsets.all(6),
+          child: BiometricSyncCard(
+            stepsToday: b.stepsToday,
+            sleepHours: b.sleepHours,
+            isSyncEnabled: b.isSyncEnabled,
+            onToggleSync: () async {
+              final newValue = !b.isSyncEnabled;
+              ref.read(biometricProvider.notifier).toggleSync(newValue);
+              if (newValue && mounted) {
+                ref.invalidate(todayStepsProvider);
+              }
+            },
+            onLogSleep: (hours, quality) {
+              ref.read(biometricProvider.notifier).logSleep(
+                    hours: hours,
+                    quality: quality,
+                  );
+            },
+          ),
+        ),
       ),
     );
   }

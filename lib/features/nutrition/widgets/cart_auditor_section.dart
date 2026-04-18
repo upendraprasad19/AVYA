@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Cart auditor: upload grocery screenshot -> Gemini Vision analysis.
@@ -20,7 +21,11 @@ class CartAuditorSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(cartAuditorProvider);
     final remaining = ref.watch(cartAuditorRemainingProvider);
-    final isPro = SubscriptionService.instance.isPro();
+    // Watch the provider (not a direct service call) so this widget
+    // rebuilds the moment Razorpay success invalidates
+    // subscriptionInfoProvider. Previously the direct isPro() read
+    // showed stale state until a full app restart.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = isPro
         ? AppConstants.proCartAuditorPerDay
         : AppConstants.freeCartAuditorPerDay;

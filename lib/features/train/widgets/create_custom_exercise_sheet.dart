@@ -31,6 +31,7 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
   final _nameCtrl = TextEditingController();
   final _setsCtrl = TextEditingController(text: '3');
   final _repsCtrl = TextEditingController(text: '10');
+  final _durationCtrl = TextEditingController(text: '30');
 
   String _loggingType = 'weight_reps';
   String _category = 'Push';
@@ -43,6 +44,18 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     ('cardio', 'Cardio'),
   ];
 
+  /// Whether to show the "Default Reps" field. Reps is meaningful for
+  /// weight_reps and bodyweight_reps. For timed/cardio it's nonsensical
+  /// (observed 2026-04-18 — user picked "Timed" for L Sit but the form
+  /// still showed Default Reps).
+  bool get _showRepsField =>
+      _loggingType == 'weight_reps' || _loggingType == 'bodyweight_reps';
+
+  /// Whether to show the "Default Duration (sec)" field. Only for
+  /// timed — the active-workout UI then prompts the user for a stopwatch
+  /// duration per set.
+  bool get _showDurationField => _loggingType == 'timed';
+
   static const _categories = [
     'Push', 'Pull', 'Legs', 'Core', 'Cardio', 'Flexibility',
   ];
@@ -52,6 +65,7 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     _nameCtrl.dispose();
     _setsCtrl.dispose();
     _repsCtrl.dispose();
+    _durationCtrl.dispose();
     super.dispose();
   }
 
@@ -73,7 +87,15 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
       'category': _category,
       'logging_type': _loggingType,
       'default_sets': int.tryParse(_setsCtrl.text) ?? 3,
-      'default_reps': _repsCtrl.text.trim().isEmpty ? '10' : _repsCtrl.text.trim(),
+      // Only store default_reps when the logging type uses reps.
+      // For timed / cardio the field is hidden in the UI and the active
+      // workout screen uses different inputs (duration / distance).
+      if (_showRepsField)
+        'default_reps':
+            _repsCtrl.text.trim().isEmpty ? '10' : _repsCtrl.text.trim(),
+      if (_showDurationField)
+        'default_duration_seconds':
+            int.tryParse(_durationCtrl.text.trim()) ?? 30,
       'primary_muscles': <String>[],
       'equipment_needed': <String>[],
       'is_custom': true,
@@ -83,8 +105,15 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     };
 
     HiveService.instance.customBox.put(key, exercise);
-    // AI coach snapshot refresh — makes the new exercise immediately
-    // available in coaching context without waiting for next launch.
+    // Push custom exercise to Supabase immediately.
+    //
+    // Previously only pushSnapshot() fired here, which refreshes AI coach
+    // context but does NOT touch the `user_custom_exercises` table. Combined
+    // with a bug in _syncCustomItems that looked for a list key, custom
+    // exercises never reached cloud at all (observed 2026-04-18 — "L Sit"
+    // created, user_custom_exercises stayed at 0 rows). syncCustomItemsNow
+    // now iterates per-key entries and writes this exercise's row.
+    unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
     Navigator.of(context).pop();
     widget.onCreated(exercise);
@@ -270,93 +299,40 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
           ),
           const SizedBox(height: 12),
 
-          // Sets + Reps row
+          // Sets + (Reps | Duration) row — second field swaps based on
+          // logging_type. Sets stays visible for every type; Reps shows
+          // for weight_reps / bodyweight_reps; Duration (sec) shows for
+          // timed; cardio shows Sets only (distance input lives in the
+          // active workout UI for now).
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Default Sets',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: TextField(
-                        controller: _setsCtrl,
-                        keyboardType: TextInputType.number,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: _numericField(
+                  label: 'Default Sets',
+                  controller: _setsCtrl,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Default Reps',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: TextField(
-                        controller: _repsCtrl,
-                        keyboardType: TextInputType.text,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          isDense: true,
-                          hintText: '10 or 8-12',
-                          hintStyle: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ],
+              if (_showRepsField) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _numericField(
+                    label: 'Default Reps',
+                    controller: _repsCtrl,
+                    hint: '10 or 8-12',
+                    numericOnly: false,
+                  ),
                 ),
-              ),
+              ],
+              if (_showDurationField) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _numericField(
+                    label: 'Default Duration (sec)',
+                    controller: _durationCtrl,
+                    hint: '30',
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -406,6 +382,59 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Small reusable numeric / text field used for Default Sets / Reps /
+  /// Duration. Extracted so the Sets+Reps+Duration row stays readable.
+  Widget _numericField({
+    required String label,
+    required TextEditingController controller,
+    String? hint,
+    bool numericOnly = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.getFont(
+            'DM Sans',
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType:
+                numericOnly ? TextInputType.number : TextInputType.text,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              isDense: true,
+              hintText: hint,
+              hintStyle: hint == null
+                  ? null
+                  : TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

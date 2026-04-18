@@ -282,7 +282,18 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
+    // Single-entry affordance: render a lone dot at the plot centre so
+    // first-time loggers get visual confirmation their weight was saved.
+    // Before this (2026-04-18), the sparkline returned empty for a
+    // 1-entry dataset even though the row showed "1 entries" beneath —
+    // users reported the graph looked broken on their first log.
+    if (values.length == 1) {
+      final center = Offset(size.width / 2, size.height / 2);
+      canvas.drawCircle(center, 4, Paint()..color = AppColors.accent);
+      canvas.drawCircle(center, 2.5, Paint()..color = AppColors.bg);
+      return;
+    }
+    if (values.isEmpty) return;
 
     final minVal = values.reduce(min) - 0.5;
     final maxVal = values.reduce(max) + 0.5;
