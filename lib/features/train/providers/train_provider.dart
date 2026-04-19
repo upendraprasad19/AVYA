@@ -1312,6 +1312,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       int totalDuration = 0;
       double totalDistance = 0;
       int completedSets = 0;
+      // Exact per-set volume sum — preserves precision for mixed-weight
+      // sessions (warm-up sets, descending sets, RPE-based progression)
+      // where best-weight × cumulative-reps would over-estimate.
+      double volumeKg = 0;
 
       // Build per-set detail list for per-set editing + accurate PR detection
       final setsDetail = <Map<String, dynamic>>[];
@@ -1332,6 +1336,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             totalReps += vals.reps ?? 0;
             totalDuration += vals.durationSeconds ?? 0;
             totalDistance += vals.distanceKm ?? 0;
+            // Accumulate exact per-set volume
+            volumeKg += (vals.weight ?? 0) * (vals.reps ?? 0);
 
             // Capture per-set detail
             setsDetail.add({
@@ -1398,6 +1404,11 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         distanceKm: totalDistance,
         hasWarmupSets: hasWarmUpSets,
         fireSyncImmediately: false, // single sync after the loop, below
+        // Pass exact per-set volume sum — preserves precision for
+        // mixed-weight sessions (warm-up sets, descending sets, RPE-based
+        // progression) where the helper's default weightKg×reps×sets would
+        // over-estimate. Restores byte-identical pre-A.7 behavior.
+        overrideVolumeKg: volumeKg,
       );
     }
 

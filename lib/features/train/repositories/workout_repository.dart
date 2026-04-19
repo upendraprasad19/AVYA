@@ -866,6 +866,7 @@ class WorkoutRepository {
     double? distanceKm,
     bool hasWarmupSets = false,
     bool fireSyncImmediately = true,
+    double? overrideVolumeKg,
   }) async {
     final now = DateTime.now();
     final logDate = date ?? now;
@@ -874,12 +875,16 @@ class WorkoutRepository {
     final effectiveLoggingType = loggingType ??
         (weightKg > 0 ? 'weight_reps' : 'bodyweight_reps');
 
-    // Volume = best weight × cumulative reps (matches completeWorkout
-    // fallback when caller doesn't supply a per-set volume from
-    // setsDetail). When setsDetail IS supplied, the caller has already
-    // computed exact per-set volume — but for the simple AI-coach path
-    // we use the best-weight × total-reps approximation.
-    final volumeKg = weightKg * reps;
+    // Volume default = weightKg × reps × sets, matching the AI-coach
+    // logSet intent semantics where `reps` is per-set and `sets` is the
+    // count (e.g. 80kg × 10 × 4 = 3200kg total volume).
+    //
+    // For the manual completeWorkout path — where mixed-weight sets are
+    // common (warm-up sets, descending sets, RPE-based progression) —
+    // the caller has already computed the exact per-set sum from
+    // setsDetail and passes it via [overrideVolumeKg]. That preserves
+    // byte-identical pre-A.7 behavior (Σ per-set weight × reps).
+    final volumeKg = overrideVolumeKg ?? (weightKg * reps * sets);
 
     final logId =
         'exlog_${now.millisecondsSinceEpoch}_${exerciseName.hashCode}';
