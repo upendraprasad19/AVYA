@@ -25,13 +25,9 @@ function applyTone(
   }
   if (tone === "data_driven") {
     const snap = snapshotJson ?? {};
-    const sleepHrs = snap.yesterday_sleep_hours as number | null;
-    const stepsYday = snap.yesterday_steps as number | null;
-    if (sleepHrs != null || stepsYday != null) {
-      const parts: string[] = [];
-      if (sleepHrs != null) parts.push(`sleep ${sleepHrs}hr`);
-      if (stepsYday != null) parts.push(`${stepsYday} steps`);
-      return `${firstName} — yesterday: ${parts.join(", ")}. ${baseAlert}`;
+    const stepsYday = snap.today_steps as number | null;
+    if (stepsYday != null) {
+      return `${firstName} — yesterday: ${stepsYday} steps. ${baseAlert}`;
     }
     return `${firstName} — ${baseAlert}`;
   }
