@@ -220,7 +220,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `exerciseBox` | exercise_library (seeded from bundled JSON) |
 | `foodBox` | food_database (seeded from bundled JSON) |
 | `customBox` | user_custom_exercises, user_custom_foods |
-| `coachBox` | ai_coach_interactions, coaching_notes |
+| `coachBox` | ai_coach_interactions, coaching_notes, `coach_memory` (CoachMemory plain Map — no Hive adapter, mirrors Supabase row) |
 | `syncBox` | last_sync_timestamps (pending_sync_queue is **planned** — see `docs/superpowers/specs/2026-04-17-sync-reliability.md`, not yet implemented) |
 | `configBox` | subscription status, feature flags, app config |
 
@@ -305,7 +305,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (26 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (27 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
@@ -316,7 +316,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 | Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
 | Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` *(new — F20)* |
 | Visual (1) | `progress_photos` *(new — F19)* |
-| AI (2) | `user_daily_snapshots`, `ai_coach_interactions` |
+| AI (3) | `user_daily_snapshots`, `ai_coach_interactions`, `coach_memory` *(new)* |
 | Telemetry (1) | `client_errors` |
 | Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
 | Community (1) | `community_reviews` |
@@ -330,6 +330,12 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `user_custom_exercises.id` and `user_custom_foods.id` — must be a deterministic v5 UUID computed from `(user_id, type, lower(name))` so cross-device upserts dedupe instead of duplicating. Generation namespace: `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`. Migration 020 dedupes legacy rows via `uuid_generate_v5`.
 
 **Cloud `workout_log_exercises`** — per-exercise summary table written by the Flutter app. Key semantics: `set_number` = total completed sets (NOT "which set"); `weight_kg` = best across sets; `exercise_id` = exercise_name (stable identity for cross-week grouping). See §11 "Exercise Log Cloud Contract".
+
+**`coach_memory` table (new — coach personalization, 1 row/user):**
+- Layer 4: `dropout_risk_score`, `plateau_risk_score`, `pro_upgrade_probability` (computed nightly by `compute-coach-signals`)
+- Layer 5: `preferred_name`, `communication_style`, `humor_tolerance`, `depth_preference`, `motivation_style` (extracted by `daily-snapshot` Gemini call)
+- `private_mode=true` short-circuits all reads/writes — never inject into prompts when set.
+- `coach_notes` is free-form and **NEVER** used for training data (DPDP commitment).
 
 **RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
 
@@ -507,6 +513,17 @@ Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter
 - Vision input via `inline_data` parts.
 - `responseMimeType: application/json` when `jsonMode=true`.
 - **Built-in fallback:** on 5xx / 429 / empty content, automatically retries once on `gemini-2.5-flash-lite`. Pass `fallbackToLite: false` when primary is already Flash-Lite.
+
+### System prompt — 7-block layout (since coach_memory ship)
+1. IDENTITY & RULES (static)
+2. USER PROFILE
+3. **COACH MEMORY** (new — preferred_name, style, risks, last_proactive_type)
+4. TODAY'S CONTEXT
+5. RECENT HISTORY (fitness_summary + last 5 turns)
+6. AVAILABLE TOOLS (placeholder — tool-calling phase TBD)
+7. RESPONSE RULES (static)
+
+Block [3] is rendered server-side via `_shared/coach_memory.ts:renderCoachMemoryBlock()` and prepended to the existing system prompt in `ai-proxy`.
 
 ### Single AI coach endpoint — no client-side routing
 ```
@@ -940,3 +957,6 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | `ai-proxy-pro` or `video-status` 410 Gone | Both retired (2026-04-18). `ai-proxy-pro` merged into `ai-proxy` (single Gemini endpoint with server-side `isPro` gate). `video-status` deferred with the video-share feature. Callers should not re-add either; if the video feature ever un-defers, rewrite `video-status` with JWT + user_id filter before deploying. |
 | Hive file bloat over time | `HiveService` implements `WidgetsBindingObserver` and runs `box.compact()` on 7 mutation-heavy boxes (user / workout / nutrition / health / custom / coach / sync) every 7 days on `AppLifecycleState.paused`. Gated via `configBox['last_compact_at']`. If disk usage keeps climbing, confirm the observer is registered in `init()` and the gate is being checked. |
 | food_text_analysis 429 when user is below daily cap | Trigger `trg_food_text_rate_limit` on `ai_coach_interactions` (migration 024, 2026-04-18) enforces the 50/day free / 200/day PRO cap atomically. Insert-first pattern — `ai-proxy` inserts a placeholder row BEFORE calling Gemini. If trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001), return 429. Do NOT re-add a separate check-then-insert pre-check; the trigger is the single source of truth. |
+| Coach calls user by wrong name | `coach_memory.preferred_name` not synced. Verify Hive `coachBox['coach_memory']` matches Supabase. Check `pushSnapshot` round-trip captured the response. |
+| Coach speaks English when user writes Hinglish | `IdentitySignalDetector` is sticky — needs 3 consecutive Hinglish messages before flipping. Devanagari script flips immediately. Verify Hive write happened in `detectAndPersistIdentitySignals`. |
+| Predictive risk scores never appear | `compute-coach-signals` cron only runs on users active in the last 21 days (actually 60 days per implementation — see `active_users_for_signals()` in migration 028). Manually invoke via `mcp__ba7b5e8e__execute_sql` calling `compute_coach_signals_for_user(p_user_id)` for the user_id to debug. |
