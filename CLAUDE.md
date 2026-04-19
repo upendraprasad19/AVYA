@@ -334,7 +334,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 **`coach_memory` table (new — coach personalization, 1 row/user):**
 - Layer 4: `dropout_risk_score`, `plateau_risk_score`, `pro_upgrade_probability` (computed nightly by `compute-coach-signals`)
 - Layer 5: `preferred_name`, `communication_style`, `humor_tolerance`, `depth_preference`, `motivation_style` (extracted by `daily-snapshot` Gemini call)
-- `private_mode=true` short-circuits all reads/writes — never inject into prompts when set.
+- `private_mode=true` short-circuits prompt rendering (`renderCoachMemoryBlock` → empty) and `daily-snapshot` extraction writes. **`fetchCoachMemory` itself still returns the row** — every consumer that reads personalized fields directly (e.g., `morning-alert`) must guard with `memory?.private_mode ? null : memory` before reading `preferred_name`/`motivation_style`/etc. Operational state (`last_proactive_type`) is NOT personal content and may still be written.
 - `coach_notes` is free-form and **NEVER** used for training data (DPDP commitment).
 
 **RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
