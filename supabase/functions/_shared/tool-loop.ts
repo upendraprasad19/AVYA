@@ -345,9 +345,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     }
 
     // Feed all function responses back to the model in one turn.
-    // Per Gemini's function-calling spec, the role for the tool-result turn
-    // is "function" (the spec we're implementing makes this explicit).
-    messages.push({ role: "function", parts: responseParts });
+    // Per the live Gemini REST docs (verified 2026-04-19), the role for
+    // the tool-result turn is "user" — the model treats functionResponse
+    // parts as user-supplied input. Some older spec drafts called for
+    // role:"function", but the live API rejects that with a 400.
+    messages.push({ role: "user", parts: responseParts });
   }
 
   // Loop exhausted without a terminal text response.

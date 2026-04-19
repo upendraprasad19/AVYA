@@ -35,6 +35,12 @@ import {
   MODEL_FLASH,
   MODEL_FLASH_LITE,
 } from "../_shared/gemini.ts";
+import {
+  fetchCoachMemory,
+  renderCoachMemoryBlock,
+} from "../_shared/coach_memory.ts";
+import { runToolLoop } from "../_shared/tool-loop.ts";
+import type { ToolContext } from "../_shared/tools/index.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -465,8 +471,40 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       );
     }
 
+    // ── Fetch coach_memory for identity-mirroring (chat path only) ──
+    // Block [3] of the 7-block context layout. Helper returns "" when
+    // private_mode=true or no row exists, so the truthy check below drops
+    // it silently. Wrapped in try/catch — a memory fetch failure must
+    // never kill the chat response.
+    //
+    // Channel guard: every non-chat channel (food_text_analysis,
+    // scan_meal, cart_auditor, prediction) returns earlier in this
+    // handler. The explicit `isChatChannel` check below is a defensive
+    // belt-and-braces — if a future channel forgets the early return,
+    // this gate prevents the +1 SELECT and the prompt pollution.
+    //
+    // Cost note: this adds +1 SELECT per chat call (coach_memory row).
+    const isChatChannel = !type || type === "chat";
+    let coachMemoryBlock = "";
+    // Reuse the request_id minted in the outer catch when available; the
+    // outer scope's `requestId` only exists in the catch block, so mint a
+    // local one here for the non-fatal warn log to satisfy the project's
+    // standard catch-block format (CLAUDE.md §11).
+    const chatRequestId = crypto.randomUUID().split("-")[0];
+    if (isChatChannel) {
+      try {
+        const coachMemory = await fetchCoachMemory(supabaseClient, userId);
+        coachMemoryBlock = renderCoachMemoryBlock(coachMemory);
+      } catch (e) {
+        console.warn(
+          `[ai-proxy] coach_memory fetch failed (non-fatal) request_id=${chatRequestId}`,
+          e,
+        );
+      }
+    }
+
     // ── Build system prompt ───────────────────────────────────────
-    let systemPrompt =
+    const baseSystemPrompt =
       "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
       "for young professionals in India — like a father who has been watching closely. " +
       "Keep responses concise, actionable, and direct. Be caring but honest. " +
@@ -492,29 +530,71 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
       '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
 
+    // Assemble in the spec'd order: base prompt → [3] coach_memory →
+    // snapshot. The block self-labels [3] in renderCoachMemoryBlock,
+    // and prepending it to the base used to put it before blocks
+    // [1]/[2] of the 7-block layout. Empty coachMemoryBlock (private
+    // mode, no row, or non-chat channel) is dropped by the truthy
+    // check.
+    const promptParts: string[] = [baseSystemPrompt];
+    if (coachMemoryBlock) promptParts.push(coachMemoryBlock);
     if (snapshot_json) {
-      systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
+      promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
+    }
+    const systemPrompt = promptParts.join("\n\n");
+
+    // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
+    // Replaces the previous single-shot geminiChat() with a 3-round
+    // loop that lets Gemini call server-side read tools (executed in
+    // place) and emit typed write intents (returned to the client for
+    // user confirmation + Hive execution).
+    //
+    // Other channels above (food_text_analysis / scan_meal /
+    // cart_auditor / prediction) still use the single-shot helper —
+    // tool calling is chat-only.
+    //
+    // image_base64 vision-on-chat is dropped at this point: the loop
+    // helper does not currently accept inline_data parts. The only
+    // production caller of vision-on-chat (the PRO photo-upload chat
+    // surface) routes through `ai-media-proxy`, not this function, so
+    // there is no live regression. If we need to support inline images
+    // here in future, plumb them through `geminiChatWithTools`.
+    const toolCtx: ToolContext = {
+      userId,
+      isPro: isProUser,
+      sb: supabaseClient,
+      requestId: chatRequestId,
+    };
+
+    let loop;
+    try {
+      loop = await runToolLoop({
+        systemPrompt,
+        userMessage: message,
+        ctx: toolCtx,
+        model: MODEL_FLASH,
+      });
+    } catch (loopErr) {
+      console.error(
+        `[ai-proxy] runToolLoop threw request_id=${chatRequestId}`,
+        loopErr,
+      );
+      return err(502, "AI temporarily unavailable. Please try again.", {
+        request_id: chatRequestId,
+      });
     }
 
-    // ── Single Gemini call (Flash, with image if present) ─────────
-    const { content, modelUsed, tokensUsed } = await geminiChat({
-      model: MODEL_FLASH,
-      systemPrompt,
-      userPrompt: message,
-      maxTokens: 1024,
-      temperature: 0.7,
-      timeoutMs: image_base64 ? 25_000 : 15_000,
-      ...(image_base64 ? { imageBase64: image_base64, imageMimeType: "image/jpeg" } : {}),
-    });
+    // The loop's final text may still contain legacy <ICBF_LOG> tags
+    // until Phase E removes those instructions from the system prompt.
+    // Keep the extractor wired so existing log_water/log_food/etc. paths
+    // still work end-to-end during the migration.
+    const extracted = extractLogActions(loop.text);
+    const cleanReply = extracted.reply;
 
-    if (!content) {
-      return err(502, "AI temporarily unavailable. Please try again.");
-    }
-
-    const modelLabel = modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH;
-
-    // Extract structured log actions from AI reply
-    const extracted = extractLogActions(content);
+    // If the loop fell back to Flash-Lite at any round, label the row
+    // accordingly so analytics see the actual provider that produced
+    // the final response.
+    const modelLabel = loop.usedFallback ? LABEL_FLASH_LITE : LABEL_FLASH;
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -525,49 +605,61 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       .limit(1)
       .single();
 
-    // Log interaction (store clean reply without tags)
+    // Log interaction (store clean reply without tags) + tool-call telemetry.
     await supabaseClient.from("ai_coach_interactions").insert({
       user_id: userId,
       snapshot_id: snapshotData?.id ?? null,
       channel: "app",
       user_message: message,
-      ai_response: extracted.reply,
+      ai_response: cleanReply,
       model_used: modelLabel,
-      tokens_used: tokensUsed,
+      tokens_used: loop.tokensUsed,
+      tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
       created_at: new Date().toISOString(),
     });
 
     // Silent embedding accumulation for both free + PRO tiers. Free
     // users don't get retrieval (no latency), but their memory is
     // ready if they upgrade. Fire-and-forget.
-    (async () => {
-      try {
-        const content_ = `User: ${message}\nCoach: ${extracted.reply}`;
-        const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
-        if (!embedding) return;
-        await supabaseClient.from("memory_embeddings").insert({
-          user_id: userId,
-          embedding,
-          content: content_,
-          source_type: "conversation",
-          metadata: {
-            date: new Date().toISOString().split("T")[0],
-            channel: "app",
-            model: modelLabel,
-            is_pro: isProUser,
-          },
-        });
-      } catch (e) {
-        console.error("[ai-proxy] Embed store error:", e);
-      }
-    })();
+    //
+    // Skip when the model emitted only tool calls (no conversational
+    // text to embed). Append a one-line intent summary so retrieval
+    // still has a hook on the structured action when there IS prose.
+    if (cleanReply.trim().length > 0 || loop.intents.length === 0) {
+      (async () => {
+        try {
+          const intentSummary = loop.intents.length > 0
+            ? ` [queued: ${loop.intents.map((i) => i.type).join(", ")}]`
+            : "";
+          const content_ = `User: ${message}\nCoach: ${cleanReply}${intentSummary}`;
+          const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
+          if (!embedding) return;
+          await supabaseClient.from("memory_embeddings").insert({
+            user_id: userId,
+            embedding,
+            content: content_,
+            source_type: "conversation",
+            metadata: {
+              date: new Date().toISOString().split("T")[0],
+              channel: "app",
+              model: modelLabel,
+              is_pro: isProUser,
+            },
+          });
+        } catch (e) {
+          console.error("[ai-proxy] Embed store error:", e);
+        }
+      })();
+    }
 
     return new Response(
       JSON.stringify({
-        reply: extracted.reply,
+        reply: cleanReply,
         model_used: modelLabel,
-        tokens_used: tokensUsed,
-        actions: extracted.actions,
+        tokens_used: loop.tokensUsed,
+        actions: extracted.actions, // legacy <ICBF_LOG> back-compat
+        tool_intents: loop.intents, // NEW — typed write intents
+        tool_calls_log: loop.toolCallsLog, // NEW — per-call telemetry
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

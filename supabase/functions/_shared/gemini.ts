@@ -352,8 +352,9 @@ export interface GeminiToolsResult {
  *
  * Caller owns the messages array across rounds — this helper does NOT
  * mutate it. Append the model's response (`role: "model", parts: result.parts`)
- * AND the function-response turns (`role: "function", parts: [...]`) before
- * the next call.
+ * AND the function-response turns (`role: "user", parts: [...]`) before
+ * the next call. Note the role is "user" — the live Gemini REST API rejects
+ * `role: "function"` even though some older spec drafts referenced it.
  *
  * On 5xx / 429 / empty content from the primary model, retries once against
  * `MODEL_FLASH_LITE` if `fallbackToLite` is true (default). Throws on total
