@@ -1,11 +1,11 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
 
 /// Redesigned achievements section for the Profile screen.
@@ -53,13 +53,7 @@ class _BadgesGridState extends State<BadgesGrid> {
             children: [
               Text(
                 'ACHIEVEMENTS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
               ),
               const Spacer(),
               Container(
@@ -71,12 +65,7 @@ class _BadgesGridState extends State<BadgesGrid> {
                 ),
                 child: Text(
                   '${unlocked.length} / ${allBadges.length}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.proGold,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.proGold),
                 ),
               ),
             ],
@@ -101,12 +90,7 @@ class _BadgesGridState extends State<BadgesGrid> {
                   const SizedBox(width: 6),
                   Text(
                     '${locked.length} more to unlock',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textDim),
                   ),
                   const Spacer(),
                   Icon(
@@ -137,12 +121,7 @@ class _BadgesGridState extends State<BadgesGrid> {
           Expanded(
             child: Text(
               'Complete workouts to unlock your first badge',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.textDim),
             ),
           ),
         ],
@@ -234,31 +213,18 @@ class _BadgesGridState extends State<BadgesGrid> {
             const SizedBox(height: 12),
             Text(
               badge.name,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 6),
             Text(
               badge.description,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             Text(
               'Keep going to unlock this!',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
             ),
           ],
         ),
@@ -293,12 +259,7 @@ class _UnlockedBadgeCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               badge.name,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -311,12 +272,7 @@ class _UnlockedBadgeCard extends StatelessWidget {
                 const SizedBox(width: 3),
                 Text(
                   _fmtDate(badge.unlockedAt!),
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.proGold,
-                  ),
+                  style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w400, color: AppColors.proGold),
                 ),
               ],
             ),
@@ -399,45 +355,24 @@ class _BadgeShareSheetState extends State<_BadgeShareSheet> {
                   const SizedBox(height: 14),
                   Text(
                     widget.badge.name.toUpperCase(),
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.proGold,
-                      letterSpacing: 1.5,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.proGold, letterSpacing: 1.5),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     widget.badge.description,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
                   Text(
                     'Unlocked ${_fmtDate(widget.badge.unlockedAt!)}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.proGold.withValues(alpha: 0.7),
-                    ),
+                    style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.proGold.withValues(alpha: 0.7)),
                   ),
                   const SizedBox(height: 20),
                   // Branding
                   Text(
                     'ICANBEFITTER',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.accent,
-                      letterSpacing: 2,
-                    ),
+                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w900, color: AppColors.accent, letterSpacing: 2),
                   ),
                 ],
               ),
@@ -466,12 +401,7 @@ class _BadgeShareSheetState extends State<_BadgeShareSheet> {
                       )
                     : Text(
                         'SHARE ACHIEVEMENT',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black),
                       ),
               ),
             ),

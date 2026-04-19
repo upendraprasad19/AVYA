@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Weekly Nutrition Report card.
 ///
@@ -28,160 +28,89 @@ class WeeklyReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Compute report data from Hive
     final reportData = _computeReportData();
+    final needsPaywall = !isPro && hasFirstReport;
 
-    return Container(
+    return WardCard(
+      variant: WardCardVariant.hero,
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Letterhead header: eyebrow + title + optional PRO chip
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  size: 16,
-                  color: AppColors.orange,
-                ),
-              ),
-              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Weekly Report',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (!isPro && hasFirstReport) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.proGold.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'PRO',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 8,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.proGold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      'WEEKLY REPORT',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 2.5,
+                      ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       usageWeeks < 1
                           ? 'Available after Week 1'
-                          : hasFirstReport && !isPro
+                          : needsPaywall
                               ? 'Upgrade for weekly reports'
                               : 'Nutrition insights',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
+              if (needsPaywall)
+                const WardChip(label: 'PRO', tone: WardChipTone.gold),
             ],
           ),
 
           // Report content
           if (usageWeeks >= 1) ...[
             const SizedBox(height: 14),
-            const Divider(color: AppColors.border, height: 1),
-            const SizedBox(height: 12),
+            const WardRule(gold: true, margin: EdgeInsets.zero),
+            const SizedBox(height: 4),
 
-            // Report summary
-            _buildReportRow(
-              'Avg Calories',
-              reportData['avgCalories'] ?? '--',
-              'vs target',
-              reportData['calTarget'] ?? '--',
+            WardKvRow(
+              label: 'Avg Calories',
+              value: _combine(
+                reportData['avgCalories'] ?? '--',
+                'vs target',
+                reportData['calTarget'] ?? '--',
+              ),
             ),
-            const SizedBox(height: 8),
-            _buildReportRow(
-              'Protein Consistency',
-              reportData['proteinDays'] ?? '0/7',
-              'days on target',
-              null,
+            WardKvRow(
+              label: 'Protein Consistency',
+              value: '${reportData['proteinDays'] ?? '0/7'} days',
             ),
-            const SizedBox(height: 8),
-            _buildReportRow(
-              'Best Day',
-              reportData['bestDay'] ?? '--',
-              null,
-              null,
+            WardKvRow(
+              label: 'Best Day',
+              value: reportData['bestDay'] ?? '--',
+              showDivider: false,
             ),
 
             const SizedBox(height: 12),
 
-            // CTA
-            GestureDetector(
-              onTap: () {
+            // Sharp 2-px CTA slab
+            WardButton(
+              label: needsPaywall
+                  ? 'Upgrade for Reports'
+                  : 'View Full Report',
+              variant: needsPaywall
+                  ? WardButtonVariant.primary
+                  : WardButtonVariant.outline,
+              onPressed: () {
                 if (isPro || !hasFirstReport) {
                   onViewReport();
                 } else {
                   onUpgradeTap();
                 }
               },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isPro || !hasFirstReport
-                      ? AppColors.accentTint
-                      : AppColors.proGoldTint,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isPro || !hasFirstReport
-                        ? AppColors.accent.withValues(alpha: 0.3)
-                        : AppColors.proGold.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    isPro || !hasFirstReport
-                        ? 'View Full Report'
-                        : 'Upgrade for Weekly Reports',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isPro || !hasFirstReport
-                          ? AppColors.accent
-                          : AppColors.proGold,
-                    ),
-                  ),
-                ),
-              ),
             ),
           ],
         ],
@@ -189,56 +118,11 @@ class WeeklyReportCard extends StatelessWidget {
     );
   }
 
-  Widget _buildReportRow(
-      String label, String value, String? suffix, String? extra) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        if (suffix != null) ...[
-          const SizedBox(width: 4),
-          Text(
-            suffix,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-        if (extra != null) ...[
-          const SizedBox(width: 4),
-          Text(
-            extra,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ],
-    );
+  String _combine(String value, String suffix, String extra) {
+    final buf = StringBuffer(value);
+    if (suffix.isNotEmpty) buf.write(' $suffix');
+    if (extra.isNotEmpty) buf.write(' $extra');
+    return buf.toString();
   }
 
   Map<String, String> _computeReportData() {

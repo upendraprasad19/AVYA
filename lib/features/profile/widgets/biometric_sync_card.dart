@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Biometric sync card displaying steps and sleep from Health Connect.
 ///
@@ -24,31 +25,22 @@ class BiometricSyncCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return WardCard(
+      variant: WardCardVariant.inset,
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with toggle
+          // Header row
           Row(
             children: [
+              // Status dot
               Container(
-                width: 34,
-                height: 34,
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: AppColors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(
-                  Icons.monitor_heart_outlined,
-                  size: 16,
-                  color: AppColors.green,
+                  color: isSyncEnabled ? AppColors.ok : AppColors.textMute,
+                  shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 10),
@@ -57,53 +49,41 @@ class BiometricSyncCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Health Sync',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                      'HEALTH CONNECT',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       isSyncEnabled
                           ? 'Google Fit / Health Connect'
                           : 'Tap to enable',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
+              // Sharp slab CONNECT / SYNCED toggle
               GestureDetector(
                 onTap: onToggleSync,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 40,
-                  height: 22,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: isSyncEnabled ? AppColors.accent : AppColors.border,
-                    borderRadius: BorderRadius.circular(11),
+                    color: isSyncEnabled ? Colors.transparent : AppColors.accent,
+                    border: Border.all(color: AppColors.accent),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
-                  child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 200),
-                    alignment: isSyncEnabled
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.all(3),
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: isSyncEnabled
-                            ? Colors.black
-                            : AppColors.textSecondary,
-                        shape: BoxShape.circle,
-                      ),
+                  child: Text(
+                    isSyncEnabled ? 'SYNCED' : 'CONNECT',
+                    style: AppTypography.monoXs.copyWith(
+                      color: isSyncEnabled ? AppColors.accent : AppColors.bgDeep,
+                      letterSpacing: 2.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -113,13 +93,12 @@ class BiometricSyncCard extends StatelessWidget {
 
           if (isSyncEnabled) ...[
             const SizedBox(height: 14),
-            const Divider(color: AppColors.border, height: 1),
+            const WardRule(margin: EdgeInsets.zero),
             const SizedBox(height: 14),
 
             // Stats row
             Row(
               children: [
-                // Steps
                 Expanded(
                   child: _MetricTile(
                     icon: Icons.directions_walk,
@@ -133,7 +112,7 @@ class BiometricSyncCard extends StatelessWidget {
                 Container(
                   width: 1,
                   height: 40,
-                  color: AppColors.border,
+                  color: AppColors.line2,
                 ),
                 // Sleep (with manual entry pencil)
                 Expanded(
@@ -141,12 +120,13 @@ class BiometricSyncCard extends StatelessWidget {
                     onTap: () => _showSleepSheet(context),
                     child: _MetricTile(
                       icon: Icons.bedtime_outlined,
-                      iconColor: AppColors.purple,
+                      iconColor: AppColors.info,
                       label: 'SLEEP',
                       value: sleepHours != null
                           ? '${sleepHours!.toStringAsFixed(1)}h'
                           : '--',
-                      trailing: Icon(Icons.edit, size: 12, color: AppColors.textSecondary),
+                      trailing: const Icon(Icons.edit,
+                          size: 12, color: AppColors.textMute),
                     ),
                   ),
                 ),
@@ -170,7 +150,7 @@ class BiometricSyncCard extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (_) => _ManualSleepSheet(
         initialHours: sleepHours,
@@ -213,57 +193,78 @@ class _ManualSleepSheetState extends State<_ManualSleepSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(18, 14, 18, MediaQuery.of(context).viewInsets.bottom + 24),
+      padding:
+          EdgeInsets.fromLTRB(18, 14, 18, MediaQuery.of(context).viewInsets.bottom + 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 16),
           Text(
+            'LOG SLEEP',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
             'Log Sleep',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            style: AppTypography.h2,
           ),
           const SizedBox(height: 14),
 
           // Duration
-          Text('Duration (hours)', style: GoogleFonts.getFont('DM Sans',
-              fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          Text(
+            'Duration (hours)',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _hoursController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: GoogleFonts.getFont('DM Sans', fontSize: 16, color: AppColors.textPrimary),
+            style: AppTypography.body
+                .copyWith(fontSize: 16, color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'e.g. 7.5',
-              hintStyle: GoogleFonts.getFont('DM Sans', color: AppColors.textSecondary),
+              hintStyle: AppTypography.body.copyWith(color: AppColors.textDim),
               filled: true,
-              fillColor: AppColors.input,
+              fillColor: AppColors.bgRaise,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: AppColors.border),
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                borderSide: const BorderSide(color: AppColors.line2),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: AppColors.border),
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                borderSide: const BorderSide(color: AppColors.line2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
           const SizedBox(height: 14),
 
           // Quality
-          Text('Quality', style: GoogleFonts.getFont('DM Sans',
-              fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          Text(
+            'Quality',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: _qualities.map((q) {
@@ -276,18 +277,21 @@ class _ManualSleepSheetState extends State<_ManualSleepSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: isActive ? AppColors.purple : AppColors.input,
-                        borderRadius: BorderRadius.circular(100),
+                        color: isActive ? AppColors.info : AppColors.bgRaise,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
                         border: Border.all(
-                          color: isActive ? AppColors.purple : AppColors.border,
+                          color: isActive ? AppColors.info : AppColors.line2,
                         ),
                       ),
                       child: Center(
                         child: Text(
                           q,
-                          style: GoogleFonts.getFont('DM Sans',
-                              fontSize: 11, fontWeight: FontWeight.w700,
-                              color: isActive ? Colors.white : AppColors.textSecondary),
+                          style: AppTypography.bodySm.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isActive
+                                ? AppColors.bgDeep
+                                : AppColors.textDim,
+                          ),
                         ),
                       ),
                     ),
@@ -298,29 +302,15 @@ class _ManualSleepSheetState extends State<_ManualSleepSheet> {
           ),
           const SizedBox(height: 18),
 
-          // Save button
-          GestureDetector(
-            onTap: () {
+          // Save button — sharp 2-px gold slab
+          WardButton(
+            label: 'Save',
+            onPressed: () {
               final hours = double.tryParse(_hoursController.text);
               if (hours == null || hours <= 0 || hours > 24) return;
               widget.onSave?.call(hours, _quality.toLowerCase());
               Navigator.of(context).pop();
             },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Center(
-                child: Text(
-                  'SAVE',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black),
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -360,22 +350,17 @@ class _MetricTile extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
+          style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
+            height: 1,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: AppColors.textSecondary,
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 2,
           ),
         ),
       ],
