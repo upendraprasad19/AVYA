@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Telegram connection section matching the mockup design.
+/// Telegram connection section.
 ///
-/// Centered layout with "Chat on Telegram instead" text and a connect button.
+/// Wardroom styling: centred stack with Mono-caps eyebrow, body copy,
+/// and a sharp 2-px accent slab CTA. Connected state swaps the chip/CTA
+/// tone to [WardChipTone.ok].
 class TelegramCard extends StatelessWidget {
   final bool isConnected;
   final VoidCallback onConnect;
@@ -23,65 +26,44 @@ class TelegramCard extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            isConnected
-                ? 'Connected to Telegram'
-                : 'Chat on Telegram instead',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            isConnected ? 'COMMS CHANNEL · LINKED' : 'COMMS CHANNEL',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
             ),
           ),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: isConnected ? null : onConnect,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                color: isConnected
+                    ? AppColors.ok.withValues(alpha: 0.14)
+                    : AppColors.accentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
                 border: Border.all(
-                  color: isConnected
-                      ? AppColors.green.withValues(alpha: 0.3)
-                      : AppColors.accent.withValues(alpha: 0.18),
+                  color: isConnected ? AppColors.ok : AppColors.accent,
+                  width: 2,
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isConnected) ...[
-                    const Icon(
-                      Icons.check_circle,
-                      color: AppColors.green,
-                      size: 14,
+                  Icon(
+                    isConnected ? Icons.check_circle : Icons.send,
+                    size: 14,
+                    color: isConnected ? AppColors.ok : AppColors.accent,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isConnected
+                        ? 'TELEGRAM CONNECTED'
+                        : 'CONNECT @AVYACOACHBOT',
+                    style: AppTypography.mono.copyWith(
+                      color: isConnected ? AppColors.ok : AppColors.accent,
+                      letterSpacing: 1.6,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Telegram Connected',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.green,
-                      ),
-                    ),
-                  ] else ...[
-                    Text(
-                      '\u{1F4F1}',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Connect @AVYACoachBot',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
             ),

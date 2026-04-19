@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Future Prediction card display.
+/// Future Prediction card display — AI-Coach-scoped variant.
 ///
-/// Shows post-onboarding prediction for all users.
-/// PRO users get a "Get Updated Prediction" button (monthly refresh).
+/// Wardroom styling: hero [WardCard] with Mono-caps eyebrow,
+/// Fraunces body prose, gold [WardRule] separators, and sharp 2-px
+/// accent slab CTAs. Shows post-onboarding prediction for all users;
+/// PRO users get a "Update" action (monthly refresh).
 class PredictionCard extends StatelessWidget {
   final String? predictionText;
   final DateTime? generatedAt;
@@ -32,77 +35,39 @@ class PredictionCard extends StatelessWidget {
     final hasPrediction =
         predictionText != null && predictionText!.isNotEmpty;
 
-    return Container(
+    return WardCard(
+      variant: WardCardVariant.hero,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(
-          color: AppColors.accent.withValues(alpha: 0.15),
-        ),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0e1219),
-            Color(0xFF0a1425),
-          ],
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header — Mono eyebrow + generated date
           Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.auto_graph,
-                  color: AppColors.accent,
-                  size: 15,
-                ),
-              ),
-              const SizedBox(width: 10),
+              const Icon(Icons.auto_graph, color: AppColors.accent, size: 14),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'YOUR FUTURE PREDICTION',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
+                  generatedAt != null
+                      ? 'FORECAST \u00B7 ${_formatDate(generatedAt!).toUpperCase()}'
+                      : 'FORECAST',
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 1.6,
                   ),
                 ),
               ),
-              if (generatedAt != null)
-                Text(
-                  _formatDate(generatedAt!),
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+          const WardRule(gold: true, margin: EdgeInsets.zero),
+          const SizedBox(height: 12),
 
           // Prediction text or placeholder
           if (hasPrediction) ...[
             Text(
               predictionText!,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
+              style: AppTypography.body.copyWith(
                 color: AppColors.textPrimary,
                 height: 1.6,
               ),
@@ -116,12 +81,10 @@ class PredictionCard extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Read More →',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                    'READ MORE \u2192',
+                    style: AppTypography.mono.copyWith(
                       color: AppColors.accent,
+                      letterSpacing: 1.6,
                     ),
                   ),
                 ),
@@ -129,40 +92,35 @@ class PredictionCard extends StatelessWidget {
           ] else
             Text(
               'Complete onboarding to get your personalised fitness prediction.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textDim,
                 height: 1.6,
               ),
             ),
 
           // Stale prediction badge (free users whose goal changed)
           if (isStale && hasPrediction) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.proGold.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.warn.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.soft),
                 border: Border.all(
-                  color: AppColors.proGold.withValues(alpha: 0.25),
+                  color: AppColors.warn.withValues(alpha: 0.33),
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded,
-                      size: 14, color: AppColors.proGold),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 14, color: AppColors.warn),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Your goal has changed. Refresh prediction (PRO)',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.warn,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.proGold,
                       ),
                     ),
                   ),
@@ -173,35 +131,31 @@ class PredictionCard extends StatelessWidget {
 
           // Action buttons
           if (hasPrediction) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
               children: [
-                // Share button
+                // Share button — sharp 2-px accent outline slab
                 GestureDetector(
                   onTap: () => _showShareSheet(context),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                        horizontal: 14, vertical: 9),
                     decoration: BoxDecoration(
-                      color: AppColors.accentTint,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(
-                        color: AppColors.accent.withValues(alpha: 0.3),
-                      ),
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(color: AppColors.accent, width: 2),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.share, size: 13,
-                            color: AppColors.accent),
+                        const Icon(Icons.share,
+                            size: 12, color: AppColors.accent),
                         const SizedBox(width: 6),
                         Text(
-                          'Share My Prediction',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                          'DISPATCH',
+                          style: AppTypography.mono.copyWith(
                             color: AppColors.accent,
+                            letterSpacing: 1.6,
                           ),
                         ),
                       ],
@@ -216,20 +170,21 @@ class PredictionCard extends StatelessWidget {
                       : onRefreshTap, // Free users tap → SnackBar in parent
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                        horizontal: 14, vertical: 9),
                     decoration: BoxDecoration(
                       color: isPro
                           ? (canRefresh
-                              ? AppColors.accentTint
+                              ? AppColors.accent
                               : AppColors.textDisabled.withValues(alpha: 0.3))
-                          : AppColors.proGold.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                          : AppColors.proGoldTint,
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
                       border: Border.all(
                         color: isPro
                             ? (canRefresh
-                                ? AppColors.accent.withValues(alpha: 0.3)
-                                : AppColors.border)
-                            : AppColors.proGold.withValues(alpha: 0.3),
+                                ? AppColors.accent
+                                : AppColors.line2)
+                            : AppColors.proGold,
+                        width: 2,
                       ),
                     ),
                     child: Row(
@@ -237,27 +192,25 @@ class PredictionCard extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.refresh,
-                          size: 13,
+                          size: 12,
                           color: isPro
                               ? (canRefresh
-                                  ? AppColors.accent
-                                  : AppColors.textSecondary)
+                                  ? AppColors.bgDeep
+                                  : AppColors.textDim)
                               : AppColors.proGold,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           isPro
-                              ? (canRefresh ? 'Update' : 'Updated')
+                              ? (canRefresh ? 'UPDATE' : 'UPDATED')
                               : 'PRO',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                          style: AppTypography.mono.copyWith(
                             color: isPro
                                 ? (canRefresh
-                                    ? AppColors.accent
-                                    : AppColors.textSecondary)
+                                    ? AppColors.bgDeep
+                                    : AppColors.textDim)
                                 : AppColors.proGold,
+                            letterSpacing: 1.6,
                           ),
                         ),
                       ],
@@ -291,7 +244,7 @@ class PredictionCard extends StatelessWidget {
       backgroundColor: AppColors.card,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.55,
@@ -307,37 +260,43 @@ class PredictionCard extends StatelessWidget {
               // Drag handle
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(2),
+                    color: AppColors.line2,
+                    borderRadius: BorderRadius.circular(AppRadius.soft),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 'YOUR 90-DAY PREDICTION',
-                style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 11, fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2, color: AppColors.accent),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 1.8,
+                ),
               ),
               if (generatedAt != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   'Generated ${_formatDate(generatedAt!)}',
-                  style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 9, color: AppColors.textSecondary),
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                  ),
                 ),
               ],
+              const SizedBox(height: 12),
+              const WardRule(gold: true, margin: EdgeInsets.zero),
               const SizedBox(height: 14),
               Text(
                 predictionText!,
-                style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 13, fontWeight: FontWeight.w400,
-                  color: AppColors.textPrimary, height: 1.7),
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textPrimary,
+                  height: 1.7,
+                ),
               ),
               const SizedBox(height: 20),
-              // Share button
+              // Share button — sharp 2-px accent slab
               SizedBox(
                 width: double.infinity,
                 child: GestureDetector(
@@ -349,13 +308,16 @@ class PredictionCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
                     ),
                     child: Center(
-                      child: Text('Share to Instagram / WhatsApp',
-                        style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 14, fontWeight: FontWeight.w900,
-                          color: Colors.black)),
+                      child: Text(
+                        'DISPATCH TO INSTAGRAM / WHATSAPP',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.bgDeep,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -368,7 +330,7 @@ class PredictionCard extends StatelessWidget {
   }
 
   String _formatDate(DateTime date) {
-    final months = [
+    const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
@@ -445,7 +407,7 @@ class _ShareablePredictionSheetState
           ),
           const SizedBox(height: 16),
 
-          // Share button
+          // Share button — sharp 2-px accent slab
           GestureDetector(
             onTap: () async {
               await CardShareService.captureAndShare(
@@ -458,16 +420,14 @@ class _ShareablePredictionSheetState
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.accent,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
               child: Center(
                 child: Text(
-                  'Share to Instagram / WhatsApp',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
+                  'DISPATCH TO INSTAGRAM / WHATSAPP',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.bgDeep,
+                    letterSpacing: 1.8,
                   ),
                 ),
               ),
@@ -481,12 +441,10 @@ class _ShareablePredictionSheetState
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Close',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
+                'CLOSE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textDim,
+                  letterSpacing: 1.6,
                 ),
               ),
             ),
@@ -509,31 +467,22 @@ class _ShareablePredictionSheetState
           // Header
           Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.auto_graph,
-                    color: AppColors.accent, size: 15),
-              ),
-              const SizedBox(width: 10),
+              const Icon(Icons.auto_graph,
+                  color: AppColors.accent, size: 14),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'YOUR 90-DAY PREDICTION',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 1.8,
                   ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          const WardRule(gold: true, margin: EdgeInsets.zero),
           const SizedBox(height: 14),
 
           // Stats grid (if structured data available)
@@ -545,12 +494,9 @@ class _ShareablePredictionSheetState
             if (stats.lifts.isNotEmpty) ...[
               Text(
                 'KEY LIFTS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                  color: AppColors.textSecondary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 1.6,
                 ),
               ),
               const SizedBox(height: 6),
@@ -565,10 +511,7 @@ class _ShareablePredictionSheetState
             widget.predictionText.length > 500
                 ? '${widget.predictionText.substring(0, 500)}...'
                 : widget.predictionText,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
+            style: AppTypography.body.copyWith(
               color: AppColors.textPrimary,
               height: 1.6,
             ),
@@ -579,12 +522,9 @@ class _ShareablePredictionSheetState
             const SizedBox(height: 10),
             Text(
               stats!.motivationalTagline!,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                fontStyle: FontStyle.italic,
-                color: AppColors.accent,
+              style: AppTypography.displayItalicAccent.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -593,12 +533,9 @@ class _ShareablePredictionSheetState
           if (widget.generatedAt != null) ...[
             const SizedBox(height: 10),
             Text(
-              'Generated ${_formatDate(widget.generatedAt!)}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 9,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
+              'GENERATED ${_formatDate(widget.generatedAt!).toUpperCase()}',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
               ),
             ),
           ],
@@ -639,20 +576,17 @@ class _ShareablePredictionSheetState
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.bgRaise,
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 8,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-              color: AppColors.textSecondary,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 1.4,
             ),
           ),
           const SizedBox(height: 6),
@@ -660,11 +594,9 @@ class _ShareablePredictionSheetState
             children: [
               Text(
                 current,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textDim,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(width: 6),
@@ -676,11 +608,9 @@ class _ShareablePredictionSheetState
               const SizedBox(width: 6),
               Text(
                 predicted,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                style: AppTypography.bodySm.copyWith(
                   color: AppColors.accent,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
@@ -692,8 +622,9 @@ class _ShareablePredictionSheetState
 
   Widget _buildLiftRow(PredictionLiftChange lift) {
     final change = lift.predictedKg - lift.currentKg;
-    final changeStr =
-        change >= 0 ? '+${change.toStringAsFixed(0)}' : change.toStringAsFixed(0);
+    final changeStr = change >= 0
+        ? '+${change.toStringAsFixed(0)}'
+        : change.toStringAsFixed(0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -702,21 +633,16 @@ class _ShareablePredictionSheetState
           Expanded(
             child: Text(
               lift.name,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              style: AppTypography.bodySm.copyWith(
                 color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
           Text(
             '${lift.currentKg.toStringAsFixed(0)}kg',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
             ),
           ),
           Padding(
@@ -729,30 +655,13 @@ class _ShareablePredictionSheetState
           ),
           Text(
             '${lift.predictedKg.toStringAsFixed(0)}kg',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+            style: AppTypography.bodySm.copyWith(
               color: AppColors.accent,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '${changeStr}kg',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-          ),
+          WardChip(label: '${changeStr}KG', tone: WardChipTone.gold),
         ],
       ),
     );

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
 
 /// Push-to-talk voice notes button — available to all users.
 ///
-/// Tap toggles recording on/off. Long press also starts/stops recording.
+/// Wardroom styling: sharp 2-px gold square tile (idle) /
+/// destructive sharp 2-px tile (recording). Tap toggles recording;
+/// long press also starts/stops recording.
 class VoiceNotesButton extends StatelessWidget {
   final bool isPro;
   final bool isRecording;
@@ -31,17 +34,18 @@ class VoiceNotesButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: isRecording ? AppColors.red : AppColors.input,
-          shape: BoxShape.circle,
+          color: isRecording
+              ? AppColors.bad.withValues(alpha: 0.14)
+              : AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
           border: Border.all(
-            color: isRecording
-                ? AppColors.red
-                : AppColors.accent.withValues(alpha: 0.3),
+            color: isRecording ? AppColors.bad : AppColors.accent,
+            width: 2,
           ),
         ),
         child: Icon(
           isRecording ? Icons.stop : Icons.mic,
-          color: isRecording ? Colors.white : AppColors.accent,
+          color: isRecording ? AppColors.bad : AppColors.accent,
           size: 16,
         ),
       ),
