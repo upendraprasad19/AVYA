@@ -35,6 +35,10 @@ import {
   MODEL_FLASH,
   MODEL_FLASH_LITE,
 } from "../_shared/gemini.ts";
+import {
+  fetchCoachMemory,
+  renderCoachMemoryBlock,
+} from "../_shared/coach_memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -465,6 +469,19 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       );
     }
 
+    // ── Fetch coach_memory for identity-mirroring (chat path only) ──
+    // Block [3] of the 7-block context layout. Helper returns "" when
+    // private_mode=true or no row exists, so .filter(Boolean) drops it
+    // silently. Wrapped in try/catch — a memory fetch failure must
+    // never kill the chat response.
+    let coachMemoryBlock = "";
+    try {
+      const coachMemory = await fetchCoachMemory(supabaseClient, userId);
+      coachMemoryBlock = renderCoachMemoryBlock(coachMemory);
+    } catch (e) {
+      console.warn("[ai-proxy] coach_memory fetch failed (non-fatal):", e);
+    }
+
     // ── Build system prompt ───────────────────────────────────────
     let systemPrompt =
       "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
@@ -491,6 +508,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       "\n- If user provides exercise details, parse them and emit:" +
       '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
       '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
+
+    // Prepend coach_memory block (Block [3]) when present. Empty string
+    // (private_mode or no row) is dropped by the truthy check.
+    if (coachMemoryBlock) {
+      systemPrompt = coachMemoryBlock + "\n\n" + systemPrompt;
+    }
 
     if (snapshot_json) {
       systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
