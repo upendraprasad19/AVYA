@@ -11,7 +11,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { upsertCoachMemory } from "../_shared/coach_memory.ts";
 
-Deno.serve(async (_req) => {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const requestId = crypto.randomUUID().split("-")[0];
   try {
     const supabase = createClient(
@@ -48,13 +58,13 @@ Deno.serve(async (_req) => {
     );
     return new Response(
       JSON.stringify({ status: "ok", processed, failed, request_id: requestId }),
-      { headers: { "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error(`[compute-coach-signals] request_id=${requestId}`, err);
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

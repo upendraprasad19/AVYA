@@ -147,12 +147,12 @@ begin
     and date >= (now() - interval '35 days')::date
     and date <  (now() - interval '7 days')::date;
 
-  select extract(day from now() - max(created_at))
+  select extract(epoch from now() - max(created_at)) / 86400.0
     into v_days_silent
   from public.ai_coach_interactions
   where user_id = p_user_id;
 
-  select extract(day from now() - max(date))
+  select extract(epoch from now() - max(date::timestamptz)) / 86400.0
     into v_days_no_weigh
   from public.weight_logs
   where user_id = p_user_id;
@@ -242,7 +242,7 @@ begin
     -- 30-day trial window from signup.
     v_trial_days_remaining := greatest(
       0,
-      30 - extract(day from now() - v_account_created)
+      30 - extract(epoch from now() - v_account_created) / 86400.0
     );
 
     -- msg volume per day over last 7 days.
