@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Animated plan generation screen shown at end of onboarding.
 ///
@@ -158,24 +158,22 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
                             valueColor: AlwaysStoppedAnimation(AppColors.accent),
                           ),
                         )
-                      : Icon(step.icon, color: AppColors.textSecondary, size: 20, key: const ValueKey('pending')),
+                      : Icon(step.icon, color: AppColors.textMute, size: 20, key: const ValueKey('pending')),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 '${step.label}${done ? '' : '...'}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
+                style: AppTypography.body.copyWith(
                   fontWeight: done ? FontWeight.w700 : FontWeight.w400,
-                  color: done ? AppColors.textPrimary : AppColors.textSecondary,
+                  color: done ? AppColors.textPrimary : AppColors.textDim,
                 ),
               ),
             ),
             if (done)
               Text(
                 '\u2713',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.accent),
+                style: AppTypography.h3.copyWith(color: AppColors.accent),
               ),
           ],
         ),
@@ -191,28 +189,16 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
       position: _revealSlide,
       child: FadeTransition(
         opacity: _revealFade,
-        child: Container(
-          width: double.infinity,
+        child: WardCard(
+          variant: WardCardVariant.hero,
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(AppRadius.cardL),
-            border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent.withValues(alpha: 0.1),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
           child: Column(
             children: [
               Text(
                 'ORDERS RECEIVED',
                 style: AppTypography.monoXs.copyWith(
                   color: AppColors.accent,
-                  letterSpacing: 3,
+                  letterSpacing: 2.5,
                 ),
               ),
               const SizedBox(height: 6),
@@ -224,20 +210,17 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
               Text(
                 splitNames,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
+                style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.accent,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                '${widget.daysPerWeek} days \u00B7 4 weeks \u00B7 Phase 1',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+                '${widget.daysPerWeek} DAYS \u00B7 4 WEEKS \u00B7 PHASE 1',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               const SizedBox(height: 12),
@@ -250,26 +233,11 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
                 ],
               ),
               const SizedBox(height: 20),
-              GestureDetector(
-                onTap: () => context.go('/home'),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    "LET'S GO \u2192",
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
+              WardButton(
+                label: "LET'S GO",
+                variant: WardButtonVariant.primary,
+                trailing: const Icon(Icons.arrow_forward, color: AppColors.bgDeep, size: 16),
+                onPressed: () => context.go('/home'),
               ),
             ],
           ),
@@ -283,14 +251,12 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.input,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        border: Border.all(color: AppColors.line2),
       ),
       child: Text(
         '$emoji $text',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 12,
+        style: AppTypography.bodySm.copyWith(
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),

@@ -3,7 +3,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -64,12 +63,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           SnackBar(
             content: Text(
               next.errorMessage!,
-              style: AppTypography.bodyM.copyWith(color: Colors.white),
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
-            backgroundColor: AppColors.red,
+            backgroundColor: AppColors.bad,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.row),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
             ),
           ),
         );
@@ -140,22 +139,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
         // Tagline (logo is now the full-screen background)
         Text(
-          'AI-powered fitness & nutrition',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
+          'AI-POWERED FITNESS & NUTRITION',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.textDim,
+            letterSpacing: 2,
           ),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 4),
         Text(
-          'built for Indian lifestyles',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
+          'BUILT FOR INDIAN LIFESTYLES',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 2,
           ),
           textAlign: TextAlign.center,
         ),
@@ -190,21 +186,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
                     ),
                     children: [
                       const TextSpan(text: 'I agree to the '),
                       TextSpan(
                         text: 'Privacy Policy',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        style: AppTypography.bodySm.copyWith(
                           color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
                         ),
                         recognizer: _privacyTapRecognizer
                           ..onTap = () => launchUrl(
@@ -215,11 +206,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       const TextSpan(text: ' and '),
                       TextSpan(
                         text: 'Terms of Service',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        style: AppTypography.bodySm.copyWith(
                           color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
                         ),
                         recognizer: _termsTapRecognizer
                           ..onTap = () => launchUrl(
@@ -237,93 +226,32 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         const SizedBox(height: 20),
 
         // ── Continue with Google — PRIMARY ──────────────────
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: isLoading || !_consentGiven ? null : () => authNotifier.signInWithGoogle(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              disabledBackgroundColor: Colors.white.withValues(alpha: 0.59),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              elevation: 2,
-              shadowColor: Colors.black.withValues(alpha: 0.16),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-            ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.black,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.g_mobiledata,
-                        size: 28,
-                        color: Colors.black87,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Continue with Google',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+        _buildSharpButton(
+          label: 'CONTINUE WITH GOOGLE',
+          icon: Icons.g_mobiledata,
+          iconSize: 28,
+          background: Colors.white,
+          foreground: Colors.black,
+          border: Colors.white,
+          onPressed: isLoading || !_consentGiven
+              ? null
+              : () => authNotifier.signInWithGoogle(),
+          isLoading: isLoading,
         ),
         const SizedBox(height: 12),
 
         // ── Continue with Phone — SECONDARY ─────────────────
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: OutlinedButton(
-            onPressed: isLoading || !_consentGiven
-                ? null
-                : () => setState(() => _currentView = _SignInView.phone),
-            style: OutlinedButton.styleFrom(
-              backgroundColor: AppColors.card,
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.border, width: 1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.phone_outlined,
-                  size: 20,
-                  color: AppColors.textPrimary,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Continue with Phone',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _buildSharpButton(
+          label: 'CONTINUE WITH PHONE',
+          icon: Icons.phone_outlined,
+          iconSize: 20,
+          background: AppColors.card,
+          foreground: AppColors.textPrimary,
+          border: AppColors.line2,
+          onPressed: isLoading || !_consentGiven
+              ? null
+              : () => setState(() => _currentView = _SignInView.phone),
+          isLoading: false,
         ),
         const SizedBox(height: 20),
 
@@ -332,57 +260,26 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         const SizedBox(height: 20),
 
         // ── Continue with Email — TERTIARY ──────────────────
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: OutlinedButton(
-            onPressed: isLoading || !_consentGiven
-                ? null
-                : () => setState(() => _currentView = _SignInView.email),
-            style: OutlinedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: AppColors.accent,
-              side: BorderSide(
-                color: AppColors.accent.withValues(alpha: 0.30),
-                width: 1,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.email_outlined,
-                  size: 20,
-                  color: AppColors.accent,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Continue with Email',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _buildSharpButton(
+          label: 'CONTINUE WITH EMAIL',
+          icon: Icons.email_outlined,
+          iconSize: 20,
+          background: Colors.transparent,
+          foreground: AppColors.accent,
+          border: AppColors.accent,
+          onPressed: isLoading || !_consentGiven
+              ? null
+              : () => setState(() => _currentView = _SignInView.email),
+          isLoading: false,
         ),
         const SizedBox(height: 32),
 
         // ── Social proof ────────────────────────────────────
         Text(
-          'Join 10,000+ Indians on their fitness journey',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
+          'JOIN 10,000+ INDIANS ON THEIR FITNESS JOURNEY',
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 1.5,
           ),
           textAlign: TextAlign.center,
         ),
@@ -392,12 +289,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         GestureDetector(
           onTap: () => setState(() => _showReferralField = !_showReferralField),
           child: Text(
-            _showReferralField ? 'Hide referral code' : 'Have a referral code?',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+            _showReferralField ? 'HIDE REFERRAL CODE' : 'HAVE A REFERRAL CODE?',
+            style: AppTypography.monoXs.copyWith(
               color: AppColors.accent,
+              letterSpacing: 1.5,
             ),
           ),
         ),
@@ -500,7 +395,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
               // Sign In / Sign Up button
               _buildPrimaryButton(
-                label: _isSignUp ? 'Create Account' : 'Sign In with Email',
+                label: _isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN WITH EMAIL',
                 isLoading: isLoading,
                 onPressed: () {
                   if (!_formKey.currentState!.validate()) return;
@@ -522,10 +417,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     : () => setState(() => _isSignUp = !_isSignUp),
                 child: Text(
                   _isSignUp
-                      ? 'Already have an account? Sign In'
-                      : "Don't have an account? Sign Up",
-                  style: AppTypography.bodyM.copyWith(
+                      ? 'ALREADY HAVE AN ACCOUNT? SIGN IN'
+                      : "DON'T HAVE AN ACCOUNT? SIGN UP",
+                  style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
@@ -580,7 +476,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
           const SizedBox(height: 24),
           _buildPrimaryButton(
-            label: 'Send OTP',
+            label: 'SEND OTP',
             isLoading: isLoading,
             onPressed: () {
               final phone = _phoneController.text.trim();
@@ -591,8 +487,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ] else ...[
           Text(
             'Enter the OTP sent to ${_phoneController.text.trim()}',
-            style: AppTypography.bodyM.copyWith(
-              color: AppColors.textSecondary,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textDim,
             ),
             textAlign: TextAlign.center,
           ),
@@ -605,7 +501,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
           const SizedBox(height: 24),
           _buildPrimaryButton(
-            label: 'Verify OTP',
+            label: 'VERIFY OTP',
             isLoading: isLoading,
             onPressed: () {
               final phone = _phoneController.text.trim();
@@ -638,15 +534,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       obscureText: obscureText,
       validator: validator,
       maxLength: maxLength,
-      style: AppTypography.bodyL.copyWith(color: AppColors.textPrimary),
+      style: AppTypography.body.copyWith(color: AppColors.textPrimary),
       cursorColor: AppColors.accent,
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: AppTypography.bodyL.copyWith(
+        hintStyle: AppTypography.body.copyWith(
           color: AppColors.textDisabled,
         ),
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: AppColors.textSecondary, size: 20)
+            ? Icon(prefixIcon, color: AppColors.textDim, size: 20)
             : null,
         suffixIcon: suffixIcon,
         filled: true,
@@ -656,26 +552,86 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.line2, width: 2),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.line2, width: 2),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          borderSide: const BorderSide(color: AppColors.red),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.bad, width: 2),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
-          borderSide: const BorderSide(color: AppColors.red, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.bad, width: 2),
         ),
-        errorStyle: AppTypography.bodyS.copyWith(color: AppColors.red),
+        errorStyle: AppTypography.bodySm.copyWith(color: AppColors.bad),
+      ),
+    );
+  }
+
+  Widget _buildSharpButton({
+    required String label,
+    required IconData icon,
+    required double iconSize,
+    required Color background,
+    required Color foreground,
+    required Color border,
+    required VoidCallback? onPressed,
+    required bool isLoading,
+  }) {
+    final disabled = onPressed == null;
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: Opacity(
+        opacity: disabled ? 0.45 : 1,
+        child: Material(
+          color: background,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            onTap: onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: border, width: 2),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+              child: isLoading
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: foreground,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, size: iconSize, color: foreground),
+                        const SizedBox(width: 10),
+                        Text(
+                          label,
+                          style: AppTypography.h3.copyWith(
+                            fontSize: 12,
+                            color: foreground,
+                            letterSpacing: 2.5,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -688,37 +644,40 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     return SizedBox(
       width: double.infinity,
       height: 52,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.black,
-          disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.39),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: Material(
+        color: AppColors.accent,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          onTap: isLoading ? null : onPressed,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.accent, width: 2),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+            child: Center(
+              child: isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.black,
+                      ),
+                    )
+                  : Text(
+                      label,
+                      style: AppTypography.h3.copyWith(
+                        fontSize: 12,
+                        color: AppColors.bgDeep,
+                        letterSpacing: 2.5,
+                        height: 1,
+                      ),
+                    ),
+            ),
           ),
-          elevation: 4,
-          shadowColor: AppColors.accent.withValues(alpha: 0.24),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.black,
-                ),
-              )
-            : Text(
-                label,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                ),
-              ),
       ),
     );
   }
@@ -726,17 +685,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Widget _buildDivider() {
     return Row(
       children: [
-        const Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+        const Expanded(child: Divider(color: AppColors.line2, thickness: 1)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'or',
-            style: AppTypography.bodyM.copyWith(
-              color: AppColors.textSecondary,
+            'OR',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
         ),
-        const Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+        const Expanded(child: Divider(color: AppColors.line2, thickness: 1)),
       ],
     );
   }
