@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Quick action chip for suggested prompts.
+///
+/// Wardroom styling: neutral [WardChip] tone with optional leading icon.
+/// Labels auto-uppercase inside the chip (Mono-caps eyebrow feel).
 class PromptChip extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -20,33 +22,12 @@ class PromptChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.accentTint,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: AppColors.accent, size: 14),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-          ],
-        ),
+      child: WardChip(
+        label: label,
+        tone: WardChipTone.gold,
+        leading: icon == null
+            ? null
+            : Icon(icon, color: AppColors.accent, size: 12),
       ),
     );
   }

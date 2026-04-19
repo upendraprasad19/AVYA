@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import '../widgets/profile_row.dart';
 
@@ -91,18 +91,27 @@ class _NotificationSettingsScreenState
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text(
-          'Notifications',
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'DISPATCH \u00B7 SIGNALS',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text('Notifications', style: AppTypography.h3),
+          ],
         ),
       ),
       body: ListView(
@@ -173,8 +182,7 @@ class _NotificationSettingsScreenState
           const SizedBox(height: 16),
           Text(
             'Notifications help you stay consistent. We\'ll never spam you.',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 11, color: AppColors.textSecondary),
+            style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
             textAlign: TextAlign.center,
           ),
         ],
@@ -243,10 +251,7 @@ class _NotificationRow extends StatelessWidget {
                 Flexible(
                   child: Text(
                     title,
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary),
+                    style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -262,10 +267,7 @@ class _NotificationRow extends StatelessWidget {
                     ),
                     child: Text(
                       'PRO',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.proGold),
+                      style: AppTypography.monoXs.copyWith(fontSize: 8, fontWeight: FontWeight.w700, color: AppColors.proGold),
                     ),
                   ),
                 ],
@@ -328,10 +330,7 @@ class _TimePicker extends StatelessWidget {
                 value: t,
                 child: Text(
                   _formatTime(t),
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 12,
-                      fontWeight: t == value ? FontWeight.w700 : FontWeight.w400,
-                      color: t == value ? AppColors.accent : AppColors.textPrimary),
+                  style: AppTypography.bodySm.copyWith(fontWeight: t == value ? FontWeight.w700 : FontWeight.w400, color: t == value ? AppColors.accent : AppColors.textPrimary),
                 ),
               ))
           .toList(),
@@ -346,10 +345,7 @@ class _TimePicker extends StatelessWidget {
           children: [
             Text(
               _formatTime(value),
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent),
+              style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
             ),
             const SizedBox(width: 2),
             const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),
@@ -392,10 +388,7 @@ class _DayPicker extends StatelessWidget {
                 value: d,
                 child: Text(
                   _formatDay(d),
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 12,
-                      fontWeight: d == value ? FontWeight.w700 : FontWeight.w400,
-                      color: d == value ? AppColors.accent : AppColors.textPrimary),
+                  style: AppTypography.bodySm.copyWith(fontWeight: d == value ? FontWeight.w700 : FontWeight.w400, color: d == value ? AppColors.accent : AppColors.textPrimary),
                 ),
               ))
           .toList(),
@@ -410,10 +403,7 @@ class _DayPicker extends StatelessWidget {
           children: [
             Text(
               _formatDay(value),
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent),
+              style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
             ),
             const SizedBox(width: 2),
             const Icon(Icons.arrow_drop_down, size: 14, color: AppColors.accent),

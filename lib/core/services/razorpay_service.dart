@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -149,7 +149,7 @@ class RazorpayService {
       },
       'notes': notes,
       'theme': {
-        'color': '#00D4FF',
+        'color': '#D4B270',
       },
     };
 
@@ -167,7 +167,7 @@ class RazorpayService {
       SnackBar(
         content: Text(
           'Couldn\'t start payment. Check your connection and try again.',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: Colors.white),
+          style: AppTypography.bodySm.copyWith(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF2a1a1a),
         behavior: SnackBarBehavior.floating,
@@ -263,7 +263,7 @@ class RazorpayService {
         SnackBar(
           content: Text(
             'Payment failed: $msg',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            style: AppTypography.bodySm.copyWith(color: Colors.white),
           ),
           backgroundColor: const Color(0xFF2a1a1a),
           behavior: SnackBarBehavior.floating,
@@ -310,9 +310,7 @@ class RazorpayService {
             const SizedBox(width: 10),
             Text(
               'PRO activated! Welcome to AVYA PRO',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
+              style: AppTypography.bodySm.copyWith(
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),

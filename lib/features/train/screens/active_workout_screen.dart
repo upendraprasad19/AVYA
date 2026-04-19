@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 import '../../home/providers/home_provider.dart';
 import '../widgets/create_custom_exercise_sheet.dart';
@@ -115,43 +116,27 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         backgroundColor: AppColors.bg,
         body: SafeArea(
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.fitness_center,
-                    color: AppColors.textDisabled, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'No workout in progress',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenPadding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.fitness_center,
+                      color: AppColors.textGhost, size: 48),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No workout in progress',
+                    style:
+                        AppTypography.body.copyWith(color: AppColors.textDim),
                   ),
-                ),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () => context.go('/train'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      'Go to Training',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                      ),
-                    ),
+                  const SizedBox(height: 16),
+                  WardButton(
+                    label: 'GO TO TRAINING',
+                    onPressed: () => context.go('/train'),
+                    fullWidth: false,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -181,41 +166,30 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               if (data.isSupersetGroupMode)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: AppColors.accent.withValues(alpha: 0.1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: AppColors.accentSoft,
                   child: Row(
                     children: [
-                      Icon(Icons.link, size: 14, color: AppColors.accent),
+                      const Icon(Icons.link,
+                          size: 14, color: AppColors.accent),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Tap another exercise to create superset',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                          'TAP ANOTHER EXERCISE TO CREATE SUPERSET',
+                          style: AppTypography.monoXs.copyWith(
                             color: AppColors.accent,
+                            letterSpacing: 1.5,
                           ),
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => ref.read(activeWorkoutProvider.notifier).cancelSupersetGrouping(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(100),
-                            border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.red,
-                            ),
-                          ),
+                        onTap: () => ref
+                            .read(activeWorkoutProvider.notifier)
+                            .cancelSupersetGrouping(),
+                        child: const WardChip(
+                          label: 'CANCEL',
+                          tone: WardChipTone.bad,
                         ),
                       ),
                     ],
@@ -233,7 +207,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       _WarmupCooldownSection(
                         title: 'WARM-UP',
                         icon: Icons.local_fire_department_rounded,
-                        color: AppColors.orange,
+                        color: AppColors.warn,
                         exercises: data.workoutDay!.warmup,
                         initiallyExpanded: !data.isComplete,
                       ),
@@ -287,12 +261,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 'SUPERSET',
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
+                                style: AppTypography.monoXs.copyWith(
                                   fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
                                   color: groupColor.withValues(alpha: 0.8),
+                                  letterSpacing: 1.8,
                                 ),
                               ),
                             ],
@@ -360,16 +332,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                     behavior: SnackBarBehavior.floating,
                                     duration: const Duration(seconds: 3),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      side: BorderSide(color: AppColors.orange.withValues(alpha: 0.3)),
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.sharp),
+                                      side: BorderSide(
+                                          color: AppColors.warn
+                                              .withValues(alpha: 0.3)),
                                     ),
                                     content: Text(
                                       'Warm-up set \u2014 not counted in volume',
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.orange,
+                                      style: AppTypography.bodySm.copyWith(
+                                        color: AppColors.warn,
                                       ),
                                     ),
                                   ),
@@ -394,7 +366,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       _WarmupCooldownSection(
                         title: 'COOL-DOWN',
                         icon: Icons.air_rounded,
-                        color: AppColors.blue,
+                        color: AppColors.info,
                         exercises: data.workoutDay!.cooldown,
                         initiallyExpanded: false,
                       ),
@@ -402,36 +374,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     // Add Exercise button — disabled in review mode (already saved)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 5),
-                      child: GestureDetector(
-                        onTap: data.isSaved
-                            ? null
-                            : () => _showExercisePickerSheet(context, ref),
-                        child: Opacity(
-                          opacity: data.isSaved ? 0.3 : 1.0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color:
-                                  AppColors.accent.withValues(alpha: 0.05),
-                              border: Border.all(
-                                color: AppColors.accent
-                                    .withValues(alpha: 0.2),
-                                style: BorderStyle.solid,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '+ Add Exercise',
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                            ),
-                          ),
+                      child: Opacity(
+                        opacity: data.isSaved ? 0.3 : 1.0,
+                        child: WardButton(
+                          label: '+ ADD EXERCISE',
+                          variant: WardButtonVariant.outline,
+                          size: WardButtonSize.small,
+                          onPressed: data.isSaved
+                              ? null
+                              : () =>
+                                  _showExercisePickerSheet(context, ref),
                         ),
                       ),
                     ),
@@ -439,61 +391,24 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     // Finish Workout button — disabled if already saved (review mode)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                      child: GestureDetector(
-                        onTap: data.isSaved
+                      child: WardButton(
+                        label: data.isSaved
+                            ? '✓ ALREADY SAVED'
+                            : '✓ FINISH WORKOUT',
+                        onPressed: data.isSaved
                             ? null
                             : () => _showFinishDialog(context, ref, data),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          decoration: BoxDecoration(
-                            color: data.isSaved
-                                ? AppColors.accent.withValues(alpha: 0.4)
-                                : AppColors.accent,
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Center(
-                            child: Text(
-                              data.isSaved ? '\u2713 Already Saved' : '\u2713 Finish Workout',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                        ),
                       ),
                     ),
 
                     // Cancel button
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                      child: GestureDetector(
-                        onTap: () => _showCancelDialog(context, ref),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(100),
-                            border: Border.all(
-                              color: AppColors.red.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '\u2715 Cancel',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.red,
-                              ),
-                            ),
-                          ),
-                        ),
+                      child: WardButton(
+                        label: '✕ CANCEL',
+                        variant: WardButtonVariant.danger,
+                        size: WardButtonSize.small,
+                        onPressed: () => _showCancelDialog(context, ref),
                       ),
                     ),
                   ],
@@ -513,9 +428,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       decoration: const BoxDecoration(
-        color: AppColors.header,
+        color: AppColors.bgDeep,
         border: Border(
-          bottom: BorderSide(color: AppColors.border),
+          bottom: BorderSide(color: AppColors.line2),
         ),
       ),
       child: SafeArea(
@@ -537,22 +452,19 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _getDayType(data.workoutDay?.name ?? ''),
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
+                    _getDayType(data.workoutDay?.name ?? '').toUpperCase(),
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 12,
                       color: AppColors.textPrimary,
+                      letterSpacing: 2.5,
                     ),
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    '${data.completedSets}/${data.totalSets} sets${data.liveVolumeKg > 0 ? ' \u00b7 ${data.liveVolumeKg.toStringAsFixed(0)}kg volume' : ''}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    '${data.completedSets} / ${data.totalSets} SETS${data.liveVolumeKg > 0 ? ' · ${data.liveVolumeKg.toStringAsFixed(0)}KG VOLUME' : ''}',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textDim,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ],
@@ -564,20 +476,18 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
+                color: AppColors.accentSoft,
                 border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.2),
+                  color: AppColors.accent.withValues(alpha: 0.27),
                 ),
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
               child: Column(
                 children: [
                   Text(
                     data.timerFormatted,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.numeric.copyWith(
                       fontSize: 17,
-                      fontWeight: FontWeight.w900,
                       color: AppColors.accent,
                       height: 1,
                     ),
@@ -585,12 +495,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   const SizedBox(height: 1),
                   Text(
                     'ELAPSED',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.monoXs.copyWith(
                       fontSize: 7,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.5,
+                      color: AppColors.textDim,
+                      letterSpacing: 1.5,
                     ),
                   ),
                 ],
@@ -607,33 +515,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       padding: const EdgeInsets.fromLTRB(16, 7, 16, 4),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFF161d28),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: progress.clamp(0.0, 1.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: WardBar(pct: progress, height: 4)),
           const SizedBox(width: 8),
           Text(
             '$pctInt%',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
+            style: AppTypography.monoXs.copyWith(
               color: AppColors.accent,
+              letterSpacing: 1.2,
             ),
           ),
         ],
@@ -657,42 +545,34 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.green.withValues(alpha: 0.1),
+                    color: AppColors.ok.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.check_circle,
-                      color: AppColors.green, size: 48),
+                      color: AppColors.ok, size: 48),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   'Workout Complete!',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.h1.copyWith(fontSize: 26),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${data.completedSets} sets logged \u00b7 ${data.timerFormatted}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                  '${data.completedSets} SETS LOGGED · ${data.timerFormatted}',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 2,
                   ),
                 ),
                 const SizedBox(height: 6),
                 GestureDetector(
-                  onTap: () => ref.read(activeWorkoutProvider.notifier).reopenWorkout(),
+                  onTap: () =>
+                      ref.read(activeWorkoutProvider.notifier).reopenWorkout(),
                   child: Text(
-                    'Review Workout',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    'REVIEW WORKOUT',
+                    style: AppTypography.monoXs.copyWith(
                       color: AppColors.accent,
+                      letterSpacing: 2,
                       decoration: TextDecoration.underline,
                       decorationColor: AppColors.accent,
                     ),
@@ -702,26 +582,15 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 // PR callout
                 if (prs.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.proGoldTint,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppColors.proGold.withValues(alpha: 0.3),
-                      ),
-                    ),
+                  WardCard(
+                    variant: WardCardVariant.hero,
                     child: Column(
                       children: [
                         Text(
                           'NEW PERSONAL RECORDS!',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
+                          style: AppTypography.mono.copyWith(
                             color: AppColors.proGold,
+                            letterSpacing: 2.5,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -729,12 +598,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                               padding: const EdgeInsets.only(bottom: 2),
                               child: Text(
                                 pr,
-                                style: GoogleFonts.getFont(
-                                  'DM Sans',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
+                                style:
+                                    AppTypography.h3.copyWith(fontSize: 13),
                               ),
                             )),
                       ],
@@ -745,61 +610,22 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                 const SizedBox(height: 24),
 
                 // Share Your Session button — opens Workout Receipt sheet
-                GestureDetector(
-                  onTap: () => _showWorkoutReceipt(context, data),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(
-                        color: AppColors.accent.withValues(alpha: 0.3),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Share Your Session',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ),
-                  ),
+                WardButton(
+                  label: 'SHARE YOUR SESSION',
+                  variant: WardButtonVariant.outline,
+                  onPressed: () => _showWorkoutReceipt(context, data),
                 ),
                 const SizedBox(height: AppSpacing.inlineGap),
 
                 // Share as Video — hidden until Remotion/Lambda infra is live
                 // _buildVideoShareRow(data),
 
-                GestureDetector(
-                  onTap: () {
+                WardButton(
+                  label: 'BACK TO WORKOUTS',
+                  onPressed: () {
                     ref.read(activeWorkoutProvider.notifier).cancelWorkout();
                     context.go('/train');
                   },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Back to Workouts',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -911,15 +737,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
+        ),
         title: Text(
           'Complete Workout?',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.h2.copyWith(fontSize: 18),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -927,22 +751,14 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           children: [
             Text(
               '${data.completedSets}/${data.totalSets} sets logged',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
             ),
             const SizedBox(height: 14),
             Text(
               'DURATION',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: AppColors.textSecondary,
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 6),
@@ -955,29 +771,30 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     controller: minCtrl,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.numeric.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
                       color: AppColors.accent,
                     ),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: AppColors.input,
+                      fillColor: AppColors.bgRaise,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 10),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: AppColors.border),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(color: AppColors.line2),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: AppColors.border),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(color: AppColors.line2),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            BorderSide(color: AppColors.accent, width: 1.5),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(
+                            color: AppColors.accent, width: 1.5),
                       ),
                     ),
                   ),
@@ -986,11 +803,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Text(
                     ':',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.numeric.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textDim,
                     ),
                   ),
                 ),
@@ -1001,41 +816,40 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                     controller: secCtrl,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.numeric.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
                       color: AppColors.accent,
                     ),
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: AppColors.input,
+                      fillColor: AppColors.bgRaise,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 10),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: AppColors.border),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(color: AppColors.line2),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: AppColors.border),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(color: AppColors.line2),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            BorderSide(color: AppColors.accent, width: 1.5),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
+                        borderSide: const BorderSide(
+                            color: AppColors.accent, width: 1.5),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'min : sec',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                  'MIN : SEC',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ],
@@ -1046,15 +860,15 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Continue',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+              'CONTINUE',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.textDim,
+                letterSpacing: 2,
               ),
             ),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               // Apply user-edited duration before completing
               final editedMins = int.tryParse(minCtrl.text) ?? mins;
@@ -1067,19 +881,12 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).completeWorkout();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
             child: Text(
-              'Complete',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w800,
-                color: Colors.black,
+              'COMPLETE',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.accent,
+                letterSpacing: 2,
               ),
             ),
           ),
@@ -1098,56 +905,42 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
+        ),
         title: Text(
           'Cancel Workout?',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.h2.copyWith(fontSize: 18),
         ),
         content: Text(
           'All progress will be lost.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Keep Going',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+              'KEEP GOING',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.textDim,
+                letterSpacing: 2,
               ),
             ),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).cancelWorkout();
               context.go('/train');
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
             child: Text(
-              'Cancel',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
+              'CANCEL',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.bad,
+                letterSpacing: 2,
               ),
             ),
           ),
@@ -1393,7 +1186,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         return [
           const SizedBox(width: 28), // set badge
           const SizedBox(width: 8),
-          Expanded(child: Center(child: Text('REPS', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('REPS', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           const SizedBox(width: 28), // checkbox
         ];
@@ -1401,7 +1194,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         return [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
-          Expanded(child: Center(child: Text('SEC', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('SEC', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           const SizedBox(width: 28),
         ];
@@ -1409,9 +1202,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         return [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
-          Expanded(child: Center(child: Text('MIN', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('MIN', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
-          Expanded(child: Center(child: Text('KM', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('KM', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           const SizedBox(width: 28),
         ];
@@ -1419,9 +1212,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         return [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
-          Expanded(child: Center(child: Text('KM', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('KM', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
-          Expanded(child: Center(child: Text('KG', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('KG', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
           const SizedBox(width: 28),
         ];
@@ -1429,11 +1222,11 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         return [
           const SizedBox(width: 28),
           const SizedBox(width: 8),
-          Expanded(child: Center(child: Text('KG', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('KG', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
-          Expanded(child: Center(child: Text('REPS', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1)))),
+          Expanded(child: Center(child: Text('REPS', style: AppTypography.monoXs.copyWith(color: AppColors.textDim, letterSpacing: 1.5)))),
           const SizedBox(width: 6),
-          SizedBox(width: 28, child: Center(child: Text('\u2713', style: GoogleFonts.getFont('DM Sans', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary)))),
+          SizedBox(width: 28, child: Center(child: Text('\u2713', style: AppTypography.monoXs.copyWith(color: AppColors.textDim)))),
         ];
     }
   }
@@ -1458,8 +1251,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                 ? AppColors.accent.withValues(alpha: 0.08)
                 : widget.isInSupersetGroupMode
                     ? AppColors.accent.withValues(alpha: 0.03)
-                    : const Color(0xFF0e1219),
-            borderRadius: BorderRadius.circular(14),
+                    : AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
               color: widget.isGroupModeSource
                   ? AppColors.accent.withValues(alpha: 0.5)
@@ -1467,7 +1260,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                       ? AppColors.accent.withValues(alpha: 0.2)
                       : widget.isActive
                           ? AppColors.accent.withValues(alpha: 0.35)
-                          : const Color(0xFF1c2535),
+                          : AppColors.line2,
             ),
           ),
           child: IntrinsicHeight(
@@ -1480,9 +1273,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                     width: 4,
                     decoration: BoxDecoration(
                       color: supersetColor,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(14),
-                        bottomLeft: Radius.circular(14),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(AppRadius.card),
+                        bottomLeft: Radius.circular(AppRadius.card),
                       ),
                     ),
                   ),
@@ -1508,20 +1301,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                 height: 24,
                                 decoration: BoxDecoration(
                                   color: widget.isActive
-                                      ? AppColors.accent.withValues(alpha: 0.15)
-                                      : const Color(0xFF161d28),
+                                      ? AppColors.accentSoft
+                                      : AppColors.bgRaise,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '${widget.exerciseIndex + 1}',
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
+                                    style: AppTypography.monoXs.copyWith(
                                       color: widget.isActive
                                           ? AppColors.accent
-                                          : AppColors.textSecondary,
+                                          : AppColors.textDim,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
                                 ),
@@ -1531,39 +1322,34 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                               // Name + subtitle
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       widget.exercise.name,
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
+                                      style: AppTypography.h3.copyWith(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
                                         height: 1.2,
                                       ),
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
                                       _metaText(),
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w400,
-                                        color: AppColors.textSecondary,
+                                      style: AppTypography.monoXs.copyWith(
+                                        color: AppColors.textDim,
+                                        letterSpacing: 1.2,
                                       ),
                                     ),
                                     // Bug #6 — hint when reviewing a completed exercise
                                     if (widget.isDone && widget.isExpanded)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 2),
+                                        padding:
+                                            const EdgeInsets.only(top: 2),
                                         child: Text(
                                           'Tap to edit values',
-                                          style: GoogleFonts.getFont(
-                                            'DM Sans',
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w400,
-                                            color: AppColors.textSecondary,
+                                          style:
+                                              AppTypography.bodySm.copyWith(
+                                            color: AppColors.textDim,
                                           ),
                                         ),
                                       ),
@@ -1575,48 +1361,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                               if (widget.isDone)
                                 GestureDetector(
                                   onTap: widget.onFocus,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 9, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.green.withValues(alpha: 0.1),
-                                      border: Border.all(
-                                        color: AppColors.green.withValues(alpha: 0.25),
-                                      ),
-                                      borderRadius: BorderRadius.circular(7),
-                                    ),
-                                    child: Text(
-                                      '\u2713 Done',
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.green,
-                                      ),
-                                    ),
+                                  child: const WardChip(
+                                    label: '✓ DONE',
+                                    tone: WardChipTone.ok,
                                   ),
                                 )
                               else
                                 GestureDetector(
                                   onTap: widget.onSwap,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF161d28),
-                                      border:
-                                          Border.all(color: const Color(0xFF1c2535)),
-                                      borderRadius: BorderRadius.circular(7),
-                                    ),
-                                    child: Text(
-                                      '\u21c4 Swap',
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
+                                  child: const WardChip(
+                                    label: '⇄ SWAP',
+                                    tone: WardChipTone.neutral,
                                   ),
                                 ),
 
@@ -1629,7 +1384,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                 child: Icon(
                                   Icons.keyboard_arrow_down,
                                   size: 18,
-                                  color: AppColors.textSecondary
+                                  color: AppColors.textDim
                                       .withValues(alpha: 0.7),
                                 ),
                               ),
@@ -1654,15 +1409,15 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                               padding: const EdgeInsets.only(top: 4),
                               child: Row(
                                 children: [
-                                  Icon(Icons.history, size: 10, color: AppColors.textSecondary),
+                                  const Icon(Icons.history,
+                                      size: 10,
+                                      color: AppColors.textDim),
                                   const SizedBox(width: 3),
                                   Text(
-                                    'Last: ${lastPerf.lastWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? '?'} reps',
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textSecondary,
+                                    'LAST: ${lastPerf.lastWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? '?'} REPS',
+                                    style: AppTypography.monoXs.copyWith(
+                                      color: AppColors.textDim,
+                                      letterSpacing: 1.2,
                                     ),
                                   ),
                                 ],
@@ -1676,15 +1431,14 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                               padding: const EdgeInsets.only(top: 2),
                               child: Row(
                                 children: [
-                                  Icon(Icons.arrow_upward, size: 10, color: AppColors.accent),
+                                  const Icon(Icons.arrow_upward,
+                                      size: 10, color: AppColors.accent),
                                   const SizedBox(width: 3),
                                   Text(
-                                    'Try: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? widget.exercise.reps}',
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
+                                    'TRY: ${lastPerf.suggestedWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? widget.exercise.reps}',
+                                    style: AppTypography.monoXs.copyWith(
                                       color: AppColors.accent,
+                                      letterSpacing: 1.2,
                                     ),
                                   ),
                                 ],
@@ -1741,23 +1495,27 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                       final validationError = _validateSetInputs(setIdx);
                                       if (validationError != null) {
                                         ScaffoldMessenger.of(context).clearSnackBars();
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
                                           SnackBar(
                                             backgroundColor: AppColors.card,
-                                            behavior: SnackBarBehavior.floating,
-                                            duration: const Duration(milliseconds: 1500),
+                                            behavior:
+                                                SnackBarBehavior.floating,
+                                            duration: const Duration(
+                                                milliseconds: 1500),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppRadius.sharp),
                                               side: BorderSide(
-                                                  color: AppColors.red.withValues(alpha: 0.3)),
+                                                  color: AppColors.bad
+                                                      .withValues(alpha: 0.3)),
                                             ),
                                             content: Text(
                                               validationError,
-                                              style: GoogleFonts.getFont(
-                                                'DM Sans',
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.red,
+                                              style: AppTypography.bodySm
+                                                  .copyWith(
+                                                color: AppColors.bad,
                                               ),
                                             ),
                                           ),
@@ -1892,24 +1650,19 @@ class _OverloadIndicator extends ConsumerWidget {
     final String icon;
 
     if (currentWeight > lastWeight) {
-      color = AppColors.green;
+      color = AppColors.ok;
       icon = '\u2191'; // up arrow
     } else if (currentWeight == lastWeight) {
-      color = AppColors.orange;
+      color = AppColors.warn;
       icon = '\u2192'; // right arrow
     } else {
-      color = AppColors.red;
+      color = AppColors.bad;
       icon = '\u2193'; // down arrow
     }
 
     return Text(
       icon,
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 14,
-        fontWeight: FontWeight.w900,
-        color: color,
-      ),
+      style: AppTypography.h2.copyWith(fontSize: 14, color: color),
     );
   }
 }
@@ -1989,13 +1742,15 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.75,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        border: Border(
-          top: BorderSide(color: AppColors.border),
-          left: BorderSide(color: AppColors.border),
-          right: BorderSide(color: AppColors.border),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+        border: const Border(
+          top: BorderSide(color: AppColors.line2),
+          left: BorderSide(color: AppColors.line2),
+          right: BorderSide(color: AppColors.line2),
         ),
       ),
       child: Column(
@@ -2008,7 +1763,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textDisabled,
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -2021,12 +1776,10 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
               children: [
                 Text(
                   'ADD EXERCISE',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                  style: AppTypography.mono.copyWith(
+                    fontSize: 12,
                     color: AppColors.textPrimary,
-                    letterSpacing: 0.5,
+                    letterSpacing: 2.5,
                   ),
                 ),
                 const Spacer(),
@@ -2052,32 +1805,9 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                       _applyFilter();
                     }
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.25)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.add,
-                            size: 12, color: AppColors.accent),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Create Custom',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: const WardChip(
+                    label: '+ CREATE CUSTOM',
+                    tone: WardChipTone.gold,
                   ),
                 ),
               ],
@@ -2089,36 +1819,27 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
               controller: _searchController,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.bodySm,
               decoration: InputDecoration(
                 hintText: 'Search exercises...',
-                hintStyle: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
+                hintStyle:
+                    AppTypography.bodySm.copyWith(color: AppColors.textDim),
                 prefixIcon: const Icon(Icons.search,
-                    color: AppColors.textSecondary, size: 18),
+                    color: AppColors.textDim, size: 18),
                 filled: true,
-                fillColor: AppColors.input,
+                fillColor: AppColors.bgRaise,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: BorderSide(
                       color: AppColors.accent.withValues(alpha: 0.5)),
                 ),
@@ -2142,31 +1863,11 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                     setState(() => _selectedCategory = cat);
                     _applyFilter();
                   },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.accent.withValues(alpha: 0.15)
-                          : AppColors.input,
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.accent.withValues(alpha: 0.4)
-                            : AppColors.border,
-                      ),
-                    ),
-                    child: Text(
-                      cat,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected
-                            ? AppColors.accent
-                            : AppColors.textSecondary,
-                      ),
-                    ),
+                  child: WardChip(
+                    label: cat,
+                    tone: isSelected
+                        ? WardChipTone.gold
+                        : WardChipTone.neutral,
                   ),
                 );
               },
@@ -2183,12 +1884,8 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                       padding: const EdgeInsets.all(32),
                       child: Text(
                         'No exercises found',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodySm
+                            .copyWith(color: AppColors.textDim),
                       ),
                     ),
                   )
@@ -2211,36 +1908,31 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                               horizontal: 16, vertical: 10),
                           decoration: const BoxDecoration(
                             border: Border(
-                              bottom:
-                                  BorderSide(color: AppColors.border, width: 0.5),
+                              bottom: BorderSide(
+                                  color: AppColors.line2, width: 0.5),
                             ),
                           ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       name,
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
-                                      ),
+                                      style: AppTypography.h3
+                                          .copyWith(fontSize: 13),
                                     ),
                                     if (muscles.isNotEmpty)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 2),
+                                        padding:
+                                            const EdgeInsets.only(top: 2),
                                         child: Text(
                                           muscles,
-                                          style: GoogleFonts.getFont(
-                                            'DM Sans',
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w400,
-                                            color: AppColors.textSecondary,
-                                          ),
+                                          style: AppTypography.bodySm
+                                              .copyWith(
+                                                  color: AppColors.textDim),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -2250,26 +1942,9 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                               ),
                               const SizedBox(width: 8),
                               // Category badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accent.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(100),
-                                  border: Border.all(
-                                    color:
-                                        AppColors.accent.withValues(alpha: 0.2),
-                                  ),
-                                ),
-                                child: Text(
-                                  category,
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.accent,
-                                  ),
-                                ),
+                              WardChip(
+                                label: category,
+                                tone: WardChipTone.gold,
                               ),
                               const SizedBox(width: 6),
                               // Logging type icon
@@ -2280,7 +1955,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                                         ? Icons.directions_run
                                         : Icons.fitness_center,
                                 size: 14,
-                                color: AppColors.textDisabled,
+                                color: AppColors.textGhost,
                               ),
                             ],
                           ),
@@ -2378,7 +2053,7 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
       child: Container(
         decoration: BoxDecoration(
           color: widget.color.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
             color: widget.color.withValues(alpha: _allDone ? 0.3 : 0.12),
           ),
@@ -2390,30 +2065,26 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
               onTap: () => setState(() => _expanded = !_expanded),
               behavior: HitTestBehavior.opaque,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
                     Icon(widget.icon, size: 16, color: widget.color),
                     const SizedBox(width: 8),
                     Text(
                       widget.title,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
+                      style: AppTypography.mono.copyWith(
                         color: widget.color,
+                        letterSpacing: 2.5,
                       ),
                     ),
                     const SizedBox(width: 8),
                     if (_checkedCount > 0)
                       Text(
                         '$_checkedCount/${widget.exercises.length}',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                        style: AppTypography.monoXs.copyWith(
                           color: widget.color.withValues(alpha: 0.6),
+                          letterSpacing: 1.2,
                         ),
                       ),
                     const Spacer(),
@@ -2421,7 +2092,9 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                       Icon(Icons.check_circle, size: 16, color: widget.color)
                     else
                       Icon(
-                        _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        _expanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
                         size: 18,
                         color: widget.color.withValues(alpha: 0.5),
                       ),
@@ -2477,24 +2150,21 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
                         Expanded(
                           child: Text(
                             ex.name,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            style: AppTypography.bodySm.copyWith(
                               color: done
-                                  ? AppColors.textSecondary
+                                  ? AppColors.textDim
                                   : AppColors.textPrimary,
-                              decoration: done ? TextDecoration.lineThrough : null,
+                              decoration: done
+                                  ? TextDecoration.lineThrough
+                                  : null,
                             ),
                           ),
                         ),
                         Text(
                           detail,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textDim,
+                            letterSpacing: 1.2,
                           ),
                         ),
                       ],

@@ -1,7 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/pro_pill_button.dart';
 
 /// Profile identity section: banner (120px, tap to view), avatar overlapping banner,
@@ -83,8 +84,8 @@ class ProfileIdentity extends StatelessWidget {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(AppRadius.card),
+                        bottomRight: Radius.circular(AppRadius.card),
                       ),
                       gradient: bannerUrl == null
                           ? const LinearGradient(
@@ -103,8 +104,8 @@ class ProfileIdentity extends StatelessWidget {
                             tag: 'banner_hero',
                             child: ClipRRect(
                               borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(16),
-                                bottomRight: Radius.circular(16),
+                                bottomLeft: Radius.circular(AppRadius.card),
+                                bottomRight: Radius.circular(AppRadius.card),
                               ),
                               child: CachedNetworkImage(
                                 imageUrl: bannerUrl!,
@@ -114,9 +115,9 @@ class ProfileIdentity extends StatelessWidget {
                                 memCacheWidth: (MediaQuery.of(context).size.width * MediaQuery.of(context).devicePixelRatio).toInt(),
                                 memCacheHeight: (120 * MediaQuery.of(context).devicePixelRatio).toInt(),
                                 placeholder: (_, url) => Container(
-                                  color: AppColors.input,
+                                  color: AppColors.bgRaise,
                                   child: const Center(
-                                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textSecondary)),
+                                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textDim)),
                                   ),
                                 ),
                                 errorWidget: (_, url, err) => Container(
@@ -142,8 +143,8 @@ class ProfileIdentity extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.bg.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(10),
+                          color: AppColors.bgDeep.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(AppRadius.card),
                           border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
                         ),
                         child: const Icon(
@@ -162,13 +163,13 @@ class ProfileIdentity extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.bg.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.bgDeep.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(AppRadius.soft),
                         ),
                         child: const Icon(
                           Icons.camera_alt_outlined,
                           size: 16,
-                          color: AppColors.textSecondary,
+                          color: AppColors.textMute,
                         ),
                       ),
                     ),
@@ -197,9 +198,10 @@ class ProfileIdentity extends StatelessWidget {
 
         const SizedBox(height: 50), // Bug #23: space for larger avatar overlap (40px below banner)
 
-        // Name row with edit button
+        // Name row with edit button — Fraunces name in h2, mono subtitle
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.gutter, 0, AppSpacing.gutter, 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -208,22 +210,17 @@ class ProfileIdentity extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name.toUpperCase(),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                      name,
+                      style: AppTypography.h2.copyWith(
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
-                      subtitle,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      subtitle.toUpperCase(),
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 1.5,
                       ),
                     ),
                   ],
@@ -232,19 +229,18 @@ class ProfileIdentity extends StatelessWidget {
               GestureDetector(
                 onTap: onTapEdit,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.line2),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                   child: Text(
                     'EDIT PROFILE',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.monoXs.copyWith(
                       color: AppColors.textPrimary,
+                      letterSpacing: 2.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -270,7 +266,7 @@ class ProfileIdentity extends StatelessWidget {
                   context: context,
                   backgroundColor: AppColors.card,
                   shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
                   ),
                   builder: (_) => SafeArea(
                     child: Padding(
@@ -278,16 +274,16 @@ class ProfileIdentity extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+                          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.line2, borderRadius: BorderRadius.circular(2))),
                           const SizedBox(height: 12),
                           ListTile(
                             leading: const Icon(Icons.fullscreen, color: AppColors.accent),
-                            title: Text('View Photo', style: GoogleFonts.getFont('DM Sans', fontSize: 14, color: AppColors.textPrimary)),
+                            title: Text('View Photo', style: AppTypography.body.copyWith(color: AppColors.textPrimary)),
                             onTap: () { Navigator.pop(context); _openFullScreen(context, avatarUrl!, 'avatar_hero'); },
                           ),
                           ListTile(
                             leading: const Icon(Icons.camera_alt, color: AppColors.accent),
-                            title: Text('Change Photo', style: GoogleFonts.getFont('DM Sans', fontSize: 14, color: AppColors.textPrimary)),
+                            title: Text('Change Photo', style: AppTypography.body.copyWith(color: AppColors.textPrimary)),
                             onTap: () { Navigator.pop(context); onReplaceAvatar(); },
                           ),
                         ],
@@ -307,7 +303,7 @@ class ProfileIdentity extends StatelessWidget {
                     ? AppColors.accent.withValues(alpha: 0.12)
                     : null,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.bg, width: 3),
+                border: Border.all(color: AppColors.bgDeep, width: 3),
               ),
               child: avatarUrl != null
                   ? Hero(
@@ -344,12 +340,12 @@ class ProfileIdentity extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.accent,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.bg, width: 2.5),
+                  border: Border.all(color: AppColors.bgDeep, width: 2.5),
                 ),
                 child: const Icon(
                   Icons.camera_alt,
                   size: 15,
-                  color: Colors.black,
+                  color: AppColors.bgDeep,
                 ),
               ),
             ),
@@ -367,8 +363,12 @@ class ProfileIdentity extends StatelessWidget {
           const Icon(Icons.camera_alt_outlined, size: 22, color: AppColors.accent),
           const SizedBox(height: 1),
           Text(
-            'Add',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 8, fontWeight: FontWeight.w700, color: AppColors.accent),
+            'ADD',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../shared/widgets/error_state.dart';
 
 /// F9 · "My Submissions" — user-visible view of their own community
@@ -93,13 +93,24 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.bg,
-        title: Text('My Submissions',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'COMMUNITY \u00B7 FILINGS',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text('My submissions', style: AppTypography.h3),
+          ],
+        ),
       ),
       body: _buildBody(),
     );
@@ -128,16 +139,12 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
                   size: 48, color: AppColors.textSecondary),
               const SizedBox(height: 12),
               Text('No submissions yet',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary)),
+                  style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               Text(
                 'Add a custom food or exercise and tick "Share with community" to contribute.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 13, color: AppColors.textSecondary),
+                style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
               ),
             ],
           ),
@@ -166,10 +173,7 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
                 Expanded(
                   child: Text(
                     'You\'ve helped $approvedCount ${approvedCount == 1 ? "other user" : "other users"}',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.accent),
+                    style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
                   ),
                 ),
               ],
@@ -222,15 +226,10 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary)),
+                    style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                 const SizedBox(height: 2),
                 Text(subtitle,
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 11,
-                        color: AppColors.textSecondary)),
+                    style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim)),
               ],
             ),
           ),
@@ -242,11 +241,7 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
             ),
             child: Text(
               statusLabel,
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: statusColor),
+              style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w800, color: statusColor, letterSpacing: 0.8),
             ),
           ),
         ],

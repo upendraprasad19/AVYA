@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -290,7 +292,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // Safe area
+              // Wardroom letterhead — mono eyebrow + Fraunces title above identity card
+              const WardLetterhead(
+                eyebrow: 'OFFICER \u00B7 DOSSIER',
+                title: 'Profile',
+                padding: EdgeInsets.fromLTRB(22, 14, 22, 12),
+                divider: true,
+              ),
               const SizedBox(height: 10),
 
               // 1. Profile identity with banner + avatar
@@ -601,25 +609,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // Bug #21 — Achievements are now rendered as the compact inline
               // row inside ProfileIdentity. Full grid opens via its chevron.
 
-              // Sign Out
+              // Sign Out — sharp 2-px bad-tinted slab
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-                child: GestureDetector(
-                  onTap: () => _showSignOutDialog(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.red.withValues(alpha: 0.08),
-                      border: Border.all(color: AppColors.red.withValues(alpha: 0.2)),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Sign Out \u2192',
-                        style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red),
-                      ),
-                    ),
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+                child: WardButton(
+                  label: 'Sign Out',
+                  variant: WardButtonVariant.danger,
+                  onPressed: () => _showSignOutDialog(),
                 ),
               ),
 
@@ -662,34 +658,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final done = [workoutDone, hasMeals, waterDone, weightDone].where((b) => b).length;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: done == 4
-            ? AppColors.emerald.withValues(alpha: 0.3)
-            : AppColors.border),
-      ),
       child: Row(
         children: [
           // Progress ring
           SizedBox(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 CircularProgressIndicator(
                   value: done / 4,
                   strokeWidth: 4,
-                  backgroundColor: AppColors.input,
+                  backgroundColor: AppColors.bgRaise,
                   valueColor: AlwaysStoppedAnimation(
-                      done == 4 ? AppColors.emerald : AppColors.accent),
+                      done == 4 ? AppColors.ok : AppColors.accent),
                 ),
-                Text('$done/4', style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 11, fontWeight: FontWeight.w900,
-                    color: done == 4 ? AppColors.emerald : AppColors.accent)),
+                Text(
+                  '$done/4',
+                  style: AppTypography.monoXs.copyWith(
+                    color: done == 4 ? AppColors.ok : AppColors.accent,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -698,10 +693,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('DAILY GOALS', style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0, color: AppColors.textSecondary)),
-                const SizedBox(height: 4),
+                Text(
+                  'DAILY GOALS',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     _completionDot('Workout', workoutDone),
@@ -726,19 +725,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(
-            color: done ? AppColors.emerald : AppColors.input,
+            color: done ? AppColors.ok : AppColors.bgRaise,
             shape: BoxShape.circle,
             border: Border.all(
-              color: done ? AppColors.emerald : AppColors.border,
+              color: done ? AppColors.ok : AppColors.line2,
               width: 1,
             ),
           ),
         ),
-        const SizedBox(width: 3),
-        Text(label, style: GoogleFonts.getFont('DM Sans',
-            fontSize: 9, color: done ? AppColors.emerald : AppColors.textSecondary)),
+        const SizedBox(width: 4),
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.monoXs.copyWith(
+            color: done ? AppColors.ok : AppColors.textMute,
+            letterSpacing: 1.5,
+          ),
+        ),
       ],
     );
   }
@@ -754,27 +759,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return '${lbs.toStringAsFixed(0)} lbs';
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('BODY STATS', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text(
+                'BODY STATS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: () => context.go('/profile/edit'),
-                child: Text('EDIT', style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent)),
+                child: Text(
+                  'EDIT',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.accent,
+                    letterSpacing: 2.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
@@ -782,9 +792,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Row(
             children: [
               _statCell('Weight', fmtWeight(weight), AppColors.accent),
-              _statCell('Target', fmtWeight(target), AppColors.emerald),
-              _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.blue),
-              _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.orange),
+              _statCell('Target', fmtWeight(target), AppColors.ok),
+              _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.info),
+              _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.warn),
             ],
           ),
         ],
@@ -796,11 +806,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 16, fontWeight: FontWeight.w900, color: color, height: 1)),
-          const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 9, color: AppColors.textSecondary)),
+          Text(
+            value,
+            style: AppTypography.h3.copyWith(
+              color: color,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 1.5,
+            ),
+          ),
         ],
       ),
     );
@@ -872,48 +892,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     // (Workout consistency data could be added here in future phases)
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
           Row(
             children: [
-              Text('YOUR JOURNEY', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text(
+                'YOUR JOURNEY',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
               const Spacer(),
-              Text('Week ${stats.currentWeek} of 4', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent)),
+              Text(
+                'WEEK ${stats.currentWeek} OF 4',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 6),
-
-          // Phase name + focus
-          Text(
-            'Phase ${stats.currentPhase} \u2014 $phaseName',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 8),
 
-          // Week progress bar within phase
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: stats.currentWeek / 4.0,
-              minHeight: 6,
-              backgroundColor: AppColors.input,
-              valueColor: AlwaysStoppedAnimation(AppColors.accent),
+          // Phase name — Fraunces
+          Text(
+            'Phase ${stats.currentPhase} \u2014 $phaseName',
+            style: AppTypography.h3.copyWith(
+              color: AppColors.textPrimary,
             ),
           ),
+          const SizedBox(height: 10),
+
+          // Week progress bar within phase
+          WardBar(pct: stats.currentWeek / 4.0, color: AppColors.accent, height: 4),
           const SizedBox(height: 10),
 
           // Phase dots
@@ -927,13 +945,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: isCompleted
-                        ? AppColors.green
+                        ? AppColors.ok
                         : isCurrent
                             ? AppColors.accent
                             : stats.isPro || phase == 0
-                                ? AppColors.input
-                                : AppColors.input.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(2),
+                                ? AppColors.bgRaise
+                                : AppColors.bgRaise.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                 ),
               );
@@ -953,7 +971,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _journeyInsight(
               icon: Icons.trending_down,
               text: trajectoryText,
-              color: AppColors.green,
+              color: AppColors.ok,
             ),
           if (etaText != null)
             _journeyInsight(
@@ -965,7 +983,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _journeyInsight(
               icon: Icons.scale_outlined,
               text: 'Log your weight daily to see your trajectory',
-              color: AppColors.textSecondary,
+              color: AppColors.textDim,
             ),
 
           // Next milestone
@@ -992,8 +1010,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           Expanded(
             child: Text(
               text,
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 12, fontWeight: FontWeight.w500, color: color),
+              style: AppTypography.bodySm.copyWith(
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -1032,37 +1052,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildSubscriptionSection(SubscriptionInfoData subInfo, bool isPro, UsageCounterService usage) {
     if (isPro) {
-      // Simple PRO card with expiry
+      // PRO dossier — hero card, Campaign Gold chip, Fraunces plan name.
       final expiryStr = subInfo.expiresAt != null
           ? '${subInfo.expiresAt!.day} ${_monthName(subInfo.expiresAt!.month)} ${subInfo.expiresAt!.year}'
           : '\u2014';
-      return Container(
+      final planLabel = (subInfo.plan ?? 'monthly').toUpperCase();
+      return WardCard(
+        variant: WardCardVariant.hero,
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.proGold.withValues(alpha: 0.3)),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1a1408), Color(0xFF0e1219)],
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.proGold,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text('PRO', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: Colors.black)),
-            ),
+            const WardChip(label: 'PRO', tone: WardChipTone.gold),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                '${(subInfo.plan ?? "monthly").toUpperCase()} \u00B7 Renews $expiryStr',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 12,
-                    fontWeight: FontWeight.w600, color: AppColors.proGold),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(planLabel,
+                      style: AppTypography.h3.copyWith(color: AppColors.accent)),
+                  const SizedBox(height: 2),
+                  Text('RENEWS $expiryStr'.toUpperCase(),
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 1.6,
+                      )),
+                ],
               ),
             ),
           ],
@@ -1070,7 +1085,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
-    // Free user — show trial pill + rate limits
+    // Free user — rate-limit meters with trial pill.
     final aiTextUsed = usage.used(AppConstants.featureAiTextLogPro, false);
     final aiTextLimit = AppConstants.freeAiTextLogsPerDay;
     final scanUsed = usage.used(AppConstants.featureScanMealPro, false);
@@ -1078,7 +1093,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
     final cartLimit = AppConstants.freeCartAuditorPerDay;
 
-    // Compute trial days remaining from Hive directly
     final configBox = HiveService.instance.configBox;
     final trialStartRaw = configBox.get('ai_trial_start') as String?;
     int? trialDaysLeft;
@@ -1091,81 +1105,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    return Container(
+    return WardCard(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('FREE PLAN', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text('FREE PLAN',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2.0,
+                  )),
               const Spacer(),
               GestureDetector(
                 onTap: () => showPaywallSheet(context, feature: 'PRO'),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(100),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
-                  child: Text('Upgrade', style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black)),
+                  child: Text('UPGRADE',
+                      style: AppTypography.monoXs.copyWith(
+                        color: Colors.black,
+                        letterSpacing: 2.0,
+                        fontWeight: FontWeight.w700,
+                      )),
                 ),
               ),
             ],
           ),
-          // Trial days pill
           if (trialDaysLeft != null) ...[
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: trialDaysLeft > 7
-                    ? AppColors.accentTint
-                    : AppColors.red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: trialDaysLeft > 7
-                      ? AppColors.accent.withValues(alpha: 0.2)
-                      : AppColors.red.withValues(alpha: 0.2),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.timer_outlined,
-                    size: 11,
-                    color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    trialDaysLeft > 0
-                        ? '30-day AI trial · $trialDaysLeft day${trialDaysLeft == 1 ? '' : 's'} remaining'
-                        : 'AI trial expired · Upgrade to continue',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
-                    ),
-                  ),
-                ],
+            WardChip(
+              label: trialDaysLeft > 0
+                  ? '${trialDaysLeft}d AI trial remaining'
+                  : 'AI trial expired',
+              tone: trialDaysLeft > 7 ? WardChipTone.gold : WardChipTone.warn,
+              leading: Icon(
+                Icons.timer_outlined,
+                size: 11,
+                color: trialDaysLeft > 7 ? AppColors.accent : AppColors.warn,
               ),
             ),
           ],
           const SizedBox(height: 12),
           _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _usageRow('Meal Scans', scanUsed, scanLimit, '/day'),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _usageRow('Cart Auditor', cartUsed, cartLimit, '/day'),
         ],
       ),
@@ -1175,36 +1165,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _usageRow(String label, int used, int limit, String period) {
     final pct = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
     final isExhausted = used >= limit;
+    final meterColor = isExhausted ? AppColors.bad : AppColors.accent;
+    final readoutColor = isExhausted ? AppColors.bad : AppColors.textDim;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: 90,
-          child: Text(label, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 11, color: AppColors.textSecondary)),
+          width: 92,
+          child: Text(label.toUpperCase(),
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.6,
+              )),
         ),
-        Expanded(
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: pct,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isExhausted ? AppColors.red : AppColors.accent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text('$used/$limit$period', style: GoogleFonts.getFont('DM Sans',
-            fontSize: 10, fontWeight: FontWeight.w700,
-            color: isExhausted ? AppColors.red : AppColors.textSecondary)),
+        Expanded(child: WardBar(pct: pct, color: meterColor, height: 4)),
+        const SizedBox(width: 10),
+        Text('$used/$limit$period',
+            style: AppTypography.monoXs.copyWith(color: readoutColor)),
       ],
     );
   }
@@ -1240,7 +1217,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    return GestureDetector(
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       onTap: projectionLine == null
           ? null
           : () => _showPaceDetailSheet(
@@ -1249,52 +1228,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 pacePreference: pacePreference,
                 goal: goal,
               ),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'MY TARGETS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(width: 12),
+              _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
+              const SizedBox(width: 8),
+              _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
+              const SizedBox(width: 8),
+              _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
+            ],
+          ),
+          if (projectionLine != null) ...[
+            const SizedBox(height: 8),
             Row(
               children: [
-                Text('MY TARGETS', style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0, color: AppColors.textSecondary)),
-                const SizedBox(width: 12),
-                _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
-                const SizedBox(width: 8),
-                _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
-                const SizedBox(width: 8),
-                _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
-              ],
-            ),
-            if (projectionLine != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      projectionLine,
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 11, fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondary),
+                Expanded(
+                  child: Text(
+                    projectionLine,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Icon(Icons.chevron_right,
-                      size: 14,
-                      color: AppColors.textSecondary.withValues(alpha: 0.7)),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right,
+                    size: 14, color: AppColors.textMute),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1321,7 +1294,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -1330,36 +1303,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('GOAL PROJECTION',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 10, fontWeight: FontWeight.w700,
-                      letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text(
+                'GOAL PROJECTION',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
-                  'Current: ${currentKg.toStringAsFixed(1)} kg → Target: ${targetKg.toStringAsFixed(1)} kg',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Text('Pace: ${pacePreference.toUpperCase()}',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.accent)),
-              const SizedBox(height: 12),
-              Text('At this pace, projected ~${p.weeks.round()} weeks to goal.',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary)),
+                'Current: ${currentKg.toStringAsFixed(1)} kg → Target: ${targetKg.toStringAsFixed(1)} kg',
+                style: AppTypography.h3
+                    .copyWith(fontSize: 14, color: AppColors.textPrimary),
+              ),
               const SizedBox(height: 4),
               Text(
-                  'Based on ${_paceRateLabel(pacePreference)} body-weight change per week and 7700 kcal ≈ 1 kg.',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textDisabled)),
+                'Pace: ${pacePreference.toUpperCase()}',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'At this pace, projected ~${p.weeks.round()} weeks to goal.',
+                style: AppTypography.body.copyWith(color: AppColors.textDim),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Based on ${_paceRateLabel(pacePreference)} body-weight change per week and 7700 kcal ≈ 1 kg.',
+                style: AppTypography.bodySm.copyWith(color: AppColors.textGhost),
+              ),
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,
@@ -1368,11 +1343,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     Navigator.of(ctx).pop();
                     context.go('/profile/edit');
                   },
-                  child: Text('Change pace →',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.accent)),
+                  child: Text(
+                    'CHANGE PACE →',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.accent,
+                      letterSpacing: 2.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1398,11 +1376,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.accent)),
-          Text(label, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 8, fontWeight: FontWeight.w700,
-              letterSpacing: 0.5, color: AppColors.textSecondary)),
+          Text(
+            value,
+            style: AppTypography.h3.copyWith(
+              fontSize: 13,
+              color: AppColors.accent,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 1.5,
+            ),
+          ),
         ],
       ),
     );
@@ -1412,19 +1401,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildDangerZone() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 8),
-        title: Text('Danger Zone', style: GoogleFonts.getFont('DM Sans',
-            fontSize: 11, color: AppColors.textSecondary)),
-        iconColor: AppColors.textSecondary,
-        collapsedIconColor: AppColors.textSecondary,
+        title: Text(
+          'DANGER ZONE',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 2,
+          ),
+        ),
+        iconColor: AppColors.textMute,
+        collapsedIconColor: AppColors.textMute,
         children: [
           GestureDetector(
             onTap: () => _showDeleteAccountDialog(),
-            child: Text('Delete Account', style: GoogleFonts.getFont('DM Sans',
-                fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.red)),
+            child: Text(
+              'Delete Account',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.bad,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -1535,17 +1534,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.cardM)),
-        title: Text('Privacy & Permissions', style: GoogleFonts.getFont('DM Sans', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
+        ),
+        title: Text(
+          'Privacy & Permissions',
+          style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Your data is stored locally on your device. Supabase is used only for backups, AI, and community features.', style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
+            Text(
+              'Your data is stored locally on your device. Supabase is used only for backups, AI, and community features.',
+              style: AppTypography.body
+                  .copyWith(color: AppColors.textDim, height: 1.5),
+            ),
             const SizedBox(height: 12),
-            Text('Permissions:', style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            Text(
+              'PERMISSIONS',
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text('\u2022 Camera: Meal scanning\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos', style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+            Text(
+              '\u2022 Camera: Meal scanning\n\u2022 Health Connect: Steps & sleep\n\u2022 Storage: Progress photos',
+              style: AppTypography.bodySm
+                  .copyWith(color: AppColors.textDim, height: 1.5),
+            ),
             const SizedBox(height: 16),
             GestureDetector(
               onTap: () => _launchUrl('https://icanbefitter.vercel.app/privacy'),
@@ -1553,7 +1572,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 children: [
                   const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
                   const SizedBox(width: 6),
-                  Text('Read our Privacy Policy', style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                  Text(
+                    'Read our Privacy Policy',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1564,7 +1589,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 children: [
                   const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
                   const SizedBox(width: 6),
-                  Text('Terms of Service', style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                  Text(
+                    'Terms of Service',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1573,7 +1604,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Close', style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700, color: AppColors.accent)),
+            child: Text(
+              'CLOSE',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -1595,7 +1633,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (referralCode == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate referral code', style: GoogleFonts.getFont('DM Sans', fontSize: 13)), backgroundColor: AppColors.red),
+          SnackBar(
+            content: Text(
+              'Failed to generate referral code',
+              style: AppTypography.bodySm,
+            ),
+            backgroundColor: AppColors.bad,
+          ),
         );
       }
       return;
@@ -1607,7 +1651,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -1616,57 +1660,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
+                'INVITE FRIENDS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 'Invite Friends',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                style: AppTypography.h2,
               ),
               const SizedBox(height: 8),
               Text(
                 'Share your code with friends. When they sign up, both of you get 7 days of PRO free!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
               ),
               const SizedBox(height: 20),
-              // Code display
+              // Code display — Wardroom hero card with Fraunces numeric
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.33)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       referralCode!,
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.accent, letterSpacing: 1.5),
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 2,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-              // Share button
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Share.share(
-                      'Join me on AVYA Fit! Use my referral code $referralCode to get 7 days of PRO free. Download: https://icanbefitter.vercel.app',
-                      subject: 'AVYA Fit Referral',
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                  ),
-                  child: Text(
-                    'Share My Code',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black),
-                  ),
-                ),
+              WardButton(
+                label: 'Share My Code',
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Share.share(
+                    'Join me on AVYA Fit! Use my referral code $referralCode to get 7 days of PRO free. Download: https://icanbefitter.vercel.app',
+                    subject: 'AVYA Fit Referral',
+                  );
+                },
               ),
             ],
           ),
@@ -1675,15 +1717,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  /// Wraps children in a card container matching `.card` style.
+  /// Wraps children in a Wardroom card.
   Widget _buildCard(List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      padding: EdgeInsets.zero,
       child: Column(children: children),
     );
   }
@@ -1694,58 +1732,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
         ),
         title: Text(
-          'Sign Out',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
+          'CONFIRM SIGN OUT',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 2,
           ),
         ),
         content: Text(
           'Are you sure you want to sign out? Your data is safe locally.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Cancel',
-              style: GoogleFonts.getFont(
-                'DM Sans',
+              'CANCEL',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2.5,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
               ),
             ),
           ),
-          ElevatedButton(
+          WardButton(
+            label: 'Sign Out',
+            variant: WardButtonVariant.danger,
+            fullWidth: false,
+            size: WardButtonSize.small,
             onPressed: () async {
               Navigator.of(ctx).pop();
               await _performSignOut();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-              ),
-            ),
-            child: Text(
-              'Sign Out',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
           ),
         ],
       ),
@@ -1789,35 +1810,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: BorderSide(color: AppColors.bad.withValues(alpha: 0.3)),
         ),
         title: Text(
-          'Delete Account',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.red,
+          'DELETE ACCOUNT',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.bad,
+            letterSpacing: 2,
           ),
         ),
         content: Text(
           'This will permanently delete your account and all data. This action cannot be undone.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Cancel',
-              style: GoogleFonts.getFont(
-                'DM Sans',
+              'CANCEL',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2.5,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
               ),
             ),
           ),
@@ -1867,18 +1882,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.bad,
+              foregroundColor: AppColors.textPrimary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
             ),
             child: Text(
-              'Delete',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
+              'DELETE',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textPrimary,
+                letterSpacing: 2.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

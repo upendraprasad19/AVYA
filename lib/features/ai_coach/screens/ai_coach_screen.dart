@@ -2,12 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/ai_coach_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/prompt_chip.dart';
@@ -90,9 +91,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         SnackBar(
           content: Text(
             'Microphone not available. Check app permissions in Settings.',
-            style: GoogleFonts.getFont('DM Sans'),
+            style: AppTypography.body.copyWith(color: AppColors.bad),
           ),
-          backgroundColor: AppColors.red,
+          backgroundColor: AppColors.card,
         ),
       );
       return;
@@ -256,15 +257,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   Widget _buildTrialCountdown(int messageCount, int daysRemaining) {
     final remaining = AppConstants.freeAiMessagesPerDay - messageCount;
     final isUrgent = daysRemaining <= 3;
-    final textColor = isUrgent ? AppColors.red : AppColors.textSecondary;
+    final textColor = isUrgent ? AppColors.bad : AppColors.textDim;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-      color: const Color(0xFF07090e),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.gutter, vertical: 8),
+      color: AppColors.bgDeep,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(Icons.timer_outlined, size: 12, color: textColor),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,33 +274,29 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               children: [
                 Text(
                   '$remaining msg${remaining == 1 ? "" : "s"} left today',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  style: AppTypography.bodySm.copyWith(
                     color: textColor,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
                   '$daysRemaining day${daysRemaining == 1 ? "" : "s"} remaining in free trial',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
+                  style: AppTypography.monoXs.copyWith(
                     color: textColor.withValues(alpha: 0.71),
+                    letterSpacing: 1.2,
                   ),
                 ),
               ],
             ),
           ),
           GestureDetector(
-            onTap: () => showPaywallSheet(context, feature: 'Unlimited AI Coach'),
+            onTap: () =>
+                showPaywallSheet(context, feature: 'Unlimited AI Coach'),
             child: Text(
-              'Upgrade',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              'UPGRADE',
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 1.6,
               ),
             ),
           ),
@@ -314,11 +312,14 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   Widget _buildCompactHeader(
       bool isPro, String channel, bool telegramConnected) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenPadding, vertical: 10),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      padding: const EdgeInsets.fromLTRB(22, 12, 14, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.accent.withValues(alpha: 0.33),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -329,18 +330,17 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.accentTint,
+                  color: AppColors.accentSoft,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.accent, width: 1.5),
                 ),
                 child: Center(
                   child: Text(
                     'AI',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
+                    style: AppTypography.mono.copyWith(
                       color: AppColors.accent,
+                      letterSpacing: 1.2,
+                      fontSize: 11,
                     ),
                   ),
                 ),
@@ -352,7 +352,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
-                    color: AppColors.green,
+                    color: AppColors.ok,
                     shape: BoxShape.circle,
                     border: Border.all(color: AppColors.header, width: 1.5),
                   ),
@@ -362,16 +362,25 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           ),
           const SizedBox(width: 10),
 
-          // Title
+          // Title — Wardroom mono eyebrow + Fraunces name
           Expanded(
-            child: Text(
-              'AVYA COACH',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'WARDROOM',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.accent,
+                    letterSpacing: 2.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Coach',
+                  style: AppTypography.h3.copyWith(height: 1.0),
+                ),
+              ],
             ),
           ),
 
@@ -388,13 +397,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           PopupMenuButton<String>(
             icon: const Icon(
               Icons.more_vert,
-              color: AppColors.textSecondary,
+              color: AppColors.textDim,
               size: 20,
             ),
             color: AppColors.card,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.border),
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              side: const BorderSide(color: AppColors.line2),
             ),
             onSelected: (value) {
               switch (value) {
@@ -424,17 +433,14 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     Icon(
                       channel == 'in_app' ? Icons.send : Icons.chat,
                       size: 16,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textDim,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       channel == 'in_app'
                           ? 'Switch to Telegram'
                           : 'Switch to In-App Chat',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                      style: AppTypography.body.copyWith(
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -446,14 +452,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   value: 'telegram',
                   child: Row(
                     children: [
-                      const Icon(Icons.link, size: 16, color: AppColors.blue),
+                      const Icon(Icons.link, size: 16, color: AppColors.info),
                       const SizedBox(width: 10),
                       Text(
                         'Connect @AVYACoachBot',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
+                        style: AppTypography.body.copyWith(
                           color: AppColors.textPrimary,
                         ),
                       ),
@@ -465,14 +468,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 child: Row(
                   children: [
                     const Icon(Icons.delete_outline,
-                        size: 16, color: AppColors.textSecondary),
+                        size: 16, color: AppColors.textDim),
                     const SizedBox(width: 10),
                     Text(
                       'Clear conversation',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                      style: AppTypography.body.copyWith(
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -489,11 +489,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                       const SizedBox(width: 10),
                       Text(
                         'Upgrade to PRO',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                        style: AppTypography.body.copyWith(
                           color: AppColors.proGold,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -522,27 +520,23 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       // Informational badge only — no tap handler. Users manage their
       // subscription from Profile → Subscription.
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.proGoldTint,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: AppColors.proGold.withValues(alpha: 0.4),
-          ),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.proGold, width: 2),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.workspace_premium,
-                size: 14, color: AppColors.proGold),
+            const Icon(Icons.workspace_premium,
+                size: 12, color: AppColors.proGold),
             const SizedBox(width: 4),
             Text(
               'PRO',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
+              style: AppTypography.mono.copyWith(
                 color: AppColors.proGold,
+                letterSpacing: 1.6,
               ),
             ),
           ],
@@ -555,27 +549,23 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       onTap: () =>
           showPaywallSheet(context, feature: 'Unlimited AI Coach'),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.accentTint,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.4),
-          ),
+          color: AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.accent, width: 2),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.arrow_upward,
+            const Icon(Icons.arrow_upward,
                 size: 12, color: AppColors.accent),
             const SizedBox(width: 4),
             Text(
-              'Upgrade',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+              'UPGRADE',
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 1.6,
               ),
             ),
           ],
@@ -590,20 +580,19 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   Widget _buildMessageCountIndicator(bool isPro, int messageCount) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.gutter, vertical: 6),
       color: AppColors.bg,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             isPro
-                ? 'Unlimited'
-                : '$messageCount/${AppConstants.freeAiMessagesPerDay} messages today',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+                ? 'UNLIMITED'
+                : '$messageCount/${AppConstants.freeAiMessagesPerDay} MESSAGES TODAY',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 1.4,
             ),
           ),
         ],
@@ -703,18 +692,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: AppColors.accentTint,
+                color: AppColors.accentSoft,
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.3), width: 2),
+                    color: AppColors.accent.withValues(alpha: 0.33), width: 2),
               ),
               child: Center(
                 child: Text(
                   'AI',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                  style: AppTypography.h2.copyWith(
                     color: AppColors.accent,
                   ),
                 ),
@@ -723,12 +709,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             const SizedBox(height: 20),
             Text(
               'Your AI Fitness Coach',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.h2,
             ),
             const SizedBox(height: 8),
             Consumer(
@@ -739,37 +720,19 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     Text(
                       insight,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textDim,
                         height: 1.6,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.auto_graph_rounded, size: 13, color: AppColors.accent),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Keep logging — AI learns from your data',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 12),
+                    WardChip(
+                      label: 'KEEP LOGGING \u00B7 AI LEARNS FROM YOUR DATA',
+                      tone: WardChipTone.gold,
+                      leading: const Icon(
+                        Icons.auto_graph_rounded,
+                        size: 12,
+                        color: AppColors.accent,
                       ),
                     ),
                   ],
@@ -790,14 +753,14 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final prompts = ref.watch(contextualPromptsProvider);
     return Container(
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.line2)),
       ),
       child: Stack(
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding, vertical: 8),
+                horizontal: AppSpacing.gutter, vertical: 10),
             child: Row(
               children: prompts.map((prompt) {
                 return Padding(
@@ -851,12 +814,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.blue.withValues(alpha: 0.1),
+                color: AppColors.info.withValues(alpha: 0.14),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.send,
-                color: AppColors.blue,
+                color: AppColors.info,
                 size: 32,
               ),
             ),
@@ -865,12 +828,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               telegramConnected
                   ? 'Telegram Connected'
                   : 'Connect to Telegram',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.h2,
             ),
             const SizedBox(height: 8),
             Text(
@@ -878,40 +836,36 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   ? 'Your AI coach is available on Telegram. Open the app to continue your conversation.'
                   : 'Chat with your AI coach on Telegram for quick access anytime.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textDim,
                 height: 1.5,
               ),
             ),
             const SizedBox(height: 24),
+            // Sharp 2-px slab CTA
             GestureDetector(
               onTap: () => _openTelegramBot(),
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
                 decoration: BoxDecoration(
                   color: telegramConnected
-                      ? AppColors.blue.withValues(alpha: 0.1)
+                      ? AppColors.info.withValues(alpha: 0.14)
                       : AppColors.accent,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                   border: telegramConnected
-                      ? Border.all(
-                          color: AppColors.blue.withValues(alpha: 0.3))
+                      ? Border.all(color: AppColors.info, width: 2)
                       : null,
                 ),
                 child: Text(
                   telegramConnected
-                      ? 'Open Telegram'
-                      : 'Connect @AVYACoachBot',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color:
-                        telegramConnected ? AppColors.blue : Colors.black,
+                      ? 'OPEN TELEGRAM'
+                      : 'CONNECT @AVYACOACHBOT',
+                  style: AppTypography.mono.copyWith(
+                    color: telegramConnected
+                        ? AppColors.info
+                        : AppColors.bgDeep,
+                    letterSpacing: 1.8,
                   ),
                 ),
               ),
@@ -937,10 +891,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding, 8, AppSpacing.screenPadding, 6),
+          AppSpacing.gutter, 10, AppSpacing.gutter, 8),
       decoration: const BoxDecoration(
         color: AppColors.header,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.line2)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -956,13 +910,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 onStartRecording: () => _startListening(),
                 onStopRecording: () => _stopListening(),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
 
               // Photo attachment button (PRO only)
               _buildAttachButton(isPro, isSending),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
 
-              // Text input
+              // Text input — sharp 2-px inner border
               Expanded(
                 child: TextField(
                   controller: _messageController,
@@ -970,10 +924,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   enabled: !isLimitReached && !isSending,
                   maxLines: 3,
                   minLines: 1,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
+                  style: AppTypography.body.copyWith(
                     color: AppColors.textPrimary,
                   ),
                   decoration: InputDecoration(
@@ -984,38 +935,38 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                             : isLimitReached
                                 ? 'Daily limit reached \u2014 Go PRO'
                                 : 'Ask your coach...',
-                    hintStyle: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
+                    hintStyle: AppTypography.body.copyWith(
                       color: _isRecording
                           ? AppColors.accent
                           : isLimitReached
                               ? AppColors.proGold
-                              : AppColors.textSecondary,
+                              : AppColors.textDim,
                     ),
                     filled: true,
-                    fillColor: AppColors.input,
+                    fillColor: AppColors.bgRaise,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
+                      horizontal: 12,
                       vertical: 10,
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      borderSide: const BorderSide(
+                          color: AppColors.line2, width: 2),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      borderSide: const BorderSide(
+                          color: AppColors.line2, width: 2),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(
-                        color: AppColors.accent.withValues(alpha: 0.5),
-                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      borderSide: const BorderSide(
+                          color: AppColors.accent, width: 2),
                     ),
                     disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      borderSide: const BorderSide(
+                          color: AppColors.line2, width: 2),
                     ),
                   ),
                   onSubmitted: (text) => _sendMessage(text),
@@ -1023,27 +974,29 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               ),
               const SizedBox(width: 8),
 
-              // Send button
+              // Send button — sharp 2-px accent slab with glyph
               GestureDetector(
                 onTap: isSending || isLimitReached
                     ? null
                     : () => _sendMessage(_messageController.text),
                 child: Container(
-                  width: 36,
-                  height: 36,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: isSending || isLimitReached
                         ? AppColors.textDisabled
                         : AppColors.accent,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                   child: Center(
                     child: Icon(
-                      isSending ? Icons.hourglass_top : Icons.send,
+                      isSending
+                          ? Icons.hourglass_top
+                          : Icons.arrow_upward,
                       color: isSending || isLimitReached
-                          ? AppColors.textSecondary
-                          : Colors.black,
-                      size: 15,
+                          ? AppColors.textDim
+                          : AppColors.bgDeep,
+                      size: 16,
                     ),
                   ),
                 ),
@@ -1054,31 +1007,27 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           // Inline message counter — only when top trial banner is NOT shown
           // (trial active users already see the counter in the banner above)
           if (!isPro && !trialInfo.isTrialActive) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '$messageCount/${AppConstants.freeAiMessagesPerDay} today',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
+                  '$messageCount/${AppConstants.freeAiMessagesPerDay} TODAY',
+                  style: AppTypography.monoXs.copyWith(
                     color: isWarning
-                        ? AppColors.orange
-                        : AppColors.textSecondary,
+                        ? AppColors.warn
+                        : AppColors.textMute,
+                    letterSpacing: 1.4,
                   ),
                 ),
                 if (trialInfo.isTrialActive &&
                     !trialInfo.isTrialExpired &&
                     trialInfo.daysRemaining <= 7) ...[
                   Text(
-                    '  \u00B7  ${trialInfo.daysRemaining}d trial left',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.orange,
+                    '  \u00B7  ${trialInfo.daysRemaining}D TRIAL LEFT',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.warn,
+                      letterSpacing: 1.4,
                     ),
                   ),
                 ],
@@ -1088,12 +1037,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                     onTap: () => showPaywallSheet(context,
                         feature: 'Unlimited AI Coach'),
                     child: Text(
-                      'Go PRO',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                      'GO PRO',
+                      style: AppTypography.monoXs.copyWith(
                         color: AppColors.proGold,
+                        letterSpacing: 1.4,
                       ),
                     ),
                   ),
@@ -1117,8 +1064,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     if (_isUploadingMedia) {
       // Show upload progress indicator
       return SizedBox(
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -1131,7 +1078,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 color: AppColors.accent,
               ),
             ),
-            Icon(
+            const Icon(
               Icons.photo,
               color: AppColors.accent,
               size: 12,
@@ -1142,18 +1089,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     }
 
     if (!isPro) {
-      // Gold-locked icon for free users
+      // Gold-locked sharp 2-px tile for free users
       return GestureDetector(
         onTap: () => showPaywallSheet(context, feature: 'Photo Analysis'),
         child: Container(
-          width: 32,
-          height: 32,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: AppColors.proGoldTint,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.proGold.withValues(alpha: 0.3),
-            ),
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: Border.all(color: AppColors.proGold, width: 2),
           ),
           child: Stack(
             children: [
@@ -1178,7 +1123,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   child: const Icon(
                     Icons.lock,
                     size: 5,
-                    color: Colors.black,
+                    color: AppColors.bgDeep,
                   ),
                 ),
               ),
@@ -1188,18 +1133,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       );
     }
 
-    // PRO user — active attach button
+    // PRO user — active sharp 2-px accent tile
     return GestureDetector(
       onTap: isSending ? null : () => _showMediaSourceSheet(),
       child: Container(
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: AppColors.input,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.3),
-          ),
+          color: AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.accent, width: 2),
         ),
         child: const Icon(
           Icons.attach_file,
@@ -1219,15 +1162,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         decoration: const BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppRadius.cardL),
+            top: Radius.circular(AppRadius.card),
           ),
           border: Border(
-            top: BorderSide(color: AppColors.border, width: 1),
-            left: BorderSide(color: AppColors.border, width: 1),
-            right: BorderSide(color: AppColors.border, width: 1),
+            top: BorderSide(color: AppColors.line2, width: 1),
+            left: BorderSide(color: AppColors.line2, width: 1),
+            right: BorderSide(color: AppColors.line2, width: 1),
           ),
         ),
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        padding: const EdgeInsets.all(AppSpacing.gutter),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1239,25 +1182,18 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: AppColors.textDisabled,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(AppRadius.soft),
                 ),
               ),
               Text(
                 'Send a Photo',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.h3,
               ),
               const SizedBox(height: 4),
               Text(
                 'Your AI coach will analyse the image',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textDim,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1296,58 +1232,46 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
+    return WardCard(
+      variant: WardCardVariant.inset,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.accentTint,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: AppColors.accent, size: 20),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              border: Border.all(color: AppColors.accent, width: 2),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+            child: Icon(icon, color: AppColors.accent, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.h3.copyWith(fontSize: 14),
+                ),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
-              size: 20,
-            ),
-          ],
-        ),
+          ),
+          const Icon(
+            Icons.chevron_right,
+            color: AppColors.textDim,
+            size: 20,
+          ),
+        ],
       ),
     );
   }
@@ -1362,7 +1286,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             SnackBar(
               content: Text(
                 'Camera is not available on web. Use gallery instead.',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
               backgroundColor: AppColors.card,
             ),
@@ -1466,9 +1392,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           SnackBar(
             content: Text(
               'Failed to upload photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 12),
+              style: AppTypography.body.copyWith(color: AppColors.bad),
             ),
-            backgroundColor: AppColors.red.withValues(alpha: 0.9),
+            backgroundColor: AppColors.card,
           ),
         );
       }

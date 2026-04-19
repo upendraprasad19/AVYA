@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/app_events_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
@@ -65,7 +65,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         SnackBar(
           content: Text(
             'Week 4 scheduled again. Keep going.',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            style: AppTypography.body.copyWith(fontSize: 13),
           ),
           backgroundColor: AppColors.card,
           behavior: SnackBarBehavior.floating,
@@ -79,7 +79,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         SnackBar(
           content: Text(
             "Couldn't schedule again. Please try again.",
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            style: AppTypography.body.copyWith(fontSize: 13),
           ),
           backgroundColor: AppColors.red,
           behavior: SnackBarBehavior.floating,
@@ -118,18 +118,13 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
             children: [
               Text(
                 '🎉',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 22),
+                style: AppTypography.body.copyWith(fontSize: 22),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Phase 1 complete',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                 ),
               ),
             ],
@@ -137,12 +132,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           const SizedBox(height: 6),
           Text(
             'Phase 2 brings new exercises, supersets, and progressive overload. Ready when you are.',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.4,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim, height: 1.4),
           ),
           const SizedBox(height: 18),
 
@@ -153,13 +143,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           // Secondary / tertiary section header
           Text(
             'OR KEEP TRAINING FREE',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
           ),
           const SizedBox(height: 10),
 
@@ -212,12 +196,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         child: Center(
           child: Text(
             'Upgrade to PRO  →',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: Colors.black,
-            ),
+            style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
           ),
         ),
       ),
@@ -249,14 +228,9 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: enabled
+                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: enabled
                       ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                ),
+                      : AppColors.textDim),
               ),
             ),
             trailing ??

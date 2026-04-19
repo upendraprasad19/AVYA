@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:uuid/uuid.dart';
 
 /// Bottom sheet for creating a custom exercise on the fly.
@@ -13,10 +14,6 @@ import 'package:uuid/uuid.dart';
 /// Writes the new exercise to `customBox` with `type: 'exercise'` and
 /// `is_custom: true`, then invokes [onCreated] with the exercise map so
 /// the caller can add it to the current workout or template immediately.
-///
-/// Extracted from `active_workout_screen.dart` so the template builder
-/// can reuse the same UI — keeps a single source of truth for the
-/// custom-exercise creation flow.
 class CreateCustomExerciseSheet extends StatefulWidget {
   final void Function(Map<String, dynamic> exercise) onCreated;
 
@@ -44,16 +41,9 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     ('cardio', 'Cardio'),
   ];
 
-  /// Whether to show the "Default Reps" field. Reps is meaningful for
-  /// weight_reps and bodyweight_reps. For timed/cardio it's nonsensical
-  /// (observed 2026-04-18 — user picked "Timed" for L Sit but the form
-  /// still showed Default Reps).
   bool get _showRepsField =>
       _loggingType == 'weight_reps' || _loggingType == 'bodyweight_reps';
 
-  /// Whether to show the "Default Duration (sec)" field. Only for
-  /// timed — the active-workout UI then prompts the user for a stopwatch
-  /// duration per set.
   bool get _showDurationField => _loggingType == 'timed';
 
   static const _categories = [
@@ -73,9 +63,6 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
 
-    // Stable id (F8): deterministic v5 from (user_id, 'exercise', lower(name)).
-    // Makes cloud upserts idempotent — same exercise from multiple devices
-    // collapses to one row instead of creating duplicates on every sync.
     const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
     final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
     final id = const Uuid().v5(customNs, '$userId|exercise|${name.toLowerCase()}');
@@ -87,9 +74,6 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
       'category': _category,
       'logging_type': _loggingType,
       'default_sets': int.tryParse(_setsCtrl.text) ?? 3,
-      // Only store default_reps when the logging type uses reps.
-      // For timed / cardio the field is hidden in the UI and the active
-      // workout screen uses different inputs (duration / distance).
       if (_showRepsField)
         'default_reps':
             _repsCtrl.text.trim().isEmpty ? '10' : _repsCtrl.text.trim(),
@@ -105,14 +89,6 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     };
 
     HiveService.instance.customBox.put(key, exercise);
-    // Push custom exercise to Supabase immediately.
-    //
-    // Previously only pushSnapshot() fired here, which refreshes AI coach
-    // context but does NOT touch the `user_custom_exercises` table. Combined
-    // with a bug in _syncCustomItems that looked for a list key, custom
-    // exercises never reached cloud at all (observed 2026-04-18 — "L Sit"
-    // created, user_custom_exercises stayed at 0 rows). syncCustomItemsNow
-    // now iterates per-key entries and writes this exercise's row.
     unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
     Navigator.of(context).pop();
@@ -124,9 +100,9 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,162 +111,72 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
           Center(
             child: Container(
               width: 36,
-              height: 4,
+              height: 3,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'CREATE CUSTOM EXERCISE',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-              color: AppColors.textSecondary,
+            'NEW EXERCISE',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 2.4,
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Create custom',
+            style: AppTypography.h2,
           ),
           const SizedBox(height: 14),
 
           // Name field
-          Text(
-            'Exercise Name',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          _fieldLabel('Exercise Name'),
           const SizedBox(height: 6),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.25)),
-            ),
-            child: TextField(
-              controller: _nameCtrl,
-              autofocus: true,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                isDense: true,
-                hintText: 'e.g. Band Pull-Apart',
-                hintStyle:
-                    TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-            ),
+          _sharpTextField(
+            controller: _nameCtrl,
+            autofocus: true,
+            hint: 'e.g. Band Pull-Apart',
           ),
           const SizedBox(height: 12),
 
           // Category + Logging Type row
           Row(
             children: [
-              // Category dropdown
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Category',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    _fieldLabel('Category'),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _category,
-                          isExpanded: true,
-                          dropdownColor: AppColors.card,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                          items: _categories
-                              .map((c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(c),
-                                  ))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _category = v ?? _category),
-                        ),
-                      ),
+                    _sharpDropdown<String>(
+                      value: _category,
+                      items: _categories,
+                      itemLabel: (c) => c,
+                      onChanged: (v) =>
+                          setState(() => _category = v ?? _category),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              // Logging type dropdown
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Logging Type',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    _fieldLabel('Logging Type'),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _loggingType,
-                          isExpanded: true,
-                          dropdownColor: AppColors.card,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                          items: _loggingTypes
-                              .map((lt) => DropdownMenuItem(
-                                    value: lt.$1,
-                                    child: Text(lt.$2),
-                                  ))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _loggingType = v ?? _loggingType),
-                        ),
-                      ),
+                    _sharpDropdown<String>(
+                      value: _loggingType,
+                      items: _loggingTypes.map((lt) => lt.$1).toList(),
+                      itemLabel: (v) => _loggingTypes
+                          .firstWhere((lt) => lt.$1 == v)
+                          .$2,
+                      onChanged: (v) =>
+                          setState(() => _loggingType = v ?? _loggingType),
                     ),
                   ],
                 ),
@@ -299,11 +185,7 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
           ),
           const SizedBox(height: 12),
 
-          // Sets + (Reps | Duration) row — second field swaps based on
-          // logging_type. Sets stays visible for every type; Reps shows
-          // for weight_reps / bodyweight_reps; Duration (sec) shows for
-          // timed; cardio shows Sets only (distance input lives in the
-          // active workout UI for now).
+          // Sets + (Reps | Duration) row
           Row(
             children: [
               Expanded(
@@ -343,50 +225,104 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
               Expanded(
                 child: Text(
                   'Share with AVYA community',
-                  style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.textSecondary),
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
+                  ),
                 ),
               ),
               Switch(
                 value: _shareWithCommunity,
                 onChanged: (v) => setState(() => _shareWithCommunity = v),
                 activeThumbColor: AppColors.accent,
-                activeTrackColor: AppColors.accent.withValues(alpha: 0.3),
+                activeTrackColor:
+                    AppColors.accent.withValues(alpha: 0.3),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // Save button
-          SizedBox(
-            width: double.infinity,
-            child: GestureDetector(
-              onTap: _save,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Add to Workout',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ),
+          // Sharp 2-px SAVE slab
+          WardButton(
+            label: 'SAVE',
+            onPressed: _save,
           ),
         ],
       ),
     );
   }
 
-  /// Small reusable numeric / text field used for Default Sets / Reps /
-  /// Duration. Extracted so the Sets+Reps+Duration row stays readable.
+  Widget _fieldLabel(String text) {
+    return Text(
+      text.toUpperCase(),
+      style: AppTypography.monoXs.copyWith(
+        color: AppColors.textMute,
+        letterSpacing: 1.8,
+      ),
+    );
+  }
+
+  Widget _sharpTextField({
+    required TextEditingController controller,
+    String? hint,
+    bool autofocus = false,
+    TextInputType? keyboardType,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgRaise,
+        borderRadius: BorderRadius.circular(2),
+        border: Border.all(color: AppColors.line2, width: 2),
+      ),
+      child: TextField(
+        controller: controller,
+        autofocus: autofocus,
+        keyboardType: keyboardType,
+        style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          isDense: true,
+          hintText: hint,
+          hintStyle: hint == null
+              ? null
+              : AppTypography.body.copyWith(color: AppColors.textMute),
+        ),
+      ),
+    );
+  }
+
+  Widget _sharpDropdown<T>({
+    required T value,
+    required List<T> items,
+    required String Function(T) itemLabel,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.bgRaise,
+        borderRadius: BorderRadius.circular(2),
+        border: Border.all(color: AppColors.line2, width: 2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: AppColors.card,
+          style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+          items: items
+              .map((c) => DropdownMenuItem<T>(
+                    value: c,
+                    child: Text(itemLabel(c)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
   Widget _numericField({
     required String label,
     required TextEditingController controller,
@@ -396,43 +332,13 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        _fieldLabel(label),
         const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: TextField(
-            controller: controller,
-            keyboardType:
-                numericOnly ? TextInputType.number : TextInputType.text,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              isDense: true,
-              hintText: hint,
-              hintStyle: hint == null
-                  ? null
-                  : TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ),
+        _sharpTextField(
+          controller: controller,
+          hint: hint,
+          keyboardType:
+              numericOnly ? TextInputType.number : TextInputType.text,
         ),
       ],
     );

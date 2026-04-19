@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import 'edit_workout_log_sheet.dart';
 import 'workout_receipt_card.dart';
@@ -46,7 +47,7 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Share button
+            // Share action — sharp gold slab, black Mono caps.
             GestureDetector(
               onTap: () async {
                 await CardShareService.captureAndShare(
@@ -59,16 +60,15 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(100),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 child: Center(
                   child: Text(
-                    'Share to Instagram / WhatsApp',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
+                    'DISPATCH TO INSTAGRAM / WHATSAPP',
+                    style: AppTypography.mono.copyWith(
                       color: Colors.black,
+                      letterSpacing: 2.4,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -76,9 +76,7 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
             ),
             const SizedBox(height: 8),
 
-            // Edit button — opens EditWorkoutLogSheet for the same date.
-            // Lets users correct logging mistakes (e.g. mis-entered seconds)
-            // without having to redo the whole workout.
+            // Edit — opens EditWorkoutLogSheet for the same date.
             GestureDetector(
               onTap: () {
                 Navigator.of(context).pop();
@@ -88,26 +86,24 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.accentTint,
-                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                   border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                    width: 1.5,
+                    color: AppColors.accent.withValues(alpha: 0.55),
+                    width: 1,
                   ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(Icons.edit_outlined,
-                        size: 15, color: AppColors.accent),
-                    const SizedBox(width: 6),
+                        size: 14, color: AppColors.accent),
+                    const SizedBox(width: 8),
                     Text(
-                      'Edit Workout Log',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                      'AMEND LOG',
+                      style: AppTypography.monoXs.copyWith(
                         color: AppColors.accent,
+                        letterSpacing: 2.4,
                       ),
                     ),
                   ],
@@ -120,14 +116,12 @@ class _WorkoutReceiptSheetState extends State<WorkoutReceiptSheet> {
             GestureDetector(
               onTap: () => Navigator.of(context).pop(),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Text(
-                  'Close',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+                  'DISMISS',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2.4,
                   ),
                 ),
               ),

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
@@ -57,7 +58,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
             SnackBar(
               content: Text(
                 'Daily AI text log limit reached. Try again tomorrow.',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                style: AppTypography.body,
               ),
               backgroundColor: AppColors.card,
             ),
@@ -92,13 +93,8 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = AppConstants.freeAiTextLogsPerDay;
 
-    return Container(
+    return WardCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         children: [
           // Input field
@@ -110,12 +106,12 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
                 color: AppColors.input,
-                borderRadius: BorderRadius.circular(AppRadius.row),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
                 border: Border.all(
                   color: _isFocused
                       ? AppColors.accent.withValues(alpha: 0.45)
-                      : AppColors.border,
-                  width: 1.5,
+                      : AppColors.line2,
+                  width: 1,
                 ),
               ),
               child: Row(
@@ -125,8 +121,8 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(
-                      color: AppColors.accentTint,
-                      borderRadius: BorderRadius.circular(7),
+                      color: AppColors.accentSoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
                     ),
                     child: const Icon(
                       Icons.auto_awesome,
@@ -141,18 +137,12 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                       focusNode: _focusNode,
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => _analyse(),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: AppTypography.body,
                       decoration: InputDecoration(
                         hintText:
                             'Type what you ate (e.g. 2 rotis with dal)...',
-                        hintStyle: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
+                        hintStyle: AppTypography.body.copyWith(
+                          color: AppColors.textDim,
                         ),
                         border: InputBorder.none,
                         isDense: true,
@@ -164,7 +154,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.stackS),
 
           // Analyse button + usage counter
           Row(
@@ -176,28 +166,27 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                     opacity: canAnalyse ? 1.0 : 0.35,
                     duration: const Duration(milliseconds: 200),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sharp),
                       ),
                       alignment: Alignment.center,
                       child: isAnalysing
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.black,
+                                color: AppColors.bgDeep,
                               ),
                             )
                           : Text(
-                              '\u2728 Analyse & Log',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.black,
+                              'ANALYSE & LOG',
+                              style: AppTypography.mono.copyWith(
+                                color: AppColors.bgDeep,
+                                letterSpacing: 2,
                               ),
                             ),
                     ),
@@ -206,30 +195,12 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
               ),
               if (!isPro) ...[
                 const SizedBox(width: 8),
-                // Usage counter badge (free users only — PRO is unlimited)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: remaining > 0
-                        ? AppColors.accent.withValues(alpha: 0.08)
-                        : AppColors.red.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: remaining > 0
-                          ? AppColors.accent.withValues(alpha: 0.2)
-                          : AppColors.red.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Text(
-                    '${limit - remaining}/$limit used',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: remaining > 0 ? AppColors.accent : AppColors.red,
-                    ),
-                  ),
+                // Usage counter chip (free users only — PRO is unlimited)
+                WardChip(
+                  label: '${limit - remaining}/$limit USED',
+                  tone: remaining > 0
+                      ? WardChipTone.gold
+                      : WardChipTone.bad,
                 ),
               ],
             ],
@@ -238,15 +209,15 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
           // Usage label (free users only)
           if (!isPro)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 6),
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  '$remaining log${remaining == 1 ? '' : 's'} left today',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    color: AppColors.textSecondary,
+                  '$remaining log${remaining == 1 ? '' : 's'} left today'
+                      .toUpperCase(),
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),

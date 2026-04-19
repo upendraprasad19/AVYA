@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet for quickly adding water intake from the home screen.
 class WaterQuickSheet extends ConsumerStatefulWidget {
@@ -33,12 +34,13 @@ class _WaterQuickSheetState extends ConsumerState<WaterQuickSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenPadding,
+        AppSpacing.gutter,
         12,
-        AppSpacing.screenPadding,
+        AppSpacing.gutter,
         24,
       ),
       child: Column(
@@ -49,98 +51,95 @@ class _WaterQuickSheetState extends ConsumerState<WaterQuickSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.border,
+              color: AppColors.line2,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Title
+          // Title — mono caps eyebrow
           Text(
             'LOG WATER',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              letterSpacing: 1,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 3,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Current progress text
-          Text(
-            '${_formatMl(currentMl)} / ${_formatMl(targetMl)} ml',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: AppColors.accent,
+          // Current progress — Fraunces numeric
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: _formatMl(currentMl),
+                  style: AppTypography.h1.copyWith(
+                    color: AppColors.accent,
+                  ),
+                ),
+                TextSpan(
+                  text: ' / ${_formatMl(targetMl)} ML',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: 12),
+
+          // Progress bar — WardBar
+          WardBar(
+            pct: progress,
+            height: 6,
+            color: AppColors.info,
           ),
           const SizedBox(height: 10),
-
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: AppColors.input,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
-            ),
-          ),
-          const SizedBox(height: 8),
 
           // Feedback text
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             child: _addedLabel != null
                 ? Text(
-                    '\u2713 Added $_addedLabel',
+                    '\u2713 ADDED $_addedLabel',
                     key: ValueKey(_addedLabel),
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.green,
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.ok,
+                      letterSpacing: 2,
                     ),
                   )
                 : const SizedBox(height: 16, key: ValueKey('empty')),
           ),
           const SizedBox(height: 12),
 
-          // Quick-add buttons row
+          // Quick-add buttons row — sharp 2-px outline tiles
           Row(
             children: [
               _WaterButton(
-                ml: 150,
-                label: '150ml',
-                subtitle: 'Small glass',
+                label: '150ML',
+                subtitle: 'SMALL GLASS',
                 icon: Icons.local_cafe_outlined,
                 onTap: () => _addWater(150, '150ml'),
               ),
               const SizedBox(width: 8),
               _WaterButton(
-                ml: 250,
-                label: '250ml',
-                subtitle: 'Glass',
+                label: '250ML',
+                subtitle: 'GLASS',
                 icon: Icons.local_drink_outlined,
                 onTap: () => _addWater(250, '250ml'),
               ),
               const SizedBox(width: 8),
               _WaterButton(
-                ml: 500,
-                label: '500ml',
-                subtitle: 'Bottle',
+                label: '500ML',
+                subtitle: 'BOTTLE',
                 icon: Icons.water_drop_outlined,
                 onTap: () => _addWater(500, '500ml'),
               ),
               const SizedBox(width: 8),
               _WaterButton(
-                ml: 750,
-                label: '750ml',
-                subtitle: 'Large',
+                label: '750ML',
+                subtitle: 'LARGE',
                 icon: Icons.sports_bar_outlined,
                 onTap: () => _addWater(750, '750ml'),
               ),
@@ -163,14 +162,12 @@ class _WaterQuickSheetState extends ConsumerState<WaterQuickSheet> {
 }
 
 class _WaterButton extends StatelessWidget {
-  final int ml;
   final String label;
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
   const _WaterButton({
-    required this.ml,
     required this.label,
     required this.subtitle,
     required this.icon,
@@ -185,31 +182,28 @@ class _WaterButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
           decoration: BoxDecoration(
-            color: AppColors.bg,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: AppColors.border),
+            color: AppColors.bgRaise,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: Border.all(color: AppColors.line2),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 18, color: AppColors.accent),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 label,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                style: AppTypography.mono.copyWith(
                   color: AppColors.textPrimary,
+                  letterSpacing: 1.5,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 8,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 1.2,
                 ),
               ),
             ],

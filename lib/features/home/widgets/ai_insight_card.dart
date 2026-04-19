@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Compact AI Coach insight card — title merged inside, no avatar/header row,
-/// no protein bar. Minimal vertical footprint.
+/// Compact AI Coach insight card — Mono eyebrow ("COACH · LIVE"),
+/// body copy, quick-win footer.
 class AiInsightCard extends StatelessWidget {
   final String? insight;
   final String userName;
@@ -20,48 +21,39 @@ class AiInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
+      variant: WardCardVariant.standard,
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Merged header: label + live dot in one row
+          // Eyebrow row: live dot + label
           Row(
             children: [
               Container(
                 width: 6,
                 height: 6,
                 decoration: const BoxDecoration(
-                  color: AppColors.green,
+                  color: AppColors.ok,
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Text(
-                'AI COACH INSIGHTS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 1.2,
+                'COACH \u00B7 LIVE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           // Insight text
           if (insight != null)
             Text(
               insight!,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
+              style: AppTypography.body.copyWith(
                 color: AppColors.textPrimary,
                 height: 1.5,
               ),
@@ -71,20 +63,16 @@ class AiInsightCard extends StatelessWidget {
           else
             Text(
               'Start a conversation with your AI coach for personalised tips!',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                color: AppColors.textSecondary,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textDim,
                 height: 1.5,
               ),
             ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             '\u{1F4A1} Quick wins: 3 eggs = 18g \u00B7 100g chicken = 31g \u00B7 1 scoop whey = 25g \u00B7 200g paneer = 36g',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              color: AppColors.textSecondary,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,

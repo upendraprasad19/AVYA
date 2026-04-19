@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'package:flutter/services.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -59,9 +59,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           SnackBar(
             content: Text(
               next.error!,
-              style: AppTypography.bodyM.copyWith(color: Colors.white),
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
-            backgroundColor: AppColors.red,
+            backgroundColor: AppColors.bad,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -71,8 +71,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: onboardingState.isFirstStep && !_showSummary
             ? null
             : IconButton(
@@ -85,9 +86,22 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                   }
                 },
               ),
-        title: Text(
-          'Getting Started',
-          style: AppTypography.titleM.copyWith(color: AppColors.textPrimary),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ENLISTMENT',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Getting started',
+              style: AppTypography.h3,
+            ),
+          ],
         ),
         centerTitle: true,
         bottom: PreferredSize(
@@ -114,22 +128,17 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Step ${state.currentStep + 1} of ${state.totalSteps}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                'STEP ${state.currentStep + 1} / ${state.totalSteps}',
+                style: AppTypography.monoXs.copyWith(
                   color: AppColors.accent,
-                  letterSpacing: 0.5,
+                  letterSpacing: 2,
                 ),
               ),
               Text(
-                '${(state.progress * 100).round()}% complete',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+                '${(state.progress * 100).round()}% COMPLETE',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
             ],
@@ -142,20 +151,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   }
 
   Widget _buildProgressBar(OnboardingState state) {
-    return Container(
-      width: double.infinity,
-      height: 4,
-      color: AppColors.input,
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: state.progress,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: WardBar(pct: state.progress, height: 4),
     );
   }
 
@@ -173,25 +171,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             children: [
               // Step indicator
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.accentTint,
-                    borderRadius: BorderRadius.circular(AppRadius.badge),
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.20),
-                    ),
-                  ),
-                  child: Text(
-                    'Step ${state.currentStep + 1} of ${state.totalSteps}',
-                    style: AppTypography.bodyS.copyWith(
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                child: WardChip(
+                  label: 'STEP ${state.currentStep + 1} / ${state.totalSteps}',
+                  tone: WardChipTone.gold,
                 ),
               ),
               const SizedBox(height: 24),
@@ -233,26 +215,19 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   Widget _buildBotBubble(String text) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
+      child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(18),
-            bottomLeft: Radius.circular(18),
-            bottomRight: Radius.circular(18),
-          ),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: AppTypography.bodyL.copyWith(
-            color: AppColors.textPrimary,
-            height: 1.4,
+        child: WardCard(
+          variant: WardCardVariant.inset,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(
+            text,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textDim,
+              height: 1.4,
+            ),
           ),
         ),
       ),
@@ -262,26 +237,25 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
   Widget _buildUserBubble(String text) {
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
+      child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.72,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.accentTint,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(18),
-            topRight: Radius.circular(4),
-            bottomLeft: Radius.circular(18),
-            bottomRight: Radius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.33),
+            ),
           ),
-          border: Border.all(color: AppColors.accent.withValues(alpha: 0.20)),
-        ),
-        child: Text(
-          text,
-          style: AppTypography.bodyL.copyWith(
-            color: AppColors.accent,
-            height: 1.4,
+          child: Text(
+            text,
+            style: AppTypography.body.copyWith(
+              color: AppColors.accent,
+              height: 1.4,
+            ),
           ),
         ),
       ),
@@ -303,7 +277,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
       ),
       decoration: const BoxDecoration(
         color: AppColors.header,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.line2)),
       ),
       child: SafeArea(
         top: false,
@@ -340,36 +314,10 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         Expanded(
           child: TextField(
             controller: _textController,
-            style: AppTypography.bodyL.copyWith(color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
             cursorColor: AppColors.accent,
             textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(
-              hintText: 'Type your answer...',
-              hintStyle: AppTypography.bodyL.copyWith(
-                color: AppColors.textDisabled,
-              ),
-              filled: true,
-              fillColor: AppColors.input,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(
-                  color: AppColors.accent,
-                  width: 1.5,
-                ),
-              ),
-            ),
+            decoration: _sharpInputDecoration('Type your answer...'),
             onSubmitted: (value) => _submitTextAnswer(
               value,
               state,
@@ -382,6 +330,36 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           _submitTextAnswer(_textController.text, state, notifier);
         }),
       ],
+    );
+  }
+
+  InputDecoration _sharpInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: AppTypography.body.copyWith(
+        color: AppColors.textDisabled,
+      ),
+      filled: true,
+      fillColor: AppColors.input,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        borderSide: const BorderSide(color: AppColors.line2, width: 2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        borderSide: const BorderSide(color: AppColors.line2, width: 2),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        borderSide: const BorderSide(
+          color: AppColors.accent,
+          width: 2,
+        ),
+      ),
     );
   }
 
@@ -408,9 +386,9 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           SnackBar(
             content: Text(
               'Please enter a valid number greater than 0',
-              style: AppTypography.bodyM.copyWith(color: Colors.white),
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
-            backgroundColor: AppColors.red,
+            backgroundColor: AppColors.bad,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -436,40 +414,14 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         Expanded(
           child: TextField(
             controller: _textController,
-            style: AppTypography.bodyL.copyWith(color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
             cursorColor: AppColors.accent,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
               LengthLimitingTextInputFormatter(6),
             ],
-            decoration: InputDecoration(
-              hintText: 'Enter a number...',
-              hintStyle: AppTypography.bodyL.copyWith(
-                color: AppColors.textDisabled,
-              ),
-              filled: true,
-              fillColor: AppColors.input,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                borderSide: const BorderSide(
-                  color: AppColors.accent,
-                  width: 1.5,
-                ),
-              ),
-            ),
+            decoration: _sharpInputDecoration('Enter a number...'),
             onSubmitted: (value) => _submitNumberAnswer(value, state, notifier),
           ),
         ),
@@ -528,14 +480,13 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+              const Icon(Icons.info_outline, size: 12, color: AppColors.textMute),
               const SizedBox(width: 4),
               Text(
-                'Scroll to select  ·  DD / MM / YYYY',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
+                'SCROLL TO SELECT  ·  DD / MM / YYYY',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
             ],
@@ -582,20 +533,18 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.accentTint : AppColors.input,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              color: isSelected ? AppColors.accentSoft : AppColors.input,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.accent.withValues(alpha: 0.50)
-                    : AppColors.border,
-                width: isSelected ? 1.5 : 1,
+                    ? AppColors.accent
+                    : AppColors.line2,
+                width: 2,
               ),
             ),
             child: Text(
               _formatOptionLabel(option),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
+              style: AppTypography.body.copyWith(
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected ? AppColors.accent : AppColors.textPrimary,
               ),
@@ -632,20 +581,18 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
               height: 56,
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.accent : AppColors.input,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
                 border: Border.all(
-                  color: isSelected ? AppColors.accent : AppColors.border,
-                  width: isSelected ? 2 : 1,
+                  color: isSelected ? AppColors.accent : AppColors.line2,
+                  width: 2,
                 ),
               ),
               alignment: Alignment.center,
               child: Text(
                 option,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
+                style: AppTypography.h3.copyWith(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.black : AppColors.textPrimary,
+                  color: isSelected ? AppColors.bgDeep : AppColors.textPrimary,
                 ),
               ),
             ),
@@ -661,40 +608,22 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
     return Container(
       width: 48,
       height: 48,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.accent,
-        shape: BoxShape.circle,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
       ),
       child: IconButton(
-        icon: const Icon(Icons.arrow_forward, color: Colors.black),
+        icon: const Icon(Icons.arrow_forward, color: AppColors.bgDeep),
         onPressed: onPressed,
       ),
     );
   }
 
   Widget _buildNextButton(OnboardingState state, OnboardingNotifier notifier) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: ElevatedButton(
-        onPressed: () => _handleNext(state, notifier),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-        ),
-        child: Text(
-          state.isLastStep ? 'Review' : 'Next',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-          ),
-        ),
-      ),
+    return WardButton(
+      label: state.isLastStep ? 'REVIEW' : 'NEXT',
+      variant: WardButtonVariant.primary,
+      onPressed: () => _handleNext(state, notifier),
     );
   }
 
@@ -721,28 +650,31 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             children: [
               const SizedBox(height: 8),
               Text(
-                'Review Your Profile',
-                style: AppTypography.titleL.copyWith(
-                  color: AppColors.textPrimary,
+                'REVIEW YOUR PROFILE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
+                'Final check',
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
                 'Make sure everything looks good before we build your plan.',
-                style: AppTypography.bodyM.copyWith(
-                  color: AppColors.textSecondary,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textDim,
                 ),
               ),
               const SizedBox(height: 24),
 
               // Summary card
-              Container(
+              WardCard(
                 padding: const EdgeInsets.all(AppSpacing.cardPadding),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(AppRadius.cardM),
-                  border: Border.all(color: AppColors.border),
-                ),
                 child: Column(
                   children: [
                     for (int i = 0; i < onboardingSteps.length; i++) ...[
@@ -759,7 +691,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                       ),
                       if (i < onboardingSteps.length - 1)
                         const Divider(
-                          color: AppColors.border,
+                          color: AppColors.line2,
                           height: 24,
                         ),
                     ],
@@ -775,7 +707,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
           decoration: const BoxDecoration(
             color: AppColors.header,
-            border: Border(top: BorderSide(color: AppColors.border)),
+            border: Border(top: BorderSide(color: AppColors.line2)),
           ),
           child: SafeArea(
             top: false,
@@ -817,13 +749,12 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.black,
+                  foregroundColor: AppColors.bgDeep,
                   disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.39),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
-                  elevation: 4,
-                  shadowColor: AppColors.accent.withValues(alpha: 0.24),
+                  elevation: 0,
                 ),
                 child: state.isCompleting
                     ? const SizedBox(
@@ -831,16 +762,16 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                         height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          color: Colors.black,
+                          color: AppColors.bgDeep,
                         ),
                       )
                     : Text(
-                        "Let's Go!",
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
+                        "LET'S GO",
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 12,
+                          color: AppColors.bgDeep,
+                          letterSpacing: 2.5,
+                          height: 1,
                         ),
                       ),
               ),
@@ -864,16 +795,16 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                label,
-                style: AppTypography.bodyS.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+                label.toUpperCase(),
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 value,
-                style: AppTypography.bodyL.copyWith(
+                style: AppTypography.body.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
@@ -885,8 +816,8 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: AppColors.accentTint,
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
             ),
             child: const Icon(
               Icons.edit_outlined,

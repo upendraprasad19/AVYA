@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// A 7-day bar chart card for weekly insights (calories or protein).
 class WeeklyChartCard extends StatelessWidget {
@@ -29,24 +30,17 @@ class WeeklyChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxVal = data.isEmpty ? 1.0 : data.reduce((a, b) => a > b ? a : b);
 
-    return Container(
+    return WardCard(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
+          // Title — Mono eyebrow above Fraunces h3
           Text(
-            '$emoji  $title',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+            '$emoji  ${title.toUpperCase()}',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
           const SizedBox(height: 14),
@@ -72,29 +66,16 @@ class WeeklyChartCard extends StatelessWidget {
                             alignment: Alignment.bottomCenter,
                             child: Container(
                               width: 30,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppColors.input,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(4),
-                                ),
                               ),
                               child: FractionallySizedBox(
-                                heightFactor: 1.0,
+                                heightFactor: fraction.clamp(0.05, 1.0),
                                 alignment: Alignment.bottomCenter,
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: FractionallySizedBox(
-                                    heightFactor: fraction.clamp(0.05, 1.0),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: barColor.withValues(
-                                          alpha: 0.7 + (fraction * 0.3),
-                                        ),
-                                        borderRadius:
-                                            const BorderRadius.vertical(
-                                          top: Radius.circular(4),
-                                        ),
-                                      ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: barColor.withValues(
+                                      alpha: 0.7 + (fraction * 0.3),
                                     ),
                                   ),
                                 ),
@@ -105,11 +86,9 @@ class WeeklyChartCard extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           _dayLabels[i],
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textMute,
+                            letterSpacing: 1.5,
                           ),
                         ),
                       ],
@@ -119,6 +98,8 @@ class WeeklyChartCard extends StatelessWidget {
               }),
             ),
           ),
+          const SizedBox(height: 12),
+          const WardRule(margin: EdgeInsets.zero),
           const SizedBox(height: 10),
 
           // Bottom row: avg and target
@@ -127,18 +108,14 @@ class WeeklyChartCard extends StatelessWidget {
             children: [
               Text(
                 avgLabel,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textDim,
                 ),
               ),
               Text(
                 targetLabel,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w700,
                   color: targetColor,
                 ),
               ),

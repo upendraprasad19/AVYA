@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// A single food log entry for the recent logs list.
 class FoodLogEntry {
@@ -20,7 +21,9 @@ class FoodLogEntry {
   });
 }
 
-/// Recent food logs card — list of logged meals with icon, name, macros, calories.
+/// Recent food logs card — list of logged meals with icon, name, macros,
+/// calories. Rows use WardKvRow-style layout: mono caps meta, Fraunces
+/// numeric kcal trailing.
 class RecentFoodLogs extends StatelessWidget {
   final List<FoodLogEntry> entries;
   final VoidCallback? onViewAll;
@@ -33,23 +36,17 @@ class RecentFoodLogs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return WardCard(
+      variant: WardCardVariant.standard,
+      padding: EdgeInsets.zero,
       child: entries.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(20),
               child: Center(
                 child: Text(
                   'No logs yet today. Start tracking!',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
                 ),
               ),
@@ -58,24 +55,24 @@ class RecentFoodLogs extends StatelessWidget {
               children: List.generate(entries.length, (index) {
                 final entry = entries[index];
                 return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     border: index < entries.length - 1
                         ? const Border(
-                            bottom: BorderSide(color: AppColors.border),
+                            bottom: BorderSide(color: AppColors.line2),
                           )
                         : null,
                   ),
                   child: Row(
                     children: [
-                      // Food icon
+                      // Food icon tile
                       Container(
                         width: 30,
                         height: 30,
                         decoration: BoxDecoration(
-                          color: AppColors.input,
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.bgRaise,
+                          borderRadius: BorderRadius.circular(AppRadius.card),
                         ),
                         alignment: Alignment.center,
                         child: const Text(
@@ -91,36 +88,45 @@ class RecentFoodLogs extends StatelessWidget {
                           children: [
                             Text(
                               entry.name,
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                              style: AppTypography.body.copyWith(
                                 color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'P:${entry.protein.round()} C:${entry.carbs.round()} F:${entry.fat.round()}',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 10,
-                                color: AppColors.textSecondary,
+                              'P ${entry.protein.round()}  \u00B7  C ${entry.carbs.round()}  \u00B7  F ${entry.fat.round()}',
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.textMute,
+                                letterSpacing: 1.5,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      // Calories
-                      Text(
-                        '${entry.calories.round()} kcal',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
+                      // Calories — Fraunces numeric
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${entry.calories.round()}',
+                            style: AppTypography.h3.copyWith(
+                              color: AppColors.accent,
+                              height: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'KCAL',
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.textMute,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

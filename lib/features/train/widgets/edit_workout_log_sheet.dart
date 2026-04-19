@@ -3,14 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet for editing the aggregate values of a completed workout's
 /// exercise logs. Reads directly from Hive (`exercise_log_index_YYYY-MM-DD`
@@ -268,7 +270,8 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
       SnackBar(
         content: Text(
           'Workout log updated',
-          style: GoogleFonts.getFont('DM Sans', fontWeight: FontWeight.w700),
+          style: AppTypography.bodySm
+              .copyWith(fontWeight: FontWeight.w700),
         ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.card,
@@ -387,8 +390,8 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         ),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.line2, width: 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -415,11 +418,16 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 
   Widget _buildHeader() {
+    final monthAbbr = const [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    ][widget.date.month - 1];
     final dateLabel =
-        '${widget.date.day.toString().padLeft(2, '0')}/${widget.date.month.toString().padLeft(2, '0')}/${widget.date.year}';
+        '$monthAbbr ${widget.date.day.toString().padLeft(2, '0')} · ${widget.date.year}';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -427,22 +435,22 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
               children: [
                 Text(
                   'EDIT WORKOUT',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
+                  style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 2.5,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Review sets',
+                  style: AppTypography.h2,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   dateLabel,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2,
                   ),
                 ),
               ],
@@ -450,7 +458,7 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
           ),
           IconButton(
             icon: const Icon(Icons.close,
-                color: AppColors.textSecondary, size: 20),
+                color: AppColors.textDim, size: 20),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -464,15 +472,13 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
       child: Column(
         children: [
           Icon(Icons.fitness_center,
-              color: AppColors.textSecondary.withValues(alpha: 0.4), size: 36),
+              color: AppColors.textDim.withValues(alpha: 0.4), size: 36),
           const SizedBox(height: 12),
           Text(
             'No exercise logs for this day',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -481,34 +487,27 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 
   Widget _buildEditRow(_ExerciseEditRow row) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            row.exerciseName,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: WardCard(
+        variant: WardCardVariant.inset,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              row.exerciseName,
+              style: AppTypography.h3.copyWith(fontSize: 14),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 10),
-          if (row.hasPerSetData)
-            _buildPerSetFields(row)
-          else
-            _buildFlattenedFields(row),
-        ],
+            const SizedBox(height: 10),
+            if (row.hasPerSetData)
+              _buildPerSetFields(row)
+            else
+              _buildFlattenedFields(row),
+          ],
+        ),
       ),
     );
   }
@@ -540,12 +539,9 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
             Expanded(
               child: Text(
                 labels[i],
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: AppColors.textSecondary,
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -579,22 +575,21 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
       height: 44,
       child: Row(
         children: [
-          // Set number badge
+          // Set number badge — sharp square in Wardroom voice
           Container(
             width: 28,
             height: 28,
             decoration: BoxDecoration(
               color: AppColors.accent,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
             ),
             child: Center(
               child: Text(
                 '$setNumber',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 11,
+                  color: AppColors.bgDeep,
+                  letterSpacing: 1.2,
                 ),
               ),
             ),
@@ -660,10 +655,8 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
           FilteringTextInputFormatter.digitsOnly,
       ],
       textAlign: TextAlign.center,
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
+      style: AppTypography.h3.copyWith(
+        fontSize: 16,
         color: AppColors.textPrimary,
       ),
       decoration: InputDecoration(
@@ -671,18 +664,18 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         filled: true,
-        fillColor: AppColors.bg,
+        fillColor: AppColors.bgDeep,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.line2, width: 2),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.line2, width: 2),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
         ),
       ),
     );
@@ -787,11 +780,8 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
             alignment: Alignment.centerLeft,
             child: Text(
               '= $formatted',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textMute,
               ),
             ),
           ),
@@ -812,38 +802,34 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         else
           FilteringTextInputFormatter.digitsOnly,
       ],
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
+      style: AppTypography.h3.copyWith(
+        fontSize: 16,
         color: AppColors.textPrimary,
       ),
       decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
+        labelText: label.toUpperCase(),
+        labelStyle: AppTypography.mono.copyWith(
+          color: AppColors.textMute,
+          letterSpacing: 2,
         ),
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         filled: true,
-        fillColor: AppColors.bg,
+        fillColor: AppColors.bgDeep,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
           borderSide:
-              const BorderSide(color: AppColors.border, width: 1),
+              const BorderSide(color: AppColors.line2, width: 2),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
           borderSide:
-              const BorderSide(color: AppColors.border, width: 1),
+              const BorderSide(color: AppColors.line2, width: 2),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
         ),
       ),
     );
@@ -855,75 +841,45 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
       child: Row(
         children: [
           Expanded(
-            child: GestureDetector(
-              onTap: _saving ? null : () => Navigator.of(context).pop(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                decoration: BoxDecoration(
-                  color: AppColors.input,
-                  borderRadius: BorderRadius.circular(100),
-                  border:
-                      Border.all(color: AppColors.border, width: 1),
-                ),
-                child: Center(
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
+            child: WardButton(
+              label: 'CANCEL',
+              onPressed: _saving ? null : () => Navigator.of(context).pop(),
+              variant: WardButtonVariant.ghost,
+              size: WardButtonSize.medium,
+              fullWidth: true,
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             flex: 2,
-            child: GestureDetector(
-              onTap: (_saving || _rows.isEmpty) ? null : _save,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                decoration: BoxDecoration(
-                  color: (_saving || _rows.isEmpty)
-                      ? AppColors.accent.withValues(alpha: 0.4)
-                      : AppColors.accent,
-                  borderRadius: BorderRadius.circular(100),
-                  boxShadow: (_saving || _rows.isEmpty)
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: AppColors.accent.withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                ),
-                child: Center(
-                  child: _saving
-                      ? const SizedBox(
-                          height: 14,
-                          width: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.black,
-                          ),
-                        )
-                      : Text(
-                          'SAVE CHANGES',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black,
-                            letterSpacing: 0.5,
-                          ),
+            child: _saving
+                ? Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.4),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.4)),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        height: 14,
+                        width: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.bgDeep,
                         ),
-                ),
-              ),
-            ),
+                      ),
+                    ),
+                  )
+                : WardButton(
+                    label: 'SAVE CHANGES',
+                    onPressed: _rows.isEmpty ? null : _save,
+                    variant: WardButtonVariant.primary,
+                    size: WardButtonSize.medium,
+                    fullWidth: true,
+                  ),
           ),
         ],
       ),

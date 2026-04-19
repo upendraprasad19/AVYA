@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
-import '../widgets/calorie_ring_painter.dart';
 import '../widgets/food_logger_section.dart';
 import '../widgets/ai_breakdown_card.dart';
 import '../widgets/todays_meals_card.dart';
@@ -94,7 +94,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       return _buildMealsTab();
     } catch (e) {
       return Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        padding: const EdgeInsets.all(AppSpacing.gutter),
         child: ErrorState(
           title: 'Failed to load nutrition data',
           subtitle: 'Tap to retry',
@@ -107,42 +107,12 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Header ─────────────────────────────────────────────────────
 
   Widget _buildHeader(DateTime now) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'NUTRITION',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Today \u00B7 ${now.day} ${_months[now.month - 1]}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          _buildDietPlanButton(),
-        ],
-      ),
+    return WardLetterhead(
+      eyebrow: 'GALLEY \u00B7 ${_months[now.month - 1].toUpperCase()} ${now.day}',
+      title: 'Nutrition',
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+      divider: true,
+      trailing: _buildDietPlanButton(),
     );
   }
 
@@ -152,29 +122,21 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: AppColors.accent.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(100),
+          color: AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
           border: Border.all(color: AppColors.accent.withValues(alpha: 0.30)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accent.withValues(alpha: 0.12),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.restaurant_menu, color: AppColors.accent, size: 14),
+            const Icon(Icons.restaurant_menu,
+                color: AppColors.accent, size: 14),
             const SizedBox(width: 6),
             Text(
-              'Diet Plan',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              'DIET PLAN',
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 2,
               ),
             ),
           ],
@@ -269,15 +231,12 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   Widget _sectionLabel(String text, {double topPadding = 12}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding, topPadding, AppSpacing.screenPadding, 8),
+          AppSpacing.gutter, topPadding, AppSpacing.gutter, 8),
       child: Text(
-        text,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textSecondary,
-          letterSpacing: 1.2,
+        text.toUpperCase(),
+        style: AppTypography.mono.copyWith(
+          color: AppColors.textMute,
+          letterSpacing: 2,
         ),
       ),
     );
@@ -295,77 +254,57 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final waterMl = ref.watch(waterIntakeProvider);
     const waterTarget = 3000;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.cardPadding, 10, AppSpacing.cardPadding, AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border:
-            Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
-      ),
+    return WardCard(
+      variant: WardCardVariant.hero,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
-          // Calorie ring
+          // Calorie ring — Wardroom animated ring with Fraunces big number
           SizedBox(
             width: 110,
             height: 110,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CustomPaint(
-                  size: const Size(110, 110),
-                  painter: CalorieRingPainter(
-                    progress: progress.clamp(0.0, 1.0),
-                    trackColor: AppColors.input,
-                    fillColor: AppColors.accent,
-                    strokeWidth: 10,
+            child: WardRing(
+              pct: progress.clamp(0.0, 1.0),
+              size: 110,
+              stroke: 6,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$consumed',
+                    style: AppTypography.h1.copyWith(
+                      fontSize: 26,
+                      color: AppColors.textPrimary,
+                      height: 1.0,
+                    ),
                   ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                        height: 1,
-                      ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'CONSUMED',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 7,
+                      letterSpacing: 1.5,
+                      color: AppColors.textMute,
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$remaining',
+                    style: AppTypography.h3.copyWith(
+                      color: AppColors.accent,
+                      height: 1.0,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.accent,
-                        height: 1,
-                      ),
+                  ),
+                  Text(
+                    'REMAINING',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 7,
+                      letterSpacing: 1.5,
+                      color: AppColors.textMute,
                     ),
-                    Text(
-                      'remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -379,8 +318,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
                     onTap: () => _showBmrTdeeInfo(targets),
-                    child: const Icon(Icons.info_outline,
-                        color: AppColors.textSecondary, size: 13),
+                    child: Icon(Icons.info_outline,
+                        color: AppColors.textDim, size: 13),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -388,35 +327,35 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   label: 'PROTEIN',
                   current: nutrition.protein.round(),
                   target: nutrition.proteinTarget.round(),
-                  color: AppColors.orange,
+                  color: AppColors.accent,
                 ),
                 const SizedBox(height: 6),
                 _macroRow(
                   label: 'CARBS',
                   current: nutrition.carbs.round(),
                   target: nutrition.carbTarget.round(),
-                  color: AppColors.blue,
+                  color: AppColors.warn,
                 ),
                 const SizedBox(height: 6),
                 _macroRow(
                   label: 'FAT',
                   current: nutrition.fat.round(),
                   target: nutrition.fatTarget.round(),
-                  color: AppColors.purple,
+                  color: AppColors.bad,
                 ),
                 const SizedBox(height: 6),
                 _macroRow(
                   label: 'FIBER',
                   current: nutrition.fiber.round(),
                   target: nutrition.fiberTarget.round(),
-                  color: AppColors.green,
+                  color: AppColors.ok,
                 ),
                 const SizedBox(height: 6),
                 _macroRow(
                   label: 'WATER',
                   current: waterMl,
                   target: waterTarget,
-                  color: const Color(0xFF06b6d4),
+                  color: AppColors.info,
                   suffix: 'ml',
                 ),
               ],
@@ -452,31 +391,29 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     String line;
     if (p.weeks > 104) {
       line =
-          "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg in >2 years";
+          "PROJECTION \u00B7 YOU'LL REACH ${targetKg.toStringAsFixed(0)}KG IN >2 YEARS";
     } else if (p.weeks <= 0) {
       return const SizedBox.shrink();
     } else {
       const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+        'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+        'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
       ];
       final dateStr = '${months[p.date.month - 1]} ${p.date.day}';
       line =
-          "At this pace, you'll reach ${targetKg.toStringAsFixed(0)} kg on $dateStr (~${p.weeks.round()} weeks)";
+          "PROJECTION \u00B7 YOU'LL HIT ${targetKg.toStringAsFixed(0)}KG BY $dateStr (~${p.weeks.round()} WKS)";
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenPadding,
-        vertical: 4,
+        horizontal: AppSpacing.gutter,
+        vertical: 6,
       ),
       child: Text(
         line,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.textMute,
+          letterSpacing: 1.5,
         ),
       ),
     );
@@ -498,44 +435,23 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
+              label.toUpperCase(),
+              style: AppTypography.mono.copyWith(
+                fontSize: 9,
+                letterSpacing: 1.8,
                 color: color,
               ),
             ),
             Text(
               '$current / $target$suffix',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                color: AppColors.textSecondary,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textDim,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 3),
-        Container(
-          height: 5,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: pct,
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
+        const SizedBox(height: 4),
+        WardBar(pct: pct, color: color, height: 4),
       ],
     );
   }
@@ -543,36 +459,28 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Unified Log Food Card ────────────────────────────────────
 
   Widget _buildUnifiedLogCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'LOG FOOD',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 1.2,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 10),
-          // Tab bar — 2 pill buttons
+          const SizedBox(height: 12),
+          // Tab bar — Mono-caps underline pattern
           Row(
             children: [
-              _logTab(0, '\u2728 AI'),
-              const SizedBox(width: 6),
-              _logTab(1, '\uD83D\uDCF7 Scan'),
+              _logTab(0, 'AI'),
+              const SizedBox(width: 8),
+              _logTab(1, 'SCAN'),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           // Tab content
           if (_logTabIndex == 0)
             Column(
@@ -584,23 +492,22 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   onTap: () => showFoodSearchSheet(context),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 14, horizontal: 14),
                     decoration: BoxDecoration(
                       color: AppColors.input,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.search,
-                            color: AppColors.textSecondary, size: 18),
+                        Icon(Icons.search,
+                            color: AppColors.textDim, size: 18),
                         const SizedBox(width: 10),
                         Text(
                           'Search 5,000+ foods...',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
+                          style: AppTypography.body.copyWith(
+                            color: AppColors.textDim,
                           ),
                         ),
                       ],
@@ -613,22 +520,27 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   onTap: () => showCustomFoodSheet(context),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 13, horizontal: 14),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-                      color: AppColors.accent.withValues(alpha: 0.06),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.35),
+                          width: 2),
+                      color: AppColors.accentSoft,
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 18),
+                        const Icon(Icons.add_circle_outline,
+                            color: AppColors.accent, size: 18),
                         const SizedBox(width: 10),
                         Text(
-                          'Create custom food',
-                          style: GoogleFonts.getFont('DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent),
+                          'CREATE CUSTOM FOOD',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ],
                     ),
@@ -648,12 +560,15 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   onTap: () => showBarcodeScanSheet(context),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 13, horizontal: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.accentTint,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.accentSoft,
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
                       border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.2)),
+                          color: AppColors.accent.withValues(alpha: 0.35),
+                          width: 2),
                     ),
                     child: Row(
                       children: [
@@ -661,24 +576,16 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                             color: AppColors.accent, size: 18),
                         const SizedBox(width: 10),
                         Text(
-                          'Scan product barcode',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                          'SCAN PRODUCT BARCODE',
+                          style: AppTypography.mono.copyWith(
                             color: AppColors.accent,
+                            letterSpacing: 2,
                           ),
                         ),
                         const Spacer(),
-                        Text(
-                          'FREE',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
-                            letterSpacing: 0.5,
-                          ),
+                        const WardChip(
+                          label: 'FREE',
+                          tone: WardChipTone.gold,
                         ),
                       ],
                     ),
@@ -696,29 +603,25 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _logTabIndex = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.accent.withValues(alpha: 0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: isActive
-                  ? AppColors.accent.withValues(alpha: 0.3)
-                  : AppColors.border,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                label,
+                style: AppTypography.mono.copyWith(
+                  color:
+                      isActive ? AppColors.accent : AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isActive ? AppColors.accent : AppColors.textSecondary,
+            Container(
+              height: 2,
+              color: isActive ? AppColors.accent : AppColors.line2,
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -737,29 +640,32 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card)),
         title: Text(
           'Delete this meal?',
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          style: AppTypography.h3,
         ),
         content: Text(
           "This will remove it from today's totals. You'll have 5 seconds to undo.",
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 13, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
+          style: AppTypography.body.copyWith(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+            child: Text('CANCEL',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textDim,
+                  letterSpacing: 2,
+                )),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Delete',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.red)),
+            child: Text('DELETE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.bad,
+                  letterSpacing: 2,
+                )),
           ),
         ],
       ),
@@ -774,11 +680,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       SnackBar(
         content: Text(
           'Meal deleted',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+          style: AppTypography.body.copyWith(
+            fontWeight: FontWeight.w600,
           ),
         ),
         backgroundColor: AppColors.card,
@@ -816,9 +719,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppRadius.card)),
           ),
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
           child: Column(
@@ -827,9 +731,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: AppColors.line2,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -837,28 +742,28 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               const SizedBox(height: 14),
               Text(
                 'EDIT MACROS',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 10,
-                    fontWeight: FontWeight.w700, letterSpacing: 1.2,
-                    color: AppColors.textSecondary),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 foodName,
-                style: GoogleFonts.getFont('DM Sans', fontSize: 16,
-                    fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                style: AppTypography.h2,
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
                   _macroField('Calories', calCtrl, AppColors.accent),
                   const SizedBox(width: 6),
-                  _macroField('Protein (g)', proteinCtrl, AppColors.orange),
+                  _macroField('Protein (g)', proteinCtrl, AppColors.accent),
                   const SizedBox(width: 6),
-                  _macroField('Carbs (g)', carbsCtrl, AppColors.textSecondary),
+                  _macroField('Carbs (g)', carbsCtrl, AppColors.warn),
                   const SizedBox(width: 6),
-                  _macroField('Fat (g)', fatCtrl, AppColors.textSecondary),
+                  _macroField('Fat (g)', fatCtrl, AppColors.bad),
                   const SizedBox(width: 6),
-                  _macroField('Fiber (g)', fiberCtrl, AppColors.green),
+                  _macroField('Fiber (g)', fiberCtrl, AppColors.ok),
                 ],
               ),
               const SizedBox(height: 18),
@@ -867,27 +772,30 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.black,
+                    foregroundColor: AppColors.bgDeep,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
                     ref.read(foodLogProvider.notifier).updateFoodLog(
-                      logId: logId,
-                      calories: double.tryParse(calCtrl.text) ?? 0,
-                      protein: double.tryParse(proteinCtrl.text) ?? 0,
-                      carbs: double.tryParse(carbsCtrl.text) ?? 0,
-                      fat: double.tryParse(fatCtrl.text) ?? 0,
-                      fiber: double.tryParse(fiberCtrl.text) ?? 0,
-                    );
+                          logId: logId,
+                          calories: double.tryParse(calCtrl.text) ?? 0,
+                          protein: double.tryParse(proteinCtrl.text) ?? 0,
+                          carbs: double.tryParse(carbsCtrl.text) ?? 0,
+                          fat: double.tryParse(fatCtrl.text) ?? 0,
+                          fiber: double.tryParse(fiberCtrl.text) ?? 0,
+                        );
                     Navigator.of(context).pop();
                   },
                   child: Text(
                     'SAVE',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 14,
-                        fontWeight: FontWeight.w900),
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.bgDeep,
+                      letterSpacing: 2,
+                    ),
                   ),
                 ),
               ),
@@ -898,37 +806,37 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     );
   }
 
-  Widget _macroField(String label, TextEditingController ctrl, Color accentColor) {
+  Widget _macroField(
+      String label, TextEditingController ctrl, Color accentColor) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-            style: GoogleFonts.getFont('DM Sans', fontSize: 9,
-                fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                color: AppColors.textSecondary),
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 1.5,
+            ),
           ),
           const SizedBox(height: 4),
           TextField(
             controller: ctrl,
             keyboardType: TextInputType.number,
-            style: GoogleFonts.getFont('DM Sans', fontSize: 16,
-                fontWeight: FontWeight.w700, color: accentColor),
+            style: AppTypography.h3.copyWith(color: accentColor),
             decoration: InputDecoration(
               filled: true,
               fillColor: AppColors.input,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 10),
+              border: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.line2),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.line2),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: accentColor),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: accentColor, width: 1.5),
               ),
             ),
           ),
@@ -945,8 +853,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          side: const BorderSide(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -955,52 +863,51 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             children: [
               Text(
                 'YOUR TARGETS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                  color: AppColors.textSecondary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
+              const SizedBox(height: 8),
+              const WardRule(gold: true, margin: EdgeInsets.zero),
+              const SizedBox(height: 8),
+              WardKvRow(
+                label: 'BMR',
+                value: '${targets['bmr']?.round() ?? 0} kcal',
+              ),
+              WardKvRow(
+                label: 'TDEE',
+                value: '${targets['tdee']?.round() ?? 0} kcal',
+              ),
+              WardKvRow(
+                label: 'Target',
+                value: '${targets['calories']?.round() ?? 0} kcal',
+                showDivider: false,
+              ),
               const SizedBox(height: 14),
-              _bmrInfoRow(
-                  'BMR', '${targets['bmr']?.round() ?? 0} kcal'),
-              const SizedBox(height: 8),
-              _bmrInfoRow(
-                  'TDEE', '${targets['tdee']?.round() ?? 0} kcal'),
-              const SizedBox(height: 8),
-              _bmrInfoRow(
-                  'Target', '${targets['calories']?.round() ?? 0} kcal'),
-              const SizedBox(height: 16),
               Text(
                 'BMR = Basal Metabolic Rate\nTDEE = Total Daily Energy Expenditure',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  color: AppColors.textSecondary,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textDim,
                 ),
               ),
               const SizedBox(height: 14),
               GestureDetector(
                 onTap: () => Navigator.of(ctx).pop(),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                        color: AppColors.accent.withValues(alpha: 0.3)),
+                    color: AppColors.accent,
+                    borderRadius:
+                        BorderRadius.circular(AppRadius.sharp),
                   ),
                   child: Text(
-                    'Got it',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.accent,
+                    'GOT IT',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.bgDeep,
+                      letterSpacing: 2,
                     ),
                   ),
                 ),
@@ -1012,42 +919,16 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     );
   }
 
-  Widget _bmrInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-
   // ── Inline Water Tracker ──────────────────────────────────────
 
   static const _urineColors = [
-    (color: Color(0xFFFFF9C4), status: 'Excellent', tip: 'Pale straw — optimal', statusColor: AppColors.green),
-    (color: Color(0xFFFFF176), status: 'Good', tip: 'Clear yellow — well hydrated', statusColor: AppColors.green),
-    (color: Color(0xFFFFD600), status: 'Adequate', tip: 'Yellow — drink more soon', statusColor: Color(0xFFF59E0B)),
-    (color: Color(0xFFFFB300), status: 'Low', tip: 'Dark yellow — drink now', statusColor: Color(0xFFF59E0B)),
-    (color: Color(0xFFE65100), status: 'Very low', tip: 'Amber — significantly dehydrated', statusColor: AppColors.red),
-    (color: Color(0xFFBF360C), status: 'Critical', tip: 'Brown — consult a doctor', statusColor: AppColors.red),
-    (color: Color(0xFF4E342E), status: 'Doctor!', tip: 'Dark brown — medical attention', statusColor: AppColors.red),
+    (color: Color(0xFFFFF9C4), status: 'Excellent', tip: 'Pale straw — optimal', statusColor: AppColors.ok),
+    (color: Color(0xFFFFF176), status: 'Good', tip: 'Clear yellow — well hydrated', statusColor: AppColors.ok),
+    (color: Color(0xFFFFD600), status: 'Adequate', tip: 'Yellow — drink more soon', statusColor: AppColors.warn),
+    (color: Color(0xFFFFB300), status: 'Low', tip: 'Dark yellow — drink now', statusColor: AppColors.warn),
+    (color: Color(0xFFE65100), status: 'Very low', tip: 'Amber — significantly dehydrated', statusColor: AppColors.bad),
+    (color: Color(0xFFBF360C), status: 'Critical', tip: 'Brown — consult a doctor', statusColor: AppColors.bad),
+    (color: Color(0xFF4E342E), status: 'Doctor!', tip: 'Dark brown — medical attention', statusColor: AppColors.bad),
   ];
 
   Widget _buildInlineWaterTracker() {
@@ -1056,13 +937,8 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final progress = (waterMl / waterTarget).clamp(0.0, 1.0);
     final selectedUrine = ref.watch(urineColorProvider);
 
-    return Container(
+    return WardCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         children: [
           // -- Top row: label + amount + expand toggle --
@@ -1070,25 +946,26 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             onTap: () => setState(() => _isWaterExpanded = !_isWaterExpanded),
             behavior: HitTestBehavior.opaque,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\u{1F4A7} WATER',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.blue,
-                    letterSpacing: 0.5,
+                  '\u{1F4A7} HYDRATION',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.info,
+                    letterSpacing: 2,
                   ),
                 ),
                 const Spacer(),
                 Text(
-                  '${waterMl.toStringAsFixed(0)} / $waterTarget ml',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                  waterMl.toStringAsFixed(0),
+                  style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  ' / $waterTarget ml',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -1096,7 +973,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   _isWaterExpanded
                       ? Icons.keyboard_arrow_up
                       : Icons.keyboard_arrow_down,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textDim,
                   size: 18,
                 ),
               ],
@@ -1104,42 +981,33 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           ),
           const SizedBox(height: 8),
 
-          // -- Progress bar --
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 3,
-              backgroundColor: const Color(0xFF161d28),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
-            ),
-          ),
+          // -- Progress bar (Wardroom) --
+          WardBar(pct: progress, color: AppColors.info, height: 4),
           const SizedBox(height: 10),
 
           // -- Quick-add buttons or goal-reached message --
           if (waterMl >= waterTarget)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 7),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: AppColors.blue.withValues(alpha: 0.2)),
+                color: AppColors.info.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                    color: AppColors.info.withValues(alpha: 0.3)),
               ),
               alignment: Alignment.center,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.check_circle_outline,
-                      size: 13, color: AppColors.blue),
+                      size: 13, color: AppColors.info),
                   const SizedBox(width: 6),
                   Text(
-                    'Goal reached! Great hydration today 💧',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.blue,
+                    'GOAL REACHED',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.info,
+                      letterSpacing: 2,
                     ),
                   ),
                 ],
@@ -1159,19 +1027,20 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                           .addWater(amount),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            vertical: 6, horizontal: 4),
+                            vertical: 8, horizontal: 4),
                         decoration: BoxDecoration(
                           color: AppColors.input,
-                          borderRadius: BorderRadius.circular(100),
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.sharp),
+                          border: Border.all(
+                              color: AppColors.info.withValues(alpha: 0.3)),
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          '+${amount}ml',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.blue,
+                          '+${amount}ML',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.info,
+                            letterSpacing: 1.5,
                           ),
                         ),
                       ),
@@ -1192,12 +1061,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'What is your urine color?',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
+                          'URINE COLOR',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.textMute,
+                            letterSpacing: 2,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -1210,15 +1077,17 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                                   .read(urineColorProvider.notifier)
                                   .select(i),
                               child: Container(
-                                width: 28,
-                                height: 28,
+                                width: 30,
+                                height: 30,
                                 decoration: BoxDecoration(
                                   color: _urineColors[i].color,
                                   shape: BoxShape.circle,
-                                  border: isSelected
-                                      ? Border.all(
-                                          color: Colors.white, width: 2)
-                                      : null,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.accent
+                                        : AppColors.line2,
+                                    width: isSelected ? 2 : 1,
+                                  ),
                                 ),
                               ),
                             );
@@ -1226,15 +1095,32 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                         ),
                         if (selectedUrine >= 0 &&
                             selectedUrine < _urineColors.length) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            '${_urineColors[selectedUrine].status} — ${_urineColors[selectedUrine].tip}',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: _urineColors[selectedUrine].statusColor,
-                            ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              WardChip(
+                                label:
+                                    'STATUS \u00B7 ${_urineColors[selectedUrine].status.toUpperCase()}',
+                                tone: _urineColors[selectedUrine]
+                                            .statusColor ==
+                                        AppColors.ok
+                                    ? WardChipTone.ok
+                                    : _urineColors[selectedUrine]
+                                                .statusColor ==
+                                            AppColors.warn
+                                        ? WardChipTone.warn
+                                        : WardChipTone.bad,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _urineColors[selectedUrine].tip,
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.textDim,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ],
@@ -1250,30 +1136,23 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Insights Section (collapsed by default) ──────────────────
 
   Widget _buildInsightsSection(WeeklyNutritionData weeklyData) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           GestureDetector(
-            onTap: () => setState(() =>
-                _isInsightsExpanded = !_isInsightsExpanded),
+            onTap: () => setState(
+                () => _isInsightsExpanded = !_isInsightsExpanded),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+                  horizontal: 14, vertical: 14),
               child: Row(
                 children: [
                   Text(
                     'INSIGHTS & TRENDS',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 1.2,
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.textMute,
+                      letterSpacing: 2,
                     ),
                   ),
                   const Spacer(),
@@ -1281,7 +1160,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                     _isInsightsExpanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textDim,
                     size: 18,
                   ),
                 ],
@@ -1289,8 +1168,9 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             ),
           ),
           if (_isInsightsExpanded) ...[
+            const WardRule(margin: EdgeInsets.zero),
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
               child: WeeklyChartCard(
                 title: 'This Week \u2014 Calories',
                 emoji: '\u{1F4CA}',
@@ -1303,19 +1183,19 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                 targetColor: AppColors.accent,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: WeeklyChartCard(
                 title: 'This Week \u2014 Protein',
                 emoji: '\u{1F4AA}',
                 data: weeklyData.protein,
-                barColor: AppColors.orange,
+                barColor: AppColors.warn,
                 avgLabel:
                     'Avg: ${weeklyData.avgProtein.round()}g/day',
                 targetLabel:
                     'Target: ${weeklyData.proteinTarget.round()}g',
-                targetColor: AppColors.orange,
+                targetColor: AppColors.warn,
               ),
             ),
           ],

@@ -3,16 +3,17 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
@@ -31,27 +32,18 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
   Widget build(BuildContext context) {
     final scanState = ref.watch(scanMealProvider);
     final remaining = ref.watch(scanMealRemainingProvider);
-    // Watch the provider so Razorpay success triggers a rebuild — direct
-    // isPro() reads Hive fresh but don't notify Riverpod, so the card
-    // previously stayed in free-tier state until a restart.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = isPro
         ? AppConstants.proScanMealPerDay
         : AppConstants.freeScanMealPerDay;
     final used = UsageCounterService.instance
         .used(AppConstants.featureScanMealPro, isPro);
-    final periodLabel = 'today';
 
     // Soft cap warning for PRO: show at 7/10 used
     final showSoftCap = isPro && used >= 7 && remaining > 0;
 
-    return Container(
+    return WardCard(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -62,8 +54,8 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 child: const Icon(Icons.camera_alt_outlined,
                     color: AppColors.accent, size: 18),
@@ -74,77 +66,40 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Scan Meal',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                      'SCAN MEAL',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       'Point camera at your plate',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Usage badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: remaining > 0
-                      ? AppColors.accent.withValues(alpha: 0.08)
-                      : AppColors.red.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(AppRadius.badge),
-                ),
-                child: Text(
-                  '${limit - remaining}/$limit used $periodLabel',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: remaining > 0 ? AppColors.accent : AppColors.red,
-                  ),
-                ),
+              // Usage chip
+              WardChip(
+                label: '${limit - remaining}/$limit TODAY',
+                tone: remaining > 0 ? WardChipTone.gold : WardChipTone.bad,
               ),
             ],
           ),
 
           // Soft cap warning
           if (showSoftCap) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.orange.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline,
-                      color: AppColors.orange, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$used of $limit scans used $periodLabel',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.orange,
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 10),
+            WardChip(
+              label: '$used OF $limit SCANS USED TODAY',
+              tone: WardChipTone.warn,
             ),
           ],
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // Scan button or result
           if (scanState.isScanning)
@@ -181,10 +136,10 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppRadius.row),
-            border:
-                Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.35), width: 2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -192,12 +147,10 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
               const Icon(Icons.camera_alt, color: AppColors.accent, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Take Photo of Your Meal',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                'TAKE PHOTO',
+                style: AppTypography.mono.copyWith(
                   color: AppColors.accent,
+                  letterSpacing: 2,
                 ),
               ),
             ],
@@ -216,14 +169,13 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
             SnackBar(
               content: Text(
                 'Daily scan limit reached. Try again tomorrow.',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                style: AppTypography.body,
               ),
               backgroundColor: AppColors.card,
             ),
           );
         },
-        onFree: () =>
-            showPaywallSheet(context, feature: 'Scan Meal'),
+        onFree: () => showPaywallSheet(context, feature: 'Scan Meal'),
       );
       return;
     }
@@ -239,35 +191,37 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppRadius.cardL),
+            top: Radius.circular(AppRadius.card),
           ),
-          border: Border(
-            top: BorderSide(color: AppColors.border, width: 1),
-            left: BorderSide(color: AppColors.border, width: 1),
-            right: BorderSide(color: AppColors.border, width: 1),
+          border: const Border(
+            top: BorderSide(color: AppColors.line2, width: 1),
+            left: BorderSide(color: AppColors.line2, width: 1),
+            right: BorderSide(color: AppColors.line2, width: 1),
           ),
         ),
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        padding: const EdgeInsets.all(AppSpacing.gutter),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.textDisabled,
+                  color: AppColors.line2,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               Text(
-                'Scan Your Meal',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 16, fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary),
+                'SCAN YOUR MEAL',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
               ),
               const SizedBox(height: 16),
               _sourceOption(ctx, Icons.camera_alt, 'Camera',
@@ -293,16 +247,17 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: AppColors.input,
-          borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.line2),
         ),
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: AppColors.accentTint,
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.accentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
               child: Icon(icon, color: AppColors.accent, size: 20),
             ),
@@ -310,11 +265,10 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 14, fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
-                Text(subtitle, style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 11, color: AppColors.textSecondary)),
+                Text(label, style: AppTypography.h3),
+                Text(subtitle,
+                    style: AppTypography.bodySm
+                        .copyWith(color: AppColors.textDim)),
               ],
             ),
           ],
@@ -339,30 +293,23 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
       children: [
         Text(
           error,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 12,
-            color: AppColors.red,
-          ),
+          style: AppTypography.bodySm.copyWith(color: AppColors.bad),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () => ref.read(scanMealProvider.notifier).clear(),
           child: Text(
-            'Try Again',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+            'TRY AGAIN',
+            style: AppTypography.mono.copyWith(
               color: AppColors.accent,
+              letterSpacing: 2,
             ),
           ),
         ),
       ],
     );
   }
-
 }
 
 /// Editable scan result: makes every item mutable so the user can correct
@@ -452,7 +399,7 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
         SnackBar(
           content: Text(
             'Add at least one item with a name before saving.',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            style: AppTypography.body,
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -515,67 +462,63 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
               child: TextField(
                 controller: _mealNameCtrl,
                 onChanged: (_) => setState(() {}),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.h3,
                 decoration: _fieldDecoration('Meal name'),
               ),
             ),
             const SizedBox(width: 10),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppRadius.badge),
-              ),
-              child: Text(
-                '$_totalKcal kcal',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.accent,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$_totalKcal',
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.accent,
+                  ),
                 ),
-              ),
+                Text(
+                  'KCAL',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        const WardRule(gold: true, margin: EdgeInsets.zero),
         const SizedBox(height: 10),
 
         // Items list
         ..._items.map(_buildItemRow),
         const SizedBox(height: 8),
 
-        // + Add item
+        // + Add item — sharp 2-px accent slab
         GestureDetector(
           onTap: _addItem,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.input,
-              borderRadius: BorderRadius.circular(AppRadius.cardS),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
               border: Border.all(
-                color: AppColors.accent.withValues(alpha: 0.3),
-                width: 1,
+                color: AppColors.accent.withValues(alpha: 0.35),
+                width: 2,
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.add, size: 14, color: AppColors.accent),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Text(
-                  'Add Item',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                  'ADD ITEM',
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 2,
                   ),
                 ),
               ],
@@ -584,26 +527,24 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
         ),
         const SizedBox(height: 12),
 
-        // Save / Discard
+        // Save / Discard — sharp slabs
         Row(
           children: [
             Expanded(
               child: GestureDetector(
                 onTap: _saving ? null : _save,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(
                     color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    '\u2713 Save',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
+                    'SAVE',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.bgDeep,
+                      letterSpacing: 2,
                     ),
                   ),
                 ),
@@ -614,17 +555,16 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
               onTap: () => ref.read(scanMealProvider.notifier).clear(),
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: AppColors.line2),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 child: Text(
-                  'Discard',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                  'DISCARD',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 2,
                   ),
                 ),
               ),
@@ -638,86 +578,89 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
   Widget _buildItemRow(_EditableItem item) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Column(
-        children: [
-          // Compact row: name | kcal | expand | delete
-          Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: TextField(
-                  controller: item.nameCtrl,
-                  onChanged: (_) => setState(() {}),
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: _fieldDecoration('Food name'),
-                ),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 58,
-                child: TextField(
-                  controller: item.kcalCtrl,
-                  onChanged: (_) => setState(() {}),
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.orange,
-                  ),
-                  decoration: _fieldDecoration('kcal'),
-                ),
-              ),
-              GestureDetector(
-                onTap: () =>
-                    setState(() => item.expanded = !item.expanded),
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(
-                    item.expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => _removeItem(item),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(Icons.close, size: 16, color: AppColors.red),
-                ),
-              ),
-            ],
-          ),
-          // Expanded macros row
-          if (item.expanded) ...[
-            const SizedBox(height: 6),
+      child: WardCard(
+        variant: WardCardVariant.inset,
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            // Compact row: name | kcal | expand | delete
             Row(
               children: [
                 Expanded(
-                    child: _macroField(
-                        item.proteinCtrl, 'P g', AppColors.accent)),
+                  flex: 5,
+                  child: TextField(
+                    controller: item.nameCtrl,
+                    onChanged: (_) => setState(() {}),
+                    style: AppTypography.body,
+                    decoration: _fieldDecoration('Food name'),
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Expanded(
-                    child: _macroField(
-                        item.carbsCtrl, 'C g', AppColors.blue)),
-                const SizedBox(width: 6),
-                Expanded(
-                    child:
-                        _macroField(item.fatCtrl, 'F g', AppColors.orange)),
-                const SizedBox(width: 6),
-                Expanded(
-                    child: _macroField(
-                        item.fiberCtrl, 'Fi g', AppColors.green)),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    controller: item.kcalCtrl,
+                    onChanged: (_) => setState(() {}),
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                    decoration: _fieldDecoration('kcal'),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => item.expanded = !item.expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                      item.expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _removeItem(item),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: WardChip(
+                      label: '',
+                      tone: WardChipTone.bad,
+                      leading: const Icon(Icons.close,
+                          size: 10, color: AppColors.bad),
+                    ),
+                  ),
+                ),
               ],
             ),
+            // Expanded macros row
+            if (item.expanded) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                      child: _macroField(
+                          item.proteinCtrl, 'P g', AppColors.accent)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                      child: _macroField(
+                          item.carbsCtrl, 'C g', AppColors.warn)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                      child:
+                          _macroField(item.fatCtrl, 'F g', AppColors.bad)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                      child: _macroField(
+                          item.fiberCtrl, 'Fi g', AppColors.ok)),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -729,9 +672,7 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
       onChanged: (_) => setState(() {}),
       keyboardType: TextInputType.number,
       textAlign: TextAlign.center,
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 11,
+      style: AppTypography.bodySm.copyWith(
         fontWeight: FontWeight.w700,
         color: color,
       ),
@@ -746,24 +687,18 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
           const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       filled: true,
       fillColor: AppColors.input,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.cardS),
-        borderSide: const BorderSide(color: AppColors.border),
+      border: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.line2),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.cardS),
-        borderSide: const BorderSide(color: AppColors.border),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.line2),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.cardS),
-        borderSide:
-            const BorderSide(color: AppColors.accent, width: 1.0),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.accent, width: 1.5),
       ),
       hintText: hint,
-      hintStyle: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 10,
-        color: AppColors.textSecondary,
+      hintStyle: AppTypography.bodySm.copyWith(
+        color: AppColors.textMute,
       ),
     );
   }

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/widgets/badges_grid.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Single-row achievements card for the profile screen.
-/// Shows trophy icon + "Achievements" label + 3 recent badge emojis +
-/// earned/total count pill + chevron. Tapping opens the full BadgesGrid
-/// in a bottom sheet.
+/// Shows Fraunces count left, label, recent badge emojis, earned/total pill,
+/// chevron. Tapping opens the full BadgesGrid in a bottom sheet.
 class SlimAchievementsCard extends StatelessWidget {
   const SlimAchievementsCard({super.key});
 
@@ -31,94 +31,78 @@ class SlimAchievementsCard extends StatelessWidget {
       display.add(locked.removeAt(0));
     }
 
-    return GestureDetector(
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       onTap: () => _openBadgesSheet(context),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        margin: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            // Trophy icon
-            const Text('🏆', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
-
-            // Label
-            Text(
-              'Achievements',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+      child: Row(
+        children: [
+          // Fraunces numeric count + "BADGES" label stack
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                earnedCount.toString().padLeft(2, '0'),
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.accent,
+                  height: 1,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-
-            // Recent badge emojis
-            for (int i = 0; i < display.length; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              Opacity(
-                opacity: display[i].isUnlocked ? 1.0 : 0.35,
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.input,
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(
-                      color: display[i].isUnlocked
-                          ? AppColors.proGold.withValues(alpha: 0.4)
-                          : AppColors.border,
-                    ),
-                  ),
-                  child: Text(
-                    display[i].emoji,
-                    style: const TextStyle(fontSize: 15),
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                'BADGES',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
             ],
+          ),
+          const SizedBox(width: 14),
 
-            const Spacer(),
-
-            // Earned / total pill
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.proGold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                    color: AppColors.proGold.withValues(alpha: 0.3)),
-              ),
-              child: Text(
-                '$earnedCount / $totalCount',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.proGold,
+          // Recent badge emojis
+          for (int i = 0; i < display.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Opacity(
+              opacity: display[i].isUnlocked ? 1.0 : 0.35,
+              child: Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.bgRaise,
+                  borderRadius: BorderRadius.circular(AppRadius.soft),
+                  border: Border.all(
+                    color: display[i].isUnlocked
+                        ? AppColors.accent.withValues(alpha: 0.4)
+                        : AppColors.line2,
+                  ),
+                ),
+                child: Text(
+                  display[i].emoji,
+                  style: const TextStyle(fontSize: 15),
                 ),
               ),
             ),
-            const SizedBox(width: 6),
-
-            // Chevron
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: AppColors.textSecondary,
-            ),
           ],
-        ),
+
+          const Spacer(),
+
+          // Earned / total chip
+          WardChip(
+            label: '$earnedCount / $totalCount',
+            tone: WardChipTone.gold,
+          ),
+          const SizedBox(width: 6),
+
+          // Chevron
+          const Icon(
+            Icons.chevron_right,
+            size: 18,
+            color: AppColors.textMute,
+          ),
+        ],
       ),
     );
   }
@@ -129,7 +113,7 @@ class SlimAchievementsCard extends StatelessWidget {
       backgroundColor: AppColors.card,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (_) => const SafeArea(
         child: Padding(

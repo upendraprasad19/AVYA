@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import '../providers/ai_coach_provider.dart';
 import '../services/conversational_log_handler.dart';
 
 /// Inline confirmation card for an AI-detected log action.
 ///
+/// Wardroom styling: sharp 2-px accent outline card with Mono-caps
+/// CONFIRM / SKIP slabs and a semantic strip keyed to the log type.
 /// Appears below the last AI message bubble in the chat list.
 /// Auto-confirms after 5 seconds with a countdown indicator.
-/// User can tap "Log it" to confirm immediately, or "Skip" to dismiss.
 class LogConfirmCard extends ConsumerStatefulWidget {
   final PendingLogAction action;
 
@@ -80,13 +81,13 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
   Color get _typeColor {
     switch (widget.action.type) {
       case LogActionType.water:
-        return AppColors.blue;
+        return AppColors.info;
       case LogActionType.weight:
-        return AppColors.orange;
+        return AppColors.warn;
       case LogActionType.food:
-        return AppColors.green;
+        return AppColors.ok;
       case LogActionType.sleep:
-        return AppColors.purple;
+        return AppColors.info;
       case LogActionType.measurement:
         return AppColors.proGold;
     }
@@ -119,18 +120,18 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.accent, width: 2),
         ),
         child: Row(
           children: [
-            // Left color strip
+            // Left color strip keyed to log type
             Container(
               width: 3,
               height: 36,
               decoration: BoxDecoration(
                 color: _typeColor,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
             ),
             const SizedBox(width: 10),
@@ -143,24 +144,24 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
             Expanded(
               child: isLogged
                   ? Text(
-                      'Logged',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.green),
+                      'LOGGED',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.ok,
+                        letterSpacing: 1.6,
+                      ),
                     )
                   : Text(
                       widget.action.displayText,
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary),
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
             ),
 
             if (isLogged)
-              const Icon(Icons.check_circle, size: 18, color: AppColors.green)
+              const Icon(Icons.check_circle, size: 18, color: AppColors.ok)
             else ...[
               // Countdown progress
               SizedBox(
@@ -172,7 +173,7 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
                     return CircularProgressIndicator(
                       value: 1.0 - _countdownController.value,
                       strokeWidth: 2,
-                      backgroundColor: AppColors.border,
+                      backgroundColor: AppColors.line2,
                       valueColor: AlwaysStoppedAnimation(_typeColor),
                     );
                   },
@@ -180,36 +181,36 @@ class _LogConfirmCardState extends ConsumerState<LogConfirmCard>
               ),
               const SizedBox(width: 10),
 
-              // "Log it" CTA
+              // CONFIRM slab — sharp 2-px accent
               GestureDetector(
                 onTap: _isExecuting ? null : _execute,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                   child: Text(
-                    'Log it',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black),
+                    'CONFIRM',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.bgDeep,
+                      letterSpacing: 1.6,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
 
-              // Skip button
+              // SKIP button — Mono caps
               GestureDetector(
                 onTap: _dismiss,
                 child: Text(
-                  'Skip',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textSecondary),
+                  'SKIP',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.6,
+                  ),
                 ),
               ),
             ],

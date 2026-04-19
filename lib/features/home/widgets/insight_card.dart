@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Provider for the top coaching insight (highest severity pattern).
 /// Refreshes once per build (cached by PatternDetector internally).
@@ -30,11 +31,11 @@ class InsightCard extends ConsumerWidget {
     final IconData icon;
     switch (insight.severity) {
       case InsightSeverity.high:
-        accentColor = AppColors.red;
+        accentColor = AppColors.bad;
         icon = Icons.warning_amber_rounded;
         break;
       case InsightSeverity.medium:
-        accentColor = AppColors.orange;
+        accentColor = AppColors.warn;
         icon = Icons.info_outline;
         break;
       case InsightSeverity.low:
@@ -43,27 +44,20 @@ class InsightCard extends ConsumerWidget {
         break;
     }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
+      child: WardCard(
+        variant: WardCardVariant.standard,
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: accentColor.withValues(alpha: 0.2)),
-        ),
+        onTap: onTap,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Left accent strip
+            // Left accent strip — sharp 2-px slab
             Container(
               width: 3,
               height: 40,
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              color: accentColor,
             ),
             const SizedBox(width: 12),
 
@@ -77,21 +71,20 @@ class InsightCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Coach Notice',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                        color: accentColor),
+                    'COACH NOTICE',
+                    style: AppTypography.mono.copyWith(
+                      color: accentColor,
+                      letterSpacing: 2,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     insight.userMessage,
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary,
-                        height: 1.4),
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -102,7 +95,7 @@ class InsightCard extends ConsumerWidget {
             // Arrow
             const SizedBox(width: 8),
             Icon(Icons.arrow_forward_ios,
-                size: 12, color: AppColors.textSecondary),
+                size: 12, color: AppColors.textDim),
           ],
         ),
       ),

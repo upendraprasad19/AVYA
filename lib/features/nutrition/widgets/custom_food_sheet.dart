@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Bottom sheet for adding a custom food item.
@@ -89,12 +89,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
               children: [
                 Text(
                   'Add Custom Food',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
                 const Spacer(),
                 IconButton(
@@ -117,13 +112,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
 
                 Text(
                   'NUTRITION PER 100g',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 8),
 
@@ -165,13 +154,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
 
                 Text(
                   'STANDARD SERVING',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -198,7 +181,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
                 Expanded(
                   child: Text(
                     'Share with AVYA community',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+                    style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                   ),
                 ),
                 Switch(
@@ -234,12 +217,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
                 ),
                 child: Text(
                   'Save Custom Food',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: _isValid ? Colors.black : AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: _isValid ? Colors.black : AppColors.textDim),
                 ),
               ),
             ),
@@ -260,7 +238,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (calories < 0.1 || calories > 2000) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Calories must be 0.1–2000 kcal per 100g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -268,7 +246,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (protein < 0 || protein > 100) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Protein must be 0–100 g per 100g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -276,7 +254,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (carbs < 0 || carbs > 100) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Carbs must be 0–100 g per 100g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -284,7 +262,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (fat < 0 || fat > 100) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Fat must be 0–100 g per 100g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -292,7 +270,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (fiber < 0 || fiber > 50) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Fiber must be 0–50 g per 100g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -302,7 +280,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
     if (servingG < 1 || servingG > 10000) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Serving weight must be 1–10,000 g',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+            style: AppTypography.body.copyWith(fontSize: 13)),
         backgroundColor: AppColors.red,
       ));
       return;
@@ -327,7 +305,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
       SnackBar(
         content: Text(
           'Added "${_nameController.text.trim()}" to your foods',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+          style: AppTypography.body.copyWith(fontSize: 13),
         ),
         backgroundColor: AppColors.card,
       ),
@@ -341,12 +319,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
       children: [
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDim),
         ),
         const SizedBox(height: 4),
         Container(
@@ -359,18 +332,10 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
           child: TextField(
             controller: controller,
             onChanged: (_) => setState(() {}),
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 14,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                color: AppColors.textDisabled,
-              ),
+              hintStyle: AppTypography.body.copyWith(color: AppColors.textDisabled),
               border: InputBorder.none,
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -388,12 +353,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
       children: [
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDim),
         ),
         const SizedBox(height: 4),
         Container(
@@ -415,18 +375,10 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
                     FilteringTextInputFormatter.allow(
                         RegExp(r'^\d*\.?\d{0,1}')),
                   ],
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     hintText: '0',
-                    hintStyle: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      color: AppColors.textDisabled,
-                    ),
+                    hintStyle: AppTypography.body.copyWith(color: AppColors.textDisabled),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding:
@@ -436,11 +388,7 @@ class _CustomFoodSheetState extends ConsumerState<_CustomFoodSheet> {
               ),
               Text(
                 suffix,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
               ),
             ],
           ),

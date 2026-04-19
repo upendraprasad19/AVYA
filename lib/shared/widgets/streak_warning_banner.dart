@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Red warning banner shown on day 6–7 of a week when the streak is at risk.
+/// Warning card shown when the streak is at risk.
+///
+/// Wardroom styling: inset card, warn-tinted leading chip, Mono eyebrow,
+/// DM Sans body, sharp outlined TRAIN NOW slab.
 class StreakWarningBanner extends StatelessWidget {
   final int streakDays;
   final int workoutsRemaining;
@@ -54,67 +60,68 @@ class StreakWarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a0808),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFef4444).withValues(alpha: 0.5)),
+    final bodyText = freezesAvailable > 0
+        ? '$workoutsRemaining left \u2022 $freezesAvailable freeze${freezesAvailable > 1 ? "s" : ""} remaining'
+        : '$workoutsRemaining left \u2022 No freezes — don\'t miss today!';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.gutter,
+        0,
+        AppSpacing.gutter,
+        AppSpacing.stackS,
       ),
-      child: Row(
-        children: [
-          const Text('⚠️', style: TextStyle(fontSize: 20)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$streakDays-day streak at risk!',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFef4444),
-                  ),
-                ),
-                Text(
-                  freezesAvailable > 0
-                      ? '$workoutsRemaining left \u2022 $freezesAvailable freeze${freezesAvailable > 1 ? "s" : ""} remaining'
-                      : '$workoutsRemaining left \u2022 No freezes \u2014 don\'t miss today!',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    color: freezesAvailable > 0
-                        ? const Color(0xFF6b7a8d)
-                        : const Color(0xFFef4444).withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onTrainNow,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFef4444),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                'Train Now',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+      child: WardCard(
+        variant: WardCardVariant.inset,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.cardPadding,
+          vertical: AppSpacing.stackM,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const WardChip(
+              label: 'AT RISK',
+              tone: WardChipTone.bad,
+              leading: Icon(
+                Icons.local_fire_department_outlined,
+                size: 12,
+                color: AppColors.bad,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.stackM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'STREAK AT RISK',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.bad,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.stackXS),
+                  Text(
+                    '$streakDays-day streak · $bodyText',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.stackS),
+            WardButton(
+              label: 'TRAIN NOW',
+              onPressed: onTrainNow,
+              variant: WardButtonVariant.danger,
+              size: WardButtonSize.small,
+              fullWidth: false,
+            ),
+          ],
+        ),
       ),
     );
   }

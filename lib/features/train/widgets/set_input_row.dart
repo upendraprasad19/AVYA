@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
-/// Compact inline set row (~40px tall) for active workout.
+/// Compact inline set row (~40 px tall) for active workout.
 ///
 /// Adapts fields based on [loggingType]:
 ///   weight_reps, bodyweight_reps, weighted_bodyweight, timed, cardio, distance
@@ -43,7 +43,7 @@ class SetInputRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          // Set badge: 28x28 circle
+          // Set tile (sharp 2-px) — "W" for warm-up, else set number
           GestureDetector(
             onLongPress: isCompleted ? null : onToggleWarmUp,
             child: Container(
@@ -51,25 +51,22 @@ class SetInputRow extends StatelessWidget {
               height: 28,
               decoration: BoxDecoration(
                 color: isWarmUp
-                    ? const Color(0xFFf97316).withValues(alpha: 0.12)
-                    : AppColors.accentTint,
-                shape: BoxShape.circle,
+                    ? AppColors.warn.withValues(alpha: 0.12)
+                    : AppColors.accentSoft,
+                borderRadius: BorderRadius.circular(2),
                 border: isWarmUp
                     ? Border.all(
-                        color: const Color(0xFFf97316).withValues(alpha: 0.3),
+                        color: AppColors.warn.withValues(alpha: 0.3),
                       )
                     : null,
               ),
               child: Center(
                 child: Text(
                   isWarmUp ? 'W' : '$setNumber',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: isWarmUp
-                        ? const Color(0xFFf97316)
-                        : AppColors.accent,
+                  style: AppTypography.mono.copyWith(
+                    color: isWarmUp ? AppColors.warn : AppColors.accent,
+                    fontSize: 11,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
@@ -82,26 +79,21 @@ class SetInputRow extends StatelessWidget {
 
           const SizedBox(width: 6),
 
-          // Checkbox: 28x28 circle
+          // Check tile (sharp 2-px)
           GestureDetector(
             onTap: onCheck,
             child: Container(
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: isChecked
-                    ? AppColors.accent
-                    : Colors.transparent,
-                shape: BoxShape.circle,
+                color: isChecked ? AppColors.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
                 border: isChecked
                     ? null
-                    : Border.all(
-                        color: AppColors.border,
-                        width: 1.5,
-                      ),
+                    : Border.all(color: AppColors.line2, width: 1.5),
               ),
               child: isChecked
-                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                  ? Icon(Icons.check, size: 16, color: AppColors.bgDeep)
                   : null,
             ),
           ),
@@ -114,47 +106,47 @@ class SetInputRow extends StatelessWidget {
     switch (loggingType) {
       case 'weight_reps':
         return [
-          Expanded(child: _compactInput(weightController, 'kg')),
+          Expanded(child: _compactInput(weightController, 'KG')),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'reps', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
         ];
 
       case 'bodyweight_reps':
         return [
-          Expanded(child: _compactInput(repsController, 'reps', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
         ];
 
       case 'weighted_bodyweight':
         return [
-          Expanded(child: _compactInput(weightController, 'kg')),
+          Expanded(child: _compactInput(weightController, 'KG')),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'reps', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
         ];
 
       case 'timed':
         return [
-          Expanded(child: _compactInput(durationController, 'sec', isInt: true)),
+          Expanded(child: _compactInput(durationController, 'SEC', isInt: true)),
         ];
 
       case 'cardio':
         return [
-          Expanded(child: _compactInput(durationController, 'min')),
+          Expanded(child: _compactInput(durationController, 'MIN')),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(distanceController, 'km')),
+          Expanded(child: _compactInput(distanceController, 'KM')),
         ];
 
       case 'distance':
         return [
-          Expanded(child: _compactInput(distanceController, 'km')),
+          Expanded(child: _compactInput(distanceController, 'KM')),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(weightController, 'kg')),
+          Expanded(child: _compactInput(weightController, 'KG')),
         ];
 
-      default: // fallback to weight_reps
+      default:
         return [
-          Expanded(child: _compactInput(weightController, 'kg')),
+          Expanded(child: _compactInput(weightController, 'KG')),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'reps', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
         ];
     }
   }
@@ -164,58 +156,62 @@ class SetInputRow extends StatelessWidget {
     String hint, {
     bool isInt = false,
   }) {
-    // Cyan border indicates this set's values have been locked in.
+    // Green border indicates this set's values have been locked in.
     final lockedBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(2),
       borderSide: BorderSide(
-        color: AppColors.green.withValues(alpha: 0.5),
-        width: 1.5,
+        color: AppColors.ok.withValues(alpha: 0.6),
+        width: 2,
       ),
     );
 
     return SizedBox(
-      height: 36,
+      height: 38,
       child: TextField(
         controller: controller,
         keyboardType: isInt
             ? TextInputType.number
             : const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: isInt
-            ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)]
-            : [FilteringTextInputFormatter.allow(RegExp(r'[\d.]')), LengthLimitingTextInputFormatter(6)],
+            ? [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ]
+            : [
+                FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                LengthLimitingTextInputFormatter(6),
+              ],
         textAlign: TextAlign.center,
-        style: GoogleFonts.getFont(
-          'DM Sans',
+        style: AppTypography.h3.copyWith(
           fontSize: 15,
-          fontWeight: FontWeight.w700,
-          color: isChecked ? AppColors.textPrimary : AppColors.textPrimary,
+          color: AppColors.textPrimary,
         ),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
+          hintStyle: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 1.4,
           ),
           filled: true,
           fillColor: isChecked
-              ? AppColors.green.withValues(alpha: 0.06)
-              : AppColors.input,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              ? AppColors.ok.withValues(alpha: 0.06)
+              : AppColors.bgRaise,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border),
+            borderRadius: BorderRadius.circular(2),
+            borderSide: const BorderSide(color: AppColors.line2, width: 2),
           ),
           enabledBorder: isChecked
               ? lockedBorder
               : OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(2),
+                  borderSide:
+                      const BorderSide(color: AppColors.line2, width: 2),
                 ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.accent, width: 1.5),
+            borderRadius: BorderRadius.circular(2),
+            borderSide: const BorderSide(color: AppColors.accent, width: 2),
           ),
         ),
       ),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
@@ -103,9 +103,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
           'Streak Freeze used! $remaining remaining this week.',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600),
+          style: AppTypography.body.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        backgroundColor: AppColors.blue,
+        backgroundColor: AppColors.info,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ));
@@ -137,20 +140,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SyncBanner(),
-            const CompletenessNudge(),
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: _buildBody(),
+      body: WardFrame(
+        padBottom: 0,
+        child: SafeArea(
+          child: Column(
+            children: [
+              const SyncBanner(),
+              const CompletenessNudge(),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: _buildBody(),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -192,9 +198,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         _buildHeader(ref),
         _buildDateDisplay(),
+        const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),
         _buildStreakWarning(ref),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
           child: WeeklyCalendar(
             onDayTap: (date, schedule) {
               DayDetailSheet.show(
@@ -274,79 +281,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final avatarUrl = profile['avatar_url'] as String?;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 14, AppSpacing.screenPadding, 10),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.gutter,
+        14,
+        AppSpacing.gutter,
+        10,
+      ),
       child: Row(
         children: [
-          // Avatar
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.accent.withValues(alpha: 0.3),
-                width: 2,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: avatarUrl != null && avatarUrl.isNotEmpty
-                ? ClipOval(
-                    child: Image.network(
-                      avatarUrl,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, err, stack) => Text(
-                        initial,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ),
-                  )
-                : Text(
-                    initial,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.accent,
-                    ),
-                  ),
+          WardAvatar(
+            initial: initial,
+            size: 44,
+            image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? NetworkImage(avatarUrl)
+                : null,
           ),
-          const SizedBox(width: 10),
-          // Welcome text
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'WELCOME BACK,',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 2,
                   ),
                 ),
+                const SizedBox(height: 1),
                 Text(
                   '$firstName \u{1F44B}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                    letterSpacing: 0.3,
+                  style: AppTypography.h3.copyWith(
+                    fontSize: 18,
+                    height: 1.1,
                   ),
                 ),
               ],
             ),
           ),
-          // Streak badge with freeze count
           GestureDetector(
             // F14 · Tap to open the streak explainer modal.
             onTap: () => StreakExplainerSheet.show(
@@ -409,44 +381,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final dateNum = now.day.toString();
     final monthName = monthNames[now.month - 1];
 
+    // Derive WK number + current phase for the letterhead suffix.
+    final weekOfYear =
+        ((now.difference(DateTime(now.year, 1, 1)).inDays) / 7).floor() + 1;
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final currentPhase = (progress['current_phase'] as int?) ?? 1;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 6),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: dayName,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
-                letterSpacing: 0.3,
-                height: 1,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.gutter,
+        0,
+        AppSpacing.gutter,
+        6,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            dayName,
+            style: AppTypography.h1.copyWith(
+              fontSize: 32,
+              letterSpacing: 0.4,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            dateNum,
+            style: AppTypography.h1.copyWith(
+              fontSize: 32,
+              fontWeight: FontWeight.w300,
+              color: AppColors.textGhost,
+              letterSpacing: 0.4,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              monthName,
+              style: AppTypography.mono.copyWith(
+                fontSize: 14,
+                color: AppColors.textDim,
+                letterSpacing: 2,
               ),
             ),
-            TextSpan(
-              text: ' $dateNum ',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 28,
-                fontWeight: FontWeight.w400,
-                color: AppColors.border,
-                height: 1,
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              'WK $weekOfYear \u00B7 PHASE $currentPhase',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
-            TextSpan(
-              text: monthName,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-                height: 1,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -512,7 +505,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? QuickActionState.completed
                 : QuickActionState.idle,
             progress: waterProgress,
-            progressColor: AppColors.blue,
+            progressColor: AppColors.info,
             onTap: () => showModalBottomSheet(
               context: context,
               backgroundColor: Colors.transparent,
@@ -542,10 +535,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildSectionLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding, 12, AppSpacing.screenPadding, 8),
-      child: Text(
+      padding: const EdgeInsets.only(top: 12),
+      child: WardEyebrow(
         text,
-        style: AppTypography.label,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter,
+          0,
+          AppSpacing.gutter,
+          8,
+        ),
       ),
     );
   }
@@ -705,11 +703,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => context.go('/nutrition'),
             child: Text(
               'VIEW ALL',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 2,
               ),
             ),
           ),

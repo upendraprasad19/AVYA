@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// A row item used in profile menu sections.
 ///
-/// Matches the mockup `.profile-row` style: icon box, title, subtitle,
-/// and a trailing widget (chevron, toggle, or custom).
+/// Wardroom styling: Fraunces h3 title, Mono caps subtitle, sharp chevron.
 class ProfileRow extends StatelessWidget {
   final IconData icon;
   final Color? iconBgColor;
@@ -40,29 +40,29 @@ class ProfileRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: showBorder
               ? const Border(
-                  bottom: BorderSide(color: AppColors.border, width: 1),
+                  bottom: BorderSide(color: AppColors.line2, width: 1),
                 )
               : null,
         ),
         child: Row(
           children: [
-            // Icon box
+            // Icon slab — sharp square, neutral bg
             Container(
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: iconBgColor ?? AppColors.input,
-                borderRadius: BorderRadius.circular(9),
+                color: iconBgColor ?? AppColors.bgRaise,
+                borderRadius: BorderRadius.circular(AppRadius.soft),
               ),
               child: Icon(
                 icon,
                 size: 15,
-                color: iconColor ?? AppColors.textSecondary,
+                color: iconColor ?? AppColors.textDim,
               ),
             ),
             const SizedBox(width: 12),
 
-            // Info
+            // Info — h3 title, mono subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,10 +72,8 @@ class ProfileRow extends StatelessWidget {
                       Flexible(
                         child: Text(
                           title,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                          style: AppTypography.h3.copyWith(
+                            fontSize: 14,
                             color: AppColors.textPrimary,
                           ),
                           maxLines: 1,
@@ -92,11 +90,8 @@ class ProfileRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
@@ -121,17 +116,15 @@ class ProfileRowChevron extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      '\u203A',
-      style: TextStyle(
-        fontSize: 18,
-        color: color ?? AppColors.textSecondary,
-      ),
+    return Icon(
+      Icons.chevron_right,
+      size: 18,
+      color: color ?? AppColors.textMute,
     );
   }
 }
 
-/// Custom toggle switch matching the mockup design (40x22px).
+/// Custom toggle switch matching Wardroom styling (40x22px, sharp corners).
 class ProfileToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -151,7 +144,7 @@ class ProfileToggle extends StatelessWidget {
         width: 40,
         height: 22,
         decoration: BoxDecoration(
-          color: value ? AppColors.accent : AppColors.border,
+          color: value ? AppColors.accent : AppColors.line2,
           borderRadius: BorderRadius.circular(11),
         ),
         child: AnimatedAlign(
@@ -162,7 +155,7 @@ class ProfileToggle extends StatelessWidget {
             width: 16,
             height: 16,
             decoration: BoxDecoration(
-              color: value ? Colors.black : AppColors.textSecondary,
+              color: value ? AppColors.bgDeep : AppColors.textDim,
               shape: BoxShape.circle,
             ),
           ),
@@ -188,8 +181,8 @@ class UnitsSegmentedControl extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(7),
+        color: AppColors.bgRaise,
+        borderRadius: BorderRadius.circular(AppRadius.soft),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -209,15 +202,14 @@ class UnitsSegmentedControl extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: selected ? AppColors.card : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
         ),
         child: Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
+          style: AppTypography.monoXs.copyWith(
+            color: selected ? AppColors.textPrimary : AppColors.textMute,
+            letterSpacing: 2,
             fontWeight: FontWeight.w700,
-            color: selected ? AppColors.textPrimary : AppColors.textSecondary,
           ),
         ),
       ),
@@ -234,16 +226,15 @@ class ProPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.proGold.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Text(
         'PRO',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 9,
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.accent,
+          letterSpacing: 2,
           fontWeight: FontWeight.w700,
-          color: AppColors.proGold,
         ),
       ),
     );

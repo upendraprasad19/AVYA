@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
-/// Pill-shaped badge showing the current streak count with fire icon.
+/// Sharp 2-px accentSoft slab showing the current streak count with fire
+/// icon. Fraunces h3 number + Mono "DAY"/"DAYS" caps + freeze counter.
 ///
 /// Plays a subtle pulse animation (1.0 -> 1.1 -> 1.0, 300ms) once on build
 /// to draw attention when the streak is non-zero.
@@ -11,7 +12,8 @@ class StreakBadge extends StatefulWidget {
   final int days;
   final int freezesAvailable;
 
-  const StreakBadge({super.key, required this.days, this.freezesAvailable = 0});
+  const StreakBadge(
+      {super.key, required this.days, this.freezesAvailable = 0});
 
   @override
   State<StreakBadge> createState() => _StreakBadgeState();
@@ -70,36 +72,32 @@ class _StreakBadgeState extends State<StreakBadge>
     return ScaleTransition(
       scale: _pulseAnimation,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AppRadius.badge),
+          color: AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
           border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.2),
+            color: AppColors.accent.withValues(alpha: 0.33),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('\u{1F525}', style: TextStyle(fontSize: 15)),
+            const Text('\u{1F525}', style: TextStyle(fontSize: 14)),
             const SizedBox(width: 6),
             Text(
               '${widget.days}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+              style: AppTypography.h3.copyWith(
                 color: AppColors.accent,
+                height: 1,
               ),
             ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 4),
             Text(
-              widget.days == 1 ? 'day' : 'days',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+              widget.days == 1 ? 'DAY' : 'DAYS',
+              style: AppTypography.monoXs.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 2,
               ),
             ),
             // Streak freeze indicator
@@ -107,22 +105,20 @@ class _StreakBadgeState extends State<StreakBadge>
             Text(
               '\u{2744}\uFE0F', // ❄️
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: widget.freezesAvailable > 0
-                    ? AppColors.blue
+                    ? AppColors.info
                     : AppColors.textDisabled,
               ),
             ),
             const SizedBox(width: 2),
             Text(
               '${widget.freezesAvailable}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+              style: AppTypography.mono.copyWith(
                 color: widget.freezesAvailable > 0
-                    ? AppColors.blue
+                    ? AppColors.info
                     : AppColors.textDisabled,
+                letterSpacing: 1,
               ),
             ),
           ],

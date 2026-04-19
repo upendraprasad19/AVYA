@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -155,19 +154,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.go('/profile'),
         ),
-        title: Text(
-          'Reports',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'LOGBOOK',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text('Reports', style: AppTypography.h3),
+          ],
         ),
       ),
       body: SafeArea(
@@ -280,23 +287,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       children: [
         Text(
           value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: color,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 28, fontWeight: FontWeight.w900, color: color),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
         ),
       ],
     );
@@ -347,12 +343,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       children: [
         Text(
           '$value',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 4),
         Container(
@@ -366,12 +357,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         const SizedBox(height: 6),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.monoXs.copyWith(fontSize: 8, fontWeight: FontWeight.w700, color: AppColors.textDim),
           textAlign: TextAlign.center,
         ),
       ],
@@ -432,12 +418,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       ),
                       child: Text(
                         label,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: isActive ? Colors.black : AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: isActive ? Colors.black : AppColors.textDim),
                       ),
                     ),
                   ),
@@ -535,7 +516,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               getTitlesWidget: (value, meta) {
                 return Text(
                   value.toStringAsFixed(0),
-                  style: GoogleFonts.getFont('DM Sans', fontSize: 9, color: AppColors.textSecondary),
+                  style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
                 );
               },
             ),
@@ -554,7 +535,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 if (parts.length == 3) {
                   return Text(
                     '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 8, color: AppColors.textSecondary),
+                    style: AppTypography.monoXs.copyWith(fontSize: 8, color: AppColors.textDim),
                   );
                 }
                 return const SizedBox();
@@ -574,7 +555,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 final dateStr = dates[spot.x.toInt()] ?? '';
                 return LineTooltipItem(
                   '${spot.y.toStringAsFixed(1)} kg\n$dateStr',
-                  GoogleFonts.getFont('DM Sans', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                  AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                 );
               }).toList();
             },
@@ -590,7 +571,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   label: HorizontalLineLabel(
                     show: true,
                     labelResolver: (_) => 'Goal: ${targetWeight.toStringAsFixed(0)}kg',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 9, color: AppColors.green),
+                    style: AppTypography.monoXs.copyWith(color: AppColors.ok),
                   ),
                 ),
               ])
@@ -651,7 +632,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           Expanded(
             child: Text(
               'Adjust your ${wantsLose ? "diet" : "nutrition"} to stay on track',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.orange),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.warn),
             ),
           ),
         ],
@@ -665,7 +646,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           const SizedBox(width: 6),
           Text(
             'You\'ve reached your goal weight!',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.green),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.ok),
           ),
         ],
       );
@@ -683,7 +664,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         Expanded(
           child: Text(
             'At current rate, you\'ll reach ${targetWeight.toStringAsFixed(0)}kg in ~$weeksToGo weeks (around $dateLabel)',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.green),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w500, color: AppColors.ok),
           ),
         ),
       ],
@@ -709,12 +690,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             children: [
               Text(
                 '$daysLogged/7',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.orange,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.warn),
               ),
               const SizedBox(width: 10),
               Text(
@@ -797,11 +773,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Expanded(
                     child: Text(
                       _reportError!,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        color: AppColors.red,
-                      ),
+                      style: AppTypography.bodySm.copyWith(color: AppColors.bad),
                     ),
                   ),
                 ],
@@ -859,23 +831,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         const SizedBox(width: 10),
                         Text(
                           'Generating...',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black54,
-                          ),
+                          style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black54),
                         ),
                       ],
                     )
                   : Text(
                       'Generate Report',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                     ),
             ),
           ),
@@ -936,13 +898,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               const SizedBox(height: 4),
               Text(
                 '$periodStart to $periodEnd',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
               ),
               const SizedBox(height: 12),
               Text(summary, style: AppTypography.bodyL),
@@ -968,16 +924,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 children: [
                   Text(
                     '$compliancePercent%',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      color: compliancePercent >= 70
-                          ? AppColors.green
+                    style: AppTypography.body.copyWith(fontSize: 32, fontWeight: FontWeight.w900, color: compliancePercent >= 70
+                          ? AppColors.ok
                           : compliancePercent >= 40
-                              ? AppColors.orange
-                              : AppColors.red,
-                    ),
+                              ? AppColors.warn
+                              : AppColors.bad),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1133,12 +1084,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 : const Icon(Icons.refresh, size: 16),
             label: Text(
               _isGeneratingReport ? 'Regenerating...' : 'Regenerate Report',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.accent,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.accent,
@@ -1191,12 +1137,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         icon: const Icon(Icons.video_library_rounded, size: 16),
         label: Text(
           'Share as Video',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textDim),
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.textSecondary,

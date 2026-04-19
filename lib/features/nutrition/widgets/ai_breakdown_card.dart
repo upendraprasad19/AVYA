@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/nutrition_provider.dart';
 
 /// Shows the AI-analysed food breakdown card with items, macros, and save/cancel.
@@ -16,148 +17,121 @@ class AiBreakdownCard extends ConsumerWidget {
 
     // Show error state if AI analysis failed
     if (breakdown.error != null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                breakdown.error!,
-                style: const TextStyle(color: Colors.red, fontSize: 13),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+        child: WardCard(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: AppColors.bad, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  breakdown.error!,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.bad),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.cardS),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.05),
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: WardCard(
+        variant: WardCardVariant.hero,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      breakdown.mealName,
+                      style: AppTypography.h3,
+                    ),
+                  ),
+                  WardChip(
+                    label: '${breakdown.totalKcal} KCAL',
+                    tone: WardChipTone.gold,
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  breakdown.mealName,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  '${breakdown.totalKcal} kcal total',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
+            const WardRule(gold: true, margin: EdgeInsets.zero),
 
-          // Food items
-          ...breakdown.items.asMap().entries.map(
-            (e) => _buildItemRow(context, ref, e.value, e.key),
-          ),
+            // Food items
+            ...breakdown.items.asMap().entries.map(
+                  (e) => _buildItemRow(context, ref, e.value, e.key),
+                ),
 
-          // Footer buttons
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              border: Border(
-                top: BorderSide(color: AppColors.border),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () =>
-                        ref.read(aiBreakdownProvider.notifier).saveMeal(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '\u2713 Save Meal',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
+            const WardRule(margin: EdgeInsets.zero),
+            // Footer buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () =>
+                          ref.read(aiBreakdownProvider.notifier).saveMeal(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(AppRadius.sharp),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'SAVE MEAL',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.bgDeep,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () =>
-                      ref.read(aiBreakdownProvider.notifier).clear(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () =>
+                        ref.read(aiBreakdownProvider.notifier).clear(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.line2),
+                        borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      ),
+                      child: Text(
+                        'CANCEL',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textDim,
+                          letterSpacing: 2,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildItemRow(BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
+  Widget _buildItemRow(
+      BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: const BoxDecoration(
-        color: AppColors.card,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
       ),
       child: Row(
         children: [
@@ -168,32 +142,27 @@ class AiBreakdownCard extends ConsumerWidget {
               children: [
                 Text(
                   item.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   item.quantity,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
                 ),
               ],
             ),
           ),
 
-          // Macros
-          _macroCol(item.protein, 'PRO', AppColors.orange),
+          // Macros — semantic per-macro colors per spec
+          _macroCol(item.protein, 'PRO', AppColors.accent),
           const SizedBox(width: 8),
-          _macroCol(item.carbs, 'CARB', AppColors.blue),
+          _macroCol(item.carbs, 'CARB', AppColors.warn),
           const SizedBox(width: 8),
-          _macroCol('${item.calories}', 'KCAL', AppColors.accent),
+          _macroCol('${item.calories}', 'KCAL', AppColors.textPrimary),
           const SizedBox(width: 10),
 
           // Edit button — tappable
@@ -204,8 +173,9 @@ class AiBreakdownCard extends ConsumerWidget {
               height: 28,
               decoration: BoxDecoration(
                 color: AppColors.input,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.3)),
               ),
               child: const Icon(
                 Icons.edit,
@@ -219,10 +189,13 @@ class AiBreakdownCard extends ConsumerWidget {
     );
   }
 
-  void _showEditItemSheet(BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
+  void _showEditItemSheet(
+      BuildContext context, WidgetRef ref, AiFoodItem item, int index) {
     final calCtrl = TextEditingController(text: '${item.calories}');
-    final proteinCtrl = TextEditingController(text: item.protein.replaceAll('g', ''));
-    final carbsCtrl = TextEditingController(text: item.carbs.replaceAll('g', ''));
+    final proteinCtrl =
+        TextEditingController(text: item.protein.replaceAll('g', ''));
+    final carbsCtrl =
+        TextEditingController(text: item.carbs.replaceAll('g', ''));
     final fatCtrl = TextEditingController(text: item.fat.replaceAll('g', ''));
     final fiberCtrl = TextEditingController(text: '${item.fiber}');
 
@@ -231,11 +204,13 @@ class AiBreakdownCard extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppRadius.card)),
           ),
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
           child: Column(
@@ -243,25 +218,43 @@ class AiBreakdownCard extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: Container(width: 36, height: 4,
-                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+                child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.line2,
+                        borderRadius: BorderRadius.circular(2))),
               ),
               const SizedBox(height: 12),
-              Text('EDIT — ${item.name}',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 10, fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text(
+                'EDIT — ${item.name}'.toUpperCase(),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: _editField('Calories', calCtrl, AppColors.accent)),
+                  Expanded(
+                      child: _editField(
+                          'Calories', calCtrl, AppColors.accent)),
                   const SizedBox(width: 6),
-                  Expanded(child: _editField('Protein (g)', proteinCtrl, AppColors.orange)),
+                  Expanded(
+                      child: _editField(
+                          'Protein (g)', proteinCtrl, AppColors.accent)),
                   const SizedBox(width: 6),
-                  Expanded(child: _editField('Carbs (g)', carbsCtrl, AppColors.blue)),
+                  Expanded(
+                      child:
+                          _editField('Carbs (g)', carbsCtrl, AppColors.warn)),
                   const SizedBox(width: 6),
-                  Expanded(child: _editField('Fat (g)', fatCtrl, AppColors.textSecondary)),
+                  Expanded(
+                      child: _editField(
+                          'Fat (g)', fatCtrl, AppColors.bad)),
                   const SizedBox(width: 6),
-                  Expanded(child: _editField('Fiber (g)', fiberCtrl, AppColors.green)),
+                  Expanded(
+                      child:
+                          _editField('Fiber (g)', fiberCtrl, AppColors.ok)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -270,25 +263,31 @@ class AiBreakdownCard extends ConsumerWidget {
                 child: GestureDetector(
                   onTap: () {
                     ref.read(aiBreakdownProvider.notifier).updateItem(
-                      index,
-                      calories: int.tryParse(calCtrl.text) ?? item.calories,
-                      protein: int.tryParse(proteinCtrl.text) ?? 0,
-                      carbs: int.tryParse(carbsCtrl.text) ?? 0,
-                      fat: int.tryParse(fatCtrl.text) ?? 0,
-                      fiber: int.tryParse(fiberCtrl.text) ?? item.fiber,
-                    );
+                          index,
+                          calories:
+                              int.tryParse(calCtrl.text) ?? item.calories,
+                          protein: int.tryParse(proteinCtrl.text) ?? 0,
+                          carbs: int.tryParse(carbsCtrl.text) ?? 0,
+                          fat: int.tryParse(fatCtrl.text) ?? 0,
+                          fiber: int.tryParse(fiberCtrl.text) ?? item.fiber,
+                        );
                     Navigator.of(context).pop();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(
                       color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
                     ),
                     alignment: Alignment.center,
-                    child: Text('Save',
-                      style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 13, fontWeight: FontWeight.w900, color: Colors.black)),
+                    child: Text(
+                      'SAVE',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.bgDeep,
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -303,23 +302,32 @@ class AiBreakdownCard extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.getFont('DM Sans', fontSize: 9,
-            fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 1.5,
+          ),
+        ),
         const SizedBox(height: 4),
         Container(
           decoration: BoxDecoration(
             color: AppColors.input,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
             border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
           child: TextField(
             controller: ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: false),
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13,
-                fontWeight: FontWeight.w700, color: color),
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: false),
+            style: AppTypography.body.copyWith(
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
             decoration: const InputDecoration(
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
           ),
@@ -333,19 +341,16 @@ class AiBreakdownCard extends ConsumerWidget {
       children: [
         Text(
           value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
+          style: AppTypography.body.copyWith(
             fontWeight: FontWeight.w700,
             color: color,
           ),
         ),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 8,
-            color: AppColors.textSecondary,
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 1.2,
           ),
         ),
       ],

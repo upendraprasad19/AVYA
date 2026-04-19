@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
+import '../../../shared/widgets/wardroom/wardroom.dart';
 
 /// F14 · In-app explainer for how streak + streak-freeze work.
 ///
@@ -24,7 +26,7 @@ class StreakExplainerSheet extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (_) => StreakExplainerSheet(
         freezesAvailable: freezesAvailable,
@@ -38,7 +40,8 @@ class StreakExplainerSheet extends StatelessWidget {
     final maxFreezes = isPro ? 3 : 1;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.gutter, 14, AppSpacing.gutter, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,29 +51,36 @@ class StreakExplainerSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: AppColors.line2,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
             const SizedBox(height: 14),
+            Text(
+              'STREAK \u00B7 FIELD MANUAL',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 3,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
                 const Icon(Icons.local_fire_department,
                     color: AppColors.accent, size: 22),
                 const SizedBox(width: 8),
-                Text(
-                  'How your streak works',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
+                Expanded(
+                  child: Text(
+                    'How your streak works',
+                    style: AppTypography.h2.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             _rule('You earn +1 each week you complete at least 80% of your '
                 'scheduled workouts.'),
             _rule('Rest days and off days don\'t count against you.'),
@@ -82,14 +92,9 @@ class StreakExplainerSheet extends StatelessWidget {
                 'available right now.'),
             if (!isPro) ...[
               const SizedBox(height: 10),
-              Container(
+              WardCard(
+                variant: WardCardVariant.inset,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.proGoldTint,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: AppColors.proGold.withValues(alpha: 0.25)),
-                ),
                 child: Row(
                   children: [
                     const Icon(Icons.workspace_premium,
@@ -98,11 +103,9 @@ class StreakExplainerSheet extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'PRO users get 3 freezes per week instead of 1.',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                        style: AppTypography.bodySm.copyWith(
                           color: AppColors.proGold,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -118,23 +121,21 @@ class StreakExplainerSheet extends StatelessWidget {
 
   Widget _rule(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.only(top: 6),
+            padding: EdgeInsets.only(top: 7),
             child: Icon(Icons.circle, size: 5, color: AppColors.accent),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
+              style: AppTypography.body.copyWith(
                 color: AppColors.textPrimary,
-                height: 1.4,
+                height: 1.5,
               ),
             ),
           ),

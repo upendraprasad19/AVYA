@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import '../providers/home_provider.dart';
 import '../../profile/providers/profile_provider.dart';
@@ -66,7 +66,6 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     }
   }
 
-
   @override
   void dispose() {
     _controller.dispose();
@@ -83,7 +82,6 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
   }
 
   void _save() {
-    // Parse from text field in case user typed manually
     final parsed = double.tryParse(_controller.text);
     if (parsed != null && parsed >= 20 && parsed <= 300) {
       _weight = parsed;
@@ -99,10 +97,9 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
       SnackBar(
         content: Text(
           'Weight logged \u2713',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontWeight: FontWeight.w700,
+          style: AppTypography.body.copyWith(
             color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
           ),
         ),
         backgroundColor: AppColors.card,
@@ -117,12 +114,13 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.screenPadding,
+        AppSpacing.gutter,
         12,
-        AppSpacing.screenPadding,
+        AppSpacing.gutter,
         MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: Column(
@@ -133,21 +131,18 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.border,
+              color: AppColors.line2,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Title
+          // Title — mono caps eyebrow
           Text(
             'LOG WEIGHT',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              letterSpacing: 1,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 3,
             ),
           ),
           const SizedBox(height: 6),
@@ -155,12 +150,10 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
           // Last logged
           if (_lastWeight != null)
             Text(
-              'Last: ${_lastWeight!.toStringAsFixed(1)} kg${_lastDate != null ? ' on ${_formatDate(_lastDate!)}' : ''}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+              'LAST: ${_lastWeight!.toStringAsFixed(1)} KG${_lastDate != null ? ' \u00B7 ${_formatDate(_lastDate!).toUpperCase()}' : ''}',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.5,
               ),
             ),
           const SizedBox(height: 20),
@@ -169,14 +162,12 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Minus button
               _RoundButton(
                 icon: Icons.remove,
                 onTap: () => _increment(-0.1),
               ),
               const SizedBox(width: 16),
 
-              // Weight display / input
               SizedBox(
                 width: 160,
                 child: Row(
@@ -194,11 +185,9 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
                           FilteringTextInputFormatter.allow(
                               RegExp(r'^\d{0,3}\.?\d{0,1}')),
                         ],
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 40,
-                          fontWeight: FontWeight.w900,
+                        style: AppTypography.display.copyWith(
                           color: AppColors.accent,
+                          height: 1,
                         ),
                         textAlign: TextAlign.center,
                         decoration: const InputDecoration(
@@ -214,14 +203,12 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
                         },
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      'kg',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                      'KG',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
                       ),
                     ),
                   ],
@@ -229,7 +216,6 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
               ),
               const SizedBox(width: 16),
 
-              // Plus button
               _RoundButton(
                 icon: Icons.add,
                 onTap: () => _increment(0.1),
@@ -238,7 +224,7 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
           ),
           const SizedBox(height: 24),
 
-          // Save button
+          // Save button — sharp 2-px accent
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -248,17 +234,16 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(100),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 elevation: 0,
               ),
               child: Text(
                 'SAVE',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
+                style: AppTypography.mono.copyWith(
+                  color: Colors.black,
+                  letterSpacing: 2,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
                 ),
               ),
             ),
@@ -270,12 +255,21 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
   }
 
   String _formatDate(String dateStr) {
-    // dateStr is YYYY-MM-DD
     final parts = dateStr.split('-');
     if (parts.length != 3) return dateStr;
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final month = int.tryParse(parts[1]) ?? 1;
     final day = int.tryParse(parts[2]) ?? 1;
@@ -297,9 +291,9 @@ class _RoundButton extends StatelessWidget {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: AppColors.bg,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border),
+          color: AppColors.bgRaise,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.line2),
         ),
         alignment: Alignment.center,
         child: Icon(icon, size: 20, color: AppColors.textPrimary),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -117,19 +118,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.screenPadding),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(AppSpacing.cardPadding),
-                          decoration: BoxDecoration(
-                            color: AppColors.card,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.cardM),
-                            border: Border.all(color: AppColors.border),
-                          ),
+                        child: WardCard(
                           child: Row(
                             children: [
-                              Icon(Icons.calendar_today,
-                                  size: 16, color: AppColors.textSecondary),
+                              const Icon(Icons.calendar_today,
+                                  size: 16, color: AppColors.textDim),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -138,11 +131,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                                       : weekDays.isEmpty
                                           ? 'No workouts scheduled for this week'
                                           : 'Viewing Week $selectedWeek plan',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.textSecondary,
+                                  style: AppTypography.bodySm.copyWith(
+                                    color: AppColors.textDim,
                                   ),
                                 ),
                               ),
@@ -159,12 +149,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                           horizontal: AppSpacing.screenPadding),
                       child: Text(
                         'THIS WEEK',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 1.2,
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textMute,
+                          letterSpacing: 2,
                         ),
                       ),
                     ),
@@ -233,81 +220,39 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
     final progressPercent = (progress * 100).round();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-      decoration: const BoxDecoration(
-        color: AppColors.header,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        WardLetterhead(
+          eyebrow: 'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
+          title: 'Week $selectedWeek of ${plan.weeks.length}',
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
+          divider: false,
+          showAnchor: true,
+          trailing: WardChip(
+            label: '$completedDays/$totalWorkoutDays',
+            tone: WardChipTone.gold,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Phase title
-          Text(
-            'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 3),
-
-          // Subtitle with completion count
-          Text(
-            'Week $selectedWeek of ${plan.weeks.length} \u00b7 $completedDays/$totalWorkoutDays workouts done',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Progress bar
-          Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+          child: Row(
             children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: Container(
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161d28),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: progress,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: WardBar(pct: progress, height: 4)),
               const SizedBox(width: 10),
               Text(
                 '$progressPercent%',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                style: AppTypography.mono.copyWith(
                   color: AppColors.accent,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const WardRule(doubleRule: true, margin: EdgeInsets.symmetric(horizontal: 22)),
+      ],
     );
   }
 
@@ -344,12 +289,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         children: [
           Text(
             "TODAY'S WORKOUT",
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 1.2,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
           const SizedBox(height: 8),
@@ -371,85 +313,43 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     final focusText =
         subtitleParts.isNotEmpty ? subtitleParts[0].trim() : '';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(
-          color: AppColors.accent.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
+    return WardCard(
+      variant: WardCardVariant.hero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             workout.name,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.h2.copyWith(fontSize: 18),
           ),
           if (focusText.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               focusText,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
               ),
             ),
           ],
           const SizedBox(height: 4),
           Text(
-            '${workout.exerciseCount} exercises \u00b7 ~${workout.estimatedDuration}',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            '${workout.exerciseCount} EXERCISES · ~${workout.estimatedDuration.toString().toUpperCase()}',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textDim,
+              letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 14),
-          GestureDetector(
-            onTap: () {
+          WardButton(
+            label: 'START WORKOUT',
+            trailing: const Icon(Icons.arrow_forward,
+                size: 14, color: AppColors.bgDeep),
+            onPressed: () {
               ref
                   .read(activeWorkoutProvider.notifier)
                   .startWorkout(workout);
               context.go('/train/active-workout');
             },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  'START WORKOUT \u2192',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -457,59 +357,36 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
   }
 
   Widget _buildRestHeroCard() {
-    return GestureDetector(
+    return WardCard(
       onTap: () => _showRestDaySheet(context),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'REST DAY',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textSecondary,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'REST DAY',
+            style: AppTypography.mono.copyWith(
+              fontSize: 12,
+              color: AppColors.textDim,
+              letterSpacing: 2.5,
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Recovery & mobility \u2014 tap for recovery tips',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Recovery & mobility \u2014 tap for recovery tips',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildDoneHeroCard(WorkoutDayData workout) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(
-          color: AppColors.green.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
+    return WardCard(
       child: Row(
         children: [
-          Icon(Icons.check_circle, color: AppColors.green, size: 20),
+          const Icon(Icons.check_circle, color: AppColors.ok, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -517,26 +394,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               children: [
                 Text(
                   workout.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.h3,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Completed today \u2014 great work!',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.green,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.ok,
                   ),
                 ),
               ],
             ),
           ),
+          const WardChip(label: 'DONE', tone: WardChipTone.ok),
         ],
       ),
     );
@@ -554,12 +424,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.border),
-        ),
+      child: WardCard(
+        padding: EdgeInsets.zero,
         child: Column(
           children: [
             for (int i = 0; i < weekDays.length; i++) ...[
@@ -575,11 +441,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   _formatDateKey(weekDays[i].date!) == todayStr)
                 _buildPlannedExpansion(context, weekDays[i]),
               if (i < weekDays.length - 1)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: AppColors.border,
-                ),
+                const WardRule(margin: EdgeInsets.zero),
             ],
           ],
         ),
@@ -648,7 +510,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: isToday
-              ? BoxDecoration(
+              ? const BoxDecoration(
                   border: Border(
                     left: BorderSide(
                       color: AppColors.accent,
@@ -663,14 +525,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               SizedBox(
                 width: 36,
                 child: Text(
-                  dayLabel,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                  dayLabel.toUpperCase(),
+                  style: AppTypography.monoXs.copyWith(
                     color: day.isRest
-                        ? AppColors.textSecondary.withValues(alpha: 0.5)
-                        : AppColors.textSecondary,
+                        ? AppColors.textDim.withValues(alpha: 0.5)
+                        : AppColors.textDim,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
@@ -679,12 +539,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               Expanded(
                 child: Text(
                   day.isRest ? 'Rest' : day.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: day.isRest ? FontWeight.w400 : FontWeight.w700,
+                  style: (day.isRest
+                          ? AppTypography.bodySm
+                          : AppTypography.h3.copyWith(fontSize: 14))
+                      .copyWith(
                     color: day.isRest
-                        ? AppColors.textSecondary.withValues(alpha: 0.5)
+                        ? AppColors.textDim.withValues(alpha: 0.5)
                         : AppColors.textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -694,12 +554,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               // Exercise count (only for workout days)
               if (!day.isRest) ...[
                 Text(
-                  '${day.exerciseCount} ex',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                  '${day.exerciseCount} EX',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.2,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -725,22 +583,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, color: AppColors.green, size: 14),
-            const SizedBox(width: 4),
-            Text(
-              'Done',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.green,
-              ),
-            ),
+            const WardChip(label: 'DONE', tone: WardChipTone.ok),
             const SizedBox(width: 2),
             Icon(
               isExpanded ? Icons.expand_less : Icons.expand_more,
               size: 16,
-              color: AppColors.green.withValues(alpha: 0.6),
+              color: AppColors.ok.withValues(alpha: 0.6),
             ),
           ],
         );
@@ -748,24 +596,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Today',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
+            const WardChip(label: 'TODAY', tone: WardChipTone.gold),
             const SizedBox(width: 2),
             Icon(
               isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -775,57 +606,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           ],
         );
       case _RowStatus.planned:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.textSecondary.withValues(alpha: 0.4),
-                  width: 1.5,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Planned',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        );
+        return const WardChip(label: 'PLANNED', tone: WardChipTone.neutral);
       case _RowStatus.missed:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '\u2014',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Missed',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        );
+        return const WardChip(label: '— MISSED', tone: WardChipTone.neutral);
       case _RowStatus.rest:
         return const SizedBox.shrink();
     }
@@ -842,12 +625,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         padding: const EdgeInsets.fromLTRB(50, 0, 14, 10),
         child: Text(
           'No exercise data logged',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
         ),
       );
     }
@@ -886,28 +664,21 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             Icon(
               isPr ? Icons.emoji_events : Icons.check,
               size: 13,
-              color: isPr ? AppColors.proGold : AppColors.green,
+              color: isPr ? AppColors.proGold : AppColors.ok,
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 name,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.bodySm.copyWith(fontSize: 11),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             Text(
               detail,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textDim,
+                letterSpacing: 1.2,
               ),
             ),
           ],
@@ -927,37 +698,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       if (dayStr == todayStr) {
         viewCardButton = Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: GestureDetector(
-            onTap: () => context.go('/train/active-workout'),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.accentTint,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.card_giftcard_outlined,
-                      size: 14, color: AppColors.accent),
-                  const SizedBox(width: 6),
-                  Text(
-                    'View Workout Card',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: WardButton(
+            label: 'VIEW WORKOUT CARD',
+            leading: const Icon(Icons.card_giftcard_outlined,
+                size: 14, color: AppColors.accent),
+            variant: WardButtonVariant.outline,
+            size: WardButtonSize.small,
+            onPressed: () => context.go('/train/active-workout'),
           ),
         );
       }
@@ -968,37 +715,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     // needing to open the receipt first.
     final editButton = Padding(
       padding: const EdgeInsets.only(top: 6),
-      child: GestureDetector(
-        onTap: () => EditWorkoutLogSheet.show(context, day.date!),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: AppColors.border,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.edit_outlined,
-                  size: 12, color: AppColors.textSecondary),
-              const SizedBox(width: 6),
-              Text(
-                'Edit Log',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: WardButton(
+        label: 'EDIT LOG',
+        leading: const Icon(Icons.edit_outlined,
+            size: 12, color: AppColors.textPrimary),
+        variant: WardButtonVariant.ghost,
+        size: WardButtonSize.small,
+        onPressed: () => EditWorkoutLogSheet.show(context, day.date!),
       ),
     );
 
@@ -1033,12 +756,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'No exercises scheduled',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
+                style:
+                    AppTypography.bodySm.copyWith(color: AppColors.textDim),
               ),
             )
           else ...[
@@ -1046,10 +765,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             if (day.warmup.isNotEmpty) ...[
               _CollapsibleExerciseSection(
                 label: 'WARM-UP',
-                color: AppColors.orange,
+                color: AppColors.warn,
                 exercises: day.warmup,
                 buildRow: (ex) => _buildPreviewExerciseRow(
-                  ex, null, AppColors.orange,
+                  ex, null, AppColors.warn,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1066,54 +785,24 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               const SizedBox(height: 8),
               _CollapsibleExerciseSection(
                 label: 'COOL-DOWN',
-                color: AppColors.blue,
+                color: AppColors.info,
                 exercises: day.cooldown,
                 buildRow: (ex) => _buildPreviewExerciseRow(
-                  ex, null, AppColors.blue,
+                  ex, null, AppColors.info,
                 ),
               ),
             ],
           ],
           const SizedBox(height: 10),
           // START WORKOUT button — the explicit gate
-          GestureDetector(
-            onTap: () {
+          WardButton(
+            label: 'START WORKOUT',
+            leading: const Icon(Icons.play_arrow_rounded,
+                size: 16, color: AppColors.bgDeep),
+            onPressed: () {
               ref.read(activeWorkoutProvider.notifier).startWorkout(day);
               context.go('/train/active-workout');
             },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(100),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.play_arrow_rounded,
-                      size: 18, color: Colors.black),
-                  const SizedBox(width: 6),
-                  Text(
-                    'START WORKOUT',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
@@ -1128,9 +817,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.card),
+          ),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         child: Column(
@@ -1143,7 +834,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: AppColors.line2,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1151,32 +842,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             const SizedBox(height: 20),
             Text(
               '🧘 Rest Day — Recovery',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.h2,
             ),
             const SizedBox(height: 8),
             Text(
               'This is when your muscles actually grow. Use today to recover well.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(color: AppColors.textDim),
             ),
             const SizedBox(height: 20),
             Text(
               'RECOVERY TIPS',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: AppColors.textSecondary,
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 10),
@@ -1187,54 +865,33 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ('💧', 'Drink at least 3L of water'),
               ('😴', 'Aim for 7–9 hours of sleep tonight'),
             ].map((tip) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  Text(tip.$1, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 12),
-                  Text(
-                    tip.$2,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary,
-                    ),
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Text(tip.$1, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 12),
+                      Text(
+                        tip.$2,
+                        style: AppTypography.body,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                )),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (_) => const WeightLogSheet(),
-                  );
-                },
-                icon: const Icon(Icons.monitor_weight_outlined, size: 18),
-                label: Text(
-                  'Log Weight',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.accent,
-                  side: const BorderSide(color: AppColors.accent, width: 1.5),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
+            WardButton(
+              label: 'LOG WEIGHT',
+              leading: const Icon(Icons.monitor_weight_outlined,
+                  size: 16, color: AppColors.accent),
+              variant: WardButtonVariant.outline,
+              onPressed: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => const WeightLogSheet(),
+                );
+              },
             ),
           ],
         ),
@@ -1289,7 +946,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: AppColors.line2,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1304,11 +961,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       day.isDone
                           ? '${day.name.toUpperCase()} ✓'
                           : day.name.toUpperCase(),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: day.isDone ? AppColors.green : AppColors.textPrimary,
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 13,
+                        color: day.isDone
+                            ? AppColors.ok
+                            : AppColors.textPrimary,
+                        letterSpacing: 2.5,
                       ),
                     ),
                   ),
@@ -1318,11 +976,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 const SizedBox(height: 2),
                 Text(
                   dateLabel,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
                 ),
               ],
@@ -1331,12 +986,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               // Section label
               Text(
                 hasActualLogs ? 'LOGGED EXERCISES' : 'PLANNED EXERCISES',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1375,52 +1027,34 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Row(
                               children: [
-                                Icon(Icons.check_circle, color: AppColors.green, size: 18),
+                                const Icon(Icons.check_circle,
+                                    color: AppColors.ok, size: 18),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         name,
-                                        style: GoogleFonts.getFont(
-                                          'DM Sans',
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.textPrimary,
-                                        ),
+                                        style: AppTypography.h3
+                                            .copyWith(fontSize: 13),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 1),
                                       Text(
                                         detail,
-                                        style: GoogleFonts.getFont(
-                                          'DM Sans',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w400,
-                                          color: AppColors.textSecondary,
+                                        style: AppTypography.monoXs.copyWith(
+                                          color: AppColors.textDim,
+                                          letterSpacing: 1.2,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 if (log['is_pr'] == true)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.proGoldTint,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      'PR',
-                                      style: GoogleFonts.getFont(
-                                        'DM Sans',
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.proGold,
-                                      ),
-                                    ),
-                                  ),
+                                  const WardChip(
+                                      label: 'PR', tone: WardChipTone.gold),
                               ],
                             ),
                           );
@@ -1428,17 +1062,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       : day.exercises.isEmpty
                           ? [
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
                                 child: Text(
                                   day.isDone
                                       ? 'Logged details not saved'
                                       : 'No exercises scheduled',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w400,
-                                    color: AppColors.textSecondary,
-                                  ),
+                                  style: AppTypography.bodySm
+                                      .copyWith(color: AppColors.textDim),
                                 ),
                               ),
                             ]
@@ -1447,20 +1078,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                               if (day.warmup.isNotEmpty) ...[
                                 _CollapsibleExerciseSection(
                                   label: 'WARM-UP',
-                                  color: AppColors.orange,
+                                  color: AppColors.warn,
                                   exercises: day.warmup,
                                   buildRow: (ex) => _buildPreviewExerciseRow(
-                                    ex, null, AppColors.orange,
+                                    ex, null, AppColors.warn,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                _buildPreviewSectionLabel('WORKOUT', AppColors.accent),
+                                _buildPreviewSectionLabel(
+                                    'WORKOUT', AppColors.accent),
                               ],
                               // Main exercises (always expanded — focal content)
                               ...List.generate(day.exercises.length, (index) {
                                 final ex = day.exercises[index];
                                 return _buildPreviewExerciseRow(
-                                  ex, index + 1, AppColors.accent,
+                                  ex,
+                                  index + 1,
+                                  AppColors.accent,
                                 );
                               }),
                               // Cool-down section (Bug #15a: collapsed by default)
@@ -1468,10 +1102,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                                 const SizedBox(height: 8),
                                 _CollapsibleExerciseSection(
                                   label: 'COOL-DOWN',
-                                  color: AppColors.blue,
+                                  color: AppColors.info,
                                   exercises: day.cooldown,
                                   buildRow: (ex) => _buildPreviewExerciseRow(
-                                    ex, null, AppColors.blue,
+                                    ex, null, AppColors.info,
                                   ),
                                 ),
                               ],
@@ -1493,12 +1127,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
+        style: AppTypography.mono.copyWith(
           color: color.withValues(alpha: 0.7),
+          letterSpacing: 2,
         ),
       ),
     );
@@ -1541,11 +1172,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               alignment: Alignment.center,
               child: Text(
                 '$number',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                style: AppTypography.monoXs.copyWith(
                   color: color,
+                  letterSpacing: 0.5,
                 ),
               ),
             )
@@ -1562,22 +1191,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               children: [
                 Text(
                   ex.name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.h3.copyWith(fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  ex.muscleLabel != null ? '${ex.muscleLabel} · $detail' : detail,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
+                  ex.muscleLabel != null
+                      ? '${ex.muscleLabel} · $detail'
+                      : detail,
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ],
@@ -1603,22 +1227,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.proGold.withValues(alpha: 0.06),
-              AppColors.proGold.withValues(alpha: 0.02),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(
-            color: AppColors.proGold.withValues(alpha: 0.2),
-          ),
-        ),
+      child: WardCard(
+        variant: WardCardVariant.hero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1632,12 +1242,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 const SizedBox(width: 8),
                 Text(
                   canGraduate ? 'PHASE 1 COMPLETE!' : 'PHASE 2 AVAILABLE',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.proGold,
+                    letterSpacing: 2.5,
                   ),
                 ),
               ],
@@ -1647,16 +1254,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               canGraduate
                   ? 'You crushed Phase 1 with ${(completionRate * 100).round()}% completion! View your achievements and unlock Phase 2.'
                   : 'Great progress! Unlock Phase 2 to continue building strength with new exercises and progressive overload.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                color: AppColors.textSecondary,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
                 height: 1.4,
               ),
             ),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () {
+            WardButton(
+              label: canGraduate
+                  ? 'VIEW YOUR ACHIEVEMENT'
+                  : 'UNLOCK PHASE 2',
+              onPressed: () {
                 if (canGraduate) {
                   context.go('/train/graduation');
                   return;
@@ -1672,25 +1280,6 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   ),
                 );
               },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.proGold,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Center(
-                  child: Text(
-                    canGraduate ? 'View Your Achievement' : 'Unlock Phase 2',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
             ),
           ],
         ),
@@ -1734,22 +1323,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           const SizedBox(height: 20),
           Text(
             'Generating your plan...',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.h2.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 8),
           Text(
             'Building a personalised workout schedule\nbased on your profile',
             textAlign: TextAlign.center,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
               height: 1.4,
             ),
           ),
@@ -1785,42 +1366,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             children: [
               Text(
                 'MY TEMPLATES',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               const Spacer(),
               GestureDetector(
                 onTap: () => context.go('/train/template-builder'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accentTint,
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 12, color: AppColors.accent),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Create',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: const WardChip(
+                  label: '+ CREATE',
+                  tone: WardChipTone.gold,
                 ),
               ),
             ],
@@ -1828,37 +1384,25 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           const SizedBox(height: 10),
 
           if (templates.isEmpty)
-            Container(
-              width: double.infinity,
+            WardCard(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(AppRadius.cardM),
-                border: Border.all(color: AppColors.border),
-              ),
               child: Column(
                 children: [
-                  Icon(Icons.fitness_center_outlined,
-                      size: 28, color: AppColors.textSecondary),
+                  const Icon(Icons.fitness_center_outlined,
+                      size: 28, color: AppColors.textDim),
                   const SizedBox(height: 8),
                   Text(
                     'No templates yet',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
+                    style: AppTypography.h3.copyWith(
                       fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textDim,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Tap Create to build a custom workout',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodySm
+                        .copyWith(color: AppColors.textDim),
                   ),
                 ],
               ),
@@ -1868,107 +1412,74 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               final name = tmpl['name'] as String? ?? 'Unnamed';
               final exercises = tmpl['exercises'] as List? ?? [];
               final templateId = tmpl['id'] as String? ?? '';
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(AppRadius.cardM),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: WardCard(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: AppTypography.h3.copyWith(fontSize: 14),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${exercises.length} exercise${exercises.length == 1 ? '' : 's'}',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.textSecondary,
+                            const SizedBox(height: 2),
+                            Text(
+                              '${exercises.length} EXERCISE${exercises.length == 1 ? '' : 'S'}',
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.textDim,
+                                letterSpacing: 1.2,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.go('/train/template-builder', extra: {
-                        'templateId': templateId,
-                        'templateData': tmpl,
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.input,
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Text(
-                          'Edit',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
-                          ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => _scheduleTemplate(context, ref, templateId, name),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentTint,
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: AppColors.accent.withValues(alpha: 0.3),
-                          ),
+                      GestureDetector(
+                        onTap: () =>
+                            context.go('/train/template-builder', extra: {
+                          'templateId': templateId,
+                          'templateData': tmpl,
+                        }),
+                        child: const WardChip(
+                          label: 'EDIT',
+                          tone: WardChipTone.neutral,
                         ),
-                        child: Text(
-                          'Schedule',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _scheduleTemplate(
+                            context, ref, templateId, name),
+                        child: const WardChip(
+                          label: 'SCHEDULE',
+                          tone: WardChipTone.gold,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _confirmDeleteTemplate(
+                            context, ref, templateId, name),
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: AppColors.bgRaise,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.pill),
+                            border:
+                                Border.all(color: AppColors.line2),
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            size: 14,
+                            color: AppColors.textDim,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () =>
-                          _confirmDeleteTemplate(context, ref, templateId, name),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: AppColors.input,
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Icon(
-                          Icons.delete_outline,
-                          size: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }),
@@ -1984,49 +1495,37 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          side: BorderSide(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: const BorderSide(color: AppColors.line2),
         ),
         title: Text(
           'Delete "$name"?',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.h3,
         ),
         content: Text(
           'Your originally scheduled workouts will be restored on those days. Completed workouts stay in your history.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
-              'Cancel',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+              'CANCEL',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.textDim,
+                letterSpacing: 2,
               ),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
-              'Delete',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.red,
+              'DELETE',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: AppColors.bad,
+                letterSpacing: 2,
               ),
             ),
           ),
@@ -2044,7 +1543,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         SnackBar(
           content: Text(
             'Template deleted',
-            style: GoogleFonts.getFont('DM Sans'),
+            style: AppTypography.bodySm,
           ),
           backgroundColor: AppColors.card,
         ),
@@ -2055,9 +1554,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         SnackBar(
           content: Text(
             'Failed to delete template: $e',
-            style: GoogleFonts.getFont('DM Sans'),
+            style: AppTypography.bodySm,
           ),
-          backgroundColor: AppColors.red,
+          backgroundColor: AppColors.bad,
         ),
       );
     }
@@ -2090,9 +1589,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
           return Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppRadius.card),
+              ),
             ),
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             child: Column(
@@ -2103,23 +1604,20 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: AppColors.line2,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Schedule "$name"',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary),
+                  style: AppTypography.h2.copyWith(fontSize: 16),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Tap days to select. Any combination.',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 12, color: AppColors.textSecondary),
+                  style:
+                      AppTypography.bodySm.copyWith(color: AppColors.textDim),
                 ),
                 const SizedBox(height: 16),
                 // Day headers
@@ -2129,10 +1627,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                             child: Center(
                               child: Text(
                                 l,
-                                style: GoogleFonts.getFont('DM Sans',
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary),
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.textDim,
+                                  letterSpacing: 1.5,
+                                ),
                               ),
                             ),
                           ))
@@ -2183,15 +1681,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                                 alignment: Alignment.center,
                                 child: Text(
                                   '${date.day}',
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
+                                  style: AppTypography.numeric.copyWith(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w600,
                                     color: isPast
-                                        ? AppColors.textSecondary
+                                        ? AppColors.textDim
                                             .withValues(alpha: 0.3)
                                         : isSelected
-                                            ? Colors.black
+                                            ? AppColors.bgDeep
                                             : AppColors.textPrimary,
                                   ),
                                 ),
@@ -2207,40 +1703,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      '${selected.length} day${selected.length == 1 ? '' : 's'} selected',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.accent),
+                      '${selected.length} DAY${selected.length == 1 ? '' : 'S'} SELECTED',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 1.5,
+                      ),
                     ),
                   ),
                 // Schedule button
-                SizedBox(
-                  width: double.infinity,
-                  child: GestureDetector(
-                    onTap: selected.isEmpty
-                        ? null
-                        : () => Navigator.of(ctx).pop(true),
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: selected.isEmpty
-                            ? AppColors.border
-                            : AppColors.accent,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'SCHEDULE',
-                        style: GoogleFonts.getFont('DM Sans',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: selected.isEmpty
-                                ? AppColors.textSecondary
-                                : Colors.black),
-                      ),
-                    ),
-                  ),
+                WardButton(
+                  label: 'SCHEDULE',
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () => Navigator.of(ctx).pop(true),
                 ),
               ],
             ),
@@ -2280,8 +1755,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       SnackBar(
         content: Text(
           'Scheduled "$name" for $dateStr',
-          style: GoogleFonts.getFont('DM Sans',
-              fontSize: 13, fontWeight: FontWeight.w500),
+          style: AppTypography.bodySm,
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
@@ -2293,8 +1767,9 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
   Widget _buildCreateCustomExerciseSection(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: GestureDetector(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: WardCard(
         onTap: () {
           showModalBottomSheet(
             context: context,
@@ -2307,8 +1782,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   SnackBar(
                     content: Text(
                       'Exercise created! It\'s now available in all workout pickers.',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 13, fontWeight: FontWeight.w500),
+                      style: AppTypography.bodySm,
                     ),
                     backgroundColor: AppColors.card,
                     behavior: SnackBarBehavior.floating,
@@ -2318,55 +1792,37 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ),
           );
         },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.add_circle_outline,
-                size: 20,
-                color: AppColors.accent,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.add_circle_outline,
+              size: 20,
+              color: AppColors.accent,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Create Custom Exercise',
+                    style: AppTypography.h3.copyWith(fontSize: 14),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Add your own exercises to use in workouts',
+                    style: AppTypography.bodySm
+                        .copyWith(color: AppColors.textDim),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Create Custom Exercise',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Add your own exercises to use in workouts',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: AppColors.textSecondary,
-              ),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.textDim,
+            ),
+          ],
         ),
       ),
     );
@@ -2418,21 +1874,15 @@ class _CollapsibleExerciseSectionState
               children: [
                 Text(
                   widget.label,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
+                  style: AppTypography.mono.copyWith(
                     color: widget.color.withValues(alpha: 0.7),
+                    letterSpacing: 2,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   '${widget.exercises.length}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                  style: AppTypography.monoXs.copyWith(
                     color: widget.color.withValues(alpha: 0.4),
                   ),
                 ),

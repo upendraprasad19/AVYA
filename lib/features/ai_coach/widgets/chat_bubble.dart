@@ -3,13 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
-/// Message bubble matching the mockup design.
+/// Wardroom chat bubble.
 ///
-/// AI messages: dark bg (#161d28), border #1c2535, top-left radius 4px.
-/// User messages: cyan bg, right-aligned.
-/// Supports rich text with highlighted spans (cyan, orange, green).
-/// Supports optional media attachment (image thumbnail).
+/// Sharp corners — 6-px card-radius overall, 2-px tail on the side that
+/// points at the sender. AI bubbles sit on [AppColors.card] with a hairline
+/// [AppColors.line2] border. User bubbles use Campaign Gold ([AppColors.accent])
+/// with black text — they read as "your orders, sent." Error bubbles swap to
+/// the warm [AppColors.bad] family with a matching subtle tint.
+///
+/// Body copy stays DM Sans (paragraph family). Timestamps switch to JB Mono
+/// (Wardroom uppercase cadence). Rich-text markers map to semantic Wardroom
+/// tokens: **accent gold**, !!warn amber!!, ++ok olive++.
 class ChatBubble extends StatelessWidget {
   final String text;
   final bool isUser;
@@ -49,6 +55,23 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sharp Wardroom corners — 6 px on body, 2 px on the tail side.
+    const soft = Radius.circular(6);
+    const tail = Radius.circular(2);
+
+    final Color bg;
+    final Color borderColor;
+    if (isUser) {
+      bg = AppColors.accent;
+      borderColor = AppColors.accent;
+    } else if (isError) {
+      bg = AppColors.bad.withValues(alpha: 0.12);
+      borderColor = AppColors.bad.withValues(alpha: 0.35);
+    } else {
+      bg = AppColors.card;
+      borderColor = AppColors.line2;
+    }
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -57,35 +80,23 @@ class ChatBubble extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
-          color: isUser
-              ? AppColors.accent
-              : isError
-                  ? AppColors.red.withValues(alpha: 0.1)
-                  : AppColors.input,
+          color: bg,
           borderRadius: isUser
               ? const BorderRadius.only(
-                  topLeft: Radius.circular(14),
-                  topRight: Radius.circular(14),
-                  bottomLeft: Radius.circular(14),
-                  bottomRight: Radius.circular(4),
+                  topLeft: soft,
+                  topRight: soft,
+                  bottomLeft: soft,
+                  bottomRight: tail,
                 )
               : const BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  topRight: Radius.circular(14),
-                  bottomLeft: Radius.circular(14),
-                  bottomRight: Radius.circular(14),
+                  topLeft: tail,
+                  topRight: soft,
+                  bottomLeft: soft,
+                  bottomRight: soft,
                 ),
-          border: isUser
-              ? null
-              : Border.all(
-                  color: isError
-                      ? AppColors.red.withValues(alpha: 0.3)
-                      : AppColors.border,
-                ),
+          border: Border.all(color: borderColor, width: 1),
         ),
-        child: isLoading
-            ? _buildLoadingDots()
-            : _buildContent(),
+        child: isLoading ? _buildLoadingDots() : _buildContent(),
       ),
     );
   }
@@ -112,7 +123,7 @@ class ChatBubble extends StatelessWidget {
           Builder(builder: (ctx) => GestureDetector(
             onTap: () => _openFullScreenImage(ctx, mediaUrl!),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.row),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
               child: CachedNetworkImage(
                 imageUrl: mediaUrl!,
                 width: 120,
@@ -123,7 +134,7 @@ class ChatBubble extends StatelessWidget {
                   height: 120,
                   decoration: BoxDecoration(
                     color: AppColors.input,
-                    borderRadius: BorderRadius.circular(AppRadius.row),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
                   child: const Center(
                     child: SizedBox(
@@ -141,7 +152,7 @@ class ChatBubble extends StatelessWidget {
                   height: 120,
                   decoration: BoxDecoration(
                     color: AppColors.input,
-                    borderRadius: BorderRadius.circular(AppRadius.row),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                     border: Border.all(color: AppColors.border),
                   ),
                   child: const Center(
@@ -174,8 +185,8 @@ class ChatBubble extends StatelessWidget {
                       style: GoogleFonts.getFont(
                         'DM Sans',
                         fontSize: 12,
-                        color:
-                            isUser ? Colors.black : AppColors.textPrimary,
+                        color: isUser ? Colors.black : AppColors.accent,
+                        fontWeight: FontWeight.w700,
                         height: 1.8,
                       ),
                     ),
@@ -194,9 +205,10 @@ class ChatBubble extends StatelessWidget {
               'DM Sans',
               fontSize: 11,
               fontWeight: FontWeight.w400,
+              fontStyle: FontStyle.italic,
               color: isUser
-                  ? Colors.black.withValues(alpha: 0.6)
-                  : AppColors.textSecondary,
+                  ? Colors.black.withValues(alpha: 0.7)
+                  : AppColors.textMute,
             ),
           ),
         ],
@@ -209,13 +221,13 @@ class ChatBubble extends StatelessWidget {
           GestureDetector(
             onTap: onRetry,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: AppColors.accentTint,
-                borderRadius: BorderRadius.circular(100),
+                color: AppColors.accentSoft,
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
                 border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                  width: 1.2,
+                  color: AppColors.accent.withValues(alpha: 0.55),
+                  width: 1,
                 ),
               ),
               child: Row(
@@ -223,18 +235,15 @@ class ChatBubble extends StatelessWidget {
                 children: [
                   const Icon(
                     Icons.refresh_rounded,
-                    size: 14,
+                    size: 13,
                     color: AppColors.accent,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 6),
                   Text(
-                    'Retry',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                    'RETRY',
+                    style: AppTypography.monoXs.copyWith(
                       color: AppColors.accent,
-                      letterSpacing: 0.3,
+                      letterSpacing: 2.0,
                     ),
                   ),
                 ],
@@ -243,18 +252,17 @@ class ChatBubble extends StatelessWidget {
           ),
         ],
 
-        // Timestamp
+        // Timestamp — JB Mono caps, Wardroom telegraph cadence.
         if (timestamp != null) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
-            timestamp!,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w400,
+            timestamp!.toUpperCase(),
+            style: AppTypography.monoXs.copyWith(
+              fontSize: 8,
+              letterSpacing: 1.4,
               color: isUser
-                  ? Colors.black.withValues(alpha: 0.5)
-                  : AppColors.textSecondary,
+                  ? Colors.black.withValues(alpha: 0.55)
+                  : AppColors.textMute,
             ),
           ),
         ],
@@ -291,7 +299,7 @@ class ChatBubble extends StatelessWidget {
       }
 
       if (match.group(1) != null) {
-        // **cyan**
+        // **accent** — Campaign Gold emphasis.
         spans.add(TextSpan(
           text: match.group(1),
           style: defaultStyle.copyWith(
@@ -300,20 +308,20 @@ class ChatBubble extends StatelessWidget {
           ),
         ));
       } else if (match.group(2) != null) {
-        // !!orange!!
+        // !!warn!! — amber warning.
         spans.add(TextSpan(
           text: match.group(2),
           style: defaultStyle.copyWith(
-            color: isUser ? Colors.black : AppColors.orange,
+            color: isUser ? Colors.black : AppColors.warn,
             fontWeight: FontWeight.w700,
           ),
         ));
       } else if (match.group(3) != null) {
-        // ++green++
+        // ++ok++ — olive success.
         spans.add(TextSpan(
           text: match.group(3),
           style: defaultStyle.copyWith(
-            color: isUser ? Colors.black : AppColors.green,
+            color: isUser ? Colors.black : AppColors.ok,
             fontWeight: FontWeight.w700,
           ),
         ));
@@ -338,6 +346,8 @@ class ChatBubble extends StatelessWidget {
   }
 
   Widget _dot(int index) {
+    // On user bubble (gold bg) use black dots; on AI bubble use gold dots.
+    final dotColor = isUser ? Colors.black : AppColors.accent;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.3, end: 1.0),
       duration: Duration(milliseconds: 600 + index * 200),
@@ -345,10 +355,10 @@ class ChatBubble extends StatelessWidget {
         return Opacity(
           opacity: value,
           child: Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: AppColors.accent,
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: dotColor,
               shape: BoxShape.circle,
             ),
           ),

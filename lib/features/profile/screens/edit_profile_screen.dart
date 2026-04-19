@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -13,6 +12,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -192,31 +192,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.go('/profile'),
         ),
-        title: Text(
-          'Edit Profile',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'DOSSIER \u00B7 AMEND',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Edit profile',
+              style: AppTypography.h3,
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _save,
             child: Text(
               'Save',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: _isSaving ? AppColors.textDisabled : AppColors.accent,
-              ),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: _isSaving ? AppColors.textDisabled : AppColors.accent),
             ),
           ),
         ],
@@ -342,13 +348,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title.toUpperCase(),
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: AppColors.textSecondary,
-      ),
+      style: AppTypography.mono.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
     );
   }
 
@@ -376,21 +376,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   children: [
                     Text(
                       'Email',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       email.isNotEmpty ? email : 'Not set',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -403,12 +394,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           padding: const EdgeInsets.only(left: 14),
           child: Text(
             'Used for sign-in',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textDim),
           ),
         ),
       ],
@@ -434,19 +420,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           : isDecimal
               ? [FilteringTextInputFormatter.allow(RegExp(r'[\d.]')), LengthLimitingTextInputFormatter(5)]
               : [LengthLimitingTextInputFormatter(50)],
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 15,
-        fontWeight: FontWeight.w400,
-        color: AppColors.textPrimary,
-      ),
+      style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 13,
-          color: AppColors.textSecondary,
-        ),
+        labelStyle: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 18),
         filled: true,
         fillColor: AppColors.input,
@@ -493,14 +470,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             Expanded(
               child: Text(
                 displayText,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: _dateOfBirth == null
-                      ? AppColors.textSecondary
-                      : AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: _dateOfBirth == null
+                      ? AppColors.textDim
+                      : AppColors.textPrimary),
               ),
             ),
             Icon(Icons.chevron_right,
@@ -550,14 +522,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             Expanded(
               child: Text(
                 displayText,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: _wakeUpTime == null
-                      ? AppColors.textSecondary
-                      : AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: _wakeUpTime == null
+                      ? AppColors.textDim
+                      : AppColors.textPrimary),
               ),
             ),
             Icon(Icons.chevron_right,
@@ -633,12 +600,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             const SizedBox(width: 8),
             Text(
               label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w400,
-                color: isSelected ? AppColors.accent : AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: isSelected ? FontWeight.w800 : FontWeight.w400, color: isSelected ? AppColors.accent : AppColors.textDim),
             ),
           ],
         ),
@@ -659,12 +621,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 value: e.key,
                 child: Text(
                   e.value,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w400, color: AppColors.textPrimary),
                 ),
               ))
           .toList(),
@@ -672,11 +629,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       dropdownColor: AppColors.card,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 13,
-          color: AppColors.textSecondary,
-        ),
+        labelStyle: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         filled: true,
         fillColor: AppColors.input,
         contentPadding:
@@ -703,11 +656,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Training Days per Week',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Row(
@@ -729,14 +678,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Center(
                     child: Text(
                       '$days',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: isSelected
+                      style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w800, color: isSelected
                             ? Colors.black
-                            : AppColors.textSecondary,
-                      ),
+                            : AppColors.textDim),
                     ),
                   ),
                 ),
@@ -767,11 +711,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Daily Lifestyle (outside gym)',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         ...options.entries.map((entry) {
@@ -810,24 +750,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     children: [
                       Text(
                         entry.value,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: isSelected
+                        style: AppTypography.body.copyWith(fontWeight: isSelected
                               ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: isSelected
+                              : FontWeight.w400, color: isSelected
                               ? AppColors.textPrimary
-                              : AppColors.textPrimary,
-                        ),
+                              : AppColors.textPrimary),
                       ),
                       Text(
                         subtitles[entry.key]!,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
                       ),
                     ],
                   ),
@@ -859,11 +790,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Goal pace',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         ...options.entries.map((entry) {
@@ -902,24 +829,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     children: [
                       Text(
                         entry.value,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: isSelected
+                        style: AppTypography.body.copyWith(fontWeight: isSelected
                               ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: isSelected
+                              : FontWeight.w400, color: isSelected
                               ? AppColors.textPrimary
-                              : AppColors.textPrimary,
-                        ),
+                              : AppColors.textPrimary),
                       ),
                       Text(
                         subtitles[entry.key]!,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
                       ),
                     ],
                   ),
@@ -941,12 +859,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Session Duration',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -973,15 +886,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Text(
                   '$min min',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
+                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected
                         ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
+                        : AppColors.textDim),
                 ),
               ),
             );
@@ -1005,12 +912,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Physique Focus',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -1037,15 +939,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Text(
                   opt.$2,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
+                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected
                         ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
+                        : AppColors.textDim),
                 ),
               ),
             );
@@ -1068,12 +964,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Experience Level',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -1100,15 +991,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Text(
                   opt.$2,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
+                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected
                         ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
+                        : AppColors.textDim),
                 ),
               ),
             );
@@ -1133,11 +1018,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Diet Preference',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -1165,15 +1046,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Text(
                   entry.value,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w400,
-                    color: isSelected
+                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected
                         ? AppColors.accent
-                        : AppColors.textPrimary,
-                  ),
+                        : AppColors.textPrimary),
                 ),
               ),
             );
@@ -1203,11 +1078,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       children: [
         Text(
           'Injuries / Areas to Avoid',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -1255,15 +1126,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
                 child: Text(
                   labels[option]!,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w400,
-                    color: isSelected
+                  style: AppTypography.body.copyWith(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected
                         ? (option == 'none'
                             ? AppColors.accent
-                            : AppColors.red)
+                            : AppColors.bad)
                         : AppColors.textPrimary,
                   ),
                 ),
@@ -1297,18 +1163,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                 ],
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 15, color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Body Fat % (optional)',
-                  labelStyle: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+                  labelStyle: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                   suffixText: hasValue ? '%' : null,
                   prefixIcon: const Icon(
                     Icons.monitor_heart_outlined,
@@ -1375,12 +1233,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           const SizedBox(width: 6),
                           Text(
                             'AI Assess',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.proGold,
-                            ),
+                            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.proGold),
                           ),
                         ],
                       ),
@@ -1392,21 +1245,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(height: 6),
           Text(
             assessedLabel,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
           ),
         ],
         const SizedBox(height: 6),
         Text(
           'Used for lean-mass protein targets. AI photo assessment is PRO, once per month.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
         ),
       ],
     );
@@ -1511,7 +1356,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           SnackBar(
             content: Text(
               'Body fat estimated: ${bfLow.round()}–${bfHigh.round()}%  (using ${bfMid.toStringAsFixed(1)}%)',
-              style: GoogleFonts.getFont('DM Sans', color: Colors.white),
+              style: AppTypography.body.copyWith(color: Colors.white),
             ),
             backgroundColor: AppColors.green,
           ),
@@ -1528,8 +1373,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.getFont('DM Sans')),
-        backgroundColor: AppColors.red,
+        content: Text(message, style: AppTypography.bodySm.copyWith(color: Colors.white)),
+        backgroundColor: AppColors.bad,
       ),
     );
   }
@@ -1681,9 +1526,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             title: Text(
               'Reschedule Workouts?',
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 16, fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary),
+              style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1691,8 +1534,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               children: [
                 Text(
                   'You changed:',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 13, color: AppColors.textSecondary),
+                  style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                 ),
                 const SizedBox(height: 6),
                 ...changes.map((c) => Padding(
@@ -1703,9 +1545,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(c,
-                          style: GoogleFonts.getFont('DM Sans',
-                              fontSize: 12, fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary)),
+                          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       ),
                     ],
                   ),
@@ -1713,8 +1553,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 const SizedBox(height: 10),
                 Text(
                   'Regenerate future workouts from today? Past completed workouts will be kept.',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 12, color: AppColors.textSecondary),
+                  style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
                 ),
               ],
             ),
@@ -1722,8 +1561,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
                 child: Text('Keep Current Plan',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 12, color: AppColors.textSecondary)),
+                    style: AppTypography.bodySm.copyWith(color: AppColors.textDim)),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
@@ -1731,9 +1569,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   backgroundColor: AppColors.accent.withValues(alpha: 0.08),
                 ),
                 child: Text('Reschedule',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 12, fontWeight: FontWeight.w700,
-                        color: AppColors.accent)),
+                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.accent)),
               ),
             ],
           ),
@@ -1800,9 +1636,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               planChanged && WorkoutScheduleService.instance.hasPlan()
                   ? 'Profile saved & workouts rescheduled'
                   : 'Profile saved',
-              style: GoogleFonts.getFont('DM Sans'),
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
-            backgroundColor: AppColors.green,
+            backgroundColor: AppColors.ok,
           ),
         );
         context.go('/profile');
@@ -1813,9 +1649,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           SnackBar(
             content: Text(
               'Failed to save: $e',
-              style: GoogleFonts.getFont('DM Sans'),
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
             ),
-            backgroundColor: AppColors.red,
+            backgroundColor: AppColors.bad,
           ),
         );
       }
