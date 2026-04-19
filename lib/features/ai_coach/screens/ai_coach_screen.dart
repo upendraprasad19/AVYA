@@ -27,6 +27,7 @@ import '../widgets/tool_confirm_card.dart';
 import '../widgets/tool_confirm_sheet.dart';
 import '../widgets/diff_preview/swap_exercise_diff.dart';
 import '../widgets/diff_preview/injury_modify_diff.dart';
+import '../widgets/diff_preview/reschedule_week_diff.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
   const AiCoachScreen({super.key});
@@ -784,6 +785,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         break;
       case 'modify_workout_for_injury':
         diffPreview = InjuryModifyDiff(intent: intent);
+        break;
+      case 'reschedule_week':
+        diffPreview = RescheduleWeekDiff(intent: intent);
         break;
       default:
         diffPreview = const Text('Confirm this action?');

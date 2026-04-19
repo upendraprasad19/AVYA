@@ -13,6 +13,7 @@ import '../../train/providers/train_provider.dart'
 import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
 import 'injury_swap_planner.dart';
+import 'reschedule_week_planner.dart';
 
 /// Result of executing a tool intent.
 class ToolExecutionResult {
@@ -89,6 +90,9 @@ class ToolDispatcher {
           break;
         case 'modify_workout_for_injury':
           result = await _executeModifyWorkoutForInjury(intent);
+          break;
+        case 'reschedule_week':
+          result = await _executeRescheduleWeek(intent);
           break;
         default:
           return ToolExecutionResult.failure(
@@ -329,6 +333,107 @@ class ToolDispatcher {
     } else {
       return ToolExecutionResult.success(data: {
         'swaps': results,
+        'partial_errors': errors,
+      });
+    }
+  }
+
+  Future<ToolExecutionResult> _executeRescheduleWeek(ToolIntent intent) async {
+    final moves = RescheduleWeekPlanner.instance.getCached(intent.id);
+    if (moves == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the reshuffle plan.',
+      );
+    }
+
+    final box = HiveService.instance.workoutBox;
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    // Two-phase apply:
+    //   Phase 1 — snapshot all source entries up front so a same-week
+    //     A→B + B→A pair doesn't clobber each other when applied in order.
+    //   Phase 2 — write each destination + delete each source from the
+    //     snapshot.
+    final sourceSnapshots = <String, Map<String, dynamic>>{};
+    for (final move in moves) {
+      if (move.action != RescheduleAction.move &&
+          move.action != RescheduleAction.drop) {
+        continue;
+      }
+      final raw = box.get('schedule_${move.fromDate}');
+      if (raw is Map) {
+        sourceSnapshots[move.fromDate] = Map<String, dynamic>.from(raw);
+      }
+    }
+
+    for (final move in moves) {
+      try {
+        switch (move.action) {
+          case RescheduleAction.keep:
+            // No-op — entry already lives on the right date.
+            break;
+          case RescheduleAction.move:
+            final from = sourceSnapshots[move.fromDate];
+            if (from == null) {
+              errors.add('${move.fromDate}: source schedule missing');
+              continue;
+            }
+            // Defensive: refuse to clobber a completed/paused destination.
+            // The planner already protects these, but a concurrent edit
+            // between sheet-open and confirm could land here.
+            final destExisting = box.get('schedule_${move.toDate}');
+            if (destExisting is Map) {
+              final destStatus = destExisting['status']?.toString();
+              if (destStatus == 'completed' || destStatus == 'paused') {
+                errors.add(
+                    '${move.toDate}: destination not empty ($destStatus)');
+                continue;
+              }
+            }
+            // Re-stamp date + day_of_week on the moved entry.
+            final updated = Map<String, dynamic>.from(from);
+            updated['date'] = move.toDate;
+            final destDate = DateTime.parse(move.toDate!);
+            updated['day_of_week'] = destDate.weekday - 1; // 0=Mon..6=Sun
+            updated['rescheduled_via'] = 'ai_coach';
+            updated['rescheduled_at'] = DateTime.now().toIso8601String();
+            await box.put('schedule_${move.toDate}', updated);
+            // Only delete the old key if it isn't the same as the new one
+            // (defensive — shouldn't happen but a no-op move would dupe).
+            if (move.fromDate != move.toDate) {
+              await box.delete('schedule_${move.fromDate}');
+            }
+            results.add({
+              'from': move.fromDate,
+              'to': move.toDate,
+              'workout': move.workoutName,
+            });
+            break;
+          case RescheduleAction.drop:
+            await box.delete('schedule_${move.fromDate}');
+            results.add({
+              'from': move.fromDate,
+              'dropped': move.workoutName,
+            });
+            break;
+        }
+      } catch (e) {
+        errors.add('${move.fromDate}: $e');
+      }
+    }
+
+    RescheduleWeekPlanner.instance.clearCache(intent.id);
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {'moves': results});
+    } else if (results.isEmpty) {
+      return ToolExecutionResult.failure(
+        'Could not move any workouts: ${errors.join("; ")}',
+      );
+    } else {
+      return ToolExecutionResult.success(data: {
+        'moves': results,
         'partial_errors': errors,
       });
     }
