@@ -5,13 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
-import '../widgets/calorie_ring_painter.dart';
 import '../widgets/food_logger_section.dart';
 import '../widgets/ai_breakdown_card.dart';
 import '../widgets/todays_meals_card.dart';
@@ -266,77 +266,57 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final waterMl = ref.watch(waterIntakeProvider);
     const waterTarget = 3000;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.cardPadding, 10, AppSpacing.cardPadding, AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border:
-            Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
-      ),
+    return WardCard(
+      variant: WardCardVariant.hero,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
-          // Calorie ring
+          // Calorie ring — Wardroom animated ring with Fraunces big number
           SizedBox(
             width: 110,
             height: 110,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CustomPaint(
-                  size: const Size(110, 110),
-                  painter: CalorieRingPainter(
-                    progress: progress.clamp(0.0, 1.0),
-                    trackColor: AppColors.input,
-                    fillColor: AppColors.accent,
-                    strokeWidth: 10,
+            child: WardRing(
+              pct: progress.clamp(0.0, 1.0),
+              size: 110,
+              stroke: 6,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$consumed',
+                    style: AppTypography.h1.copyWith(
+                      fontSize: 26,
+                      color: AppColors.textPrimary,
+                      height: 1.0,
+                    ),
                   ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                        height: 1,
-                      ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'CONSUMED',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 7,
+                      letterSpacing: 1.5,
+                      color: AppColors.textMute,
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'consumed',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$remaining',
+                    style: AppTypography.h3.copyWith(
+                      color: AppColors.accent,
+                      height: 1.0,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.accent,
-                        height: 1,
-                      ),
+                  ),
+                  Text(
+                    'REMAINING',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 7,
+                      letterSpacing: 1.5,
+                      color: AppColors.textMute,
                     ),
-                    Text(
-                      'remaining',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 8,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -469,44 +449,23 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
+              label.toUpperCase(),
+              style: AppTypography.mono.copyWith(
+                fontSize: 9,
+                letterSpacing: 1.8,
                 color: color,
               ),
             ),
             Text(
               '$current / $target$suffix',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                color: AppColors.textSecondary,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textDim,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 3),
-        Container(
-          height: 5,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: pct,
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
+        const SizedBox(height: 4),
+        WardBar(pct: pct, color: color, height: 4),
       ],
     );
   }
