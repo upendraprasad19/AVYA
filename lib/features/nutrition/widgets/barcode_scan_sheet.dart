@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:icanbefitter/core/services/barcode_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
 import '../providers/nutrition_provider.dart';
 
@@ -132,7 +132,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${food.name} logged ✓',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+              style: AppTypography.body.copyWith(fontSize: 13)),
           backgroundColor: AppColors.card,
           duration: const Duration(seconds: 2),
         ),
@@ -170,12 +170,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                 children: [
                   Text(
                     'Scan Barcode',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                   ),
                   const Spacer(),
                   GestureDetector(
@@ -257,8 +252,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                   children: [
                     Text(
                       _error!,
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 13, color: AppColors.textSecondary),
+                      style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
@@ -275,10 +269,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                         ),
                         child: Text(
                           'Scan Again',
-                          style: GoogleFonts.getFont('DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent),
+                          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
                         ),
                       ),
                     ),
@@ -295,15 +286,14 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text("Add manually",
-                          style: GoogleFonts.getFont("DM Sans", fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDim)),
                       ),
                     ),
                   ],
                 )
               : Text(
                   'Point camera at the barcode on the packaging',
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 13, color: AppColors.textSecondary),
+                  style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                   textAlign: TextAlign.center,
                 ),
         ),
@@ -330,17 +320,13 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           const SizedBox(height: 20),
           Text(
             'Barcode scanning requires\nthe mobile app',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
           Text(
             'Download ICANBEFITTER on Android to scan\nproduct barcodes with your camera.',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 13, color: AppColors.textSecondary),
+            style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -355,10 +341,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
               ),
               child: Text(
                 'Got it',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
               ),
             ),
           ),
@@ -388,10 +371,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
             ),
             child: Text(
               '✓ Product found',
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.green),
+              style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ok),
             ),
           ),
           const SizedBox(height: 10),
@@ -399,17 +379,13 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           // Product name
           Text(
             food.name,
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
           ),
           if (food.brand != null) ...[
             const SizedBox(height: 2),
             Text(
               food.brand!,
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 13, color: AppColors.textSecondary),
+              style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
             ),
           ],
           const SizedBox(height: 16),
@@ -466,10 +442,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                     alignment: Alignment.center,
                     child: Text(
                       '✓ Log Food',
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                     ),
                   ),
                 ),
@@ -486,8 +459,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                   ),
                   child: Text(
                     'Rescan',
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 13, color: AppColors.textSecondary),
+                    style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
                   ),
                 ),
               ),
@@ -506,15 +478,9 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Serving size',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
+                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
             Text('${_servingG.round()}g',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.accent)),
+                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.accent)),
           ],
         ),
         SliderTheme(
@@ -536,8 +502,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
         if (food.servingDesc != null)
           Text(
             'Typical serving: ${food.servingDesc}',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 10, color: AppColors.textSecondary),
+            style: AppTypography.monoXs.copyWith(fontSize: 10, color: AppColors.textDim),
           ),
       ],
     );
@@ -570,12 +535,9 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
               alignment: Alignment.center,
               child: Text(
                 labels[i],
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: isActive
+                style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: isActive
                         ? AppColors.accent
-                        : AppColors.textSecondary),
+                        : AppColors.textDim),
               ),
             ),
           ),
@@ -589,13 +551,9 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
       child: Column(
         children: [
           Text(value,
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: color)),
+              style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
           Text(label,
-              style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 9, color: AppColors.textSecondary)),
+              style: AppTypography.monoXs.copyWith(color: AppColors.textDim)),
         ],
       ),
     );

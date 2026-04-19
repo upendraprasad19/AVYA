@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import '../providers/nutrition_provider.dart';
 import 'custom_food_sheet.dart';
 
@@ -94,12 +94,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
               children: [
                 Text(
                   'Search Food',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
                 const Spacer(),
                 IconButton(
@@ -128,18 +123,10 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                 autofocus: true,
                 onChanged: (q) =>
                     ref.read(foodSearchProvider.notifier).search(q),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search foods (e.g. paneer tikka, idli)...',
-                  hintStyle: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
+                  hintStyle: AppTypography.body.copyWith(color: AppColors.textDim),
                   border: InputBorder.none,
                   icon: const Icon(Icons.search,
                       color: AppColors.textSecondary, size: 20),
@@ -172,11 +159,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
             const SizedBox(height: 8),
             Text(
               'Search from 5,000+ foods',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
             ),
             const SizedBox(height: 20),
             GestureDetector(
@@ -198,12 +181,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                     const SizedBox(width: 6),
                     Text(
                       'Create custom food',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
                     ),
                   ],
                 ),
@@ -221,11 +199,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           children: [
             Text(
               'No foods found for "${_searchController.text}"',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
             ),
             const SizedBox(height: 16),
             GestureDetector(
@@ -247,12 +221,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                     const SizedBox(width: 6),
                     Text(
                       'Create custom food',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
                     ),
                   ],
                 ),
@@ -303,23 +272,14 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                     children: [
                       Text(
                         name,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '$servingDesc \u00B7 P ${protein.round()}g/100g',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.monoXs.copyWith(fontSize: 10, color: AppColors.textDim),
                       ),
                     ],
                   ),
@@ -329,20 +289,11 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                   children: [
                     Text(
                       '${servingCals.round()} kcal',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.orange,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.warn),
                     ),
                     Text(
                       'per serving',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 9,
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -398,12 +349,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
               Expanded(
                 child: Text(
                   name,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
               ),
             ],
@@ -424,12 +370,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                 // Calories
                 Text(
                   '$adjustedCals kcal',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.accent,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.accent),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -449,13 +390,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           // Quantity slider (adjustable portions - FREE for all)
           Text(
             'PORTION SIZE',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
           ),
           const SizedBox(height: 6),
 
@@ -470,12 +405,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
             children: [
               Text(
                 '${_quantityG.round()}g',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
               ),
               Expanded(
                 child: Slider(
@@ -496,13 +426,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           // Meal type selector
           Text(
             'MEAL TYPE',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
           ),
           const SizedBox(height: 6),
           Row(
@@ -534,7 +458,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
                   SnackBar(
                     content: Text(
                       'Logged $name ($adjustedCals kcal)',
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                      style: AppTypography.body.copyWith(fontSize: 13),
                     ),
                     backgroundColor: AppColors.card,
                   ),
@@ -550,12 +474,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
               ),
               child: Text(
                 '\u2713 Log $name \u2014 $adjustedCals kcal',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                ),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
               ),
             ),
           ),
@@ -570,20 +489,11 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
       children: [
         Text(
           value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-            color: color,
-          ),
+          style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: color),
         ),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.monoXs.copyWith(fontSize: 10, color: AppColors.textDim),
         ),
       ],
     );
@@ -649,12 +559,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? AppColors.accent : AppColors.textSecondary,
-            ),
+            style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: isSelected ? AppColors.accent : AppColors.textDim),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -682,12 +587,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? AppColors.accent : AppColors.textSecondary,
-            ),
+            style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: isSelected ? AppColors.accent : AppColors.textDim),
           ),
         ),
       ),

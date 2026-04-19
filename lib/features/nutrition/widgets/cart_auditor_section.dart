@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
 
@@ -21,28 +22,18 @@ class CartAuditorSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(cartAuditorProvider);
     final remaining = ref.watch(cartAuditorRemainingProvider);
-    // Watch the provider (not a direct service call) so this widget
-    // rebuilds the moment Razorpay success invalidates
-    // subscriptionInfoProvider. Previously the direct isPro() read
-    // showed stale state until a full app restart.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final limit = isPro
         ? AppConstants.proCartAuditorPerDay
         : AppConstants.freeCartAuditorPerDay;
     final used = UsageCounterService.instance
         .used(AppConstants.featureCartAuditorPro, isPro);
-    final periodLabel = 'today';
 
     // Soft cap warning for PRO: show at 7/10 used
     final showSoftCap = isPro && used >= 7 && remaining > 0;
 
-    return Container(
+    return WardCard(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -53,11 +44,11 @@ class CartAuditorSection extends ConsumerWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.green.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.ok.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 child: const Icon(Icons.shopping_cart_outlined,
-                    color: AppColors.green, size: 18),
+                    color: AppColors.ok, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -65,83 +56,46 @@ class CartAuditorSection extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Cart Auditor',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                      'CART AUDITOR',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      'Upload grocery screenshot for macro analysis',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
+                      'Upload grocery screenshot',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: remaining > 0
-                      ? AppColors.green.withValues(alpha: 0.08)
-                      : AppColors.red.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(AppRadius.badge),
-                ),
-                child: Text(
-                  '$remaining/$limit $periodLabel',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: remaining > 0 ? AppColors.green : AppColors.red,
-                  ),
-                ),
+              WardChip(
+                label: '$remaining/$limit TODAY',
+                tone: remaining > 0 ? WardChipTone.ok : WardChipTone.bad,
               ),
             ],
           ),
 
           // Soft cap warning
           if (showSoftCap) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.orange.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline,
-                      color: AppColors.orange, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$used of $limit audits used today',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.orange,
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 10),
+            WardChip(
+              label: '$used OF $limit AUDITS USED TODAY',
+              tone: WardChipTone.warn,
             ),
           ],
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           if (state.isAnalysing)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: CircularProgressIndicator(
-                  color: AppColors.green,
+                  color: AppColors.ok,
                   strokeWidth: 2,
                 ),
               ),
@@ -166,23 +120,21 @@ class CartAuditorSection extends ConsumerWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.green.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppRadius.row),
+            color: AppColors.ok.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
             border:
-                Border.all(color: AppColors.green.withValues(alpha: 0.2)),
+                Border.all(color: AppColors.ok.withValues(alpha: 0.35), width: 2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.upload_file, color: AppColors.green, size: 18),
+              const Icon(Icons.upload_file, color: AppColors.ok, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Upload Grocery Screenshot',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.green,
+                'UPLOAD SCREENSHOT',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.ok,
+                  letterSpacing: 2,
                 ),
               ),
             ],
@@ -192,7 +144,8 @@ class CartAuditorSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleUpload(BuildContext context, WidgetRef ref, int remaining) async {
+  Future<void> _handleUpload(
+      BuildContext context, WidgetRef ref, int remaining) async {
     if (remaining <= 0) {
       SubscriptionService.instance.gate(
         AppConstants.featureCartAuditorPro,
@@ -201,14 +154,13 @@ class CartAuditorSection extends ConsumerWidget {
             SnackBar(
               content: Text(
                 'Daily cart auditor limit reached. Try again tomorrow.',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                style: AppTypography.body,
               ),
               backgroundColor: AppColors.card,
             ),
           );
         },
-        onFree: () =>
-            showPaywallSheet(context, feature: 'Cart Auditor'),
+        onFree: () => showPaywallSheet(context, feature: 'Cart Auditor'),
       );
       return;
     }
@@ -228,19 +180,17 @@ class CartAuditorSection extends ConsumerWidget {
       children: [
         Text(
           error,
-          style: GoogleFonts.getFont('DM Sans', fontSize: 12, color: AppColors.red),
+          style: AppTypography.bodySm.copyWith(color: AppColors.bad),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () => ref.read(cartAuditorProvider.notifier).clear(),
           child: Text(
-            'Try Again',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.green,
+            'TRY AGAIN',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 2,
             ),
           ),
         ),
@@ -251,28 +201,59 @@ class CartAuditorSection extends ConsumerWidget {
   Widget _buildResult(Map<String, dynamic> result, WidgetRef ref) {
     final items = (result['items'] as List<dynamic>?) ?? [];
     final swaps = (result['swap_suggestions'] as List<dynamic>?) ?? [];
+    final score = (result['health_score'] as num?)?.toInt();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Cart Analysis',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'CART ANALYSIS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+            if (score != null) ...[
+              WardRing(
+                pct: (score / 100).clamp(0.0, 1.0),
+                size: 56,
+                stroke: 4,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$score',
+                      style: AppTypography.h3.copyWith(
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    Text(
+                      '/100',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+        const WardRule(margin: EdgeInsets.zero),
+        const SizedBox(height: 10),
 
         // Items
         ...items.map((item) {
           final name = item['name'] as String? ?? 'Unknown';
           final verdict = item['verdict'] as String? ?? '';
-          final color = verdict == 'good' ? AppColors.green : AppColors.orange;
+          final color = verdict == 'good' ? AppColors.ok : AppColors.warn;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
                 Icon(
@@ -282,15 +263,11 @@ class CartAuditorSection extends ConsumerWidget {
                   size: 14,
                   color: color,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppTypography.body,
                   ),
                 ),
               ],
@@ -303,15 +280,12 @@ class CartAuditorSection extends ConsumerWidget {
           const SizedBox(height: 10),
           Text(
             'SWAP SUGGESTIONS',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-              color: AppColors.textSecondary,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           ...swaps.map((swap) {
             final from = swap['from'] as String? ?? '';
             final to = swap['to'] as String? ?? '';
@@ -320,9 +294,7 @@ class CartAuditorSection extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 '$from \u2192 $to ($reason)',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
+                style: AppTypography.bodySm.copyWith(
                   color: AppColors.accent,
                 ),
               ),
@@ -330,7 +302,7 @@ class CartAuditorSection extends ConsumerWidget {
           }),
         ],
 
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
         // Dismiss
         SizedBox(
@@ -338,19 +310,17 @@ class CartAuditorSection extends ConsumerWidget {
           child: GestureDetector(
             onTap: () => ref.read(cartAuditorProvider.notifier).clear(),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 9),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: AppColors.line2),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
               ),
               alignment: Alignment.center,
               child: Text(
-                'Done',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
+                'DONE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textDim,
+                  letterSpacing: 2,
                 ),
               ),
             ),

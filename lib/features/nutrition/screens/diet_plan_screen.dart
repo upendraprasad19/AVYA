@@ -7,7 +7,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -189,12 +188,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               const SizedBox(height: 16),
               Text(
                 'Swap "${item.name}" with...',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 12),
               ...alternatives.map((food) {
@@ -211,20 +205,11 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     foodName,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   subtitle: Text(
                     '$servingDesc \u00B7 $servingCals kcal',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodySm.copyWith(fontSize: 11, color: AppColors.textDim),
                   ),
                   trailing: const Icon(Icons.swap_horiz,
                       color: AppColors.accent, size: 20),
@@ -293,7 +278,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       SnackBar(
         content: Text(
           'Diet plan saved to your device',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
@@ -327,11 +312,11 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Saved Diet Plan Found',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
         ),
         content: Text(
           'You have a saved plan from $dateLabel. Would you like to load it or generate a fresh one?',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, color: AppColors.textSecondary),
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -341,7 +326,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
             },
             child: Text(
               'Generate New',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDim),
             ),
           ),
           TextButton(
@@ -351,7 +336,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
             },
             child: Text(
               'Load Saved',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
             ),
           ),
         ],
@@ -476,7 +461,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to generate PDF',
-              style: GoogleFonts.getFont('DM Sans', fontSize: 12)),
+              style: AppTypography.bodySm),
             backgroundColor: AppColors.red,
           ),
         );
@@ -498,12 +483,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         ),
         title: Text(
           'Diet Plan',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
         ),
         actions: [
           IconButton(
@@ -515,7 +495,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                 SnackBar(
                   content: Text(
                     'Plan regenerated!',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                    style: AppTypography.body.copyWith(fontSize: 13),
                   ),
                   backgroundColor: AppColors.card,
                 ),
@@ -586,32 +566,16 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
         ),
         Text(
           unit,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 10,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textDim),
         ),
       ],
     );
@@ -653,24 +617,14 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           child: Center(
             child: Text(
               value,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: color),
             ),
           ),
         ),
         const SizedBox(height: 6),
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDim),
         ),
       ],
     );
@@ -698,12 +652,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
               Text(meal.name, style: AppTypography.titleS),
               Text(
                 '$totalCals kcal \u00B7 P ${totalProtein}g',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
-                ),
+                style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent),
               ),
             ],
           ),
@@ -727,34 +676,20 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
                         children: [
                           Text(
                             item.name,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.textPrimary,
-                            ),
+                            style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w400, color: AppColors.textPrimary),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             '${item.servingDesc} \u00B7 P${item.protein}g C${item.carbs}g F${item.fat}g',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 9,
-                              color: AppColors.textSecondary,
-                            ),
+                            style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
                           ),
                         ],
                       ),
                     ),
                     Text(
                       '${item.calories} kcal',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.orange,
-                      ),
+                      style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.warn),
                     ),
                     const SizedBox(width: 6),
                     GestureDetector(
