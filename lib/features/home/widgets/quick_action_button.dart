@@ -1,27 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/tap_scale.dart';
 
 /// Quick-action state that drives visual treatment.
 enum QuickActionState {
-  /// Default: cyan border, cyan icon — action not yet done.
+  /// Default: parchment-dim icon + mono label on navy card — action pending.
   idle,
 
-  /// Action completed: emerald tint background, emerald icon.
+  /// Action completed: ok-green tint + green icon/label.
   completed,
 
-  /// Rest day: muted cyan appearance — "nothing to do, you're good".
+  /// Rest day: muted gold — "nothing to do, you're good".
   restDay,
 }
 
-/// Compact quick action card on the Home dashboard.
+/// Wardroom quick-action card on the Home dashboard.
 ///
-/// Supports:
-/// - **Completion state** — turns emerald tint when [state] is [QuickActionState.completed].
-/// - **Optional progress bar** on the right edge — driven by [progress] (0.0–1.0).
-///   Bar color transitions: [progressColor] while in progress → emerald when
-///   [progress] >= 1.0 (target met).
+/// Renders as a short, sharp-cornered (4-px) navy tile with a mono
+/// uppercase label under the icon. Completion flips to a green-tinted
+/// surface. Rest day dims into the gold family.
+///
+/// Supports an optional 0–1 [progress] rendered as a 3-px vertical bar
+/// on the right edge — fills bottom-to-top and switches to ok-green once
+/// target is met.
 class QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -32,7 +34,7 @@ class QuickActionButton extends StatelessWidget {
   /// null = no bar shown.
   final double? progress;
 
-  /// Bar color while target not yet met. Defaults to accent cyan.
+  /// Bar color while target not yet met. Defaults to Campaign Gold.
   final Color progressColor;
 
   const QuickActionButton({
@@ -55,20 +57,20 @@ class QuickActionButton extends StatelessWidget {
     final Color labelColor;
 
     if (isDone) {
-      bgColor = AppColors.emeraldTint;
-      borderColor = AppColors.emerald.withValues(alpha: 0.28);
-      iconColor = AppColors.emerald;
-      labelColor = AppColors.emerald;
+      bgColor = AppColors.ok.withValues(alpha: 0.10);
+      borderColor = AppColors.ok.withValues(alpha: 0.33);
+      iconColor = AppColors.ok;
+      labelColor = AppColors.ok;
     } else if (isRest) {
-      bgColor = AppColors.accentTint;
-      borderColor = AppColors.accent.withValues(alpha: 0.18);
-      iconColor = AppColors.accent.withValues(alpha: 0.5);
-      labelColor = AppColors.accent.withValues(alpha: 0.5);
+      bgColor = AppColors.accentSoft;
+      borderColor = AppColors.accent.withValues(alpha: 0.22);
+      iconColor = AppColors.accent.withValues(alpha: 0.55);
+      labelColor = AppColors.accent.withValues(alpha: 0.55);
     } else {
       bgColor = AppColors.card;
-      borderColor = AppColors.border;
-      iconColor = AppColors.textSecondary;
-      labelColor = AppColors.textSecondary;
+      borderColor = AppColors.line2;
+      iconColor = AppColors.textDim;
+      labelColor = AppColors.textDim;
     }
 
     return Expanded(
@@ -78,13 +80,26 @@ class QuickActionButton extends StatelessWidget {
           height: 62,
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: borderColor),
+            // Sharp Wardroom corners — 4 px, not 11.
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: borderColor, width: 1),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
-              // Main content: icon + label
+              // Thin gold top rule — flagship Wardroom motif, only on idle.
+              if (!isDone && !isRest)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    height: 1,
+                    color: AppColors.accent.withValues(alpha: 0.27),
+                  ),
+                ),
+
+              // Main content: icon + mono uppercase label
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -94,15 +109,13 @@ class QuickActionButton extends StatelessWidget {
                       size: 17,
                       color: iconColor,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
-                      isRest ? 'Rest' : label,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
+                      (isRest ? 'REST' : label).toUpperCase(),
+                      style: AppTypography.monoXs.copyWith(
                         color: labelColor,
+                        letterSpacing: 1.8,
+                        height: 1.0,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -118,7 +131,7 @@ class QuickActionButton extends StatelessWidget {
                   bottom: 0,
                   child: _VerticalProgressBar(
                     progress: progress!.clamp(0.0, 1.0),
-                    color: progress! >= 1.0 ? AppColors.emerald : progressColor,
+                    color: progress! >= 1.0 ? AppColors.ok : progressColor,
                   ),
                 ),
             ],
@@ -129,7 +142,8 @@ class QuickActionButton extends StatelessWidget {
   }
 }
 
-/// Thin vertical progress bar that fills bottom-to-top.
+/// Thin vertical progress bar that fills bottom-to-top. Wardroom keeps
+/// sharp edges — no rounding on the bar itself.
 class _VerticalProgressBar extends StatelessWidget {
   final double progress;
   final Color color;
@@ -150,15 +164,10 @@ class _VerticalProgressBar extends StatelessWidget {
             alignment: Alignment.bottomCenter,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOut,
+              curve: Curves.easeOutCubic,
               width: 3,
               height: barHeight,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(2),
-                ),
-              ),
+              color: color,
             ),
           );
         },
