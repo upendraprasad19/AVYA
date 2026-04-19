@@ -42,7 +42,7 @@ class WardFrame extends StatelessWidget {
                 child: child,
               ),
             ),
-            if (grain) const IgnorePointer(child: _GrainOverlay()),
+            if (grain) const Positioned.fill(child: IgnorePointer(child: _GrainOverlay())),
           ],
         ),
       ),
@@ -74,6 +74,7 @@ class _GrainOverlay extends StatelessWidget {
           backgroundBlendMode: BlendMode.overlay,
           color: Colors.transparent,
         ),
+        child: const SizedBox.expand(),
       ),
     );
   }

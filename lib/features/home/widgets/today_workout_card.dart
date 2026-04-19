@@ -67,7 +67,8 @@ class TodayWorkoutCard extends StatelessWidget {
     final stepsProgress =
         stepsGoal > 0 ? (steps / stepsGoal).clamp(0.0, 1.0) : 0.0;
 
-    return IntrinsicHeight(
+    return SizedBox(
+      height: 168,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
