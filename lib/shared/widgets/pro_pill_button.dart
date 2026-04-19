@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../../core/theme/typography.dart';
 
 /// Bug #22 — Brushed metallic PRO pill. Gold for PRO, silver for free.
 /// Both tiers share the same shape/size/shadow/padding. Only the gradient,
@@ -72,13 +73,7 @@ class ProPillButton extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-              color: Colors.black,
-            ),
+            style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.black, letterSpacing: 0.5),
           ),
         ),
       ),

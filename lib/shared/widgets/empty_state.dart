@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -67,12 +66,7 @@ class EmptyState extends StatelessWidget {
                 ),
                 child: Text(
                   ctaLabel!,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                 ),
               ),
             ),

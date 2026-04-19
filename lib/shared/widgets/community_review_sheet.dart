@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet showing pending community food/exercise submissions
 /// for the user to approve or reject.
@@ -116,10 +118,10 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-            vote == 'approve' ? 'Approved!' : 'Rejected',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            vote == 'approve' ? 'Approved' : 'Rejected',
+            style: AppTypography.bodySm,
           ),
-          backgroundColor: vote == 'approve' ? AppColors.green : AppColors.card,
+          backgroundColor: vote == 'approve' ? AppColors.ok : AppColors.card,
           duration: const Duration(seconds: 1),
         ));
       }
@@ -142,7 +144,12 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
       ),
       decoration: const BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+        border: Border(
+          top: BorderSide(color: AppColors.line2),
+          left: BorderSide(color: AppColors.line2),
+          right: BorderSide(color: AppColors.line2),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -151,31 +158,36 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
           const SizedBox(height: 10),
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(
-              children: [
-                Text(
-                  'COMMUNITY REVIEW',
-                  style: GoogleFonts.getFont('DM Sans', fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.accent),
-                ),
-                const Spacer(),
-                Text(
-                  '10 approvals = auto-added',
-                  style: GoogleFonts.getFont('DM Sans', fontSize: 10, color: AppColors.textSecondary),
-                ),
-              ],
+          const SizedBox(height: AppSpacing.stackM),
+          // Letterhead
+          WardLetterhead(
+            eyebrow: 'COMMUNITY REVIEW',
+            title: 'Pending submissions',
+            divider: false,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.gutter,
+              AppSpacing.stackS,
+              AppSpacing.gutter,
+              AppSpacing.stackS,
+            ),
+            trailing: Text(
+              '10 approvals = live',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.5,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
+          const WardRule(margin: EdgeInsets.symmetric(horizontal: AppSpacing.gutter)),
+          const SizedBox(height: AppSpacing.stackM),
 
           if (_loading)
             const Padding(
@@ -185,18 +197,24 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
           else if (_error != null)
             Padding(
               padding: const EdgeInsets.all(40),
-              child: Text(_error!, style: GoogleFonts.getFont('DM Sans', color: AppColors.red)),
+              child: Text(
+                _error!,
+                style: AppTypography.body.copyWith(color: AppColors.bad),
+              ),
             )
           else if (_pendingItems.isEmpty)
             Padding(
               padding: const EdgeInsets.all(40),
               child: Column(
                 children: [
-                  const Text('\u2705', style: TextStyle(fontSize: 32)),
-                  const SizedBox(height: 8),
+                  const Icon(Icons.check_circle_outline,
+                      color: AppColors.ok, size: 32),
+                  const SizedBox(height: AppSpacing.stackS),
                   Text(
                     'No items to review right now',
-                    style: GoogleFonts.getFont('DM Sans', fontSize: 14, color: AppColors.textSecondary),
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textDim,
+                    ),
                   ),
                 ],
               ),
@@ -205,68 +223,78 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.gutter,
+                  0,
+                  AppSpacing.gutter,
+                  AppSpacing.stackL + 6,
+                ),
                 itemCount: _pendingItems.length,
-                separatorBuilder: (_, index) => const SizedBox(height: 8),
+                separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.stackS),
                 itemBuilder: (ctx, i) {
                   final item = _pendingItems[i];
                   final isFood = item['item_type'] == 'food';
 
-                  return Container(
+                  return WardCard(
+                    variant: WardCardVariant.inset,
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.bg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
                     child: Row(
                       children: [
                         // Icon
                         Container(
-                          width: 36, height: 36,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
-                            color: (isFood ? AppColors.orange : AppColors.accent).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
+                            color: (isFood ? AppColors.warn : AppColors.accent)
+                                .withValues(alpha: 0.12),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.soft),
                           ),
                           child: Icon(
                             isFood ? Icons.restaurant : Icons.fitness_center,
                             size: 18,
-                            color: isFood ? AppColors.orange : AppColors.accent,
+                            color: isFood ? AppColors.warn : AppColors.accent,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.stackM),
                         // Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item['name'] ?? 'Unknown',
-                                style: GoogleFonts.getFont('DM Sans', fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                (item['name'] as String?) ?? 'Unknown',
+                                style: AppTypography.h3.copyWith(fontSize: 14),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 isFood
                                     ? '${(item['calories_per_100g'] as num?)?.round() ?? 0} kcal \u2022 P:${(item['protein_per_100g'] as num?)?.round() ?? 0}g \u2022 C:${(item['carbs_per_100g'] as num?)?.round() ?? 0}g \u2022 F:${(item['fat_per_100g'] as num?)?.round() ?? 0}g'
                                     : '${item['category'] ?? ''} \u2022 ${item['logging_type'] ?? ''}',
-                                style: GoogleFonts.getFont('DM Sans', fontSize: 11, color: AppColors.textSecondary),
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.textMute,
+                                ),
                               ),
                             ],
                           ),
                         ),
                         // Approve/Reject buttons
                         IconButton(
-                          icon: const Icon(Icons.close, color: AppColors.red, size: 20),
+                          icon: const Icon(Icons.close,
+                              color: AppColors.bad, size: 20),
                           onPressed: () => _vote(item, 'reject'),
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          constraints: const BoxConstraints(
+                              minWidth: 32, minHeight: 32),
                         ),
                         const SizedBox(width: 4),
                         IconButton(
-                          icon: const Icon(Icons.check, color: AppColors.green, size: 20),
+                          icon: const Icon(Icons.check,
+                              color: AppColors.ok, size: 20),
                           onPressed: () => _vote(item, 'approve'),
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          constraints: const BoxConstraints(
+                              minWidth: 32, minHeight: 32),
                         ),
                       ],
                     ),

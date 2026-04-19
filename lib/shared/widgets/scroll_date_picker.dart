@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// A compact scroll-wheel date picker with three side-by-side columns:
 /// [Day] [Month] [Year] — all in one row.
@@ -127,14 +127,9 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
                       return Center(
                         child: Text(
                           day.toString().padLeft(2, '0'),
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: isSelected ? 18 : 14,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
-                            color: isSelected
+                          style: AppTypography.body.copyWith(fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500, color: isSelected
                                 ? AppColors.accent
-                                : AppColors.textSecondary,
-                          ),
+                                : AppColors.textDim),
                         ),
                       );
                     },
@@ -161,14 +156,9 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
                       return Center(
                         child: Text(
                           _months[index],
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: isSelected ? 18 : 14,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
-                            color: isSelected
+                          style: AppTypography.body.copyWith(fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500, color: isSelected
                                 ? AppColors.accent
-                                : AppColors.textSecondary,
-                          ),
+                                : AppColors.textDim),
                         ),
                       );
                     },
@@ -196,14 +186,9 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
                       return Center(
                         child: Text(
                           year.toString(),
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: isSelected ? 18 : 14,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
-                            color: isSelected
+                          style: AppTypography.body.copyWith(fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500, color: isSelected
                                 ? AppColors.accent
-                                : AppColors.textSecondary,
-                          ),
+                                : AppColors.textDim),
                         ),
                       );
                     },

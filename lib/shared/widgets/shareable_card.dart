@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Base wrapper for all shareable cards.
 ///
@@ -53,13 +53,7 @@ class ShareableCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       AppConstants.appName,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                        letterSpacing: 1.5,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: AppColors.textPrimary, letterSpacing: 1.5),
                     ),
                   ),
 
