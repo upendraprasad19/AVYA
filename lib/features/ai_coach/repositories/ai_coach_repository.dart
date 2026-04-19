@@ -62,7 +62,117 @@ class AiCoachRepository {
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
+
+      // Phase A.9 — let the coach reference the user's existing custom
+      // exercises and saved templates in tool args (e.g. swap_exercise
+      // toExerciseId from snapshot.custom_exercises[].id, or a future
+      // schedule_template referencing snapshot.saved_templates[].id).
+      // Token cost: ~200-500 bytes for typical users (0-5 customs,
+      // 0-3 templates), well under the 9.5KB compaction cap.
+      'custom_exercises': _readCustomExercises(),
+      'saved_templates': _readSavedTemplates(),
     };
+  }
+
+  /// Reads all custom exercises the user has created from customBox.
+  ///
+  /// Two storage formats coexist (Bug #4 cloud sync fix, 2026-04-18):
+  /// - **Per-key entries** (`custom_exercise_<timestamp>` → Map with
+  ///   `type: 'exercise'`). Written by CreateCustomExerciseSheet._save.
+  /// - **Legacy list-key** (`customBox.put('custom_exercises', [...])`).
+  ///   Written by SyncService._restoreCustomExercises on cross-device
+  ///   restore. Each list entry is the same exercise map shape.
+  ///
+  /// Returns a compact projection (id, name, muscle_group, equipment) so
+  /// the snapshot doesn't bloat with logging defaults / community flags.
+  List<Map<String, dynamic>> _readCustomExercises() {
+    final box = _hive.customBox;
+    final result = <Map<String, dynamic>>[];
+    final seenIds = <String>{};
+
+    void addExercise(Map<String, dynamic> v, Object fallbackKey) {
+      final type = v['type'];
+      // Skip anything that isn't an exercise (custom foods live here too).
+      if (type != null && type != 'exercise') return;
+
+      final name = v['name'] as String?;
+      if (name == null || name.isEmpty) return;
+
+      final id = (v['id'] ?? fallbackKey).toString();
+      if (!seenIds.add(id)) return; // dedupe across per-key + legacy list
+
+      final equipment = v['equipment_needed'] ?? v['equipment'];
+      final muscle = v['category'] ??
+          v['muscle_group'] ??
+          v['target_focus'] ??
+          (v['primary_muscles'] is List &&
+                  (v['primary_muscles'] as List).isNotEmpty
+              ? (v['primary_muscles'] as List).first
+              : null);
+
+      result.add({
+        'id': id,
+        'name': name,
+        'muscle_group': muscle,
+        'equipment': equipment,
+      });
+    }
+
+    for (final key in box.keys) {
+      final v = box.get(key);
+      if (v is Map) {
+        addExercise(Map<String, dynamic>.from(v), key);
+      } else if (v is List && key.toString() == 'custom_exercises') {
+        // Legacy list-key path written by restore.
+        for (final entry in v) {
+          if (entry is Map) {
+            addExercise(Map<String, dynamic>.from(entry), entry['id'] ?? key);
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Reads all saved workout templates from workoutBox.
+  ///
+  /// Templates are identified by `type: 'template'` (not by key prefix —
+  /// they're keyed `tmpl_<timestamp>` per TemplatesNotifier.saveTemplate).
+  /// Each template has `name`, `exercises` (List), `assigned_days` (`List<int>`).
+  ///
+  /// Returns a compact projection so the AI knows what templates exist
+  /// (referenced by Phase D's schedule_template tool) without ballooning
+  /// the snapshot with full exercise lists.
+  List<Map<String, dynamic>> _readSavedTemplates() {
+    final box = _hive.workoutBox;
+    final result = <Map<String, dynamic>>[];
+
+    for (final key in box.keys) {
+      final v = box.get(key);
+      if (v is! Map) continue;
+      if (v['type'] != 'template') continue;
+
+      final name = v['name'] as String?;
+      if (name == null || name.isEmpty) continue;
+
+      final id = (v['id'] ?? key).toString();
+      final exercises = v['exercises'] as List? ?? const [];
+      final assignedDays = v['assigned_days'] as List? ?? const [];
+      final daysCount = assignedDays.isNotEmpty
+          ? assignedDays.length
+          : (v['days_count'] as int? ?? 1);
+      final exerciseCount = (v['exercise_count'] as int?) ?? exercises.length;
+
+      result.add({
+        'id': id,
+        'name': name,
+        'days_count': daysCount,
+        'exercise_count': exerciseCount,
+      });
+    }
+
+    return result;
   }
 
   /// Enriches the base AI context with historical data when the user's
