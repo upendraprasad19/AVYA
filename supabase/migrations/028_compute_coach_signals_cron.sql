@@ -52,30 +52,36 @@ grant execute on function public.active_users_for_signals() to service_role;
 -- ─────────────────────────────────────────────────────────────────────
 -- 2. RPC: compute the three signals for one user
 --
--- Formulas (v1 — deterministic, will be tuned with real data):
+-- Formulas (v1 — aligned with plan §"Predictive Signal Formulas"):
 --
 -- dropout_risk_score  (0..1, higher = more likely to churn):
---   • +0.40  if no workout logged in last 14 days
---   • +0.20  if no AI coach interaction in last 7 days
---   • +0.20  if last_active_at > 7 days ago
---   • +0.20  if no weight log in last 30 days
+--   Weighted continuous formula (NOT bucket sums):
+--     0.4 * greatest(0, (w_avg - w_now) / nullif(w_avg, 0))
+--   + 0.3 * least(1.0, days_silent / 7.0)
+--   + 0.2 * least(1.0, days_no_weigh / 14.0)
+--   + 0.1 * greatest(0, (6.0 - coalesce(sleep_avg, 7)) / 6.0)
+--   where:
+--     w_now        = workouts in last 7 days
+--     w_avg        = avg workouts/wk in trailing 4-week window (days 7-35)
+--     days_silent  = days since last ai_coach_interactions row
+--     days_no_weigh= days since last weight_logs row
+--     sleep_avg    = avg sleep_logs.duration_hrs in last 7 days
 --   Capped at 1.0.
 --
 -- plateau_risk_score  (0..1, higher = more stuck):
---   • Weight component (+0.50): user has ≥3 weight logs in last 28d
---     AND |max - min| weight < 0.5kg.
---   • Volume component (+0.50): user has ≥6 workout logs in last 28d
---     AND total reps in last 14d ≤ total reps in 14d before that.
---   Capped at 1.0. Returns 0 if not enough data to judge.
+--   • Weight unchanged: |max - min| weight_kg in last 10d < 0.3 (need ≥2 logs)
+--   • Caloric surplus: avg daily total_calories (last 10d) > daily_target+100
+--   Score: 1.0 if both true, 0.5 if one true, 0.0 if neither / undeterminable.
+--   Default daily_target = 2200 kcal if user_profile.daily_calories is null.
 --
 -- pro_upgrade_probability  (0..1, higher = more likely to upgrade):
---   Only computed for free users (no active paid subscription).
---   • +0.30  if ≥4 workouts in last 14 days (engaged)
---   • +0.30  if ≥10 AI coach interactions in last 14 days (heavy chat)
---   • +0.20  if ≥3 weight logs in last 14 days (tracking)
---   • +0.20  if account ≥21 days old (past initial novelty)
---   Returns 0 for users who already have an active paid subscription.
---   Capped at 1.0.
+--   Discrete buckets (no fancy math at v1). Only for free users.
+--   Three gates:
+--     • trial_days_remaining < 8  (using created_at proxy: 30 - days_since_signup)
+--     • msg_volume > 10/day       (ai_coach_interactions last 7d / 7 > 10)
+--     • current_streak > 15 days  (proxied via user_progress.current_streak_weeks > 2)
+--   Score: 1.0 if 3/3, 0.66 if 2/3, 0.33 if 1/3, 0.0 if 0/3.
+--   Returns 0 for users with active paid subscription.
 -- ─────────────────────────────────────────────────────────────────────
 create or replace function public.compute_coach_signals_for_user(p_user_id uuid)
 returns table (
@@ -88,78 +94,139 @@ security definer
 set search_path = public
 as $$
 declare
-  v_workouts_14d        int;
-  v_workouts_28d        int;
-  v_ai_chats_7d         int;
-  v_ai_chats_14d        int;
-  v_weight_logs_30d     int;
-  v_weight_logs_14d     int;
-  v_weight_logs_28d     int;
-  v_weight_min_28d      numeric;
-  v_weight_max_28d      numeric;
-  v_reps_recent_14d     bigint;
-  v_reps_prior_14d      bigint;
-  v_last_active         timestamptz;
+  -- Dropout inputs
+  v_w_now               numeric;
+  v_w_avg               numeric;
+  v_days_silent         numeric;
+  v_days_no_weigh       numeric;
+  v_sleep_avg           numeric;
+  -- Plateau inputs
+  v_weight_min_10d      numeric;
+  v_weight_max_10d      numeric;
+  v_weight_logs_10d     int;
+  v_avg_calories_10d    numeric;
+  v_daily_calorie_target int;
+  v_weight_unchanged    boolean := false;
+  v_calorie_surplus     boolean := false;
+  v_plateau_components  int := 0;
+  -- Pro upgrade inputs
   v_account_created     timestamptz;
+  v_trial_days_remaining numeric;
+  v_msgs_per_day_7d     numeric;
+  v_current_streak_weeks int;
   v_has_paid_sub        boolean;
+  v_pro_gates_met       int := 0;
+  -- Outputs
   v_dropout             real := 0;
   v_plateau             real := 0;
   v_upgrade             real := 0;
 begin
-  -- Pull all the counters we need in one go.
-  select last_active_at, created_at
-    into v_last_active, v_account_created
+  -- Account anchor.
+  select created_at
+    into v_account_created
   from public.users
   where id = p_user_id;
 
-  -- Account doesn't exist or is malformed → return all zeros.
   if v_account_created is null then
     return query select 0::real, 0::real, 0::real;
     return;
   end if;
 
-  select count(*) into v_workouts_14d
-    from public.workout_logs
-    where user_id = p_user_id and date >= (current_date - 14);
+  -- ───────────── Dropout risk inputs ─────────────
+  select count(*)::numeric
+    into v_w_now
+  from public.workout_logs
+  where user_id = p_user_id
+    and date >= (now() - interval '7 days')::date;
 
-  select count(*) into v_workouts_28d
-    from public.workout_logs
-    where user_id = p_user_id and date >= (current_date - 28);
+  -- Trailing 4-week average (days 7-35), normalized per week (÷4).
+  select count(*)::numeric / 4.0
+    into v_w_avg
+  from public.workout_logs
+  where user_id = p_user_id
+    and date >= (now() - interval '35 days')::date
+    and date <  (now() - interval '7 days')::date;
 
-  select count(*) into v_ai_chats_7d
-    from public.ai_coach_interactions
-    where user_id = p_user_id and created_at >= now() - interval '7 days';
+  select extract(day from now() - max(created_at))
+    into v_days_silent
+  from public.ai_coach_interactions
+  where user_id = p_user_id;
 
-  select count(*) into v_ai_chats_14d
-    from public.ai_coach_interactions
-    where user_id = p_user_id and created_at >= now() - interval '14 days';
-
-  select count(*) into v_weight_logs_30d
-    from public.weight_logs
-    where user_id = p_user_id and date >= (current_date - 30);
-
-  select count(*) into v_weight_logs_14d
-    from public.weight_logs
-    where user_id = p_user_id and date >= (current_date - 14);
-
-  select count(*), min(weight_kg), max(weight_kg)
-    into v_weight_logs_28d, v_weight_min_28d, v_weight_max_28d
+  select extract(day from now() - max(date))
+    into v_days_no_weigh
   from public.weight_logs
-  where user_id = p_user_id and date >= (current_date - 28);
+  where user_id = p_user_id;
 
-  select coalesce(sum(reps_completed * sets_completed), 0)
-    into v_reps_recent_14d
-  from public.workout_logs
+  -- sleep_logs uses `duration_hrs` (NOT `hours` as the plan SQL assumes).
+  select avg(duration_hrs)
+    into v_sleep_avg
+  from public.sleep_logs
   where user_id = p_user_id
-    and date >= (current_date - 14);
+    and date >= (now() - interval '7 days')::date;
 
-  select coalesce(sum(reps_completed * sets_completed), 0)
-    into v_reps_prior_14d
-  from public.workout_logs
+  -- Weighted continuous formula (plan spec).
+  -- Null-handle days_silent / days_no_weigh: treat "never logged" as max risk
+  -- by clamping to the 7d / 14d ceiling respectively.
+  v_dropout := least(1.0,
+      0.4 * greatest(0, (coalesce(v_w_avg, 0) - coalesce(v_w_now, 0)) / nullif(v_w_avg, 0))
+    + 0.3 * least(1.0, coalesce(v_days_silent, 7) / 7.0)
+    + 0.2 * least(1.0, coalesce(v_days_no_weigh, 14) / 14.0)
+    + 0.1 * greatest(0, (6.0 - coalesce(v_sleep_avg, 7)) / 6.0)
+  );
+  -- The arithmetic above can also be NaN if w_avg is null AND w_now is 0
+  -- (greatest(0, x/null) returns null). Coalesce the final score to be safe.
+  v_dropout := coalesce(v_dropout, 0)::real;
+
+  -- ───────────── Plateau risk ─────────────
+  -- Weight component: weight delta < 0.3kg over last 10 days, ≥2 logs.
+  select count(*), min(weight_kg), max(weight_kg)
+    into v_weight_logs_10d, v_weight_min_10d, v_weight_max_10d
+  from public.weight_logs
   where user_id = p_user_id
-    and date >= (current_date - 28)
-    and date <  (current_date - 14);
+    and date >= (now() - interval '10 days')::date;
 
+  if v_weight_logs_10d >= 2
+     and v_weight_min_10d is not null
+     and (v_weight_max_10d - v_weight_min_10d) < 0.3 then
+    v_weight_unchanged := true;
+  end if;
+
+  -- Calorie target: prefer user_profile.daily_calories, fall back to 2200.
+  -- (Schema gap: plan referenced `daily_calorie_target` which doesn't exist;
+  --  `daily_calories` is the actual computed-target column on user_profile.
+  --  user_progress has no calorie-target column either.)
+  select coalesce(daily_calories, 2200)
+    into v_daily_calorie_target
+  from public.user_profile
+  where user_id = p_user_id
+  limit 1;
+  v_daily_calorie_target := coalesce(v_daily_calorie_target, 2200);
+
+  -- Avg daily calories over last 10 days (sum-per-day then average).
+  select avg(daily_total)
+    into v_avg_calories_10d
+  from (
+    select date, sum(total_calories) as daily_total
+    from public.nutrition_logs
+    where user_id = p_user_id
+      and date >= (now() - interval '10 days')::date
+    group by date
+  ) d;
+
+  if v_avg_calories_10d is not null
+     and v_avg_calories_10d > (v_daily_calorie_target + 100) then
+    v_calorie_surplus := true;
+  end if;
+
+  v_plateau_components := (case when v_weight_unchanged then 1 else 0 end)
+                       + (case when v_calorie_surplus  then 1 else 0 end);
+  v_plateau := (case
+    when v_plateau_components = 2 then 1.0
+    when v_plateau_components = 1 then 0.5
+    else 0.0
+  end)::real;
+
+  -- ───────────── Pro upgrade probability ─────────────
   select exists (
     select 1
     from public.subscriptions
@@ -168,53 +235,48 @@ begin
       and end_date > now()
   ) into v_has_paid_sub;
 
-  -- ───────────── Dropout risk ─────────────
-  if v_workouts_14d = 0 then
-    v_dropout := v_dropout + 0.40;
-  end if;
-  if v_ai_chats_7d = 0 then
-    v_dropout := v_dropout + 0.20;
-  end if;
-  if v_last_active is null or v_last_active < now() - interval '7 days' then
-    v_dropout := v_dropout + 0.20;
-  end if;
-  if v_weight_logs_30d = 0 then
-    v_dropout := v_dropout + 0.20;
-  end if;
-  v_dropout := least(v_dropout, 1.0);
-
-  -- ───────────── Plateau risk ─────────────
-  -- Weight component
-  if v_weight_logs_28d >= 3
-     and v_weight_min_28d is not null
-     and (v_weight_max_28d - v_weight_min_28d) < 0.5 then
-    v_plateau := v_plateau + 0.50;
-  end if;
-  -- Volume component
-  if v_workouts_28d >= 6
-     and v_reps_prior_14d > 0
-     and v_reps_recent_14d <= v_reps_prior_14d then
-    v_plateau := v_plateau + 0.50;
-  end if;
-  v_plateau := least(v_plateau, 1.0);
-
-  -- ───────────── Pro upgrade probability ─────────────
   if v_has_paid_sub then
     v_upgrade := 0;
   else
-    if v_workouts_14d >= 4 then
-      v_upgrade := v_upgrade + 0.30;
+    -- trial_days_remaining proxy (no users.current_period_end column):
+    -- 30-day trial window from signup.
+    v_trial_days_remaining := greatest(
+      0,
+      30 - extract(day from now() - v_account_created)
+    );
+
+    -- msg volume per day over last 7 days.
+    select count(*)::numeric / 7.0
+      into v_msgs_per_day_7d
+    from public.ai_coach_interactions
+    where user_id = p_user_id
+      and created_at >= now() - interval '7 days';
+
+    -- Streak proxy: 15-day streak ≈ >2 consecutive weeks of streak maintained.
+    -- (No daily streak in Postgres — Hive holds that. user_progress is closest.)
+    select coalesce(current_streak_weeks, 0)
+      into v_current_streak_weeks
+    from public.user_progress
+    where user_id = p_user_id
+    limit 1;
+    v_current_streak_weeks := coalesce(v_current_streak_weeks, 0);
+
+    if v_trial_days_remaining < 8 then
+      v_pro_gates_met := v_pro_gates_met + 1;
     end if;
-    if v_ai_chats_14d >= 10 then
-      v_upgrade := v_upgrade + 0.30;
+    if coalesce(v_msgs_per_day_7d, 0) > 10 then
+      v_pro_gates_met := v_pro_gates_met + 1;
     end if;
-    if v_weight_logs_14d >= 3 then
-      v_upgrade := v_upgrade + 0.20;
+    if v_current_streak_weeks > 2 then
+      v_pro_gates_met := v_pro_gates_met + 1;
     end if;
-    if v_account_created <= now() - interval '21 days' then
-      v_upgrade := v_upgrade + 0.20;
-    end if;
-    v_upgrade := least(v_upgrade, 1.0);
+
+    v_upgrade := (case
+      when v_pro_gates_met = 3 then 1.0
+      when v_pro_gates_met = 2 then 0.66
+      when v_pro_gates_met = 1 then 0.33
+      else 0.0
+    end)::real;
   end if;
 
   return query select v_dropout, v_plateau, v_upgrade;
