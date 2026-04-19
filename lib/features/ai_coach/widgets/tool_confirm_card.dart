@@ -356,6 +356,12 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           ? 'Shorten $date workout to $minutes min'
           : "Shorten today's workout to $minutes min";
     }
+    if (intent.type == 'create_custom_exercise') {
+      final name = intent.payload['name']?.toString() ?? '';
+      final category = intent.payload['category']?.toString() ?? '';
+      final equipment = intent.payload['equipment']?.toString() ?? '';
+      return '$name\n$category \u00b7 $equipment';
+    }
     return intent.previewSummary;
   }
 
@@ -386,6 +392,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'MARK COMPLETE';
       case 'shorten_workout':
         return 'SHORTEN WORKOUT';
+      case 'create_custom_exercise':
+        return 'NEW EXERCISE';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -401,6 +409,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.check_circle_outline;
       case 'shorten_workout':
         return Icons.timer;
+      case 'create_custom_exercise':
+        return Icons.add_circle_outline;
       default:
         return Icons.bolt;
     }
@@ -416,6 +426,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Marked complete';
       case 'shorten_workout':
         return 'Workout shortened';
+      case 'create_custom_exercise':
+        return 'Created';
       default:
         return 'Done';
     }

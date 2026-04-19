@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:uuid/uuid.dart';
 
 /// A personal record for a single exercise, based on all-time best value.
 class ExercisePR {
@@ -1062,6 +1064,104 @@ class WorkoutRepository {
     }
   }
 
+  // ── Custom Exercise Creation ─────────────────────────────────
+
+  /// Creates a new custom exercise in the user's library.
+  ///
+  /// Mirrors the write performed by `CreateCustomExerciseSheet._save()` so
+  /// AI-coach-created customs are byte-identical to UI-created customs:
+  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
+  ///     name = `<user_id>|exercise|<lower(name)>`).
+  ///   - Same map shape (id / name / category / logging_type / default_sets
+  ///     / default_reps? / default_duration_seconds? / primary_muscles /
+  ///     equipment_needed / is_custom / type / submitted_to_library /
+  ///     approved_for_library / created_at).
+  ///   - Stored under `custom_exercise_<millisSinceEpoch>` in customBox.
+  ///   - Fires `syncCustomItemsNow()` (writes the
+  ///     `user_custom_exercises` row) and `pushSnapshot()` (refreshes the
+  ///     AI coach context — without this, the new exercise is invisible
+  ///     to the coach until next app launch — see CLAUDE.md "Custom
+  ///     exercise invisible to AI coach" bug).
+  ///
+  /// Returns the deterministic exercise ID. Throws
+  /// [CreateCustomExerciseException] for invalid input or duplicate name.
+  Future<String> createCustomExercise({
+    required String name,
+    required String category,
+    required String equipment,
+    required String loggingType,
+    List<String>? primaryMuscles,
+    int defaultSets = 3,
+    int? defaultReps,
+    int? defaultDurationSeconds,
+    bool submittedToLibrary = false,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw const CreateCustomExerciseException(
+        'invalid_input',
+        'Exercise name cannot be empty.',
+      );
+    }
+    if (trimmed.length > 60) {
+      throw const CreateCustomExerciseException(
+        'invalid_input',
+        'Exercise name must be 60 characters or less.',
+      );
+    }
+
+    // Deterministic v5 UUID per CLAUDE.md §7. Same algorithm as
+    // CreateCustomExerciseSheet._save() — keeps cross-device upserts
+    // idempotent so AI- and UI-created customs collapse correctly.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final id = const Uuid()
+        .v5(customNs, '$userId|exercise|${trimmed.toLowerCase()}');
+
+    // Duplicate-name guard — scan customBox for an existing entry with the
+    // same deterministic ID (different keys, same logical exercise).
+    final customBox = _hive.customBox;
+    for (final k in customBox.keys) {
+      final v = customBox.get(k);
+      if (v is Map && v['id'] == id) {
+        throw CreateCustomExerciseException(
+          'duplicate_name',
+          'A custom exercise named "$trimmed" already exists.',
+        );
+      }
+    }
+
+    final key = 'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
+    final exercise = <String, dynamic>{
+      'id': id,
+      'name': trimmed,
+      'category': category,
+      'logging_type': loggingType,
+      'default_sets': defaultSets,
+      // Match the sheet's conditional shape: only store reps when
+      // logging_type is rep-based; only store duration when timed.
+      'default_reps': ?defaultReps?.toString(),
+      'default_duration_seconds': ?defaultDurationSeconds,
+      'primary_muscles': primaryMuscles ?? <String>[],
+      'equipment_needed': <String>[equipment],
+      'is_custom': true,
+      'type': 'exercise',
+      'submitted_to_library': submittedToLibrary,
+      'approved_for_library': false,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    await customBox.put(key, exercise);
+
+    // Fire-and-forget: push the new row to user_custom_exercises AND
+    // refresh the AI snapshot so the coach can see it on the next turn.
+    unawaited(SyncService.instance.syncCustomItemsNow());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    return id;
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
 
   String _formatDate(DateTime date) => formatDateKey(date);
@@ -1071,6 +1171,20 @@ class WorkoutRepository {
     final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
     return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
+}
+
+/// Thrown by [WorkoutRepository.createCustomExercise] for input validation
+/// failures or duplicate names. [code] is one of:
+///   - `invalid_input` — name empty / too long / other validation
+///   - `duplicate_name` — an exercise with the same deterministic ID
+///     already exists in the user's library
+///   - `other` — unexpected
+class CreateCustomExerciseException implements Exception {
+  final String code;
+  final String message;
+  const CreateCustomExerciseException(this.code, this.message);
+  @override
+  String toString() => 'CreateCustomExerciseException($code): $message';
 }
 
 /// Internal scratch record for [WorkoutRepository._recomputePrFlagsForExercise].

@@ -83,6 +83,9 @@ class ToolDispatcher {
         case 'shorten_workout':
           result = await _executeShortenWorkout(intent);
           break;
+        case 'create_custom_exercise':
+          result = await _executeCreateCustomExercise(intent);
+          break;
         default:
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
@@ -209,6 +212,45 @@ class ToolDispatcher {
 
     await WorkoutRepository.instance.markWorkoutCompleted(parsed);
     return ToolExecutionResult.success(data: {'date': date});
+  }
+
+  Future<ToolExecutionResult> _executeCreateCustomExercise(
+      ToolIntent intent) async {
+    final p = intent.payload;
+    final name = p['name'] as String?;
+    if (name == null || name.trim().isEmpty) {
+      return const ToolExecutionResult.failure('Custom exercise needs a name.');
+    }
+    final category = p['category'] as String?;
+    final equipment = p['equipment'] as String?;
+    final loggingType = p['loggingType'] as String?;
+    if (category == null || equipment == null || loggingType == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid create_custom_exercise intent payload.');
+    }
+
+    try {
+      final id = await WorkoutRepository.instance.createCustomExercise(
+        name: name,
+        category: category,
+        equipment: equipment,
+        loggingType: loggingType,
+        primaryMuscles: (p['primaryMuscles'] as List?)?.cast<String>(),
+        defaultSets: (p['defaultSets'] as num?)?.toInt() ?? 3,
+        defaultReps: (p['defaultReps'] as num?)?.toInt(),
+        defaultDurationSeconds: (p['defaultDurationSeconds'] as num?)?.toInt(),
+      );
+      return ToolExecutionResult.success(data: {
+        'exerciseId': id,
+        'name': name,
+      });
+    } on CreateCustomExerciseException catch (e) {
+      return ToolExecutionResult.failure(
+        e.code == 'duplicate_name'
+            ? 'You already have an exercise called "$name".'
+            : e.message,
+      );
+    }
   }
 
   Future<ToolExecutionResult> _executeShortenWorkout(ToolIntent intent) async {
