@@ -523,7 +523,7 @@ Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter
 6. AVAILABLE TOOLS (placeholder — tool-calling phase TBD)
 7. RESPONSE RULES (static)
 
-Block [3] is rendered server-side via `_shared/coach_memory.ts:renderCoachMemoryBlock()` and prepended to the existing system prompt in `ai-proxy`.
+Block [3] is rendered server-side via `_shared/coach_memory.ts:renderCoachMemoryBlock()` and **inserted between the base prompt and the daily snapshot** in `ai-proxy/index.ts:537-542` (NOT prepended — prepending was tried and reverted because it broke the block-ordering claim).
 
 ### Single AI coach endpoint — no client-side routing
 ```
@@ -959,4 +959,4 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | food_text_analysis 429 when user is below daily cap | Trigger `trg_food_text_rate_limit` on `ai_coach_interactions` (migration 024, 2026-04-18) enforces the 50/day free / 200/day PRO cap atomically. Insert-first pattern — `ai-proxy` inserts a placeholder row BEFORE calling Gemini. If trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001), return 429. Do NOT re-add a separate check-then-insert pre-check; the trigger is the single source of truth. |
 | Coach calls user by wrong name | `coach_memory.preferred_name` not synced. Verify Hive `coachBox['coach_memory']` matches Supabase. Check `pushSnapshot` round-trip captured the response. |
 | Coach speaks English when user writes Hinglish | `IdentitySignalDetector` is sticky — needs 3 consecutive Hinglish messages before flipping. Devanagari script flips immediately. Verify Hive write happened in `detectAndPersistIdentitySignals`. |
-| Predictive risk scores never appear | `compute-coach-signals` cron only runs on users active in the last 21 days (actually 60 days per implementation — see `active_users_for_signals()` in migration 028). Manually invoke via `mcp__ba7b5e8e__execute_sql` calling `compute_coach_signals_for_user(p_user_id)` for the user_id to debug. |
+| Predictive risk scores never appear | `compute-coach-signals` cron only runs on users active in the last 60 days (`active_users_for_signals()` in migration 028, line 44). Manually invoke via `mcp__ba7b5e8e__execute_sql` calling `compute_coach_signals_for_user(p_user_id)` for the user_id to debug. |
