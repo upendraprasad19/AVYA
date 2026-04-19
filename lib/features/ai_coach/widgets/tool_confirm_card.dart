@@ -394,6 +394,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'SHORTEN WORKOUT';
       case 'create_custom_exercise':
         return 'NEW EXERCISE';
+      case 'modify_workout_for_injury':
+        return 'INJURY MODIFY';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -411,6 +413,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.timer;
       case 'create_custom_exercise':
         return Icons.add_circle_outline;
+      case 'modify_workout_for_injury':
+        return Icons.healing;
       default:
         return Icons.bolt;
     }
@@ -428,6 +432,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Workout shortened';
       case 'create_custom_exercise':
         return 'Created';
+      case 'modify_workout_for_injury':
+        return 'Workouts updated';
       default:
         return 'Done';
     }

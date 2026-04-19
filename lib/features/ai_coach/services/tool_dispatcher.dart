@@ -12,6 +12,7 @@ import '../../train/providers/train_provider.dart'
     show currentPlanProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
+import 'injury_swap_planner.dart';
 
 /// Result of executing a tool intent.
 class ToolExecutionResult {
@@ -85,6 +86,9 @@ class ToolDispatcher {
           break;
         case 'create_custom_exercise':
           result = await _executeCreateCustomExercise(intent);
+          break;
+        case 'modify_workout_for_injury':
+          result = await _executeModifyWorkoutForInjury(intent);
           break;
         default:
           return ToolExecutionResult.failure(
@@ -271,6 +275,92 @@ class ToolDispatcher {
     } on ShortenDayException catch (e) {
       return ToolExecutionResult.failure(_shortenWorkoutErrorMessage(e));
     }
+  }
+
+  Future<ToolExecutionResult> _executeModifyWorkoutForInjury(
+      ToolIntent intent) async {
+    final swaps = InjurySwapPlanner.instance.getCachedSwaps(intent.id);
+    if (swaps == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the changes.',
+      );
+    }
+
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final swap in swaps) {
+      try {
+        await WorkoutScheduleService.instance.swapExerciseInDay(
+          date: swap.date,
+          fromExerciseId: swap.fromId,
+          toExerciseId: swap.toId,
+        );
+        results.add({
+          'date': swap.date,
+          'from': swap.fromName,
+          'to': swap.toName,
+        });
+      } on SwapExerciseException catch (e) {
+        errors.add('${swap.date}: ${e.message}');
+      } catch (e) {
+        errors.add('${swap.date}: $e');
+      }
+    }
+
+    // Update coach_memory.injuries (best-effort; never fails the op).
+    try {
+      await _appendInjuryToCoachMemory(
+        intent.payload['bodyPart'] as String,
+        intent.payload['severity'] as String,
+      );
+    } catch (e) {
+      debugPrint('[ToolDispatcher] coach_memory injury update failed: $e');
+    }
+
+    InjurySwapPlanner.instance.clearCache(intent.id);
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {'swaps': results});
+    } else if (results.isEmpty) {
+      return ToolExecutionResult.failure(
+        'Could not modify any workouts: ${errors.join("; ")}',
+      );
+    } else {
+      return ToolExecutionResult.success(data: {
+        'swaps': results,
+        'partial_errors': errors,
+      });
+    }
+  }
+
+  Future<void> _appendInjuryToCoachMemory(
+      String bodyPart, String severity) async {
+    final box = HiveService.instance.coachBox;
+    final raw = box.get('coach_memory');
+    final mem = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : <String, dynamic>{};
+
+    final existing = mem['injuries'];
+    final injuries = existing is List
+        ? existing
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    injuries.add({
+      'part': bodyPart,
+      'severity': severity,
+      'since': DateTime.now().toIso8601String().split('T').first,
+    });
+
+    mem['injuries'] = injuries;
+    await box.put('coach_memory', mem);
+    // pushSnapshot fires after this in the dispatcher's outer flow; the
+    // snapshot path can opt to forward the injury delta to server-side
+    // coach_memory in a future change.
   }
 
   // ---------------- helpers ----------------

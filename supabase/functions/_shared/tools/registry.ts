@@ -3,6 +3,7 @@ import {
   createCustomExerciseTool,
   logSetTool,
   markWorkoutCompleteTool,
+  modifyWorkoutForInjuryTool,
   shortenWorkoutTool,
   swapExerciseTool,
 } from "./workout/index.ts";
@@ -18,8 +19,9 @@ const ALL_TOOLS: ToolDefinition[] = [
   shortenWorkoutTool, // workout / write / trivial / FREE
   // Phase B.2
   createCustomExerciseTool, // workout / write / reviewable / FREE
-  // Phase B.3-B.5 will add: modifyWorkoutForInjury, rescheduleWeek,
-  //   generateHotelWorkout
+  // Phase B.3
+  modifyWorkoutForInjuryTool, // workout / write / destructive / PRO
+  // Phase B.4-B.5 will add: rescheduleWeek, generateHotelWorkout
   // Phase C will add: nutrition family
   // Phase D will add: plan family
 ];
