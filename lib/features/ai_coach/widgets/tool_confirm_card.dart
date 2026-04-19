@@ -343,6 +343,19 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       final sets = intent.payload['sets'];
       return '$name \u2014 ${w}kg \u00d7 $reps \u00d7 $sets sets';
     }
+    if (intent.type == 'mark_workout_complete') {
+      final date = intent.payload['date'] as String?;
+      return date != null
+          ? 'Mark $date workout complete'
+          : "Mark today's workout complete";
+    }
+    if (intent.type == 'shorten_workout') {
+      final minutes = intent.payload['minutes'];
+      final date = intent.payload['date'] as String?;
+      return date != null
+          ? 'Shorten $date workout to $minutes min'
+          : "Shorten today's workout to $minutes min";
+    }
     return intent.previewSummary;
   }
 
@@ -369,6 +382,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'SWAP EXERCISE';
       case 'log_set':
         return 'LOG SET';
+      case 'mark_workout_complete':
+        return 'MARK COMPLETE';
+      case 'shorten_workout':
+        return 'SHORTEN WORKOUT';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -380,6 +397,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.swap_horiz;
       case 'log_set':
         return Icons.fitness_center;
+      case 'mark_workout_complete':
+        return Icons.check_circle_outline;
+      case 'shorten_workout':
+        return Icons.timer;
       default:
         return Icons.bolt;
     }
@@ -391,6 +412,10 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Swapped';
       case 'log_set':
         return 'Logged';
+      case 'mark_workout_complete':
+        return 'Marked complete';
+      case 'shorten_workout':
+        return 'Workout shortened';
       default:
         return 'Done';
     }

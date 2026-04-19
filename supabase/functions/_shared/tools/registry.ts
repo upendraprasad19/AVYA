@@ -1,5 +1,10 @@
 import { ToolDefinition, ToolTier } from "./types.ts";
-import { logSetTool, swapExerciseTool } from "./workout/index.ts";
+import {
+  logSetTool,
+  markWorkoutCompleteTool,
+  shortenWorkoutTool,
+  swapExerciseTool,
+} from "./workout/index.ts";
 import { getProgressSummaryTool } from "./progress/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
@@ -7,10 +12,13 @@ const ALL_TOOLS: ToolDefinition[] = [
   swapExerciseTool, // workout / write / reviewable / PRO
   logSetTool, // workout / write / trivial / FREE
   getProgressSummaryTool, // progress / read / FREE
-  // Phase B will add: workout family completion (markWorkoutComplete, shortenWorkout,
-  //   modifyWorkoutForInjury, rescheduleWeek, generateHotelWorkout, createCustomExercise)
+  // Phase B.1
+  markWorkoutCompleteTool, // workout / write / trivial / FREE
+  shortenWorkoutTool, // workout / write / trivial / FREE
+  // Phase B.3-B.5 will add: modifyWorkoutForInjury, rescheduleWeek,
+  //   generateHotelWorkout, createCustomExercise
   // Phase C will add: nutrition family
-  // Phase D will add: progress + plan family
+  // Phase D will add: plan family
 ];
 
 /**

@@ -77,6 +77,12 @@ class ToolDispatcher {
         case 'log_set':
           result = await _executeLogSet(intent);
           break;
+        case 'mark_workout_complete':
+          result = await _executeMarkWorkoutComplete(intent);
+          break;
+        case 'shorten_workout':
+          result = await _executeShortenWorkout(intent);
+          break;
         default:
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
@@ -179,6 +185,52 @@ class ToolDispatcher {
         data: {'log_id': logId, 'exercise_name': name});
   }
 
+  Future<ToolExecutionResult> _executeMarkWorkoutComplete(
+      ToolIntent intent) async {
+    final dateRaw = intent.payload['date'] as String?;
+    final date = dateRaw ?? _todayDateString();
+
+    // Concurrent-edit guard: a schedule entry must exist for the date.
+    final raw = HiveService.instance.workoutBox.get('schedule_$date');
+    if (raw is! Map) {
+      throw ConcurrentEditException('no workout scheduled for $date');
+    }
+    if (raw['status'] == 'completed') {
+      // Already done — idempotent success.
+      return ToolExecutionResult.success(
+          data: {'date': date, 'already_completed': true});
+    }
+
+    final parsed = DateTime.tryParse(date);
+    if (parsed == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid mark_workout_complete intent payload.');
+    }
+
+    await WorkoutRepository.instance.markWorkoutCompleted(parsed);
+    return ToolExecutionResult.success(data: {'date': date});
+  }
+
+  Future<ToolExecutionResult> _executeShortenWorkout(ToolIntent intent) async {
+    final minutes = (intent.payload['minutes'] as num?)?.toInt();
+    final dateRaw = intent.payload['date'] as String?;
+    if (minutes == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid shorten_workout intent payload.');
+    }
+    final date = dateRaw ?? _todayDateString();
+
+    try {
+      final result = await WorkoutScheduleService.instance.shortenDay(
+        date: date,
+        targetMinutes: minutes,
+      );
+      return ToolExecutionResult.success(data: result);
+    } on ShortenDayException catch (e) {
+      return ToolExecutionResult.failure(_shortenWorkoutErrorMessage(e));
+    }
+  }
+
   // ---------------- helpers ----------------
 
   void _invalidateWorkoutProviders(Ref ref) {
@@ -253,6 +305,19 @@ class ToolDispatcher {
         return "I couldn't find the replacement exercise in your library.";
       case 'workout_completed':
         return "Today's workout is already done — edit it from the Train screen instead.";
+      default:
+        return e.message;
+    }
+  }
+
+  String _shortenWorkoutErrorMessage(ShortenDayException e) {
+    switch (e.code) {
+      case 'no_schedule':
+        return 'No workout scheduled for that day.';
+      case 'workout_completed':
+        return "Workout already done — can't shorten.";
+      case 'target_too_low':
+        return 'Target time is too short — even basic compound work needs more time.';
       default:
         return e.message;
     }

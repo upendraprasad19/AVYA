@@ -57,6 +57,59 @@ class SwapExerciseException implements Exception {
   String toString() => 'SwapExerciseException($code): $message';
 }
 
+/// Result returned by [WorkoutScheduleService.shortenDay].
+///
+/// Carries enough metadata for the AI coach dispatcher to render a
+/// "Shortened today's workout from N exercises to M (≈X min)" snackbar
+/// without re-reading Hive.
+class ShortenDayResult {
+  /// `YYYY-MM-DD` date string the trim was applied to.
+  final String date;
+
+  /// Exercise count before trimming.
+  final int originalExerciseCount;
+
+  /// Exercise count after trimming.
+  final int trimmedExerciseCount;
+
+  /// Estimated session minutes before trimming.
+  final int estimatedOriginalMinutes;
+
+  /// Estimated session minutes after trimming.
+  final int estimatedTrimmedMinutes;
+
+  /// Display names of the exercises that were dropped (in priority order,
+  /// lowest priority first — i.e. accessory work first).
+  final List<String> droppedExerciseNames;
+
+  const ShortenDayResult({
+    required this.date,
+    required this.originalExerciseCount,
+    required this.trimmedExerciseCount,
+    required this.estimatedOriginalMinutes,
+    required this.estimatedTrimmedMinutes,
+    required this.droppedExerciseNames,
+  });
+}
+
+/// Typed failure modes for [WorkoutScheduleService.shortenDay].
+///
+/// Codes:
+///   - `no_schedule` — no `schedule_<date>` entry exists for the date.
+///   - `workout_completed` — the day is already marked completed; trim is
+///     refused so history stays sacred.
+///   - `target_too_low` — even keeping just the 2 highest-priority
+///     compounds would exceed the requested target. User needs to extend
+///     the time budget.
+///   - `other` — anything else (defensive catch-all).
+class ShortenDayException implements Exception {
+  final String code;
+  final String message;
+  const ShortenDayException(this.code, this.message);
+  @override
+  String toString() => 'ShortenDayException($code): $message';
+}
+
 /// Maps generated plan days to real calendar dates and persists to Hive.
 ///
 /// This is the glue between PlanGenerator (logical days) and the UI
@@ -874,6 +927,189 @@ class WorkoutScheduleService {
     );
   }
 
+  /// Trims a scheduled workout to fit a target session duration in minutes.
+  ///
+  /// Called by the AI coach `shorten_workout` tool intent dispatcher
+  /// (Phase B.1). Caller fires Riverpod invalidation + sync — this stays
+  /// a pure data layer (mirrors [swapExerciseInDay]).
+  ///
+  /// Algorithm:
+  ///   1. Read `schedule_<date>`. Throw `no_schedule` if missing,
+  ///      `workout_completed` if already done.
+  ///   2. Estimate per-exercise duration =
+  ///        (sets * 60s work) + (sets * (rest_seconds || 60s rest)),
+  ///      summed over exercises and converted to minutes.
+  ///   3. If estimated <= target → return unchanged (idempotent).
+  ///   4. Sort exercises by priority (compound first). Order:
+  ///        a. Library `priority_tier` ascending if present (1 = primary
+  ///           compound).
+  ///        b. Otherwise name-based heuristic — anything containing
+  ///           "squat", "bench", "deadlift", "row", "press", "pull-up",
+  ///           "pullup" treated as priority 1.
+  ///        c. Stable order falls back to original schedule index.
+  ///   5. Drop from the END (lowest priority) until estimated <= target
+  ///      OR only 2 exercises remain.
+  ///   6. If even the floor of 2 exercises exceeds target → throw
+  ///      `target_too_low`. User needs more time.
+  ///   7. Persist the trimmed list back to the same schedule entry.
+  ///
+  /// Returns a [ShortenDayResult] with original/trimmed counts, estimates,
+  /// and the names of the dropped exercises (in drop order — accessory
+  /// work first).
+  Future<ShortenDayResult> shortenDay({
+    required String date,
+    required int targetMinutes,
+  }) async {
+    final scheduleKey = '$_schedulePrefix$date';
+    final raw = _hive.workoutBox.get(scheduleKey);
+    if (raw is! Map) {
+      throw ShortenDayException(
+        'no_schedule',
+        'No scheduled workout found for $date',
+      );
+    }
+    final scheduleMap = Map<String, dynamic>.from(raw);
+
+    if (scheduleMap['status'] == 'completed') {
+      throw ShortenDayException(
+        'workout_completed',
+        'Cannot shorten a completed workout',
+      );
+    }
+
+    // Pull exercises into a working list with stable original index.
+    final exercisesRaw = scheduleMap['exercises'];
+    final exercises = exercisesRaw is List
+        ? exercisesRaw
+            .map((e) => e is Map
+                ? Map<String, dynamic>.from(e)
+                : <String, dynamic>{})
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    final originalCount = exercises.length;
+    final originalEstimateSec = _estimateExerciseListSeconds(exercises);
+    final originalMinutes = (originalEstimateSec / 60).ceil();
+
+    // Already within budget — nothing to do.
+    if (originalMinutes <= targetMinutes) {
+      return ShortenDayResult(
+        date: date,
+        originalExerciseCount: originalCount,
+        trimmedExerciseCount: originalCount,
+        estimatedOriginalMinutes: originalMinutes,
+        estimatedTrimmedMinutes: originalMinutes,
+        droppedExerciseNames: const [],
+      );
+    }
+
+    // Build keep/drop priority order. Lower priorityRank = keep first.
+    final indexed = <_PrioritisedExercise>[
+      for (int i = 0; i < exercises.length; i++)
+        _PrioritisedExercise(
+          originalIndex: i,
+          priorityRank: _exercisePriorityRank(exercises[i]),
+          entry: exercises[i],
+        ),
+    ];
+
+    // Sort by priorityRank asc, then originalIndex asc (stable).
+    indexed.sort((a, b) {
+      final cmp = a.priorityRank.compareTo(b.priorityRank);
+      if (cmp != 0) return cmp;
+      return a.originalIndex.compareTo(b.originalIndex);
+    });
+
+    // Pop from the END (lowest priority) until we fit or hit floor of 2.
+    final droppedNames = <String>[];
+    while (indexed.length > 2) {
+      final estimateSec = _estimateExerciseListSeconds(
+          indexed.map((e) => e.entry).toList(growable: false));
+      if ((estimateSec / 60).ceil() <= targetMinutes) break;
+      final dropped = indexed.removeLast();
+      final name = (dropped.entry['exercise_name'] as String?) ??
+          (dropped.entry['exercise_id'] as String?) ??
+          'Unknown';
+      droppedNames.add(name);
+    }
+
+    // Final estimate — even with floor of 2, we may still be over budget.
+    final keptEntries = indexed.map((e) => e.entry).toList(growable: false);
+    final keptEstimateSec = _estimateExerciseListSeconds(keptEntries);
+    final keptMinutes = (keptEstimateSec / 60).ceil();
+    if (keptMinutes > targetMinutes) {
+      throw ShortenDayException(
+        'target_too_low',
+        'Even the highest-priority compounds need ~${keptMinutes}min — '
+            'requested $targetMinutes is too short',
+      );
+    }
+
+    // Restore the original on-screen order (don't reshuffle compounds to
+    // top — just remove the dropped slots).
+    indexed.sort((a, b) => a.originalIndex.compareTo(b.originalIndex));
+    final trimmedExercises =
+        indexed.map((e) => e.entry).toList(growable: false);
+
+    scheduleMap['exercises'] = trimmedExercises;
+    scheduleMap['shortened_via'] = 'ai_coach';
+    scheduleMap['shortened_at'] = DateTime.now().toIso8601String();
+    await _hive.workoutBox.put(scheduleKey, scheduleMap);
+
+    return ShortenDayResult(
+      date: date,
+      originalExerciseCount: originalCount,
+      trimmedExerciseCount: trimmedExercises.length,
+      estimatedOriginalMinutes: originalMinutes,
+      estimatedTrimmedMinutes: keptMinutes,
+      droppedExerciseNames: droppedNames,
+    );
+  }
+
+  /// Estimate session seconds: per exercise =
+  ///   (sets * 60s work) + (sets * (rest_seconds || 60s)).
+  /// Crude but consistent — we just need a comparable order of magnitude.
+  int _estimateExerciseListSeconds(List<Map<String, dynamic>> exercises) {
+    int total = 0;
+    for (final ex in exercises) {
+      final setsRaw = ex['sets'];
+      final sets = setsRaw is num ? setsRaw.toInt() : 3;
+      final restRaw = ex['rest_seconds'];
+      final rest = restRaw is num ? restRaw.toInt() : 60;
+      total += sets * 60 + sets * rest;
+    }
+    return total;
+  }
+
+  /// Lower rank = higher priority = keep first.
+  ///   1 → primary compound (or library priority_tier == 1)
+  ///   2 → library priority_tier == 2
+  ///   3 → library priority_tier == 3 / accessory / unknown
+  int _exercisePriorityRank(Map<String, dynamic> ex) {
+    final tier = ex['priority_tier'];
+    if (tier is num) {
+      final t = tier.toInt();
+      if (t >= 1 && t <= 3) return t;
+    }
+    // Name-based fallback for legacy schedule entries that don't carry
+    // priority_tier (older auto-plans, custom templates).
+    final name = (ex['exercise_name'] as String? ?? '').toLowerCase();
+    const compoundKeywords = [
+      'squat',
+      'bench',
+      'deadlift',
+      'row',
+      'press',
+      'pull-up',
+      'pullup',
+      'pull up',
+    ];
+    for (final kw in compoundKeywords) {
+      if (name.contains(kw)) return 1;
+    }
+    return 3;
+  }
+
   int _getSwapsUsedThisWeek(DateTime monday) {
     final weekStart = _hive.configBox.get(_swapWeekStartKey) as String?;
     if (weekStart == null || weekStart != _dateKey(monday)) {
@@ -1282,4 +1518,20 @@ class WorkoutScheduleService {
 
   /// Format date as 'yyyy-MM-dd' string key.
   String _dateKey(DateTime date) => formatDateKey(date);
+}
+
+/// Private helper for [WorkoutScheduleService.shortenDay] — pairs an
+/// exercise entry with its priority rank and original schedule index so
+/// the trim algorithm can sort by priority while still being able to
+/// restore on-screen order before persisting.
+class _PrioritisedExercise {
+  final int originalIndex;
+  final int priorityRank;
+  final Map<String, dynamic> entry;
+
+  const _PrioritisedExercise({
+    required this.originalIndex,
+    required this.priorityRank,
+    required this.entry,
+  });
 }
