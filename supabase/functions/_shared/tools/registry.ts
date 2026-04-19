@@ -1,10 +1,14 @@
 import { ToolDefinition, ToolTier } from "./types.ts";
+import { logSetTool, swapExerciseTool } from "./workout/index.ts";
+import { getProgressSummaryTool } from "./progress/index.ts";
 
-// Will be populated as tools are added in subsequent tasks (Phase A.5+).
-// For now, this is empty — the framework is in place but no tools are registered yet.
 const ALL_TOOLS: ToolDefinition[] = [
-  // Phase A.5 will add: swapExercise, logSet, getProgressSummary
-  // Phase B will add: workout family
+  // Phase A anchor tools — one per confirmation class, one per tool kind.
+  swapExerciseTool, // workout / write / reviewable / PRO
+  logSetTool, // workout / write / trivial / FREE
+  getProgressSummaryTool, // progress / read / FREE
+  // Phase B will add: workout family completion (markWorkoutComplete, shortenWorkout,
+  //   modifyWorkoutForInjury, rescheduleWeek, generateHotelWorkout, createCustomExercise)
   // Phase C will add: nutrition family
   // Phase D will add: progress + plan family
 ];
