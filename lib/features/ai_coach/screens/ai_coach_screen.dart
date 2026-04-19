@@ -27,6 +27,7 @@ import '../widgets/tool_confirm_card.dart';
 import '../widgets/tool_confirm_sheet.dart';
 import '../widgets/diff_preview/swap_exercise_diff.dart';
 import '../widgets/diff_preview/injury_modify_diff.dart';
+import '../widgets/diff_preview/hotel_workout_diff.dart';
 import '../widgets/diff_preview/reschedule_week_diff.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
@@ -788,6 +789,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         break;
       case 'reschedule_week':
         diffPreview = RescheduleWeekDiff(intent: intent);
+        break;
+      case 'generate_hotel_workout':
+        diffPreview = HotelWorkoutDiff(intent: intent);
         break;
       default:
         diffPreview = const Text('Confirm this action?');

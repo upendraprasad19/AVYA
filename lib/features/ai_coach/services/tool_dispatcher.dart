@@ -12,6 +12,7 @@ import '../../train/providers/train_provider.dart'
     show currentPlanProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
+import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
 import 'reschedule_week_planner.dart';
 
@@ -93,6 +94,9 @@ class ToolDispatcher {
           break;
         case 'reschedule_week':
           result = await _executeRescheduleWeek(intent);
+          break;
+        case 'generate_hotel_workout':
+          result = await _executeGenerateHotelWorkout(intent);
           break;
         default:
           return ToolExecutionResult.failure(
@@ -434,6 +438,57 @@ class ToolDispatcher {
     } else {
       return ToolExecutionResult.success(data: {
         'moves': results,
+        'partial_errors': errors,
+      });
+    }
+  }
+
+  Future<ToolExecutionResult> _executeGenerateHotelWorkout(
+      ToolIntent intent) async {
+    final rawSchedules =
+        HotelWorkoutPlanner.instance.getCachedRawSchedules(intent.id);
+    if (rawSchedules == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the plan.',
+      );
+    }
+
+    final box = HiveService.instance.workoutBox;
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final schedule in rawSchedules) {
+      final date = schedule['date'] as String;
+      try {
+        // Defensive: re-check completed status (concurrent-edit guard).
+        // The planner already filters completed days out of the raw
+        // schedule list, but a workout completed between sheet-open and
+        // confirm could land here.
+        final existing = box.get('schedule_$date');
+        if (existing is Map && existing['status'] == 'completed') {
+          continue;
+        }
+        await box.put('schedule_$date', schedule);
+        results.add({
+          'date': date,
+          'workout': schedule['workout_name'],
+        });
+      } catch (e) {
+        errors.add('$date: $e');
+      }
+    }
+
+    HotelWorkoutPlanner.instance.clearCache(intent.id);
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {'schedules': results});
+    } else if (results.isEmpty) {
+      return ToolExecutionResult.failure(
+        'Could not generate any workouts: ${errors.join("; ")}',
+      );
+    } else {
+      return ToolExecutionResult.success(data: {
+        'schedules': results,
         'partial_errors': errors,
       });
     }

@@ -1,6 +1,7 @@
 import { ToolDefinition, ToolTier } from "./types.ts";
 import {
   createCustomExerciseTool,
+  generateHotelWorkoutTool,
   logSetTool,
   markWorkoutCompleteTool,
   modifyWorkoutForInjuryTool,
@@ -24,7 +25,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   modifyWorkoutForInjuryTool, // workout / write / destructive / PRO
   // Phase B.4
   rescheduleWeekTool, // workout / write / destructive / PRO
-  // Phase B.5 will add: generateHotelWorkout
+  // Phase B.5
+  generateHotelWorkoutTool, // workout / write / destructive / PRO
   // Phase C will add: nutrition family
   // Phase D will add: plan family
 ];

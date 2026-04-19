@@ -398,6 +398,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'INJURY MODIFY';
       case 'reschedule_week':
         return 'RESCHEDULE WEEK';
+      case 'generate_hotel_workout':
+        return 'HOTEL WORKOUT';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -419,6 +421,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.healing;
       case 'reschedule_week':
         return Icons.calendar_view_week;
+      case 'generate_hotel_workout':
+        return Icons.luggage;
       default:
         return Icons.bolt;
     }
@@ -440,6 +444,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Workouts updated';
       case 'reschedule_week':
         return 'Week reshuffled';
+      case 'generate_hotel_workout':
+        return 'Hotel plan generated';
       default:
         return 'Done';
     }
