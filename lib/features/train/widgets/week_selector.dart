@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 
 /// Horizontal scrollable week tab bar.
 ///
-/// Shows "W1 · Mar 24–30" format for each week. Scrollable so the user can
-/// navigate to past/future weeks without limit. Auto-scrolls to the selected
-/// week on first build.
+/// Shows "WK 01 · MAR 24" format per week in Wardroom voice. Gold chip when
+/// selected, neutral otherwise. Scrolls without limit — auto-centres the
+/// selected week on first build.
 class WeekSelector extends StatefulWidget {
   final int totalWeeks;
   final int selectedWeek; // 1-indexed
@@ -26,7 +27,7 @@ class WeekSelector extends StatefulWidget {
 
 class _WeekSelectorState extends State<WeekSelector> {
   final ScrollController _scrollController = ScrollController();
-  static const double _tabWidth = 88;
+  static const double _tabWidth = 92;
   static const double _tabSpacing = 6;
 
   @override
@@ -64,11 +65,11 @@ class _WeekSelectorState extends State<WeekSelector> {
     final planStart = WorkoutScheduleService.instance.getPlanStartDate();
 
     return SizedBox(
-      height: 42,
+      height: 44,
       child: ListView.separated(
         controller: _scrollController,
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
         itemCount: widget.totalWeeks,
         separatorBuilder: (_, index) => const SizedBox(width: _tabSpacing),
         itemBuilder: (context, index) {
@@ -76,44 +77,56 @@ class _WeekSelectorState extends State<WeekSelector> {
           final isSelected = week == widget.selectedWeek;
 
           String label;
+          String? sub;
           if (planStart != null) {
             final weekStart = planStart.add(Duration(days: index * 7));
             final weekEnd = weekStart.add(const Duration(days: 6));
-            final startStr = _formatShort(weekStart);
-            final endStr = _formatShort(weekEnd);
-            label = 'W$week\n$startStr–$endStr';
+            label = 'WK ${week.toString().padLeft(2, '0')}';
+            sub = '${_formatShort(weekStart)}–${_formatShort(weekEnd)}';
           } else {
-            label = 'WEEK $week';
+            label = 'WK ${week.toString().padLeft(2, '0')}';
           }
+
+          final fg = isSelected ? AppColors.bgDeep : AppColors.textDim;
+          final bg = isSelected ? AppColors.accent : Colors.transparent;
+          final border = isSelected ? AppColors.accent : AppColors.line2;
 
           return GestureDetector(
             onTap: () => widget.onSelect(week),
             child: Container(
               width: _tabWidth,
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.accent
-                    : const Color(0xFF0e1219),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.accent
-                      : const Color(0xFF1c2535),
-                ),
+                color: bg,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: border),
               ),
               child: Center(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color:
-                        isSelected ? Colors.black : AppColors.textSecondary,
-                    height: 1.3,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTypography.monoXs.copyWith(
+                        color: fg,
+                        letterSpacing: 1.6,
+                        height: 1.1,
+                      ),
+                    ),
+                    if (sub != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        sub.toUpperCase(),
+                        style: AppTypography.monoXs.copyWith(
+                          color: fg.withValues(
+                              alpha: isSelected ? 0.85 : 0.75),
+                          fontSize: 8,
+                          letterSpacing: 1.2,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),

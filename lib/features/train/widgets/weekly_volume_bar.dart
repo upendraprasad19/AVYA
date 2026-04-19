@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 class WeeklyVolumeBar extends StatelessWidget {
   final Map<String, double> weekVolume;
@@ -15,10 +15,10 @@ class WeeklyVolumeBar extends StatelessWidget {
 
   static const _categoryColors = <String, Color>{
     'push': AppColors.accent,
-    'pull': AppColors.purple,
-    'legs': AppColors.green,
-    'core': AppColors.orange,
-    'cardio': AppColors.blue,
+    'pull': AppColors.info,
+    'legs': AppColors.ok,
+    'core': AppColors.warn,
+    'cardio': AppColors.info,
   };
 
   String _formatKg(double value) {
@@ -39,37 +39,27 @@ class WeeklyVolumeBar extends StatelessWidget {
         .where((key) => (weekVolume[key] ?? 0) > 0)
         .toList();
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-      ),
+    return WardCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Title row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'THIS WEEK\'S VOLUME',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 1.2,
+                'THIS WEEK VOLUME',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               Text(
-                '${_formatKg(total)} kg',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                '${_formatKg(total)} KG',
+                style: AppTypography.h2.copyWith(
                   color: AppColors.accent,
+                  height: 1,
                 ),
               ),
             ],
@@ -97,35 +87,24 @@ class WeeklyVolumeBar extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              cat[0].toUpperCase() + cat.substring(1),
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 10,
-                                fontWeight: FontWeight.w400,
-                                color: AppColors.textSecondary,
+                              (cat[0].toUpperCase() + cat.substring(1))
+                                  .toUpperCase(),
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.textMute,
+                                letterSpacing: 1.4,
                               ),
                             ),
                             Text(
                               _formatKg(value),
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                              style: AppTypography.bodySm.copyWith(
+                                fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            backgroundColor: AppColors.input,
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                          ),
-                        ),
+                        WardBar(pct: progress, color: color, height: 4),
                       ],
                     ),
                   ),

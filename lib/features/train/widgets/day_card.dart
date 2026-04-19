@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Workout day card showing workout name, muscle groups, exercise count, and status.
 class DayCard extends StatelessWidget {
@@ -30,143 +30,91 @@ class DayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompleted = status == 'completed';
 
-    return GestureDetector(
+    return WardCard(
+      variant: isToday ? WardCardVariant.hero : WardCardVariant.standard,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(
-            color: isToday
-                ? AppColors.accent.withValues(alpha: 0.3)
-                : AppColors.border,
-            width: isToday ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Day indicator
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: isCompleted
-                    ? AppColors.accent
-                    : isToday
-                        ? AppColors.accentTint
-                        : AppColors.input,
-                borderRadius: BorderRadius.circular(AppRadius.row),
-              ),
-              child: Center(
-                child: isCompleted
-                    ? const Icon(Icons.check, color: Colors.black, size: 20)
-                    : Text(
-                        'D$dayNumber',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: isToday
-                              ? AppColors.accent
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-              ),
+      child: Row(
+        children: [
+          // Day indicator tile
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isCompleted
+                  ? AppColors.accent
+                  : isToday
+                      ? AppColors.accentSoft
+                      : AppColors.bgRaise,
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(width: 14),
-
-            // Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+            child: Center(
+              child: isCompleted
+                  ? Icon(Icons.check, color: AppColors.bgDeep, size: 20)
+                  : Text(
+                      'D$dayNumber',
+                      style: AppTypography.mono.copyWith(
+                        color: isToday
+                            ? AppColors.accent
+                            : AppColors.textDim,
+                        letterSpacing: 1.4,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        muscles,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 3,
-                        height: 3,
-                        decoration: const BoxDecoration(
-                          color: AppColors.textDisabled,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$exerciseCount exercises',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
+          ),
+          const SizedBox(width: 14),
 
-            // Start button for today
-            if (isToday && !isCompleted && onStart != null)
-              ElevatedButton(
-                onPressed: onStart,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.black,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          // Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.h3,
                 ),
-                child: Text(
-                  'Start',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      muscles,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 3,
+                      height: 3,
+                      decoration: const BoxDecoration(
+                        color: AppColors.textGhost,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$exerciseCount exercises',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ],
                 ),
-              )
-            else if (isCompleted)
-              Text(
-                'DONE',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.green,
-                  letterSpacing: 1,
-                ),
-              )
-            else
-              const Icon(Icons.chevron_right, color: AppColors.textDisabled),
-          ],
-        ),
+              ],
+            ),
+          ),
+
+          if (isToday && !isCompleted && onStart != null)
+            WardButton(
+              label: 'START',
+              onPressed: onStart,
+              size: WardButtonSize.small,
+              fullWidth: false,
+            )
+          else if (isCompleted)
+            const WardChip(label: 'DONE', tone: WardChipTone.ok)
+          else
+            const Icon(Icons.chevron_right, color: AppColors.textGhost),
+        ],
       ),
     );
   }

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
 /// Bottom sheet for swapping an exercise or adding a new one.
-/// Reads from Hive exerciseBox, with category filter chips and search.
+/// Reads from Hive exerciseBox, with category chips and search.
 class ExerciseSwapSheet extends StatefulWidget {
   final String currentExerciseName;
   final String? category;
@@ -14,7 +15,6 @@ class ExerciseSwapSheet extends StatefulWidget {
   final VoidCallback? onDelete;
 
   /// Called when the user taps "+ Add Exercise" to append (not replace).
-  /// Receives the same [SwapExerciseData] as [onSelect].
   final ValueChanged<SwapExerciseData>? onAdd;
 
   const ExerciseSwapSheet({
@@ -50,7 +50,6 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
   @override
   void initState() {
     super.initState();
-    // Pre-select the current day's category if it matches a chip, otherwise "All"
     if (widget.category != null &&
         _categoryChips
             .map((c) => c.toLowerCase())
@@ -67,21 +66,15 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
 
   void _loadExercises() {
     final repo = ExerciseRepository.instance;
-    // Load ALL library exercises (no category filter — chips handle that)
     _allLibraryExercises = repo.getAll();
-
-    // Remove the current exercise from the list
     _allLibraryExercises.removeWhere((e) =>
         (e['name'] as String?)?.toLowerCase() ==
         widget.currentExerciseName.toLowerCase());
-
-    // Load custom exercises via repository
     _customExercises = ExerciseRepository.instance.getCustomExercises();
   }
 
   List<Map<String, dynamic>> get _filteredLibrary {
     if (_searchQuery.isNotEmpty) {
-      // When searching, ignore the chip filter and search across ALL exercises
       final q = _searchQuery.toLowerCase();
       return _allLibraryExercises.where((e) {
         final name = (e['name'] as String?)?.toLowerCase() ?? '';
@@ -94,7 +87,6 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
         return false;
       }).toList();
     }
-    // No search — apply category chip filter
     if (_selectedCategory == 'All') return _allLibraryExercises;
     return _allLibraryExercises.where((e) {
       final cat = (e['category'] as String?)?.toLowerCase() ?? '';
@@ -121,8 +113,8 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF0e1219),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: AppColors.card,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -130,62 +122,55 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
           // Handle
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 6),
+              margin: const EdgeInsets.only(top: 12, bottom: 10),
               width: 36,
-              height: 4,
+              height: 3,
               decoration: BoxDecoration(
-                color: const Color(0xFF1c2535),
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
 
-          // Header row with title + optional Add Exercise button
+          // Eyebrow + title
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Swap: ${widget.currentExerciseName}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SWAP EXERCISE',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.accent,
+                          letterSpacing: 2.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.currentExerciseName,
+                        style: AppTypography.h2,
+                      ),
+                    ],
                   ),
                 ),
-                if (widget.onAdd != null) ...[
-                  GestureDetector(
-                    onTap: () {
-                      // Use same sheet but in "add" mode —
-                      // show picker, and when user selects, call onAdd
-                      setState(() {
-                        // Switch to "add" mode visually (handled via _isAddMode)
-                      });
-                    },
-                    child: const SizedBox.shrink(),
-                  ),
-                ],
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(),
                   child: Container(
-                    width: 28,
-                    height: 28,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF161d28),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.bgRaise,
+                      borderRadius: BorderRadius.circular(2),
+                      border: Border.all(color: AppColors.line2),
                     ),
-                    child: Center(
-                      child: Text(
-                        '\u2715',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
-                        ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: AppColors.textDim,
                       ),
                     ),
                   ),
@@ -194,119 +179,73 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
             ),
           ),
 
-          // "+ Add Exercise" button (when onAdd callback is provided)
+          // "+ Add Exercise" slab (when onAdd available)
           if (widget.onAdd != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-              child: GestureDetector(
-                onTap: () {
-                  // Pop this sheet, then the parent will show the same picker
-                  // in "add" mode. We use a special sentinel to signal this.
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+              child: WardButton(
+                label: '+ ADD EXERCISE',
+                onPressed: () {
                   Navigator.of(context).pop();
                   widget.onAdd!(const SwapExerciseData(
                     name: '__ADD_MODE__',
                     detail: '',
                   ));
                 },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.08),
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.25),
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '\uff0b Add Exercise',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                  ),
-                ),
+                variant: WardButtonVariant.outline,
+                size: WardButtonSize.small,
               ),
             ),
 
-          // Delete button
+          // Delete slab
           if (widget.onDelete != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-              child: GestureDetector(
-                onTap: () {
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+              child: WardButton(
+                label: '− REMOVE EXERCISE',
+                onPressed: () {
                   Navigator.of(context).pop();
                   widget.onDelete!();
                 },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFef4444).withValues(alpha: 0.08),
-                    border: Border.all(
-                      color: const Color(0xFFef4444).withValues(alpha: 0.25),
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '\u2212 Remove Exercise',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFef4444),
-                      ),
-                    ),
-                  ),
-                ),
+                variant: WardButtonVariant.danger,
+                size: WardButtonSize.small,
               ),
             ),
 
-          const Divider(height: 1, color: Color(0xFF1c2535)),
+          const WardRule(margin: EdgeInsets.zero),
 
           // Search
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 10),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF161d28),
-                border: Border.all(color: const Color(0xFF1c2535)),
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.bgRaise,
+                border: Border.all(color: AppColors.line2, width: 2),
+                borderRadius: BorderRadius.circular(2),
               ),
               child: TextField(
                 onChanged: (v) => setState(() => _searchQuery = v),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.body,
                 decoration: InputDecoration(
                   hintText: 'Search exercises...',
-                  hintStyle: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                  hintStyle: AppTypography.body.copyWith(
+                    color: AppColors.textMute,
                   ),
                   border: InputBorder.none,
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   isDense: true,
                 ),
               ),
             ),
           ),
 
-          // Category filter chips
+          // Category chips
           SizedBox(
             height: 34,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
               itemCount: _categoryChips.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
@@ -314,25 +253,11 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                 final isActive = chip == _selectedCategory;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedCategory = chip),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color:
-                          isActive ? AppColors.accent : const Color(0xFF161d28),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      chip,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isActive
-                            ? Colors.black
-                            : AppColors.textSecondary,
-                      ),
-                    ),
+                  child: WardChip(
+                    label: chip,
+                    tone: isActive
+                        ? WardChipTone.filled
+                        : WardChipTone.neutral,
                   ),
                 );
               },
@@ -341,40 +266,33 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
 
           const SizedBox(height: 8),
 
-          // Scrollable list
           Flexible(
             child: ListView(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
               children: [
-                // Section label
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
+                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 6),
                   child: Text(
                     _searchQuery.isNotEmpty
-                        ? 'RESULTS \u00b7 ALL CATEGORIES'
+                        ? 'RESULTS · ALL CATEGORIES'
                         : _selectedCategory == 'All'
-                            ? 'LIBRARY \u00b7 ALL EXERCISES'
-                            : 'LIBRARY \u00b7 ${_selectedCategory.toUpperCase()}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 1,
+                            ? 'LIBRARY · ALL EXERCISES'
+                            : 'LIBRARY · ${_selectedCategory.toUpperCase()}',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.textMute,
+                      letterSpacing: 2,
                     ),
                   ),
                 ),
 
                 if (filtered.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(22),
                     child: Text(
                       'No matching exercises found',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textDim,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -389,25 +307,21 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                         )),
                       )),
 
-                // Custom exercises section
                 if (filteredCustom.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 6),
                     child: Text(
                       'YOUR CUSTOM EXERCISES',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 1,
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
                       ),
                     ),
                   ),
                   ...filteredCustom.map((ex) => _SwapItem(
                         name: ex['name'] as String? ?? 'Custom Exercise',
                         detail:
-                            'Custom \u00b7 ${ex['category'] ?? ''} \u00b7 ${ex['logging_type'] ?? 'weight_reps'}',
+                            'Custom · ${ex['category'] ?? ''} · ${ex['logging_type'] ?? 'weight_reps'}',
                         onSelect: () => widget.onSelect(SwapExerciseData(
                           name: ex['name'] as String? ?? 'Custom Exercise',
                           detail: 'Custom',
@@ -430,7 +344,7 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
     final difficulty = ex['difficulty_level'] as String? ?? '';
     final parts = <String>[category, loggingType];
     if (difficulty.isNotEmpty) parts.add(difficulty);
-    return parts.join(' \u00b7 ');
+    return parts.join(' · ');
   }
 }
 
@@ -450,83 +364,56 @@ class _SwapItem extends StatelessWidget {
     return InkWell(
       onTap: onSelect,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: const BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFF1c2535)),
+            bottom: BorderSide(color: AppColors.line2),
           ),
         ),
         child: Row(
           children: [
-            // Icon
             Container(
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF161d28),
-                borderRadius: BorderRadius.circular(9),
+                color: AppColors.bgRaise,
+                borderRadius: BorderRadius.circular(2),
               ),
               child: const Center(
                 child: Icon(
                   Icons.fitness_center,
                   size: 14,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textDim,
                 ),
               ),
             ),
             const SizedBox(width: 12),
-
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     detail,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Select button
-            GestureDetector(
-              onTap: onSelect,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Select',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
-                ),
-              ),
+            WardButton(
+              label: 'SELECT',
+              onPressed: onSelect,
+              variant: WardButtonVariant.outline,
+              size: WardButtonSize.small,
+              fullWidth: false,
             ),
           ],
         ),

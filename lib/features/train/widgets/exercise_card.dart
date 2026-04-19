@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Exercise card used in the template builder.
 class ExerciseCard extends StatelessWidget {
@@ -28,94 +28,56 @@ class ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return WardCard(
+      variant: WardCardVariant.inset,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardS),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            // Drag handle
-            const Icon(Icons.drag_handle, color: AppColors.textDisabled, size: 20),
-            const SizedBox(width: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.drag_handle, color: AppColors.textGhost, size: 20),
+          const SizedBox(width: 12),
 
-            // Exercise info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTypography.h3,
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (category != null)
+                      WardChip(label: category!),
+                    WardChip(label: _formatLoggingType(loggingType)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$sets sets x $reps ${loggingType == 'timed' ? 'sec' : 'reps'} · ${restSeconds}s rest',
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      if (category != null) ...[
-                        _chip(category!),
-                        const SizedBox(width: 6),
-                      ],
-                      _chip(_formatLoggingType(loggingType)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$sets sets x $reps ${loggingType == 'timed' ? 'sec' : 'reps'} | ${restSeconds}s rest',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
 
-            // Remove button
-            if (onRemove != null)
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.close, color: AppColors.red, size: 18),
-                constraints: const BoxConstraints(),
-                padding: EdgeInsets.zero,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(AppRadius.badge),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textSecondary,
-          letterSpacing: 0.5,
-        ),
+          if (onRemove != null)
+            IconButton(
+              onPressed: onRemove,
+              icon: const Icon(Icons.close, color: AppColors.bad, size: 18),
+              constraints: const BoxConstraints(),
+              padding: EdgeInsets.zero,
+            ),
+        ],
       ),
     );
   }
 
   String _formatLoggingType(String type) {
-    return type.replaceAll('_', ' ').toUpperCase();
+    return type.replaceAll('_', ' ');
   }
 }

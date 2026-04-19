@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../home/providers/home_provider.dart';
 import '../providers/train_provider.dart';
 import '../widgets/create_custom_exercise_sheet.dart';
@@ -66,35 +66,33 @@ class _TemplateBuilderScreenState
 
   @override
   Widget build(BuildContext context) {
+    final canSave = _exercises.isNotEmpty && !_isSaving;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.header,
+        backgroundColor: AppColors.bgDeep,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.go('/train'),
         ),
         title: Text(
-          'Template Builder',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+          'TEMPLATE BUILDER',
+          style: AppTypography.mono.copyWith(
+            fontSize: 11,
             color: AppColors.textPrimary,
+            letterSpacing: 2.5,
           ),
         ),
         actions: [
           TextButton(
-            onPressed: _exercises.isNotEmpty && !_isSaving ? _saveTemplate : null,
+            onPressed: canSave ? _saveTemplate : null,
             child: Text(
-              'Save',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: _exercises.isNotEmpty
-                    ? AppColors.accent
-                    : AppColors.textDisabled,
+              'SAVE',
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
+                color: canSave ? AppColors.accent : AppColors.textGhost,
+                letterSpacing: 2.5,
               ),
             ),
           ),
@@ -107,34 +105,28 @@ class _TemplateBuilderScreenState
             // Template name
             TextField(
               controller: _nameController,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.h2.copyWith(fontSize: 18),
               decoration: InputDecoration(
                 hintText: 'Template Name',
-                hintStyle: GoogleFonts.getFont(
-                  'DM Sans',
+                hintStyle: AppTypography.h2.copyWith(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textDisabled,
+                  color: AppColors.textGhost,
                 ),
                 filled: true,
-                fillColor: AppColors.input,
+                fillColor: AppColors.bgRaise,
                 contentPadding: const EdgeInsets.all(16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.cardS),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.cardS),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.cardS),
-                  borderSide: BorderSide(color: AppColors.accent, width: 1.5),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide:
+                      const BorderSide(color: AppColors.accent, width: 1.5),
                 ),
               ),
             ),
@@ -143,28 +135,29 @@ class _TemplateBuilderScreenState
             // Day selector chips (W7) — assign template to specific weekdays
             Text(
               _editingTemplateId != null ? 'EDIT SCHEDULE' : 'ASSIGN TO DAYS',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: AppColors.textSecondary,
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Tap days to toggle. Selected days sync to your home calendar.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
             ),
             const SizedBox(height: 8),
             Row(
               children: List.generate(7, (i) {
                 final dayNum = i + 1; // 1=Mon ... 7=Sun
-                const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const dayLabels = [
+                  'MON',
+                  'TUE',
+                  'WED',
+                  'THU',
+                  'FRI',
+                  'SAT',
+                  'SUN'
+                ];
                 final isSelected = _selectedDays.contains(dayNum);
                 return Expanded(
                   child: Padding(
@@ -180,31 +173,28 @@ class _TemplateBuilderScreenState
                         });
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.accent.withValues(alpha: 0.1)
-                              : AppColors.input,
-                          borderRadius: BorderRadius.circular(10),
+                              ? AppColors.accentSoft
+                              : AppColors.bgRaise,
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.sharp),
                           border: Border.all(
                             color: isSelected
                                 ? AppColors.accent.withValues(alpha: 0.4)
-                                : AppColors.border,
+                                : AppColors.line2,
                             width: isSelected ? 1.5 : 1,
                           ),
                         ),
                         child: Center(
                           child: Text(
                             dayLabels[i],
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              fontWeight: isSelected
-                                  ? FontWeight.w800
-                                  : FontWeight.w500,
+                            style: AppTypography.monoXs.copyWith(
                               color: isSelected
                                   ? AppColors.accent
-                                  : AppColors.textSecondary,
+                                  : AppColors.textDim,
+                              letterSpacing: 1.5,
                             ),
                           ),
                         ),
@@ -218,12 +208,10 @@ class _TemplateBuilderScreenState
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '${_selectedDays.length} day${_selectedDays.length == 1 ? '' : 's'} selected',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
+                  '${_selectedDays.length} DAY${_selectedDays.length == 1 ? '' : 'S'} SELECTED',
+                  style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
@@ -232,12 +220,14 @@ class _TemplateBuilderScreenState
             // Exercises header
             Row(
               children: [
-                Text('Exercises', style: AppTypography.titleS),
+                Text('Exercises', style: AppTypography.h3),
                 const Spacer(),
                 Text(
-                  '${_exercises.length} added',
-                  style: AppTypography.bodyS
-                      .copyWith(color: AppColors.textSecondary),
+                  '${_exercises.length} ADDED',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.5,
+                  ),
                 ),
               ],
             ),
@@ -245,36 +235,29 @@ class _TemplateBuilderScreenState
 
             // Exercise list
             if (_exercises.isEmpty)
-              GestureDetector(
+              WardCard(
+                variant: WardCardVariant.inset,
+                padding: const EdgeInsets.symmetric(vertical: 30),
                 onTap: () => _showExerciseSearch(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 30),
-                  decoration: BoxDecoration(
-                    color: AppColors.input,
-                    borderRadius: BorderRadius.circular(AppRadius.cardS),
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.25),
-                      style: BorderStyle.solid,
+                child: Column(
+                  children: [
+                    const Icon(Icons.add_circle_outline,
+                        color: AppColors.accent, size: 40),
+                    const SizedBox(height: 8),
+                    Text(
+                      'TAP TO ADD EXERCISES',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 2,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(Icons.add_circle_outline,
-                          color: AppColors.accent, size: 40),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap to add exercises',
-                        style: AppTypography.bodyM
-                            .copyWith(color: AppColors.accent, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Build your workout by adding exercises',
-                        style: AppTypography.bodyS
-                            .copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Build your workout by adding exercises',
+                      style: AppTypography.bodySm
+                          .copyWith(color: AppColors.textDim),
+                    ),
+                  ],
                 ),
               )
             else
@@ -321,28 +304,10 @@ class _TemplateBuilderScreenState
             const SizedBox(height: AppSpacing.gridGap),
 
             // Add exercise button
-            OutlinedButton.icon(
+            WardButton(
+              label: '+ ADD EXERCISE',
               onPressed: () => _showExerciseSearch(context),
-              icon: const Icon(Icons.add, color: AppColors.accent),
-              label: Text(
-                'Add Exercise',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.accent,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                side: BorderSide(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-              ),
+              variant: WardButtonVariant.outline,
             ),
             const SizedBox(height: 40),
           ],
@@ -372,9 +337,9 @@ class _TemplateBuilderScreenState
         SnackBar(
           content: Text(
             'Please enter a template name',
-            style: GoogleFonts.getFont('DM Sans'),
+            style: AppTypography.bodySm,
           ),
-          backgroundColor: AppColors.red,
+          backgroundColor: AppColors.bad,
         ),
       );
       return;
@@ -394,8 +359,9 @@ class _TemplateBuilderScreenState
 
       String templateId;
       if (_editingTemplateId != null) {
-        await ref.read(templatesProvider.notifier).updateTemplate(
-            _editingTemplateId!, templateData);
+        await ref
+            .read(templatesProvider.notifier)
+            .updateTemplate(_editingTemplateId!, templateData);
         templateId = _editingTemplateId!;
       } else {
         templateId = 'tmpl_${DateTime.now().millisecondsSinceEpoch}';
@@ -436,7 +402,8 @@ class _TemplateBuilderScreenState
                 .add(Duration(days: weekOffset * 7 + dayNum - 1));
             if (targetDate.isBefore(today)) continue;
             if (targetDate.isAfter(planEnd)) continue;
-            await scheduleService.assignTemplateToDate(templateId, targetDate);
+            await scheduleService.assignTemplateToDate(
+                templateId, targetDate);
             writtenCount++;
           }
         }
@@ -451,7 +418,7 @@ class _TemplateBuilderScreenState
             SnackBar(
               content: Text(
                 'Template saved. No days could be scheduled — your current Phase ends soon. Schedule it manually after your next Phase commences.',
-                style: GoogleFonts.getFont('DM Sans'),
+                style: AppTypography.bodySm,
               ),
               backgroundColor: AppColors.card,
               duration: const Duration(seconds: 6),
@@ -495,9 +462,9 @@ class _TemplateBuilderScreenState
           SnackBar(
             content: Text(
               'Failed to save template: $e',
-              style: GoogleFonts.getFont('DM Sans'),
+              style: AppTypography.bodySm,
             ),
-            backgroundColor: AppColors.red,
+            backgroundColor: AppColors.bad,
           ),
         );
       }
@@ -589,10 +556,10 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.cardL),
+          top: Radius.circular(AppRadius.card),
         ),
       ),
       child: Column(
@@ -603,7 +570,7 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
             height: 4,
             margin: const EdgeInsets.only(top: 12, bottom: 12),
             decoration: BoxDecoration(
-              color: AppColors.textDisabled,
+              color: AppColors.line2,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -616,43 +583,18 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
               children: [
                 Text(
                   'ADD EXERCISE',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                  style: AppTypography.mono.copyWith(
+                    fontSize: 12,
                     color: AppColors.textPrimary,
-                    letterSpacing: 0.5,
+                    letterSpacing: 2.5,
                   ),
                 ),
                 const Spacer(),
                 GestureDetector(
                   onTap: _openCreateCustom,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.25)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.add,
-                            size: 12, color: AppColors.accent),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Create Custom',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: const WardChip(
+                    label: '+ CREATE CUSTOM',
+                    tone: WardChipTone.gold,
                   ),
                 ),
               ],
@@ -668,36 +610,28 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
               controller: _searchController,
               onChanged: _search,
               autofocus: true,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.body,
               decoration: InputDecoration(
                 hintText: 'Search exercises...',
-                hintStyle: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  color: AppColors.textSecondary,
-                ),
+                hintStyle:
+                    AppTypography.body.copyWith(color: AppColors.textDim),
                 prefixIcon: const Icon(Icons.search,
-                    color: AppColors.textSecondary, size: 20),
+                    color: AppColors.textDim, size: 20),
                 filled: true,
-                fillColor: AppColors.input,
+                fillColor: AppColors.bgRaise,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.row),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.row),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.line2),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.row),
-                  borderSide: BorderSide(color: AppColors.accent),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  borderSide: const BorderSide(color: AppColors.accent),
                 ),
               ),
             ),
@@ -710,8 +644,8 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
                 ? Center(
                     child: Text(
                       'No exercises found',
-                      style: AppTypography.bodyM
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.body
+                          .copyWith(color: AppColors.textDim),
                     ),
                   )
                 : ListView.builder(
@@ -725,19 +659,13 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           ex['name'] as String? ?? 'Unknown',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
+                          style: AppTypography.h3.copyWith(fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${ex['category'] ?? ''} | ${_formatType(ex['logging_type'] as String? ?? '')}',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
+                          '${ex['category'] ?? ''} · ${_formatType(ex['logging_type'] as String? ?? '')}',
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textDim,
+                            letterSpacing: 1.2,
                           ),
                         ),
                         trailing: const Icon(Icons.add_circle_outline,

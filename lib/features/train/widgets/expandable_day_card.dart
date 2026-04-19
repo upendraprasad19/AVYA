@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
-/// Expandable day card matching the mockup:
-/// - Collapsed: day number badge, workout name, subtitle, chevron
-/// - Expanded: cyan border, exercise list with numbered badges, "Log This Workout" button
+/// Expandable day card matching the Wardroom mockup:
+/// - Collapsed: day tile, workout name, subtitle, chevron
+/// - Expanded: gold border, exercise list, "Log This Workout" slab
 /// - Rest days: rest message
 class ExpandableDayCard extends ConsumerWidget {
   final WorkoutDayData dayData;
@@ -26,94 +27,75 @@ class ExpandableDayCard extends ConsumerWidget {
     final isExpanded = expandedDay == dayIndex;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: const Color(0xFF0e1219),
-          borderRadius: BorderRadius.circular(12),
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isExpanded
                 ? AppColors.accent.withValues(alpha: 0.35)
-                : const Color(0xFF1c2535),
+                : AppColors.line2,
           ),
         ),
         child: Column(
           children: [
-            // Collapsed row (always visible)
+            // Collapsed row
             GestureDetector(
               onTap: () =>
                   ref.read(expandedDayProvider.notifier).toggle(dayIndex),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 11),
+                    horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
-                    // Day number badge
                     _DayNumberBadge(
                       dayNumber: dayData.dayNumber,
                       isExpanded: isExpanded,
                     ),
                     const SizedBox(width: 12),
-
-                    // Info
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             dayData.name,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
+                            style: AppTypography.h3,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             dayData.isDone
                                 ? '\u2713 ${dayData.subtitle}'
                                 : dayData.subtitle,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
+                            style: AppTypography.bodySm.copyWith(
                               color: dayData.isDone
-                                  ? AppColors.green
-                                  : AppColors.textSecondary,
+                                  ? AppColors.ok
+                                  : AppColors.textDim,
                             ),
                           ),
                           if (dayData.dateLabel != null) ...[
                             const SizedBox(height: 2),
                             Text(
-                              dayData.dateLabel!,
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 9,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary.withValues(alpha: 0.6),
+                              dayData.dateLabel!.toUpperCase(),
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.textMute,
+                                letterSpacing: 1.2,
                               ),
                             ),
                           ],
                         ],
                       ),
                     ),
-
-                    // Chevron
                     AnimatedRotation(
                       turns: isExpanded ? 0.25 : 0,
                       duration: const Duration(milliseconds: 250),
-                      child: Text(
-                        '\u203a',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w400,
-                          color: isExpanded
-                              ? AppColors.accent
-                              : AppColors.textSecondary,
-                        ),
+                      child: Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: isExpanded
+                            ? AppColors.accent
+                            : AppColors.textDim,
                       ),
                     ),
                   ],
@@ -139,29 +121,17 @@ class ExpandableDayCard extends ConsumerWidget {
   Widget _buildExpandedPanel() {
     return Column(
       children: [
-        // Divider
-        Container(
-          height: 1,
-          margin: const EdgeInsets.symmetric(horizontal: 14),
-          color: AppColors.accent.withValues(alpha: 0.1),
-        ),
-
+        const WardRule(margin: EdgeInsets.symmetric(horizontal: 14)),
         if (dayData.isRest)
           Padding(
             padding: const EdgeInsets.all(14),
             child: Text(
-              '\u{1f9d8} Rest & recover. Stretch or walk.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              'Rest & recover. Stretch or walk.',
+              style: AppTypography.body.copyWith(color: AppColors.textDim),
               textAlign: TextAlign.center,
             ),
           )
         else ...[
-          // Exercise list
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
             child: Column(
@@ -177,37 +147,12 @@ class ExpandableDayCard extends ConsumerWidget {
                     ),
                   );
                 }),
-
-                // Log This Workout button
                 const SizedBox(height: 4),
-                SizedBox(
-                  width: double.infinity,
-                  child: GestureDetector(
-                    onTap: onStartWorkout,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color:
-                            AppColors.accent.withValues(alpha: 0.08),
-                        border: Border.all(
-                          color:
-                              AppColors.accent.withValues(alpha: 0.2),
-                        ),
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '\u{1f4dd} Log This Workout',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                WardButton(
+                  label: 'LOG THIS WORKOUT',
+                  onPressed: onStartWorkout,
+                  variant: WardButtonVariant.outline,
+                  size: WardButtonSize.small,
                 ),
               ],
             ),
@@ -218,7 +163,7 @@ class ExpandableDayCard extends ConsumerWidget {
   }
 }
 
-/// Day number badge: 38x38 with "DAY" label on top, number below.
+/// Day number tile: 38x38 inset rail with Mono "DAY" cap and Fraunces number.
 class _DayNumberBadge extends StatelessWidget {
   final int dayNumber;
   final bool isExpanded;
@@ -231,31 +176,25 @@ class _DayNumberBadge extends StatelessWidget {
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isExpanded
-            ? AppColors.accent.withValues(alpha: 0.12)
-            : const Color(0xFF161d28),
-        borderRadius: BorderRadius.circular(9),
+        color: isExpanded ? AppColors.accentSoft : AppColors.bgRaise,
+        borderRadius: BorderRadius.circular(2),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             'DAY',
-            style: GoogleFonts.getFont(
-              'DM Sans',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
               fontSize: 7,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+              letterSpacing: 1.2,
             ),
           ),
           Text(
             '$dayNumber',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
+            style: AppTypography.h3.copyWith(
               color: isExpanded ? AppColors.accent : AppColors.textPrimary,
-              height: 1.1,
+              height: 1.05,
             ),
           ),
         ],
@@ -265,7 +204,6 @@ class _DayNumberBadge extends StatelessWidget {
 }
 
 /// Single exercise row inside expanded day card.
-/// Uses Consumer to access lastPerformanceProvider for ghost line.
 class _ExerciseRow extends StatelessWidget {
   final int index;
   final ExerciseData exercise;
@@ -279,97 +217,78 @@ class _ExerciseRow extends StatelessWidget {
         final lastPerf = ref.watch(lastPerformanceProvider(exercise.name));
 
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: const Color(0xFF161d28),
-            borderRadius: BorderRadius.circular(10),
+            color: AppColors.bgRaise,
+            borderRadius: BorderRadius.circular(2),
           ),
           child: Row(
             children: [
-              // Number badge
               Container(
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(7),
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(2),
                 ),
                 child: Center(
                   child: Text(
                     '${index + 1}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.monoXs.copyWith(
                       color: AppColors.accent,
+                      fontSize: 10,
+                      letterSpacing: 1,
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
-
-              // Exercise info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       exercise.name,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    // Last performance ghost line
-                    if (lastPerf.hasData && lastPerf.lastWeight != null && lastPerf.lastWeight! > 0) ...[
+                    if (lastPerf.hasData &&
+                        lastPerf.lastWeight != null &&
+                        lastPerf.lastWeight! > 0) ...[
                       const SizedBox(height: 1),
                       Text(
                         'Last: ${lastPerf.lastWeight!.toStringAsFixed(1)}kg \u00d7 ${lastPerf.lastReps ?? 0}',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.textMute,
                         ),
                       ),
                     ],
                     const SizedBox(height: 2),
                     Text(
                       'Rest: ${exercise.rest}',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
-
-              // Sets x Reps + Weight
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     '${exercise.sets} \u00d7 ${exercise.reps}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                    style: AppTypography.h3.copyWith(
                       color: AppColors.accent,
+                      fontSize: 14,
                     ),
                   ),
                   const SizedBox(height: 1),
                   Text(
                     exercise.weight,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.textDim,
                     ),
                   ),
                 ],

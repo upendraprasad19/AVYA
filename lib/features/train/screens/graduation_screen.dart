@@ -3,15 +3,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
 /// Phase 1 Graduation Ceremony — the #1 conversion moment.
@@ -72,29 +73,34 @@ class GraduationScreen extends ConsumerWidget {
                 Center(
                   child: Text(
                     'PHASE 1 COMPLETE',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 13,
                       color: AppColors.proGold,
-                      letterSpacing: 1,
+                      letterSpacing: 3,
                     ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: Text(
+                    'Week Four',
+                    style: AppTypography.display.copyWith(height: 1.05),
+                    textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Center(
                   child: Text(
                     'You built the foundation. Time to level up.',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textDim,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 18),
+                const WardRule(gold: true, margin: EdgeInsets.zero),
+                const SizedBox(height: 22),
 
                 // Stats grid
                 _buildStatsGrid(stats),
@@ -128,12 +134,10 @@ class GraduationScreen extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'Keep training Phase 1',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
+                        'KEEP TRAINING PHASE 1',
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.textMute,
+                          letterSpacing: 2,
                         ),
                       ),
                     ),
@@ -149,23 +153,15 @@ class GraduationScreen extends ConsumerWidget {
   }
 
   Widget _buildStatsGrid(GraduationStatsData stats) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.proGold.withValues(alpha: 0.2)),
-      ),
+    return WardCard(
+      variant: WardCardVariant.hero,
       child: Column(
         children: [
           Text(
             'YOUR PHASE 1 JOURNEY',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
           const SizedBox(height: 14),
@@ -174,7 +170,7 @@ class GraduationScreen extends ConsumerWidget {
               Expanded(
                 child: _statTile(
                   value: '${stats.totalWorkouts}',
-                  label: 'Workouts',
+                  label: 'WORKOUTS',
                   icon: Icons.fitness_center,
                   color: AppColors.accent,
                 ),
@@ -183,9 +179,9 @@ class GraduationScreen extends ConsumerWidget {
               Expanded(
                 child: _statTile(
                   value: '${stats.streakWeeks}',
-                  label: 'Week Streak',
+                  label: 'WEEK STREAK',
                   icon: Icons.local_fire_department,
-                  color: AppColors.orange,
+                  color: AppColors.warn,
                 ),
               ),
             ],
@@ -196,16 +192,16 @@ class GraduationScreen extends ConsumerWidget {
               Expanded(
                 child: _statTile(
                   value: '${stats.totalSets}',
-                  label: 'Total Sets',
+                  label: 'TOTAL SETS',
                   icon: Icons.repeat,
-                  color: AppColors.blue,
+                  color: AppColors.info,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _statTile(
                   value: '${stats.personalRecords}',
-                  label: 'PRs Set',
+                  label: 'PRS SET',
                   icon: Icons.emoji_events,
                   color: AppColors.proGold,
                 ),
@@ -216,16 +212,13 @@ class GraduationScreen extends ConsumerWidget {
           // Top PRs
           if (stats.topPrs.isNotEmpty) ...[
             const SizedBox(height: 14),
-            const Divider(color: AppColors.border, height: 1),
+            const WardRule(margin: EdgeInsets.zero),
             const SizedBox(height: 12),
             Text(
               'TOP PERSONAL RECORDS',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.0,
-                color: AppColors.textSecondary,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 8),
@@ -233,25 +226,19 @@ class GraduationScreen extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: [
-                      const Icon(Icons.star, size: 14, color: AppColors.proGold),
+                      const Icon(Icons.star,
+                          size: 14, color: AppColors.proGold),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           pr.exerciseName,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
+                          style: AppTypography.h3.copyWith(fontSize: 13),
                         ),
                       ),
                       Text(
                         pr.value,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 13,
                           color: AppColors.accent,
                         ),
                       ),
@@ -274,7 +261,7 @@ class GraduationScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppRadius.cardS),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Column(
@@ -283,20 +270,15 @@ class GraduationScreen extends ConsumerWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
+            style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
             ),
           ),
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textDim,
+              letterSpacing: 1.5,
             ),
           ),
         ],
@@ -314,55 +296,26 @@ class GraduationScreen extends ConsumerWidget {
       'Day 5: Lower Hypertrophy',
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.15)),
-      ),
+    return WardCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'PHASE 2',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.accent,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
+              const WardChip(label: 'PHASE 2', tone: WardChipTone.gold),
               const SizedBox(width: 8),
               Text(
                 'Progressive Overload',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.h3,
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            '5 days/week \u00B7 Weeks 5-8 \u00B7 Power + Hypertrophy',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              color: AppColors.textSecondary,
+            '5 DAYS/WEEK · WEEKS 5-8 · POWER + HYPERTROPHY',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textDim,
+              letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 14),
@@ -375,7 +328,7 @@ class GraduationScreen extends ConsumerWidget {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.accent,
                         shape: BoxShape.circle,
                       ),
@@ -383,24 +336,18 @@ class GraduationScreen extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Text(
                       day,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: AppTypography.h3.copyWith(fontSize: 13),
                     ),
                     const SizedBox(width: 8),
                     // Blurred exercise placeholder
                     Expanded(
                       child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        imageFilter:
+                            ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                         child: Text(
                           'Bench Press, Rows, OHP...',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
+                          style: AppTypography.bodySm.copyWith(
+                            color: AppColors.textDim,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -423,24 +370,16 @@ class GraduationScreen extends ConsumerWidget {
       'Phases 2-12 unlock full 48-week journey',
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
+      variant: WardCardVariant.inset,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'WHAT PHASE 2 UNLOCKS',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
             ),
           ),
           const SizedBox(height: 10),
@@ -458,12 +397,7 @@ class GraduationScreen extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         benefit,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textPrimary,
-                        ),
+                        style: AppTypography.body,
                       ),
                     ),
                   ],
@@ -475,103 +409,77 @@ class GraduationScreen extends ConsumerWidget {
   }
 
   Widget _buildCta(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          SubscriptionService.instance.gate(
-            AppConstants.featurePhases2To12,
-            onPro: () async {
-              // PRO user — generate next phase plan
-              try {
-                final profile = UserRepository.instance.getProfile() ?? {};
-                final progress = UserRepository.instance.getProgress() ?? {};
-                final currentPhase = (progress['current_phase'] as int?) ?? 1;
-                // Cycle phases 9→10→11→12→9→10... for users who've completed all 12
-                final nextPhase = currentPhase >= 12
-                    ? 9 + ((currentPhase - 8) % 4) // Cycles: 9→10→11→12→9→10...
-                    : currentPhase + 1;
+    return WardButton(
+      label: 'GENERATE NEXT PHASE',
+      leading: const Icon(Icons.rocket_launch,
+          size: 16, color: AppColors.bgDeep),
+      onPressed: () {
+        SubscriptionService.instance.gate(
+          AppConstants.featurePhases2To12,
+          onPro: () async {
+            // PRO user — generate next phase plan
+            try {
+              final profile = UserRepository.instance.getProfile() ?? {};
+              final progress = UserRepository.instance.getProgress() ?? {};
+              final currentPhase = (progress['current_phase'] as int?) ?? 1;
+              // Cycle phases 9→10→11→12→9→10... for users who've completed all 12
+              final nextPhase = currentPhase >= 12
+                  ? 9 + ((currentPhase - 8) % 4) // Cycles: 9→10→11→12→9→10...
+                  : currentPhase + 1;
 
-                // Generate next phase plan and write schedule to Hive
-                final savedDays = HiveService.instance.configBox
-                    .get('preferred_training_days');
-                final preferredDays = savedDays is List
-                    ? savedDays.cast<int>()
-                    : null;
+              // Generate next phase plan and write schedule to Hive
+              final savedDays = HiveService.instance.configBox
+                  .get('preferred_training_days');
+              final preferredDays =
+                  savedDays is List ? savedDays.cast<int>() : null;
 
-                await WorkoutScheduleService.instance.generateAndSchedule(
-                  goal: profile['primary_goal'] as String? ?? 'general_fitness',
-                  equipment: profile['equipment_access'] as String? ?? 'basic_gym',
-                  daysPerWeek: (profile['days_per_week'] as num?)?.toInt() ?? 4,
-                  startDate: DateTime.now(),
-                  phase: nextPhase,
-                  experienceLevel: profile['fitness_experience'] as String? ?? 'beginner',
-                  preferredDays: preferredDays,
-                );
+              await WorkoutScheduleService.instance.generateAndSchedule(
+                goal: profile['primary_goal'] as String? ?? 'general_fitness',
+                equipment:
+                    profile['equipment_access'] as String? ?? 'basic_gym',
+                daysPerWeek:
+                    (profile['days_per_week'] as num?)?.toInt() ?? 4,
+                startDate: DateTime.now(),
+                phase: nextPhase,
+                experienceLevel:
+                    profile['fitness_experience'] as String? ?? 'beginner',
+                preferredDays: preferredDays,
+              );
 
-                // Update user progress
-                await UserRepository.instance.updateProgress({
-                  'current_phase': nextPhase,
-                  'current_week': 1,
-                  'phase_started_at': DateTime.now().toIso8601String(),
-                });
+              // Update user progress
+              await UserRepository.instance.updateProgress({
+                'current_phase': nextPhase,
+                'current_week': 1,
+                'phase_started_at': DateTime.now().toIso8601String(),
+              });
 
-                if (context.mounted) context.go('/train');
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: AppColors.card,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(
-                            color: AppColors.red.withValues(alpha: 0.3)),
-                      ),
-                      content: Text(
-                        'Failed to generate Phase 2: $e',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.red,
-                        ),
+              if (context.mounted) context.go('/train');
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: AppColors.card,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
+                      side: BorderSide(
+                          color: AppColors.bad.withValues(alpha: 0.3)),
+                    ),
+                    content: Text(
+                      'Failed to generate Phase 2: $e',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.bad,
                       ),
                     ),
-                  );
-                }
+                  ),
+                );
               }
-            },
-            onFree: () => showPaywallSheet(context, feature: 'Phases 2-12'),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.proGold,
-          foregroundColor: Colors.black,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-          elevation: 6,
-          shadowColor: AppColors.proGold.withValues(alpha: 0.3),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.rocket_launch, size: 18, color: Colors.black),
-            const SizedBox(width: 8),
-            Text(
-              'Continue Your Journey',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-      ),
+            }
+          },
+          onFree: () => showPaywallSheet(context, feature: 'Phases 2-12'),
+        );
+      },
     );
   }
 }
