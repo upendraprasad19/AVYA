@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
 // ── Category-specific taglines ───────────────────────────────────
@@ -444,8 +447,8 @@ class WorkoutReceiptCard extends StatelessWidget {
             ..._buildExerciseRows(),
             const SizedBox(height: 12),
 
-            // Divider
-            Container(height: 1, color: AppColors.border),
+            // Thin gold rule — letterhead closer.
+            const WardRule(gold: true, margin: EdgeInsets.zero),
             const SizedBox(height: 12),
 
             // Summary row
@@ -472,7 +475,7 @@ class WorkoutReceiptCard extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w400,
                 fontStyle: FontStyle.italic,
-                color: AppColors.textSecondary,
+                color: AppColors.textMute,
               ),
             ),
           ],
@@ -490,34 +493,41 @@ class WorkoutReceiptCard extends StatelessWidget {
     final dayName = dayNames[data.date.weekday - 1];
     final monthName = monthNames[data.date.month - 1];
 
+    // JB Mono eyebrow in accent gold — Wardroom letterhead cadence.
     return Text(
-      '$dayName, ${data.date.day} $monthName ${data.date.year}',
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: AppColors.textSecondary,
+      '$dayName \u00b7 ${data.date.day} $monthName ${data.date.year}',
+      style: AppTypography.mono.copyWith(
+        color: AppColors.accent,
+        letterSpacing: 2.4,
       ),
     );
   }
 
   Widget _buildTitle() {
-    return Text(
-      '${data.workoutName} \u00b7 PHASE ${data.phase}',
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 20,
-        fontWeight: FontWeight.w900,
-        color: AppColors.textPrimary,
-        letterSpacing: 0.5,
-      ),
+    // Fraunces display for the workout name, Mono meta for the phase code.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          data.workoutName,
+          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'PHASE ${data.phase}',
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.textMute,
+            letterSpacing: 2.0,
+          ),
+        ),
+      ],
     );
   }
 
   List<Widget> _buildExerciseRows() {
     return data.exercises.map((ex) {
       final detail = _exerciseDetail(ex);
+      // Left: DM Sans body (paragraph voice). Right: JB Mono tabular stats.
       return Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
@@ -525,11 +535,8 @@ class WorkoutReceiptCard extends StatelessWidget {
             Expanded(
               child: Text(
                 ex.name,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
+                style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -537,12 +544,7 @@ class WorkoutReceiptCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               detail,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
             ),
           ],
         ),
@@ -604,32 +606,25 @@ class WorkoutReceiptCard extends StatelessWidget {
   Widget _summaryChip(String value, String label) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.input,
-          borderRadius: BorderRadius.circular(10),
+          color: AppColors.bgRaise,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.line2, width: 1),
         ),
         child: Column(
           children: [
             Text(
               value,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-                color: AppColors.textSecondary,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2.0,
               ),
             ),
           ],
@@ -641,29 +636,24 @@ class WorkoutReceiptCard extends StatelessWidget {
   Widget _buildPRSection() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.accent.withValues(alpha: 0.2),
-        ),
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.star, color: AppColors.accent, size: 14),
-              const SizedBox(width: 4),
+              const Icon(Icons.military_tech, color: AppColors.accent, size: 14),
+              const SizedBox(width: 6),
               Text(
                 'PERSONAL RECORDS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
+                style: AppTypography.mono.copyWith(
                   color: AppColors.accent,
+                  letterSpacing: 2.4,
                 ),
               ),
             ],
@@ -673,11 +663,9 @@ class WorkoutReceiptCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
                   pr,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  style: AppTypography.body.copyWith(
                     color: AppColors.accent,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               )),
@@ -687,29 +675,25 @@ class WorkoutReceiptCard extends StatelessWidget {
   }
 
   Widget _buildStreakBadge() {
+    // Sharp Wardroom chip — no more pill.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.accentTint,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: AppColors.accent.withValues(alpha: 0.2),
-        ),
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.local_fire_department,
-              color: AppColors.accent, size: 14),
-          const SizedBox(width: 4),
+              color: AppColors.accent, size: 13),
+          const SizedBox(width: 6),
           Text(
             '${data.streakWeeks} WEEK STREAK',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
+            style: AppTypography.monoXs.copyWith(
               color: AppColors.accent,
-              letterSpacing: 0.5,
+              letterSpacing: 2.0,
             ),
           ),
         ],

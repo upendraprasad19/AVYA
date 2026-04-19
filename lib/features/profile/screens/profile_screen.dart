@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -1039,37 +1040,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildSubscriptionSection(SubscriptionInfoData subInfo, bool isPro, UsageCounterService usage) {
     if (isPro) {
-      // Simple PRO card with expiry
+      // PRO dossier — hero card, Campaign Gold chip, Fraunces plan name.
       final expiryStr = subInfo.expiresAt != null
           ? '${subInfo.expiresAt!.day} ${_monthName(subInfo.expiresAt!.month)} ${subInfo.expiresAt!.year}'
           : '\u2014';
-      return Container(
+      final planLabel = (subInfo.plan ?? 'monthly').toUpperCase();
+      return WardCard(
+        variant: WardCardVariant.hero,
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.proGold.withValues(alpha: 0.3)),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1a1408), Color(0xFF0e1219)],
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.proGold,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text('PRO', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: Colors.black)),
-            ),
+            const WardChip(label: 'PRO', tone: WardChipTone.gold),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                '${(subInfo.plan ?? "monthly").toUpperCase()} \u00B7 Renews $expiryStr',
-                style: GoogleFonts.getFont('DM Sans', fontSize: 12,
-                    fontWeight: FontWeight.w600, color: AppColors.proGold),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(planLabel,
+                      style: AppTypography.h3.copyWith(color: AppColors.accent)),
+                  const SizedBox(height: 2),
+                  Text('RENEWS $expiryStr'.toUpperCase(),
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 1.6,
+                      )),
+                ],
               ),
             ),
           ],
@@ -1077,7 +1073,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
-    // Free user — show trial pill + rate limits
+    // Free user — rate-limit meters with trial pill.
     final aiTextUsed = usage.used(AppConstants.featureAiTextLogPro, false);
     final aiTextLimit = AppConstants.freeAiTextLogsPerDay;
     final scanUsed = usage.used(AppConstants.featureScanMealPro, false);
@@ -1085,7 +1081,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
     final cartLimit = AppConstants.freeCartAuditorPerDay;
 
-    // Compute trial days remaining from Hive directly
     final configBox = HiveService.instance.configBox;
     final trialStartRaw = configBox.get('ai_trial_start') as String?;
     int? trialDaysLeft;
@@ -1098,81 +1093,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    return Container(
+    return WardCard(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('FREE PLAN', style: GoogleFonts.getFont('DM Sans',
-                  fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.textSecondary)),
+              Text('FREE PLAN',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 2.0,
+                  )),
               const Spacer(),
               GestureDetector(
                 onTap: () => showPaywallSheet(context, feature: 'PRO'),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(100),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
                   ),
-                  child: Text('Upgrade', style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black)),
+                  child: Text('UPGRADE',
+                      style: AppTypography.monoXs.copyWith(
+                        color: Colors.black,
+                        letterSpacing: 2.0,
+                        fontWeight: FontWeight.w700,
+                      )),
                 ),
               ),
             ],
           ),
-          // Trial days pill
           if (trialDaysLeft != null) ...[
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: trialDaysLeft > 7
-                    ? AppColors.accentTint
-                    : AppColors.red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: trialDaysLeft > 7
-                      ? AppColors.accent.withValues(alpha: 0.2)
-                      : AppColors.red.withValues(alpha: 0.2),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.timer_outlined,
-                    size: 11,
-                    color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    trialDaysLeft > 0
-                        ? '30-day AI trial · $trialDaysLeft day${trialDaysLeft == 1 ? '' : 's'} remaining'
-                        : 'AI trial expired · Upgrade to continue',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: trialDaysLeft > 7 ? AppColors.accent : AppColors.red,
-                    ),
-                  ),
-                ],
+            WardChip(
+              label: trialDaysLeft > 0
+                  ? '${trialDaysLeft}d AI trial remaining'
+                  : 'AI trial expired',
+              tone: trialDaysLeft > 7 ? WardChipTone.gold : WardChipTone.warn,
+              leading: Icon(
+                Icons.timer_outlined,
+                size: 11,
+                color: trialDaysLeft > 7 ? AppColors.accent : AppColors.warn,
               ),
             ),
           ],
           const SizedBox(height: 12),
           _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _usageRow('Meal Scans', scanUsed, scanLimit, '/day'),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _usageRow('Cart Auditor', cartUsed, cartLimit, '/day'),
         ],
       ),
@@ -1182,36 +1153,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _usageRow(String label, int used, int limit, String period) {
     final pct = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
     final isExhausted = used >= limit;
+    final meterColor = isExhausted ? AppColors.bad : AppColors.accent;
+    final readoutColor = isExhausted ? AppColors.bad : AppColors.textDim;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: 90,
-          child: Text(label, style: GoogleFonts.getFont('DM Sans',
-              fontSize: 11, color: AppColors.textSecondary)),
+          width: 92,
+          child: Text(label.toUpperCase(),
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.6,
+              )),
         ),
-        Expanded(
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.input,
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: pct,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isExhausted ? AppColors.red : AppColors.accent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text('$used/$limit$period', style: GoogleFonts.getFont('DM Sans',
-            fontSize: 10, fontWeight: FontWeight.w700,
-            color: isExhausted ? AppColors.red : AppColors.textSecondary)),
+        Expanded(child: WardBar(pct: pct, color: meterColor, height: 4)),
+        const SizedBox(width: 10),
+        Text('$used/$limit$period',
+            style: AppTypography.monoXs.copyWith(color: readoutColor)),
       ],
     );
   }
