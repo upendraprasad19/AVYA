@@ -4,6 +4,59 @@ import '../utils/date_utils.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
+/// Result returned by [WorkoutScheduleService.swapExerciseInDay].
+///
+/// Holds enough metadata for the AI coach dispatcher (Phase A.8) to
+/// render a "Swapped X for Y in today's workout" success state without
+/// re-reading Hive.
+class SwapExerciseResult {
+  /// `YYYY-MM-DD` date string the swap was applied to.
+  final String date;
+
+  /// Library `id` of the exercise that was removed.
+  final String fromExerciseId;
+
+  /// Display name of the exercise that was removed.
+  final String fromExerciseName;
+
+  /// Library `id` of the exercise that was inserted.
+  final String toExerciseId;
+
+  /// Display name of the exercise that was inserted.
+  final String toExerciseName;
+
+  /// 0-based position in the day's `exercises` array where the swap occurred.
+  final int positionInWorkout;
+
+  const SwapExerciseResult({
+    required this.date,
+    required this.fromExerciseId,
+    required this.fromExerciseName,
+    required this.toExerciseId,
+    required this.toExerciseName,
+    required this.positionInWorkout,
+  });
+}
+
+/// Typed failure modes for [WorkoutScheduleService.swapExerciseInDay].
+///
+/// The dispatcher inspects [code] to map to a user-facing message:
+///   - `no_schedule` — no `schedule_<date>` entry exists for the date.
+///   - `exercise_not_in_workout` — the source exercise isn't in that day.
+///   - `exercise_not_found` — the target exercise isn't in exerciseBox or
+///     customBox. Catches typos and stale ids.
+///   - `workout_completed` — the day is already marked completed; swap is
+///     refused so history stays sacred. Use [EditWorkoutLogSheet] instead
+///     for post-completion changes.
+///   - `other` — anything else (defensive catch-all).
+class SwapExerciseException implements Exception {
+  final String code;
+  final String message;
+  const SwapExerciseException(this.code, this.message);
+  @override
+  String toString() => 'SwapExerciseException($code): $message';
+}
+
 /// Maps generated plan days to real calendar dates and persists to Hive.
 ///
 /// This is the glue between PlanGenerator (logical days) and the UI
@@ -652,6 +705,173 @@ class WorkoutScheduleService {
     await _incrementSwapCount(mondayA);
 
     return null; // success
+  }
+
+  /// Swaps a single exercise within a scheduled workout for a different one.
+  ///
+  /// Called by the AI coach `swap_exercise` tool intent dispatcher (Phase
+  /// A.8). The caller is responsible for invalidating Riverpod providers
+  /// (CLAUDE.md §15: currentPlanProvider, workoutStatsProvider,
+  /// calendarWeekProvider, streakProvider, todayWorkoutProvider,
+  /// allExercisePRsProvider) and firing fire-and-forget sync — this
+  /// service stays a pure data layer (matches existing methods like
+  /// [swapDays] and [assignTemplateToDate], which also leave invalidation
+  /// + sync to the caller).
+  ///
+  /// Behaviour:
+  ///   1. Reads `schedule_<date>` from workoutBox; throws if absent.
+  ///   2. Refuses to mutate completed workouts (history is sacred).
+  ///   3. Locates [fromExerciseId] in the day's `exercises` array.
+  ///   4. Resolves [toExerciseId] from exerciseBox first, then customBox.
+  ///   5. Builds a replacement exercise entry that:
+  ///        - Carries over `sets`, `reps`, `rest_seconds`, `superset_group`
+  ///          from the swapped-out entry (so the user's prescription is
+  ///          preserved).
+  ///        - Pulls fresh `id`, `exercise_name`, `category`,
+  ///          `equipment_needed`, `logging_type`, `exercise_type`,
+  ///          `coaching_cues`, `image_*` from the new exercise's library
+  ///          row.
+  ///   6. Writes the updated schedule back to Hive.
+  ///   7. Returns a [SwapExerciseResult] with before/after names + index.
+  ///
+  /// Throws [SwapExerciseException] with one of: `no_schedule`,
+  /// `exercise_not_in_workout`, `exercise_not_found`, `workout_completed`.
+  Future<SwapExerciseResult> swapExerciseInDay({
+    required String date,
+    required String fromExerciseId,
+    required String toExerciseId,
+  }) async {
+    final scheduleKey = '$_schedulePrefix$date';
+    final raw = _hive.workoutBox.get(scheduleKey);
+    if (raw is! Map) {
+      throw SwapExerciseException(
+        'no_schedule',
+        'No scheduled workout found for $date',
+      );
+    }
+    final scheduleMap = Map<String, dynamic>.from(raw);
+
+    if (scheduleMap['status'] == 'completed') {
+      throw SwapExerciseException(
+        'workout_completed',
+        'Cannot swap exercise in a completed workout — use the Edit log path instead',
+      );
+    }
+
+    // Locate fromExerciseId in the exercises array. Match against either
+    // exercise_id (preferred — newer schedules) or exercise_name (older
+    // entries may not have stored exercise_id).
+    final exercisesRaw = scheduleMap['exercises'];
+    final exercises = exercisesRaw is List
+        ? exercisesRaw
+            .map((e) => e is Map
+                ? Map<String, dynamic>.from(e)
+                : <String, dynamic>{})
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    int matchIndex = -1;
+    for (int i = 0; i < exercises.length; i++) {
+      final ex = exercises[i];
+      final id = (ex['exercise_id'] as String?) ?? '';
+      final name = (ex['exercise_name'] as String?) ?? '';
+      if (id == fromExerciseId || name == fromExerciseId) {
+        matchIndex = i;
+        break;
+      }
+    }
+    if (matchIndex == -1) {
+      throw SwapExerciseException(
+        'exercise_not_in_workout',
+        'Exercise "$fromExerciseId" is not scheduled on $date',
+      );
+    }
+
+    // Resolve toExerciseId from exerciseBox first, then customBox.
+    Map<String, dynamic>? newLib;
+    final libRaw = _hive.exerciseBox.get(toExerciseId);
+    if (libRaw is Map) {
+      newLib = Map<String, dynamic>.from(libRaw);
+    } else {
+      // customBox uses keys like 'custom_exercise_<ts>' — scan for matching id or name.
+      for (final key in _hive.customBox.keys) {
+        if (key is! String || !key.startsWith('custom_exercise_')) continue;
+        final candidate = _hive.customBox.get(key);
+        if (candidate is! Map) continue;
+        final candMap = Map<String, dynamic>.from(candidate);
+        final candId = (candMap['id'] as String?) ?? '';
+        final candName = (candMap['name'] as String?) ?? '';
+        if (candId == toExerciseId || candName == toExerciseId) {
+          newLib = candMap;
+          break;
+        }
+      }
+    }
+    if (newLib == null) {
+      throw SwapExerciseException(
+        'exercise_not_found',
+        'Exercise "$toExerciseId" not found in library or custom exercises',
+      );
+    }
+
+    // Preserve user-prescribed volume from the swapped-out entry.
+    final original = exercises[matchIndex];
+    final replacement = <String, dynamic>{
+      'exercise_id':
+          (newLib['id'] as String?) ?? toExerciseId,
+      'exercise_name': (newLib['name'] as String?) ?? toExerciseId,
+      'logging_type': (newLib['logging_type'] as String?) ??
+          (original['logging_type'] as String?) ??
+          'weight_reps',
+      // Keep prescribed sets/reps/rest from the original slot.
+      'sets': original['sets'] ?? newLib['default_sets'] ?? 3,
+      'reps': (original['reps'] ??
+              newLib['default_reps'] ??
+              '8-12')
+          .toString(),
+      'rest_seconds': original['rest_seconds'] ??
+          newLib['default_rest_secs'] ??
+          60,
+      // Carry pairing if present so superset structure stays intact.
+      if (original['superset_group'] != null)
+        'superset_group': original['superset_group'],
+      // Refresh metadata from the new library entry.
+      if (newLib['category'] != null) 'category': newLib['category'],
+      if (newLib['exercise_type'] != null)
+        'exercise_type': newLib['exercise_type'],
+      if (newLib['equipment_needed'] != null)
+        'equipment_needed': newLib['equipment_needed'],
+      if (newLib['target_focus'] != null)
+        'target_focus': newLib['target_focus'],
+      if (newLib['priority_tier'] != null)
+        'priority_tier': newLib['priority_tier'],
+      if (newLib['coaching_cues'] != null)
+        'coaching_cues': newLib['coaching_cues'],
+      if (newLib['image_start_url'] != null)
+        'image_start_url': newLib['image_start_url'],
+      if (newLib['image_end_url'] != null)
+        'image_end_url': newLib['image_end_url'],
+      // Mark this slot as user-modified so downstream periodisation /
+      // analytics can treat it differently from auto-generated picks.
+      'swapped_via': 'ai_coach',
+    };
+
+    exercises[matchIndex] = replacement;
+    scheduleMap['exercises'] = exercises;
+    await _hive.workoutBox.put(scheduleKey, scheduleMap);
+
+    return SwapExerciseResult(
+      date: date,
+      fromExerciseId: (original['exercise_id'] as String?) ??
+          (original['exercise_name'] as String?) ??
+          fromExerciseId,
+      fromExerciseName: (original['exercise_name'] as String?) ??
+          (original['exercise_id'] as String?) ??
+          fromExerciseId,
+      toExerciseId: (newLib['id'] as String?) ?? toExerciseId,
+      toExerciseName: (newLib['name'] as String?) ?? toExerciseId,
+      positionInWorkout: matchIndex,
+    );
   }
 
   int _getSwapsUsedThisWeek(DateTime monday) {

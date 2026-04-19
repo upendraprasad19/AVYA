@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -815,6 +818,245 @@ class WorkoutRepository {
     return count;
   }
 
+  // ── Single-exercise logging (shared by completeWorkout + AI coach) ──
+
+  /// Logs a single exercise's completed sets, recomputes the chronological
+  /// `is_pr` flag for that exercise across all history, updates the
+  /// per-date `exercise_log_index_<YYYY-MM-DD>` index, and (optionally)
+  /// fires fire-and-forget cloud sync.
+  ///
+  /// Used by:
+  ///   - [ActiveWorkoutNotifier.completeWorkout] — once per exercise in
+  ///     a completed workout. Passes `fireSyncImmediately: false` so the
+  ///     caller can fire a single sync after the loop instead of N+1.
+  ///     May also pass [setsDetail] / [bestSingleSetReps] /
+  ///     [bestSingleSetDuration] / [hasWarmupSets] to preserve the
+  ///     richer per-set log shape used by [WorkoutReceiptCard] and
+  ///     [EditWorkoutLogSheet].
+  ///   - AI coach `log_set` tool intent (Phase A.8) — once per call,
+  ///     simple shape (weight/reps/sets), no per-set detail.
+  ///
+  /// [exerciseId] is the library / custom id (used for stable identity
+  /// in the cloud `workout_log_exercises` table). [exerciseName] is the
+  /// human-readable label persisted in Hive.
+  ///
+  /// [loggingType] defaults to a heuristic: `weight_reps` if `weightKg > 0`,
+  /// else `bodyweight_reps`. Pass an explicit value for `timed`/`cardio`/
+  /// `distance`/`weighted_bodyweight`.
+  ///
+  /// PR rescan walks every `exlog_*` for the same exercise name across
+  /// ALL dates, sorts by `date + created_at`, and uses strict `>`
+  /// comparison — same logic as [EditWorkoutLogSheet._recomputePrFlagsForExercise].
+  /// The earliest log is never a PR (needs a baseline to beat).
+  ///
+  /// Returns the deterministic Hive key written
+  /// (`exlog_<millisSinceEpoch>_<nameHash>`).
+  Future<String> logSetWithPrRescan({
+    required String exerciseId,
+    required String exerciseName,
+    required double weightKg,
+    required int reps,
+    required int sets,
+    String? loggingType,
+    DateTime? date,
+    List<Map<String, dynamic>>? setsDetail,
+    int? bestSingleSetReps,
+    int? bestSingleSetDuration,
+    int? durationSeconds,
+    double? distanceKm,
+    bool hasWarmupSets = false,
+    bool fireSyncImmediately = true,
+  }) async {
+    final now = DateTime.now();
+    final logDate = date ?? now;
+    final dateStr = formatDateKey(logDate);
+
+    final effectiveLoggingType = loggingType ??
+        (weightKg > 0 ? 'weight_reps' : 'bodyweight_reps');
+
+    // Volume = best weight × cumulative reps (matches completeWorkout
+    // fallback when caller doesn't supply a per-set volume from
+    // setsDetail). When setsDetail IS supplied, the caller has already
+    // computed exact per-set volume — but for the simple AI-coach path
+    // we use the best-weight × total-reps approximation.
+    final volumeKg = weightKg * reps;
+
+    final logId =
+        'exlog_${now.millisecondsSinceEpoch}_${exerciseName.hashCode}';
+
+    final logMap = <String, dynamic>{
+      'id': logId,
+      'type': 'exercise_log',
+      'exercise_id': exerciseId,
+      'exercise_name': exerciseName,
+      'date': dateStr,
+      'logging_type': effectiveLoggingType,
+      'is_pr': false, // rescan below sets the correct value
+      'has_warmup_sets': hasWarmupSets,
+      'volume_kg': volumeKg,
+      'created_at': now.toIso8601String(),
+      'sets_detail': ?setsDetail,
+      'best_single_set_reps': ?bestSingleSetReps,
+      'best_single_set_duration': ?bestSingleSetDuration,
+    };
+
+    // Per-logging-type fields — mirrors completeWorkout's switch.
+    switch (effectiveLoggingType) {
+      case 'weight_reps':
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'bodyweight_reps':
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'weighted_bodyweight':
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'timed':
+        logMap['duration_seconds'] = durationSeconds ?? 0;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'cardio':
+        logMap['duration_seconds'] = durationSeconds ?? 0;
+        logMap['distance_km'] = distanceKm ?? 0;
+        break;
+      case 'distance':
+        logMap['distance_km'] = distanceKm ?? 0;
+        logMap['weight_kg'] = weightKg;
+        break;
+      default:
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+    }
+
+    await _hive.workoutBox.put(logId, logMap);
+
+    // Append to the per-date index for O(1) reads by
+    // [getExerciseLogsForDate]. Multiple workouts on the same day all
+    // accumulate in this list.
+    final indexKey = 'exercise_log_index_$dateStr';
+    final existingIndex = _hive.workoutBox.get(indexKey);
+    final indexList = existingIndex is List
+        ? List<String>.from(existingIndex)
+        : <String>[];
+    indexList.add(logId);
+    await _hive.workoutBox.put(indexKey, indexList);
+
+    // Walk every exlog_* for this exercise across all dates and rewrite
+    // is_pr in chronological order. Strict `>` comparison; first log with
+    // a baseline is never a PR. Mirrors EditWorkoutLogSheet's logic.
+    _recomputePrFlagsForExercise(exerciseName);
+
+    if (fireSyncImmediately) {
+      // Fire-and-forget — never block the UI on cloud sync.
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+    }
+
+    return logId;
+  }
+
+  /// Walks every exlog for [exerciseName] chronologically and rewrites
+  /// the `is_pr` flag. PR rule (matches
+  /// [EditWorkoutLogSheet._recomputePrFlagsForExercise]):
+  ///   - `weight_reps` / `weighted_bodyweight`: strict increase in
+  ///     `weight_kg`.
+  ///   - `bodyweight_reps`: strict increase in per-set best reps
+  ///     (`best_single_set_reps`, falls back to estimated average).
+  ///   - `timed`: strict increase in per-set best duration
+  ///     (`best_single_set_duration`, falls back to estimated average).
+  ///   - `cardio` / `distance`: strict increase in `distance_km`.
+  /// Earliest log with a baseline value is NOT a PR.
+  void _recomputePrFlagsForExercise(String exerciseName) {
+    final box = _hive.workoutBox;
+    final lower = exerciseName.toLowerCase();
+
+    final entries = <_PrScanEntry>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('exlog_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['type'] != 'exercise_log') continue;
+      final exName = (map['exercise_name'] as String?) ?? '';
+      if (exName.toLowerCase() != lower) continue;
+      final dateStr = (map['date'] as String?) ?? '';
+      entries.add(_PrScanEntry(key: key, dateStr: dateStr, map: map));
+    }
+
+    if (entries.isEmpty) return;
+
+    entries.sort((a, b) {
+      final d = a.dateStr.compareTo(b.dateStr);
+      if (d != 0) return d;
+      final aC = (a.map['created_at'] as String?) ?? '';
+      final bC = (b.map['created_at'] as String?) ?? '';
+      return aC.compareTo(bC);
+    });
+
+    double runningMaxWeight = 0;
+    int runningMaxReps = 0;
+    int runningMaxDuration = 0;
+    double runningMaxDistance = 0;
+
+    for (final e in entries) {
+      final loggingType = (e.map['logging_type'] as String?) ?? 'weight_reps';
+      final weight = (e.map['weight_kg'] as num?)?.toDouble() ?? 0;
+      final distance = (e.map['distance_km'] as num?)?.toDouble() ?? 0;
+
+      final bestReps = (e.map['best_single_set_reps'] as int?) ??
+          (((e.map['reps_completed'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['reps_completed'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
+      final bestDuration = (e.map['best_single_set_duration'] as int?) ??
+          (((e.map['duration_seconds'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['duration_seconds'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
+
+      bool isPr = false;
+      switch (loggingType) {
+        case 'weight_reps':
+        case 'weighted_bodyweight':
+          if (weight > runningMaxWeight && runningMaxWeight > 0) isPr = true;
+          if (weight > runningMaxWeight) runningMaxWeight = weight;
+          break;
+        case 'bodyweight_reps':
+          if (bestReps > runningMaxReps && runningMaxReps > 0) isPr = true;
+          if (bestReps > runningMaxReps) runningMaxReps = bestReps;
+          break;
+        case 'timed':
+          if (bestDuration > runningMaxDuration && runningMaxDuration > 0) {
+            isPr = true;
+          }
+          if (bestDuration > runningMaxDuration) {
+            runningMaxDuration = bestDuration;
+          }
+          break;
+        case 'cardio':
+        case 'distance':
+          if (distance > runningMaxDistance && runningMaxDistance > 0) {
+            isPr = true;
+          }
+          if (distance > runningMaxDistance) runningMaxDistance = distance;
+          break;
+      }
+
+      if (e.map['is_pr'] != isPr) {
+        e.map['is_pr'] = isPr;
+        box.put(e.key, e.map);
+      }
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
 
   String _formatDate(DateTime date) => formatDateKey(date);
@@ -824,4 +1066,16 @@ class WorkoutRepository {
     final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
     return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
+}
+
+/// Internal scratch record for [WorkoutRepository._recomputePrFlagsForExercise].
+class _PrScanEntry {
+  final String key;
+  final String dateStr;
+  final Map<String, dynamic> map;
+  const _PrScanEntry({
+    required this.key,
+    required this.dateStr,
+    required this.map,
+  });
 }

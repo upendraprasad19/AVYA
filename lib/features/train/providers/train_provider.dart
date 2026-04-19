@@ -1283,17 +1283,20 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       completedAt: workoutDate,
     );
 
-    // Compute date key once — used by exercise logs, date index, schedule, and streak.
+    // Compute date key once — used by schedule + streak below.
     final dateStr = formatDateKey(workoutDate);
-    final savedLogIds = <String>[]; // Collect IDs for date index
 
-    // Save individual exercise logs with is_pr flag, respecting logging type
+    // Save individual exercise logs via the shared per-exercise helper
+    // (WorkoutRepository.logSetWithPrRescan). The helper handles:
+    //   - exlog_<ts>_<hash> Hive write (with volume_kg)
+    //   - exercise_log_index_<date> append (per-date O(1) index)
+    //   - chronological is_pr rescan for the exercise across all history
+    // We pass `fireSyncImmediately: false` to suppress per-exercise sync —
+    // completeWorkout fires a single sync after the loop instead of N+1.
+    // The pre-loop `prDescriptions` list above stays as-is and drives the
+    // success-state UI; the helper's rescan is what persists is_pr to Hive.
     for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
       final exercise = state.exercises[exIdx];
-      final isPr = prDescriptions
-          .any((pr) => pr.startsWith(exercise.name));
-      final logId =
-          'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
 
       // Aggregate values from per-set input data.
       // Scan checkedSets for dynamically added sets beyond template count.
@@ -1308,7 +1311,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       int totalReps = 0;
       int totalDuration = 0;
       double totalDistance = 0;
-      double volumeKg = 0; // exact per-set volume for receipt reconstruction
       int completedSets = 0;
 
       // Build per-set detail list for per-set editing + accurate PR detection
@@ -1330,8 +1332,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             totalReps += vals.reps ?? 0;
             totalDuration += vals.durationSeconds ?? 0;
             totalDistance += vals.distanceKm ?? 0;
-            // Accumulate exact per-set volume
-            volumeKg += (vals.weight ?? 0) * (vals.reps ?? 0);
 
             // Capture per-set detail
             setsDetail.add({
@@ -1380,69 +1380,25 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
               ? ((s['duration_seconds'] as int?) ?? 0)
               : max);
 
-      // Build log map based on logging type
-      final logMap = <String, dynamic>{
-        'id': logId,
-        'type': 'exercise_log',
-        'exercise_name': exercise.name,
-        'date': dateStr,
-        'logging_type': effectiveLoggingType,
-        'is_pr': isPr,
-        'has_warmup_sets': hasWarmUpSets,
-        'volume_kg': volumeKg,
-        'created_at': now.toIso8601String(),
-        'sets_detail': setsDetail,
-        'best_single_set_reps': bestSingleSetReps,
-        'best_single_set_duration': bestSingleSetDuration,
-      };
-
-      switch (effectiveLoggingType) {
-        case 'weight_reps':
-          logMap['weight_kg'] = totalWeight;
-          logMap['reps_completed'] = totalReps;
-          logMap['sets_completed'] = completedSets;
-          break;
-        case 'bodyweight_reps':
-          logMap['reps_completed'] = totalReps;
-          logMap['sets_completed'] = completedSets;
-          break;
-        case 'weighted_bodyweight':
-          logMap['weight_kg'] = totalWeight;
-          logMap['reps_completed'] = totalReps;
-          logMap['sets_completed'] = completedSets;
-          break;
-        case 'timed':
-          logMap['duration_seconds'] = totalDuration;
-          logMap['sets_completed'] = completedSets;
-          break;
-        case 'cardio':
-          logMap['duration_seconds'] = totalDuration;
-          logMap['distance_km'] = totalDistance;
-          break;
-        case 'distance':
-          logMap['distance_km'] = totalDistance;
-          logMap['weight_kg'] = totalWeight;
-          break;
-        default:
-          logMap['weight_kg'] = totalWeight;
-          logMap['reps_completed'] = totalReps;
-          logMap['sets_completed'] = completedSets;
-      }
-
-      await hive.workoutBox.put(logId, logMap);
-      savedLogIds.add(logId);
-    }
-
-    // Update date index for O(1) lookups by date (Fix 4: date index).
-    // Appends new log IDs to existing index (handles multiple workouts/day).
-    if (savedLogIds.isNotEmpty) {
-      final indexKey = 'exercise_log_index_$dateStr';
-      final existingIndex = hive.workoutBox.get(indexKey);
-      final indexList = existingIndex is List
-          ? List<String>.from(existingIndex)
-          : <String>[];
-      indexList.addAll(savedLogIds);
-      await hive.workoutBox.put(indexKey, indexList);
+      await repo.logSetWithPrRescan(
+        // ActiveExercise has no library id field — name is the stable
+        // identity used both in Hive (`exercise_name`) and in the cloud
+        // contract (`workout_log_exercises.exercise_id`).
+        exerciseId: exercise.name,
+        exerciseName: exercise.name,
+        weightKg: totalWeight,
+        reps: totalReps,
+        sets: completedSets,
+        loggingType: effectiveLoggingType,
+        date: workoutDate,
+        setsDetail: setsDetail,
+        bestSingleSetReps: bestSingleSetReps,
+        bestSingleSetDuration: bestSingleSetDuration,
+        durationSeconds: totalDuration,
+        distanceKm: totalDistance,
+        hasWarmupSets: hasWarmUpSets,
+        fireSyncImmediately: false, // single sync after the loop, below
+      );
     }
 
     // Mark the scheduled day as completed in the calendar.
