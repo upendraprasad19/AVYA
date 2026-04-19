@@ -25,6 +25,7 @@ function applyTone(
   }
   if (tone === "data_driven") {
     const snap = snapshotJson ?? {};
+    // "today_steps" in yesterday's snapshot = steps recorded yesterday
     const stepsYday = snap.today_steps as number | null;
     if (stepsYday != null) {
       return `${firstName} — yesterday: ${stepsYday} steps. ${baseAlert}`;
@@ -306,12 +307,15 @@ async function generateAndStoreAlert(
   try {
     const isPro = user.subscription_status === "pro";
 
-    // Read coach_memory ONCE per user — fetchCoachMemory returns null when row
-    // is missing OR when private_mode=true, so the fallbacks below also handle
-    // the privacy case correctly without leaking memory-derived copy.
+    // Read coach_memory ONCE per user.
+    // private_mode users get default copy — explicit guard since fetchCoachMemory
+    // returns the row regardless of private_mode (only renderCoachMemoryBlock
+    // short-circuits on it). Without nullifying here, preferred_name +
+    // motivation_style would leak personalised copy to private_mode users.
     const memory = await fetchCoachMemory(supabaseClient, user.id);
-    const userName = memory?.preferred_name ?? user.full_name ?? "Champion";
-    const tone = (memory?.motivation_style ?? null) as MotivationTone | null;
+    const usableMemory = memory?.private_mode ? null : memory;
+    const userName = usableMemory?.preferred_name ?? user.full_name ?? "Champion";
+    const tone = (usableMemory?.motivation_style ?? null) as MotivationTone | null;
 
     // Fetch yesterday's snapshot for context
     const { data: yesterdaySnap } = await supabaseClient
