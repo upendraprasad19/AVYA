@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -104,9 +103,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
           'Streak Freeze used! $remaining remaining this week.',
-          style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w600),
+          style: AppTypography.body.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        backgroundColor: AppColors.blue,
+        backgroundColor: AppColors.info,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ));
@@ -503,7 +505,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? QuickActionState.completed
                 : QuickActionState.idle,
             progress: waterProgress,
-            progressColor: AppColors.blue,
+            progressColor: AppColors.info,
             onTap: () => showModalBottomSheet(
               context: context,
               backgroundColor: Colors.transparent,
@@ -701,11 +703,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => context.go('/nutrition'),
             child: Text(
               'VIEW ALL',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                letterSpacing: 2,
               ),
             ),
           ),

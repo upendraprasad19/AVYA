@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Personal Records snapshot on the home dashboard.
 ///
@@ -19,26 +20,19 @@ class PrSnapshot extends ConsumerWidget {
     final prs = ref.watch(allExercisePRsProvider);
 
     if (prs.isEmpty) {
-      return Container(
-        width: double.infinity,
+      return WardCard(
+        variant: WardCardVariant.standard,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.border),
-        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.emoji_events_outlined,
-                size: 16, color: AppColors.textSecondary),
+                size: 16, color: AppColors.textDim),
             const SizedBox(width: 10),
             Text(
               'Log workouts to see your PRs here',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                color: AppColors.textSecondary,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
               ),
             ),
           ],
@@ -50,16 +44,13 @@ class PrSnapshot extends ConsumerWidget {
     final visiblePrs = prs.take(3).toList();
     final hasMore = prs.length > 3;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
+    return WardCard(
+      variant: WardCardVariant.standard,
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(
               children: [
                 const Icon(Icons.emoji_events,
@@ -67,12 +58,9 @@ class PrSnapshot extends ConsumerWidget {
                 const SizedBox(width: 6),
                 Text(
                   'PERSONAL RECORDS',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.proGold,
+                    letterSpacing: 2,
                   ),
                 ),
                 const Spacer(),
@@ -80,12 +68,10 @@ class PrSnapshot extends ConsumerWidget {
                   GestureDetector(
                     onTap: () => _showAllPRsSheet(context, prs),
                     child: Text(
-                      'See All ${prs.length} →',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                      'SEE ALL ${prs.length} \u2192',
+                      style: AppTypography.monoXs.copyWith(
                         color: AppColors.accent,
+                        letterSpacing: 2,
                       ),
                     ),
                   ),
@@ -93,7 +79,7 @@ class PrSnapshot extends ConsumerWidget {
             ),
           ),
 
-          Container(height: 1, color: AppColors.border),
+          Container(height: 1, color: AppColors.line2),
 
           ...visiblePrs.asMap().entries.map((entry) {
             final i = entry.key;
@@ -107,12 +93,12 @@ class PrSnapshot extends ConsumerWidget {
               onTap: () => _showAllPRsSheet(context, prs),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 9),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.proGoldTint,
                   borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(AppRadius.cardM),
-                    bottomRight: Radius.circular(AppRadius.cardM),
+                    bottomLeft: Radius.circular(AppRadius.card),
+                    bottomRight: Radius.circular(AppRadius.card),
                   ),
                 ),
                 child: Row(
@@ -122,12 +108,10 @@ class PrSnapshot extends ConsumerWidget {
                         size: 13, color: AppColors.proGold),
                     const SizedBox(width: 4),
                     Text(
-                      '${prs.length - 3} more PRs',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                      '${prs.length - 3} MORE PRS',
+                      style: AppTypography.monoXs.copyWith(
                         color: AppColors.proGold,
+                        letterSpacing: 2,
                       ),
                     ),
                   ],
@@ -151,7 +135,8 @@ class PrSnapshot extends ConsumerWidget {
         builder: (_, scrollController) => Container(
           decoration: const BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppRadius.card)),
           ),
           child: Column(
             children: [
@@ -161,57 +146,42 @@ class PrSnapshot extends ConsumerWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: AppColors.line2,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, 4, AppSpacing.gutter, 12),
                 child: Row(
                   children: [
                     const Icon(Icons.emoji_events,
                         size: 14, color: AppColors.proGold),
                     const SizedBox(width: 8),
                     Text(
-                      'ALL EXERCISE PRs',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
+                      'ALL EXERCISE PRS',
+                      style: AppTypography.mono.copyWith(
                         color: AppColors.textPrimary,
+                        letterSpacing: 2,
                       ),
                     ),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentTint,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        '${prs.length} exercises',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
-                      ),
+                    WardChip(
+                      label: '${prs.length} EXERCISES',
+                      tone: WardChipTone.gold,
                     ),
                   ],
                 ),
               ),
-              Container(height: 1, color: AppColors.border),
+              Container(height: 1, color: AppColors.line2),
               Expanded(
                 child: ListView.separated(
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: prs.length,
                   separatorBuilder: (_, index) =>
-                      Container(height: 1, color: AppColors.border),
+                      Container(height: 1, color: AppColors.line2),
                   itemBuilder: (_, i) {
                     final pr = prs[i];
                     return Padding(
@@ -222,10 +192,7 @@ class PrSnapshot extends ConsumerWidget {
                           Container(
                             width: 3,
                             height: 30,
-                            decoration: BoxDecoration(
-                              color: AppColors.proGold,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                            color: AppColors.proGold,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -235,19 +202,16 @@ class PrSnapshot extends ConsumerWidget {
                                 Text(
                                   pr.exerciseName,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                  style: AppTypography.body.copyWith(
                                     color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 Text(
                                   pr.formattedDate,
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 10,
-                                    color: AppColors.textSecondary,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.textMute,
+                                    letterSpacing: 1.5,
                                   ),
                                 ),
                               ],
@@ -255,10 +219,7 @@ class PrSnapshot extends ConsumerWidget {
                           ),
                           Text(
                             pr.formattedValue,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
+                            style: AppTypography.h3.copyWith(
                               color: AppColors.accent,
                             ),
                           ),
@@ -289,20 +250,17 @@ class _PrRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : Border(bottom: BorderSide(color: AppColors.border)),
+            : const Border(bottom: BorderSide(color: AppColors.line2)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: Row(
           children: [
-            // Slimmer gold bar matches "RECENT LOGS" row density.
+            // Slim gold slab
             Container(
               width: 3,
               height: 30,
-              decoration: BoxDecoration(
-                color: AppColors.proGold,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              color: AppColors.proGold,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -313,20 +271,17 @@ class _PrRow extends StatelessWidget {
                   Text(
                     pr.exerciseName,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    style: AppTypography.body.copyWith(
                       color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     pr.formattedDate,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textMute,
+                      letterSpacing: 1.5,
                     ),
                   ),
                 ],
@@ -334,10 +289,7 @@ class _PrRow extends StatelessWidget {
             ),
             Text(
               pr.formattedValue,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
+              style: AppTypography.h3.copyWith(
                 color: AppColors.accent,
               ),
             ),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet showing workout details for a tapped calendar day.
 ///
@@ -49,7 +50,7 @@ class DayDetailSheet extends StatelessWidget {
         decoration: const BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppRadius.cardL),
+            top: Radius.circular(AppRadius.card),
           ),
         ),
         child: Column(
@@ -61,26 +62,22 @@ class DayDetailSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: AppColors.line2,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.cardPadding,
+                AppSpacing.gutter,
                 14,
-                AppSpacing.cardPadding,
+                AppSpacing.gutter,
                 0,
               ),
               child: _buildHeader(),
             ),
             const SizedBox(height: 12),
-            // Divider
-            Container(
-              height: 1,
-              color: AppColors.border.withValues(alpha: 0.5),
-            ),
+            const WardRule(margin: EdgeInsets.zero),
             // Body
             if (isRestDay)
               _buildRestBody()
@@ -109,11 +106,16 @@ class DayDetailSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _formatDate(date),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                _formatDate(date).toUpperCase(),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatDateDisplay(date),
+                style: AppTypography.h2.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
@@ -121,12 +123,9 @@ class DayDetailSheet extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'WEEK $week',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: AppColors.textSecondary,
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ],
@@ -134,46 +133,14 @@ class DayDetailSheet extends StatelessWidget {
           ),
         ),
         if (isWorkout && workoutName.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppRadius.badge),
-              border: Border.all(
-                color: AppColors.accent.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Text(
-              workoutName.toUpperCase(),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: AppColors.accent,
-              ),
-            ),
-          ),
-        if (!isWorkout)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.textSecondary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppRadius.badge),
-              border: Border.all(
-                color: AppColors.textSecondary.withValues(alpha: 0.15),
-              ),
-            ),
-            child: Text(
-              'REST DAY',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: AppColors.textSecondary,
-              ),
-            ),
+          WardChip(
+            label: workoutName,
+            tone: WardChipTone.gold,
+          )
+        else if (!isWorkout)
+          const WardChip(
+            label: 'REST DAY',
+            tone: WardChipTone.neutral,
           ),
       ],
     );
@@ -183,22 +150,19 @@ class DayDetailSheet extends StatelessWidget {
 
   Widget _buildRestBody() {
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      padding: const EdgeInsets.all(AppSpacing.gutter),
       child: Column(
         children: [
           const SizedBox(height: 8),
           Icon(
             Icons.self_improvement_rounded,
             size: 40,
-            color: AppColors.textSecondary.withValues(alpha: 0.4),
+            color: AppColors.textDim.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 12),
           Text(
             'Rest & Recovery',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+            style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
             ),
           ),
@@ -207,11 +171,8 @@ class DayDetailSheet extends StatelessWidget {
             'Focus on light stretching, foam rolling, and staying hydrated. '
             'Sleep 7-9 hours to maximise muscle recovery and performance gains.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textDim,
               height: 1.5,
             ),
           ),
@@ -228,14 +189,11 @@ class DayDetailSheet extends StatelessWidget {
 
     if (exercises.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        padding: const EdgeInsets.all(AppSpacing.gutter),
         child: Text(
           'No exercises scheduled.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
+          style: AppTypography.body.copyWith(
+            color: AppColors.textDim,
           ),
         ),
       );
@@ -243,7 +201,7 @@ class DayDetailSheet extends StatelessWidget {
 
     return ListView.separated(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.cardPadding,
+        horizontal: AppSpacing.gutter,
         vertical: 12,
       ),
       shrinkWrap: true,
@@ -274,15 +232,9 @@ class DayDetailSheet extends StatelessWidget {
             60;
         final loggingType = ex['logging_type'] as String? ?? 'weight_reps';
 
-        return Container(
+        return WardCard(
+          variant: WardCardVariant.inset,
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.input,
-            borderRadius: BorderRadius.circular(AppRadius.row),
-            border: Border.all(
-              color: AppColors.border.withValues(alpha: 0.5),
-            ),
-          ),
           child: Row(
             children: [
               // Exercise index
@@ -290,17 +242,15 @@ class DayDetailSheet extends StatelessWidget {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.accentSoft,
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   '${index + 1}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                  style: AppTypography.mono.copyWith(
                     color: AppColors.accent,
+                    letterSpacing: 1,
                   ),
                 ),
               ),
@@ -312,11 +262,9 @@ class DayDetailSheet extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      style: AppTypography.body.copyWith(
                         color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -329,11 +277,9 @@ class DayDetailSheet extends StatelessWidget {
                         reps: reps,
                         restSecs: restSecs,
                       ),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ],
@@ -364,9 +310,9 @@ class DayDetailSheet extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.cardPadding,
-        4,
-        AppSpacing.cardPadding,
+        AppSpacing.gutter,
+        12,
+        AppSpacing.gutter,
         MediaQuery.of(context).padding.bottom + 16,
       ),
       child: isCompleted
@@ -389,26 +335,24 @@ class DayDetailSheet extends StatelessWidget {
           height: 48,
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.green.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              color: AppColors.ok.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
               border: Border.all(
-                color: AppColors.green.withValues(alpha: 0.25),
+                color: AppColors.ok.withValues(alpha: 0.33),
               ),
             ),
             alignment: Alignment.center,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, size: 18, color: AppColors.green),
-                const SizedBox(width: 6),
+                const Icon(Icons.check_circle, size: 16, color: AppColors.ok),
+                const SizedBox(width: 8),
                 Text(
                   'COMPLETED',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 13,
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.ok,
+                    letterSpacing: 2,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                    color: AppColors.green,
                   ),
                 ),
               ],
@@ -416,13 +360,13 @@ class DayDetailSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // View Workout Card button
+        // View Workout Card button — sharp 2-px accent outline
         SizedBox(
           width: double.infinity,
           height: 44,
           child: Material(
-            color: AppColors.accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
             child: InkWell(
               onTap: () {
                 final receiptData = WorkoutReceiptData.fromExerciseLogs(date);
@@ -430,24 +374,30 @@ class DayDetailSheet extends StatelessWidget {
                   WorkoutReceiptSheet.show(context, receiptData);
                 }
               },
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.receipt_long,
-                        size: 16, color: AppColors.accent),
-                    const SizedBox(width: 6),
-                    Text(
-                      'View Workout Card',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.accent,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.33),
+                  ),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.receipt_long,
+                          size: 14, color: AppColors.accent),
+                      const SizedBox(width: 8),
+                      Text(
+                        'VIEW WORKOUT CARD',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.accent,
+                          letterSpacing: 2,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -460,19 +410,17 @@ class DayDetailSheet extends StatelessWidget {
   Widget _buildStartButton(BuildContext context, {required bool enabled}) {
     return Material(
       color: enabled ? AppColors.accent : AppColors.textDisabled,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
+      borderRadius: BorderRadius.circular(AppRadius.sharp),
       child: InkWell(
         onTap: enabled ? () => Navigator.of(context).pop() : null,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
         child: Center(
           child: Text(
             'START WORKOUT',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 14,
+            style: AppTypography.mono.copyWith(
+              color: enabled ? Colors.black : AppColors.textMute,
+              letterSpacing: 2,
               fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-              color: enabled ? Colors.black : AppColors.textSecondary,
             ),
           ),
         ),
@@ -484,14 +432,33 @@ class DayDetailSheet extends StatelessWidget {
 
   String _formatDate(DateTime d) {
     const dayNames = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
     ];
+    return dayNames[d.weekday - 1];
+  }
+
+  String _formatDateDisplay(DateTime d) {
     const monthNames = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
-    return '${dayNames[d.weekday - 1]}, ${monthNames[d.month - 1]} ${d.day}';
+    return '${monthNames[d.month - 1]} ${d.day}';
   }
 
   String _formatExerciseDetail({
@@ -502,13 +469,13 @@ class DayDetailSheet extends StatelessWidget {
   }) {
     switch (loggingType) {
       case 'timed':
-        return '$sets sets \u00B7 ${reps}s \u00B7 ${restSecs}s rest';
+        return '$sets SETS \u00B7 ${reps}S \u00B7 ${restSecs}S REST';
       case 'cardio':
-        return '$reps min \u00B7 ${restSecs}s rest';
+        return '$reps MIN \u00B7 ${restSecs}S REST';
       case 'distance':
-        return '$reps \u00B7 ${restSecs}s rest';
+        return '$reps \u00B7 ${restSecs}S REST';
       default:
-        return '$sets sets \u00D7 $reps reps \u00B7 ${restSecs}s rest';
+        return '$sets SETS \u00D7 $reps REPS \u00B7 ${restSecs}S REST';
     }
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 
@@ -73,9 +73,8 @@ class _SwapSheetState extends State<SwapSheet> {
     _weekStart = DateTime(src.year, src.month, src.day)
         .subtract(Duration(days: src.weekday - 1));
     _weekDays = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
-    _schedules = _weekDays
-        .map((d) => _scheduleService.getScheduleForDate(d))
-        .toList();
+    _schedules =
+        _weekDays.map((d) => _scheduleService.getScheduleForDate(d)).toList();
     _sourceSchedule = _scheduleService.getScheduleForDate(widget.sourceDate);
   }
 
@@ -87,19 +86,16 @@ class _SwapSheetState extends State<SwapSheet> {
   }
 
   bool _wouldCauseThreeConsecutiveRest(DateTime target) {
-    // Build current week types
     final types = <String>[];
     for (final s in _schedules) {
       types.add(s?['type'] as String? ?? 'rest');
     }
-    // Simulate swap
     final idxA = widget.sourceDate.difference(_weekStart).inDays;
     final idxB = target.difference(_weekStart).inDays;
     if (idxA < 0 || idxA > 6 || idxB < 0 || idxB > 6) return false;
     final temp = types[idxA];
     types[idxA] = types[idxB];
     types[idxB] = temp;
-    // Check
     int consecutive = 0;
     for (final t in types) {
       if (t == 'rest') {
@@ -136,23 +132,21 @@ class _SwapSheetState extends State<SwapSheet> {
       return;
     }
 
-    // Success
     Navigator.of(context).pop();
     widget.onSwapComplete?.call();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Workout swapped \u2713',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontWeight: FontWeight.w700,
+          style: AppTypography.body.copyWith(
             color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
           ),
         ),
         backgroundColor: AppColors.card,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.row),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -161,8 +155,7 @@ class _SwapSheetState extends State<SwapSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceDayName =
-        _dayNames[widget.sourceDate.weekday - 1];
+    final sourceDayName = _dayNames[widget.sourceDate.weekday - 1];
     final sourceWorkout = _workoutLabel(_sourceSchedule);
 
     final bool confirmDisabled = _selectedTarget == null ||
@@ -174,17 +167,17 @@ class _SwapSheetState extends State<SwapSheet> {
       decoration: const BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.cardL),
+          top: Radius.circular(AppRadius.card),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenPadding,
+            AppSpacing.gutter,
             12,
-            AppSpacing.screenPadding,
-            AppSpacing.screenPadding,
+            AppSpacing.gutter,
+            AppSpacing.gutter,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -194,31 +187,25 @@ class _SwapSheetState extends State<SwapSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: AppColors.line2,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 14),
 
-              // Header
+              // Header — mono caps eyebrow
               Text(
                 'SWAP WORKOUT',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                  color: AppColors.textPrimary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 3,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 '$sourceDayName \u2014 $sourceWorkout',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textDim,
                 ),
               ),
               const SizedBox(height: 16),
@@ -227,10 +214,9 @@ class _SwapSheetState extends State<SwapSheet> {
               ...List.generate(7, (index) {
                 final day = _weekDays[index];
                 final schedule = _schedules[index];
-                final isSameAsSource =
-                    day.year == widget.sourceDate.year &&
-                        day.month == widget.sourceDate.month &&
-                        day.day == widget.sourceDate.day;
+                final isSameAsSource = day.year == widget.sourceDate.year &&
+                    day.month == widget.sourceDate.month &&
+                    day.day == widget.sourceDate.day;
 
                 if (isSameAsSource) return const SizedBox.shrink();
 
@@ -241,8 +227,7 @@ class _SwapSheetState extends State<SwapSheet> {
                     _selectedTarget!.month == day.month &&
                     _selectedTarget!.day == day.day;
 
-                final wouldCauseError =
-                    _wouldCauseThreeConsecutiveRest(day);
+                final wouldCauseError = _wouldCauseThreeConsecutiveRest(day);
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 6),
@@ -261,19 +246,19 @@ class _SwapSheetState extends State<SwapSheet> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.cardPadding,
+                        horizontal: 14,
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.accent.withValues(alpha: 0.06)
-                            : AppColors.input,
+                            ? AppColors.accentSoft
+                            : AppColors.bgRaise,
                         borderRadius:
-                            BorderRadius.circular(AppRadius.row),
+                            BorderRadius.circular(AppRadius.sharp),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.accent
-                              : AppColors.border,
+                              : AppColors.line2,
                           width: isSelected ? 1.5 : 1,
                         ),
                       ),
@@ -286,30 +271,26 @@ class _SwapSheetState extends State<SwapSheet> {
                               children: [
                                 Text(
                                   dayName,
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
+                                  style: AppTypography.body.copyWith(
                                     color: isSelected
                                         ? AppColors.accent
                                         : AppColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   workoutName,
-                                  style: GoogleFonts.getFont(
-                                    'DM Sans',
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                    color: AppColors.textSecondary,
+                                  style: AppTypography.monoXs.copyWith(
+                                    color: AppColors.textMute,
+                                    letterSpacing: 1.5,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           if (isSelected)
-                            Icon(
+                            const Icon(
                               Icons.swap_horiz_rounded,
                               color: AppColors.accent,
                               size: 20,
@@ -323,41 +304,38 @@ class _SwapSheetState extends State<SwapSheet> {
 
               const SizedBox(height: 4),
 
-              // Error text
               if (_errorText != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
                     _errorText!,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 12,
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.bad,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.red,
                     ),
                   ),
                 ),
 
-              // Confirm button
+              // Confirm button — sharp 2-px
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: confirmDisabled ? null : _onConfirm,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: confirmDisabled
-                        ? AppColors.input
+                        ? AppColors.bgRaise
                         : AppColors.accent,
                     foregroundColor: confirmDisabled
                         ? AppColors.textDisabled
                         : Colors.black,
-                    disabledBackgroundColor: AppColors.input,
+                    disabledBackgroundColor: AppColors.bgRaise,
                     disabledForegroundColor: AppColors.textDisabled,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius:
-                          BorderRadius.circular(AppRadius.pill),
+                          BorderRadius.circular(AppRadius.sharp),
                     ),
                   ),
                   child: _isSwapping
@@ -371,11 +349,12 @@ class _SwapSheetState extends State<SwapSheet> {
                         )
                       : Text(
                           'CONFIRM SWAP',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 14,
+                          style: AppTypography.mono.copyWith(
+                            color: confirmDisabled
+                                ? AppColors.textDisabled
+                                : Colors.black,
+                            letterSpacing: 2,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
                           ),
                         ),
                 ),
@@ -384,12 +363,10 @@ class _SwapSheetState extends State<SwapSheet> {
 
               // Swap limit info
               Text(
-                'Free: 1 swap/week \u00B7 PRO: 3 swaps/week',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                'FREE: 1 SWAP/WEEK  \u00B7  PRO: 3 SWAPS/WEEK',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 1.5,
                 ),
               ),
             ],

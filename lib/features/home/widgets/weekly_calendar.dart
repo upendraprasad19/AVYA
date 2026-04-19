@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/home_provider.dart';
 
@@ -11,24 +12,23 @@ import '../providers/home_provider.dart';
 /// and Workout screen always show the same data. Uses [calendarWeekProvider]
 /// to rebuild automatically when schedule data changes.
 ///
-/// States:
-///   - completed: cyan tint bg, check icon
-///   - today: solid cyan bg, dash indicator
-///   - planned (workout): border, small dot
-///   - rest: gray, no indicator
-///   - travel: amber tint, suitcase icon
-///   - swapped: has 🔄 indicator
+/// States (Wardroom):
+///   - today: sharp 2-px gold outline, accent day initial
+///   - completed: accent tint bg + gold tick
+///   - planned: sharp outline, small dumbbell
+///   - rest: muted, em-dash
+///   - travel: gold tint, suitcase glyph
+///   - missed: bad-tinted, minus glyph
 class WeeklyCalendar extends ConsumerWidget {
   final void Function(DateTime date, Map<String, dynamic>? schedule)? onDayTap;
-  final void Function(DateTime date, Map<String, dynamic>? schedule)? onDayLongPress;
+  final void Function(DateTime date, Map<String, dynamic>? schedule)?
+      onDayLongPress;
 
   const WeeklyCalendar({super.key, this.onDayTap, this.onDayLongPress});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the calendar provider so this widget rebuilds when schedule changes.
-    // We don't use the provider's data directly — we read full schedule maps
-    // from the service for tap callbacks — but watching ensures rebuilds.
     ref.watch(calendarWeekProvider);
 
     final now = DateTime.now();
@@ -54,13 +54,14 @@ class WeeklyCalendar extends ConsumerWidget {
         final status = schedule?['status'] as String? ?? 'none';
         final isSwapped = schedule?['is_swapped'] as bool? ?? false;
 
-        // Determine visual state
         final isCompleted = status == 'completed';
         final isWorkout = type == 'workout';
         final isCustomTemplate = type == 'custom_template';
         final isRest = type == 'rest';
         final isTravel = status == 'travel';
-        final isPlanned = (isWorkout || isCustomTemplate) && status == 'planned';
+        final isPlanned =
+            (isWorkout || isCustomTemplate) && status == 'planned';
+        final isMissed = isPast && !isCompleted && (isWorkout || isCustomTemplate);
 
         Color bgColor;
         Color borderColor;
@@ -68,31 +69,37 @@ class WeeklyCalendar extends ConsumerWidget {
         Color dateColor;
 
         if (isToday) {
-          bgColor = AppColors.accent;
+          // Sharp 2-px gold outline — today marker
+          bgColor = AppColors.accentSoft;
           borderColor = AppColors.accent;
-          labelColor = Colors.black.withValues(alpha: 0.6);
-          dateColor = Colors.black;
+          labelColor = AppColors.accent;
+          dateColor = AppColors.accent;
         } else if (isCompleted) {
-          bgColor = AppColors.accent.withValues(alpha: 0.07);
-          borderColor = AppColors.accent.withValues(alpha: 0.28);
-          labelColor = AppColors.accent.withValues(alpha: 0.7);
+          bgColor = AppColors.accentSoft;
+          borderColor = AppColors.accent.withValues(alpha: 0.33);
+          labelColor = AppColors.accent.withValues(alpha: 0.8);
           dateColor = AppColors.textPrimary;
         } else if (isTravel) {
-          bgColor = AppColors.proGold.withValues(alpha: 0.07);
-          borderColor = AppColors.proGold.withValues(alpha: 0.28);
-          labelColor = AppColors.proGold.withValues(alpha: 0.7);
+          bgColor = AppColors.proGoldTint;
+          borderColor = AppColors.proGold.withValues(alpha: 0.33);
+          labelColor = AppColors.proGold;
           dateColor = AppColors.textPrimary;
         } else if (isPlanned) {
           bgColor = Colors.transparent;
-          borderColor = AppColors.accent.withValues(alpha: 0.2);
-          labelColor = AppColors.accent.withValues(alpha: 0.5);
+          borderColor = AppColors.line2;
+          labelColor = AppColors.textMute;
           dateColor = AppColors.textPrimary;
+        } else if (isMissed) {
+          bgColor = AppColors.bad.withValues(alpha: 0.08);
+          borderColor = AppColors.bad.withValues(alpha: 0.25);
+          labelColor = AppColors.bad.withValues(alpha: 0.7);
+          dateColor = AppColors.textDim;
         } else {
           // Rest or no plan
           bgColor = Colors.transparent;
-          borderColor = AppColors.border;
-          labelColor = AppColors.textSecondary;
-          dateColor = AppColors.textSecondary;
+          borderColor = AppColors.line2;
+          labelColor = AppColors.textMute;
+          dateColor = AppColors.textDim;
         }
 
         return Expanded(
@@ -107,30 +114,28 @@ class WeeklyCalendar extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
               decoration: BoxDecoration(
                 color: bgColor,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                  color: borderColor,
+                  width: isToday ? 1.5 : 1,
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     labels[index],
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
+                    style: AppTypography.monoXs.copyWith(
                       color: labelColor,
+                      letterSpacing: 1.5,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${day.day}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                    style: AppTypography.body.copyWith(
                       color: dateColor,
+                      fontWeight: FontWeight.w800,
                       height: 1,
                     ),
                   ),
@@ -144,7 +149,7 @@ class WeeklyCalendar extends ConsumerWidget {
                       isRest: isRest,
                       isTravel: isTravel,
                       isSwapped: isSwapped,
-                      isPast: isPast,
+                      isMissed: isMissed,
                     ),
                   ),
                 ],
@@ -163,44 +168,29 @@ class WeeklyCalendar extends ConsumerWidget {
     required bool isRest,
     required bool isTravel,
     required bool isSwapped,
-    required bool isPast,
+    required bool isMissed,
   }) {
     if (isSwapped) {
-      return Text(
-        '\u{1F504}',
-        style: GoogleFonts.getFont('DM Sans', fontSize: 8),
-      );
+      return const Text('\u{1F504}', style: TextStyle(fontSize: 8));
     }
     if (isCompleted) {
-      return Icon(
-        Icons.check,
-        size: 10,
-        color: isToday ? Colors.black.withValues(alpha: 0.5) : AppColors.accent.withValues(alpha: 0.7),
-      );
+      return const Icon(Icons.check, size: 10, color: AppColors.accent);
     }
     if (isTravel) {
-      return Text(
-        '\u{1F9F3}',
-        style: GoogleFonts.getFont('DM Sans', fontSize: 8),
-      );
+      return const Text('\u{1F9F3}', style: TextStyle(fontSize: 8));
     }
     if (isToday && isPlanned) {
-      // Today is a workout day — show dumbbell in black against cyan bg
-      return Icon(
+      return const Icon(
         Icons.fitness_center,
         size: 9,
-        color: Colors.black.withValues(alpha: 0.5),
+        color: AppColors.accent,
       );
     }
     if (isToday) {
-      // Today is a rest day — show em-dash
       return Text(
         '\u2014',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          color: Colors.black.withValues(alpha: 0.4),
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.accent,
         ),
       );
     }
@@ -208,25 +198,21 @@ class WeeklyCalendar extends ConsumerWidget {
       return Icon(
         Icons.fitness_center,
         size: 9,
-        color: AppColors.accent.withValues(alpha: 0.5),
+        color: AppColors.textMute,
       );
     }
-    if (isPast && !isRest) {
-      // Past workout that wasn't completed = missed
+    if (isMissed) {
       return Icon(
         Icons.remove,
         size: 8,
-        color: AppColors.textSecondary.withValues(alpha: 0.3),
+        color: AppColors.bad.withValues(alpha: 0.6),
       );
     }
     if (isRest) {
       return Text(
         '\u2014',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 8,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textSecondary.withValues(alpha: 0.3),
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.textDisabled,
         ),
       );
     }

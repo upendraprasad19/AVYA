@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Weight entry with date for axis labels.
 class WeightEntry {
@@ -11,7 +11,8 @@ class WeightEntry {
   const WeightEntry({required this.date, required this.weight});
 }
 
-/// Weight trend card with duration selector, Y-axis labels, and date axis.
+/// Weight trend card with duration selector, Y-axis labels, date axis,
+/// and a Wardroom [WardSpark] sparkline.
 class WeightSparkline extends StatefulWidget {
   final List<WeightEntry> entries;
 
@@ -35,34 +36,29 @@ class _WeightSparklineState extends State<WeightSparkline> {
       '1y' => now.subtract(const Duration(days: 365)),
       _ => DateTime(2000), // All
     };
-    final cutoffStr = '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
-    final filtered = widget.entries.where((e) => e.date.compareTo(cutoffStr) >= 0).toList();
+    final cutoffStr =
+        '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+    final filtered =
+        widget.entries.where((e) => e.date.compareTo(cutoffStr) >= 0).toList();
     return filtered.isEmpty ? widget.entries : filtered;
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.entries.isEmpty) {
-      return Container(
-        width: double.infinity,
+      return WardCard(
+        variant: WardCardVariant.standard,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.cardM),
-          border: Border.all(color: AppColors.border),
-        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.monitor_weight_outlined,
-                size: 16, color: AppColors.textSecondary),
+                size: 16, color: AppColors.textDim),
             const SizedBox(width: 8),
             Text(
               'Log your weight to see trends here',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                color: AppColors.textSecondary,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
               ),
             ),
           ],
@@ -73,20 +69,21 @@ class _WeightSparklineState extends State<WeightSparkline> {
     final entries = _filteredEntries;
     final weights = entries.map((e) => e.weight).toList();
     final latest = weights.last;
-    final change = weights.length >= 2 ? weights.last - weights[weights.length - 2] : 0.0;
-    final changeStr = change >= 0 ? '+${change.toStringAsFixed(1)}' : change.toStringAsFixed(1);
-    final changeColor = change < 0 ? AppColors.green : (change > 0 ? AppColors.orange : AppColors.textSecondary);
+    final change =
+        weights.length >= 2 ? weights.last - weights[weights.length - 2] : 0.0;
+    final changeStr =
+        change >= 0 ? '+${change.toStringAsFixed(1)}' : change.toStringAsFixed(1);
+    // Semantic: weight loss = good (ok). Weight gain = warn. No change = neutral.
+    final WardChipTone deltaTone = change < 0
+        ? WardChipTone.ok
+        : (change > 0 ? WardChipTone.warn : WardChipTone.neutral);
 
     final minW = weights.reduce(min);
     final maxW = weights.reduce(max);
 
-    return Container(
+    return WardCard(
+      variant: WardCardVariant.standard,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.cardM),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -94,43 +91,40 @@ class _WeightSparklineState extends State<WeightSparkline> {
           Row(
             children: [
               const Icon(Icons.monitor_weight_outlined,
-                  size: 12, color: AppColors.textSecondary),
+                  size: 12, color: AppColors.textDim),
               const SizedBox(width: 6),
               Text(
                 'WEIGHT TREND',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: AppColors.textSecondary,
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
               ),
               const Spacer(),
               Text(
-                '${latest.toStringAsFixed(1)} kg',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
+                latest.toStringAsFixed(1),
+                style: AppTypography.h3.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 3),
               Text(
-                '$changeStr kg',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: changeColor,
+                'KG',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
+              ),
+              const SizedBox(width: 8),
+              WardChip(
+                label: '$changeStr KG',
+                tone: deltaTone,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
-          // Duration selector
+          // Duration selector — sharp 2-px chip tiles
           Row(
             children: _ranges.map((range) {
               final isSelected = range == _selectedRange;
@@ -139,25 +133,25 @@ class _WeightSparklineState extends State<WeightSparkline> {
                 child: GestureDetector(
                   onTap: () => setState(() => _selectedRange = range),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppColors.accent.withValues(alpha: 0.12)
+                          ? AppColors.accentSoft
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                         color: isSelected
-                            ? AppColors.accent.withValues(alpha: 0.3)
-                            : AppColors.border,
+                            ? AppColors.accent.withValues(alpha: 0.33)
+                            : AppColors.line2,
                       ),
                     ),
                     child: Text(
-                      range,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? AppColors.accent : AppColors.textSecondary,
+                      range.toUpperCase(),
+                      style: AppTypography.monoXs.copyWith(
+                        color: isSelected
+                            ? AppColors.accent
+                            : AppColors.textMute,
+                        letterSpacing: 1.5,
                       ),
                     ),
                   ),
@@ -165,7 +159,7 @@ class _WeightSparklineState extends State<WeightSparkline> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           // Chart with Y-axis labels
           SizedBox(
@@ -179,28 +173,51 @@ class _WeightSparklineState extends State<WeightSparkline> {
                   children: [
                     Text(
                       maxW.toStringAsFixed(0),
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 8, color: AppColors.textSecondary),
+                      style: AppTypography.monoXs
+                          .copyWith(color: AppColors.textMute),
                     ),
                     if (maxW != minW)
                       Text(
                         ((maxW + minW) / 2).toStringAsFixed(0),
-                        style: GoogleFonts.getFont('DM Sans',
-                            fontSize: 8, color: AppColors.textSecondary),
+                        style: AppTypography.monoXs
+                            .copyWith(color: AppColors.textMute),
                       ),
                     Text(
                       minW.toStringAsFixed(0),
-                      style: GoogleFonts.getFont('DM Sans',
-                          fontSize: 8, color: AppColors.textSecondary),
+                      style: AppTypography.monoXs
+                          .copyWith(color: AppColors.textMute),
                     ),
                   ],
                 ),
                 const SizedBox(width: 6),
-                // Chart area
+                // Chart area — WardSpark with fill
                 Expanded(
-                  child: CustomPaint(
-                    size: const Size(double.infinity, 70),
-                    painter: _SparklinePainter(values: weights),
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      if (weights.length < 2) {
+                        return SizedBox(
+                          width: c.maxWidth,
+                          height: 70,
+                          child: Center(
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return WardSpark(
+                        data: weights,
+                        width: c.maxWidth,
+                        height: 70,
+                        strokeWidth: 1.5,
+                        fillAlpha: 0.2,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -216,47 +233,51 @@ class _WeightSparklineState extends State<WeightSparkline> {
               children: [
                 Text(
                   _formatDateShort(entries.first.date),
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 8, color: AppColors.textSecondary),
+                  style: AppTypography.monoXs
+                      .copyWith(color: AppColors.textMute),
                 ),
                 if (entries.length > 2)
                   Text(
                     _formatDateShort(entries[entries.length ~/ 2].date),
-                    style: GoogleFonts.getFont('DM Sans',
-                        fontSize: 8, color: AppColors.textSecondary),
+                    style: AppTypography.monoXs
+                        .copyWith(color: AppColors.textMute),
                   ),
                 Text(
                   _formatDateShort(entries.last.date),
-                  style: GoogleFonts.getFont('DM Sans',
-                      fontSize: 8, color: AppColors.textSecondary),
+                  style: AppTypography.monoXs
+                      .copyWith(color: AppColors.textMute),
                 ),
               ],
             ),
           ),
 
           // Min/Max summary
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Low: ${minW.toStringAsFixed(1)} kg',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 9, fontWeight: FontWeight.w600,
-                    color: AppColors.green),
+                'LOW ${minW.toStringAsFixed(1)}',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.ok,
+                  letterSpacing: 1.5,
+                ),
               ),
               const SizedBox(width: 12),
               Text(
-                'High: ${maxW.toStringAsFixed(1)} kg',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 9, fontWeight: FontWeight.w600,
-                    color: AppColors.orange),
+                'HIGH ${maxW.toStringAsFixed(1)}',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.warn,
+                  letterSpacing: 1.5,
+                ),
               ),
               const SizedBox(width: 12),
               Text(
-                '${entries.length} entries',
-                style: GoogleFonts.getFont('DM Sans',
-                    fontSize: 9, color: AppColors.textSecondary),
+                '${entries.length} ENTRIES',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 1.5,
+                ),
               ),
             ],
           ),
@@ -268,96 +289,22 @@ class _WeightSparklineState extends State<WeightSparkline> {
   String _formatDateShort(String dateStr) {
     final parts = dateStr.split('-');
     if (parts.length != 3) return dateStr;
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC'
+    ];
     final month = int.tryParse(parts[1]) ?? 1;
     final day = int.tryParse(parts[2]) ?? 1;
     return '${months[month - 1]} $day';
   }
-}
-
-class _SparklinePainter extends CustomPainter {
-  final List<double> values;
-
-  _SparklinePainter({required this.values});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Single-entry affordance: render a lone dot at the plot centre so
-    // first-time loggers get visual confirmation their weight was saved.
-    // Before this (2026-04-18), the sparkline returned empty for a
-    // 1-entry dataset even though the row showed "1 entries" beneath —
-    // users reported the graph looked broken on their first log.
-    if (values.length == 1) {
-      final center = Offset(size.width / 2, size.height / 2);
-      canvas.drawCircle(center, 4, Paint()..color = AppColors.accent);
-      canvas.drawCircle(center, 2.5, Paint()..color = AppColors.bg);
-      return;
-    }
-    if (values.isEmpty) return;
-
-    final minVal = values.reduce(min) - 0.5;
-    final maxVal = values.reduce(max) + 0.5;
-    final range = maxVal - minVal;
-    if (range == 0) return;
-
-    final stepX = size.width / (values.length - 1);
-
-    final path = Path();
-    final points = <Offset>[];
-    for (int i = 0; i < values.length; i++) {
-      final x = i * stepX;
-      final y = size.height - ((values[i] - minVal) / range) * size.height;
-      points.add(Offset(x, y));
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-
-    // Gradient fill
-    final fillPath = Path.from(path);
-    fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color(0x3300D4FF),
-          Color(0x0000D4FF),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawPath(fillPath, fillPaint);
-
-    // Line
-    final linePaint = Paint()
-      ..color = AppColors.accent
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, linePaint);
-
-    // Current point dot
-    if (points.isNotEmpty) {
-      final lastPoint = points.last;
-      canvas.drawCircle(
-        lastPoint,
-        3.5,
-        Paint()..color = AppColors.accent,
-      );
-      canvas.drawCircle(
-        lastPoint,
-        2,
-        Paint()..color = AppColors.bg,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.values != values;
 }

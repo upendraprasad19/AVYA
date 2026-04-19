@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/tap_scale.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Today's workout split card with workout info on left, fuel + steps on right.
 class TodayWorkoutCard extends StatelessWidget {
@@ -63,26 +64,19 @@ class TodayWorkoutCard extends StatelessWidget {
     final proteinProgress = proteinTarget > 0
         ? (proteinCurrent / proteinTarget).clamp(0.0, 1.0)
         : 0.0;
-    final stepsProgress = stepsGoal > 0
-        ? (steps / stepsGoal).clamp(0.0, 1.0)
-        : 0.0;
+    final stepsProgress =
+        stepsGoal > 0 ? (steps / stepsGoal).clamp(0.0, 1.0) : 0.0;
 
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Left: Workout card (60%)
+          // Left: Workout card (60%) — hero variant
           Expanded(
             flex: 6,
-            child: Container(
+            child: WardCard(
+              variant: WardCardVariant.hero,
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(AppRadius.cardM),
-                border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.15),
-                ),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -91,30 +85,16 @@ class TodayWorkoutCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (workoutTag != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          margin: const EdgeInsets.only(bottom: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                          ),
-                          child: Text(
-                            workoutTag!,
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.accent,
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: WardChip(
+                            label: workoutTag!,
+                            tone: WardChipTone.neutral,
                           ),
                         ),
                       Text(
                         workoutName,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                        style: AppTypography.h3.copyWith(
                           color: AppColors.textPrimary,
                           height: 1.2,
                         ),
@@ -124,19 +104,17 @@ class TodayWorkoutCard extends StatelessWidget {
                         children: [
                           Text(
                             '\u23F1 $durationMin MIN',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              color: AppColors.textSecondary,
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.textMute,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Text(
                             '\u{1F4AA} $exerciseCount EX',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 10,
-                              color: AppColors.textSecondary,
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.textMute,
+                              letterSpacing: 1.5,
                             ),
                           ),
                         ],
@@ -147,27 +125,22 @@ class TodayWorkoutCard extends StatelessWidget {
                   if (isRestDay)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 9),
+                          horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                        border: Border.all(color: AppColors.border),
+                        color: AppColors.bgRaise,
+                        borderRadius: BorderRadius.circular(AppRadius.sharp),
+                        border: Border.all(color: AppColors.line2),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '\u{1F4A4}',
-                            style: GoogleFonts.getFont('DM Sans', fontSize: 10),
-                          ),
-                          const SizedBox(width: 4),
+                          const Text('\u{1F4A4}', style: TextStyle(fontSize: 11)),
+                          const SizedBox(width: 6),
                           Text(
                             'REST DAY',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary,
+                            style: AppTypography.mono.copyWith(
+                              color: AppColors.textMute,
+                              letterSpacing: 2,
                             ),
                           ),
                         ],
@@ -177,34 +150,13 @@ class TodayWorkoutCard extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Row 1: DONE badge + View Card button
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: AppColors.green.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(AppRadius.pill),
-                                border: Border.all(color: AppColors.green.withValues(alpha: 0.3)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check_circle,
-                                      size: 10, color: AppColors.green),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'DONE',
-                                    style: GoogleFonts.getFont(
-                                      'DM Sans',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            const WardChip(
+                              label: 'DONE',
+                              tone: WardChipTone.ok,
+                              leading: Icon(Icons.check_circle,
+                                  size: 10, color: AppColors.ok),
                             ),
                             if (onViewCard != null) ...[
                               const SizedBox(width: 8),
@@ -214,25 +166,27 @@ class TodayWorkoutCard extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
-                                    color: AppColors.accent.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(
+                                        AppRadius.sharp),
+                                    border: Border.all(
+                                      color: AppColors.accent
+                                          .withValues(alpha: 0.33),
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'View Card',
-                                        style: GoogleFonts.getFont(
-                                          'DM Sans',
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
+                                        'VIEW CARD',
+                                        style: AppTypography.monoXs.copyWith(
                                           color: AppColors.accent,
+                                          letterSpacing: 2,
                                         ),
                                       ),
-                                      const SizedBox(width: 2),
-                                      const Icon(Icons.arrow_forward_ios,
-                                          size: 8, color: AppColors.accent),
+                                      const SizedBox(width: 3),
+                                      const Icon(Icons.arrow_forward,
+                                          size: 10, color: AppColors.accent),
                                     ],
                                   ),
                                 ),
@@ -240,7 +194,6 @@ class TodayWorkoutCard extends StatelessWidget {
                             ],
                           ],
                         ),
-                        // Row 2: Best lift + volume stats
                         if (bestLift != null || totalVolumeKg != null) ...[
                           const SizedBox(height: 6),
                           Text(
@@ -249,11 +202,9 @@ class TodayWorkoutCard extends StatelessWidget {
                               if (totalVolumeKg != null)
                                 '${totalVolumeKg!.toStringAsFixed(0)} kg vol',
                             ].join('  \u00B7  '),
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.textMute,
+                              letterSpacing: 1.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -262,40 +213,39 @@ class TodayWorkoutCard extends StatelessWidget {
                       ],
                     )
                   else
-                  TapScale(
-                    onTap: onStart,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.play_arrow,
-                              size: 12, color: Colors.black),
-                          const SizedBox(width: 4),
-                          Text(
-                            'START',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.black,
+                    TapScale(
+                      onTap: onStart,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(AppRadius.sharp),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.play_arrow,
+                                size: 14, color: Colors.black),
+                            const SizedBox(width: 5),
+                            Text(
+                              'START',
+                              style: AppTypography.mono.copyWith(
+                                color: Colors.black,
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
           ),
           const SizedBox(width: 8),
-          // Right: Combined Fuel+Protein + Steps (stretch to match workout card)
+          // Right: Combined Fuel+Protein + Steps
           Expanded(
             flex: 4,
             child: Column(
@@ -304,18 +254,13 @@ class TodayWorkoutCard extends StatelessWidget {
                 // Combined Fuel + Protein card
                 Expanded(
                   flex: 3,
-                  child: Container(
+                  child: WardCard(
+                    variant: WardCardVariant.standard,
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        // Fuel row
                         _StatRow(
                           icon: Icons.local_gas_station,
                           iconColor: AppColors.accent,
@@ -328,17 +273,16 @@ class TodayWorkoutCard extends StatelessWidget {
                           progressColor: AppColors.accent,
                         ),
                         const SizedBox(height: 8),
-                        // Protein row
                         _StatRow(
                           icon: Icons.fitness_center,
-                          iconColor: AppColors.orange,
+                          iconColor: AppColors.warn,
                           label: 'PROTEIN',
                           value: '${proteinCurrent.round()}',
                           target: '${proteinTarget.round()}',
                           suffix: 'g',
-                          valueColor: AppColors.orange,
+                          valueColor: AppColors.warn,
                           progress: proteinProgress,
-                          progressColor: AppColors.orange,
+                          progressColor: AppColors.warn,
                         ),
                       ],
                     ),
@@ -348,31 +292,23 @@ class TodayWorkoutCard extends StatelessWidget {
                 // Steps card
                 Expanded(
                   flex: 2,
-                  child: Container(
+                  child: WardCard(
+                    variant: WardCardVariant.standard,
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Single-line: icon + label + animated value
                         Row(
                           children: [
                             const Icon(Icons.directions_walk,
-                                size: 10, color: AppColors.green),
+                                size: 10, color: AppColors.ok),
                             const SizedBox(width: 3),
                             Text(
                               'STEPS',
-                              style: GoogleFonts.getFont(
-                                'DM Sans',
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textSecondary,
-                                letterSpacing: 0.5,
+                              style: AppTypography.monoXs.copyWith(
+                                color: AppColors.textMute,
+                                letterSpacing: 1.5,
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -386,21 +322,18 @@ class TodayWorkoutCard extends StatelessWidget {
                                     TextSpan(
                                       children: [
                                         TextSpan(
-                                          text: _formatNumber(animSteps.round()),
-                                          style: GoogleFonts.getFont(
-                                            'DM Sans',
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w900,
-                                            color: AppColors.green,
+                                          text: _formatNumber(
+                                              animSteps.round()),
+                                          style: AppTypography.h3.copyWith(
+                                            color: AppColors.ok,
                                             height: 1,
                                           ),
                                         ),
                                         TextSpan(
-                                          text: ' / ${_formatNumber(stepsGoal)}',
-                                          style: GoogleFonts.getFont(
-                                            'DM Sans',
-                                            fontSize: 9,
-                                            color: AppColors.textSecondary,
+                                          text:
+                                              ' / ${_formatNumber(stepsGoal)}',
+                                          style: AppTypography.monoXs.copyWith(
+                                            color: AppColors.textMute,
                                           ),
                                         ),
                                       ],
@@ -413,22 +346,10 @@ class TodayWorkoutCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: stepsProgress),
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOut,
-                          builder: (context, animProgress, _) {
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: animProgress,
-                                minHeight: 3,
-                                backgroundColor: AppColors.input,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                    AppColors.green),
-                              ),
-                            );
-                          },
+                        WardBar(
+                          pct: stepsProgress,
+                          height: 3,
+                          color: AppColors.ok,
                         ),
                       ],
                     ),
@@ -481,19 +402,15 @@ class _StatRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Single-line: icon + label + animated value + suffix
         Row(
           children: [
             Icon(icon, size: 10, color: iconColor),
             const SizedBox(width: 3),
             Text(
               label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-                letterSpacing: 0.5,
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.5,
               ),
             ),
             const SizedBox(width: 6),
@@ -508,10 +425,7 @@ class _StatRow extends StatelessWidget {
                       children: [
                         TextSpan(
                           text: '${animValue.round()}',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
+                          style: AppTypography.h3.copyWith(
                             color: valueColor,
                             height: 1,
                           ),
@@ -519,18 +433,14 @@ class _StatRow extends StatelessWidget {
                         if (target.isNotEmpty)
                           TextSpan(
                             text: '/$target',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontSize: 9,
-                              color: AppColors.textSecondary,
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.textMute,
                             ),
                           ),
                         TextSpan(
                           text: ' $suffix',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 8,
-                            color: AppColors.textSecondary,
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textMute,
                           ),
                         ),
                       ],
@@ -543,21 +453,10 @@ class _StatRow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: progress),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOut,
-          builder: (context, animProgress, _) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: animProgress,
-                minHeight: 3,
-                backgroundColor: AppColors.input,
-                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-              ),
-            );
-          },
+        WardBar(
+          pct: progress,
+          height: 3,
+          color: progressColor,
         ),
       ],
     );
