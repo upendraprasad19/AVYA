@@ -35,6 +35,10 @@ import {
   MODEL_FLASH,
   MODEL_FLASH_LITE,
 } from "../_shared/gemini.ts";
+import {
+  fetchCoachMemory,
+  renderCoachMemoryBlock,
+} from "../_shared/coach_memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -465,8 +469,40 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       );
     }
 
+    // ── Fetch coach_memory for identity-mirroring (chat path only) ──
+    // Block [3] of the 7-block context layout. Helper returns "" when
+    // private_mode=true or no row exists, so the truthy check below drops
+    // it silently. Wrapped in try/catch — a memory fetch failure must
+    // never kill the chat response.
+    //
+    // Channel guard: every non-chat channel (food_text_analysis,
+    // scan_meal, cart_auditor, prediction) returns earlier in this
+    // handler. The explicit `isChatChannel` check below is a defensive
+    // belt-and-braces — if a future channel forgets the early return,
+    // this gate prevents the +1 SELECT and the prompt pollution.
+    //
+    // Cost note: this adds +1 SELECT per chat call (coach_memory row).
+    const isChatChannel = !type || type === "chat";
+    let coachMemoryBlock = "";
+    // Reuse the request_id minted in the outer catch when available; the
+    // outer scope's `requestId` only exists in the catch block, so mint a
+    // local one here for the non-fatal warn log to satisfy the project's
+    // standard catch-block format (CLAUDE.md §11).
+    const chatRequestId = crypto.randomUUID().split("-")[0];
+    if (isChatChannel) {
+      try {
+        const coachMemory = await fetchCoachMemory(supabaseClient, userId);
+        coachMemoryBlock = renderCoachMemoryBlock(coachMemory);
+      } catch (e) {
+        console.warn(
+          `[ai-proxy] coach_memory fetch failed (non-fatal) request_id=${chatRequestId}`,
+          e,
+        );
+      }
+    }
+
     // ── Build system prompt ───────────────────────────────────────
-    let systemPrompt =
+    const baseSystemPrompt =
       "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
       "for young professionals in India — like a father who has been watching closely. " +
       "Keep responses concise, actionable, and direct. Be caring but honest. " +
@@ -492,9 +528,18 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
       '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
 
+    // Assemble in the spec'd order: base prompt → [3] coach_memory →
+    // snapshot. The block self-labels [3] in renderCoachMemoryBlock,
+    // and prepending it to the base used to put it before blocks
+    // [1]/[2] of the 7-block layout. Empty coachMemoryBlock (private
+    // mode, no row, or non-chat channel) is dropped by the truthy
+    // check.
+    const promptParts: string[] = [baseSystemPrompt];
+    if (coachMemoryBlock) promptParts.push(coachMemoryBlock);
     if (snapshot_json) {
-      systemPrompt += "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
+      promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
     }
+    const systemPrompt = promptParts.join("\n\n");
 
     // ── Single Gemini call (Flash, with image if present) ─────────
     const { content, modelUsed, tokensUsed } = await geminiChat({

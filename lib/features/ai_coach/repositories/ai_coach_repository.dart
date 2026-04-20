@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
+import '../services/identity_signal_detector.dart';
+import '../models/coach_memory.dart';
 
 /// Repository for AI Coach data access.
 ///
@@ -17,6 +20,8 @@ class AiCoachRepository {
   static AiCoachRepository get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+  final IdentitySignalDetector _identityDetector = IdentitySignalDetector();
+  String? _lastIdentityUserId;
 
   /// Builds the full AI context map from all Hive boxes.
   /// This is the user_daily_snapshot that gets sent with every AI message.
@@ -59,6 +64,7 @@ class AiCoachRepository {
       'latest_weight': _getLatestWeight(),
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
+      'coach_memory': _getCoachMemoryForContext(),
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
@@ -228,6 +234,43 @@ class AiCoachRepository {
     return id;
   }
 
+  /// Runs the identity heuristics on a single user message and patches
+  /// Hive coach_memory in place. No-op if no signals detected.
+  Future<void> detectAndPersistIdentitySignals(String userMessage) async {
+    final signals = _identityDetector.detect(userMessage);
+    if (signals.communicationStyle == null && signals.preferredName == null) {
+      return;
+    }
+
+    final userId = Hive.box('userBox').get('user_id') as String?;
+    if (userId == null || userId.isEmpty) return;
+
+    // Reset detector streak when the active user changes — the singleton
+    // detector would otherwise leak Hinglish streak state across sessions.
+    if (_lastIdentityUserId != null && _lastIdentityUserId != userId) {
+      _identityDetector.resetStreak();
+    }
+    _lastIdentityUserId = userId;
+
+    try {
+      final coachBox = Hive.box('coachBox');
+      final existing =
+          CoachMemory.readFromBox(coachBox) ?? CoachMemory(userId: userId);
+      final patched = existing.merge(CoachMemory(
+        userId: userId,
+        communicationStyle: signals.communicationStyle,
+        preferredName: signals.preferredName,
+        updatedAt: DateTime.now(),
+      ));
+      await patched.writeToBox(coachBox);
+    } catch (e) {
+      // A corrupt coach_memory blob must never crash the message-send hot
+      // path. Log and continue — the next successful write will heal it.
+      debugPrint('[AiCoachRepository] identity persist failed: $e');
+      return;
+    }
+  }
+
   /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
   /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
   /// it as a loading bubble even if the app is killed mid-call. Returns the
@@ -238,6 +281,10 @@ class AiCoachRepository {
     String? mediaUrl,
     String? mediaType,
   }) async {
+    // Run cheap on-device identity heuristics on every outbound user message.
+    // Patches Hive coach_memory in place; no-op if no signals detected.
+    await detectAndPersistIdentitySignals(userMessage);
+
     final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
     await _hive.coachBox.put(id, {
       'id': id,
@@ -413,6 +460,35 @@ class AiCoachRepository {
       'notes': existingNotes,
       'last_extracted': now.toIso8601String(),
     });
+  }
+
+  /// One-time migration: convert legacy coachBox['coaching_notes'] string
+  /// list into coach_memory.coach_notes. Idempotent — no-op if coach_memory
+  /// already exists in Hive.
+  Future<void> backfillCoachMemoryIfNeeded() async {
+    final coachBox = Hive.box('coachBox');
+    if (CoachMemory.readFromBox(coachBox) != null) return;
+
+    final userId = Hive.box('userBox').get('user_id') as String?;
+    if (userId == null || userId.isEmpty) return;
+
+    final legacy = coachBox.get('coaching_notes');
+    String? merged;
+    if (legacy is Map) {
+      final notes = legacy['notes'];
+      if (notes is List && notes.isNotEmpty) {
+        merged = notes.map((n) => n.toString()).join('\n');
+      }
+    }
+
+    final mem = CoachMemory(
+      userId: userId,
+      coachNotes: merged,
+      lastExtractionAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await mem.writeToBox(coachBox);
+    debugPrint('[AiCoachRepository] backfilled coach_memory from legacy coaching_notes');
   }
 
   /// Returns contextual quick prompts based on user's current state.
@@ -723,6 +799,19 @@ class AiCoachRepository {
       }
     }
     return [];
+  }
+
+  /// Returns the coach_memory JSON snapshot for context injection, or
+  /// null when private_mode is on / no memory exists.
+  Map<String, dynamic>? _getCoachMemoryForContext() {
+    try {
+      final mem = CoachMemory.readFromBox(_hive.coachBox);
+      if (mem == null || mem.privateMode) return null;
+      return mem.toJson();
+    } catch (e) {
+      debugPrint('[AiCoachRepository] coach_memory read failed: $e');
+      return null;
+    }
   }
 
   /// Returns the rolling conversation summary from coachBox.

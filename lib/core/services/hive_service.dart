@@ -182,4 +182,18 @@ class HiveService with WidgetsBindingObserver {
   Box get coachBox => getBox(coachBoxName);
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
+
+  /// Test-only hook. Marks the singleton as initialized after the test
+  /// has opened the boxes itself with raw `Hive.openBox`. Avoids calling
+  /// [init] (which routes through `Hive.initFlutter` + path_provider) in
+  /// pure-VM unit tests. Production callers must use [init].
+  @visibleForTesting
+  void markInitializedForTests() {
+    _initialized = true;
+  }
+
+  /// Static convenience wrapper for [markInitializedForTests].
+  @visibleForTesting
+  static void debugMarkInitializedForTests() =>
+      _instance.markInitializedForTests();
 }

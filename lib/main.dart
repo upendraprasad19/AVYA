@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'features/ai_coach/repositories/ai_coach_repository.dart';
 import 'app.dart';
 
 /// Default entry point.
@@ -41,6 +42,15 @@ Future<void> main() async {
   // 1. Initialize Hive — registers adapters and opens all 10 boxes.
   //    Must complete before runApp() so Riverpod providers can read boxes.
   await HiveService.instance.init();
+
+  // One-time backfill of coach_memory from legacy coaching_notes.
+  // Safe to call on every launch — idempotent. Guarded so a Hive write
+  // failure (disk full / corrupted box) cannot crash app launch.
+  try {
+    await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
+  } catch (e) {
+    debugPrint('[main] coach_memory backfill failed: $e');
+  }
 
   // 1a. Atomic-logout recovery (F16). If a previous session was killed
   //     mid-logout, finish the wipe before anything else reads Hive.
