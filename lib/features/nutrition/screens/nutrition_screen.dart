@@ -11,6 +11,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
+import '../providers/diet_plan_provider.dart';
 import '../widgets/food_logger_section.dart';
 import '../widgets/ai_breakdown_card.dart';
 import '../widgets/todays_meals_card.dart';
@@ -201,16 +202,28 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: TodaysMealsCard(
-            meals: nutrition.allMeals,
-            onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
-            onEdit: (meal) => _showEditMacrosSheet(context, meal),
-            // AG.1 — tapping "+ LOG" on an empty slot opens the food
-            // search with the slot preselected. Matches the handoff's
-            // nutrition.jsx empty-slot affordance.
-            onLogSlot: (slot) =>
-                showFoodSearchSheet(context, mealType: slot),
-          ),
+          child: Builder(builder: (context) {
+            final plannedSlots = ref.watch(dietPlanProvider);
+            return TodaysMealsCard(
+              meals: nutrition.allMeals,
+              plannedSlots: plannedSlots,
+              onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
+              onEdit: (meal) => _showEditMacrosSheet(context, meal),
+              // AG.1 — tapping "+ LOG" on an empty slot opens the food
+              // search with the slot preselected. AH.5 — when that slot
+              // has a saved diet-plan hint, also pre-fill the query with
+              // the planned food name so the user lands on matching
+              // results instead of an empty search.
+              onLogSlot: (slot) {
+                final planned = plannedSlots[slot];
+                showFoodSearchSheet(
+                  context,
+                  mealType: slot,
+                  initialQuery: planned?.firstFoodName,
+                );
+              },
+            );
+          }),
         ),
         const SizedBox(height: 10),
 
