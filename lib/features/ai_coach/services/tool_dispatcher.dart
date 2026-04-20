@@ -17,6 +17,8 @@ import '../../home/providers/home_provider.dart'
 import '../../nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
 import '../../nutrition/repositories/nutrition_repository.dart';
+import '../../profile/providers/profile_provider.dart'
+    show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
     show currentPlanProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
@@ -115,6 +117,9 @@ class ToolDispatcher {
         case 'pause_plan':
           result = await _executePausePlan(intent);
           break;
+        case 'switch_goal':
+          result = await _executeSwitchGoal(intent);
+          break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
           break;
@@ -145,6 +150,12 @@ class ToolDispatcher {
       } else {
         _invalidateWorkoutProviders(ref);
         unawaited(SyncService.instance.syncWorkoutData());
+      }
+      // switch_goal also mutates the profile (primary_goal) — refresh the
+      // profile readers so MY TARGETS card, header, and any goal-derived
+      // UI re-read the new value.
+      if (intent.type == 'switch_goal') {
+        _invalidateProfileProviders(ref);
       }
       unawaited(SyncService.instance.pushSnapshot());
 
@@ -673,6 +684,101 @@ class ToolDispatcher {
     }
   }
 
+  /// D.5 switchGoal — destructive two-part operation:
+  ///   1. Update `userBox['profile']['primary_goal']` to the new goal,
+  ///      stamping `goal_changed_at` / `goal_changed_via` / `previous_goal`
+  ///      audit fields.
+  ///   2. Apply the regenerated schedules cached by [SwitchGoalDiff] (which
+  ///      called [RegeneratePlanPlanner.plan] with `goal: newGoal`). Same
+  ///      shape as [_executeRegeneratePlanBlock] — we cannot reuse that
+  ///      method directly because the dispatcher needs the success result
+  ///      to carry the goal-change metadata too.
+  Future<ToolExecutionResult> _executeSwitchGoal(ToolIntent intent) async {
+    final p = intent.payload;
+    final newGoal = p['new_goal'] as String?;
+    if (newGoal == null || newGoal.isEmpty) {
+      return const ToolExecutionResult.failure(
+          'Invalid switch_goal payload.');
+    }
+
+    // The diff widget caches the regenerated raw schedules under intent.id
+    // — the dispatcher refuses to write the profile change without the
+    // matching plan, so the user can never end up with mismatched
+    // profile/schedule state.
+    final rawSchedules =
+        RegeneratePlanPlanner.instance.getCachedRawSchedules(intent.id);
+    if (rawSchedules == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the plan.',
+      );
+    }
+
+    // 1. Profile write.
+    final userBox = HiveService.instance.userBox;
+    final rawProfile = userBox.get('profile');
+    if (rawProfile is! Map) {
+      return const ToolExecutionResult.failure('Profile not found.');
+    }
+    final updatedProfile = Map<String, dynamic>.from(rawProfile);
+    final oldGoal = updatedProfile['primary_goal']?.toString();
+    updatedProfile['primary_goal'] = newGoal;
+    updatedProfile['goal_changed_at'] =
+        DateTime.now().toIso8601String();
+    updatedProfile['goal_changed_via'] = 'ai_coach';
+    updatedProfile['previous_goal'] = oldGoal;
+    await userBox.put('profile', updatedProfile);
+
+    // 2. Schedule writes (same shape as regenerate_plan_block).
+    final wbox = HiveService.instance.workoutBox;
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final schedule in rawSchedules) {
+      final date = schedule['date'] as String;
+      try {
+        final existing = wbox.get('schedule_$date');
+        if (existing is Map && existing['status'] == 'completed') {
+          // Concurrent-edit safety net — completed days stay sacred.
+          continue;
+        }
+        await wbox.put('schedule_$date', schedule);
+        results.add({
+          'date': date,
+          'workout': schedule['workout_name'],
+          'type': schedule['type'],
+        });
+      } catch (e) {
+        errors.add('$date: $e');
+      }
+    }
+
+    RegeneratePlanPlanner.instance.clearCache(intent.id);
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {
+        'old_goal': oldGoal,
+        'new_goal': newGoal,
+        'schedules': results,
+        'count': results.length,
+      });
+    } else if (results.isEmpty) {
+      // Profile already changed but plan regen totally failed — surface the
+      // partial state so the user knows. Profile rollback would require a
+      // second write that could itself fail.
+      return ToolExecutionResult.failure(
+        'Goal updated but plan regenerate failed: ${errors.join("; ")}',
+      );
+    } else {
+      return ToolExecutionResult.success(data: {
+        'old_goal': oldGoal,
+        'new_goal': newGoal,
+        'schedules': results,
+        'count': results.length,
+        'partial_errors': errors,
+      });
+    }
+  }
+
   String _pausePlanErrorMessage(PausePlanException e) {
     switch (e.code) {
       case 'past_date':
@@ -974,6 +1080,19 @@ class ToolDispatcher {
     // to re-read the override-aware target.
     try {
       ref.invalidate(macroTargetsProvider);
+    } catch (_) {/* ignore */}
+  }
+
+  void _invalidateProfileProviders(Ref ref) {
+    // switch_goal mutates userBox['profile']['primary_goal']. Refresh the
+    // profile readers so MY TARGETS card, header chip, and any goal-derived
+    // UI re-read the new value immediately. Each call is independently
+    // try/caught so one missing provider doesn't block the rest.
+    try {
+      ref.invalidate(userProfileProvider);
+    } catch (_) {/* ignore */}
+    try {
+      ref.invalidate(userStatsProvider);
     } catch (_) {/* ignore */}
   }
 
