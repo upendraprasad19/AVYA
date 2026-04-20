@@ -24,6 +24,7 @@ import {
   createCustomTemplateTool,
   pausePlanTool,
   regeneratePlanBlockTool,
+  scheduleTemplateTool,
   switchGoalTool,
 } from "./plan/index.ts";
 
@@ -59,6 +60,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   pausePlanTool, // plan / write / destructive / PRO  (D.4)
   switchGoalTool, // plan / write / destructive / PRO  (D.5)
   createCustomTemplateTool, // plan / write / destructive / PRO  (D.6)
+  scheduleTemplateTool, // plan / write / destructive / PRO  (D.7)
 ];
 
 /**

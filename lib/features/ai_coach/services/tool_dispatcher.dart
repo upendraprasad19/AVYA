@@ -28,6 +28,7 @@ import 'injury_swap_planner.dart';
 import 'pause_plan_planner.dart';
 import 'regenerate_plan_planner.dart';
 import 'reschedule_week_planner.dart';
+import 'schedule_template_planner.dart';
 
 /// Result of executing a tool intent.
 class ToolExecutionResult {
@@ -122,6 +123,9 @@ class ToolDispatcher {
           break;
         case 'create_custom_template':
           result = await _executeCreateCustomTemplate(intent);
+          break;
+        case 'schedule_template':
+          result = await _executeScheduleTemplate(intent);
           break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
@@ -853,6 +857,85 @@ class ToolDispatcher {
       return const ToolExecutionResult.failure(
           'Could not create that template.');
     }
+  }
+
+  /// D.7 scheduleTemplate — fans a template (single OR multi-day group)
+  /// across 1-14 calendar dates.
+  ///
+  /// Flow:
+  ///  1. Read the cached `(date, templateId)` assignments the planner
+  ///     resolved during diff render (atomic with the display rows via the
+  ///     planner's record-return contract).
+  ///  2. For each assignment, re-check the schedule entry for `completed`
+  ///     status and silently skip — concurrent-edit guard (the user could
+  ///     have completed a workout between diff render and Confirm).
+  ///  3. Delegate the per-date write to
+  ///     [WorkoutScheduleService.assignTemplateToDate] — the canonical
+  ///     single-template-to-single-date path that handles displaced
+  ///     backups, warm-up/cool-down injection, completed guard, and
+  ///     proper week numbering. We avoid duplicating that logic.
+  ///  4. Aggregate results — partial success is allowed (some dates land,
+  ///     some skipped/failed).
+  Future<ToolExecutionResult> _executeScheduleTemplate(
+      ToolIntent intent) async {
+    final assignments =
+        ScheduleTemplatePlanner.instance.getCachedAssignments(intent.id);
+    if (assignments == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the schedule.',
+      );
+    }
+    if (assignments.isEmpty) {
+      ScheduleTemplatePlanner.instance.clearCache(intent.id);
+      return const ToolExecutionResult.failure(
+        'All target dates were already completed — nothing to schedule.',
+      );
+    }
+
+    final box = HiveService.instance.workoutBox;
+    final scheduled = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final a in assignments) {
+      // Concurrent-edit guard — re-read the schedule entry. The planner
+      // already filtered completed days, but the user may have completed
+      // a workout since then.
+      final existing = box.get('schedule_${a.date}');
+      if (existing is Map && existing['status'] == 'completed') {
+        continue;
+      }
+
+      final date = DateTime.tryParse(a.date);
+      if (date == null) {
+        errors.add('${a.date}: invalid date');
+        continue;
+      }
+
+      try {
+        await WorkoutScheduleService.instance
+            .assignTemplateToDate(a.templateId, date);
+        scheduled.add({'date': a.date, 'template_id': a.templateId});
+      } catch (e, stack) {
+        debugPrint(
+            '[ToolDispatcher] schedule_template ${a.date} failed: $e\n$stack');
+        errors.add('${a.date}: $e');
+      }
+    }
+
+    ScheduleTemplatePlanner.instance.clearCache(intent.id);
+
+    if (scheduled.isEmpty) {
+      return ToolExecutionResult.failure(
+        errors.isEmpty
+            ? 'No dates were scheduled.'
+            : 'Could not schedule any dates: ${errors.join("; ")}',
+      );
+    }
+    return ToolExecutionResult.success(data: {
+      'scheduled': scheduled,
+      'count': scheduled.length,
+      if (errors.isNotEmpty) 'partial_errors': errors,
+    });
   }
 
   Future<ToolExecutionResult> _executeLogMealByText(ToolIntent intent) async {
