@@ -23,8 +23,11 @@ class WeightSparkline extends StatefulWidget {
 }
 
 class _WeightSparklineState extends State<WeightSparkline> {
-  String _selectedRange = '7d'; // 7d, 30d, 3m, 1y, All
-  static const _ranges = ['7d', '30d', '3m', '1y', 'All'];
+  // Handoff (`daily.jsx`): chip set is 7D / 30D / 90D only.
+  // Legacy 1y / All chips removed to match the spec; historical data
+  // is still reachable via the Weekly Report and the weight log screen.
+  String _selectedRange = '7d';
+  static const _ranges = ['7d', '30d', '90d'];
 
   List<WeightEntry> get _filteredEntries {
     if (widget.entries.isEmpty) return [];
@@ -32,9 +35,8 @@ class _WeightSparklineState extends State<WeightSparkline> {
     final cutoff = switch (_selectedRange) {
       '7d' => now.subtract(const Duration(days: 7)),
       '30d' => now.subtract(const Duration(days: 30)),
-      '3m' => now.subtract(const Duration(days: 90)),
-      '1y' => now.subtract(const Duration(days: 365)),
-      _ => DateTime(2000), // All
+      '90d' => now.subtract(const Duration(days: 90)),
+      _ => now.subtract(const Duration(days: 7)),
     };
     final cutoffStr =
         '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
