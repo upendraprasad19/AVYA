@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/pro_badge.dart';
@@ -153,28 +154,108 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.go('/profile'),
-        ),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'LOGBOOK',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 3,
-              ),
+      // Handoff dispatch-style header (`utility.jsx` ReportScreen lines
+      // 568-608): back / Seal badge / share + dispatch range + Fraunces
+      // title. Double gold rule bottom.
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(140),
+        child: Container(
+          decoration: const BoxDecoration(color: AppColors.bg),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(18, 14, 18, 8),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => context.go('/profile'),
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          '\u2190 BACK',
+                          style: AppTypography.mono.copyWith(
+                            fontSize: 11,
+                            color: AppColors.textDim,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const WardSealBadge(
+                        label: 'REPORT',
+                        subline: 'W\u00B72026',
+                        variant: WardSealVariant.report,
+                      ),
+                      const Spacer(),
+                      Text(
+                        'SHARE',
+                        style: AppTypography.mono.copyWith(
+                          fontSize: 11,
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22),
+                  child: Text(
+                    'WEEKLY DISPATCH',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 9,
+                      color: AppColors.accent,
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(22, 2, 22, 10),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: RichText(
+                      text: TextSpan(
+                        style: AppTypography.h1.copyWith(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                        children: const [
+                          TextSpan(text: 'A '),
+                          TextSpan(
+                            text: 'clean',
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                          TextSpan(text: ' week.'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  height: 1,
+                  color: AppColors.accent.withValues(alpha: 0.6),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  height: 1,
+                  color: AppColors.accent.withValues(alpha: 0.3),
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text('Reports', style: AppTypography.h3),
-          ],
+          ),
         ),
       ),
       body: SafeArea(

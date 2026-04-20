@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
-/// Sharp 2-px accentSoft slab showing the current streak count with fire
-/// icon. Fraunces h3 number + Mono "DAY"/"DAYS" caps + freeze counter.
+/// Streak badge — matches the handoff header combined pill
+/// (`design_handoff_wardroom/src/screens/daily.jsx` lines 32–43).
 ///
-/// Plays a subtle pulse animation (1.0 -> 1.1 -> 1.0, 300ms) once on build
-/// to draw attention when the streak is non-zero.
+/// Single pill with `cardHi` bg and a 27% gold border; shows a small
+/// gold dot, the streak number in gold, "DAYS" caps, a 1-px neutral
+/// divider, a snowflake glyph, and the freeze count in `info`. Sharp
+/// `radPill` corners. No 🔥 emoji — gold dot instead.
+///
+/// Pulses once on mount when `days > 0` and re-pulses when the streak
+/// increases via `didUpdateWidget`.
 class StreakBadge extends StatefulWidget {
   final int days;
   final int freezesAvailable;
 
-  const StreakBadge(
-      {super.key, required this.days, this.freezesAvailable = 0});
+  const StreakBadge({
+    super.key,
+    required this.days,
+    this.freezesAvailable = 0,
+  });
 
   @override
   State<StreakBadge> createState() => _StreakBadgeState();
@@ -44,7 +51,6 @@ class _StreakBadgeState extends State<StreakBadge>
       ),
     ]).animate(_pulseController);
 
-    // Fire pulse once if streak is non-zero.
     if (widget.days > 0) {
       Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) _pulseController.forward();
@@ -55,7 +61,6 @@ class _StreakBadgeState extends State<StreakBadge>
   @override
   void didUpdateWidget(covariant StreakBadge oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Pulse when streak value increases.
     if (widget.days > oldWidget.days && widget.days > 0) {
       _pulseController.forward(from: 0);
     }
@@ -69,56 +74,75 @@ class _StreakBadgeState extends State<StreakBadge>
 
   @override
   Widget build(BuildContext context) {
+    final freezeColor = widget.freezesAvailable > 0
+        ? AppColors.info
+        : AppColors.textDisabled;
+
     return ScaleTransition(
       scale: _pulseAnimation,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.accentSoft,
-          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          color: AppColors.cardHi,
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.33),
+            color: AppColors.accent.withValues(alpha: 0.27),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text('\u{1F525}', style: TextStyle(fontSize: 14)),
-            const SizedBox(width: 6),
+            // Gold dot.
+            Text(
+              '\u25CF',
+              style: AppTypography.monoXs.copyWith(
+                fontSize: 9,
+                color: AppColors.accent,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 4),
             Text(
               '${widget.days}',
-              style: AppTypography.h3.copyWith(
+              style: AppTypography.mono.copyWith(
+                fontSize: 11,
                 color: AppColors.accent,
-                height: 1,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
               ),
             ),
             const SizedBox(width: 4),
             Text(
               widget.days == 1 ? 'DAY' : 'DAYS',
               style: AppTypography.monoXs.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 2,
+                fontSize: 8,
+                color: AppColors.textDim,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            // Streak freeze indicator
-            const SizedBox(width: 8),
+            // Divider.
+            Container(
+              width: 1,
+              height: 10,
+              color: AppColors.line2,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+            ),
+            // Snowflake.
             Text(
-              '\u{2744}\uFE0F', // ❄️
-              style: TextStyle(
-                fontSize: 11,
-                color: widget.freezesAvailable > 0
-                    ? AppColors.info
-                    : AppColors.textDisabled,
-              ),
+              '\u2744',
+              style: TextStyle(fontSize: 10, color: freezeColor, height: 1),
             ),
-            const SizedBox(width: 2),
+            const SizedBox(width: 3),
             Text(
               '${widget.freezesAvailable}',
               style: AppTypography.mono.copyWith(
-                color: widget.freezesAvailable > 0
-                    ? AppColors.info
-                    : AppColors.textDisabled,
-                letterSpacing: 1,
+                fontSize: 11,
+                color: freezeColor,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
               ),
             ),
           ],

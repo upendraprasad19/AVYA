@@ -6,6 +6,10 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/stats_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/plan_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
@@ -19,6 +23,8 @@ import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
+import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
+import 'package:icanbefitter/features/profile/screens/notifications_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
@@ -74,6 +80,74 @@ class AppRouter {
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const WelcomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding/goal',
+        name: 'onboardingGoal',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: GoalScreen(initialGoal: extra['goal'] as String?),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/onboarding/stats',
+        name: 'onboardingStats',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          final goal = extra['goal'] as String? ?? 'recomp';
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: StatsScreen(
+              goal: goal,
+              initial: Map<String, dynamic>.from(extra),
+            ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/onboarding/plan',
+        name: 'onboardingPlan',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: PlanScreen(data: Map<String, dynamic>.from(extra)),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      // Legacy chat-based onboarding — retained behind /onboarding/chat as
+      // a fallback while the 4-step stepped flow (welcome → goal → stats
+      // → plan) rolls out via PRs Y–AB. Remove once the new flow ships
+      // on all environments.
+      GoRoute(
+        path: '/onboarding/chat',
+        name: 'onboardingChat',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const OnboardingChatScreen(),
@@ -207,6 +281,16 @@ class AppRouter {
                     name: 'mySubmissions',
                     builder: (context, state) => const MySubmissionsScreen(),
                   ),
+                  GoRoute(
+                    path: 'settings',
+                    name: 'settings',
+                    builder: (context, state) => const SettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'notifications',
+                    name: 'notificationsInbox',
+                    builder: (context, state) => const NotificationsScreen(),
+                  ),
                 ],
               ),
             ],
@@ -223,7 +307,11 @@ class AppRouter {
   static String? _authRedirect(BuildContext context, GoRouterState state) {
     final isOnSplash = state.matchedLocation == '/splash';
     final isOnAuthRoute = state.matchedLocation == '/sign-in';
-    final isOnOnboarding = state.matchedLocation == '/onboarding';
+    // Treat every `/onboarding*` sub-route (welcome / goal / stats /
+    // plan / chat) as "on onboarding" so the stepped flow can navigate
+    // between its own screens without the not-onboarded redirect
+    // bouncing the user back to /onboarding every tap.
+    final isOnOnboarding = state.matchedLocation.startsWith('/onboarding');
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;

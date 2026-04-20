@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Warning card shown when the streak is at risk.
+/// Streak-at-risk warning banner — matches the handoff
+/// (`design_handoff_wardroom/src/screens/daily.jsx` lines 58–79).
 ///
-/// Wardroom styling: inset card, warn-tinted leading chip, Mono eyebrow,
-/// DM Sans body, sharp outlined TRAIN NOW slab.
+/// `badSoft` bg with a solid 3-px `bad` left border, 1-px `bad`-55%
+/// on the other three edges. Layout: ⚠ glyph → Fraunces 13 w600
+/// `bad` title → mono 10 dim meta → solid `bad`-bg "Train Now" CTA.
+/// `radSharp` corners.
 class StreakWarningBanner extends StatelessWidget {
   final int streakDays;
   final int workoutsRemaining;
   final int freezesAvailable;
   final VoidCallback onTrainNow;
+  final int? hoursLeft;
 
   const StreakWarningBanner({
     super.key,
@@ -20,21 +23,11 @@ class StreakWarningBanner extends StatelessWidget {
     required this.workoutsRemaining,
     this.freezesAvailable = 0,
     required this.onTrainNow,
+    this.hoursLeft,
   });
 
-  /// Returns true if the banner should be displayed.
-  ///
-  /// Bug #12 — Personalised per user. Replaces the old "Sat/Sun-only +
-  /// any-time-of-day" check with a smart rule:
-  ///
-  /// 1. Today must be a workout day (not a rest day).
-  /// 2. Today's workout must NOT already be completed.
-  /// 3. Current time must be ≥ user's median workout hour + 3 hours
-  ///    (with a 15:00 IST hard floor and 23:00 IST hard ceiling).
-  /// 4. User must have a non-zero streak (we don't warn on day 0).
-  ///
-  /// All inputs are computed by [streakWarningEligibilityProvider] in
-  /// `home_provider.dart`. Keep this method pure so it stays unit-testable.
+  /// Bug #12 — Personalised per-user eligibility. Unchanged from the
+  /// previous Wardroom port; visual shell only updated in this PR.
   static bool shouldShow({
     required int streakDays,
     required bool isWorkoutDayToday,
@@ -48,10 +41,6 @@ class StreakWarningBanner extends StatelessWidget {
 
     final clock = now ?? DateTime.now();
     final currentHour = clock.hour;
-
-    // Median + 3, then clamp to [15, 23]. The clamp prevents pre-3pm warnings
-    // (annoying for users who train in the morning) and post-11pm warnings
-    // (useless — by then it's "tomorrow's problem").
     final rawThreshold = medianWorkoutHour + 3;
     final thresholdHour = rawThreshold.clamp(15, 23);
 
@@ -60,65 +49,82 @@ class StreakWarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bodyText = freezesAvailable > 0
-        ? '$workoutsRemaining left \u2022 $freezesAvailable freeze${freezesAvailable > 1 ? "s" : ""} remaining'
-        : '$workoutsRemaining left \u2022 No freezes — don\'t miss today!';
+    final clock = DateTime.now();
+    final hours = hoursLeft ?? (23 - clock.hour).clamp(0, 23);
+    final metaLine = freezesAvailable > 0
+        ? '${hours}H LEFT \u00B7 $freezesAvailable FREEZE AVAILABLE'
+        : '${hours}H LEFT \u00B7 NO FREEZES — DON\'T MISS TODAY';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.gutter,
         0,
         AppSpacing.gutter,
-        AppSpacing.stackS,
+        14,
       ),
-      child: WardCard(
-        variant: WardCardVariant.inset,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.cardPadding,
-          vertical: AppSpacing.stackM,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: AppColors.bad.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border(
+            top: BorderSide(color: AppColors.bad.withValues(alpha: 0.33)),
+            right: BorderSide(color: AppColors.bad.withValues(alpha: 0.33)),
+            bottom: BorderSide(color: AppColors.bad.withValues(alpha: 0.33)),
+            left: BorderSide(color: AppColors.bad, width: 3),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const WardChip(
-              label: 'AT RISK',
-              tone: WardChipTone.bad,
-              leading: Icon(
-                Icons.local_fire_department_outlined,
-                size: 12,
-                color: AppColors.bad,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.stackM),
+            const Text('\u26A0', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'STREAK AT RISK',
-                    style: AppTypography.mono.copyWith(
+                    '$streakDays-day streak at risk',
+                    style: AppTypography.h3.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.bad,
-                      letterSpacing: 2,
+                      letterSpacing: -0.1,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.stackXS),
+                  const SizedBox(height: 2),
                   Text(
-                    '$streakDays-day streak · $bodyText',
-                    style: AppTypography.bodySm.copyWith(
+                    metaLine,
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 10,
                       color: AppColors.textDim,
+                      letterSpacing: 1,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.stackS),
-            WardButton(
-              label: 'TRAIN NOW',
-              onPressed: onTrainNow,
-              variant: WardButtonVariant.danger,
-              size: WardButtonSize.small,
-              fullWidth: false,
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: onTrainNow,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.bad,
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
+                ),
+                child: Text(
+                  'TRAIN NOW',
+                  style: AppTypography.mono.copyWith(
+                    fontSize: 11,
+                    color: AppColors.bgDeep,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

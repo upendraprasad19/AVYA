@@ -182,9 +182,11 @@ class SetInputRow extends StatelessWidget {
                 LengthLimitingTextInputFormatter(6),
               ],
         textAlign: TextAlign.center,
-        style: AppTypography.h3.copyWith(
+        style: AppTypography.h2.copyWith(
           fontSize: 15,
+          fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
+          letterSpacing: -0.2,
         ),
         decoration: InputDecoration(
           hintText: hint,

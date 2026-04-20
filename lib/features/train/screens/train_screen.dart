@@ -220,39 +220,66 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
     final progressPercent = (progress * 100).round();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        WardLetterhead(
-          eyebrow: 'PHASE ${plan.phase} \u00b7 ${plan.phaseName.toUpperCase()}',
-          title: 'Week $selectedWeek of ${plan.weeks.length}',
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 10),
-          divider: false,
-          showAnchor: true,
-          trailing: WardChip(
-            label: '$completedDays/$totalWorkoutDays',
-            tone: WardChipTone.gold,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
-          child: Row(
+    // Matches handoff `train.jsx` lines 14–29: eyebrow + "Week N of M"
+    // Fraunces title with inline "· X/Y done" dim subtitle, progress
+    // bar with trailing "NN%" gold mono label, single bottom `line2`.
+    return Container(
+      color: AppColors.bgDeep,
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(child: WardBar(pct: progress, height: 4)),
-              const SizedBox(width: 10),
+              const AnchorGlyph(size: 12),
+              const SizedBox(width: 8),
               Text(
-                '$progressPercent%',
-                style: AppTypography.mono.copyWith(
+                'PHASE ${plan.phase} \u00B7 ${plan.phaseName.toUpperCase()}',
+                style: AppTypography.monoXs.copyWith(
                   color: AppColors.accent,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
+                  letterSpacing: 3,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-        ),
-        const WardRule(doubleRule: true, margin: EdgeInsets.symmetric(horizontal: 22)),
-      ],
+          const SizedBox(height: 4),
+          RichText(
+            text: TextSpan(
+              style: AppTypography.h2.copyWith(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+              children: [
+                TextSpan(text: 'Week $selectedWeek of ${plan.weeks.length}'),
+                TextSpan(
+                  text: '  \u00B7  $completedDays/$totalWorkoutDays done',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: AppColors.textDim,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          WardBar(
+            pct: progress,
+            height: 4,
+            trailingLabel: '$progressPercent%',
+            trailingColor: AppColors.accent,
+          ),
+        ],
+      ),
     );
   }
 
@@ -313,14 +340,45 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     final focusText =
         subtitleParts.isNotEmpty ? subtitleParts[0].trim() : '';
 
+    // Split workout.name so the mode label (e.g. "Relaxed", "Focused")
+    // renders as an italic-gold second run under the title. Phase-driven
+    // same as Home — matches handoff "Leg Day / _Relaxed_" pattern.
+    final plan = ref.read(currentPlanProvider);
+    final phaseMode = {
+      1: 'Relaxed',
+      2: 'Focused',
+      3: 'Capacity',
+      4: 'Peak',
+    };
+    final modeLabel = phaseMode[plan.phase] ?? 'Focused';
+
     return WardCard(
       variant: WardCardVariant.hero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            workout.name,
-            style: AppTypography.h2.copyWith(fontSize: 18),
+          RichText(
+            text: TextSpan(
+              style: AppTypography.h2.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.3,
+                height: 1.1,
+              ),
+              children: [
+                TextSpan(text: workout.name),
+                const TextSpan(text: ' '),
+                TextSpan(
+                  text: modeLabel,
+                  style: const TextStyle(
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
           ),
           if (focusText.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -333,10 +391,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           ],
           const SizedBox(height: 4),
           Text(
-            '${workout.exerciseCount} EXERCISES · ~${workout.estimatedDuration.toString().toUpperCase()}',
+            '${workout.exerciseCount} EXERCISES \u00B7 ~${workout.estimatedDuration.toString().toUpperCase()}',
             style: AppTypography.monoXs.copyWith(
               color: AppColors.textDim,
-              letterSpacing: 1.5,
+              letterSpacing: 1,
             ),
           ),
           const SizedBox(height: 14),
@@ -606,9 +664,27 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           ],
         );
       case _RowStatus.planned:
-        return const WardChip(label: 'PLANNED', tone: WardChipTone.neutral);
+        // Handoff: small circle outline only — no chip.
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.textGhost,
+              width: 1.5,
+            ),
+          ),
+        );
       case _RowStatus.missed:
-        return const WardChip(label: '— MISSED', tone: WardChipTone.neutral);
+        // Handoff: row opacity already at 60%; render a muted minus.
+        return Text(
+          '\u2014',
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.bad.withValues(alpha: 0.6),
+            letterSpacing: 1,
+          ),
+        );
       case _RowStatus.rest:
         return const SizedBox.shrink();
     }

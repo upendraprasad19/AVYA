@@ -5,33 +5,35 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/tap_scale.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Today's workout split card with workout info on left, fuel + steps on right.
+/// Today's workout split card — matches the Wardroom handoff
+/// (`design_handoff_wardroom/src/screens/daily.jsx` lines 87–148).
+///
+/// Layout is a 1.35fr/1fr two-column grid:
+/// * **Left** (hero): phase chip + meta eyebrow + Fraunces 20 title
+///   with italic-gold secondary (e.g. `LEG DAY` / _Relaxed_), meta
+///   row, bottom-aligned primary CTA.
+/// * **Right**: **three equal stacked micro-cards** — FUEL / PROTEIN /
+///   STEPS. Each renders a colored diamond glyph, a mono 8 caps label,
+///   Fraunces 15 w700 tabular value with mono 9 target suffix. STEPS
+///   gets a 2-px progress bar across the bottom.
 class TodayWorkoutCard extends StatelessWidget {
   final String? workoutTag;
   final String workoutName;
+  final String? workoutMode;
   final int durationMin;
   final int exerciseCount;
   final VoidCallback onStart;
 
-  // Fuel mini card
   final double caloriesCurrent;
   final double caloriesTarget;
-
-  // Protein mini card
   final double proteinCurrent;
   final double proteinTarget;
-
-  // Steps mini card
   final int steps;
   final int stepsGoal;
 
-  // Rest day mode
   final bool isRestDay;
-
-  // Completed mode
   final bool isDone;
 
-  // Completed-state extras
   final double? totalVolumeKg;
   final String? bestLift;
   final VoidCallback? onViewCard;
@@ -40,6 +42,7 @@ class TodayWorkoutCard extends StatelessWidget {
     super.key,
     this.workoutTag,
     required this.workoutName,
+    this.workoutMode,
     this.durationMin = 55,
     this.exerciseCount = 6,
     required this.onStart,
@@ -58,302 +61,66 @@ class TodayWorkoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fuelProgress = caloriesTarget > 0
-        ? (caloriesCurrent / caloriesTarget).clamp(0.0, 1.0)
-        : 0.0;
-    final proteinProgress = proteinTarget > 0
-        ? (proteinCurrent / proteinTarget).clamp(0.0, 1.0)
-        : 0.0;
-    final stepsProgress =
+    final stepsPct =
         stepsGoal > 0 ? (steps / stepsGoal).clamp(0.0, 1.0) : 0.0;
 
-    return SizedBox(
-      height: 168,
+    return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Left: Workout card (60%) — hero variant
-          Expanded(
-            flex: 6,
-            child: WardCard(
-              variant: WardCardVariant.hero,
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (workoutTag != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: WardChip(
-                            label: workoutTag!,
-                            tone: WardChipTone.neutral,
-                          ),
-                        ),
-                      Text(
-                        workoutName,
-                        style: AppTypography.h3.copyWith(
-                          color: AppColors.textPrimary,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text(
-                            '\u23F1 $durationMin MIN',
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.textMute,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            '\u{1F4AA} $exerciseCount EX',
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.textMute,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (isRestDay)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: AppColors.bgRaise,
-                        borderRadius: BorderRadius.circular(AppRadius.sharp),
-                        border: Border.all(color: AppColors.line2),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('\u{1F4A4}', style: TextStyle(fontSize: 11)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'REST DAY',
-                            style: AppTypography.mono.copyWith(
-                              color: AppColors.textMute,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else if (isDone)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const WardChip(
-                              label: 'DONE',
-                              tone: WardChipTone.ok,
-                              leading: Icon(Icons.check_circle,
-                                  size: 10, color: AppColors.ok),
-                            ),
-                            if (onViewCard != null) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: onViewCard,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentSoft,
-                                    borderRadius: BorderRadius.circular(
-                                        AppRadius.sharp),
-                                    border: Border.all(
-                                      color: AppColors.accent
-                                          .withValues(alpha: 0.33),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'VIEW CARD',
-                                        style: AppTypography.monoXs.copyWith(
-                                          color: AppColors.accent,
-                                          letterSpacing: 2,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      const Icon(Icons.arrow_forward,
-                                          size: 10, color: AppColors.accent),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (bestLift != null || totalVolumeKg != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            [
-                              if (bestLift != null) '\u{1F3C6} $bestLift',
-                              if (totalVolumeKg != null)
-                                '${totalVolumeKg!.toStringAsFixed(0)} kg vol',
-                            ].join('  \u00B7  '),
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.textMute,
-                              letterSpacing: 1.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    )
-                  else
-                    TapScale(
-                      onTap: onStart,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(AppRadius.sharp),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_arrow,
-                                size: 14, color: Colors.black),
-                            const SizedBox(width: 5),
-                            Text(
-                              'START',
-                              style: AppTypography.mono.copyWith(
-                                color: Colors.black,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+          // Left hero (1.35fr).
+          Expanded(flex: 135, child: _HeroCard(
+            workoutTag: workoutTag,
+            workoutName: workoutName,
+            workoutMode: workoutMode,
+            durationMin: durationMin,
+            exerciseCount: exerciseCount,
+            isRestDay: isRestDay,
+            isDone: isDone,
+            totalVolumeKg: totalVolumeKg,
+            bestLift: bestLift,
+            onStart: onStart,
+            onViewCard: onViewCard,
+          )),
           const SizedBox(width: 8),
-          // Right: Combined Fuel+Protein + Steps
+          // Right column (1fr) — three equal stacked cards.
           Expanded(
-            flex: 4,
+            flex: 100,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.max,
               children: [
-                // Combined Fuel + Protein card
                 Expanded(
-                  flex: 3,
-                  child: WardCard(
-                    variant: WardCardVariant.standard,
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _StatRow(
-                          icon: Icons.local_gas_station,
-                          iconColor: AppColors.accent,
-                          label: 'FUEL',
-                          value: '${caloriesCurrent.round()}',
-                          target: '${caloriesTarget.round()}',
-                          suffix: 'kcal',
-                          valueColor: AppColors.accent,
-                          progress: fuelProgress,
-                          progressColor: AppColors.accent,
-                        ),
-                        const SizedBox(height: 8),
-                        _StatRow(
-                          icon: Icons.fitness_center,
-                          iconColor: AppColors.warn,
-                          label: 'PROTEIN',
-                          value: '${proteinCurrent.round()}',
-                          target: '${proteinTarget.round()}',
-                          suffix: 'g',
-                          valueColor: AppColors.warn,
-                          progress: proteinProgress,
-                          progressColor: AppColors.warn,
-                        ),
-                      ],
-                    ),
+                  child: _MicroCard(
+                    glyph: '\u25C7', // ◇
+                    glyphColor: AppColors.accent,
+                    label: 'FUEL',
+                    value: '${caloriesCurrent.round()}',
+                    suffix: '/${caloriesTarget.round()} kcal',
+                    valueColor: AppColors.accent,
                   ),
                 ),
                 const SizedBox(height: 6),
-                // Steps card
                 Expanded(
-                  flex: 2,
-                  child: WardCard(
-                    variant: WardCardVariant.standard,
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.directions_walk,
-                                size: 10, color: AppColors.ok),
-                            const SizedBox(width: 3),
-                            Text(
-                              'STEPS',
-                              style: AppTypography.monoXs.copyWith(
-                                color: AppColors.textMute,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: steps.toDouble()),
-                                duration: const Duration(milliseconds: 500),
-                                curve: Curves.easeOut,
-                                builder: (context, animSteps, _) {
-                                  return Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        TextSpan(
-                                          text: _formatNumber(
-                                              animSteps.round()),
-                                          style: AppTypography.h3.copyWith(
-                                            color: AppColors.ok,
-                                            height: 1,
-                                          ),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              ' / ${_formatNumber(stepsGoal)}',
-                                          style: AppTypography.monoXs.copyWith(
-                                            color: AppColors.textMute,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    textAlign: TextAlign.right,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        WardBar(
-                          pct: stepsProgress,
-                          height: 3,
-                          color: AppColors.ok,
-                        ),
-                      ],
-                    ),
+                  child: _MicroCard(
+                    glyph: '\u25C6', // ◆
+                    glyphColor: AppColors.ok,
+                    label: 'PROTEIN',
+                    value: '${proteinCurrent.round()}',
+                    suffix: '/${proteinTarget.round()} g',
+                    valueColor: AppColors.ok,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: _MicroCard(
+                    glyph: '\u25B2', // ▲
+                    glyphColor: AppColors.info,
+                    label: 'STEPS',
+                    value: _fmtK(steps),
+                    suffix: '/${_fmtK(stepsGoal)}',
+                    valueColor: AppColors.info,
+                    progress: stepsPct,
+                    progressColor: AppColors.info,
                   ),
                 ),
               ],
@@ -364,102 +131,437 @@ class TodayWorkoutCard extends StatelessWidget {
     );
   }
 
-  String _formatNumber(int n) {
+  static String _fmtK(int n) {
     if (n >= 1000) {
-      return '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k';
+      final v = n / 1000;
+      return '${v.toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k';
     }
     return n.toString();
   }
 }
 
-class _StatRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final String value;
-  final String target;
-  final String suffix;
-  final Color valueColor;
-  final double progress;
-  final Color progressColor;
-
-  const _StatRow({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.value,
-    this.target = '',
-    required this.suffix,
-    required this.valueColor,
-    required this.progress,
-    required this.progressColor,
+// ── Left hero card ─────────────────────────────────────────────────────
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    required this.workoutTag,
+    required this.workoutName,
+    required this.workoutMode,
+    required this.durationMin,
+    required this.exerciseCount,
+    required this.isRestDay,
+    required this.isDone,
+    required this.totalVolumeKg,
+    required this.bestLift,
+    required this.onStart,
+    required this.onViewCard,
   });
+
+  final String? workoutTag;
+  final String workoutName;
+  final String? workoutMode;
+  final int durationMin;
+  final int exerciseCount;
+  final bool isRestDay;
+  final bool isDone;
+  final double? totalVolumeKg;
+  final String? bestLift;
+  final VoidCallback onStart;
+  final VoidCallback? onViewCard;
 
   @override
   Widget build(BuildContext context) {
-    final numericValue = double.tryParse(value) ?? 0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 10, color: iconColor),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textMute,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: numericValue),
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeOut,
-                builder: (context, animValue, _) {
-                  return Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${animValue.round()}',
-                          style: AppTypography.h3.copyWith(
-                            color: valueColor,
-                            height: 1,
-                          ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(
+          color: AppColors.accent.withValues(alpha: 0.33),
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Phase chip + meta eyebrow.
+              Row(
+                children: [
+                  if (workoutTag != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentSoft,
+                        border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.27),
                         ),
-                        if (target.isNotEmpty)
-                          TextSpan(
-                            text: '/$target',
-                            style: AppTypography.monoXs.copyWith(
-                              color: AppColors.textMute,
-                            ),
-                          ),
-                        TextSpan(
-                          text: ' $suffix',
-                          style: AppTypography.monoXs.copyWith(
-                            color: AppColors.textMute,
-                          ),
+                      ),
+                      child: Text(
+                        workoutTag!,
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 8,
+                          color: AppColors.accent,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
+                      ),
                     ),
-                    textAlign: TextAlign.right,
-                  );
-                },
+                  if (workoutMode != null && workoutTag != null)
+                    const SizedBox(width: 6),
+                  if (workoutMode != null)
+                    Flexible(
+                      child: Text(
+                        workoutMode!,
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 8,
+                          color: AppColors.textMute,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Workout name — Fraunces 20 w600 with italic-gold second
+              // line if [workoutMode] is provided and the name has two
+              // visual tiers (e.g. "LEG DAY" / "Relaxed").
+              RichText(
+                text: TextSpan(
+                  style: AppTypography.h2.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                    height: 1.05,
+                  ),
+                  children: [
+                    TextSpan(text: workoutName),
+                    if (workoutMode != null && !isRestDay) ...[
+                      const TextSpan(text: '\n'),
+                      TextSpan(
+                        text: _titleCase(workoutMode!),
+                        style: const TextStyle(
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (!isRestDay && exerciseCount > 0) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      '\u23F1 $durationMin MIN',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textDim,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '\u00B7',
+                      style: AppTypography.monoXs
+                          .copyWith(color: AppColors.textGhost),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$exerciseCount EX',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textDim,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          _HeroCta(
+            isRestDay: isRestDay,
+            isDone: isDone,
+            totalVolumeKg: totalVolumeKg,
+            bestLift: bestLift,
+            onStart: onStart,
+            onViewCard: onViewCard,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _titleCase(String input) {
+    if (input.isEmpty) return input;
+    final lower = input.toLowerCase();
+    return lower[0].toUpperCase() + lower.substring(1);
+  }
+}
+
+class _HeroCta extends StatelessWidget {
+  const _HeroCta({
+    required this.isRestDay,
+    required this.isDone,
+    required this.totalVolumeKg,
+    required this.bestLift,
+    required this.onStart,
+    required this.onViewCard,
+  });
+  final bool isRestDay;
+  final bool isDone;
+  final double? totalVolumeKg;
+  final String? bestLift;
+  final VoidCallback onStart;
+  final VoidCallback? onViewCard;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isRestDay) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.bgRaise,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(color: AppColors.line2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('\u{1F4A4}', style: TextStyle(fontSize: 11)),
+            const SizedBox(width: 6),
+            Text(
+              'REST DAY',
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        WardBar(
-          pct: progress,
-          height: 3,
-          color: progressColor,
+      );
+    }
+
+    if (isDone) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const WardChip(
+                label: 'DONE',
+                tone: WardChipTone.ok,
+                leading: Icon(
+                  Icons.check_circle,
+                  size: 10,
+                  color: AppColors.ok,
+                ),
+              ),
+              if (onViewCard != null) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: onViewCard,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(
+                        color:
+                            AppColors.accent.withValues(alpha: 0.33),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'VIEW CARD',
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.arrow_forward,
+                          size: 10,
+                          color: AppColors.accent,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (bestLift != null || totalVolumeKg != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              [
+                if (bestLift != null) '\u{1F3C6} $bestLift',
+                if (totalVolumeKg != null)
+                  '${totalVolumeKg!.toStringAsFixed(0)} kg vol',
+              ].join('  \u00B7  '),
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      );
+    }
+
+    return TapScale(
+      onTap: onStart,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 9,
         ),
-      ],
+        decoration: BoxDecoration(
+          color: AppColors.accent,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.play_arrow,
+              size: 14,
+              color: AppColors.bgDeep,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              'START',
+              style: AppTypography.mono.copyWith(
+                color: AppColors.bgDeep,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Right-column micro-card ────────────────────────────────────────────
+class _MicroCard extends StatelessWidget {
+  const _MicroCard({
+    required this.glyph,
+    required this.glyphColor,
+    required this.label,
+    required this.value,
+    required this.suffix,
+    required this.valueColor,
+    this.progress,
+    this.progressColor,
+  });
+
+  final String glyph;
+  final Color glyphColor;
+  final String label;
+  final String value;
+  final String suffix;
+  final Color valueColor;
+  final double? progress;
+  final Color? progressColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                glyph,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: glyphColor,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTypography.monoXs.copyWith(
+                  fontSize: 8,
+                  color: AppColors.textMute,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  style: AppTypography.h2.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor,
+                    letterSpacing: -0.2,
+                    height: 1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  suffix,
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 9,
+                    color: AppColors.textMute,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          if (progress != null)
+            SizedBox(
+              height: 2,
+              child: WardBar(
+                pct: progress!,
+                height: 2,
+                color: progressColor ?? AppColors.accent,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
