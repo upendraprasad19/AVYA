@@ -11,6 +11,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
+import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,6 +118,16 @@ serve(async (req: Request) => {
         continue;
       }
 
+      // Proactive dedup: skip if streak_protection already sent today.
+      const allow = await shouldSendProactive(supabase, userId, "streak_protection");
+      if (!allow) {
+        console.log(
+          `[streak-guardian] skipping ${userId}: dedup hit for streak_protection`,
+        );
+        skipped++;
+        continue;
+      }
+
       // 5. Build a contextual message based on streak + snapshot data.
       const snap = snapshot?.snapshot_json ?? {};
       const streakDays = (snap?.current_streak_days as number) ?? streakWeeks * 7;
@@ -170,7 +181,10 @@ serve(async (req: Request) => {
         screen: "/train",
       });
 
-      if (ok) sent++;
+      if (ok) {
+        sent++;
+        await markProactiveSent(supabase, userId, "streak_protection");
+      }
     }
 
     return new Response(

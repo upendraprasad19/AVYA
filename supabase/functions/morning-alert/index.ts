@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "./_shared/send_notification.ts";
 import { geminiChat, MODEL_FLASH } from "./_shared/gemini.ts";
+import { markProactiveSent, shouldSendProactive } from "./_shared/proactive_dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -427,6 +428,19 @@ async function deliverAlerts(
           const prefs = snap.snapshot_json?.notification_preferences;
           if (prefs?.morning_checkin?.enabled === false) return;
 
+          // Proactive dedup: skip if morning_brief already sent today.
+          const allow = await shouldSendProactive(
+            supabaseClient,
+            snap.user_id,
+            "morning_brief",
+          );
+          if (!allow) {
+            console.log(
+              `[morning-alert] skipping ${snap.user_id}: dedup hit for morning_brief`,
+            );
+            return;
+          }
+
           // Send push via OneSignal
           // [TODO] FCM not implemented — alert stored in DB only for user ${snap.user_id}
           const pushOk = await sendPushToUser(
@@ -434,7 +448,10 @@ async function deliverAlerts(
             "ICANBEFITTER",
             alertMsg,
           );
-          if (pushOk) pushSent++;
+          if (pushOk) {
+            pushSent++;
+            await markProactiveSent(supabaseClient, snap.user_id, "morning_brief");
+          }
 
           // Try Telegram if connected
           const { data: tgConn } = await supabaseClient
