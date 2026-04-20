@@ -27,6 +27,7 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   late final TextEditingController _weight;
+  late final TextEditingController _targetWeight;
   late final TextEditingController _height;
   late final TextEditingController _age;
   late final TextEditingController _bodyFat;
@@ -39,6 +40,24 @@ class _StatsScreenState extends State<StatsScreen> {
     final init = widget.initial ?? const <String, dynamic>{};
     _weight = TextEditingController(
       text: (init['weight_kg'] as num?)?.toStringAsFixed(1) ?? '75.0',
+    );
+    // AI.1 — target weight seed mirrors the goal-derived delta that
+    // plan_screen.dart previously computed silently (lose_fat -5,
+    // recomp -2, build_muscle +3, otherwise current weight). User can
+    // overwrite freely; the BMR calculator uses this for protein
+    // targeting when goal == 'lose_fat' and for projection elsewhere.
+    final seedWeight =
+        (init['weight_kg'] as num?)?.toDouble() ?? 75.0;
+    final goalDelta = switch (widget.goal) {
+      'lose_fat' => -5.0,
+      'recomp' => -2.0,
+      'build_muscle' => 3.0,
+      _ => 0.0,
+    };
+    final seedTarget = (init['target_weight_kg'] as num?)?.toDouble() ??
+        (seedWeight + goalDelta).clamp(40.0, 250.0);
+    _targetWeight = TextEditingController(
+      text: seedTarget.toStringAsFixed(1),
     );
     _height = TextEditingController(
       text: (init['height_cm'] as num?)?.toStringAsFixed(0) ?? '175',
@@ -56,6 +75,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void dispose() {
     _weight.dispose();
+    _targetWeight.dispose();
     _height.dispose();
     _age.dispose();
     _bodyFat.dispose();
@@ -98,7 +118,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Row(
       children: [
         Text(
-          '02 \u00B7 03',
+          '02 \u00B7 04',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -111,7 +131,7 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Container(height: 1, color: AppColors.line2),
               FractionallySizedBox(
-                widthFactor: 2 / 3,
+                widthFactor: 2 / 4,
                 child: Container(height: 1, color: AppColors.accent),
               ),
             ],
@@ -248,6 +268,18 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'WEIGHT',
                 unit: 'KG',
                 controller: _weight,
+                highlight: true,
+                decimal: true,
+              ),
+            ),
+            // AI.1 — target weight lives next to current weight so the
+            // pairing reads visually. Same gold border treatment.
+            SizedBox(
+              width: tileWidth,
+              child: _StatField(
+                label: 'TARGET',
+                unit: 'KG',
+                controller: _targetWeight,
                 highlight: true,
                 decimal: true,
               ),
@@ -406,6 +438,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final height = double.tryParse(_height.text);
     final age = int.tryParse(_age.text);
     final bodyFat = double.tryParse(_bodyFat.text);
+    final targetWeight = double.tryParse(_targetWeight.text);
     if (weight == null || height == null || age == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -421,12 +454,17 @@ class _StatsScreenState extends State<StatsScreen> {
       );
       return;
     }
+    // AI.1 — target_weight_kg rides along in the route extras. AI.3
+    // will wire plan_screen to consume it instead of inferring from
+    // goal + weight. Until then the field passes through silently.
+    final resolvedTarget = (targetWeight ?? weight).clamp(40.0, 250.0);
     context.go(
       '/onboarding/plan',
       extra: {
         'goal': widget.goal,
         'sex': _sex,
         'weight_kg': weight,
+        'target_weight_kg': resolvedTarget,
         'height_cm': height,
         'age': age,
         'body_fat_pct': bodyFat ?? 18.0,
