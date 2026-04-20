@@ -31,6 +31,7 @@ import '../widgets/diff_preview/hotel_workout_diff.dart';
 import '../widgets/diff_preview/pause_plan_diff.dart';
 import '../widgets/diff_preview/regenerate_plan_diff.dart';
 import '../widgets/diff_preview/reschedule_week_diff.dart';
+import '../widgets/diff_preview/custom_template_diff.dart';
 import '../widgets/diff_preview/switch_goal_diff.dart';
 import '../widgets/diff_preview/prelog_diff.dart';
 
@@ -805,6 +806,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         break;
       case 'switch_goal':
         diffPreview = SwitchGoalDiff(intent: intent);
+        break;
+      case 'create_custom_template':
+        diffPreview = CustomTemplateDiff(intent: intent);
         break;
       case 'prelog':
         diffPreview = PrelogDiff(intent: intent);

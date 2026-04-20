@@ -21,6 +21,7 @@ import {
   suggestMealTool,
 } from "./nutrition/index.ts";
 import {
+  createCustomTemplateTool,
   pausePlanTool,
   regeneratePlanBlockTool,
   switchGoalTool,
@@ -57,6 +58,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   regeneratePlanBlockTool, // plan / write / destructive / PRO  (D.3)
   pausePlanTool, // plan / write / destructive / PRO  (D.4)
   switchGoalTool, // plan / write / destructive / PRO  (D.5)
+  createCustomTemplateTool, // plan / write / destructive / PRO  (D.6)
 ];
 
 /**

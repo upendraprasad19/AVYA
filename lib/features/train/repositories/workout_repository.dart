@@ -1162,6 +1162,194 @@ class WorkoutRepository {
     return id;
   }
 
+  // ── Custom Template Creation (Phase D.6) ─────────────────────
+
+  /// Creates one or more custom workout templates in the user's library
+  /// (Phase D.6 — `createCustomTemplate` AI coach tool).
+  ///
+  /// Mirrors the write performed by [TemplatesNotifier.saveTemplate] so
+  /// AI-coach-created templates are byte-identical to UI-created ones:
+  ///   - Hive key: `tmpl_<millisSinceEpoch>` (with per-day suffix when
+  ///     more than one day is supplied).
+  ///   - Map shape: `{id, name, description?, exercises[], exercise_count,
+  ///     workout_type:'custom', type:'template', created_at, assigned_days?,
+  ///     group_id, group_day_index}` — `group_id`/`group_day_index` are
+  ///     extra metadata so the multi-day grouping survives across tools
+  ///     (e.g. Phase D.7's `scheduleTemplate` can fan out by group).
+  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
+  ///     name = `<user_id>|template|<lower(name)>` for the group ID).
+  ///
+  /// Because the existing Hive shape is single-day-per-template (the
+  /// Template Builder UI is single-day), each `days[]` entry becomes its
+  /// own `tmpl_*` row named `"<name> - <dayName>"`. This keeps the existing
+  /// readers ([TemplatesNotifier], `_syncWorkoutTemplates`,
+  /// `WorkoutScheduleService.assignTemplateToDate`) working unchanged.
+  ///
+  /// Each `days[i]` map MUST contain:
+  ///   - `dayName` (String)
+  ///   - `exercises` (List<Map>) where each exercise has:
+  ///       `exerciseId`, `exerciseName`, `sets`, `reps`,
+  ///       optional `restSeconds`, optional `durationSeconds`
+  ///
+  /// Fires `unawaited(SyncService.instance.syncWorkoutData())` and
+  /// `unawaited(SyncService.instance.pushSnapshot())` so the cloud
+  /// `workout_templates`/`template_exercises` rows AND the AI coach
+  /// snapshot pick up the new templates immediately (CLAUDE.md
+  /// "Custom exercise invisible to AI coach" precedent — same fix
+  /// applies to templates).
+  ///
+  /// Returns the deterministic group ID. Throws
+  /// [CreateTemplateException] for invalid input or duplicate name.
+  Future<String> createTemplate({
+    required String name,
+    String? description,
+    required List<Map<String, dynamic>> days,
+    List<int>? assignedDays,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template name cannot be empty.',
+      );
+    }
+    if (trimmed.length > 60) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template name must be 60 characters or less.',
+      );
+    }
+    if (days.isEmpty) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template must contain at least one day.',
+      );
+    }
+
+    // Deterministic v5 UUID — same algorithm as createCustomExercise
+    // (CLAUDE.md §7). Keeps cross-device upserts idempotent and lets the
+    // `tmpl_*` group survive a re-create on another device.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final groupId = const Uuid()
+        .v5(customNs, '$userId|template|${trimmed.toLowerCase()}');
+
+    // Duplicate-name guard — scan workoutBox for any existing template
+    // sharing this group_id (a re-run of the same AI tool against the same
+    // template name would otherwise create a parallel set of `tmpl_*`
+    // rows that look identical to the user).
+    final box = _hive.workoutBox;
+    for (final k in box.keys) {
+      final v = box.get(k);
+      if (v is Map &&
+          v['type'] == 'template' &&
+          v['group_id'] == groupId) {
+        throw CreateTemplateException(
+          'duplicate_name',
+          'A template named "$trimmed" already exists.',
+        );
+      }
+    }
+
+    final createdAt = DateTime.now().toIso8601String();
+    final assignedDaysSorted = assignedDays != null
+        ? (List<int>.from(assignedDays)..sort())
+        : null;
+
+    // One Hive `tmpl_*` row per day. Ordered keys (added 1ms apart) so
+    // the templates list reflects the AI's intended day order.
+    int writtenDays = 0;
+    for (int i = 0; i < days.length; i++) {
+      final day = Map<String, dynamic>.from(days[i]);
+      final dayName = (day['dayName'] as String?)?.trim() ?? 'Day ${i + 1}';
+      final rawExercises = (day['exercises'] as List?) ?? const [];
+
+      // Translate the tool's per-exercise shape to the Hive shape that
+      // `_syncWorkoutTemplates` and the active-workout flow already
+      // understand (`exercise_id` / `exercise_name` / `sets` / `reps` /
+      // `rest_seconds`).
+      final exercises = <Map<String, dynamic>>[];
+      for (final raw in rawExercises) {
+        if (raw is! Map) continue;
+        final ex = Map<String, dynamic>.from(raw);
+        final exerciseId = ex['exerciseId']?.toString();
+        final exerciseName = ex['exerciseName']?.toString();
+        if (exerciseId == null ||
+            exerciseId.isEmpty ||
+            exerciseName == null ||
+            exerciseName.isEmpty) {
+          continue;
+        }
+        final mapped = <String, dynamic>{
+          'exercise_id': exerciseId,
+          'exercise_name': exerciseName,
+          'sets': (ex['sets'] as num?)?.toInt() ?? 3,
+          'reps': ex['reps']?.toString() ?? '10',
+          'rest_seconds': (ex['restSeconds'] as num?)?.toInt() ?? 60,
+        };
+        final dur = (ex['durationSeconds'] as num?)?.toInt();
+        if (dur != null && dur > 0) {
+          mapped['time_secs'] = dur;
+          mapped['logging_type'] = 'timed';
+        }
+        exercises.add(mapped);
+      }
+
+      if (exercises.isEmpty) {
+        // Skip empty days silently rather than throwing — the model
+        // sometimes emits a placeholder day without exercises and we'd
+        // rather create what we can than refuse the whole template.
+        continue;
+      }
+
+      final perDayName = days.length == 1 ? trimmed : '$trimmed - $dayName';
+      final perDayId =
+          'tmpl_${DateTime.now().millisecondsSinceEpoch + i}';
+
+      final templateMap = <String, dynamic>{
+        'id': perDayId,
+        'name': perDayName,
+        'exercises': exercises,
+        'exercise_count': exercises.length,
+        'workout_type': 'custom',
+        'type': 'template',
+        'created_at': createdAt,
+        // Multi-day grouping metadata — extra fields are tolerated by
+        // both `templatesProvider` and `_syncWorkoutTemplates`.
+        'group_id': groupId,
+        'group_day_index': i,
+        'group_total_days': days.length,
+        'group_name': trimmed,
+        'day_name': dayName,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        // Mirror the Template Builder behaviour — a single weekday is
+        // attached when the AI provided a 1:1 days/assignedDays mapping.
+        if (assignedDaysSorted != null &&
+            i < assignedDaysSorted.length)
+          'assigned_days': <int>[assignedDaysSorted[i]],
+      };
+
+      await box.put(perDayId, templateMap);
+      writtenDays++;
+    }
+
+    if (writtenDays == 0) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template had no valid exercises in any day.',
+      );
+    }
+
+    // Fire-and-forget — push the new templates to cloud and refresh the
+    // AI snapshot so the coach can reference them on the very next turn.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    return groupId;
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
 
   String _formatDate(DateTime date) => formatDateKey(date);
@@ -1185,6 +1373,20 @@ class CreateCustomExerciseException implements Exception {
   const CreateCustomExerciseException(this.code, this.message);
   @override
   String toString() => 'CreateCustomExerciseException($code): $message';
+}
+
+/// Thrown by [WorkoutRepository.createTemplate] (Phase D.6 createCustomTemplate)
+/// for input validation failures or duplicate names. [code] is one of:
+///   - `invalid_input` — name empty / too long / no days / no valid exercises
+///   - `duplicate_name` — a template with the same deterministic group ID
+///     already exists in the user's library
+///   - `other` — unexpected
+class CreateTemplateException implements Exception {
+  final String code;
+  final String message;
+  const CreateTemplateException(this.code, this.message);
+  @override
+  String toString() => 'CreateTemplateException($code): $message';
 }
 
 /// Internal scratch record for [WorkoutRepository._recomputePrFlagsForExercise].

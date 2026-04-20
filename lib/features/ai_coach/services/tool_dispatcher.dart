@@ -20,7 +20,7 @@ import '../../nutrition/repositories/nutrition_repository.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
-    show currentPlanProvider, workoutStatsProvider;
+    show currentPlanProvider, templatesProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
 import 'hotel_workout_planner.dart';
@@ -120,6 +120,9 @@ class ToolDispatcher {
         case 'switch_goal':
           result = await _executeSwitchGoal(intent);
           break;
+        case 'create_custom_template':
+          result = await _executeCreateCustomTemplate(intent);
+          break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
           break;
@@ -156,6 +159,14 @@ class ToolDispatcher {
       // UI re-read the new value.
       if (intent.type == 'switch_goal') {
         _invalidateProfileProviders(ref);
+      }
+      // create_custom_template adds rows to the user's template library —
+      // refresh the Train screen's templates list so the new entries
+      // appear immediately without a tab switch.
+      if (intent.type == 'create_custom_template') {
+        try {
+          ref.invalidate(templatesProvider);
+        } catch (_) {/* ignore */}
       }
       unawaited(SyncService.instance.pushSnapshot());
 
@@ -787,6 +798,60 @@ class ToolDispatcher {
         return 'No scheduled workouts in that date range to pause.';
       default:
         return e.message;
+    }
+  }
+
+  /// D.6 createCustomTemplate — saves a multi-day custom template to the
+  /// user's library by writing one Hive `tmpl_*` row per day (matching the
+  /// existing single-day Template Builder shape so `templatesProvider`,
+  /// `_syncWorkoutTemplates`, and `WorkoutScheduleService` all keep working
+  /// unchanged).
+  ///
+  /// Days with no valid exercises are silently skipped at the repository
+  /// level. If every day is empty the repo throws `invalid_input` and we
+  /// surface a friendly message.
+  Future<ToolExecutionResult> _executeCreateCustomTemplate(
+      ToolIntent intent) async {
+    final p = intent.payload;
+    final name = p['name'] as String?;
+    final days = ((p['days'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    final assignedDaysRaw = ((p['assigned_days'] as List?) ?? const [])
+        .whereType<num>()
+        .map((n) => n.toInt())
+        .toList();
+
+    if (name == null || name.trim().isEmpty || days.isEmpty) {
+      return const ToolExecutionResult.failure(
+          'Invalid create_custom_template payload.');
+    }
+
+    try {
+      final groupId = await WorkoutRepository.instance.createTemplate(
+        name: name.trim(),
+        description: p['description'] as String?,
+        days: days,
+        assignedDays:
+            assignedDaysRaw.isNotEmpty ? assignedDaysRaw : null,
+      );
+      return ToolExecutionResult.success(data: {
+        'template_group_id': groupId,
+        'name': name,
+        'days_count': days.length,
+      });
+    } on CreateTemplateException catch (e) {
+      return ToolExecutionResult.failure(
+        e.code == 'duplicate_name'
+            ? 'A template called "$name" already exists in your library.'
+            : e.message,
+      );
+    } catch (e, stack) {
+      debugPrint(
+          '[ToolDispatcher] create_custom_template failed: $e\n$stack');
+      return const ToolExecutionResult.failure(
+          'Could not create that template.');
     }
   }
 

@@ -452,6 +452,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'PAUSE PLAN';
       case 'switch_goal':
         return 'SWITCH GOAL';
+      case 'create_custom_template':
+        return 'NEW TEMPLATE';
       case 'log_meal_by_text':
         return 'LOG MEAL';
       case 'adjust_caloric_target':
@@ -489,6 +491,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.pause_circle;
       case 'switch_goal':
         return Icons.flag;
+      case 'create_custom_template':
+        return Icons.list_alt;
       case 'log_meal_by_text':
         return Icons.restaurant_menu;
       case 'adjust_caloric_target':
@@ -526,6 +530,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Plan paused';
       case 'switch_goal':
         return 'Goal switched';
+      case 'create_custom_template':
+        return 'Template saved';
       case 'log_meal_by_text':
         return 'Logged';
       case 'adjust_caloric_target':
