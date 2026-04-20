@@ -113,7 +113,16 @@
       "Bash(tasklist)",
       "Bash(taskkill /F /IM dart.exe /T)",
       "Bash(taskkill /F /IM flutter.exe /T)",
-      "Bash(taskkill /F /IM flutter_tester.exe /T)"
+      "Bash(taskkill /F /IM flutter_tester.exe /T)",
+      "mcp__ba7b5e8e-8611-4910-8e25-46712ab747b9__get_publishable_keys",
+      "Bash(curl -s -X POST \"https://dedsavbjuwgarrhphgnl.supabase.co/functions/v1/rolling-context\" -H \"Content-Type: application/json\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZHNhdmJqdXdnYXJyaHBoZ25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNTM4NTIsImV4cCI6MjA4OTgyOTg1Mn0.GkJvQOzApnImjaKfFLbbuwTao3ud1so52DpZrbQsfc8\" -d \"{}\")",
+      "Bash(curl -s -X POST \"https://dedsavbjuwgarrhphgnl.supabase.co/functions/v1/morning-alert\" -H \"Content-Type: application/json\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZHNhdmJqdXdnYXJyaHBoZ25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNTM4NTIsImV4cCI6MjA4OTgyOTg1Mn0.GkJvQOzApnImjaKfFLbbuwTao3ud1so52DpZrbQsfc8\" -d \"{}\")",
+      "mcp__ba7b5e8e-8611-4910-8e25-46712ab747b9__get_logs",
+      "Bash(xargs grep:*)",
+      "Bash(export JAVA_HOME=\"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\")",
+      "Bash(./gradlew --stop)",
+      "Bash(python3 -c ':*)",
+      "Bash(wc -l /c/Upendra/\"Claude Code\"/\"Fitness App\"/lib/shared/repositories/plan_engine/*.dart)"
     ]
   }
 }
