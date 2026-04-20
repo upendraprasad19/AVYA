@@ -4,55 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-# Avya Master Reference
+# ICANBEFITTER Master Reference
 > Single source of truth for all coding agents. Read this before touching any file.
-
-> **Branch `feat/wardroom-redesign`** — Wardroom visual redesign in progress. See `Knowledgebase/Avya App redesign/design_handoff_wardroom/` for full spec. Design token changes (colors, typography, spacing, radii) cascade everywhere — update via `lib/core/theme/` files, never inline.
-
----
-
-## WARDROOM DESIGN SYSTEM (this branch only)
-
-### Active on this branch
-This branch implements the **Wardroom** redesign — a full visual rebrand from Electric Cyan / round-corner / DM-Sans-only to Campaign Gold / sharp-corner / Fraunces+JetBrains-Mono.
-
-### New Token Rules (OVERRIDE §6 rules 10–12 on this branch)
-- **Primary accent: Campaign Gold `#D4B270`** (replaces Electric Cyan `#00D4FF`)
-- **Background base: `#0A1020` deep navy** (replaces `#07090e`)
-- **Primary text: `#FFF7E0` warm parchment** (replaces `#eef2f7`)
-- **Card radius: 6px** (replaces 16px)
-- **Button radius: 2px sharp** (replaces 100px pill)
-- **Display font: Fraunces** (serif, variable opsz) for all headers + numbers
-- **Mono font: JetBrains Mono** for all eyebrows, labels, metadata
-- **Body font: DM Sans** — unchanged for prose/body copy
-
-### Wardroom Token Files
-- `lib/core/theme/colors.dart` — Wardroom palette
-- `lib/core/theme/typography.dart` — 3-font system (Fraunces + DM Sans + JetBrains Mono)
-- `lib/core/theme/spacing.dart` — Wardroom spacing + radii
-- `lib/core/theme/app_theme.dart` — ThemeData wired to Wardroom tokens
-
-### Wardroom Shared Widgets
-All new widgets live in `lib/shared/widgets/wardroom/`:
-- `ward_frame.dart` — screen shell (grain overlay, gutters, bottom padding)
-- `ward_letterhead.dart` — gold eyebrow + Fraunces title + double rule
-- `ward_eyebrow.dart` — JetBrains Mono uppercase section label
-- `ward_card.dart` — default / hero / inset card variants
-- `ward_big_number.dart` — Fraunces tabular-nums stat display
-- `ward_button.dart` — primary / outline / ghost / danger variants
-- `ward_chip.dart` — 6-tone status pill
-- `ward_kv_row.dart` — key-value row with dashed divider
-- `ward_ring.dart` — animated CustomPainter progress ring
-- `ward_rule.dart` — single + double gold hairline
-- `ward_avatar.dart` — gold ring avatar
-- `ward_glyphs.dart` — Anchor, CompassRose, Seal, TierChevrons, RankBar
-
-### Gold usage rules
-- Gold ONLY on: CTAs, active state, progression meters, hero rules, section kickers
-- NEVER gold on regular card borders — use `AppColors.line2`
-- `ok` (green `#7FB586`) and `warn` (amber `#D9A04C`) are the only secondary chroma
-
----
 
 ---
 
@@ -127,14 +80,25 @@ dart run build_runner build --delete-conflicting-outputs
 dart run build_runner watch   # watch mode during development
 ```
 
-### Edge Functions (Supabase MCP — preferred)
-Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI — it is logged into the wrong account (personal, not fitness app account). See §2a for account details.
+### Edge Functions — host-shell deploy (preferred for any function with nested `_shared/tools/...` or payloads >100KB)
+
+```bash
+cd "C:/Upendra/Claude Code/Fitness App"
+node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/functions
+node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
+```
+
+- **Token:** auto-resolved from `supabase/.supabase/supabase access token.txt` (gitignored). Generated 2026-04-20 against fitness-app account.
+- **Byte-identical to git** (no MCP path-mangling, no hand-trim risk). First used Phase C.5 → ai-proxy v43; now standard for all redeploys.
+- **Path scheme:** all shared imports MUST use `from "../_shared/..."` (parent dir), NOT `from "./_shared/..."`. The OLD MCP `deploy_edge_function` tool silently mangled the wrong path; the new flow doesn't. Audit your edits.
+
+`mcp__ba7b5e8e__deploy_edge_function` (the legacy MCP path) still works for small single-file functions but is unsafe for the AI coach tools bundle. Do not use `supabase` CLI — it is logged into the wrong account (personal, not fitness app account). See §2a for account details.
 
 ---
 
 ## 1. PROJECT IDENTITY
 
-**App:** Avya — personalised fitness & nutrition platform for young professionals (22-35) in India.
+**App:** ICANBEFITTER — personalised fitness & nutrition platform for young professionals (22-35) in India.
 **Model:** Freemium. ₹349/month or ₹2,999/year for PRO.
 **Architecture:** Offline-first. Hive = primary. Supabase = backup + AI + community growth.
 
@@ -236,7 +200,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 │                                                      │
 │  SEED DATA (bundled JSON in APK):                    │
 │    assets/data/exercise_library.json (200+ exercises)│
-│    assets/data/food_database.json (5,000 foods)      │
+│    assets/data/food_database.json (93 foods)          │
 │    → Parsed into Hive on first launch                │
 │                                                      │
 │  SYNC TO SUPABASE:                                   │
@@ -267,7 +231,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `exerciseBox` | exercise_library (seeded from bundled JSON) |
 | `foodBox` | food_database (seeded from bundled JSON) |
 | `customBox` | user_custom_exercises, user_custom_foods |
-| `coachBox` | ai_coach_interactions, coaching_notes, `coach_memory` (CoachMemory plain Map — no Hive adapter, mirrors Supabase row) |
+| `coachBox` | ai_coach_interactions, coaching_notes |
 | `syncBox` | last_sync_timestamps (pending_sync_queue is **planned** — see `docs/superpowers/specs/2026-04-17-sync-reliability.md`, not yet implemented) |
 | `configBox` | subscription status, feature flags, app config |
 
@@ -278,7 +242,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `exercise_log_index_YYYY-MM-DD` | List of exercise log IDs for that date |
 | `exlog_<timestamp>_<hash>` | Exercise log: exercise_name, logging_type, weight_kg, reps_completed, sets_completed, volume_kg, is_pr |
 | `wlog_<timestamp>` | Workout log: workout_name, date, duration_seconds, sets_completed |
-| `template_<id>` | Workout template with exercises |
+| `tmpl_<timestamp>` | Workout template (single-day) — fields: id, name, exercises[], exercise_count, type:'template', assigned_days:[int], created_at. Multi-day AI templates (from `createCustomTemplate` tool) split into N rows tagged with `group_id`/`group_day_index`/`group_total_days` for cross-row identification. |
 
 ---
 
@@ -339,9 +303,9 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 7. **PaywallSheet** is the ONLY paywall UI. Never create custom paywall modals.
 8. **Plan generator = local Dart.** Queries Hive exerciseBox. Never calls any API.
 9. **Never expose API keys client-side.** All AI calls go through Supabase Edge Functions.
-10. **Three fonts only:** `Fraunces` for display/numbers, `DM Sans` for body/UI, `JetBrains Mono` for labels/metadata. No system fonts.
-11. **Campaign Gold `#D4B270`** for all accent/CTA. Never use Electric Cyan (`#00D4FF`) — that's the old spec. Never use old green `#00e5a0`.
-12. **Dark theme only.** Background hierarchy: `#0A1020` (bg) > `#111826` (card) > `#141B2E` (input/rail). Never pure black; never gray.
+10. **DM Sans font everywhere.** No system fonts. Use `GoogleFonts.getFont('DM Sans', ...)`.
+11. **Electric Cyan #00D4FF** for all accent/CTA. Never use green (#00e5a0) — that's the old spec.
+12. **Dark theme only.** Background hierarchy: `#07090e` (bg) > `#0e1219` (card) > `#161d28` (input).
 13. **All screens must handle:** loading state (skeleton), error state (retry), empty state.
 14. **Never modify `plan_generator.dart`** without explicit instruction.
 15. **Import paths:** Use relative imports within features. Use `package:` imports for shared/ and core/.
@@ -352,21 +316,21 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (27 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (35 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
 | Domain | Tables |
 |---|---|
 | Identity (4) | `users`, `user_profile`, `user_preferences`, `user_progress` |
-| Fitness (7) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets` *(new — F4)*, `user_custom_exercises` |
+| Fitness (8) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets`, `user_custom_exercises` |
 | Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
-| Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` *(new — F20)* |
-| Visual (1) | `progress_photos` *(new — F19)* |
-| AI (3) | `user_daily_snapshots`, `ai_coach_interactions`, `coach_memory` *(new)* |
+| Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` |
+| Visual (1) | `progress_photos` |
+| AI (3) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory` |
 | Telemetry (1) | `client_errors` |
 | Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
-| Community (1) | `community_reviews` |
+| Community (2) | `community_reviews`, `memory_embeddings` |
 
 **Critical UNIQUE constraints (required for safe re-sync dedup — never remove):**
 - `streaks(user_id, week_start)` — prevents duplicate weeks on restore
@@ -377,12 +341,6 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `user_custom_exercises.id` and `user_custom_foods.id` — must be a deterministic v5 UUID computed from `(user_id, type, lower(name))` so cross-device upserts dedupe instead of duplicating. Generation namespace: `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`. Migration 020 dedupes legacy rows via `uuid_generate_v5`.
 
 **Cloud `workout_log_exercises`** — per-exercise summary table written by the Flutter app. Key semantics: `set_number` = total completed sets (NOT "which set"); `weight_kg` = best across sets; `exercise_id` = exercise_name (stable identity for cross-week grouping). See §11 "Exercise Log Cloud Contract".
-
-**`coach_memory` table (new — coach personalization, 1 row/user):**
-- Layer 4: `dropout_risk_score`, `plateau_risk_score`, `pro_upgrade_probability` (computed nightly by `compute-coach-signals`)
-- Layer 5: `preferred_name`, `communication_style`, `humor_tolerance`, `depth_preference`, `motivation_style` (extracted by `daily-snapshot` Gemini call)
-- `private_mode=true` short-circuits prompt rendering (`renderCoachMemoryBlock` → empty) and `daily-snapshot` extraction writes. **`fetchCoachMemory` itself still returns the row** — every consumer that reads personalized fields directly (e.g., `morning-alert`) must guard with `memory?.private_mode ? null : memory` before reading `preferred_name`/`motivation_style`/etc. Operational state (`last_proactive_type`) is NOT personal content and may still be written.
-- `coach_notes` is free-form and **NEVER** used for training data (DPDP commitment).
 
 **RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
 
@@ -540,6 +498,42 @@ static const Set<String> _highValueFeatures = {
 
 Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter were retired on 2026-04-18 — one key to rotate, one billing line, one source of truth.
 
+### Tool-calling (since ai-proxy v44, 2026-04-20) — 20 AI coach tools
+
+`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 20 typed tools across 4 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts`. Tier filtering: free users see 6 FREE tools, PRO sees 20.
+
+| Family | Tools |
+|---|---|
+| Workout (8) | `swapExercise`, `logSet`, `markWorkoutComplete`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `generateHotelWorkout` |
+| Progress (3) | `getProgressSummary`, `getExerciseHistory`, `logPR` |
+| Nutrition (4) | `logMealByText`, `adjustCaloricTarget`, `suggestMeal`, `prelog` |
+| Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
+
+**Hive-first hybrid architecture:** READ tools (e.g. `getProgressSummary`, `getExerciseHistory`, `suggestMeal`) execute server-side and feed Gemini results in same turn. WRITE tools emit typed `ToolIntent` to client; client confirms via card/sheet, then writes Hive + fire-and-forget syncs (matching the existing CLAUDE.md §6 rule 1 mutation pattern).
+
+3 confirmation classes: trivial (5s auto-confirm card), reviewable (explicit inline card), destructive (bottom-sheet with diff preview). Per-intent dispatch in `lib/features/ai_coach/services/tool_dispatcher.dart`. 1-hour intent TTL + concurrent-edit guards on every dispatch.
+
+Telemetry: per-tool-call records written to `ai_coach_interactions.tool_calls` JSONB column (migration 029), surfaced via `coach_tool_invocations_v` view.
+
+### Proactive triggers (8 of 8 brainstorm §5 triggers, since 2026-04-20)
+
+All 8 cron-driven Edge Functions in prod. Each uses `_shared/proactive_dedup.ts` (`shouldSendProactive` + `markProactiveSent`) to prevent same-type push twice per IST day, writing `coach_memory.last_proactive_type` after successful send.
+
+| # | Trigger | Edge Function | Cron (UTC → IST) | Tier |
+|---|---|---|---|---|
+| 1 | Morning Brief | `morning-alert` | (existing 2-stage) → 7am IST | both |
+| 2 | Workout Window Closing | `workout-window-closing` | `30 15 * * *` → 21:00 IST | both |
+| 3 | Protein Gap Alert | `protein-gap-alert` | `30 14 * * *` → 20:00 IST | PRO |
+| 4 | Streak Protection | `streak-guardian` | (existing) → 20:00 IST | both |
+| 5 | PR Detection | `pr-detection` | `*/15 * * * *` → near-real-time | both |
+| 6 | Plateau Alert | `plateau-alert` | `30 13 * * *` → 19:00 IST | PRO |
+| 7 | Weekly Recap | `weekly-recap-ready` | (existing) → Sunday | both |
+| 8 | Re-engagement | `re-engagement` | `30 06 * * *` → 12:00 IST | both |
+
+**Plateau-alert** + **re-engagement** read scores from `coach_memory.{plateau_risk_score, dropout_risk_score}` (computed nightly by `compute-coach-signals` → `compute_coach_signals_for_user(user_id)` RPC). Re-engagement has a fallback path that scans `workout_logs/nutrition_logs/weight_logs` directly for users without `coach_memory` rows yet.
+
+Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`. Each uses `private.morning_alert_get_service_key()` for the Bearer token (consistent with `compute_coach_signals` cron pattern).
+
 ### Model matrix
 | Edge Function | Model | Purpose |
 |---|---|---|
@@ -560,17 +554,6 @@ Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter
 - Vision input via `inline_data` parts.
 - `responseMimeType: application/json` when `jsonMode=true`.
 - **Built-in fallback:** on 5xx / 429 / empty content, automatically retries once on `gemini-2.5-flash-lite`. Pass `fallbackToLite: false` when primary is already Flash-Lite.
-
-### System prompt — 7-block layout (since coach_memory ship)
-1. IDENTITY & RULES (static)
-2. USER PROFILE
-3. **COACH MEMORY** (new — preferred_name, style, risks, last_proactive_type)
-4. TODAY'S CONTEXT
-5. RECENT HISTORY (fitness_summary + last 5 turns)
-6. AVAILABLE TOOLS (placeholder — tool-calling phase TBD)
-7. RESPONSE RULES (static)
-
-Block [3] is rendered server-side via `_shared/coach_memory.ts:renderCoachMemoryBlock()` and **inserted between the base prompt and the daily snapshot** in `ai-proxy/index.ts:537-542` (NOT prepended — prepending was tried and reverted because it broke the block-ordering claim).
 
 ### Single AI coach endpoint — no client-side routing
 ```
@@ -932,13 +915,13 @@ Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protoc
 
 ## 18. FOOD DATABASE
 
-5,000 Indian-first foods bundled in JSON. Categories:
-- Staples (~500), Street food (~200), Restaurant dishes (~300)
-- Packaged/branded (~500), Fruits & veg (~300), Dairy (~200)
-- Pulses (~200), Protein (~300), Supplements (~100)
-- Global (~400), Beverages (~200), Nuts & seeds (~200)
+**93 Indian-first foods** bundled in `assets/data/food_database.json` (NOT 5,000 — earlier doc claim was aspirational; actual seed is 93). Same 93 rows are mirrored to Postgres `food_database` table (migration 030, 2026-04-20) so server-side tools like AI coach `suggestMeal` can query them.
+
+Categories cover staples, street food, restaurant dishes, dairy, pulses, protein, fruits/veg, beverages.
 
 Community growth: User adds custom food → Hive + Supabase. Admin approves → promoted to global DB. Other users get it via periodic sync + app updates.
+
+**Re-seeding:** if the bundled JSON is updated, regenerate migration via `node scripts/seed_food_database.js` then apply. Idempotent (deterministic v5 UUID per CLAUDE.md §7 namespace).
 
 ---
 
@@ -1004,6 +987,3 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | `ai-proxy-pro` or `video-status` 410 Gone | Both retired (2026-04-18). `ai-proxy-pro` merged into `ai-proxy` (single Gemini endpoint with server-side `isPro` gate). `video-status` deferred with the video-share feature. Callers should not re-add either; if the video feature ever un-defers, rewrite `video-status` with JWT + user_id filter before deploying. |
 | Hive file bloat over time | `HiveService` implements `WidgetsBindingObserver` and runs `box.compact()` on 7 mutation-heavy boxes (user / workout / nutrition / health / custom / coach / sync) every 7 days on `AppLifecycleState.paused`. Gated via `configBox['last_compact_at']`. If disk usage keeps climbing, confirm the observer is registered in `init()` and the gate is being checked. |
 | food_text_analysis 429 when user is below daily cap | Trigger `trg_food_text_rate_limit` on `ai_coach_interactions` (migration 024, 2026-04-18) enforces the 50/day free / 200/day PRO cap atomically. Insert-first pattern — `ai-proxy` inserts a placeholder row BEFORE calling Gemini. If trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001), return 429. Do NOT re-add a separate check-then-insert pre-check; the trigger is the single source of truth. |
-| Coach calls user by wrong name | `coach_memory.preferred_name` not synced. Verify Hive `coachBox['coach_memory']` matches Supabase. Check `pushSnapshot` round-trip captured the response. |
-| Coach speaks English when user writes Hinglish | `IdentitySignalDetector` is sticky — needs 3 consecutive Hinglish messages before flipping. Devanagari script flips immediately. Verify Hive write happened in `detectAndPersistIdentitySignals`. |
-| Predictive risk scores never appear | `compute-coach-signals` cron only runs on users active in the last 60 days (`active_users_for_signals()` in migration 028, line 44). Manually invoke via `mcp__ba7b5e8e__execute_sql` calling `compute_coach_signals_for_user(p_user_id)` for the user_id to debug. |

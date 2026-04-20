@@ -13,6 +13,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
+import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,7 @@ async function processUser(
   user: ActiveUser,
   snapshotMap: Map<string, Record<string, unknown>>,
   progressMap: Map<string, number>,
+  supabase: SupabaseClient,
 ): Promise<"sent" | "skipped" | "error"> {
   try {
     const userId = user.id;
@@ -55,6 +57,15 @@ async function processUser(
       return "skipped";
     }
 
+    // Proactive dedup: skip if weekly_recap already sent today.
+    const allow = await shouldSendProactive(supabase, userId, "weekly_recap");
+    if (!allow) {
+      console.log(
+        `[weekly-recap-ready] skipping ${userId}: dedup hit for weekly_recap`,
+      );
+      return "skipped";
+    }
+
     const currentWeek = progressMap.get(userId) ?? 1;
 
     const ok = await sendPushNotification({
@@ -64,7 +75,11 @@ async function processUser(
       screen: "/profile/reports",
     });
 
-    return ok ? "sent" : "error";
+    if (ok) {
+      await markProactiveSent(supabase, userId, "weekly_recap");
+      return "sent";
+    }
+    return "error";
   } catch (err) {
     console.error(`weekly-recap-ready: error for user ${user.id}:`, err);
     return "error";
@@ -159,7 +174,7 @@ serve(async (req: Request) => {
         const chunk = users.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           chunk.map((user: ActiveUser) =>
-            processUser(user, snapshotMap, progressMap)
+            processUser(user, snapshotMap, progressMap, supabase)
           ),
         );
 

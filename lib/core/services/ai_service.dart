@@ -4,23 +4,36 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 
 /// Structured response from any AI Edge Function.
 ///
 /// [reply] is the visible message text (ICBF_LOG tags already stripped
 /// server-side). [actions] contains zero or more log actions to be routed
 /// to the conversational log handler on the client.
+///
+/// [toolIntents] are typed write intents emitted by the server-side AI
+/// coach tool registry (Phase A.6+). The dispatcher confirms each with the
+/// user before executing it against the right Hive repository.
+///
+/// [toolCallsLog] is per-call telemetry from the server (tool name, status,
+/// latency, etc.) — used for debugging the tool pipeline. Never surfaced
+/// to end users.
 class AiChatResponse {
   final String reply;
   final String modelUsed;
   final int tokensUsed;
   final List<Map<String, dynamic>> actions;
+  final List<ToolIntent> toolIntents;
+  final List<Map<String, dynamic>> toolCallsLog;
 
   const AiChatResponse({
     required this.reply,
     required this.modelUsed,
     required this.tokensUsed,
     this.actions = const [],
+    this.toolIntents = const [],
+    this.toolCallsLog = const [],
   });
 }
 
@@ -157,6 +170,33 @@ class AiService {
   /// Build an [AiChatResponse] from a decoded JSON map.
   AiChatResponse _buildResponse(Map<String, dynamic> data) {
     final rawActions = data['actions'];
+
+    // Phase A.6+ — typed write intents from the server tool registry.
+    // Defensive: a single malformed intent must not break the whole chat.
+    // ai-media-proxy does NOT emit tool_intents yet, so the field is
+    // routinely absent there; default to empty list rather than null.
+    final toolIntentsJson = (data['tool_intents'] as List?) ?? const [];
+    final parsedIntents = <ToolIntent>[];
+    for (final raw in toolIntentsJson) {
+      if (raw is! Map) continue;
+      try {
+        parsedIntents
+            .add(ToolIntent.fromJson(Map<String, dynamic>.from(raw)));
+      } catch (e) {
+        debugPrint('[AiService] tool_intent parse failed: $e');
+      }
+    }
+
+    // Per-call telemetry — tool name, status, latency, etc. Server-only
+    // diagnostics; never surfaced to the user.
+    final toolCallsLogJson = (data['tool_calls_log'] as List?) ?? const [];
+    final parsedCallsLog = <Map<String, dynamic>>[];
+    for (final raw in toolCallsLogJson) {
+      if (raw is Map) {
+        parsedCallsLog.add(Map<String, dynamic>.from(raw));
+      }
+    }
+
     return AiChatResponse(
       reply: data['reply'] as String? ?? data['response'] as String? ?? '',
       modelUsed: data['model_used'] as String? ?? 'unknown',
@@ -166,6 +206,8 @@ class AiService {
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList()
           : const [],
+      toolIntents: parsedIntents,
+      toolCallsLog: parsedCallsLog,
     );
   }
 

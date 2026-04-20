@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:uuid/uuid.dart';
 
 /// A personal record for a single exercise, based on all-time best value.
 class ExercisePR {
@@ -815,6 +820,536 @@ class WorkoutRepository {
     return count;
   }
 
+  // ── Single-exercise logging (shared by completeWorkout + AI coach) ──
+
+  /// Logs a single exercise's completed sets, recomputes the chronological
+  /// `is_pr` flag for that exercise across all history, updates the
+  /// per-date `exercise_log_index_<YYYY-MM-DD>` index, and (optionally)
+  /// fires fire-and-forget cloud sync.
+  ///
+  /// Used by:
+  ///   - [ActiveWorkoutNotifier.completeWorkout] — once per exercise in
+  ///     a completed workout. Passes `fireSyncImmediately: false` so the
+  ///     caller can fire a single sync after the loop instead of N+1.
+  ///     May also pass [setsDetail] / [bestSingleSetReps] /
+  ///     [bestSingleSetDuration] / [hasWarmupSets] to preserve the
+  ///     richer per-set log shape used by [WorkoutReceiptCard] and
+  ///     [EditWorkoutLogSheet].
+  ///   - AI coach `log_set` tool intent (Phase A.8) — once per call,
+  ///     simple shape (weight/reps/sets), no per-set detail.
+  ///
+  /// [exerciseId] is the library / custom id (used for stable identity
+  /// in the cloud `workout_log_exercises` table). [exerciseName] is the
+  /// human-readable label persisted in Hive.
+  ///
+  /// [loggingType] defaults to a heuristic: `weight_reps` if `weightKg > 0`,
+  /// else `bodyweight_reps`. Pass an explicit value for `timed`/`cardio`/
+  /// `distance`/`weighted_bodyweight`.
+  ///
+  /// PR rescan walks every `exlog_*` for the same exercise name across
+  /// ALL dates, sorts by `date + created_at`, and uses strict `>`
+  /// comparison — same logic as [EditWorkoutLogSheet._recomputePrFlagsForExercise].
+  /// The earliest log is never a PR (needs a baseline to beat).
+  ///
+  /// Returns the deterministic Hive key written
+  /// (`exlog_<millisSinceEpoch>_<nameHash>`).
+  Future<String> logSetWithPrRescan({
+    required String exerciseId,
+    required String exerciseName,
+    required double weightKg,
+    required int reps,
+    required int sets,
+    String? loggingType,
+    DateTime? date,
+    List<Map<String, dynamic>>? setsDetail,
+    int? bestSingleSetReps,
+    int? bestSingleSetDuration,
+    int? durationSeconds,
+    double? distanceKm,
+    bool hasWarmupSets = false,
+    bool fireSyncImmediately = true,
+    double? overrideVolumeKg,
+  }) async {
+    final now = DateTime.now();
+    final logDate = date ?? now;
+    final dateStr = formatDateKey(logDate);
+
+    final effectiveLoggingType = loggingType ??
+        (weightKg > 0 ? 'weight_reps' : 'bodyweight_reps');
+
+    // Volume default = weightKg × reps × sets, matching the AI-coach
+    // logSet intent semantics where `reps` is per-set and `sets` is the
+    // count (e.g. 80kg × 10 × 4 = 3200kg total volume).
+    //
+    // For the manual completeWorkout path — where mixed-weight sets are
+    // common (warm-up sets, descending sets, RPE-based progression) —
+    // the caller has already computed the exact per-set sum from
+    // setsDetail and passes it via [overrideVolumeKg]. That preserves
+    // byte-identical pre-A.7 behavior (Σ per-set weight × reps).
+    final volumeKg = overrideVolumeKg ?? (weightKg * reps * sets);
+
+    final logId =
+        'exlog_${now.millisecondsSinceEpoch}_${exerciseName.hashCode}';
+
+    final logMap = <String, dynamic>{
+      'id': logId,
+      'type': 'exercise_log',
+      'exercise_id': exerciseId,
+      'exercise_name': exerciseName,
+      'date': dateStr,
+      'logging_type': effectiveLoggingType,
+      'is_pr': false, // rescan below sets the correct value
+      'has_warmup_sets': hasWarmupSets,
+      'volume_kg': volumeKg,
+      'created_at': now.toIso8601String(),
+      'sets_detail': ?setsDetail,
+      'best_single_set_reps': ?bestSingleSetReps,
+      'best_single_set_duration': ?bestSingleSetDuration,
+    };
+
+    // Per-logging-type fields — mirrors completeWorkout's switch.
+    switch (effectiveLoggingType) {
+      case 'weight_reps':
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'bodyweight_reps':
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'weighted_bodyweight':
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'timed':
+        logMap['duration_seconds'] = durationSeconds ?? 0;
+        logMap['sets_completed'] = sets;
+        break;
+      case 'cardio':
+        logMap['duration_seconds'] = durationSeconds ?? 0;
+        logMap['distance_km'] = distanceKm ?? 0;
+        break;
+      case 'distance':
+        logMap['distance_km'] = distanceKm ?? 0;
+        logMap['weight_kg'] = weightKg;
+        break;
+      default:
+        logMap['weight_kg'] = weightKg;
+        logMap['reps_completed'] = reps;
+        logMap['sets_completed'] = sets;
+    }
+
+    await _hive.workoutBox.put(logId, logMap);
+
+    // Append to the per-date index for O(1) reads by
+    // [getExerciseLogsForDate]. Multiple workouts on the same day all
+    // accumulate in this list.
+    final indexKey = 'exercise_log_index_$dateStr';
+    final existingIndex = _hive.workoutBox.get(indexKey);
+    final indexList = existingIndex is List
+        ? List<String>.from(existingIndex)
+        : <String>[];
+    indexList.add(logId);
+    await _hive.workoutBox.put(indexKey, indexList);
+
+    // Walk every exlog_* for this exercise across all dates and rewrite
+    // is_pr in chronological order. Strict `>` comparison; first log with
+    // a baseline is never a PR. Mirrors EditWorkoutLogSheet's logic.
+    _recomputePrFlagsForExercise(exerciseName);
+
+    if (fireSyncImmediately) {
+      // Fire-and-forget — never block the UI on cloud sync.
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+    }
+
+    return logId;
+  }
+
+  /// Walks every exlog for [exerciseName] chronologically and rewrites
+  /// the `is_pr` flag. PR rule (matches
+  /// [EditWorkoutLogSheet._recomputePrFlagsForExercise]):
+  ///   - `weight_reps` / `weighted_bodyweight`: strict increase in
+  ///     `weight_kg`.
+  ///   - `bodyweight_reps`: strict increase in per-set best reps
+  ///     (`best_single_set_reps`, falls back to estimated average).
+  ///   - `timed`: strict increase in per-set best duration
+  ///     (`best_single_set_duration`, falls back to estimated average).
+  ///   - `cardio` / `distance`: strict increase in `distance_km`.
+  /// Earliest log with a baseline value is NOT a PR.
+  void _recomputePrFlagsForExercise(String exerciseName) {
+    final box = _hive.workoutBox;
+    final lower = exerciseName.toLowerCase();
+
+    final entries = <_PrScanEntry>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('exlog_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['type'] != 'exercise_log') continue;
+      final exName = (map['exercise_name'] as String?) ?? '';
+      if (exName.toLowerCase() != lower) continue;
+      final dateStr = (map['date'] as String?) ?? '';
+      entries.add(_PrScanEntry(key: key, dateStr: dateStr, map: map));
+    }
+
+    if (entries.isEmpty) return;
+
+    entries.sort((a, b) {
+      final d = a.dateStr.compareTo(b.dateStr);
+      if (d != 0) return d;
+      final aC = (a.map['created_at'] as String?) ?? '';
+      final bC = (b.map['created_at'] as String?) ?? '';
+      return aC.compareTo(bC);
+    });
+
+    double runningMaxWeight = 0;
+    int runningMaxReps = 0;
+    int runningMaxDuration = 0;
+    double runningMaxDistance = 0;
+
+    for (final e in entries) {
+      final loggingType = (e.map['logging_type'] as String?) ?? 'weight_reps';
+      final weight = (e.map['weight_kg'] as num?)?.toDouble() ?? 0;
+      final distance = (e.map['distance_km'] as num?)?.toDouble() ?? 0;
+
+      final bestReps = (e.map['best_single_set_reps'] as int?) ??
+          (((e.map['reps_completed'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['reps_completed'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
+      final bestDuration = (e.map['best_single_set_duration'] as int?) ??
+          (((e.map['duration_seconds'] as num?)?.toInt() ?? 0) > 0 &&
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
+              ? ((e.map['duration_seconds'] as num?)?.toInt() ?? 0) ~/
+                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
+              : 0);
+
+      bool isPr = false;
+      switch (loggingType) {
+        case 'weight_reps':
+        case 'weighted_bodyweight':
+          if (weight > runningMaxWeight && runningMaxWeight > 0) isPr = true;
+          if (weight > runningMaxWeight) runningMaxWeight = weight;
+          break;
+        case 'bodyweight_reps':
+          if (bestReps > runningMaxReps && runningMaxReps > 0) isPr = true;
+          if (bestReps > runningMaxReps) runningMaxReps = bestReps;
+          break;
+        case 'timed':
+          if (bestDuration > runningMaxDuration && runningMaxDuration > 0) {
+            isPr = true;
+          }
+          if (bestDuration > runningMaxDuration) {
+            runningMaxDuration = bestDuration;
+          }
+          break;
+        case 'cardio':
+        case 'distance':
+          if (distance > runningMaxDistance && runningMaxDistance > 0) {
+            isPr = true;
+          }
+          if (distance > runningMaxDistance) runningMaxDistance = distance;
+          break;
+      }
+
+      if (e.map['is_pr'] != isPr) {
+        e.map['is_pr'] = isPr;
+        box.put(e.key, e.map);
+      }
+    }
+  }
+
+  // ── Custom Exercise Creation ─────────────────────────────────
+
+  /// Creates a new custom exercise in the user's library.
+  ///
+  /// Mirrors the write performed by `CreateCustomExerciseSheet._save()` so
+  /// AI-coach-created customs are byte-identical to UI-created customs:
+  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
+  ///     name = `<user_id>|exercise|<lower(name)>`).
+  ///   - Same map shape (id / name / category / logging_type / default_sets
+  ///     / default_reps? / default_duration_seconds? / primary_muscles /
+  ///     equipment_needed / is_custom / type / submitted_to_library /
+  ///     approved_for_library / created_at).
+  ///   - Stored under `custom_exercise_<millisSinceEpoch>` in customBox.
+  ///   - Fires `syncCustomItemsNow()` (writes the
+  ///     `user_custom_exercises` row) and `pushSnapshot()` (refreshes the
+  ///     AI coach context — without this, the new exercise is invisible
+  ///     to the coach until next app launch — see CLAUDE.md "Custom
+  ///     exercise invisible to AI coach" bug).
+  ///
+  /// Returns the deterministic exercise ID. Throws
+  /// [CreateCustomExerciseException] for invalid input or duplicate name.
+  Future<String> createCustomExercise({
+    required String name,
+    required String category,
+    required String equipment,
+    required String loggingType,
+    List<String>? primaryMuscles,
+    int defaultSets = 3,
+    int? defaultReps,
+    int? defaultDurationSeconds,
+    bool submittedToLibrary = false,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw const CreateCustomExerciseException(
+        'invalid_input',
+        'Exercise name cannot be empty.',
+      );
+    }
+    if (trimmed.length > 60) {
+      throw const CreateCustomExerciseException(
+        'invalid_input',
+        'Exercise name must be 60 characters or less.',
+      );
+    }
+
+    // Deterministic v5 UUID per CLAUDE.md §7. Same algorithm as
+    // CreateCustomExerciseSheet._save() — keeps cross-device upserts
+    // idempotent so AI- and UI-created customs collapse correctly.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final id = const Uuid()
+        .v5(customNs, '$userId|exercise|${trimmed.toLowerCase()}');
+
+    // Duplicate-name guard — scan customBox for an existing entry with the
+    // same deterministic ID (different keys, same logical exercise).
+    final customBox = _hive.customBox;
+    for (final k in customBox.keys) {
+      final v = customBox.get(k);
+      if (v is Map && v['id'] == id) {
+        throw CreateCustomExerciseException(
+          'duplicate_name',
+          'A custom exercise named "$trimmed" already exists.',
+        );
+      }
+    }
+
+    final key = 'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
+    final exercise = <String, dynamic>{
+      'id': id,
+      'name': trimmed,
+      'category': category,
+      'logging_type': loggingType,
+      'default_sets': defaultSets,
+      // Match the sheet's conditional shape: only store reps when
+      // logging_type is rep-based; only store duration when timed.
+      'default_reps': ?defaultReps?.toString(),
+      'default_duration_seconds': ?defaultDurationSeconds,
+      'primary_muscles': primaryMuscles ?? <String>[],
+      'equipment_needed': <String>[equipment],
+      'is_custom': true,
+      'type': 'exercise',
+      'submitted_to_library': submittedToLibrary,
+      'approved_for_library': false,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    await customBox.put(key, exercise);
+
+    // Fire-and-forget: push the new row to user_custom_exercises AND
+    // refresh the AI snapshot so the coach can see it on the next turn.
+    unawaited(SyncService.instance.syncCustomItemsNow());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    return id;
+  }
+
+  // ── Custom Template Creation (Phase D.6) ─────────────────────
+
+  /// Creates one or more custom workout templates in the user's library
+  /// (Phase D.6 — `createCustomTemplate` AI coach tool).
+  ///
+  /// Mirrors the write performed by [TemplatesNotifier.saveTemplate] so
+  /// AI-coach-created templates are byte-identical to UI-created ones:
+  ///   - Hive key: `tmpl_<millisSinceEpoch>` (with per-day suffix when
+  ///     more than one day is supplied).
+  ///   - Map shape: `{id, name, description?, exercises[], exercise_count,
+  ///     workout_type:'custom', type:'template', created_at, assigned_days?,
+  ///     group_id, group_day_index}` — `group_id`/`group_day_index` are
+  ///     extra metadata so the multi-day grouping survives across tools
+  ///     (e.g. Phase D.7's `scheduleTemplate` can fan out by group).
+  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
+  ///     name = `<user_id>|template|<lower(name)>` for the group ID).
+  ///
+  /// Because the existing Hive shape is single-day-per-template (the
+  /// Template Builder UI is single-day), each `days[]` entry becomes its
+  /// own `tmpl_*` row named `"<name> - <dayName>"`. This keeps the existing
+  /// readers ([TemplatesNotifier], `_syncWorkoutTemplates`,
+  /// `WorkoutScheduleService.assignTemplateToDate`) working unchanged.
+  ///
+  /// Each `days[i]` map MUST contain:
+  ///   - `dayName` (String)
+  ///   - `exercises` (List<Map>) where each exercise has:
+  ///       `exerciseId`, `exerciseName`, `sets`, `reps`,
+  ///       optional `restSeconds`, optional `durationSeconds`
+  ///
+  /// Fires `unawaited(SyncService.instance.syncWorkoutData())` and
+  /// `unawaited(SyncService.instance.pushSnapshot())` so the cloud
+  /// `workout_templates`/`template_exercises` rows AND the AI coach
+  /// snapshot pick up the new templates immediately (CLAUDE.md
+  /// "Custom exercise invisible to AI coach" precedent — same fix
+  /// applies to templates).
+  ///
+  /// Returns the deterministic group ID. Throws
+  /// [CreateTemplateException] for invalid input or duplicate name.
+  Future<String> createTemplate({
+    required String name,
+    String? description,
+    required List<Map<String, dynamic>> days,
+    List<int>? assignedDays,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template name cannot be empty.',
+      );
+    }
+    if (trimmed.length > 60) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template name must be 60 characters or less.',
+      );
+    }
+    if (days.isEmpty) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template must contain at least one day.',
+      );
+    }
+
+    // Deterministic v5 UUID — same algorithm as createCustomExercise
+    // (CLAUDE.md §7). Keeps cross-device upserts idempotent and lets the
+    // `tmpl_*` group survive a re-create on another device.
+    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
+    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
+    final groupId = const Uuid()
+        .v5(customNs, '$userId|template|${trimmed.toLowerCase()}');
+
+    // Duplicate-name guard — scan workoutBox for any existing template
+    // sharing this group_id (a re-run of the same AI tool against the same
+    // template name would otherwise create a parallel set of `tmpl_*`
+    // rows that look identical to the user).
+    final box = _hive.workoutBox;
+    for (final k in box.keys) {
+      final v = box.get(k);
+      if (v is Map &&
+          v['type'] == 'template' &&
+          v['group_id'] == groupId) {
+        throw CreateTemplateException(
+          'duplicate_name',
+          'A template named "$trimmed" already exists.',
+        );
+      }
+    }
+
+    final createdAt = DateTime.now().toIso8601String();
+    final assignedDaysSorted = assignedDays != null
+        ? (List<int>.from(assignedDays)..sort())
+        : null;
+
+    // One Hive `tmpl_*` row per day. Ordered keys (added 1ms apart) so
+    // the templates list reflects the AI's intended day order.
+    int writtenDays = 0;
+    for (int i = 0; i < days.length; i++) {
+      final day = Map<String, dynamic>.from(days[i]);
+      final dayName = (day['dayName'] as String?)?.trim() ?? 'Day ${i + 1}';
+      final rawExercises = (day['exercises'] as List?) ?? const [];
+
+      // Translate the tool's per-exercise shape to the Hive shape that
+      // `_syncWorkoutTemplates` and the active-workout flow already
+      // understand (`exercise_id` / `exercise_name` / `sets` / `reps` /
+      // `rest_seconds`).
+      final exercises = <Map<String, dynamic>>[];
+      for (final raw in rawExercises) {
+        if (raw is! Map) continue;
+        final ex = Map<String, dynamic>.from(raw);
+        final exerciseId = ex['exerciseId']?.toString();
+        final exerciseName = ex['exerciseName']?.toString();
+        if (exerciseId == null ||
+            exerciseId.isEmpty ||
+            exerciseName == null ||
+            exerciseName.isEmpty) {
+          continue;
+        }
+        final mapped = <String, dynamic>{
+          'exercise_id': exerciseId,
+          'exercise_name': exerciseName,
+          'sets': (ex['sets'] as num?)?.toInt() ?? 3,
+          'reps': ex['reps']?.toString() ?? '10',
+          'rest_seconds': (ex['restSeconds'] as num?)?.toInt() ?? 60,
+        };
+        final dur = (ex['durationSeconds'] as num?)?.toInt();
+        if (dur != null && dur > 0) {
+          mapped['time_secs'] = dur;
+          mapped['logging_type'] = 'timed';
+        }
+        exercises.add(mapped);
+      }
+
+      if (exercises.isEmpty) {
+        // Skip empty days silently rather than throwing — the model
+        // sometimes emits a placeholder day without exercises and we'd
+        // rather create what we can than refuse the whole template.
+        continue;
+      }
+
+      final perDayName = days.length == 1 ? trimmed : '$trimmed - $dayName';
+      final perDayId =
+          'tmpl_${DateTime.now().millisecondsSinceEpoch + i}';
+
+      final templateMap = <String, dynamic>{
+        'id': perDayId,
+        'name': perDayName,
+        'exercises': exercises,
+        'exercise_count': exercises.length,
+        'workout_type': 'custom',
+        'type': 'template',
+        'created_at': createdAt,
+        // Multi-day grouping metadata — extra fields are tolerated by
+        // both `templatesProvider` and `_syncWorkoutTemplates`.
+        'group_id': groupId,
+        'group_day_index': i,
+        'group_total_days': days.length,
+        'group_name': trimmed,
+        'day_name': dayName,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        // Mirror the Template Builder behaviour — a single weekday is
+        // attached when the AI provided a 1:1 days/assignedDays mapping.
+        if (assignedDaysSorted != null &&
+            i < assignedDaysSorted.length)
+          'assigned_days': <int>[assignedDaysSorted[i]],
+      };
+
+      await box.put(perDayId, templateMap);
+      writtenDays++;
+    }
+
+    if (writtenDays == 0) {
+      throw const CreateTemplateException(
+        'invalid_input',
+        'Template had no valid exercises in any day.',
+      );
+    }
+
+    // Fire-and-forget — push the new templates to cloud and refresh the
+    // AI snapshot so the coach can reference them on the very next turn.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    return groupId;
+  }
+
   // ── Helpers ───────────────────────────────────────────────────
 
   String _formatDate(DateTime date) => formatDateKey(date);
@@ -824,4 +1359,44 @@ class WorkoutRepository {
     final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
     return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
+}
+
+/// Thrown by [WorkoutRepository.createCustomExercise] for input validation
+/// failures or duplicate names. [code] is one of:
+///   - `invalid_input` — name empty / too long / other validation
+///   - `duplicate_name` — an exercise with the same deterministic ID
+///     already exists in the user's library
+///   - `other` — unexpected
+class CreateCustomExerciseException implements Exception {
+  final String code;
+  final String message;
+  const CreateCustomExerciseException(this.code, this.message);
+  @override
+  String toString() => 'CreateCustomExerciseException($code): $message';
+}
+
+/// Thrown by [WorkoutRepository.createTemplate] (Phase D.6 createCustomTemplate)
+/// for input validation failures or duplicate names. [code] is one of:
+///   - `invalid_input` — name empty / too long / no days / no valid exercises
+///   - `duplicate_name` — a template with the same deterministic group ID
+///     already exists in the user's library
+///   - `other` — unexpected
+class CreateTemplateException implements Exception {
+  final String code;
+  final String message;
+  const CreateTemplateException(this.code, this.message);
+  @override
+  String toString() => 'CreateTemplateException($code): $message';
+}
+
+/// Internal scratch record for [WorkoutRepository._recomputePrFlagsForExercise].
+class _PrScanEntry {
+  final String key;
+  final String dateStr;
+  final Map<String, dynamic> map;
+  const _PrScanEntry({
+    required this.key,
+    required this.dateStr,
+    required this.map,
+  });
 }

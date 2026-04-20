@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -22,6 +23,20 @@ import '../widgets/prompt_chip.dart';
 import '../widgets/voice_notes_button.dart';
 import '../widgets/log_confirm_card.dart';
 import '../widgets/workout_log_confirm_card.dart';
+import '../providers/pending_tool_intents_provider.dart';
+import '../models/tool_intent.dart';
+import '../widgets/tool_confirm_card.dart';
+import '../widgets/tool_confirm_sheet.dart';
+import '../widgets/diff_preview/swap_exercise_diff.dart';
+import '../widgets/diff_preview/injury_modify_diff.dart';
+import '../widgets/diff_preview/hotel_workout_diff.dart';
+import '../widgets/diff_preview/pause_plan_diff.dart';
+import '../widgets/diff_preview/regenerate_plan_diff.dart';
+import '../widgets/diff_preview/reschedule_week_diff.dart';
+import '../widgets/diff_preview/custom_template_diff.dart';
+import '../widgets/diff_preview/schedule_template_diff.dart';
+import '../widgets/diff_preview/switch_goal_diff.dart';
+import '../widgets/diff_preview/prelog_diff.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
   const AiCoachScreen({super.key});
@@ -206,6 +221,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     // Scroll when messages change or log actions appear
     ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
     ref.listen(pendingLogActionsProvider, (_, _) => _scrollToBottom());
+    ref.listen(pendingToolIntentsProvider, (_, _) => _scrollToBottom());
     ref.listen(workoutDraftProvider, (_, next) {
       if (next != null) _scrollToBottom();
     });
@@ -618,9 +634,20 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     // Workout draft (multi-turn workout confirmation)
     final hasWorkoutDraft = ref.watch(workoutDraftProvider) != null;
 
+    // Phase A.11 — typed tool intents (pending + recently-settled, kept by prune)
+    final visibleIntents = ref.watch(pendingToolIntentsProvider).where((i) {
+      return i.status == ToolIntentStatus.pending ||
+          i.status == ToolIntentStatus.executing ||
+          i.status == ToolIntentStatus.failed ||
+          i.status == ToolIntentStatus.executed ||
+          i.status == ToolIntentStatus.rejected ||
+          i.status == ToolIntentStatus.expired;
+    }).toList();
+
     final totalItems = messages.length +
         pendingActions.length +
-        (hasWorkoutDraft ? 1 : 0);
+        (hasWorkoutDraft ? 1 : 0) +
+        visibleIntents.length;
 
     return ListView.builder(
       controller: _scrollController,
@@ -670,9 +697,123 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           return LogConfirmCard(action: pendingActions[offset]);
         }
 
-        // Workout draft confirm card (last)
-        return const WorkoutLogConfirmCard();
+        // Workout draft confirm card (after legacy log actions)
+        var afterActions = offset - pendingActions.length;
+        if (hasWorkoutDraft && afterActions == 0) {
+          return const WorkoutLogConfirmCard();
+        }
+        if (hasWorkoutDraft) afterActions -= 1;
+
+        // Phase A.11 — typed tool intent confirmation widgets
+        if (afterActions < visibleIntents.length) {
+          final intent = visibleIntents[afterActions];
+          if (intent.confirmationClass == ConfirmationClass.destructive) {
+            return _buildDestructiveIntentTile(context, intent);
+          }
+          return ToolConfirmCard(intent: intent);
+        }
+
+        // Defensive fallback — shouldn't be reached given totalItems math
+        return const SizedBox.shrink();
       },
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Phase A.11 — destructive tool intent tile (opens modal sheet)
+  // ────────────────────────────────────────────────────────────────
+
+  Widget _buildDestructiveIntentTile(BuildContext context, ToolIntent intent) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: AppColors.proGold.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: InkWell(
+        onTap: () => _openIntentSheet(context, intent),
+        borderRadius: BorderRadius.circular(14),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: AppColors.proGold, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Review: ${intent.previewSummary}',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap to review changes before applying',
+                    style: GoogleFonts.getFont(
+                      'DM Sans',
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openIntentSheet(BuildContext context, ToolIntent intent) {
+    final Widget diffPreview;
+    switch (intent.type) {
+      case 'swap_exercise':
+        diffPreview = SwapExerciseDiff(intent: intent);
+        break;
+      case 'modify_workout_for_injury':
+        diffPreview = InjuryModifyDiff(intent: intent);
+        break;
+      case 'reschedule_week':
+        diffPreview = RescheduleWeekDiff(intent: intent);
+        break;
+      case 'generate_hotel_workout':
+        diffPreview = HotelWorkoutDiff(intent: intent);
+        break;
+      case 'regenerate_plan_block':
+        diffPreview = RegeneratePlanDiff(intent: intent);
+        break;
+      case 'pause_plan':
+        diffPreview = PausePlanDiff(intent: intent);
+        break;
+      case 'switch_goal':
+        diffPreview = SwitchGoalDiff(intent: intent);
+        break;
+      case 'create_custom_template':
+        diffPreview = CustomTemplateDiff(intent: intent);
+        break;
+      case 'schedule_template':
+        diffPreview = ScheduleTemplateDiff(intent: intent);
+        break;
+      case 'prelog':
+        diffPreview = PrelogDiff(intent: intent);
+        break;
+      default:
+        diffPreview = const Text('Confirm this action?');
+    }
+    ToolConfirmSheet.show(
+      context,
+      intent: intent,
+      diffPreview: diffPreview,
     );
   }
 

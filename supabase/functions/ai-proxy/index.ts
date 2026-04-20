@@ -39,6 +39,8 @@ import {
   fetchCoachMemory,
   renderCoachMemoryBlock,
 } from "../_shared/coach_memory.ts";
+import { runToolLoop } from "../_shared/tool-loop.ts";
+import type { ToolContext } from "../_shared/tools/index.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -541,25 +543,58 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     }
     const systemPrompt = promptParts.join("\n\n");
 
-    // ── Single Gemini call (Flash, with image if present) ─────────
-    const { content, modelUsed, tokensUsed } = await geminiChat({
-      model: MODEL_FLASH,
-      systemPrompt,
-      userPrompt: message,
-      maxTokens: 1024,
-      temperature: 0.7,
-      timeoutMs: image_base64 ? 25_000 : 15_000,
-      ...(image_base64 ? { imageBase64: image_base64, imageMimeType: "image/jpeg" } : {}),
-    });
+    // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
+    // Replaces the previous single-shot geminiChat() with a 3-round
+    // loop that lets Gemini call server-side read tools (executed in
+    // place) and emit typed write intents (returned to the client for
+    // user confirmation + Hive execution).
+    //
+    // Other channels above (food_text_analysis / scan_meal /
+    // cart_auditor / prediction) still use the single-shot helper —
+    // tool calling is chat-only.
+    //
+    // image_base64 vision-on-chat is dropped at this point: the loop
+    // helper does not currently accept inline_data parts. The only
+    // production caller of vision-on-chat (the PRO photo-upload chat
+    // surface) routes through `ai-media-proxy`, not this function, so
+    // there is no live regression. If we need to support inline images
+    // here in future, plumb them through `geminiChatWithTools`.
+    const toolCtx: ToolContext = {
+      userId,
+      isPro: isProUser,
+      sb: supabaseClient,
+      requestId: chatRequestId,
+    };
 
-    if (!content) {
-      return err(502, "AI temporarily unavailable. Please try again.");
+    let loop;
+    try {
+      loop = await runToolLoop({
+        systemPrompt,
+        userMessage: message,
+        ctx: toolCtx,
+        model: MODEL_FLASH,
+      });
+    } catch (loopErr) {
+      console.error(
+        `[ai-proxy] runToolLoop threw request_id=${chatRequestId}`,
+        loopErr,
+      );
+      return err(502, "AI temporarily unavailable. Please try again.", {
+        request_id: chatRequestId,
+      });
     }
 
-    const modelLabel = modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH;
+    // The loop's final text may still contain legacy <ICBF_LOG> tags
+    // until Phase E removes those instructions from the system prompt.
+    // Keep the extractor wired so existing log_water/log_food/etc. paths
+    // still work end-to-end during the migration.
+    const extracted = extractLogActions(loop.text);
+    const cleanReply = extracted.reply;
 
-    // Extract structured log actions from AI reply
-    const extracted = extractLogActions(content);
+    // If the loop fell back to Flash-Lite at any round, label the row
+    // accordingly so analytics see the actual provider that produced
+    // the final response.
+    const modelLabel = loop.usedFallback ? LABEL_FLASH_LITE : LABEL_FLASH;
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -570,49 +605,61 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       .limit(1)
       .single();
 
-    // Log interaction (store clean reply without tags)
+    // Log interaction (store clean reply without tags) + tool-call telemetry.
     await supabaseClient.from("ai_coach_interactions").insert({
       user_id: userId,
       snapshot_id: snapshotData?.id ?? null,
       channel: "app",
       user_message: message,
-      ai_response: extracted.reply,
+      ai_response: cleanReply,
       model_used: modelLabel,
-      tokens_used: tokensUsed,
+      tokens_used: loop.tokensUsed,
+      tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
       created_at: new Date().toISOString(),
     });
 
     // Silent embedding accumulation for both free + PRO tiers. Free
     // users don't get retrieval (no latency), but their memory is
     // ready if they upgrade. Fire-and-forget.
-    (async () => {
-      try {
-        const content_ = `User: ${message}\nCoach: ${extracted.reply}`;
-        const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
-        if (!embedding) return;
-        await supabaseClient.from("memory_embeddings").insert({
-          user_id: userId,
-          embedding,
-          content: content_,
-          source_type: "conversation",
-          metadata: {
-            date: new Date().toISOString().split("T")[0],
-            channel: "app",
-            model: modelLabel,
-            is_pro: isProUser,
-          },
-        });
-      } catch (e) {
-        console.error("[ai-proxy] Embed store error:", e);
-      }
-    })();
+    //
+    // Skip when the model emitted only tool calls (no conversational
+    // text to embed). Append a one-line intent summary so retrieval
+    // still has a hook on the structured action when there IS prose.
+    if (cleanReply.trim().length > 0 || loop.intents.length === 0) {
+      (async () => {
+        try {
+          const intentSummary = loop.intents.length > 0
+            ? ` [queued: ${loop.intents.map((i) => i.type).join(", ")}]`
+            : "";
+          const content_ = `User: ${message}\nCoach: ${cleanReply}${intentSummary}`;
+          const embedding = await getEmbedding(content_, "RETRIEVAL_DOCUMENT");
+          if (!embedding) return;
+          await supabaseClient.from("memory_embeddings").insert({
+            user_id: userId,
+            embedding,
+            content: content_,
+            source_type: "conversation",
+            metadata: {
+              date: new Date().toISOString().split("T")[0],
+              channel: "app",
+              model: modelLabel,
+              is_pro: isProUser,
+            },
+          });
+        } catch (e) {
+          console.error("[ai-proxy] Embed store error:", e);
+        }
+      })();
+    }
 
     return new Response(
       JSON.stringify({
-        reply: extracted.reply,
+        reply: cleanReply,
         model_used: modelLabel,
-        tokens_used: tokensUsed,
-        actions: extracted.actions,
+        tokens_used: loop.tokensUsed,
+        actions: extracted.actions, // legacy <ICBF_LOG> back-compat
+        tool_intents: loop.intents, // NEW — typed write intents
+        tool_calls_log: loop.toolCallsLog, // NEW — per-call telemetry
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

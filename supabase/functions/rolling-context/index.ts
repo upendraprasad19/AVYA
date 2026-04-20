@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { getEmbedding } from "./_shared/embeddings.ts";
-import { geminiChat, MODEL_FLASH } from "./_shared/gemini.ts";
+import { getEmbedding } from "../_shared/embeddings.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -380,15 +380,26 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
   NutritionSummaryData build() {
     // F7 · Single source of truth — Home + Nutrition screens sum
     // identically via NutritionRepository.dailyMacros.
-    final macros = NutritionRepository.instance.dailyMacros(DateTime.now());
+    final today = DateTime.now();
+    final macros = NutritionRepository.instance.dailyMacros(today);
 
     final profile = UserRepository.instance.getProfile();
-    final calorieTarget =
+    final baseCalorieTarget =
         (profile?['daily_calories'] as num?)?.toDouble() ?? 2000;
     final proteinTarget =
         (profile?['protein_grams'] as num?)?.toDouble() ?? 120;
     final carbTarget = (profile?['carb_grams'] as num?)?.toDouble() ?? 250;
     final fatTarget = (profile?['fat_grams'] as num?)?.toDouble() ?? 65;
+
+    // Apply AI-coach calorie target override for today (clamped 800..6000).
+    // Macros are not scaled — overrides ship a kcal delta only.
+    final override =
+        NutritionRepository.instance.getActiveTargetOverride(today);
+    final calorieTarget = override == null
+        ? baseCalorieTarget
+        : (baseCalorieTarget + ((override['delta_kcal'] as num?) ?? 0))
+            .clamp(800, 6000)
+            .toDouble();
 
     return NutritionSummaryData(
       calories: macros['calories']!,

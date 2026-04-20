@@ -1,41 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { sendPushNotification } from "./_shared/send_notification.ts";
-import { geminiChat, MODEL_FLASH } from "./_shared/gemini.ts";
-import { fetchCoachMemory, upsertCoachMemory } from "./_shared/coach_memory.ts";
-
-type MotivationTone = "tough_love" | "gentle" | "data_driven";
-
-/**
- * Wrap a base alert with a tone-specific lead-in. `name` is the user's
- * preferred_name (from coach_memory) when present, falling back to the
- * full_name first token. `tone` is motivation_style from coach_memory; when
- * null/unknown we treat it as "gentle" (the existing default voice).
- */
-function applyTone(
-  baseAlert: string,
-  name: string,
-  tone: MotivationTone | null,
-  snapshotJson: Record<string, unknown> | null,
-): string {
-  const firstName = name?.split(" ")[0] ?? "there";
-
-  if (tone === "tough_love") {
-    return `${firstName}, no excuses today. ${baseAlert}`;
-  }
-  if (tone === "data_driven") {
-    const snap = snapshotJson ?? {};
-    // "today_steps" in yesterday's snapshot = steps recorded yesterday
-    const stepsYday = snap.today_steps as number | null;
-    if (stepsYday != null) {
-      return `${firstName} — yesterday: ${stepsYday} steps. ${baseAlert}`;
-    }
-    return `${firstName} — ${baseAlert}`;
-  }
-  // gentle (default) — warm greeting prefix when the base doesn't already lead with the name
-  if (baseAlert.startsWith("Good morning")) return baseAlert;
-  return `Morning ${firstName}! ${baseAlert}`;
-}
+import { sendPushNotification } from "../_shared/send_notification.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,20 +175,12 @@ function generateProLightAlert(name: string, primaryGoal: string | null): string
 async function generateProAlert(
   name: string,
   snapshotJson: Record<string, unknown>,
-  tone: MotivationTone | null,
 ): Promise<string | null> {
-  const toneGuidance = tone === "tough_love"
-    ? "Tone: tough_love — be direct, no soft padding, challenge them."
-    : tone === "data_driven"
-    ? "Tone: data_driven — lead with a specific number from the snapshot, then the suggestion."
-    : "Tone: gentle — warm and validating before suggesting.";
-
   const systemPrompt =
     "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
     "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
     "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
     "Be encouraging, specific, and actionable. Use the user's first name. " +
-    `${toneGuidance} ` +
     "Output ONLY the alert message, no preamble or formatting.";
 
   const userPrompt =
@@ -306,16 +265,7 @@ async function generateAndStoreAlert(
 ): Promise<void> {
   try {
     const isPro = user.subscription_status === "pro";
-
-    // Read coach_memory ONCE per user.
-    // private_mode users get default copy — explicit guard since fetchCoachMemory
-    // returns the row regardless of private_mode (only renderCoachMemoryBlock
-    // short-circuits on it). Without nullifying here, preferred_name +
-    // motivation_style would leak personalised copy to private_mode users.
-    const memory = await fetchCoachMemory(supabaseClient, user.id);
-    const usableMemory = memory?.private_mode ? null : memory;
-    const userName = usableMemory?.preferred_name ?? user.full_name ?? "Champion";
-    const tone = (usableMemory?.motivation_style ?? null) as MotivationTone | null;
+    const userName = user.full_name ?? "Champion";
 
     // Fetch yesterday's snapshot for context
     const { data: yesterdaySnap } = await supabaseClient
@@ -333,7 +283,7 @@ async function generateAndStoreAlert(
 
     if (isPro && snapshotJson) {
       // PRO: AI-personalised message (8s timeout, immediate fallback)
-      const proMsg = await generateProAlert(userName, snapshotJson, tone);
+      const proMsg = await generateProAlert(userName, snapshotJson);
       if (proMsg) {
         alertMessage = proMsg;
         msgType = "pro";
@@ -341,8 +291,7 @@ async function generateAndStoreAlert(
         proAlerts++;
       } else {
         // AI failed — fall back to free template (still has yesterday's data)
-        const baseFree = generateFreeAlert(userName, snapshotJson);
-        alertMessage = applyTone(baseFree, userName, tone, snapshotJson);
+        alertMessage = generateFreeAlert(userName, snapshotJson);
         msgType = "free";
         freeAlerts++;
       }
@@ -357,14 +306,12 @@ async function generateAndStoreAlert(
         .single();
 
       const primaryGoal = profileRow?.primary_goal ?? null;
-      const baseProLight = generateProLightAlert(userName, primaryGoal);
-      alertMessage = applyTone(baseProLight, userName, tone, snapshotJson);
+      alertMessage = generateProLightAlert(userName, primaryGoal);
       msgType = "pro_light";
       proLightAlerts++;
     } else {
       // FREE: template message (no AI cost)
-      const baseFree = generateFreeAlert(userName, snapshotJson);
-      alertMessage = applyTone(baseFree, userName, tone, snapshotJson);
+      alertMessage = generateFreeAlert(userName, snapshotJson);
       msgType = "free";
       freeAlerts++;
     }
@@ -481,6 +428,19 @@ async function deliverAlerts(
           const prefs = snap.snapshot_json?.notification_preferences;
           if (prefs?.morning_checkin?.enabled === false) return;
 
+          // Proactive dedup: skip if morning_brief already sent today.
+          const allow = await shouldSendProactive(
+            supabaseClient,
+            snap.user_id,
+            "morning_brief",
+          );
+          if (!allow) {
+            console.log(
+              `[morning-alert] skipping ${snap.user_id}: dedup hit for morning_brief`,
+            );
+            return;
+          }
+
           // Send push via OneSignal
           // [TODO] FCM not implemented — alert stored in DB only for user ${snap.user_id}
           const pushOk = await sendPushToUser(
@@ -490,19 +450,7 @@ async function deliverAlerts(
           );
           if (pushOk) {
             pushSent++;
-            // Fire-and-forget: tag coach_memory so other proactive triggers
-            // (rolling-context, weekly-recap-ready, etc.) can avoid duplicate
-            // same-day pings. Non-fatal — push has already gone out.
-            try {
-              await upsertCoachMemory(supabaseClient, snap.user_id, {
-                last_proactive_type: "morning_brief",
-              });
-            } catch (memErr) {
-              console.warn(
-                `[morning-alert] last_proactive_type tag failed for ${snap.user_id}:`,
-                memErr,
-              );
-            }
+            await markProactiveSent(supabaseClient, snap.user_id, "morning_brief");
           }
 
           // Try Telegram if connected

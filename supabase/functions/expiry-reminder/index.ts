@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
+import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,6 +82,20 @@ serve(async (req: Request) => {
         continue;
       }
 
+      // Proactive dedup: skip if subscription_expiry already sent today.
+      const allow = await shouldSendProactive(
+        supabase,
+        userId,
+        "subscription_expiry",
+      );
+      if (!allow) {
+        console.log(
+          `[expiry-reminder] skipping ${userId}: dedup hit for subscription_expiry`,
+        );
+        skipped++;
+        continue;
+      }
+
       // Send push notification.
       const daysText =
         daysLeft <= 0
@@ -96,7 +111,10 @@ serve(async (req: Request) => {
         screen: "/profile",
       });
 
-      if (ok) sent++;
+      if (ok) {
+        sent++;
+        await markProactiveSent(supabase, userId, "subscription_expiry");
+      }
     }
 
     return new Response(

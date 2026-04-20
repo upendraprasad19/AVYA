@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../repositories/ai_coach_repository.dart';
+import 'pending_tool_intents_provider.dart';
 
 // ── Chat Message Model ───────────────────────────────────────────
 
@@ -349,6 +350,13 @@ class SendMessageNotifier extends Notifier<bool> {
               ref,
             );
       }
+
+      // NEW: typed tool intents dispatch (Phase A — runs alongside legacy actions[])
+      if (aiResponse.toolIntents.isNotEmpty) {
+        ref
+            .read(pendingToolIntentsProvider.notifier)
+            .addIntents(aiResponse.toolIntents);
+      }
     } catch (e) {
       final errStr2 = e.toString();
       final String errorMsg;
@@ -504,6 +512,13 @@ class SendMessageNotifier extends Notifier<bool> {
               ref,
             );
       }
+
+      // NEW: typed tool intents dispatch (Phase A — runs alongside legacy actions[])
+      if (aiResponse.toolIntents.isNotEmpty) {
+        ref
+            .read(pendingToolIntentsProvider.notifier)
+            .addIntents(aiResponse.toolIntents);
+      }
     } catch (e) {
       debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
@@ -546,6 +561,12 @@ class SendMessageNotifier extends Notifier<bool> {
           limitNotifier.increment();
           if (retryResponse.actions.isNotEmpty) {
             ref.read(pendingLogActionsProvider.notifier).addActions(retryResponse.actions, ref);
+          }
+          // NEW: typed tool intents dispatch (Phase A — runs alongside legacy actions[])
+          if (retryResponse.toolIntents.isNotEmpty) {
+            ref
+                .read(pendingToolIntentsProvider.notifier)
+                .addIntents(retryResponse.toolIntents);
           }
           return; // Success — skip error message below
         } catch (retryErr) {
