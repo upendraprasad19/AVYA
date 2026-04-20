@@ -164,6 +164,122 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   static String _monthName(int m) => const ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
 
+  /// "EST" seal date for the PRO subscription card corner — shows when
+  /// the user became a member. SubscriptionInfoData carries `expiresAt`
+  /// but no dedicated `startedAt`, so we back-compute from plan duration
+  /// (annual = 365d, monthly = 30d). DD/MM/YY format matches the
+  /// Wardroom handoff brand motif (see welcome.jsx `EST · 2026`).
+  static String _estSealDate(SubscriptionInfoData subInfo) {
+    if (subInfo.expiresAt == null) {
+      final now = DateTime.now();
+      return _ddMmYy(now);
+    }
+    final planDays = (subInfo.plan?.toLowerCase() == 'yearly' ||
+            subInfo.plan?.toLowerCase() == 'annual')
+        ? 365
+        : 30;
+    final startedAt =
+        subInfo.expiresAt!.subtract(Duration(days: planDays));
+    return _ddMmYy(startedAt);
+  }
+
+  static String _ddMmYy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yy = (d.year % 100).toString().padLeft(2, '0');
+    return '$dd/$mm/$yy';
+  }
+
+  /// PRO-card "MANAGE SUBSCRIPTION →" tap target. No self-service
+  /// cancel/upgrade flow exists in-app yet (Razorpay subscriptions are
+  /// managed out-of-band via support), so show a bottom sheet with the
+  /// support contact. Wire a richer flow later via a dedicated PR if
+  /// self-service becomes a priority.
+  void _onManageSubscription() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'MANAGE SUBSCRIPTION',
+                style: AppTypography.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your PRO subscription is handled by Razorpay and '
+                'auto-renews by default. To cancel, change plans, or '
+                'request a refund, reach out to us and we\'ll sort it '
+                'within 24 hours.',
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textDim,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.bgDeep,
+                  border: Border.all(color: AppColors.line2),
+                  borderRadius: BorderRadius.circular(AppRadius.sharp),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.mail_outline,
+                        size: 16, color: AppColors.accent),
+                    const SizedBox(width: 10),
+                    Text(
+                      'support@avya.app',
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                  ),
+                  child: Text(
+                    'GOT IT',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 11,
+                      color: AppColors.bgDeep,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   String? _addCacheBuster(String? url) {
     if (url == null || url.isEmpty) return null;
     final ts = DateTime.now().millisecondsSinceEpoch;
@@ -1052,35 +1168,145 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildSubscriptionSection(SubscriptionInfoData subInfo, bool isPro, UsageCounterService usage) {
     if (isPro) {
-      // PRO dossier — hero card, Campaign Gold chip, Fraunces plan name.
+      // PRO dossier — matches the Wardroom handoff spec
+      // (`design_handoff_wardroom/src/screens/profile.jsx` block 13,
+      // lines 360–391): gradient accentSoft→bgDeep card with a Seal
+      // badge in the top-right corner, PRO chip + plan tag on top,
+      // "Everything unlocked" Fraunces hero line, renewal mono line,
+      // and a dashed-divider + MANAGE SUBSCRIPTION → CTA below.
       final expiryStr = subInfo.expiresAt != null
           ? '${subInfo.expiresAt!.day} ${_monthName(subInfo.expiresAt!.month)} ${subInfo.expiresAt!.year}'
           : '\u2014';
       final planLabel = (subInfo.plan ?? 'monthly').toUpperCase();
-      return WardCard(
-        variant: WardCardVariant.hero,
-        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          children: [
-            const WardChip(label: 'PRO', tone: WardChipTone.gold),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(planLabel,
-                      style: AppTypography.h3.copyWith(color: AppColors.accent)),
-                  const SizedBox(height: 2),
-                  Text('RENEWS $expiryStr'.toUpperCase(),
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.textMute,
-                        letterSpacing: 1.6,
-                      )),
-                ],
+      // "EST" seal carries the member-since date — the Wardroom brand
+      // motif mirrors the welcome screen's "EST · 2026" + the founder
+      // seal. Compute from expiresAt minus plan duration (best-effort;
+      // no dedicated startedAt field exists on SubscriptionInfoData).
+      final sealDate = _estSealDate(subInfo);
+      return Container(
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding,
+        ),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.accentSoft,
+              AppColors.bgDeep,
+            ],
+          ),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.40),
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Reserve space on the right so content doesn't
+                    // slide under the corner seal.
+                    Padding(
+                      padding: const EdgeInsets.only(right: 56),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const WardChip(
+                                label: 'PRO',
+                                tone: WardChipTone.gold,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                planLabel,
+                                style: AppTypography.monoXs.copyWith(
+                                  fontSize: 9,
+                                  color: AppColors.accent,
+                                  letterSpacing: 1.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Everything unlocked',
+                            style: AppTypography.h3.copyWith(
+                              fontSize: 18,
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'RENEWS $expiryStr'.toUpperCase(),
+                            style: AppTypography.mono.copyWith(
+                              fontSize: 10,
+                              color: AppColors.textDim,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Dashed divider + MANAGE CTA (full width — past the
+                    // reserved padding so it stretches across).
+                    const SizedBox(height: 12),
+                    WardDashedBorder(
+                      color: AppColors.line2,
+                      strokeWidth: 1,
+                      dashLength: 3,
+                      gapLength: 3,
+                      radius: 0,
+                      child: const SizedBox(
+                        width: double.infinity,
+                        height: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _onManageSubscription,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          Text(
+                            'MANAGE SUBSCRIPTION \u2192',
+                            style: AppTypography.mono.copyWith(
+                              fontSize: 9,
+                              color: AppColors.accent,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              // Corner seal — JSX spec uses size 48; the Wardroom
+              // WardSealBadge.subscription variant defaults to 54 for
+              // consistency with the report + phase placements.
+              Positioned(
+                top: 10,
+                right: 10,
+                child: WardSealBadge(
+                  label: 'EST',
+                  subline: sealDate,
+                  variant: WardSealVariant.subscription,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

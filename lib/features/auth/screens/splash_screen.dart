@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/profile/services/notification_inbox_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
@@ -162,6 +163,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!kIsWeb) {
       OneSignal.initialize(AppConstants.oneSignalAppId);
       OneSignal.Notifications.requestPermission(true);
+      // Wire the in-app inbox — foreground/click listeners mirror every
+      // push into the Hive notificationsBox so the Notifications screen
+      // has data to render. Also seeds the welcome entry on first run.
+      // See NotificationInboxService for the ingest contract.
+      NotificationInboxService.instance.init();
     }
   }
 

@@ -34,6 +34,7 @@ class HiveService with WidgetsBindingObserver {
   static const String coachBoxName = 'coachBox';
   static const String syncBoxName = 'syncBox';
   static const String configBoxName = 'configBox';
+  static const String notificationsBoxName = 'notificationsBox';
 
   static const List<String> _allBoxNames = [
     userBoxName,
@@ -46,6 +47,7 @@ class HiveService with WidgetsBindingObserver {
     coachBoxName,
     syncBoxName,
     configBoxName,
+    notificationsBoxName,
   ];
 
   /// Initialize Hive: register adapters and open all boxes.
@@ -92,6 +94,7 @@ class HiveService with WidgetsBindingObserver {
     customBoxName,
     coachBoxName,
     syncBoxName,
+    notificationsBoxName,
     // configBox stays excluded — tiny and we store `last_compact_at`
     // there, which would churn the compaction state itself.
   ];
@@ -182,6 +185,7 @@ class HiveService with WidgetsBindingObserver {
   Box get coachBox => getBox(coachBoxName);
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
+  Box get notificationsBox => getBox(notificationsBoxName);
 
   /// Test-only hook. Marks the singleton as initialized after the test
   /// has opened the boxes itself with raw `Hive.openBox`. Avoids calling
