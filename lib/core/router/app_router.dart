@@ -7,6 +7,7 @@ import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
@@ -83,6 +84,22 @@ class AppRouter {
           },
           transitionDuration: const Duration(milliseconds: 300),
         ),
+      ),
+      GoRoute(
+        path: '/onboarding/goal',
+        name: 'onboardingGoal',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: GoalScreen(initialGoal: extra['goal'] as String?),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
       ),
       // Legacy chat-based onboarding — retained behind /onboarding/chat as
       // a fallback while the 4-step stepped flow (welcome → goal → stats
