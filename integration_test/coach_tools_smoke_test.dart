@@ -16,5 +16,5 @@ void main() {
     //  - Sample exerciseBox + workoutBox seed data
     //  - HTTP mock (or AiService stub via ProviderContainer override)
     //  - Riverpod ProviderScope with overrides
-  }, skip: 'Phase E follow-up');
+  }, skip: true); // TODO Phase E follow-up
 }
