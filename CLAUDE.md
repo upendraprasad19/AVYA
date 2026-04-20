@@ -80,8 +80,19 @@ dart run build_runner build --delete-conflicting-outputs
 dart run build_runner watch   # watch mode during development
 ```
 
-### Edge Functions (Supabase MCP — preferred)
-Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI — it is logged into the wrong account (personal, not fitness app account). See §2a for account details.
+### Edge Functions — host-shell deploy (preferred for any function with nested `_shared/tools/...` or payloads >100KB)
+
+```bash
+cd "C:/Upendra/Claude Code/Fitness App"
+node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/functions
+node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
+```
+
+- **Token:** auto-resolved from `supabase/.supabase/supabase access token.txt` (gitignored). Generated 2026-04-20 against fitness-app account.
+- **Byte-identical to git** (no MCP path-mangling, no hand-trim risk). First used Phase C.5 → ai-proxy v43; now standard for all redeploys.
+- **Path scheme:** all shared imports MUST use `from "../_shared/..."` (parent dir), NOT `from "./_shared/..."`. The OLD MCP `deploy_edge_function` tool silently mangled the wrong path; the new flow doesn't. Audit your edits.
+
+`mcp__ba7b5e8e__deploy_edge_function` (the legacy MCP path) still works for small single-file functions but is unsafe for the AI coach tools bundle. Do not use `supabase` CLI — it is logged into the wrong account (personal, not fitness app account). See §2a for account details.
 
 ---
 
@@ -189,7 +200,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 │                                                      │
 │  SEED DATA (bundled JSON in APK):                    │
 │    assets/data/exercise_library.json (200+ exercises)│
-│    assets/data/food_database.json (5,000 foods)      │
+│    assets/data/food_database.json (93 foods)          │
 │    → Parsed into Hive on first launch                │
 │                                                      │
 │  SYNC TO SUPABASE:                                   │
@@ -231,7 +242,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 | `exercise_log_index_YYYY-MM-DD` | List of exercise log IDs for that date |
 | `exlog_<timestamp>_<hash>` | Exercise log: exercise_name, logging_type, weight_kg, reps_completed, sets_completed, volume_kg, is_pr |
 | `wlog_<timestamp>` | Workout log: workout_name, date, duration_seconds, sets_completed |
-| `template_<id>` | Workout template with exercises |
+| `tmpl_<timestamp>` | Workout template (single-day) — fields: id, name, exercises[], exercise_count, type:'template', assigned_days:[int], created_at. Multi-day AI templates (from `createCustomTemplate` tool) split into N rows tagged with `group_id`/`group_day_index`/`group_total_days` for cross-row identification. |
 
 ---
 
@@ -305,21 +316,21 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (26 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (35 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
 | Domain | Tables |
 |---|---|
 | Identity (4) | `users`, `user_profile`, `user_preferences`, `user_progress` |
-| Fitness (7) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets` *(new — F4)*, `user_custom_exercises` |
+| Fitness (8) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets`, `user_custom_exercises` |
 | Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
-| Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` *(new — F20)* |
-| Visual (1) | `progress_photos` *(new — F19)* |
-| AI (2) | `user_daily_snapshots`, `ai_coach_interactions` |
+| Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` |
+| Visual (1) | `progress_photos` |
+| AI (3) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory` |
 | Telemetry (1) | `client_errors` |
 | Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
-| Community (1) | `community_reviews` |
+| Community (2) | `community_reviews`, `memory_embeddings` |
 
 **Critical UNIQUE constraints (required for safe re-sync dedup — never remove):**
 - `streaks(user_id, week_start)` — prevents duplicate weeks on restore
@@ -486,6 +497,42 @@ static const Set<String> _highValueFeatures = {
 ## 11. AI ARCHITECTURE
 
 Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter were retired on 2026-04-18 — one key to rotate, one billing line, one source of truth.
+
+### Tool-calling (since ai-proxy v44, 2026-04-20) — 20 AI coach tools
+
+`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 20 typed tools across 4 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts`. Tier filtering: free users see 6 FREE tools, PRO sees 20.
+
+| Family | Tools |
+|---|---|
+| Workout (8) | `swapExercise`, `logSet`, `markWorkoutComplete`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `generateHotelWorkout` |
+| Progress (3) | `getProgressSummary`, `getExerciseHistory`, `logPR` |
+| Nutrition (4) | `logMealByText`, `adjustCaloricTarget`, `suggestMeal`, `prelog` |
+| Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
+
+**Hive-first hybrid architecture:** READ tools (e.g. `getProgressSummary`, `getExerciseHistory`, `suggestMeal`) execute server-side and feed Gemini results in same turn. WRITE tools emit typed `ToolIntent` to client; client confirms via card/sheet, then writes Hive + fire-and-forget syncs (matching the existing CLAUDE.md §6 rule 1 mutation pattern).
+
+3 confirmation classes: trivial (5s auto-confirm card), reviewable (explicit inline card), destructive (bottom-sheet with diff preview). Per-intent dispatch in `lib/features/ai_coach/services/tool_dispatcher.dart`. 1-hour intent TTL + concurrent-edit guards on every dispatch.
+
+Telemetry: per-tool-call records written to `ai_coach_interactions.tool_calls` JSONB column (migration 029), surfaced via `coach_tool_invocations_v` view.
+
+### Proactive triggers (8 of 8 brainstorm §5 triggers, since 2026-04-20)
+
+All 8 cron-driven Edge Functions in prod. Each uses `_shared/proactive_dedup.ts` (`shouldSendProactive` + `markProactiveSent`) to prevent same-type push twice per IST day, writing `coach_memory.last_proactive_type` after successful send.
+
+| # | Trigger | Edge Function | Cron (UTC → IST) | Tier |
+|---|---|---|---|---|
+| 1 | Morning Brief | `morning-alert` | (existing 2-stage) → 7am IST | both |
+| 2 | Workout Window Closing | `workout-window-closing` | `30 15 * * *` → 21:00 IST | both |
+| 3 | Protein Gap Alert | `protein-gap-alert` | `30 14 * * *` → 20:00 IST | PRO |
+| 4 | Streak Protection | `streak-guardian` | (existing) → 20:00 IST | both |
+| 5 | PR Detection | `pr-detection` | `*/15 * * * *` → near-real-time | both |
+| 6 | Plateau Alert | `plateau-alert` | `30 13 * * *` → 19:00 IST | PRO |
+| 7 | Weekly Recap | `weekly-recap-ready` | (existing) → Sunday | both |
+| 8 | Re-engagement | `re-engagement` | `30 06 * * *` → 12:00 IST | both |
+
+**Plateau-alert** + **re-engagement** read scores from `coach_memory.{plateau_risk_score, dropout_risk_score}` (computed nightly by `compute-coach-signals` → `compute_coach_signals_for_user(user_id)` RPC). Re-engagement has a fallback path that scans `workout_logs/nutrition_logs/weight_logs` directly for users without `coach_memory` rows yet.
+
+Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`. Each uses `private.morning_alert_get_service_key()` for the Bearer token (consistent with `compute_coach_signals` cron pattern).
 
 ### Model matrix
 | Edge Function | Model | Purpose |
@@ -868,13 +915,13 @@ Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protoc
 
 ## 18. FOOD DATABASE
 
-5,000 Indian-first foods bundled in JSON. Categories:
-- Staples (~500), Street food (~200), Restaurant dishes (~300)
-- Packaged/branded (~500), Fruits & veg (~300), Dairy (~200)
-- Pulses (~200), Protein (~300), Supplements (~100)
-- Global (~400), Beverages (~200), Nuts & seeds (~200)
+**93 Indian-first foods** bundled in `assets/data/food_database.json` (NOT 5,000 — earlier doc claim was aspirational; actual seed is 93). Same 93 rows are mirrored to Postgres `food_database` table (migration 030, 2026-04-20) so server-side tools like AI coach `suggestMeal` can query them.
+
+Categories cover staples, street food, restaurant dishes, dairy, pulses, protein, fruits/veg, beverages.
 
 Community growth: User adds custom food → Hive + Supabase. Admin approves → promoted to global DB. Other users get it via periodic sync + app updates.
+
+**Re-seeding:** if the bundled JSON is updated, regenerate migration via `node scripts/seed_food_database.js` then apply. Idempotent (deterministic v5 UUID per CLAUDE.md §7 namespace).
 
 ---
 
