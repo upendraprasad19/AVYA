@@ -30,11 +30,6 @@ class NutritionScreen extends ConsumerStatefulWidget {
 }
 
 class _NutritionScreenState extends ConsumerState<NutritionScreen> {
-  static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
   bool _isLoading = true;
   bool _isInsightsExpanded = false;
   bool _isWaterExpanded = true;
@@ -107,9 +102,19 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Header ─────────────────────────────────────────────────────
 
   Widget _buildHeader(DateTime now) {
+    // Handoff: eyebrow "GALLEY · TUE 14 APR" (3-letter weekday + day +
+    // month-short) + Fraunces 30 title "Fueling the plan" + trailing
+    // button + single gold rule.
+    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const monthShort = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    ];
+    final eyebrow =
+        'GALLEY \u00B7 ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
     return WardLetterhead(
-      eyebrow: 'GALLEY \u00B7 ${_months[now.month - 1].toUpperCase()} ${now.day}',
-      title: 'Nutrition',
+      eyebrow: eyebrow,
+      title: 'Fueling the plan',
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
       divider: true,
       trailing: _buildDietPlanButton(),
@@ -979,9 +984,26 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
-          // -- Progress bar (Wardroom) --
+          // -- 8-glass grid per handoff (one glass ≈ 375ml for a 3L goal) --
+          Builder(builder: (_) {
+            const glassMl = 375;
+            final filled = (waterMl / glassMl).floor().clamp(0, 8);
+            return WardGlassGrid(
+              filled: filled,
+              slots: 8,
+              onAdd: () => ref
+                  .read(waterIntakeProvider.notifier)
+                  .addWater(glassMl),
+              onDecrement: () => ref
+                  .read(waterIntakeProvider.notifier)
+                  .addWater(-glassMl),
+            );
+          }),
+          const SizedBox(height: 10),
+
+          // -- Thin progress bar (kept for precise ml tracking alongside glasses) --
           WardBar(pct: progress, color: AppColors.info, height: 4),
           const SizedBox(height: 10),
 
