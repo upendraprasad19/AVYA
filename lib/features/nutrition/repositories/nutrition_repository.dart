@@ -1,7 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
+
+/// Thrown by [NutritionRepository.adjustDailyTarget] when validation fails.
+class AdjustDailyTargetException implements Exception {
+  /// One of: 'invalid_delta', 'invalid_ttl', 'past_date', 'other'.
+  final String code;
+  final String message;
+  const AdjustDailyTargetException(this.code, this.message);
+  @override
+  String toString() => 'AdjustDailyTargetException($code): $message';
+}
 
 /// Repository for all nutrition-related Hive reads/writes.
 ///
@@ -491,6 +506,195 @@ class NutritionRepository {
           0;
     }
     return total;
+  }
+
+  // ── Daily Calorie Target Override (AI Coach C.2) ─────────────────
+
+  /// Writes a daily calorie target override starting on [startDate]
+  /// (defaults to today) for [ttlDays] days. Each affected day gets its
+  /// own `target_override_<YYYY-MM-DD>` key in `nutritionBox`, so the
+  /// reader is a single point lookup per render. Reads happen on every
+  /// nutrition dashboard render; writes happen rarely — optimise for read.
+  ///
+  /// Override map shape (per key):
+  /// ```
+  /// {
+  ///   date: 'YYYY-MM-DD',
+  ///   delta_kcal: signed int,
+  ///   reason: nullable string,
+  ///   applied_at: ISO 8601,
+  ///   expires_at: ISO 8601 (applied_at + ttlDays * 86400),
+  ///   source: 'ai_coach_tool',
+  ///   span_start: 'YYYY-MM-DD' (the startDate),
+  ///   span_total_days: int (ttlDays),
+  ///   span_day_index: 1..ttlDays,
+  /// }
+  /// ```
+  ///
+  /// Returns the FIRST written override map (start-date entry) so the
+  /// caller can surface preview data.
+  ///
+  /// Fires fire-and-forget cloud sync + AI snapshot push so the override
+  /// is visible to subsequent AI coach turns and to the cloud backup.
+  ///
+  /// Throws [AdjustDailyTargetException] on validation failure.
+  Future<Map<String, dynamic>> adjustDailyTarget({
+    required int deltaKcal,
+    required int ttlDays,
+    DateTime? startDate,
+    String? reason,
+  }) async {
+    if (deltaKcal.abs() > 1500) {
+      throw const AdjustDailyTargetException(
+          'invalid_delta', 'Delta must be within +/- 1500 kcal.');
+    }
+    if (ttlDays < 1 || ttlDays > 28) {
+      throw const AdjustDailyTargetException(
+          'invalid_ttl', 'TTL must be between 1 and 28 days.');
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = startDate ??
+        DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(start.year, start.month, start.day);
+
+    // Reject backdating beyond yesterday — overrides are forward-looking.
+    if (startDay.isBefore(today.subtract(const Duration(days: 1)))) {
+      throw const AdjustDailyTargetException(
+          'past_date', 'Cannot adjust target for a past date.');
+    }
+
+    final appliedAt = now;
+    final expiresAt = now.add(Duration(days: ttlDays));
+    final box = _hive.nutritionBox;
+    Map<String, dynamic>? firstWritten;
+
+    for (var i = 0; i < ttlDays; i++) {
+      final d = startDay.add(Duration(days: i));
+      final dateStr = _formatDate(d);
+      final entry = <String, dynamic>{
+        'date': dateStr,
+        'delta_kcal': deltaKcal,
+        'reason': reason,
+        'applied_at': appliedAt.toIso8601String(),
+        'expires_at': expiresAt.toIso8601String(),
+        'source': 'ai_coach_tool',
+        'span_start': _formatDate(startDay),
+        'span_total_days': ttlDays,
+        'span_day_index': i + 1,
+      };
+      await box.put('target_override_$dateStr', entry);
+      firstWritten ??= entry;
+    }
+
+    // Fire-and-forget sync — never block the dispatcher on network.
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    return firstWritten!;
+  }
+
+  /// Returns the active calorie target override for [date], or null if none
+  /// is in effect (no override key, or the override has expired).
+  ///
+  /// Used by [getDailyCalorieTargetWithOverrides] and by the dashboard /
+  /// AI snapshot builders to display "Override active until X" hints.
+  Map<String, dynamic>? getActiveTargetOverride(DateTime date) {
+    final dateStr = _formatDate(date);
+    final raw = _hive.nutritionBox.get('target_override_$dateStr');
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw);
+    final expiresAtStr = map['expires_at'] as String?;
+    if (expiresAtStr != null) {
+      final expiresAt = DateTime.tryParse(expiresAtStr);
+      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+        return null; // expired — ignore
+      }
+    }
+    return map;
+  }
+
+  /// Returns the daily calorie target for [date], applying any active
+  /// `target_override_<date>` override. Falls back to the base BMR-derived
+  /// target from the user profile (or BmrCalculator-recomputed if the
+  /// profile is missing the cached macros). Result is clamped to
+  /// `[800, 6000]` for safety against absurd writes.
+  ///
+  /// This is the SOURCE OF TRUTH for "today's calorie target" once the
+  /// AI coach can adjust it. Provider/widget code that previously read
+  /// `profile['daily_calories']` directly should call this method instead
+  /// when the displayed date matters (today's dashboard, day-detail view).
+  ///
+  /// Pure computation — does NOT trigger any sync.
+  ///
+  /// TODO(c2-cleanup): add a periodic sweep of expired
+  ///   `target_override_*` keys on app launch. Skipped for v1 — overrides
+  ///   are tiny, and the read-time check filters expired ones already.
+  double getDailyCalorieTargetWithOverrides(DateTime date) {
+    final profile = UserRepository.instance.getProfile();
+    final base = _resolveBaseDailyCalories(profile);
+
+    final override = getActiveTargetOverride(date);
+    if (override == null) return base;
+
+    final delta = (override['delta_kcal'] as num?)?.toDouble() ?? 0;
+    return (base + delta).clamp(800, 6000).toDouble();
+  }
+
+  /// Resolves the user's BASELINE daily calorie target from the profile,
+  /// without any override applied. Mirrors the fallback chain in
+  /// `nutrition_provider._resolveNutritionTargets` (cached → recomputed →
+  /// hardcoded), kept private here so the override-aware reader has one
+  /// place to read the base from.
+  double _resolveBaseDailyCalories(Map<String, dynamic>? profile) {
+    if (profile != null && profile['daily_calories'] != null) {
+      return (profile['daily_calories'] as num).toDouble();
+    }
+    if (profile != null) {
+      final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
+      final heightCm = (profile['height_cm'] as num?)?.toDouble();
+      final gender = profile['gender'] as String?;
+      if (weightKg != null &&
+          weightKg > 0 &&
+          heightCm != null &&
+          heightCm > 0 &&
+          gender != null) {
+        final goal =
+            profile['primary_goal'] as String? ?? 'general_fitness';
+        final activityLevel =
+            profile['activity_level'] as String? ?? 'moderate';
+        final dob = profile['date_of_birth'] as String?;
+        int age = 25;
+        if (dob != null) {
+          final birthDate = DateTime.tryParse(dob);
+          if (birthDate != null) {
+            final now = DateTime.now();
+            age = now.year - birthDate.year;
+            if (now.month < birthDate.month ||
+                (now.month == birthDate.month && now.day < birthDate.day)) {
+              age--;
+            }
+            if (age <= 0) age = 25;
+          }
+        }
+        final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
+        final targets = BmrCalculator.calculateTargets(
+          weightKg: weightKg,
+          heightCm: heightCm,
+          age: age,
+          gender: gender,
+          activityLevel: activityLevel,
+          goal: goal,
+          pacePreference:
+              (profile['pace_preference'] as String?) ?? 'balanced',
+          bodyFatPercent: bodyFat,
+        );
+        return targets.dailyCalories.toDouble();
+      }
+    }
+    // Last-resort hardcoded default (matches _resolveNutritionTargets).
+    return 2400;
   }
 
   // ── Helpers ──────────────────────────────────────────────────────

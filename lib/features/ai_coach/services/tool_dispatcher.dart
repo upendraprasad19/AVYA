@@ -15,7 +15,8 @@ import '../../home/providers/home_provider.dart'
         nutritionSummaryProvider,
         recentFoodLogsProvider;
 import '../../nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, weeklyNutritionProvider;
+    show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
+import '../../nutrition/repositories/nutrition_repository.dart';
 import '../../train/providers/train_provider.dart'
     show currentPlanProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
@@ -108,6 +109,9 @@ class ToolDispatcher {
           break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
+          break;
+        case 'adjust_caloric_target':
+          result = await _executeAdjustCaloricTarget(intent);
           break;
         default:
           return ToolExecutionResult.failure(
@@ -558,6 +562,52 @@ class ToolDispatcher {
     }
   }
 
+  Future<ToolExecutionResult> _executeAdjustCaloricTarget(
+      ToolIntent intent) async {
+    final p = intent.payload;
+    final delta = (p['delta_kcal'] as num?)?.toInt();
+    final ttl = (p['ttl_days'] as num?)?.toInt();
+    if (delta == null || ttl == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid adjust_caloric_target payload.');
+    }
+
+    final startDateStr = p['start_date'] as String?;
+    final startDate = (startDateStr == null || startDateStr.isEmpty)
+        ? null
+        : DateTime.tryParse(startDateStr);
+
+    try {
+      final override = await NutritionRepository.instance.adjustDailyTarget(
+        deltaKcal: delta,
+        ttlDays: ttl,
+        startDate: startDate,
+        reason: p['reason'] as String?,
+      );
+      return ToolExecutionResult.success(data: override);
+    } on AdjustDailyTargetException catch (e) {
+      return ToolExecutionResult.failure(_adjustTargetErrorMessage(e));
+    } catch (e, stack) {
+      debugPrint(
+          '[ToolDispatcher] adjust_caloric_target failed: $e\n$stack');
+      return const ToolExecutionResult.failure(
+          'Could not adjust your calorie target.');
+    }
+  }
+
+  String _adjustTargetErrorMessage(AdjustDailyTargetException e) {
+    switch (e.code) {
+      case 'invalid_delta':
+        return 'That adjustment is too large.';
+      case 'invalid_ttl':
+        return 'TTL must be between 1 and 28 days.';
+      case 'past_date':
+        return 'Cannot adjust target for a past date.';
+      default:
+        return e.message;
+    }
+  }
+
   /// Write a meal-by-text log to the nutrition Hive box.
   ///
   /// Mirrors the shape produced by `FoodLogNotifier.logFood` so the existing
@@ -616,9 +666,9 @@ class ToolDispatcher {
 
   bool _isNutritionIntent(String type) {
     // Keep this list in sync with the nutrition family handlers above.
-    // Phase C.1 ships only log_meal_by_text; future C tools (adjustCaloricTarget,
-    // suggestMeal, prelog) will be added here.
-    return type == 'log_meal_by_text';
+    // C.1 log_meal_by_text, C.2 adjust_caloric_target. Future C tools
+    // (suggestMeal, prelog) will be added here.
+    return type == 'log_meal_by_text' || type == 'adjust_caloric_target';
   }
 
   Future<void> _appendInjuryToCoachMemory(
@@ -667,6 +717,12 @@ class ToolDispatcher {
     } catch (_) {/* ignore */}
     try {
       ref.invalidate(recentFoodLogsProvider);
+    } catch (_) {/* ignore */}
+    // adjust_caloric_target writes a target_override_<date> key; the
+    // macro-target readers (profile MY TARGETS card, diet plan screen) need
+    // to re-read the override-aware target.
+    try {
+      ref.invalidate(macroTargetsProvider);
     } catch (_) {/* ignore */}
   }
 

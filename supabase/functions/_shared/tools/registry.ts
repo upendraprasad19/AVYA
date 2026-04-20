@@ -10,7 +10,10 @@ import {
   swapExerciseTool,
 } from "./workout/index.ts";
 import { getProgressSummaryTool } from "./progress/index.ts";
-import { logMealByTextTool } from "./nutrition/index.ts";
+import {
+  adjustCaloricTargetTool,
+  logMealByTextTool,
+} from "./nutrition/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
@@ -31,6 +34,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   // ── Phase C: nutrition family ─────────────────────────────────────
   // Append future C-phase tools below this marker.
   logMealByTextTool, // nutrition / write / trivial / FREE  (C.1)
+  adjustCaloricTargetTool, // nutrition / write / trivial-or-reviewable / PRO  (C.2)
   // Phase D will add: plan family
 ];
 

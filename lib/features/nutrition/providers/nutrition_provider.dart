@@ -22,18 +22,30 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 /// Resolves nutrition targets from profile, falling back to BmrCalculator
 /// when computed fields are missing. Only uses hardcoded defaults as a
 /// last resort when even BMR inputs are unavailable.
-Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
+///
+/// When [date] is provided, an active calorie-target override (written by
+/// the AI coach `adjustCaloricTarget` tool) is applied to `daily_calories`.
+/// Macro targets (protein/carb/fat) are NOT scaled — the override is a
+/// signed kcal delta only, intentionally narrow in scope. Result is
+/// clamped to [800, 6000] for safety.
+Map<String, double> _resolveNutritionTargets(
+  Map<String, dynamic>? profile, {
+  DateTime? date,
+}) {
+  Map<String, double> targets;
+
   if (profile != null &&
       profile['daily_calories'] != null &&
       profile['protein_grams'] != null &&
       profile['carb_grams'] != null &&
       profile['fat_grams'] != null) {
-    return {
+    targets = {
       'daily_calories': (profile['daily_calories'] as num).toDouble(),
       'protein_grams': (profile['protein_grams'] as num).toDouble(),
       'carb_grams': (profile['carb_grams'] as num).toDouble(),
       'fat_grams': (profile['fat_grams'] as num).toDouble(),
     };
+    return _applyCalorieOverride(targets, date);
   }
 
   // Try to recalculate from profile inputs.
@@ -68,21 +80,42 @@ Map<String, double> _resolveNutritionTargets(Map<String, dynamic>? profile) {
         pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
         bodyFatPercent: bodyFat,
       );
-      return {
+      return _applyCalorieOverride({
         'daily_calories': targets.dailyCalories.toDouble(),
         'protein_grams': targets.proteinGrams.toDouble(),
         'carb_grams': targets.carbGrams.toDouble(),
         'fat_grams': targets.fatGrams.toDouble(),
-      };
+      }, date);
     }
   }
 
   // Last resort hardcoded defaults.
-  return {
+  return _applyCalorieOverride({
     'daily_calories': 2400,
     'protein_grams': 184,
     'carb_grams': 280,
     'fat_grams': 80,
+  }, date);
+}
+
+/// Applies an active `target_override_<date>` calorie delta to the
+/// resolved targets map. Macros are intentionally NOT scaled (the AI
+/// coach tool only ships a kcal delta). Result clamped to [800, 6000].
+/// Returns the input map unchanged when [date] is null or no active
+/// override exists.
+Map<String, double> _applyCalorieOverride(
+  Map<String, double> targets,
+  DateTime? date,
+) {
+  if (date == null) return targets;
+  final override = NutritionRepository.instance.getActiveTargetOverride(date);
+  if (override == null) return targets;
+  final delta = (override['delta_kcal'] as num?)?.toDouble() ?? 0;
+  final base = targets['daily_calories'] ?? 0;
+  final adjusted = (base + delta).clamp(800, 6000).toDouble();
+  return {
+    ...targets,
+    'daily_calories': adjusted,
   };
 }
 
@@ -282,7 +315,9 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
     }
 
     final profile = UserRepository.instance.getProfile();
-    final targets = _resolveNutritionTargets(profile);
+    // Pass selectedDate so any active calorie-target override (AI coach
+    // adjustCaloricTarget tool) is applied for the displayed day.
+    final targets = _resolveNutritionTargets(profile, date: selectedDate);
     final calorieTarget = targets['daily_calories']!;
     final proteinTarget = targets['protein_grams']!;
     final carbTarget = targets['carb_grams']!;

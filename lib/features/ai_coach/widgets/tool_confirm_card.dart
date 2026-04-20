@@ -373,6 +373,14 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       }
       return base;
     }
+    if (intent.type == 'adjust_caloric_target') {
+      final delta = intent.payload['delta_kcal'] ?? 0;
+      final ttl = intent.payload['ttl_days'] ?? 0;
+      final reason = intent.payload['reason'] as String?;
+      final sign = (delta as num) >= 0 ? '+' : '';
+      final base = '$sign$delta kcal/day for $ttl day${ttl == 1 ? '' : 's'}';
+      return reason != null && reason.isNotEmpty ? '$base\n$reason' : base;
+    }
     return intent.previewSummary;
   }
 
@@ -413,6 +421,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'HOTEL WORKOUT';
       case 'log_meal_by_text':
         return 'LOG MEAL';
+      case 'adjust_caloric_target':
+        return 'CALORIE TARGET';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -438,6 +448,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.luggage;
       case 'log_meal_by_text':
         return Icons.restaurant_menu;
+      case 'adjust_caloric_target':
+        return Icons.tune;
       default:
         return Icons.bolt;
     }
@@ -463,6 +475,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Hotel plan generated';
       case 'log_meal_by_text':
         return 'Logged';
+      case 'adjust_caloric_target':
+        return 'Target adjusted';
       default:
         return 'Done';
     }
