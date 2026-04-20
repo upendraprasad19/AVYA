@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
@@ -74,6 +75,22 @@ class AppRouter {
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const WelcomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+      // Legacy chat-based onboarding — retained behind /onboarding/chat as
+      // a fallback while the 4-step stepped flow (welcome → goal → stats
+      // → plan) rolls out via PRs Y–AB. Remove once the new flow ships
+      // on all environments.
+      GoRoute(
+        path: '/onboarding/chat',
+        name: 'onboardingChat',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const OnboardingChatScreen(),
