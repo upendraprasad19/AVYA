@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -889,12 +890,15 @@ class ActiveWorkoutData {
 
   /// Color for a superset group index.
   static Color supersetColor(int groupIndex) {
-    const colors = [
-      Color(0xFF00D4FF), // accent
-      Color(0xFFa855f7), // purple
-      Color(0xFFf97316), // orange
-      Color(0xFF4ade80), // green
-      Color(0xFF38bdf8), // blue
+    // AH.C1 — first slot uses the Wardroom accent (Campaign Gold) so
+    // superset A matches the primary CTA colour. Other slots stay as
+    // distinct chart hues (purple / orange / green / blue).
+    final colors = [
+      AppColors.accent,
+      const Color(0xFFa855f7), // purple
+      const Color(0xFFf97316), // orange
+      const Color(0xFF4ade80), // green
+      const Color(0xFF38bdf8), // blue
     ];
     return colors[groupIndex % colors.length];
   }
@@ -1543,9 +1547,12 @@ class RestTimerData {
       totalSeconds > 0 ? secondsRemaining / totalSeconds : 0.0;
 
   Color get timerColor {
-    if (secondsRemaining > 30) return const Color(0xFF00D4FF);
-    if (secondsRemaining > 10) return const Color(0xFFF59E0B);
-    return const Color(0xFFef4444);
+    // AH.C1 — token-aligned timer colours. > 30s shows the Wardroom
+    // accent (Campaign Gold), the 10–30s window stays amber (warn),
+    // under 10s turns red (bad).
+    if (secondsRemaining > 30) return AppColors.accent;
+    if (secondsRemaining > 10) return AppColors.warn;
+    return AppColors.bad;
   }
 }
 
