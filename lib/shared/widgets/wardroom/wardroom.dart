@@ -17,7 +17,7 @@
 /// * **Structure** — [WardGlassGrid], [WardAchievementStrip],
 ///                   [WardPhaseDots], [WardPhaseBlock],
 ///                   [WardSessionRow], [WardSessionTable],
-///                   [WardCategorySidebar]
+///                   [WardCategorySidebar], [WardDashedBorder]
 /// * **Badge**     — [WardSealBadge]
 /// * **Glyph**     — [AnchorGlyph], [CompassRoseGlyph],
 ///                   [TierChevronsGlyph], [SealGlyph], [RankBarGlyph]
@@ -31,6 +31,7 @@ export 'ward_button.dart';
 export 'ward_card.dart';
 export 'ward_category_sidebar.dart';
 export 'ward_chip.dart';
+export 'ward_dashed_border.dart';
 export 'ward_dispatch_header.dart';
 export 'ward_eyebrow.dart';
 export 'ward_frame.dart';

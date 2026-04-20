@@ -205,6 +205,11 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             meals: nutrition.allMeals,
             onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
             onEdit: (meal) => _showEditMacrosSheet(context, meal),
+            // AG.1 — tapping "+ LOG" on an empty slot opens the food
+            // search with the slot preselected. Matches the handoff's
+            // nutrition.jsx empty-slot affordance.
+            onLogSlot: (slot) =>
+                showFoodSearchSheet(context, mealType: slot),
           ),
         ),
         const SizedBox(height: 10),

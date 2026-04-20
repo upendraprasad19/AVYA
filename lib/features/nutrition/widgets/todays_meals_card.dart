@@ -4,209 +4,324 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Displays today's logged meals in a card with icon, name, macros, and calories.
-/// Supports swipe-to-delete and tap-to-edit macros.
+/// Today's meals, rendered as **4 fixed slots** (BREAKFAST / LUNCH / DINNER
+/// / SNACK) per the Wardroom handoff
+/// (`design_handoff_wardroom/src/screens/nutrition.jsx` lines 115–141).
+///
+/// * Populated slots — solid [AppColors.line2] border, gold eyebrow +
+///   earliest time, total kcal on the right, items joined by ` · ` below.
+/// * Empty slots — [WardDashedBorder] (accent @ 27% alpha), greyed eyebrow,
+///   `+ LOG` CTA in accent mono. Tapping invokes [onLogSlot] so the parent
+///   can open `showFoodSearchSheet` with the correct `mealType` preset.
+///
+/// The slot order is fixed — DINNER still renders as a dashed empty slot
+/// even when SNACK is populated (do NOT collapse empties). This matches the
+/// handoff sample where all 4 slots are always visible.
 class TodaysMealsCard extends StatelessWidget {
   final List<Map<String, dynamic>> meals;
   final void Function(Map<String, dynamic> meal)? onEdit;
   final void Function(String logId)? onDelete;
+
+  /// Invoked when the `+ LOG` CTA on an empty slot is tapped. The string is
+  /// the slot key in lowercase (`breakfast` / `lunch` / `dinner` / `snack`),
+  /// safe to pass directly as `mealType:` to `showFoodSearchSheet`.
+  final void Function(String slot)? onLogSlot;
 
   const TodaysMealsCard({
     super.key,
     required this.meals,
     this.onEdit,
     this.onDelete,
+    this.onLogSlot,
   });
+
+  static const _slotOrder = <String>['breakfast', 'lunch', 'dinner', 'snack'];
+  static const _slotLabel = <String, String>{
+    'breakfast': 'BREAKFAST',
+    'lunch': 'LUNCH',
+    'dinner': 'DINNER',
+    'snack': 'SNACK',
+  };
 
   @override
   Widget build(BuildContext context) {
-    return WardCard(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: meals.isEmpty ? _buildEmpty() : _buildMealList(),
-      ),
-    );
-  }
-
-  static String _mealTypeLabel(String raw) {
-    switch (raw) {
-      case 'breakfast':
-        return 'BREAKFAST';
-      case 'lunch':
-        return 'LUNCH';
-      case 'dinner':
-        return 'DINNER';
-      case 'snacks':
-      case 'snack':
-        return 'SNACK';
-      default:
-        return '';
+    // Group incoming meals by normalized slot key. Unknown meal_type falls
+    // back to 'snack' so the log always shows up somewhere rather than
+    // silently disappearing.
+    final grouped = <String, List<Map<String, dynamic>>>{
+      for (final k in _slotOrder) k: <Map<String, dynamic>>[],
+    };
+    for (final meal in meals) {
+      final raw = (meal['meal_type_label'] as String? ??
+              meal['meal_type'] as String? ??
+              '')
+          .toLowerCase();
+      final key = switch (raw) {
+        'breakfast' => 'breakfast',
+        'lunch' => 'lunch',
+        'dinner' => 'dinner',
+        'snack' || 'snacks' => 'snack',
+        _ => 'snack',
+      };
+      grouped[key]!.add(meal);
     }
-  }
 
-  static String _formatTime(String? iso8601) {
-    if (iso8601 == null || iso8601.isEmpty) return '';
-    final dt = DateTime.tryParse(iso8601);
-    if (dt == null) return '';
-    final local = dt.toLocal();
-    final hour = local.hour;
-    final minute = local.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    return '$h12:$minute $period';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final slot in _slotOrder) ...[
+          if (grouped[slot]!.isEmpty)
+            _EmptySlotCard(
+              slot: slot,
+              label: _slotLabel[slot]!,
+              onTap: onLogSlot == null ? null : () => onLogSlot!(slot),
+            )
+          else
+            _PopulatedSlotCard(
+              slot: slot,
+              label: _slotLabel[slot]!,
+              items: grouped[slot]!,
+              onEdit: onEdit,
+              onDelete: onDelete,
+            ),
+          if (slot != _slotOrder.last) const SizedBox(height: 6),
+        ],
+      ],
+    );
   }
+}
 
-  Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.all(18),
-      child: Center(
-        child: Text(
-          'No meals logged yet.',
-          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
-        ),
+// ── Populated slot ──────────────────────────────────────────────────
+
+class _PopulatedSlotCard extends StatelessWidget {
+  const _PopulatedSlotCard({
+    required this.slot,
+    required this.label,
+    required this.items,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final String slot;
+  final String label;
+  final List<Map<String, dynamic>> items;
+  final void Function(Map<String, dynamic> meal)? onEdit;
+  final void Function(String logId)? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    // Sum kcal across every entry in this slot; earliest logged time
+    // becomes the slot time label (matches the handoff sample — breakfast
+    // shows 08:14, the earliest eaten item).
+    int totalKcal = 0;
+    DateTime? earliest;
+    for (final item in items) {
+      totalKcal += (item['total_calories'] as num?)?.round() ?? 0;
+      final createdAt = item['created_at'] as String?;
+      if (createdAt != null && createdAt.isNotEmpty) {
+        final parsed = DateTime.tryParse(createdAt);
+        if (parsed != null &&
+            (earliest == null || parsed.isBefore(earliest))) {
+          earliest = parsed;
+        }
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: eyebrow · time · kcal
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                label,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (earliest != null) ...[
+                const SizedBox(width: 10),
+                Text(
+                  '\u00B7 ${_formatTime(earliest)}',
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 9,
+                    color: AppColors.textGhost,
+                  ),
+                ),
+              ],
+              const Spacer(),
+              Text(
+                '$totalKcal kcal',
+                style: AppTypography.mono.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Items joined by ` · ` — tap any item for edit, swipe for delete.
+          // To preserve per-item edit/delete affordances the list is stacked
+          // as one tappable row per item; handoff rendering remains (dim
+          // DM Sans 12 joined by separator) via the separator widget.
+          ..._buildItemRows(context),
+        ],
       ),
     );
   }
 
-  Widget _buildMealList() {
-    return Column(
-      children: List.generate(meals.length, (index) {
-        final meal = meals[index];
-        final name = meal['food_name'] as String? ?? 'Unknown';
-        final cal = (meal['total_calories'] as num?)?.toInt() ?? 0;
-        final protein = (meal['total_protein'] as num?)?.toInt() ?? 0;
-        final carbs = (meal['total_carbs'] as num?)?.toInt() ?? 0;
-        final fat = (meal['total_fat'] as num?)?.toInt() ?? 0;
-        final fiber = (meal['total_fiber'] as num?)?.toInt() ?? 0;
-        final logId = meal['id'] as String?;
-        final mealTypeRaw = (meal['meal_type_label'] as String? ??
-                    meal['meal_type'] as String?)
-                ?.toLowerCase() ??
-            '';
-        final mealTypeLabel = _mealTypeLabel(mealTypeRaw);
-        final createdAt = meal['created_at'] as String?;
-        final timeLabel = _formatTime(createdAt);
+  List<Widget> _buildItemRows(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final name = item['food_name'] as String? ?? 'Unknown';
+      final logId = item['id'] as String?;
 
-        Widget row = GestureDetector(
-          onTap: onEdit != null ? () => onEdit!(meal) : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              border: index < meals.length - 1
-                  ? const Border(bottom: BorderSide(color: AppColors.line2))
-                  : null,
+      Widget row = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onEdit == null ? null : () => onEdit!(item),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: AppTypography.body.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textDim,
+                  height: 1.4,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            child: Row(
-              children: [
-                // Meal icon
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.input,
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text('\uD83C\uDF7D',
-                      style: TextStyle(fontSize: 14)),
-                ),
-                const SizedBox(width: 10),
+            if (onEdit != null) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.edit_outlined,
+                size: 12,
+                color: AppColors.textDim.withValues(alpha: 0.6),
+              ),
+            ],
+          ],
+        ),
+      );
 
-                // Name + macros
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (mealTypeLabel.isNotEmpty) ...[
-                        Text(
-                          mealTypeLabel,
-                          style: AppTypography.monoXs.copyWith(
-                            color: AppColors.accent.withValues(alpha: 0.8),
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                      ],
-                      Text(
-                        name,
-                        style: AppTypography.h3,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'P:${protein}g · C:${carbs}g · Fat:${fat}g${fiber > 0 ? ' · Fi:${fiber}g' : ''}',
-                        style: AppTypography.bodySm.copyWith(
-                          color: AppColors.textDim,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      if (onDelete != null && logId != null) {
+        row = Dismissible(
+          key: ValueKey('meal_item_$logId'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 12),
+            color: AppColors.bad.withValues(alpha: 0.15),
+            child: Icon(Icons.delete_outline, color: AppColors.bad, size: 16),
+          ),
+          onDismissed: (_) => onDelete!(logId),
+          child: row,
+        );
+      }
 
-                // Calories + time
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '$cal',
-                      style: AppTypography.h3.copyWith(
-                        color: AppColors.accent,
-                      ),
-                    ),
-                    Text(
-                      'KCAL',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.textMute,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    if (timeLabel.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          timeLabel,
-                          style: AppTypography.monoXs.copyWith(
-                            color: AppColors.textMute,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                // Edit affordance — makes the tap-to-edit target discoverable.
-                if (onEdit != null) ...[
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.edit_outlined,
-                    size: 14,
-                    color: AppColors.textDim.withValues(alpha: 0.7),
-                  ),
-                ],
-              ],
+      rows.add(row);
+      if (i < items.length - 1) {
+        // Subtle separator between items — dim ` · ` matches the JSX
+        // `items.join(' · ')` pattern but keeps each item independently
+        // tappable/swipeable.
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              '\u00B7',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textGhost,
+                fontSize: 10,
+              ),
             ),
           ),
         );
+      }
+    }
+    return rows;
+  }
 
-        // Wrap with Dismissible for swipe-to-delete
-        if (onDelete != null && logId != null) {
-          row = Dismissible(
-            key: ValueKey(logId),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 18),
-              color: AppColors.bad.withValues(alpha: 0.15),
-              child: Icon(Icons.delete_outline,
-                  color: AppColors.bad, size: 20),
-            ),
-            onDismissed: (_) => onDelete!(logId),
-            child: row,
-          );
-        }
+  static String _formatTime(DateTime dt) {
+    final local = dt.toLocal();
+    final hour = local.hour;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final period = hour >= 12 ? 'PM' : 'AM';
+    return '$h12:$minute $period';
+  }
+}
 
-        return row;
-      }),
+// ── Empty slot ──────────────────────────────────────────────────────
+
+class _EmptySlotCard extends StatelessWidget {
+  const _EmptySlotCard({
+    required this.slot,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String slot;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: WardDashedBorder(
+        color: AppColors.accent.withValues(alpha: 0.27),
+        strokeWidth: 1,
+        dashLength: 4,
+        gapLength: 3,
+        radius: AppRadius.card.toDouble(),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '+ LOG',
+                style: AppTypography.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
