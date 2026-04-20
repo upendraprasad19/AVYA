@@ -7,11 +7,14 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Personal Records snapshot on the home dashboard.
+/// Personal Records 2×2 grid — matches the handoff
+/// (`design_handoff_wardroom/src/screens/daily.jsx` lines 229–251).
 ///
-/// Always shows the 3 most recent PRs in a compact vertical list.
-/// "See All N" opens a bottom sheet — never expands in-place so the
-/// card stays a fixed size regardless of how many exercises the user has.
+/// Shows the top 4 PRs as a 2×2 grid of `card`-bg tiles with `line2`
+/// border. Each tile: mono 8 exercise name + `ok` delta (if available)
+/// on a single row, then Fraunces 22 w700 gold tabular numeric + mono
+/// 8 unit on the second row. "SEE ALL N" opens the full list sheet
+/// (preserved from the pre-port behaviour).
 class PrSnapshot extends ConsumerWidget {
   const PrSnapshot({super.key});
 
@@ -20,14 +23,21 @@ class PrSnapshot extends ConsumerWidget {
     final prs = ref.watch(allExercisePRsProvider);
 
     if (prs.isEmpty) {
-      return WardCard(
-        variant: WardCardVariant.standard,
+      return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          border: Border.all(color: AppColors.line2),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.emoji_events_outlined,
-                size: 16, color: AppColors.textDim),
+            const Icon(
+              Icons.emoji_events_outlined,
+              size: 16,
+              color: AppColors.textDim,
+            ),
             const SizedBox(width: 10),
             Text(
               'Log workouts to see your PRs here',
@@ -40,86 +50,43 @@ class PrSnapshot extends ConsumerWidget {
       );
     }
 
-    // Always show top 3 only. Full list is in the bottom sheet.
-    final visiblePrs = prs.take(3).toList();
-    final hasMore = prs.length > 3;
+    final top = prs.take(4).toList();
+    final hasMore = prs.length > 4;
 
-    return WardCard(
-      variant: WardCardVariant.standard,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Row(
-              children: [
-                const Icon(Icons.emoji_events,
-                    size: 13, color: AppColors.proGold),
-                const SizedBox(width: 6),
-                Text(
-                  'PERSONAL RECORDS',
-                  style: AppTypography.mono.copyWith(
-                    color: AppColors.proGold,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const Spacer(),
-                if (hasMore)
-                  GestureDetector(
-                    onTap: () => _showAllPRsSheet(context, prs),
-                    child: Text(
-                      'SEE ALL ${prs.length} \u2192',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.accent,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          Container(height: 1, color: AppColors.line2),
-
-          ...visiblePrs.asMap().entries.map((entry) {
-            final i = entry.key;
-            final pr = entry.value;
-            final isLast = i == visiblePrs.length - 1 && !hasMore;
-            return _PrRow(pr: pr, isLast: isLast);
-          }),
-
-          if (hasMore)
-            GestureDetector(
-              onTap: () => _showAllPRsSheet(context, prs),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.proGoldTint,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(AppRadius.card),
-                    bottomRight: Radius.circular(AppRadius.card),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.expand_more,
-                        size: 13, color: AppColors.proGold),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${prs.length - 3} MORE PRS',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.proGold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        LayoutBuilder(builder: (context, c) {
+          final gap = 6.0;
+          final width = (c.maxWidth - gap) / 2;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final pr in top)
+                SizedBox(width: width, child: _PrTile(pr: pr)),
+            ],
+          );
+        }),
+        if (hasMore) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _showAllPRsSheet(context, prs),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'SEE ALL ${prs.length} \u2192',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -136,7 +103,8 @@ class PrSnapshot extends ConsumerWidget {
           decoration: const BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.vertical(
-                top: Radius.circular(AppRadius.card)),
+              top: Radius.circular(AppRadius.card),
+            ),
           ),
           child: Column(
             children: [
@@ -153,12 +121,13 @@ class PrSnapshot extends ConsumerWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.gutter, 4, AppSpacing.gutter, 12),
+                  AppSpacing.gutter,
+                  4,
+                  AppSpacing.gutter,
+                  12,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.emoji_events,
-                        size: 14, color: AppColors.proGold),
-                    const SizedBox(width: 8),
                     Text(
                       'ALL EXERCISE PRS',
                       style: AppTypography.mono.copyWith(
@@ -180,21 +149,17 @@ class PrSnapshot extends ConsumerWidget {
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: prs.length,
-                  separatorBuilder: (_, index) =>
+                  separatorBuilder: (_, _) =>
                       Container(height: 1, color: AppColors.line2),
                   itemBuilder: (_, i) {
                     final pr = prs[i];
                     return Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
-                          Container(
-                            width: 3,
-                            height: 30,
-                            color: AppColors.proGold,
-                          ),
-                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,64 +202,72 @@ class PrSnapshot extends ConsumerWidget {
   }
 }
 
-/// A single PR row — compact, matching the "RECENT LOGS" style.
-class _PrRow extends StatelessWidget {
+class _PrTile extends StatelessWidget {
+  const _PrTile({required this.pr});
   final ExercisePR pr;
-  final bool isLast;
-
-  const _PrRow({required this.pr, required this.isLast});
 
   @override
   Widget build(BuildContext context) {
+    // Expect formattedValue like "82.5 kg" or "14 reps". Split into
+    // numeric + unit so we can render Fraunces on the number and mono
+    // on the unit.
+    final parts = pr.formattedValue.split(' ');
+    final numeric = parts.isNotEmpty ? parts.first : pr.formattedValue;
+    final unit = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: AppColors.line2)),
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-        child: Row(
-          children: [
-            // Slim gold slab
-            Container(
-              width: 3,
-              height: 30,
-              color: AppColors.proGold,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            pr.exerciseName.toUpperCase(),
+            style: AppTypography.monoXs.copyWith(
+              fontSize: 8,
+              color: AppColors.textMute,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    pr.exerciseName,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  numeric,
+                  style: AppTypography.h2.copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                    letterSpacing: -0.6,
+                    height: 1,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    pr.formattedDate,
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.textMute,
-                      letterSpacing: 1.5,
-                    ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Text(
+                  unit.toUpperCase(),
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 8,
+                    color: AppColors.textMute,
                   ),
-                ],
-              ),
-            ),
-            Text(
-              pr.formattedValue,
-              style: AppTypography.h3.copyWith(
-                color: AppColors.accent,
-              ),
-            ),
-          ],
-        ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -236,7 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const SizedBox(height: 10),
         const ProfileNudgeCard(),  // V4: profile completeness nudge
         const SizedBox(height: 10),
-        // AI Coach insight
+        _buildAiCoachEyebrow(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
           child: _buildAiInsight(ref),
@@ -531,6 +531,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  // -- AI Coach Eyebrow (green dot + "AI COACH · INSIGHTS") -----------
+
+  Widget _buildAiCoachEyebrow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.gutter,
+        12,
+        AppSpacing.gutter,
+        8,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: AppColors.ok,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'AI COACH \u00B7 INSIGHTS',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // -- Section Label --------------------------------------------------
 
   Widget _buildSectionLabel(String text) {
@@ -597,10 +631,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
 
+    // Phase-driven mode label — renders as the italic-gold second line
+    // under the Fraunces workout title (handoff: "LEG DAY / _Relaxed_").
+    const phaseMode = {
+      1: 'Relaxed',
+      2: 'Focused',
+      3: 'Capacity',
+      4: 'Peak',
+    };
+    final modeLabel = phaseMode[currentPhase] ?? 'Focused';
+
     if (isRestDay) {
       return TodayWorkoutCard(
-        workoutTag: 'REST DAY \u00B7 WEEK $week',
-        workoutName: 'RECOVERY\n& MOBILITY',
+        workoutTag: 'PHASE $currentPhase',
+        workoutName: 'RECOVERY',
+        workoutMode: 'Week $week',
         durationMin: 0,
         exerciseCount: 0,
         isRestDay: true,
@@ -638,8 +683,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
 
       return TodayWorkoutCard(
-        workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE $currentPhase',
+        workoutTag: 'PHASE $currentPhase',
         workoutName: workoutName.toUpperCase(),
+        workoutMode: modeLabel,
         durationMin: durationSecs > 0 ? (durationSecs / 60).round() : 0,
         exerciseCount: exercises.length,
         isRestDay: false,
@@ -673,8 +719,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final estDuration = totalSets > 0 ? (totalSets * 2.5).round() : 45;
 
     return TodayWorkoutCard(
-      workoutTag: '${workoutName.toUpperCase()} \u00B7 PHASE $currentPhase',
+      workoutTag: 'PHASE $currentPhase',
       workoutName: workoutName.toUpperCase(),
+      workoutMode: modeLabel,
       durationMin: estDuration,
       exerciseCount: exercises.length,
       onStart: () => context.go('/train/active-workout'),
