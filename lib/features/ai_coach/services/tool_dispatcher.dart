@@ -590,7 +590,8 @@ class ToolDispatcher {
     final results = <Map<String, dynamic>>[];
     final errors = <String>[];
 
-    for (final meal in parsedMeals) {
+    for (int i = 0; i < parsedMeals.length; i++) {
+      final meal = parsedMeals[i];
       final date = meal['date'] as String?;
       final foodName = (meal['food_name'] as String?)?.trim();
       if (date == null || foodName == null || foodName.isEmpty) {
@@ -611,6 +612,7 @@ class ToolDispatcher {
                       true
                   ? meal['serving_description'] as String
                   : '1 serving',
+          uniqueSuffix: '$i',
         );
         results.add({
           'log_id': logId,
@@ -708,10 +710,15 @@ class ToolDispatcher {
     required int carbs,
     required int fat,
     required String servingDescription,
+    String? uniqueSuffix,
   }) async {
     final box = HiveService.instance.nutritionBox;
     final now = DateTime.now();
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
+    final ts = now.millisecondsSinceEpoch;
+    // Optional suffix prevents same-millisecond ID collisions in batch writers
+    // (e.g. C.4 prelog iterates up to 21 meals; on a fast device two iterations
+    // can land in the same ms, and box.put would silently overwrite the first).
+    final id = uniqueSuffix != null ? 'nlog_${ts}_$uniqueSuffix' : 'nlog_$ts';
 
     final logMap = <String, dynamic>{
       'id': id,
