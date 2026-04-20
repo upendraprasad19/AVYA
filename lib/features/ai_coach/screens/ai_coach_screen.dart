@@ -23,6 +23,10 @@ import '../widgets/prompt_chip.dart';
 import '../widgets/voice_notes_button.dart';
 import '../widgets/log_confirm_card.dart';
 import '../widgets/workout_log_confirm_card.dart';
+import '../widgets/coach_insight_section.dart';
+import '../widgets/coach_suggested_actions.dart';
+import '../widgets/coach_patterns_card.dart';
+import '../widgets/coach_deep_analysis_card.dart';
 import '../providers/pending_tool_intents_provider.dart';
 import '../models/tool_intent.dart';
 import '../widgets/tool_confirm_card.dart';
@@ -834,67 +838,19 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildWelcomeView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Large coach avatar
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.accentSoft,
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.33), width: 2),
-              ),
-              child: Center(
-                child: Text(
-                  'AI',
-                  style: AppTypography.h2.copyWith(
-                    color: AppColors.accent,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Your AI Fitness Coach',
-              style: AppTypography.h2,
-            ),
-            const SizedBox(height: 8),
-            Consumer(
-              builder: (context, ref, _) {
-                final insight = ref.watch(coachInsightProvider);
-                return Column(
-                  children: [
-                    Text(
-                      insight,
-                      textAlign: TextAlign.center,
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textDim,
-                        height: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    WardChip(
-                      label: 'KEEP LOGGING \u00B7 AI LEARNS FROM YOUR DATA',
-                      tone: WardChipTone.gold,
-                      leading: const Icon(
-                        Icons.auto_graph_rounded,
-                        size: 12,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+    // AG.2 — JSX handoff's full coach "home" layout: Today's Insight
+    // quote, 3 Suggested Actions, Patterns I've Noticed, and the
+    // Deep Analysis dashed CTA. Shown only while the chat history is
+    // empty; as soon as the user sends a message `_buildChatArea`
+    // takes over and these sections scroll out of the way naturally.
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 20),
+      children: const [
+        CoachInsightSection(),
+        CoachSuggestedActions(),
+        CoachPatternsCard(),
+        CoachDeepAnalysisCard(),
+      ],
     );
   }
 
