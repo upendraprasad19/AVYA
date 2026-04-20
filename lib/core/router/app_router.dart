@@ -9,6 +9,7 @@ import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.
 import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/stats_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/plan_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
@@ -114,6 +115,22 @@ class AppRouter {
               goal: goal,
               initial: Map<String, dynamic>.from(extra),
             ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/onboarding/plan',
+        name: 'onboardingPlan',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: PlanScreen(data: Map<String, dynamic>.from(extra)),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
