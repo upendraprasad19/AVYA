@@ -8,6 +8,7 @@ import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/stats_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
@@ -93,6 +94,26 @@ class AppRouter {
           return CustomTransitionPage(
             key: state.pageKey,
             child: GoalScreen(initialGoal: extra['goal'] as String?),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/onboarding/stats',
+        name: 'onboardingStats',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          final goal = extra['goal'] as String? ?? 'recomp';
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: StatsScreen(
+              goal: goal,
+              initial: Map<String, dynamic>.from(extra),
+            ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
