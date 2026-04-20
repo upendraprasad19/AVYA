@@ -5,8 +5,10 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/pro_pill_button.dart';
 
-/// Profile identity section: banner (120px, tap to view), avatar overlapping banner,
-/// name, subtitle, edit button.
+/// Profile identity section: banner (140px per handoff, tap to view),
+/// avatar overlapping banner, name, subtitle, edit button. Banner has
+/// a faint diagonal-hatching overlay on placeholder gradients to match
+/// the handoff `Banner` primitive.
 /// Tap avatar/banner = view full screen (if exists). Small icon = replace.
 ///
 /// The banner-overlap row hosts two elements: the 80px avatar on the left
@@ -80,7 +82,7 @@ class ProfileIdentity extends StatelessWidget {
               child: Stack(
                 children: [
                   Container(
-                    height: 120,
+                    height: 140,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: const BorderRadius.only(
@@ -111,7 +113,7 @@ class ProfileIdentity extends StatelessWidget {
                                 imageUrl: bannerUrl!,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                height: 120,
+                                height: 140,
                                 memCacheWidth: (MediaQuery.of(context).size.width * MediaQuery.of(context).devicePixelRatio).toInt(),
                                 memCacheHeight: (120 * MediaQuery.of(context).devicePixelRatio).toInt(),
                                 placeholder: (_, url) => Container(
