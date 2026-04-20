@@ -369,17 +369,29 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'WARDROOM',
+                  'YOUR AI COACH \u00B7 24/7',
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
                     letterSpacing: 2.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Coach',
-                  style: AppTypography.h3.copyWith(height: 1.0),
-                ),
+                Builder(builder: (_) {
+                  final hour = DateTime.now().hour;
+                  final tod = hour < 12
+                      ? 'morning'
+                      : hour < 17
+                          ? 'afternoon'
+                          : 'evening';
+                  return Text(
+                    'Good $tod.',
+                    style: AppTypography.h3.copyWith(
+                      height: 1.0,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
