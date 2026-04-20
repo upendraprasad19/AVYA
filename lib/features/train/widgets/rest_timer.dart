@@ -50,7 +50,8 @@ class RestTimer extends StatelessWidget {
               timeText,
               style: AppTypography.numeric.copyWith(
                 fontSize: 32,
-                color: AppColors.textPrimary,
+                color: AppColors.accent,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.5,
                 height: 1,
               ),
