@@ -455,11 +455,13 @@ class _StatsScreenState extends State<StatsScreen> {
       return;
     }
     // AI.1 — target_weight_kg rides along in the route extras. AI.3
-    // will wire plan_screen to consume it instead of inferring from
-    // goal + weight. Until then the field passes through silently.
+    // wires plan_screen to consume it instead of inferring from goal
+    // + weight.
     final resolvedTarget = (targetWeight ?? weight).clamp(40.0, 250.0);
+    // AI.2 — now routes to Details (Experience / Pace / Days / Equipment)
+    // which then continues to Plan. Previously went straight to Plan.
     context.go(
-      '/onboarding/plan',
+      '/onboarding/details',
       extra: {
         'goal': widget.goal,
         'sex': _sex,

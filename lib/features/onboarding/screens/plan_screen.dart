@@ -77,7 +77,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     return Row(
       children: [
         Text(
-          '03 \u00B7 03',
+          '04 \u00B7 04',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
