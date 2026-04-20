@@ -4,12 +4,26 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
 import 'ward_glyphs.dart';
 
+/// Divider style below a [WardLetterhead].
+///
+/// * [WardDivider.single] — 1 px gold hairline. Used on Daily, Train,
+///   Nutrition, Profile.
+/// * [WardDivider.double] — two 1 px gold hairlines at different
+///   opacities, 2 px gap. Used on Coach, Weekly Report, Settings, Edit
+///   Profile, Notifications.
+/// * [WardDivider.none] — no rule.
+enum WardDivider { single, double, none }
+
 /// Page-header letterhead block. Small gold anchor glyph + mono eyebrow
-/// on top, Fraunces title below, optional gold double-rule divider.
+/// on top, Fraunces title below, optional gold divider.
 ///
 /// Used at the top of every Wardroom screen (Daily, Train, Nutrition,
-/// Coach, Profile, Weekly Report). Pairs with [WardEyebrow] for inline
+/// Coach, Profile, Weekly Report). Pairs with `WardEyebrow` for inline
 /// section labels further down the page.
+///
+/// Legacy API: `divider: true|false` → single|none. New API: pass
+/// [dividerStyle] directly ([WardDivider.none] / `.single` / `.double`).
+/// When [dividerStyle] is set, [divider] is ignored.
 class WardLetterhead extends StatelessWidget {
   const WardLetterhead({
     super.key,
@@ -17,6 +31,7 @@ class WardLetterhead extends StatelessWidget {
     this.title,
     this.trailing,
     this.divider = true,
+    this.dividerStyle,
     this.padding = const EdgeInsets.fromLTRB(22, 56, 22, 14),
     this.showAnchor = true,
   });
@@ -25,23 +40,17 @@ class WardLetterhead extends StatelessWidget {
   final String? title;
   final Widget? trailing;
   final bool divider;
+  final WardDivider? dividerStyle;
   final EdgeInsets padding;
   final bool showAnchor;
 
+  WardDivider get _effectiveStyle =>
+      dividerStyle ?? (divider ? WardDivider.single : WardDivider.none);
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final body = Padding(
       padding: padding,
-      decoration: BoxDecoration(
-        border: divider
-            ? Border(
-                bottom: BorderSide(
-                  color: AppColors.accent.withValues(alpha: 0.33),
-                  width: 1,
-                ),
-              )
-            : null,
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -89,5 +98,37 @@ class WardLetterhead extends StatelessWidget {
         ],
       ),
     );
+
+    switch (_effectiveStyle) {
+      case WardDivider.none:
+        return body;
+      case WardDivider.single:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            body,
+            Container(
+              height: 1,
+              color: AppColors.accent.withValues(alpha: 0.33),
+            ),
+          ],
+        );
+      case WardDivider.double:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            body,
+            Container(
+              height: 1,
+              color: AppColors.accent.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              height: 1,
+              color: AppColors.accent.withValues(alpha: 0.3),
+            ),
+          ],
+        );
+    }
   }
 }
