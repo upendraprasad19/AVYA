@@ -21,6 +21,8 @@
 - [project_bug_batch_3.md](project_bug_batch_3.md) — Bug Batch #3 (April 12 2026): food log delete UX, profile Layout B, brushed pill, avatar bump, streetlight nav, pace picker + projection
 - [project_plan_generator_v3.md](project_plan_generator_v3.md) — Plan Generator V3: modular 8-stage pipeline, 4 cycling archetypes, beginner full-body, injury exclusion
 - [project_wardroom_handoff_enforcement.md](project_wardroom_handoff_enforcement.md) - Wardroom design handoff enforcement sweep: 17 commits, 14 screens, 13 new primitives, merge commit e3d5aaf
+- [project_pr_ag_handoff_gaps.md](project_pr_ag_handoff_gaps.md) - PR AG (5 sub-PRs): nutrition meal-slot cards, coach insight stack, profile subscription seal, onboarding defaults, notifications inbox. Merge commit 386f42e. New primitive: WardDashedBorder. New Hive box: notificationsBox.
+- [project_pr_ah_part_b.md](project_pr_ah_part_b.md) - PR AH / Part B (6 sub-PRs): home streak 18h floor + sparkline chips, nutrition "From Your Diet Plan" wiring, profile Rate App tile, weekly report 4-up sparklines, coach firstName greeting, token hygiene (legacy cyan → AppColors.accent). Merge commit 895b2e2. Part C decision: zero drift, hold position.
 
 ## Reference
 - [reference_web_test_plan.md](reference_web_test_plan.md) - 17-section web test plan at testing/web_test_plan.md; token-optimised 3-tier execution strategy
