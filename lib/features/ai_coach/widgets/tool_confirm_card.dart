@@ -362,6 +362,17 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       final equipment = intent.payload['equipment']?.toString() ?? '';
       return '$name\n$category \u00b7 $equipment';
     }
+    if (intent.type == 'log_meal_by_text') {
+      final foodName = intent.payload['food_name']?.toString() ?? 'Meal';
+      final cal = intent.payload['total_calories'] ?? 0;
+      final protein = intent.payload['total_protein_g'] ?? 0;
+      final confidence = intent.payload['confidence']?.toString();
+      final base = '$foodName \u2014 $cal kcal \u00b7 ${protein}g protein';
+      if (confidence == 'low') {
+        return '$base\n(low confidence \u2014 review carefully)';
+      }
+      return base;
+    }
     return intent.previewSummary;
   }
 
@@ -400,6 +411,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'RESCHEDULE WEEK';
       case 'generate_hotel_workout':
         return 'HOTEL WORKOUT';
+      case 'log_meal_by_text':
+        return 'LOG MEAL';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -423,6 +436,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.calendar_view_week;
       case 'generate_hotel_workout':
         return Icons.luggage;
+      case 'log_meal_by_text':
+        return Icons.restaurant_menu;
       default:
         return Icons.bolt;
     }
@@ -446,6 +461,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Week reshuffled';
       case 'generate_hotel_workout':
         return 'Hotel plan generated';
+      case 'log_meal_by_text':
+        return 'Logged';
       default:
         return 'Done';
     }

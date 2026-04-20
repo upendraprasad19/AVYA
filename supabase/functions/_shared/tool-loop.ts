@@ -301,7 +301,10 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         }
 
         try {
-          const partial = tool.intentBuilder(parsed.data);
+          // intentBuilder is async-capable as of Phase C.1 (logMealByText).
+          // `await` here works for both sync and async builders — sync values
+          // are wrapped in a resolved promise automatically.
+          const partial = await tool.intentBuilder(parsed.data, opts.ctx);
           const intent: ToolIntent = {
             ...partial,
             id: crypto.randomUUID(),

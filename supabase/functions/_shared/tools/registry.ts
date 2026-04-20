@@ -10,6 +10,7 @@ import {
   swapExerciseTool,
 } from "./workout/index.ts";
 import { getProgressSummaryTool } from "./progress/index.ts";
+import { logMealByTextTool } from "./nutrition/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
@@ -27,7 +28,9 @@ const ALL_TOOLS: ToolDefinition[] = [
   rescheduleWeekTool, // workout / write / destructive / PRO
   // Phase B.5
   generateHotelWorkoutTool, // workout / write / destructive / PRO
-  // Phase C will add: nutrition family
+  // ── Phase C: nutrition family ─────────────────────────────────────
+  // Append future C-phase tools below this marker.
+  logMealByTextTool, // nutrition / write / trivial / FREE  (C.1)
   // Phase D will add: plan family
 ];
 

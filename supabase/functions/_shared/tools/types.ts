@@ -64,8 +64,23 @@ export interface ToolDefinition<TArgs = unknown, TResult = unknown> {
   schema: z.ZodTypeAny;
   /** Optional max latency for read tools. Default 3000ms. Ignored for write tools. */
   maxLatencyMs?: number;
-  /** Build a ToolIntent for write tools. Receives the validated args. Required when kind='write'. */
-  intentBuilder?: (args: TArgs) => Omit<ToolIntent, "id" | "createdAt">;
+  /**
+   * Build a ToolIntent for write tools. Receives the validated args plus the
+   * tool context (auth + Supabase client + tier). Required when kind='write'.
+   *
+   * MAY be async — returning `Promise<...>` lets a tool do server-side prep
+   * (e.g. parse free-text via Gemini) before emitting the intent. Sync builders
+   * just return the object directly; tool-loop awaits both shapes naturally.
+   *
+   * If the builder throws, tool-loop catches it and feeds an `intent_build_failed`
+   * functionResponse back to the model so the conversation can recover.
+   */
+  intentBuilder?: (
+    args: TArgs,
+    ctx: ToolContext,
+  ) =>
+    | Promise<Omit<ToolIntent, "id" | "createdAt">>
+    | Omit<ToolIntent, "id" | "createdAt">;
   /** Execute a read tool server-side. Receives validated args + context. Required when kind='read'. */
   handler?: (ctx: ToolContext, args: TArgs) => Promise<TResult>;
 }
