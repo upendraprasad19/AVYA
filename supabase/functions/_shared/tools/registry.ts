@@ -13,6 +13,7 @@ import { getProgressSummaryTool } from "./progress/index.ts";
 import {
   adjustCaloricTargetTool,
   logMealByTextTool,
+  prelogTool,
   suggestMealTool,
 } from "./nutrition/index.ts";
 
@@ -37,6 +38,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   logMealByTextTool, // nutrition / write / trivial / FREE  (C.1)
   adjustCaloricTargetTool, // nutrition / write / trivial-or-reviewable / PRO  (C.2)
   suggestMealTool, // nutrition / read / PRO  (C.3)
+  prelogTool, // nutrition / write / reviewable-or-destructive / PRO  (C.4)
   // Phase D will add: plan family
 ];
 

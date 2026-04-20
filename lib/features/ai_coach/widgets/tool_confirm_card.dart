@@ -381,6 +381,26 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       final base = '$sign$delta kcal/day for $ttl day${ttl == 1 ? '' : 's'}';
       return reason != null && reason.isNotEmpty ? '$base\n$reason' : base;
     }
+    if (intent.type == 'prelog') {
+      final parsed =
+          (intent.payload['parsed_meals'] as List?) ?? const <dynamic>[];
+      final failed =
+          (intent.payload['failed_meals'] as List?) ?? const <dynamic>[];
+      final dates = parsed
+          .whereType<Map>()
+          .map((m) => m['date'])
+          .where((d) => d != null)
+          .toSet()
+          .length;
+      final totalKcal = parsed.whereType<Map>().fold<num>(
+            0,
+            (s, m) => s + ((m['total_calories'] as num?) ?? 0),
+          );
+      final base =
+          '${parsed.length} meal${parsed.length == 1 ? '' : 's'} across $dates day${dates == 1 ? '' : 's'} \u2014 ${totalKcal.toInt()} kcal';
+      if (failed.isNotEmpty) return '$base\n${failed.length} failed to parse';
+      return base;
+    }
     return intent.previewSummary;
   }
 
@@ -423,6 +443,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'LOG MEAL';
       case 'adjust_caloric_target':
         return 'CALORIE TARGET';
+      case 'prelog':
+        return 'PRE-LOG MEALS';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -450,6 +472,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.restaurant_menu;
       case 'adjust_caloric_target':
         return Icons.tune;
+      case 'prelog':
+        return Icons.event_note;
       default:
         return Icons.bolt;
     }
@@ -477,6 +501,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Logged';
       case 'adjust_caloric_target':
         return 'Target adjusted';
+      case 'prelog':
+        return 'Meals logged';
       default:
         return 'Done';
     }

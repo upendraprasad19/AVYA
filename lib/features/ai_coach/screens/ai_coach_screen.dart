@@ -29,6 +29,7 @@ import '../widgets/diff_preview/swap_exercise_diff.dart';
 import '../widgets/diff_preview/injury_modify_diff.dart';
 import '../widgets/diff_preview/hotel_workout_diff.dart';
 import '../widgets/diff_preview/reschedule_week_diff.dart';
+import '../widgets/diff_preview/prelog_diff.dart';
 
 class AiCoachScreen extends ConsumerStatefulWidget {
   const AiCoachScreen({super.key});
@@ -792,6 +793,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         break;
       case 'generate_hotel_workout':
         diffPreview = HotelWorkoutDiff(intent: intent);
+        break;
+      case 'prelog':
+        diffPreview = PrelogDiff(intent: intent);
         break;
       default:
         diffPreview = const Text('Confirm this action?');

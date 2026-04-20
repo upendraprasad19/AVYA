@@ -113,6 +113,9 @@ class ToolDispatcher {
         case 'adjust_caloric_target':
           result = await _executeAdjustCaloricTarget(intent);
           break;
+        case 'prelog':
+          result = await _executePrelog(intent);
+          break;
         default:
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
@@ -562,6 +565,79 @@ class ToolDispatcher {
     }
   }
 
+  /// C.4 prelog — batch-writes many meals across one or more days.
+  ///
+  /// The intent payload already carries fully pre-parsed meals (the tool's
+  /// server-side intentBuilder ran `parseFoodText` over each meal in
+  /// parallel). All the dispatcher has to do is iterate and reuse the same
+  /// `_writeFoodLogFromIntent` helper the single-meal C.1 tool uses so both
+  /// paths write identical shapes to the nutrition Hive box.
+  ///
+  /// Partial failure is tolerated: per-meal errors are collected, but as
+  /// long as one meal writes we return success(partial_errors). All-empty
+  /// or all-failed returns failure.
+  Future<ToolExecutionResult> _executePrelog(ToolIntent intent) async {
+    final parsedMeals = (intent.payload['parsed_meals'] as List?)
+            ?.whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList() ??
+        <Map<String, dynamic>>[];
+
+    if (parsedMeals.isEmpty) {
+      return const ToolExecutionResult.failure('No meals to pre-log.');
+    }
+
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final meal in parsedMeals) {
+      final date = meal['date'] as String?;
+      final foodName = (meal['food_name'] as String?)?.trim();
+      if (date == null || foodName == null || foodName.isEmpty) {
+        errors.add('skipped meal with missing date or name');
+        continue;
+      }
+      try {
+        final logId = await _writeFoodLogFromIntent(
+          date: date,
+          foodName: foodName,
+          mealType: _validateMealType(meal['meal_type'] as String?),
+          totalCalories: (meal['total_calories'] as num?)?.toInt() ?? 0,
+          protein: (meal['total_protein_g'] as num?)?.toInt() ?? 0,
+          carbs: (meal['total_carbs_g'] as num?)?.toInt() ?? 0,
+          fat: (meal['total_fat_g'] as num?)?.toInt() ?? 0,
+          servingDescription:
+              (meal['serving_description'] as String?)?.trim().isNotEmpty ==
+                      true
+                  ? meal['serving_description'] as String
+                  : '1 serving',
+        );
+        results.add({
+          'log_id': logId,
+          'date': date,
+          'food_name': foodName,
+          'total_calories': meal['total_calories'] ?? 0,
+        });
+      } catch (e, stack) {
+        debugPrint(
+            '[ToolDispatcher] prelog meal failed ($foodName on $date): $e\n$stack');
+        errors.add('$foodName on $date: $e');
+      }
+    }
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {'logged': results});
+    } else if (results.isEmpty) {
+      return ToolExecutionResult.failure(
+          'Could not log any meals: ${errors.join("; ")}');
+    } else {
+      return ToolExecutionResult.success(data: {
+        'logged': results,
+        'partial_errors': errors,
+      });
+    }
+  }
+
   Future<ToolExecutionResult> _executeAdjustCaloricTarget(
       ToolIntent intent) async {
     final p = intent.payload;
@@ -666,9 +742,11 @@ class ToolDispatcher {
 
   bool _isNutritionIntent(String type) {
     // Keep this list in sync with the nutrition family handlers above.
-    // C.1 log_meal_by_text, C.2 adjust_caloric_target. Future C tools
-    // (suggestMeal, prelog) will be added here.
-    return type == 'log_meal_by_text' || type == 'adjust_caloric_target';
+    // C.1 log_meal_by_text, C.2 adjust_caloric_target, C.4 prelog.
+    // (suggestMeal is read-only — no dispatcher entry, so not listed here.)
+    return type == 'log_meal_by_text' ||
+        type == 'adjust_caloric_target' ||
+        type == 'prelog';
   }
 
   Future<void> _appendInjuryToCoachMemory(
