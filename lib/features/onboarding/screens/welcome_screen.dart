@@ -195,7 +195,7 @@ class WelcomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         GestureDetector(
-          onTap: () => context.go('/auth/sign-in'),
+          onTap: () => context.go('/sign-in'),
           child: RichText(
             text: TextSpan(
               style: AppTypography.monoXs.copyWith(

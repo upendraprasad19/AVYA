@@ -307,7 +307,11 @@ class AppRouter {
   static String? _authRedirect(BuildContext context, GoRouterState state) {
     final isOnSplash = state.matchedLocation == '/splash';
     final isOnAuthRoute = state.matchedLocation == '/sign-in';
-    final isOnOnboarding = state.matchedLocation == '/onboarding';
+    // Treat every `/onboarding*` sub-route (welcome / goal / stats /
+    // plan / chat) as "on onboarding" so the stepped flow can navigate
+    // between its own screens without the not-onboarded redirect
+    // bouncing the user back to /onboarding every tap.
+    final isOnOnboarding = state.matchedLocation.startsWith('/onboarding');
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;
