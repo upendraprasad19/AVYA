@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../providers/nutrition_provider.dart';
+import '../providers/diet_plan_provider.dart';
 
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
@@ -272,6 +273,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     };
 
     UserRepository.instance.saveDietPlan(planData);
+
+    // AH.5 — refresh the nutrition screen's "From Your Diet Plan" hints
+    // so a freshly-saved plan shows up on empty meal slots immediately.
+    ref.invalidate(dietPlanProvider);
 
     setState(() => _saved = true);
     ScaffoldMessenger.of(context).showSnackBar(

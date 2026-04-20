@@ -404,8 +404,23 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                       : hour < 17
                           ? 'afternoon'
                           : 'evening';
+                  // AH.9 — pull the user's first name from the profile so
+                  // the greeting reads "Good morning, Upendra." rather
+                  // than the generic "Good morning.". Profile stores
+                  // `full_name`; we use the first whitespace-separated
+                  // token. Falls back silently when the name is missing
+                  // or still the bootstrap 'User' placeholder.
+                  final profile = ref.watch(userProfileProvider);
+                  final fullName =
+                      (profile['full_name'] as String? ?? '').trim();
+                  final firstName = fullName.isEmpty || fullName == 'User'
+                      ? null
+                      : fullName.split(RegExp(r'\s+')).first;
+                  final greeting = firstName != null
+                      ? 'Good $tod, $firstName.'
+                      : 'Good $tod.';
                   return Text(
-                    'Good $tod.',
+                    greeting,
                     style: AppTypography.h3.copyWith(
                       height: 1.0,
                       fontStyle: FontStyle.italic,

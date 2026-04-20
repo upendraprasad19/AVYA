@@ -649,8 +649,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: 'My Submissions',
                   subtitle: 'Track approval status of foods & exercises you shared',
                   trailing: const ProfileRowChevron(),
-                  showBorder: false,
                   onTap: () => context.go('/profile/my-submissions'),
+                ),
+                // AH.7 — Rate App tile completes the SHARE & GROW block
+                // (JSX spec lines 331–338 + user ask for explicit Rate App
+                // row). Launches the Play Store listing via externalApplication
+                // so the Play Store app intercepts on-device; users without
+                // it land on the web listing.
+                ProfileRow(
+                  icon: Icons.star_outline,
+                  title: 'Rate App',
+                  subtitle: 'Tell the Play Store what you think',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => _launchUrl(
+                    'https://play.google.com/store/apps/details?id=com.icanbefitter.icanbefitter',
+                  ),
                 ),
               ]),
               const SizedBox(height: 8),

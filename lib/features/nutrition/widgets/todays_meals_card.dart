@@ -4,6 +4,8 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
+import '../providers/diet_plan_provider.dart';
+
 /// Today's meals, rendered as **4 fixed slots** (BREAKFAST / LUNCH / DINNER
 /// / SNACK) per the Wardroom handoff
 /// (`design_handoff_wardroom/src/screens/nutrition.jsx` lines 115–141).
@@ -11,8 +13,11 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// * Populated slots — solid [AppColors.line2] border, gold eyebrow +
 ///   earliest time, total kcal on the right, items joined by ` · ` below.
 /// * Empty slots — [WardDashedBorder] (accent @ 27% alpha), greyed eyebrow,
-///   `+ LOG` CTA in accent mono. Tapping invokes [onLogSlot] so the parent
-///   can open `showFoodSearchSheet` with the correct `mealType` preset.
+///   `+ LOG` CTA in accent mono. When a matching entry is present in
+///   [plannedSlots] (saved diet plan), a "FROM YOUR DIET PLAN" hint row is
+///   rendered between the eyebrow and the CTA with planned kcal + item
+///   summary. Tapping invokes [onLogSlot] so the parent can open
+///   `showFoodSearchSheet` pre-filled with the planned food name.
 ///
 /// The slot order is fixed — DINNER still renders as a dashed empty slot
 /// even when SNACK is populated (do NOT collapse empties). This matches the
@@ -27,12 +32,18 @@ class TodaysMealsCard extends StatelessWidget {
   /// safe to pass directly as `mealType:` to `showFoodSearchSheet`.
   final void Function(String slot)? onLogSlot;
 
+  /// Optional planned-meal hints keyed by slot (`breakfast` / `lunch` /
+  /// `dinner` / `snack`). When an entry is present and the slot is empty,
+  /// the empty-slot card renders a "FROM YOUR DIET PLAN" subline.
+  final Map<String, PlannedSlot>? plannedSlots;
+
   const TodaysMealsCard({
     super.key,
     required this.meals,
     this.onEdit,
     this.onDelete,
     this.onLogSlot,
+    this.plannedSlots,
   });
 
   static const _slotOrder = <String>['breakfast', 'lunch', 'dinner', 'snack'];
@@ -74,6 +85,7 @@ class TodaysMealsCard extends StatelessWidget {
             _EmptySlotCard(
               slot: slot,
               label: _slotLabel[slot]!,
+              planned: plannedSlots?[slot],
               onTap: onLogSlot == null ? null : () => onLogSlot!(slot),
             )
           else
@@ -275,14 +287,22 @@ class _EmptySlotCard extends StatelessWidget {
     required this.slot,
     required this.label,
     required this.onTap,
+    this.planned,
   });
 
   final String slot;
   final String label;
   final VoidCallback? onTap;
 
+  /// Optional planned-meal hint. When present, a "FROM YOUR DIET PLAN"
+  /// subline with kcal + joined item names is rendered below the eyebrow
+  /// row. Tapping the card still invokes [onTap] — the parent uses the
+  /// `PlannedSlot.firstFoodName` to pre-fill the food search.
+  final PlannedSlot? planned;
+
   @override
   Widget build(BuildContext context) {
+    final hasPlan = planned != null && planned!.summary.isNotEmpty;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -297,27 +317,77 @@ class _EmptySlotCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.card),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                label,
-                style: AppTypography.mono.copyWith(
-                  fontSize: 10,
-                  color: AppColors.textMute,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w700,
-                ),
+              // Top row: eyebrow (+ planned kcal) · + LOG
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    label,
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 10,
+                      color: AppColors.textMute,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (hasPlan) ...[
+                    const SizedBox(width: 10),
+                    Text(
+                      '\u00B7 ~${planned!.calories.round()} kcal',
+                      style: AppTypography.monoXs.copyWith(
+                        fontSize: 9,
+                        color: AppColors.textGhost,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  Text(
+                    '+ LOG',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 10,
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
               ),
-              const Spacer(),
-              Text(
-                '+ LOG',
-                style: AppTypography.mono.copyWith(
-                  fontSize: 10,
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
+              if (hasPlan) ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FROM YOUR DIET PLAN',
+                      style: AppTypography.monoXs.copyWith(
+                        fontSize: 9,
+                        color: AppColors.accent.withValues(alpha: 0.75),
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        planned!.summary,
+                        style: AppTypography.body.copyWith(
+                          fontSize: 12,
+                          color: AppColors.textDim,
+                          height: 1.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+              ],
             ],
           ),
         ),

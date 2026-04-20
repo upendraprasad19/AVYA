@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -117,10 +118,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Photo',
-            toolbarColor: const Color(0xFF07090e),
-            toolbarWidgetColor: const Color(0xFFeef2f7),
-            backgroundColor: const Color(0xFF07090e),
-            activeControlsWidgetColor: const Color(0xFF00D4FF),
+            toolbarColor: AppColors.bg,
+            toolbarWidgetColor: AppColors.textPrimary,
+            backgroundColor: AppColors.bg,
+            activeControlsWidgetColor: AppColors.accent,
             cropStyle: CropStyle.circle,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
@@ -186,10 +187,10 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Banner',
-            toolbarColor: const Color(0xFF07090e),
-            toolbarWidgetColor: const Color(0xFFeef2f7),
-            backgroundColor: const Color(0xFF07090e),
-            activeControlsWidgetColor: const Color(0xFF00D4FF),
+            toolbarColor: AppColors.bg,
+            toolbarWidgetColor: AppColors.textPrimary,
+            backgroundColor: AppColors.bg,
+            activeControlsWidgetColor: AppColors.accent,
             initAspectRatio: CropAspectRatioPreset.ratio16x9,
             lockAspectRatio: true,
           ),

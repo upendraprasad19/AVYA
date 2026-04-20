@@ -328,7 +328,9 @@ class StreakWarningEligibilityNotifier
 
     final currentHour = DateTime.now().hour;
     final rawThreshold = medianWorkoutHour + 3;
-    final thresholdHour = rawThreshold.clamp(15, 23);
+    // Must stay in sync with [StreakWarningBanner.shouldShow].
+    // Handoff: banner is evening-only → 18 floor.
+    final thresholdHour = rawThreshold.clamp(18, 23);
     return currentHour >= thresholdHour;
   }
 }

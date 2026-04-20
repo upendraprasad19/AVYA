@@ -42,7 +42,10 @@ class StreakWarningBanner extends StatelessWidget {
     final clock = now ?? DateTime.now();
     final currentHour = clock.hour;
     final rawThreshold = medianWorkoutHour + 3;
-    final thresholdHour = rawThreshold.clamp(15, 23);
+    // Handoff (`daily.jsx`): banner is evening-only. Lower bound raised
+    // from 15 → 18 so an early-riser (e.g. 6 AM median → raw 9 AM) no
+    // longer surfaces the "train now" nudge before dinnertime.
+    final thresholdHour = rawThreshold.clamp(18, 23);
 
     return currentHour >= thresholdHour;
   }

@@ -8,19 +8,32 @@ import 'custom_food_sheet.dart';
 
 /// Bottom sheet for searching the food database (5K items) and logging
 /// with adjustable portions. FREE for all users.
-void showFoodSearchSheet(BuildContext context, {String? mealType}) {
+///
+/// [initialQuery] pre-fills the search input and kicks off a first search
+/// — used by the nutrition screen's "From Your Diet Plan" flow so tapping
+/// `+ LOG` on an empty slot with a planned meal lands the user on results
+/// for that food.
+void showFoodSearchSheet(
+  BuildContext context, {
+  String? mealType,
+  String? initialQuery,
+}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _FoodSearchSheet(initialMealType: mealType),
+    builder: (_) => _FoodSearchSheet(
+      initialMealType: mealType,
+      initialQuery: initialQuery,
+    ),
   );
 }
 
 class _FoodSearchSheet extends ConsumerStatefulWidget {
   final String? initialMealType;
+  final String? initialQuery;
 
-  const _FoodSearchSheet({this.initialMealType});
+  const _FoodSearchSheet({this.initialMealType, this.initialQuery});
 
   @override
   ConsumerState<_FoodSearchSheet> createState() => _FoodSearchSheetState();
@@ -48,6 +61,20 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
       } else {
         _mealType = 'snacks';
       }
+    }
+
+    // Pre-fill the search field and kick off a first search so the user
+    // lands directly on results for the planned food. Deferred via
+    // `addPostFrameCallback` because `foodSearchProvider` is a Notifier
+    // and `ref.read(...)` in `initState` is allowed but the listener
+    // chain is stabler after the first frame.
+    final q = widget.initialQuery?.trim();
+    if (q != null && q.isNotEmpty) {
+      _searchController.text = q;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(foodSearchProvider.notifier).search(q);
+      });
     }
   }
 
