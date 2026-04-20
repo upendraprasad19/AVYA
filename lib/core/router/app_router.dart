@@ -23,6 +23,7 @@ import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
+import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
@@ -278,6 +279,11 @@ class AppRouter {
                     path: 'my-submissions',
                     name: 'mySubmissions',
                     builder: (context, state) => const MySubmissionsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'settings',
+                    name: 'settings',
+                    builder: (context, state) => const SettingsScreen(),
                   ),
                 ],
               ),
