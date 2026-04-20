@@ -4,11 +4,14 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 
-/// Horizontal scrollable week tab bar.
+/// Horizontal scrollable week tab bar — matches the handoff
+/// (`design_handoff_wardroom/src/screens/train.jsx` lines 50–62).
 ///
-/// Shows "WK 01 · MAR 24" format per week in Wardroom voice. Gold chip when
-/// selected, neutral otherwise. Scrolls without limit — auto-centres the
-/// selected week on first build.
+/// Short "W1 / W2 / W3 / W4" format (not "WK 01"). Selected: `accent`
+/// bg + `bgDeep` text. Unselected: transparent + `line2` border +
+/// `textDim` text. Sharp 2-px corners. Auto-centres on the selected
+/// week. A date range caption below the letter label appears only on
+/// selected weeks to conserve vertical space.
 class WeekSelector extends StatefulWidget {
   final int totalWeeks;
   final int selectedWeek; // 1-indexed
@@ -27,8 +30,8 @@ class WeekSelector extends StatefulWidget {
 
 class _WeekSelectorState extends State<WeekSelector> {
   final ScrollController _scrollController = ScrollController();
-  static const double _tabWidth = 92;
-  static const double _tabSpacing = 6;
+  static const double _tabWidth = 62;
+  static const double _tabSpacing = 4;
 
   @override
   void initState() {
@@ -76,29 +79,26 @@ class _WeekSelectorState extends State<WeekSelector> {
           final week = index + 1;
           final isSelected = week == widget.selectedWeek;
 
-          String label;
+          final label = 'W$week';
           String? sub;
-          if (planStart != null) {
+          if (planStart != null && isSelected) {
             final weekStart = planStart.add(Duration(days: index * 7));
             final weekEnd = weekStart.add(const Duration(days: 6));
-            label = 'WK ${week.toString().padLeft(2, '0')}';
             sub = '${_formatShort(weekStart)}–${_formatShort(weekEnd)}';
-          } else {
-            label = 'WK ${week.toString().padLeft(2, '0')}';
           }
 
           final fg = isSelected ? AppColors.bgDeep : AppColors.textDim;
-          final bg = isSelected ? AppColors.accent : Colors.transparent;
+          final bg = isSelected ? AppColors.accent : AppColors.card;
           final border = isSelected ? AppColors.accent : AppColors.line2;
 
           return GestureDetector(
             onTap: () => widget.onSelect(week),
             child: Container(
               width: _tabWidth,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
                 border: Border.all(color: border),
               ),
               child: Center(
@@ -108,8 +108,10 @@ class _WeekSelectorState extends State<WeekSelector> {
                     Text(
                       label,
                       style: AppTypography.monoXs.copyWith(
+                        fontSize: 10,
                         color: fg,
-                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
                         height: 1.1,
                       ),
                     ),
@@ -118,10 +120,9 @@ class _WeekSelectorState extends State<WeekSelector> {
                       Text(
                         sub.toUpperCase(),
                         style: AppTypography.monoXs.copyWith(
-                          color: fg.withValues(
-                              alpha: isSelected ? 0.85 : 0.75),
-                          fontSize: 8,
-                          letterSpacing: 1.2,
+                          color: fg.withValues(alpha: 0.85),
+                          fontSize: 7,
+                          letterSpacing: 1,
                           height: 1.1,
                         ),
                       ),
