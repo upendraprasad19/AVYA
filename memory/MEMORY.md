@@ -23,6 +23,7 @@
 - [project_wardroom_handoff_enforcement.md](project_wardroom_handoff_enforcement.md) - Wardroom design handoff enforcement sweep: 17 commits, 14 screens, 13 new primitives, merge commit e3d5aaf
 - [project_pr_ag_handoff_gaps.md](project_pr_ag_handoff_gaps.md) - PR AG (5 sub-PRs): nutrition meal-slot cards, coach insight stack, profile subscription seal, onboarding defaults, notifications inbox. Merge commit 386f42e. New primitive: WardDashedBorder. New Hive box: notificationsBox.
 - [project_pr_ah_part_b.md](project_pr_ah_part_b.md) - PR AH / Part B (6 sub-PRs): home streak 18h floor + sparkline chips, nutrition "From Your Diet Plan" wiring, profile Rate App tile, weekly report 4-up sparklines, coach firstName greeting, token hygiene (legacy cyan → AppColors.accent). Merge commit 895b2e2. Part C decision: zero drift, hold position.
+- [project_pr_ai_onboarding_fields.md](project_pr_ai_onboarding_fields.md) - PR AI (3 sub-PRs): stepped onboarding field coverage — Stats gains target_weight_kg, new Details screen (03·04) collects fitness_experience + pace_preference + days_per_week + equipment_access, plan_screen rewired to consume real values. diet_preference default 'balanced' → 'veg', injuries default [] → ['none']. Merge commit bdbd2f2. Flow now 4 visible steps (Goal → Stats → Details → Plan).
 
 ## Reference
 - [reference_web_test_plan.md](reference_web_test_plan.md) - 17-section web test plan at testing/web_test_plan.md; token-optimised 3-tier execution strategy

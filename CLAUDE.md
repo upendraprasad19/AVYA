@@ -834,34 +834,48 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 
 ---
 
-## 13a. ONBOARDING (stepped flow — default since PR Y–AB, 2026-04-20)
+## 13a. ONBOARDING (stepped flow — default since PR Y–AB, expanded in PR AI 2026-04-20)
 
-**New default flow (Wardroom):**
+**Current default flow (Wardroom + AI):**
 
 ```
-Welcome       (/onboarding)          → sets no state, just CTA
+Welcome       (/onboarding)            → sets no state, just CTA  (unnumbered)
    ↓
-Goal          (/onboarding/goal)     → picks primary_goal
+Goal          (/onboarding/goal)       → primary_goal             (01 · 04)
    ↓
-Stats         (/onboarding/stats)    → current_weight_kg, height_cm, age, sex
+Stats         (/onboarding/stats)      → sex, current_weight_kg,
+                                         target_weight_kg, height_cm,
+                                         age, body_fat_pct,
+                                         activity_level            (02 · 04)
    ↓
-Plan          (/onboarding/plan)     → "REPORT FOR DUTY" — commits via
-                                        OnboardingNotifier.completeOnboarding()
+Details       (/onboarding/details)    → fitness_experience,
+                                         pace_preference,
+                                         days_per_week,
+                                         equipment_access          (03 · 04)
+   ↓
+Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
+                                         OnboardingNotifier.completeOnboarding()
+                                                                   (04 · 04)
 ```
 
 - **State passing:** `GoRouter` `state.extra` (a `Map<String, dynamic>`) between screens —
   **no premature provider commits.** The notifier only runs once, on the final tap.
-- **Fields not yet collected by the stepped flow** (server / defaults fill these in — PR AG
-  candidates): `fitness_experience`, `days_per_week`, `equipment_access`, `lifestyle_activity`,
-  `pace_preference`, `diet_preference`, `injuries`, target weight.
+- **Fields still defaulted by the stepped flow** (user can edit via Profile → Edit Profile):
+  - `lifestyle_activity` — inferred from `activity_level` (1:1 mapping).
+  - `diet_preference` — defaults to `'veg'` (Indian-first default).
+  - `injuries` — defaults to `['none']` (matches `edit_profile_screen` convention).
+  - `start_date` — hardcoded to `'this_monday'`.
 - **Legacy chat fallback:** the pre-PR-Y chat-based flow is still reachable at
-  `/onboarding/chat` (`onboarding_chat_screen.dart`). Retained for rollback only — remove after
-  PR AG ships.
+  `/onboarding/chat` (`onboarding_chat_screen.dart`). Retained for rollback only — retirement
+  scheduled for PR AJ once AI is validated end-to-end.
 - **Auth redirect gotcha:** `GoRouter._authRedirect` uses
   `location.startsWith('/onboarding')` (NOT `location == '/onboarding'`), so taps on
-  `/onboarding/goal` / `/stats` / `/plan` aren't bounced back to Welcome. This was the nav bug
-  fixed in commit `17faa86` — any regression here will make the stepped flow look like every
-  tap does nothing.
+  `/onboarding/goal` / `/stats` / `/details` / `/plan` aren't bounced back to Welcome. This
+  was the nav bug fixed in commit `17faa86` — any regression here will make the stepped flow
+  look like every tap does nothing.
+- **Inference fallback:** `plan_screen._onReportForDuty` keeps the old switch-expression
+  inference rules as fallback for fields missing from `widget.data` (legacy chat users,
+  deep-links, corrupted route extras). Fallback must never become the default path.
 
 ---
 
