@@ -2,7 +2,41 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
+
+type MotivationTone = "tough_love" | "gentle" | "data_driven";
+
+/**
+ * Wrap a base alert with a tone-specific lead-in. `name` is the user's
+ * preferred_name (from coach_memory) when present, falling back to the
+ * full_name first token. `tone` is motivation_style from coach_memory; when
+ * null/unknown we treat it as "gentle" (the existing default voice).
+ */
+function applyTone(
+  baseAlert: string,
+  name: string,
+  tone: MotivationTone | null,
+  snapshotJson: Record<string, unknown> | null,
+): string {
+  const firstName = name?.split(" ")[0] ?? "there";
+
+  if (tone === "tough_love") {
+    return `${firstName}, no excuses today. ${baseAlert}`;
+  }
+  if (tone === "data_driven") {
+    const snap = snapshotJson ?? {};
+    // "today_steps" in yesterday's snapshot = steps recorded yesterday
+    const stepsYday = snap.today_steps as number | null;
+    if (stepsYday != null) {
+      return `${firstName} — yesterday: ${stepsYday} steps. ${baseAlert}`;
+    }
+    return `${firstName} — ${baseAlert}`;
+  }
+  // gentle (default) — warm greeting prefix when the base doesn't already lead with the name
+  if (baseAlert.startsWith("Good morning")) return baseAlert;
+  return `Morning ${firstName}! ${baseAlert}`;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -175,12 +209,20 @@ function generateProLightAlert(name: string, primaryGoal: string | null): string
 async function generateProAlert(
   name: string,
   snapshotJson: Record<string, unknown>,
+  tone: MotivationTone | null,
 ): Promise<string | null> {
+  const toneGuidance = tone === "tough_love"
+    ? "Tone: tough_love — be direct, no soft padding, challenge them."
+    : tone === "data_driven"
+    ? "Tone: data_driven — lead with a specific number from the snapshot, then the suggestion."
+    : "Tone: gentle — warm and validating before suggesting.";
+
   const systemPrompt =
     "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
     "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
     "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
     "Be encouraging, specific, and actionable. Use the user's first name. " +
+    `${toneGuidance} ` +
     "Output ONLY the alert message, no preamble or formatting.";
 
   const userPrompt =
@@ -265,7 +307,16 @@ async function generateAndStoreAlert(
 ): Promise<void> {
   try {
     const isPro = user.subscription_status === "pro";
-    const userName = user.full_name ?? "Champion";
+
+    // Read coach_memory ONCE per user.
+    // private_mode users get default copy — explicit guard since fetchCoachMemory
+    // returns the row regardless of private_mode (only renderCoachMemoryBlock
+    // short-circuits on it). Without nullifying here, preferred_name +
+    // motivation_style would leak personalised copy to private_mode users.
+    const memory = await fetchCoachMemory(supabaseClient, user.id);
+    const usableMemory = memory?.private_mode ? null : memory;
+    const userName = usableMemory?.preferred_name ?? user.full_name ?? "Champion";
+    const tone = (usableMemory?.motivation_style ?? null) as MotivationTone | null;
 
     // Fetch yesterday's snapshot for context
     const { data: yesterdaySnap } = await supabaseClient
@@ -283,7 +334,7 @@ async function generateAndStoreAlert(
 
     if (isPro && snapshotJson) {
       // PRO: AI-personalised message (8s timeout, immediate fallback)
-      const proMsg = await generateProAlert(userName, snapshotJson);
+      const proMsg = await generateProAlert(userName, snapshotJson, tone);
       if (proMsg) {
         alertMessage = proMsg;
         msgType = "pro";
@@ -291,7 +342,8 @@ async function generateAndStoreAlert(
         proAlerts++;
       } else {
         // AI failed — fall back to free template (still has yesterday's data)
-        alertMessage = generateFreeAlert(userName, snapshotJson);
+        const baseFree = generateFreeAlert(userName, snapshotJson);
+        alertMessage = applyTone(baseFree, userName, tone, snapshotJson);
         msgType = "free";
         freeAlerts++;
       }
@@ -306,12 +358,14 @@ async function generateAndStoreAlert(
         .single();
 
       const primaryGoal = profileRow?.primary_goal ?? null;
-      alertMessage = generateProLightAlert(userName, primaryGoal);
+      const baseProLight = generateProLightAlert(userName, primaryGoal);
+      alertMessage = applyTone(baseProLight, userName, tone, snapshotJson);
       msgType = "pro_light";
       proLightAlerts++;
     } else {
       // FREE: template message (no AI cost)
-      alertMessage = generateFreeAlert(userName, snapshotJson);
+      const baseFree = generateFreeAlert(userName, snapshotJson);
+      alertMessage = applyTone(baseFree, userName, tone, snapshotJson);
       msgType = "free";
       freeAlerts++;
     }
