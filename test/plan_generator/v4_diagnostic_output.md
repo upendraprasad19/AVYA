@@ -1,4 +1,4 @@
-# V4 Diagnostic — 2026-04-19
+# V4 Diagnostic — 2026-04-20
 
 Run from: `flutter test test/plan_generator/v4_diagnostic_test.dart`
 
