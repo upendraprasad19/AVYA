@@ -448,6 +448,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'HOTEL WORKOUT';
       case 'regenerate_plan_block':
         return 'NEW PLAN';
+      case 'pause_plan':
+        return 'PAUSE PLAN';
       case 'log_meal_by_text':
         return 'LOG MEAL';
       case 'adjust_caloric_target':
@@ -481,6 +483,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.luggage;
       case 'regenerate_plan_block':
         return Icons.refresh;
+      case 'pause_plan':
+        return Icons.pause_circle;
       case 'log_meal_by_text':
         return Icons.restaurant_menu;
       case 'adjust_caloric_target':
@@ -514,6 +518,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Hotel plan generated';
       case 'regenerate_plan_block':
         return 'Plan regenerated';
+      case 'pause_plan':
+        return 'Plan paused';
       case 'log_meal_by_text':
         return 'Logged';
       case 'adjust_caloric_target':

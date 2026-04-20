@@ -23,6 +23,7 @@ import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
+import 'pause_plan_planner.dart';
 import 'regenerate_plan_planner.dart';
 import 'reschedule_week_planner.dart';
 
@@ -110,6 +111,9 @@ class ToolDispatcher {
           break;
         case 'regenerate_plan_block':
           result = await _executeRegeneratePlanBlock(intent);
+          break;
+        case 'pause_plan':
+          result = await _executePausePlan(intent);
           break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
@@ -625,6 +629,58 @@ class ToolDispatcher {
         'count': results.length,
         'partial_errors': errors,
       });
+    }
+  }
+
+  /// D.4 pausePlan — pauses scheduled workouts for a date range.
+  ///
+  /// Reads the original payload (start_date + days + reason) and delegates
+  /// to [WorkoutScheduleService.pauseRange]. The planner cache is
+  /// informational only — the dispatcher doesn't need it to perform the
+  /// write (the service walks the date range itself and skips completed
+  /// entries).
+  Future<ToolExecutionResult> _executePausePlan(ToolIntent intent) async {
+    final p = intent.payload;
+    final startDateRaw = p['start_date'] as String?;
+    final days = (p['days'] as num?)?.toInt();
+    final reason = p['reason'] as String?;
+
+    if (startDateRaw == null || days == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid pause_plan payload.');
+    }
+
+    final startDate = DateTime.tryParse(startDateRaw);
+    if (startDate == null) {
+      return const ToolExecutionResult.failure(
+          'Invalid start_date format.');
+    }
+
+    try {
+      final pausedDates =
+          await WorkoutScheduleService.instance.pauseRange(
+        startDate: startDate,
+        days: days,
+        reason: reason,
+      );
+      PausePlanPlanner.instance.clearCache(intent.id);
+      return ToolExecutionResult.success(data: {
+        'paused_dates': pausedDates,
+        'paused_count': pausedDates.length,
+      });
+    } on PausePlanException catch (e) {
+      return ToolExecutionResult.failure(_pausePlanErrorMessage(e));
+    }
+  }
+
+  String _pausePlanErrorMessage(PausePlanException e) {
+    switch (e.code) {
+      case 'past_date':
+        return 'Cannot pause dates that are too far in the past.';
+      case 'no_schedules_in_range':
+        return 'No scheduled workouts in that date range to pause.';
+      default:
+        return e.message;
     }
   }
 

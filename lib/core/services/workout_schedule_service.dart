@@ -110,6 +110,21 @@ class ShortenDayException implements Exception {
   String toString() => 'ShortenDayException($code): $message';
 }
 
+/// Typed failure modes for [WorkoutScheduleService.pauseRange] (Phase D.4).
+///
+/// Codes:
+///   - `past_date` — startDate is more than 1 day in the past.
+///   - `no_schedules_in_range` — no non-completed schedule entries existed
+///     in the requested window. Nothing was paused.
+///   - `other` — anything else (defensive catch-all).
+class PausePlanException implements Exception {
+  final String code;
+  final String message;
+  const PausePlanException(this.code, this.message);
+  @override
+  String toString() => 'PausePlanException($code): $message';
+}
+
 /// Maps generated plan days to real calendar dates and persists to Hive.
 ///
 /// This is the glue between PlanGenerator (logical days) and the UI
@@ -698,6 +713,80 @@ class WorkoutScheduleService {
     final map = Map<String, dynamic>.from(data as Map);
     map['status'] = 'skipped';
     await _hive.workoutBox.put(key, map);
+  }
+
+  // ── Pause range (Phase D.4) ─────────────────────────────────────
+
+  /// Pauses scheduled workouts for [days] consecutive dates starting at
+  /// [startDate].
+  ///
+  /// Used by the AI coach `pause_plan` tool intent dispatcher. Each
+  /// non-completed entry has its `status` set to `'paused'` and gets
+  /// `paused_via='ai_coach'` + `paused_at=<ISO8601>` + optional
+  /// `pause_reason` markers (for analytics + future "resume" flow).
+  /// Already-completed workouts are SKIPPED (history is sacred). Empty
+  /// dates (no schedule entry) are no-ops.
+  ///
+  /// Returns the list of YYYY-MM-DD date strings that were actually paused
+  /// (excludes completed and unscheduled dates).
+  ///
+  /// Throws [PausePlanException]:
+  ///   - `past_date` if [startDate] is more than 1 day before today.
+  ///   - `no_schedules_in_range` if zero dates were paused (nothing to do).
+  ///
+  /// Caller is responsible for Riverpod invalidation + sync — this stays
+  /// a pure data layer (mirrors [swapExerciseInDay], [shortenDay]).
+  Future<List<String>> pauseRange({
+    required DateTime startDate,
+    required int days,
+    String? reason,
+  }) async {
+    // Past-date guard: tolerate "starting today" requests with a 1-day
+    // grace (timezone slop), but refuse anything older.
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final startMidnight =
+        DateTime(startDate.year, startDate.month, startDate.day);
+    if (startMidnight.isBefore(
+        todayMidnight.subtract(const Duration(days: 1)))) {
+      throw PausePlanException(
+        'past_date',
+        'Cannot pause dates older than yesterday (got ${_dateKey(startDate)})',
+      );
+    }
+
+    final box = _hive.workoutBox;
+    final pausedAt = DateTime.now().toIso8601String();
+    final pausedDates = <String>[];
+
+    for (var i = 0; i < days; i++) {
+      final d = startMidnight.add(Duration(days: i));
+      final dateStr = _dateKey(d);
+      final key = '$_schedulePrefix$dateStr';
+      final raw = box.get(key);
+      if (raw is! Map) continue; // no schedule for this date — skip silently
+
+      final map = Map<String, dynamic>.from(raw);
+      if (map['status'] == 'completed') continue; // history is sacred
+
+      map['status'] = 'paused';
+      map['paused_via'] = 'ai_coach';
+      map['paused_at'] = pausedAt;
+      if (reason != null && reason.trim().isNotEmpty) {
+        map['pause_reason'] = reason.trim();
+      }
+      await box.put(key, map);
+      pausedDates.add(dateStr);
+    }
+
+    if (pausedDates.isEmpty) {
+      throw PausePlanException(
+        'no_schedules_in_range',
+        'No scheduled workouts to pause in that date range',
+      );
+    }
+
+    return pausedDates;
   }
 
   // ── Swap ────────────────────────────────────────────────────────
