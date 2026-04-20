@@ -9,6 +9,7 @@ import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.
 import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/stats_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/details_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
@@ -117,6 +118,25 @@ class AppRouter {
               goal: goal,
               initial: Map<String, dynamic>.from(extra),
             ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          );
+        },
+      ),
+      // AI.2 — Details screen collects fitness_experience, pace_preference,
+      // days_per_week, equipment_access (4 high-leverage fields the
+      // handoff's 4-screen flow previously inferred or hardcoded).
+      GoRoute(
+        path: '/onboarding/details',
+        name: 'onboardingDetails',
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: DetailsScreen(data: Map<String, dynamic>.from(extra)),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);

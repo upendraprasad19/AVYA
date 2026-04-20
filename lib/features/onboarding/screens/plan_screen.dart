@@ -77,7 +77,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     return Row(
       children: [
         Text(
-          '03 \u00B7 03',
+          '04 \u00B7 04',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -348,78 +348,91 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
       // Map collected data onto OnboardingNotifier's answers schema.
       //
-      // The JSX handoff deliberately collects only 6 fields (sex, weight,
-      // height, age, body-fat, activity) + goal — everything else is
-      // derived server-side or refined later through the AI coach. This
-      // block does that derivation: rather than hardcoding everyone as a
-      // "beginner at a basic gym who sits all day", it infers sensible
-      // values from the signals the user already gave us.
+      // As of PR AI, the stepped flow actively collects 11 of the 13
+      // fields the profile cares about:
+      //   Goal screen       → goal
+      //   Stats screen      → sex, weight_kg, target_weight_kg,
+      //                       height_cm, age, body_fat_pct,
+      //                       activity_level
+      //   Details screen    → fitness_experience, pace_preference,
+      //                       days_per_week, equipment_access
       //
-      // Fields still defaulted (no signal in the stepped flow):
-      //   equipment_access → 'basic_gym' (most common for young pros in IN)
-      //   diet_preference  → 'balanced'
-      //   injuries         → [] (refined via coach later)
-      //   start_date       → 'this_monday' (most-picked option in legacy flow)
+      // Two fields stay as onboarding defaults by explicit product
+      // decision during PR AI planning:
+      //   diet_preference → 'veg'  (Indian-first target audience)
+      //   injuries        → ['none']  (matches edit_profile's convention)
+      // Users override both via Profile → Edit Profile, which has both
+      // fields wired.
+      //
+      // `lifestyle_activity` stays inferred from `activity_level`
+      // because the mapping is 1:1 and no extra user question would
+      // improve fidelity.
+      //   start_date → 'this_monday' (most-picked option in legacy flow).
       final goal = widget.data['goal'] as String? ?? 'recomp';
       final weight = (widget.data['weight_kg'] as num?)?.toDouble() ?? 75.0;
       final activityLevel =
           (widget.data['activity_level'] as String?) ?? 'moderate';
 
-      // Target weight — 12-week delta sized to the goal. Conservative on
-      // both ends so the calorie maths don't land in unsafe territory for
-      // edge-case starting weights.
-      final targetDelta = switch (goal) {
-        'lose_fat' => -5.0,
-        'recomp' => -2.0,
-        'build_muscle' => 3.0,
-        _ => 0.0,
-      };
-      final targetWeight = (weight + targetDelta).clamp(40, 250);
+      // Target weight — Stats screen now collects this directly. Fall
+      // back to the old goal-delta rule if (somehow) absent — covers
+      // legacy chat users or direct deep-links to /plan.
+      final suppliedTarget =
+          (widget.data['target_weight_kg'] as num?)?.toDouble();
+      final targetWeight = suppliedTarget != null
+          ? suppliedTarget.clamp(40.0, 250.0)
+          : () {
+              final targetDelta = switch (goal) {
+                'lose_fat' => -5.0,
+                'recomp' => -2.0,
+                'build_muscle' => 3.0,
+                _ => 0.0,
+              };
+              return (weight + targetDelta).clamp(40.0, 250.0);
+            }();
       final now = DateTime.now();
       final age = (widget.data['age'] as int?) ?? 30;
       final dob = DateTime(now.year - age, now.month, now.day);
 
-      // Infer fitness_experience from activity_level. A "heavy activity"
-      // person is moving enough outside the gym that a beginner-tier plan
-      // would feel insulting; a sedentary user usually needs foundation
-      // work before higher volumes are safe.
-      final fitnessExperience = switch (activityLevel) {
-        'sedentary' || 'light' => 'beginner',
-        'moderate' => 'intermediate',
-        'heavy' => 'advanced',
-        _ => 'beginner',
-      };
-
-      // Days per week by goal intensity. More honest than "everyone gets
-      // 4/week": Build/Strength programs need more sessions for the SV
-      // split to work; Maintain barely needs 3.
-      final daysPerWeek = switch (goal) {
-        'build_muscle' || 'strength' => 5,
-        'recomp' || 'lose_fat' => 4,
-        'maintain' => 3,
-        _ => 4,
-      };
+      // fitness_experience, days_per_week, equipment_access,
+      // pace_preference now come directly from the Details screen.
+      // Fall back to the previous inference rules only when the field
+      // is absent (legacy chat users, deep-links, or a user who
+      // skipped the stepped flow somehow).
+      final fitnessExperience =
+          (widget.data['fitness_experience'] as String?) ??
+              switch (activityLevel) {
+                'sedentary' || 'light' => 'beginner',
+                'moderate' => 'intermediate',
+                'heavy' => 'advanced',
+                _ => 'beginner',
+              };
+      final daysPerWeek = (widget.data['days_per_week'] as int?) ??
+          switch (goal) {
+            'build_muscle' || 'strength' => 5,
+            'recomp' || 'lose_fat' => 4,
+            'maintain' => 3,
+            _ => 4,
+          };
+      final pacePreference =
+          (widget.data['pace_preference'] as String?) ??
+              switch (goal) {
+                'lose_fat' || 'build_muscle' => 'aggressive',
+                'recomp' || 'strength' => 'balanced',
+                'maintain' => 'slow',
+                _ => 'balanced',
+              };
+      final equipmentAccess =
+          (widget.data['equipment_access'] as String?) ?? 'basic_gym';
 
       // lifestyle_activity — stats-screen collects activity_level with 4
       // pills (sedentary/light/moderate/heavy); plan_engine expects 3
-      // buckets (desk_job/lightly_active/very_active_job). Fold the
-      // top end into very_active_job so users with heavy day jobs don't
-      // get TDEE under-estimated.
+      // buckets (desk_job/lightly_active/very_active_job). 1:1 mapping,
+      // so no user-facing question needed.
       final lifestyleActivity = switch (activityLevel) {
         'sedentary' || 'light' => 'desk_job',
         'moderate' => 'lightly_active',
         'heavy' => 'very_active_job',
         _ => 'desk_job',
-      };
-
-      // Pace preference follows goal aggression. Cut/Build users picked
-      // an aggressive goal; Recomp/Strength users want steady progress;
-      // Maintain users explicitly don't want acceleration.
-      final pacePreference = switch (goal) {
-        'lose_fat' || 'build_muscle' => 'aggressive',
-        'recomp' || 'strength' => 'balanced',
-        'maintain' => 'slow',
-        _ => 'balanced',
       };
 
       final notifier = ref.read(onboardingProvider.notifier);
@@ -435,15 +448,18 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       notifier.setAnswer('primary_goal', _mapGoal(goal));
       notifier.setAnswer('fitness_experience', fitnessExperience);
       notifier.setAnswer('days_per_week', daysPerWeek);
-      notifier.setAnswer('equipment_access', 'basic_gym');
+      notifier.setAnswer('equipment_access', equipmentAccess);
       notifier.setAnswer('activity_level', activityLevel);
       notifier.setAnswer('lifestyle_activity', lifestyleActivity);
       notifier.setAnswer('pace_preference', pacePreference);
-      notifier.setAnswer('diet_preference', 'balanced');
+      // AI.3 — defaults updated per user decision:
+      //   diet_preference: 'balanced' → 'veg' (Indian-first default)
+      //   injuries: []  → ['none']  (matches edit_profile convention)
+      notifier.setAnswer('diet_preference', 'veg');
       notifier.setAnswer(
           'body_fat_percent',
           (widget.data['body_fat_pct'] as num?)?.toDouble() ?? 18.0);
-      notifier.setAnswer('injuries', <String>[]);
+      notifier.setAnswer('injuries', <String>['none']);
       notifier.setAnswer('start_date', 'this_monday');
 
       final phase = await notifier.completeOnboarding();

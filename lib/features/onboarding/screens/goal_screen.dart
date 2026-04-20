@@ -106,7 +106,7 @@ class _GoalScreenState extends State<GoalScreen> {
     return Row(
       children: [
         Text(
-          '01 \u00B7 03',
+          '01 \u00B7 04',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -119,7 +119,7 @@ class _GoalScreenState extends State<GoalScreen> {
             children: [
               Container(height: 1, color: AppColors.line2),
               FractionallySizedBox(
-                widthFactor: 1 / 3,
+                widthFactor: 1 / 4,
                 child: Container(height: 1, color: AppColors.accent),
               ),
             ],
