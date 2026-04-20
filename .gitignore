@@ -54,5 +54,17 @@ app.*.map.json
 .env.local
 supabase/.env
 
+# Supabase Management API access tokens (e.g. supabase/.supabase/supabase access token.txt)
+# Used by .claude/deploy_via_api.js — DO NOT commit any token, ever.
+supabase/.supabase/
+
+# Edge function deploy payloads (regenerable via .claude/emit_payload.js)
+# Contain inlined source — no point checking them in.
+.claude/_payload_*.json
+.claude/_payload_*.b64
+.claude/_payload_*.txt
+.claude/_deploy_payload_*.json
+.claude/ai-proxy-chunk-*.txt
+
 # Knowledgebase (reference docs, not source code)
 Knowledgebase/
