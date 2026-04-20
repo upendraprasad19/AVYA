@@ -252,15 +252,41 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 
 ```
 lib/
-  core/{theme, router, constants, services, utils}/   # singletons, GoRouter, theme tokens, BMR
+  core/{theme, router, constants, services, utils, copy}/   # singletons, GoRouter, theme tokens, BMR
       utils/exercise_display.dart    # Experience-aware exercise labels
+      copy/wardroom_copy.dart        # Single source for literal Wardroom handoff strings
+                                     #   (eyebrows, CTA labels, onboarding copy, notifications)
   features/{auth, onboarding, home, train, nutrition, ai_coach, profile}/
     each: screens/, widgets/, providers/, repositories/, models/
+      onboarding/screens/
+        welcome_screen.dart          # Stepped flow entry — / onboarding (NEW default)
+        goal_screen.dart             # /onboarding/goal (NEW)
+        stats_screen.dart            # /onboarding/stats (NEW)
+        plan_screen.dart             # /onboarding/plan — "REPORT FOR DUTY" CTA (NEW)
+        onboarding_chat_screen.dart  # LEGACY — now only at /onboarding/chat for rollback
+      profile/screens/
+        settings_screen.dart         # Wardroom refresh (PR AC)
+        notifications_screen.dart    # Wardroom notifications inbox (PR AF)
       profile/providers/profile_completeness_provider.dart  # Tier 1/2 weighted calculation
       profile/widgets/profile_completeness_card.dart  # Progress bar + missing fields
       profile/widgets/slim_achievements_card.dart     # Single-line badges row
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
+      wardroom/   # 28 primitives (up from 15) — see "Wardroom primitives" in §9.
+                  # Barrel: wardroom.dart. New since PR R (2026-04-18..20):
+                  #   ward_seal_badge.dart            — WardSealBadge + WardSealVariant
+                  #   ward_dispatch_header.dart       — WardDispatchHeader (double gold rule eyebrow)
+                  #   ward_insight_quote.dart         — WardInsightQuote + InsightSegment
+                  #   ward_glass_grid.dart            — WardGlassGrid (8-cell hydration)
+                  #   ward_achievement_strip.dart     — WardAchievementStrip (earned/locked circles)
+                  #   ward_phase_dots.dart            — WardPhaseDots (12-phase row)
+                  #   ward_phase_block.dart           — WardPhaseBlock (roman numeral + START chip)
+                  #   ward_stat_tile.dart             — WardStatTile (mono label + Fraunces numeric)
+                  #   ward_radio_row.dart             — WardRadioRow (gold left-border)
+                  #   ward_toggle.dart                — WardToggle (pill, 150ms crossfade)
+                  #   ward_unit_toggle.dart           — WardUnitToggle (KG/LBS pill)
+                  #   ward_session_row.dart           — WardSessionRow + WardSessionTable
+                  #   ward_category_sidebar.dart      — WardCategorySidebar (rotated mono label)
     repositories/  user, exercise, food, plan_generator (NEVER modify without approval)
       plan_generator.dart (re-export shim)
       plan_engine/             # V4 modular pipeline
@@ -361,33 +387,43 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ## 9. DESIGN SYSTEM
 
-### Colors
+### Colors — Wardroom palette (post-PR R reconciliation)
+
 ```dart
 class AppColors {
-  static const bg          = Color(0xFF07090e);
-  static const header      = Color(0xFF0a0f18);
-  static const card        = Color(0xFF0e1219);
-  static const input       = Color(0xFF161d28);
-  static const border      = Color(0xFF1c2535);
+  // Backgrounds (5-step depth hierarchy)
+  static const bg        = Color(0xFF02070F);  // primary canvas
+  static const bgDeep    = Color(0xFF01040A);  // deepest — rotated sidebars, modal scrim
+  static const bgRaise   = Color(0xFF04111E);  // raised (active workout rest timer etc.)
+  static const header    = Color(0xFF0A1020);  // app bar / letterhead band
+  static const card      = Color(0xFF06101F);  // standard card
+  static const cardHi    = Color(0xFF0A1828);  // elevated card (selected, insight)
+  static const input     = Color(0xFF0E1E30);  // text fields, chips
+  static const border    = Color(0xFF1A2C40);  // hairline borders
+  static const line2     = Color(0x14FFFAE8);  // parchment 8% alpha — divider/grain accent
 
-  static const accent      = Color(0xFF00D4FF);  // Electric Cyan
-  static const accentTint  = Color(0x1400D4FF);  // rgba(0,212,255,0.08)
-  static const accentDark  = Color(0xFF00a8cc);
+  // Accent — Campaign Gold (NOT cyan; the Wardroom handoff moved everything off Electric Cyan)
+  static const accent     = Color(0xFFD4B270);  // Campaign Gold
+  static const accentSoft = Color(0x1AD4B270);  // 10% alpha tint
 
-  static const proGold     = Color(0xFFF59E0B);  // Champion Gold
-  static const proGoldTint = Color(0x1AF59E0B);
+  // Text (4-step ghost ladder)
+  static const textPrimary = Color(0xFFF2EDE4);  // parchment
+  static const textDim     = Color(0xFF8A9BAA);
+  static const textMute    = Color(0xFF4D6070);
+  static const textGhost   = Color(0xFF2A3848);  // placeholder, disabled
 
-  static const textPrimary   = Color(0xFFeef2f7);
-  static const textSecondary = Color(0xFF6b7a8d);
-  static const textDisabled  = Color(0xFF2d3748);
-
-  static const red    = Color(0xFFef4444);  // error, danger
-  static const orange = Color(0xFFf97316);  // calories
-  static const blue   = Color(0xFF38bdf8);  // water, cardio
-  static const purple = Color(0xFFa855f7);  // sleep
-  static const green  = Color(0xFF4ade80);  // success
+  // Semantic
+  static const ok   = Color(0xFF7FB4A2);  // success, confirmed
+  static const warn = Color(0xFFF0B23E);  // warnings, over-cap
+  static const bad  = Color(0xFFD7604E);  // errors, destructive
+  static const info = Color(0xFF6FA2C9);  // neutral info, water
 }
 ```
+
+> The handoff's `README.md` rounds the palette for print; the JSX `const W = {}` in
+> `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx` is the
+> **source of truth** and is what `colors.dart` tracks. PRs K–Q used README hex values and
+> were reconciled to the JSX map in PR R (commit `174ff21`).
 
 ### Typography (DM Sans via GoogleFonts)
 ```
@@ -412,11 +448,53 @@ Radius:    pill 100 / card-L 22 / card-M 16 / card-S 14 / row 12
 
 ### Component Patterns
 - **Primary button:** `accent` bg, black w900 text, pill radius, shadow
-- **Secondary button:** `accentTint` bg, 1.5 `accent`-30% border, `accent` w800 text
+- **Secondary button:** `accentSoft` bg, 1.5 `accent`-30% border, `accent` w800 text
 - **Card:** `card` bg, 1 `border` border, radius-M, padding 16. Active variant uses `accent`-20% border.
-- **PRO locked card:** blur(4) + `bg`-85% overlay, gold lock, cyan CTA
-- **Streak badge:** `accentTint` bg, `accent` w900 text, `accent`-20% border
+- **PRO locked card:** blur(4) + `bg`-85% overlay, gold lock, gold CTA
+- **Streak badge:** `accentSoft` bg, `accent` w900 text, `accent`-20% border
 - **Progress bar:** `input` track, `accent` fill, height 6, radius 3
+
+### Wardroom primitives (28 total)
+
+Barrel: `lib/shared/widgets/wardroom/wardroom.dart`. Grouped by role:
+
+| Primitive | File | Purpose |
+|-----------|------|---------|
+| **Shell** | | |
+| WardFrame | ward_frame.dart | Root scaffold — grain overlay, padded content area |
+| **Header** | | |
+| WardLetterhead | ward_letterhead.dart | Section eyebrow + title + optional gold rule (`WardDivider` enum: `none`/`single`/`double`; legacy `divider: bool` still accepted) |
+| WardDispatchHeader | ward_dispatch_header.dart | Double gold rule + eyebrow + italic-gold emphasis + context line (reports / coach dispatch) |
+| WardEyebrow | ward_eyebrow.dart | Standalone mono eyebrow label |
+| WardRule | ward_rule.dart | Gold rule with configurable weight / dash pattern |
+| **Surface** | | |
+| WardCard | ward_card.dart | Standard card — bg, border, radius variants |
+| WardAvatar | ward_avatar.dart | Circular monogram or photo w/ gold ring |
+| WardInsightQuote | ward_insight_quote.dart | Gradient card with gold quote watermark + `InsightSegment` list |
+| WardGlassGrid | ward_glass_grid.dart | 8-cell hydration tracker grid |
+| **Action** | | |
+| WardButton | ward_button.dart | Primary/secondary/ghost button variants |
+| WardChip | ward_chip.dart | Compact label / toggle chip |
+| WardRadioRow | ward_radio_row.dart | 44px tap row with gold left-border when selected |
+| WardToggle | ward_toggle.dart | 36×20 pill toggle, 150ms crossfade |
+| WardUnitToggle | ward_unit_toggle.dart | KG/LBS 2-position inline pill |
+| **Numeric** | | |
+| WardBigNumber | ward_big_number.dart | Fraunces large numeric + unit caption |
+| WardKvRow | ward_kv_row.dart | Label + value row with dotted leader |
+| WardStatTile | ward_stat_tile.dart | Mono label + Fraunces numeric + unit |
+| **Meter** | | |
+| WardBar | ward_bar.dart | Progress bar — optional `trailingLabel` for gold "25%" mono numeral |
+| WardSpark | ward_spark.dart | Sparkline with gold stroke |
+| WardRing / WardMultiRing | ward_ring.dart | Single + concentric ring progress |
+| **Structure** | | |
+| WardAchievementStrip | ward_achievement_strip.dart | Horizontal scrollable earned/locked circles |
+| WardPhaseDots | ward_phase_dots.dart | 12-phase progress row |
+| WardPhaseBlock | ward_phase_block.dart | Roman numeral circle + title/weeks/description + START chip |
+| WardSessionRow / WardSessionTable | ward_session_row.dart | Set-log row (set# / weight / reps / status) + table shell |
+| WardCategorySidebar | ward_category_sidebar.dart | Vertical 46px `bgDeep` with rotated mono label |
+| **Badge / Glyph** | | |
+| WardSealBadge | ward_seal_badge.dart | Seal glyph in 4 `WardSealVariant` (report / subscription / phase / founder) |
+| Glyph set (5) | ward_glyphs.dart | `AnchorGlyph`, `CompassRoseGlyph`, `TierChevronsGlyph`, `SealGlyph`, `RankBarGlyph` |
 
 ---
 
@@ -748,9 +826,40 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 ```
 
 **Today's Workout Card — Completed State:**
-- Shows: DONE badge (green) + "View Card >" (cyan) + best lift + total volume
+- Shows: DONE badge (green) + "View Card >" (gold) + best lift + total volume
 - "View Card" opens `WorkoutReceiptSheet` with receipt reconstructed from Hive exercise logs
 - Calendar day detail sheet also shows "View Workout Card" button for completed days
+
+---
+
+## 13a. ONBOARDING (stepped flow — default since PR Y–AB, 2026-04-20)
+
+**New default flow (Wardroom):**
+
+```
+Welcome       (/onboarding)          → sets no state, just CTA
+   ↓
+Goal          (/onboarding/goal)     → picks primary_goal
+   ↓
+Stats         (/onboarding/stats)    → current_weight_kg, height_cm, age, sex
+   ↓
+Plan          (/onboarding/plan)     → "REPORT FOR DUTY" — commits via
+                                        OnboardingNotifier.completeOnboarding()
+```
+
+- **State passing:** `GoRouter` `state.extra` (a `Map<String, dynamic>`) between screens —
+  **no premature provider commits.** The notifier only runs once, on the final tap.
+- **Fields not yet collected by the stepped flow** (server / defaults fill these in — PR AG
+  candidates): `fitness_experience`, `days_per_week`, `equipment_access`, `lifestyle_activity`,
+  `pace_preference`, `diet_preference`, `injuries`, target weight.
+- **Legacy chat fallback:** the pre-PR-Y chat-based flow is still reachable at
+  `/onboarding/chat` (`onboarding_chat_screen.dart`). Retained for rollback only — remove after
+  PR AG ships.
+- **Auth redirect gotcha:** `GoRouter._authRedirect` uses
+  `location.startsWith('/onboarding')` (NOT `location == '/onboarding'`), so taps on
+  `/onboarding/goal` / `/stats` / `/plan` aren't bounced back to Welcome. This was the nav bug
+  fixed in commit `17faa86` — any regression here will make the stepped flow look like every
+  tap does nothing.
 
 ---
 
@@ -987,3 +1096,7 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | `ai-proxy-pro` or `video-status` 410 Gone | Both retired (2026-04-18). `ai-proxy-pro` merged into `ai-proxy` (single Gemini endpoint with server-side `isPro` gate). `video-status` deferred with the video-share feature. Callers should not re-add either; if the video feature ever un-defers, rewrite `video-status` with JWT + user_id filter before deploying. |
 | Hive file bloat over time | `HiveService` implements `WidgetsBindingObserver` and runs `box.compact()` on 7 mutation-heavy boxes (user / workout / nutrition / health / custom / coach / sync) every 7 days on `AppLifecycleState.paused`. Gated via `configBox['last_compact_at']`. If disk usage keeps climbing, confirm the observer is registered in `init()` and the gate is being checked. |
 | food_text_analysis 429 when user is below daily cap | Trigger `trg_food_text_rate_limit` on `ai_coach_interactions` (migration 024, 2026-04-18) enforces the 50/day free / 200/day PRO cap atomically. Insert-first pattern — `ai-proxy` inserts a placeholder row BEFORE calling Gemini. If trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001), return 429. Do NOT re-add a separate check-then-insert pre-check; the trigger is the single source of truth. |
+| Stepped onboarding bounces back to Welcome on every tap | `GoRouter._authRedirect`'s `isOnOnboarding` check MUST use `location.startsWith('/onboarding')`, not `location == '/onboarding'`. Sub-routes (`/goal`, `/stats`, `/plan`) would otherwise be redirected back to Welcome on every navigation. Fixed in commit `17faa86`. |
+| Worktree APK build fails with "Did not find .env" | `.env` is gitignored and not copied when creating a new git worktree. Before `flutter build apk` in a new worktree, copy from the main: `cp "C:/Upendra/Claude Code/Fitness App/.env" <worktree>/.env`. Without it `SUPABASE_URL` compiles to empty string and auth crashes at startup. |
+| Fraunces title emphasis not italic-gold | Don't style an entire `Text` widget italic — the non-emphasized leading/trailing words become italic too. Use `RichText` with inline `TextSpan`s carrying `fontStyle: FontStyle.italic`, `color: AppColors.accent`, `fontWeight: FontWeight.w500` on the emphasised span only. Pattern baked into `WardDispatchHeader`. |
+| Wardroom palette drift | PRs K–Q used README hex values (rounded for print); PR R (commit `174ff21`) reconciled `colors.dart` to the JSX `const W = {}` in `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx`. The JSX is the truth. Never back-port README hex values into `colors.dart`. |
