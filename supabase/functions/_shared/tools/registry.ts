@@ -20,6 +20,7 @@ import {
   prelogTool,
   suggestMealTool,
 } from "./nutrition/index.ts";
+import { regeneratePlanBlockTool } from "./plan/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
@@ -47,6 +48,9 @@ const ALL_TOOLS: ToolDefinition[] = [
   // Append future D-phase tools below this marker.
   getExerciseHistoryTool, // progress / read / PRO  (D.1)
   logPRTool, // progress / write / trivial / FREE  (D.2)
+  // ── Phase D.3: plan family ────────────────────────────────────────
+  // First plan-family tool. Append future plan tools below this marker.
+  regeneratePlanBlockTool, // plan / write / destructive / PRO  (D.3)
 ];
 
 /**

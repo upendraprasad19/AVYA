@@ -23,6 +23,7 @@ import '../../train/repositories/workout_repository.dart';
 import '../models/tool_intent.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
+import 'regenerate_plan_planner.dart';
 import 'reschedule_week_planner.dart';
 
 /// Result of executing a tool intent.
@@ -106,6 +107,9 @@ class ToolDispatcher {
           break;
         case 'generate_hotel_workout':
           result = await _executeGenerateHotelWorkout(intent);
+          break;
+        case 'regenerate_plan_block':
+          result = await _executeRegeneratePlanBlock(intent);
           break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
@@ -558,6 +562,67 @@ class ToolDispatcher {
     } else {
       return ToolExecutionResult.success(data: {
         'schedules': results,
+        'partial_errors': errors,
+      });
+    }
+  }
+
+  /// D.3 regeneratePlanBlock — writes a fresh N-week schedule block.
+  ///
+  /// The planner has already computed the raw schedule list (one entry per
+  /// non-completed day in the window, including rest days). Dispatcher
+  /// writes them in order, preserving completed days defensively as a
+  /// concurrent-edit guard (planner already filters them out, but a
+  /// completion that lands between sheet-open and confirm would get caught
+  /// here).
+  Future<ToolExecutionResult> _executeRegeneratePlanBlock(
+      ToolIntent intent) async {
+    final rawSchedules =
+        RegeneratePlanPlanner.instance.getCachedRawSchedules(intent.id);
+    if (rawSchedules == null) {
+      return const ToolExecutionResult.failure(
+        'Open the diff preview first to compute the plan.',
+      );
+    }
+
+    final box = HiveService.instance.workoutBox;
+    final results = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (final schedule in rawSchedules) {
+      final date = schedule['date'] as String;
+      try {
+        final existing = box.get('schedule_$date');
+        if (existing is Map && existing['status'] == 'completed') {
+          // Concurrent-edit safety net.
+          continue;
+        }
+        await box.put('schedule_$date', schedule);
+        results.add({
+          'date': date,
+          'workout': schedule['workout_name'],
+          'type': schedule['type'],
+        });
+      } catch (e) {
+        errors.add('$date: $e');
+      }
+    }
+
+    RegeneratePlanPlanner.instance.clearCache(intent.id);
+
+    if (errors.isEmpty) {
+      return ToolExecutionResult.success(data: {
+        'schedules': results,
+        'count': results.length,
+      });
+    } else if (results.isEmpty) {
+      return ToolExecutionResult.failure(
+        'Could not regenerate plan: ${errors.join("; ")}',
+      );
+    } else {
+      return ToolExecutionResult.success(data: {
+        'schedules': results,
+        'count': results.length,
         'partial_errors': errors,
       });
     }

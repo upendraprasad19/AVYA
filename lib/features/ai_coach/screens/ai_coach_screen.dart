@@ -28,6 +28,7 @@ import '../widgets/tool_confirm_sheet.dart';
 import '../widgets/diff_preview/swap_exercise_diff.dart';
 import '../widgets/diff_preview/injury_modify_diff.dart';
 import '../widgets/diff_preview/hotel_workout_diff.dart';
+import '../widgets/diff_preview/regenerate_plan_diff.dart';
 import '../widgets/diff_preview/reschedule_week_diff.dart';
 import '../widgets/diff_preview/prelog_diff.dart';
 
@@ -793,6 +794,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         break;
       case 'generate_hotel_workout':
         diffPreview = HotelWorkoutDiff(intent: intent);
+        break;
+      case 'regenerate_plan_block':
+        diffPreview = RegeneratePlanDiff(intent: intent);
         break;
       case 'prelog':
         diffPreview = PrelogDiff(intent: intent);

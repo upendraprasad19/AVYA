@@ -446,6 +446,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'RESCHEDULE WEEK';
       case 'generate_hotel_workout':
         return 'HOTEL WORKOUT';
+      case 'regenerate_plan_block':
+        return 'NEW PLAN';
       case 'log_meal_by_text':
         return 'LOG MEAL';
       case 'adjust_caloric_target':
@@ -477,6 +479,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.calendar_view_week;
       case 'generate_hotel_workout':
         return Icons.luggage;
+      case 'regenerate_plan_block':
+        return Icons.refresh;
       case 'log_meal_by_text':
         return Icons.restaurant_menu;
       case 'adjust_caloric_target':
@@ -508,6 +512,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Week reshuffled';
       case 'generate_hotel_workout':
         return 'Hotel plan generated';
+      case 'regenerate_plan_block':
+        return 'Plan regenerated';
       case 'log_meal_by_text':
         return 'Logged';
       case 'adjust_caloric_target':
