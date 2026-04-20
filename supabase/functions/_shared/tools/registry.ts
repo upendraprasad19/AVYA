@@ -9,7 +9,11 @@ import {
   shortenWorkoutTool,
   swapExerciseTool,
 } from "./workout/index.ts";
-import { getProgressSummaryTool } from "./progress/index.ts";
+import {
+  getExerciseHistoryTool,
+  getProgressSummaryTool,
+  logPRTool,
+} from "./progress/index.ts";
 import {
   adjustCaloricTargetTool,
   logMealByTextTool,
@@ -39,7 +43,10 @@ const ALL_TOOLS: ToolDefinition[] = [
   adjustCaloricTargetTool, // nutrition / write / trivial-or-reviewable / PRO  (C.2)
   suggestMealTool, // nutrition / read / PRO  (C.3)
   prelogTool, // nutrition / write / reviewable-or-destructive / PRO  (C.4)
-  // Phase D will add: plan family
+  // ── Phase D: progress family expansion ────────────────────────────
+  // Append future D-phase tools below this marker.
+  getExerciseHistoryTool, // progress / read / PRO  (D.1)
+  logPRTool, // progress / write / trivial / FREE  (D.2)
 ];
 
 /**

@@ -381,6 +381,13 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       final base = '$sign$delta kcal/day for $ttl day${ttl == 1 ? '' : 's'}';
       return reason != null && reason.isNotEmpty ? '$base\n$reason' : base;
     }
+    if (intent.type == 'log_pr') {
+      final exerciseId = intent.payload['exerciseId']?.toString() ?? '';
+      final name = _resolveExerciseName(exerciseId) ?? exerciseId;
+      final w = intent.payload['weightKg'];
+      final reps = intent.payload['reps'];
+      return '$name \u2014 ${w}kg \u00d7 $reps';
+    }
     if (intent.type == 'prelog') {
       final parsed =
           (intent.payload['parsed_meals'] as List?) ?? const <dynamic>[];
@@ -445,6 +452,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'CALORIE TARGET';
       case 'prelog':
         return 'PRE-LOG MEALS';
+      case 'log_pr':
+        return 'NEW PR';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -474,6 +483,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.tune;
       case 'prelog':
         return Icons.event_note;
+      case 'log_pr':
+        return Icons.emoji_events;
       default:
         return Icons.bolt;
     }
@@ -503,6 +514,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Target adjusted';
       case 'prelog':
         return 'Meals logged';
+      case 'log_pr':
+        return 'PR logged';
       default:
         return 'Done';
     }

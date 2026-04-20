@@ -116,6 +116,9 @@ class ToolDispatcher {
         case 'prelog':
           result = await _executePrelog(intent);
           break;
+        case 'log_pr':
+          result = await _executeLogPR(intent);
+          break;
         default:
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
@@ -222,6 +225,48 @@ class ToolDispatcher {
     );
     return ToolExecutionResult.success(
         data: {'log_id': logId, 'exercise_name': name});
+  }
+
+  /// D.2 logPR — wrapper over `logSetWithPrRescan` for PR claims.
+  ///
+  /// Reuses the same Hive write path as Phase A's log_set (sets=1,
+  /// PR detection rescans chronologically). If the claim isn't actually a
+  /// new PR, the row still lands but `is_pr=false` on the underlying entry.
+  Future<ToolExecutionResult> _executeLogPR(ToolIntent intent) async {
+    final p = intent.payload;
+    final exerciseId = p['exerciseId'] as String?;
+    final weightKg = (p['weightKg'] as num?)?.toDouble();
+    final reps = (p['reps'] as num?)?.toInt() ?? 1;
+    final dateRaw = p['date'] as String?;
+
+    if (exerciseId == null || weightKg == null) {
+      return const ToolExecutionResult.failure('Invalid log_pr intent payload.');
+    }
+
+    final name = _resolveExerciseName(exerciseId) ?? exerciseId;
+    final date = (dateRaw == null || dateRaw.isEmpty)
+        ? null
+        : DateTime.tryParse(dateRaw);
+
+    try {
+      final logId = await WorkoutRepository.instance.logSetWithPrRescan(
+        exerciseId: exerciseId,
+        exerciseName: name,
+        weightKg: weightKg,
+        reps: reps,
+        sets: 1, // PR is a single max-effort attempt
+        date: date,
+      );
+      return ToolExecutionResult.success(data: {
+        'log_id': logId,
+        'exercise_name': name,
+        'weight_kg': weightKg,
+        'reps': reps,
+      });
+    } catch (e, stack) {
+      debugPrint('[ToolDispatcher] log_pr failed: $e\n$stack');
+      return ToolExecutionResult.failure('Could not log PR: $e');
+    }
   }
 
   Future<ToolExecutionResult> _executeMarkWorkoutComplete(
