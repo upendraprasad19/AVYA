@@ -191,41 +191,80 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.go('/profile'),
-        ),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'DOSSIER \u00B7 AMEND',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 2.5,
+      // Handoff header: double gold rule + mono "← BACK" left / Fraunces
+      // h3 "Edit Profile" centre / mono gold "SAVE" right. Matches
+      // `design_handoff_wardroom/src/screens/utility.jsx` EditProfileScreen
+      // lines 386–406.
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.bg,
+            border: Border(
+              bottom: BorderSide(
+                color: AppColors.accent.withValues(alpha: 0.6),
+                width: 1,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'Edit profile',
-              style: AppTypography.h3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: Text(
-              'Save',
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: _isSaving ? AppColors.textDisabled : AppColors.accent),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => context.go('/profile'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                    child: Text(
+                      '\u2190 BACK',
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 11,
+                        color: AppColors.textDim,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'Edit Profile',
+                      style: AppTypography.h3.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _isSaving ? null : _save,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 18,
+                    ),
+                    child: Text(
+                      'SAVE',
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 11,
+                        color: _isSaving
+                            ? AppColors.textDisabled
+                            : AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
       body: SafeArea(
         child: Form(
