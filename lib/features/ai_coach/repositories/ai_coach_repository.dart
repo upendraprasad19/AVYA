@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -570,6 +572,7 @@ class AiCoachRepository {
       'notes': existingNotes,
       'last_extracted': now.toIso8601String(),
     });
+    unawaited(SyncService.instance.pushSnapshot());
   }
 
   /// One-time migration: convert legacy coachBox['coaching_notes'] string

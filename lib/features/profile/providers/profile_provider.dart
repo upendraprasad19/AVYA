@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -443,6 +445,7 @@ class BiometricNotifier extends Notifier<BiometricData> {
       'created_at': now.toIso8601String(),
     });
     ref.invalidateSelf();
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 

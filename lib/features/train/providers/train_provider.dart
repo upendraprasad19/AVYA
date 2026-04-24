@@ -1489,6 +1489,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // throwing in the background must never reach the UI.
     unawaited(SyncService.instance.syncWorkoutData());
     unawaited(SyncService.instance.syncProgressNow());
+    unawaited(SyncService.instance.pushSnapshot());
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.

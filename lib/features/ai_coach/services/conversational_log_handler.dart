@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -115,6 +117,7 @@ class ConversationalLogHandler {
     });
 
     await healthBox.put('sleep_logs', logs);
+    unawaited(SyncService.instance.pushSnapshot());
     return true;
   }
 
@@ -145,6 +148,7 @@ class ConversationalLogHandler {
     record[type] = valueCm;
     record['updated_at'] = now.toIso8601String();
     await healthBox.put(key, record);
+    unawaited(SyncService.instance.pushSnapshot());
     return true;
   }
 
@@ -259,6 +263,10 @@ Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   ref.invalidate(calendarWeekProvider);
   ref.invalidate(streakProvider);
   ref.invalidate(todayWorkoutProvider);
+
+  // Fire-and-forget cloud sync so AI coach gets fresh workout context.
+  unawaited(SyncService.instance.syncWorkoutData());
+  unawaited(SyncService.instance.pushSnapshot());
 
   // Clear the draft
   ref.read(workoutDraftProvider.notifier).clearDraft();
