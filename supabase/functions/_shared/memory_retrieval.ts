@@ -58,7 +58,37 @@ export async function retrieveRelevantMemories(
   query: string,
   options: RetrievalOptions = {},
 ): Promise<RetrievalResult> {
-  // Will be implemented in Task 2.
-  const _unused = { supabaseClient, userId, query, options };
-  return { memories: [], source: "empty" };
+  const matchCount = options.matchCount ?? 5;
+  const threshold = options.threshold ?? 0.65;
+
+  // 1. Embed the query — RETRIEVAL_QUERY task type is critical for Gemini's
+  //    asymmetric embedding model. Phase A writes use RETRIEVAL_DOCUMENT;
+  //    mixing them degrades recall significantly.
+  const queryEmbedding = await getEmbedding(query, "RETRIEVAL_QUERY");
+  if (!queryEmbedding) {
+    return { memories: [], source: "no_embedding" };
+  }
+
+  // 2. Call the existing RPC — match_memories filters by user_id then uses
+  //    the IVFFlat index on embedding column. Fast even on large corpora.
+  const { data, error } = await supabaseClient.rpc("match_memories", {
+    p_user_id: userId,
+    p_query_embedding: queryEmbedding,
+    p_match_count: matchCount,
+    p_similarity_threshold: threshold,
+  });
+
+  if (error) {
+    console.warn(
+      "[memory_retrieval] rpc_error",
+      JSON.stringify({ user_id: userId, error: error.message ?? error }),
+    );
+    return { memories: [], source: "rpc_error" };
+  }
+
+  const memories = (data ?? []) as Memory[];
+  return {
+    memories,
+    source: memories.length > 0 ? "retrieval" : "empty",
+  };
 }
