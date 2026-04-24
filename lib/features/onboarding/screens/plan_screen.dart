@@ -320,7 +320,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         const SizedBox(height: 10),
         GestureDetector(
           onTap: () => context.go(
-            '/onboarding/stats',
+            '/onboarding/details',
             extra: widget.data,
           ),
           child: Text(
@@ -511,16 +511,18 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       _ => (weight * 30).round(),
     };
     final protein = (weight * 2).round();
-    // Must mirror the daysPerWeek inference in _onReportForDuty so the
-    // targets card the user sees matches what the plan generator will
-    // actually produce. Change both together or the "4× LIFTS" on the
-    // card lies about "5× LIFTS" programs.
-    final daysPerWeek = switch (goal) {
-      'build_muscle' || 'strength' => 5,
-      'recomp' || 'lose_fat' => 4,
-      'maintain' => 3,
-      _ => 4,
-    };
+    // Read the real days_per_week the user picked on the Details screen.
+    // Fall back to goal-derived defaults only when the field is absent
+    // (legacy chat users, deep-links, corrupted route extras) so the
+    // "4× LIFTS" label on the card always matches what the plan
+    // generator will actually produce.
+    final daysPerWeek = (widget.data['days_per_week'] as int?) ??
+        switch (goal) {
+          'build_muscle' || 'strength' => 5,
+          'recomp' || 'lose_fat' => 4,
+          'maintain' => 3,
+          _ => 4,
+        };
     // Weight-delta label follows the same 12-week target math used at
     // submit time. Keep aligned with the `targetDelta` switch above.
     final delta = switch (goal) {
