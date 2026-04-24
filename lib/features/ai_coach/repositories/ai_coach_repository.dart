@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -354,7 +353,7 @@ class AiCoachRepository {
       return;
     }
 
-    final userId = Hive.box('userBox').get('user_id') as String?;
+    final userId = HiveService.instance.userBox.get('user_id') as String?;
     if (userId == null || userId.isEmpty) return;
 
     // Reset detector streak when the active user changes — the singleton
@@ -365,7 +364,7 @@ class AiCoachRepository {
     _lastIdentityUserId = userId;
 
     try {
-      final coachBox = Hive.box('coachBox');
+      final coachBox = HiveService.instance.coachBox;
       final existing =
           CoachMemory.readFromBox(coachBox) ?? CoachMemory(userId: userId);
       final patched = existing.merge(CoachMemory(
@@ -579,10 +578,10 @@ class AiCoachRepository {
   /// list into coach_memory.coach_notes. Idempotent — no-op if coach_memory
   /// already exists in Hive.
   Future<void> backfillCoachMemoryIfNeeded() async {
-    final coachBox = Hive.box('coachBox');
+    final coachBox = HiveService.instance.coachBox;
     if (CoachMemory.readFromBox(coachBox) != null) return;
 
-    final userId = Hive.box('userBox').get('user_id') as String?;
+    final userId = HiveService.instance.userBox.get('user_id') as String?;
     if (userId == null || userId.isEmpty) return;
 
     final legacy = coachBox.get('coaching_notes');

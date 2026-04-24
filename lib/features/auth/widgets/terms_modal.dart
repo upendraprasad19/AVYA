@@ -1,9 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -47,7 +47,7 @@ class TermsModal extends StatelessWidget {
 
   static bool _alreadyAccepted() {
     try {
-      final box = Hive.box('userBox');
+      final box = HiveService.instance.userBox;
       final stamp = box.get('terms_accepted_at');
       final storedVersion = box.get('terms_version');
       return stamp is String &&
@@ -60,7 +60,7 @@ class TermsModal extends StatelessWidget {
 
   static Future<void> _recordAcceptance() async {
     try {
-      final box = Hive.box('userBox');
+      final box = HiveService.instance.userBox;
       await box.put(
         'terms_accepted_at',
         DateTime.now().toUtc().toIso8601String(),

@@ -377,7 +377,9 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
       category: category,
       equipmentNeeded: equipList,
       exerciseType: m['exercise_type'] is List
-          ? (m['exercise_type'] as List).first.toString()
+          ? ((m['exercise_type'] as List).isNotEmpty
+              ? (m['exercise_type'] as List).first.toString()
+              : null)
           : m['exercise_type'] as String?,
       supersetGroup: m['superset_group'] as int?,
       muscleLabel: muscleLabel,

@@ -288,11 +288,11 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
 
     // F7 · Single source of truth for summed macros.
     final macros = NutritionRepository.instance.dailyMacros(selectedDate);
-    final calories = macros['calories']!;
-    final protein = macros['protein']!;
-    final carbs = macros['carbs']!;
-    final fat = macros['fat']!;
-    final fiber = macros['fiber']!;
+    final calories = (macros['calories'] as num?)?.toDouble() ?? 0.0;
+    final protein = (macros['protein'] as num?)?.toDouble() ?? 0.0;
+    final carbs = (macros['carbs'] as num?)?.toDouble() ?? 0.0;
+    final fat = (macros['fat'] as num?)?.toDouble() ?? 0.0;
+    final fiber = (macros['fiber'] as num?)?.toDouble() ?? 0.0;
 
     // Build meal breakdown (this provider's unique responsibility — not
     // relevant to Home). Same box, same date filter.

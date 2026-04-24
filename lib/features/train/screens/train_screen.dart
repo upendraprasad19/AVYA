@@ -322,8 +322,8 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          if (isDoneToday)
-            _buildDoneHeroCard(todayDay!)
+          if (isDoneToday && todayDay != null)
+            _buildDoneHeroCard(todayDay)
           else if (isRestDay)
             _buildRestHeroCard()
           else if (todayWorkout != null)
