@@ -729,11 +729,101 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             ? () => ref.read(activeWorkoutProvider.notifier).removeExercise(exerciseIndex)
             : null,
         onAdd: (addEx) {
-          // Sentinel value '__ADD_MODE__' means user tapped the "+ Add Exercise"
-          // button — open the full exercise picker sheet for appending.
+          // Sentinel '__ADD_MODE__' means user tapped "+ ADD EXERCISE"
+          // inside the Swap sheet.
+          //
+          // Pre-2026-04-24 this opened a picker sheet to browse
+          // existing exercises, forcing the user to then swap again
+          // manually. Per APK test #1 feedback: "if the path was via
+          // swap, it should have swapped as well." The new flow opens
+          // CreateCustomExerciseSheet directly; on save the new
+          // exercise is auto-swapped into the slot, with an UNDO
+          // snackbar for recoverability.
           if (addEx.name == '__ADD_MODE__') {
-            _showExercisePickerSheet(context, ref);
+            _openCreateAndAutoSwap(context, ref, exerciseIndex);
           }
+        },
+      ),
+    );
+  }
+
+  /// Opens [CreateCustomExerciseSheet] and, on save, swaps the newly
+  /// created exercise into [exerciseIndex], preserving the slot's sets,
+  /// reps, weight, and rest. Shows an UNDO snackbar that restores the
+  /// original exercise if tapped within 5 s.
+  void _openCreateAndAutoSwap(
+    BuildContext context,
+    WidgetRef ref,
+    int exerciseIndex,
+  ) {
+    final data = ref.read(activeWorkoutProvider);
+    if (exerciseIndex < 0 || exerciseIndex >= data.exercises.length) return;
+    final original = data.exercises[exerciseIndex];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => CreateCustomExerciseSheet(
+        onCreated: (newExercise) {
+          final newName = (newExercise['name'] as String?) ?? 'Exercise';
+          final loggingType =
+              (newExercise['logging_type'] as String?) ?? 'weight_reps';
+          final defaultSets = newExercise['default_sets'];
+          final defaultReps = newExercise['default_reps'];
+          final defaultRest = newExercise['default_rest_secs'];
+          final equipment = (newExercise['equipment_needed'] as List?)
+                  ?.cast<String>() ??
+              original.equipmentNeeded;
+
+          // Compose the swap target. Prefer the form's defaults (user
+          // just typed them) and fall back to the original slot's
+          // values so weight and cadence carry over naturally.
+          final replacement = ExerciseData(
+            name: newName,
+            sets: defaultSets != null ? '$defaultSets' : original.sets,
+            reps: defaultReps != null ? '$defaultReps' : original.reps,
+            weight: original.weight,
+            rest: defaultRest != null ? '${defaultRest}s' : original.rest,
+            loggingType: loggingType,
+            category: (newExercise['category'] as String?) ?? original.category,
+            equipmentNeeded: equipment,
+          );
+
+          ref.read(activeWorkoutProvider.notifier).swapExercise(
+                exerciseIndex,
+                replacement,
+              );
+          ref.invalidate(todayWorkoutProvider);
+          ref.invalidate(currentPlanProvider);
+          ref.invalidate(calendarWeekProvider);
+
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: AppColors.card,
+                duration: const Duration(seconds: 5),
+                content: Text(
+                  'Swapped "${original.name}" \u2192 "$newName"',
+                  style: AppTypography.bodySm,
+                ),
+                action: SnackBarAction(
+                  label: 'UNDO',
+                  textColor: AppColors.accent,
+                  onPressed: () {
+                    ref
+                        .read(activeWorkoutProvider.notifier)
+                        .swapExercise(exerciseIndex, original);
+                    ref.invalidate(todayWorkoutProvider);
+                    ref.invalidate(currentPlanProvider);
+                    ref.invalidate(calendarWeekProvider);
+                  },
+                ),
+              ),
+            );
         },
       ),
     );

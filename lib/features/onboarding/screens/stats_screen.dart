@@ -60,8 +60,12 @@ class _StatsScreenState extends State<StatsScreen> {
     _height = TextEditingController(
       text: (init['height_cm'] as num?)?.toStringAsFixed(0) ?? '175',
     );
+    // Body fat is OPTIONAL — default blank so users aren't nudged to
+    // over-commit to a guess. BmrCalculator falls back to Mifflin-St Jeor
+    // (height + weight + age + sex) when body_fat_pct is null, so leaving
+    // this blank is first-class.
     _bodyFat = TextEditingController(
-      text: (init['body_fat_pct'] as num?)?.toStringAsFixed(0) ?? '18',
+      text: (init['body_fat_pct'] as num?)?.toStringAsFixed(0) ?? '',
     );
     _activity = (init['activity_level'] as String?) ?? 'moderate';
   }
@@ -236,9 +240,10 @@ class _StatsScreenState extends State<StatsScreen> {
               width: tileWidth,
               child: _StatField(
                 label: 'BODY FAT',
-                unit: '% \u00B7 EST',
+                unit: '% \u00B7 OPT',
                 controller: _bodyFat,
                 decimal: false,
+                hint: '\u2014',
               ),
             ),
           ],
@@ -360,7 +365,11 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
               alignment: Alignment.center,
               child: Text(
-                'CALIBRATE PLAN \u2192',
+                // Renamed from "CALIBRATE PLAN" — misleading because the
+                // actual plan calibration happens on step 05 (Plan screen)
+                // via "REPORT FOR DUTY". This step just continues to
+                // Details (step 04).
+                'CONTINUE \u2192',
                 style: AppTypography.mono.copyWith(
                   fontSize: 12,
                   color: AppColors.bgDeep,
@@ -395,13 +404,15 @@ class _StatsScreenState extends State<StatsScreen> {
       );
       return;
     }
-    // L4 — non-blocking feedback when body fat is left blank so the user
-    // knows the 18% default was applied. Does NOT block CONTINUE.
+    // Body fat is optional. When blank, BmrCalculator falls back to
+    // Mifflin-St Jeor (weight + height + age + sex) which is accurate
+    // enough for onboarding targets. No longer forces a "18% default"
+    // since that misled users into thinking we were making up a number.
     if (_bodyFat.text.trim().isEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-              "We'll estimate body fat at 18% — you can refine later in Profile."),
+              "Skipping body fat \u2014 using weight + height. Scan later from Profile to refine."),
           duration: Duration(seconds: 3),
         ),
       );
@@ -435,6 +446,7 @@ class _StatField extends StatelessWidget {
     required this.controller,
     this.highlight = false,
     this.decimal = false,
+    this.hint,
   });
 
   final String label;
@@ -442,6 +454,9 @@ class _StatField extends StatelessWidget {
   final TextEditingController controller;
   final bool highlight;
   final bool decimal;
+  /// Placeholder shown when the controller is empty — used on optional
+  /// fields (e.g. body fat) so the tile doesn't look like a missing zero.
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -494,10 +509,20 @@ class _StatField extends StatelessWidget {
                     height: 1,
                     fontWeight: FontWeight.w700,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
+                    hintText: hint,
+                    hintStyle: hint == null
+                        ? null
+                        : AppTypography.numeric.copyWith(
+                            fontSize: 26,
+                            color: AppColors.textGhost,
+                            letterSpacing: -0.5,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                          ),
                   ),
                 ),
               ),

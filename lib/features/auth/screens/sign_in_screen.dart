@@ -455,6 +455,31 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   }
                 },
               ),
+
+              // Forgot password — only relevant on the sign-in variant,
+              // never during sign-up. Pre-2026-04-24 the link lived only
+              // on the welcome view (pre-email) where users who already
+              // committed to email couldn't see it.
+              if (!_isSignUp) ...[
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: isLoading
+                      ? null
+                      : () => ForgotPasswordSheet.show(context),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'Forgot password?',
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
 
               // Toggle sign-in / sign-up
@@ -901,9 +926,10 @@ class _HeroLogoBand extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Logo mark — 82dp circle, 2px gold border, faint radial
-                  // gold glow. Placeholder "A" glyph in italic serif; can
-                  // be swapped later for an SVG/PNG asset without touching
-                  // the layout math.
+                  // gold glow. The "A" italic-serif placeholder used here
+                  // until the APK-test-1-batch (2026-04-24) is replaced
+                  // with the canonical AVYA icon asset for a more crafted
+                  // premium feel. Icon sized to 54% of the ring diameter.
                   Container(
                     width: 82,
                     height: 82,
@@ -921,15 +947,12 @@ class _HeroLogoBand extends StatelessWidget {
                       ),
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      'A',
-                      style: TextStyle(
-                        fontFamily: 'Georgia',
-                        fontSize: 38,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                        height: 1,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/avya_icon.png',
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),

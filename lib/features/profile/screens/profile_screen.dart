@@ -38,7 +38,6 @@ import '../widgets/slim_achievements_card.dart';
 import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
-import 'package:icanbefitter/shared/widgets/community_review_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -630,25 +629,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   trailing: const ProfileRowChevron(),
                   onTap: () => _showInviteFriends(),
                 ),
-                ProfileRow(
-                  icon: Icons.rate_review_outlined,
-                  title: 'Review Community Items',
-                  subtitle: 'Approve foods & exercises from users',
-                  trailing: const ProfileRowChevron(),
-                  onTap: () => showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const CommunityReviewSheet(),
-                  ),
-                ),
-                // F9 — user-visible status of their own submissions
+                // S1 (2026-04-24) — the pre-APK-1-batch split of
+                // "Review Community Items" (bottom sheet) and
+                // "My Submissions" (screen) confused testers who kept
+                // tapping one expecting the other. Collapsed into a
+                // single Submissions row that opens a tabbed screen
+                // with both views.
                 ProfileRow(
                   icon: Icons.workspace_premium_outlined,
-                  title: 'My Submissions',
-                  subtitle: 'Track approval status of foods & exercises you shared',
+                  title: 'Submissions',
+                  subtitle: 'Your submissions + vote on community items',
                   trailing: const ProfileRowChevron(),
-                  onTap: () => context.go('/profile/my-submissions'),
+                  onTap: () => context.go('/profile/submissions'),
                 ),
                 // AH.7 — Rate App tile completes the SHARE & GROW block
                 // (JSX spec lines 331–338 + user ask for explicit Rate App

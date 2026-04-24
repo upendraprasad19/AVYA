@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -679,10 +681,75 @@ class PredictionData {
 }
 
 class PredictionNotifier extends Notifier<PredictionData> {
+  /// Sanitises a prediction_text value stored in Hive.
+  ///
+  /// Gemini sometimes returns JSON (e.g. `{"predictions":[...]}`) even when
+  /// the prompt asks for plain prose. Rather than showing raw JSON in the
+  /// card, try to pull out a human-readable field; on failure, strip the
+  /// most common JSON artefacts. The cleaned value is written back to Hive
+  /// so the guard runs at most once per value.
+  static String? _sanitisePredictionText(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return raw;
+
+    // Strip ```json ... ``` fences if Gemini wrapped the JSON.
+    var body = trimmed;
+    if (body.startsWith('```')) {
+      body = body.replaceFirst(RegExp(r'^```(json)?\n?'), '');
+      if (body.endsWith('```')) body = body.substring(0, body.length - 3);
+      body = body.trim();
+    }
+
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map) {
+        for (final key in ['summary', 'tagline', 'text', 'prediction']) {
+          final v = decoded[key];
+          if (v is String && v.trim().isNotEmpty) return v.trim();
+        }
+        final preds = decoded['predictions'];
+        if (preds is List && preds.isNotEmpty) {
+          final first = preds.first;
+          if (first is Map) {
+            for (final key in ['summary', 'tagline', 'text', 'timeframe']) {
+              final v = first[key];
+              if (v is String && v.trim().isNotEmpty) return v.trim();
+            }
+          } else if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+      } else if (decoded is List && decoded.isNotEmpty) {
+        final first = decoded.first;
+        if (first is String && first.trim().isNotEmpty) return first.trim();
+      }
+    } catch (_) {
+      // Fall through to the artefact-stripping fallback.
+    }
+
+    // Last-ditch: remove obvious JSON syntax so the user sees something
+    // readable rather than `{"predictions":[{...`.
+    final stripped = body
+        .replaceAll(RegExp(r'[\{\}\[\]"]'), '')
+        .replaceAll(RegExp(r'\s*,\s*'), ' · ')
+        .replaceAll(RegExp(r'\s*:\s*'), ': ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return stripped.isEmpty ? null : stripped;
+  }
+
   @override
   PredictionData build() {
     final configBox = HiveService.instance.configBox;
-    final predText = configBox.get('prediction_text') as String?;
+    final rawText = configBox.get('prediction_text') as String?;
+    final predText = _sanitisePredictionText(rawText);
+    // Overwrite the Hive value with the cleaned version so the expensive
+    // decode path runs at most once per value.
+    if (predText != null && predText != rawText) {
+      configBox.put('prediction_text', predText);
+    }
     final predDateRaw = configBox.get('prediction_date') as String?;
     final predDate =
         predDateRaw != null ? DateTime.tryParse(predDateRaw) : null;

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
@@ -192,8 +194,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 20),
 
-                    // CREATE CUSTOM EXERCISE section
-                    _buildCreateCustomExerciseSection(context),
+                    // YOUR EXERCISES section — header + CREATE pill +
+                    // horizontal chip row showing all custom exercises
+                    // with their approval status. Replaces the older
+                    // full-width "Create Custom Exercise" card (saves
+                    // vertical space and surfaces DRAFT/PENDING
+                    // state visibly, per APK-test-1-batch D4/D6).
+                    _buildYourExercisesSection(context),
 
                     const SizedBox(height: 20),
                   ],
@@ -1853,67 +1860,199 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     );
   }
 
-  // ── Create Custom Exercise Section ──────────────────────────────
+  // ── Your Exercises Section (D4 / D6) ─────────────────────────────
+  //
+  // Replaces the pre-2026-04-24 full-width "Create Custom Exercise"
+  // WardCard with a header-plus-chips layout that mirrors MY TEMPLATES.
+  // Users can see every exercise they've created, with a visible
+  // approval state (DRAFT / PENDING / APPROVED) so the path from
+  // create -> community -> approved is legible without opening Profile.
 
-  Widget _buildCreateCustomExerciseSection(BuildContext context) {
+  Widget _buildYourExercisesSection(BuildContext context) {
+    final customBox = HiveService.instance.customBox;
+
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: WardCard(
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            backgroundColor: Colors.transparent,
-            isScrollControlled: true,
-            builder: (_) => CreateCustomExerciseSheet(
-              onCreated: (exercise) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Exercise created! It\'s now available in all workout pickers.',
-                      style: AppTypography.bodySm,
-                    ),
-                    backgroundColor: AppColors.card,
-                    behavior: SnackBarBehavior.floating,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'YOUR EXERCISES',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _openCreateCustomExerciseSheet(context),
+                child: const WardChip(
+                  label: '+ CREATE',
+                  tone: WardChipTone.gold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // ValueListenableBuilder rebuilds the chip row whenever the
+          // Hive customBox mutates — so new exercises appear as soon as
+          // CreateCustomExerciseSheet._save writes them.
+          ValueListenableBuilder<Box<dynamic>>(
+            valueListenable: customBox.listenable(),
+            builder: (context, box, _) {
+              final exercises = _collectCustomExercises(box);
+              if (exercises.isEmpty) {
+                return WardCard(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.fitness_center_outlined,
+                        size: 28,
+                        color: AppColors.textDim,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No custom exercises yet',
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 13,
+                          color: AppColors.textDim,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap + CREATE to add one',
+                        style: AppTypography.bodySm
+                            .copyWith(color: AppColors.textDim),
+                      ),
+                    ],
                   ),
                 );
-              },
+              }
+              return SizedBox(
+                height: 68,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: exercises.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) =>
+                      _CustomExerciseChip(exercise: exercises[i]),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reads every `custom_exercise_*` entry from the Hive customBox and
+  /// returns them newest-first. Filters out malformed entries.
+  List<Map<String, dynamic>> _collectCustomExercises(Box<dynamic> box) {
+    final out = <Map<String, dynamic>>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('custom_exercise_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      map['_key'] = key;
+      out.add(map);
+    }
+    // Newest first. Hive keys are `custom_exercise_<ms>` so string
+    // descending sort == recency order.
+    out.sort((a, b) => (b['_key'] as String).compareTo(a['_key'] as String));
+    return out;
+  }
+
+  void _openCreateCustomExerciseSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => CreateCustomExerciseSheet(
+        onCreated: (exercise) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Exercise saved. Showing in YOUR EXERCISES.',
+                style: AppTypography.bodySm,
+              ),
+              backgroundColor: AppColors.card,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         },
-        child: Row(
-          children: [
-            const Icon(
-              Icons.add_circle_outline,
-              size: 20,
-              color: AppColors.accent,
+      ),
+    );
+  }
+}
+
+/// Horizontal chip for a custom exercise on the Train screen, showing
+/// name + approval status. Status rules:
+///   * `approved_for_library=true`          -> APPROVED (ok)
+///   * `submitted_to_library=true` only     -> PENDING  (warn)
+///   * neither                               -> DRAFT    (textMute)
+class _CustomExerciseChip extends StatelessWidget {
+  const _CustomExerciseChip({required this.exercise});
+
+  final Map<String, dynamic> exercise;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = exercise['name'] as String? ?? 'Unnamed';
+    final submitted = exercise['submitted_to_library'] == true;
+    final approved = exercise['approved_for_library'] == true;
+
+    final (String statusLabel, Color statusColor) = approved
+        ? ('APPROVED', AppColors.ok)
+        : submitted
+            ? ('PENDING', AppColors.warn)
+            : ('DRAFT', AppColors.textMute);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.h3.copyWith(
+              fontSize: 13,
+              color: AppColors.textPrimary,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Create Custom Exercise',
-                    style: AppTypography.h3.copyWith(fontSize: 14),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Add your own exercises to use in workouts',
-                    style: AppTypography.bodySm
-                        .copyWith(color: AppColors.textDim),
-                  ),
-                ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (approved) ...[
+                Icon(Icons.check_circle_outline, size: 11, color: statusColor),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                statusLabel,
+                style: AppTypography.monoXs.copyWith(
+                  color: statusColor,
+                  letterSpacing: 1.8,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: AppColors.textDim,
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -31,7 +31,10 @@ class PredictionService {
 
 Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
 
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+Reply as plain text bullet points ONLY. Max 80 words.
+DO NOT return JSON. DO NOT wrap in code fences. DO NOT include keys like "predictions", "timeframe", or "summary". Plain bullets only.
+
+Format (use • not JSON):
 • Weight: current → 4wk → 8wk → 12wk
 • Body fat estimate change
 • Key lift projections

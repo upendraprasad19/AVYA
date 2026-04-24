@@ -23,6 +23,7 @@ import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
+import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
@@ -322,9 +323,17 @@ class AppRouter {
                     builder: (context, state) => const ProgressPhotosScreen(),
                   ),
                   GoRoute(
+                    // Legacy route kept for deep-links in notifications
+                    // that were filed against the old "My Submissions"
+                    // row. New Profile entry points at `/profile/submissions`.
                     path: 'my-submissions',
                     name: 'mySubmissions',
                     builder: (context, state) => const MySubmissionsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'submissions',
+                    name: 'submissions',
+                    builder: (context, state) => const SubmissionsScreen(),
                   ),
                   GoRoute(
                     path: 'settings',

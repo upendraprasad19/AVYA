@@ -523,7 +523,10 @@ Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
 Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
 BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
 
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+Reply as plain text bullet points ONLY. Max 80 words.
+DO NOT return JSON. DO NOT wrap in code fences. DO NOT include keys like "predictions", "timeframe", or "summary". Plain bullets only.
+
+Format (use • not JSON):
 • Weight: 74kg → 71kg (3mo) → 69kg (6mo) → 67kg (12mo)
 • Body fat: ~22% → ~18%
 • Bench: 40kg → 60kg, Squat: 50kg → 80kg

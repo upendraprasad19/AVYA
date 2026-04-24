@@ -1453,20 +1453,40 @@ class SyncService {
         if (raw is! Map) continue;
 
         if (key.startsWith('custom_exercise_')) {
+          final payload = _projectCustomExercise(raw, userId);
+          if (kDebugMode) {
+            debugPrint(
+              '[SyncService] upsert user_custom_exercises '
+              'name=${payload['name']} user=$userId id=${payload['id']}',
+            );
+          }
           try {
             await _supabase.client
                 .from('user_custom_exercises')
-                .upsert(_projectCustomExercise(raw, userId), onConflict: 'id');
+                .upsert(payload, onConflict: 'id');
           } catch (e) {
-            debugPrint('[SyncService._syncCustomItems] exercise $key: $e');
+            debugPrint(
+              '[SyncService._syncCustomItems] exercise '
+              '"${payload['name']}" key=$key: $e',
+            );
           }
         } else if (key.startsWith('custom_food_')) {
+          final payload = _projectCustomFood(raw, userId);
+          if (kDebugMode) {
+            debugPrint(
+              '[SyncService] upsert user_custom_foods '
+              'name=${payload['name']} user=$userId id=${payload['id']}',
+            );
+          }
           try {
             await _supabase.client
                 .from('user_custom_foods')
-                .upsert(_projectCustomFood(raw, userId), onConflict: 'id');
+                .upsert(payload, onConflict: 'id');
           } catch (e) {
-            debugPrint('[SyncService._syncCustomItems] food $key: $e');
+            debugPrint(
+              '[SyncService._syncCustomItems] food '
+              '"${payload['name']}" key=$key: $e',
+            );
           }
         }
       }
