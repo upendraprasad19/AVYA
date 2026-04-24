@@ -77,11 +77,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // much sooner. The future completes as soon as Health Connect data
     // has been written to Hive (or immediately if sync is disabled).
     SyncService.instance.healthSyncDone.then((_) {
-      if (mounted) {
-        ref.invalidate(todayStepsProvider);
-        ref.invalidate(weightHistoryProvider);
-        ref.invalidate(todayWeightLoggedProvider);
-      }
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.invalidate(todayStepsProvider);
+          ref.invalidate(weightHistoryProvider);
+          ref.invalidate(todayWeightLoggedProvider);
+        }
+      });
     });
   }
 

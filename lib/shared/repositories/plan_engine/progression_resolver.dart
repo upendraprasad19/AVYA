@@ -1,5 +1,5 @@
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 
 /// Stage 0: Reads exercise logs from Hive for Phase 2+ to suggest starting weights.
 ///
@@ -31,7 +31,7 @@ class ProgressionResolver {
     final weights = <String, double>{};
 
     try {
-      final workoutBox = Hive.box('workoutBox');
+      final workoutBox = HiveService.instance.workoutBox;
       final now = DateTime.now();
       // Look back 4 weeks (previous phase period)
       final cutoff = now.subtract(const Duration(days: 28));

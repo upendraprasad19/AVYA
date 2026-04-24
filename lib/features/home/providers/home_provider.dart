@@ -404,10 +404,10 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
             .toDouble();
 
     return NutritionSummaryData(
-      calories: macros['calories']!,
-      protein: macros['protein']!,
-      carbs: macros['carbs']!,
-      fat: macros['fat']!,
+      calories: (macros['calories'] as num?)?.toDouble() ?? 0.0,
+      protein: (macros['protein'] as num?)?.toDouble() ?? 0.0,
+      carbs: (macros['carbs'] as num?)?.toDouble() ?? 0.0,
+      fat: (macros['fat'] as num?)?.toDouble() ?? 0.0,
       calorieTarget: calorieTarget,
       proteinTarget: proteinTarget,
       carbTarget: carbTarget,
@@ -520,6 +520,7 @@ class AiInsightNotifier extends Notifier<String?> {
 
     // Extract last sentence as a concise tip — skip if it's too long
     final sentences = latestResponse.split(RegExp(r'[.!?]\s+'));
+    if (sentences.isEmpty) return null;
     final tip = sentences.last.trim();
     if (tip.length > 80 || tip.length < 10) return null;
     return tip;

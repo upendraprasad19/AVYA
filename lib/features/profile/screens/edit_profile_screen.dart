@@ -653,6 +653,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     required Map<String, String> options,
     required void Function(String?) onChanged,
   }) {
+    if (options.isEmpty) return const SizedBox.shrink();
     return DropdownButtonFormField<String>(
       initialValue: options.containsKey(value) ? value : options.keys.first,
       items: options.entries

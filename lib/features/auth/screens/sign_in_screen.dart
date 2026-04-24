@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
@@ -10,6 +9,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/forgot_password_sheet.dart';
@@ -121,7 +121,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         if (code.isNotEmpty) {
           // Store pending referral in configBox for retry on next launch
           try {
-            final configBox = Hive.box('configBox');
+            final configBox = HiveService.instance.configBox;
             configBox.put('pending_referral_code', code);
           } catch (_) {}
           SupabaseService.instance.callFunction(
@@ -130,7 +130,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ).then((_) {
             debugPrint('[SignIn] Referral code redeemed: $code');
             // Clear pending code on success
-            try { Hive.box('configBox').delete('pending_referral_code'); } catch (_) {}
+            try { HiveService.instance.configBox.delete('pending_referral_code'); } catch (_) {}
           }).catchError((e) {
             debugPrint('[SignIn] Referral redemption failed (will retry on next launch): $e');
           });

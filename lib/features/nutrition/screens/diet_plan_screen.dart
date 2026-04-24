@@ -108,10 +108,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       final category = categories[catIdx];
       final foods =
           FoodRepository.instance.getByCategory(category).take(20).toList();
-      if (foods.isEmpty) continue;
 
       // Shuffle with deterministic seed for this meal + category.
       foods.shuffle(Random(seed + catIdx));
+      if (foods.isEmpty) continue;
       final food = foods.first;
       final cals =
           (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
