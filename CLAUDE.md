@@ -270,6 +270,16 @@ lib/
       profile/providers/profile_completeness_provider.dart  # Tier 1/2 weighted calculation
       profile/widgets/profile_completeness_card.dart  # Progress bar + missing fields
       profile/widgets/slim_achievements_card.dart     # Single-line badges row
+      profile/screens/submissions_screen.dart         # Tabbed MY SUBMISSIONS / COMMUNITY
+                                                      #   REVIEW. Canonical route:
+                                                      #   /profile/submissions (S1, APK
+                                                      #   test #1 batch 2026-04-24).
+      profile/screens/my_submissions_screen.dart      # LEGACY — kept only so old
+                                                      #   deep-links to /profile/my-
+                                                      #   submissions keep working. Do
+                                                      #   not add new entry points;
+                                                      #   route new callers at
+                                                      #   /profile/submissions instead.
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
       wardroom/   # 28 primitives (up from 15) — see "Wardroom primitives" in §9.
@@ -344,7 +354,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (35 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (36 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
@@ -357,8 +367,10 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 | Visual (1) | `progress_photos` |
 | AI (3) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory` |
 | Telemetry (1) | `client_errors` |
-| Monetisation (5) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections` |
+| Monetisation (6) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes` |
 | Community (2) | `community_reviews`, `memory_embeddings` |
+
+**FK direction quirk — `referral_codes` is the ONLY table with an FK to `auth.users(id)`.** Every other user-scoped table FKs to `public.users(id)` because those tables are populated only after the onboarding sync path has inserted the user into `public.users`. Referral-code generation fires on-demand from Profile → Invite Friends, which can happen BEFORE `public.users` has the user's row (fresh sign-up, onboarding not yet completed). Migration 035 (2026-04-24) repointed the FK to `auth.users` + added `UNIQUE(user_id)` after silent FK violations on new-account testers produced the "Failed to generate referral code" toast. Do not "normalize" this FK back to `public.users` without understanding that timing dependency.
 
 **Critical UNIQUE constraints (required for safe re-sync dedup — never remove):**
 - `streaks(user_id, week_start)` — prevents duplicate weeks on restore
@@ -906,6 +918,40 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   deep-links, corrupted route extras). Fallback must never become the default path. The
   DOB path falls back to `DateTime(now.year - age, ...)` when `date_of_birth` is missing
   and `age` happens to be present — only legacy chat users hit this.
+- **Plan-screen preview uses canonical `BmrCalculator.calculateTargets`** (APK-test-1-batch,
+  2026-04-24). `_computeTargets` in `plan_screen.dart` passes every real input from
+  `widget.data` (weight, height, DOB-derived age, sex, activity_level, goal, pace_preference,
+  target_weight_kg, body_fat_pct) and returns `targets.dailyCalories` + `targets.proteinGrams`
+  verbatim. Weight delta is `target - current` rounded, with `HOLD` when abs(diff) < 0.5. The
+  preview numbers now exactly match what `completeOnboarding` will write to the profile — no
+  "plan screen shows X, saved profile gets Y" drift. Pre-2026-04-24 this used a reduced
+  goal-only formula (`weight × 32 + 250` for build_muscle, `weight × 2` for protein) that
+  ignored half the inputs.
+- **Body fat is optional with blank default** (APK-test-1-batch). `stats_screen.dart`
+  controller seeds to `''` (was `'18'`), label reads `BODY FAT % · OPT`, hint shows em-dash
+  ghost when empty. When blank, `BmrCalculator` falls back to Mifflin-St Jeor (weight +
+  height + age + sex) which is accurate enough for onboarding; the old "we'll estimate at
+  18%" snackbar was misleading (no estimation happens — Mifflin-St Jeor doesn't use body
+  fat at all) and has been rephrased to "Skipping body fat — using weight + height. Scan
+  later from Profile to refine."
+- **Details step CTA is `CONTINUE →`, not `CALIBRATE PLAN →`** (APK-test-1-batch). Pre-2026-
+  04-24 the Stats → Details navigation button was labelled "CALIBRATE PLAN", misleading since
+  plan calibration doesn't happen until REPORT FOR DUTY on step 05. Renamed to `CONTINUE →`;
+  behavior unchanged.
+- **Details screen layout uses equal-height sections with in-section fade**
+  (APK-test-1-batch). Experience + Pace render as `_FadeRow` (3 compact rows each; unselected
+  at 45% opacity + `textGhost` code). Days/Week + Equipment render as `_ChipRow` (single
+  horizontal row of 4 pills). Defaults are pre-selected: Intermediate / Balanced / 4 days /
+  Basic gym. Layout is tuned for 360×640 dp with a `SingleChildScrollView` safety net; if
+  a future change adds a 5th section, it will scroll. Custom `_FadeRow`/`_ChipRow` widgets
+  live in `details_screen.dart` (not Wardroom primitives) — if reused elsewhere, promote to
+  `lib/shared/widgets/wardroom/`.
+- **Identity screen name field auto-focuses with inline validation** (APK-test-1-batch).
+  `autofocus: true` pops the keyboard immediately, `textCapitalization.words` title-cases as
+  you type, `_nameError` state + `_nameAllowed` regex (letters/spaces/`.-'`) enforce min 2 /
+  max 40 chars on CONTINUE tap. Error clears automatically when the user resumes typing.
+  DOB still uses a snackbar for missing-field feedback (no inline error surface on the date
+  tile).
 
 ---
 
@@ -1165,3 +1211,10 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | `featureActiveWorkoutMode` is PRO on paper, free in practice | Both START WORKOUT entry points in `train_screen.dart` now route through `SubscriptionService.instance.gate(AppConstants.featureActiveWorkoutMode, ...)`. If you add a new entry point to the active workout flow, you MUST gate it — `test/subscription/active_workout_gate_test.dart` asserts at least 2 gate calls + zero direct `context.go('/train/active-workout')` without a gate. Closed 2026-04-24 (PR-FIX-3). |
 | Onboarding "ADJUST PLAN" silently skipped Details screen | `plan_screen.dart` "ADJUST PLAN" now routes to `/onboarding/details` (was `/onboarding/stats`, bypassing the whole Details step). Stats BACK button now carries current controller values (`_weight`, `_targetWeight`, `_height`, `_bodyFat`, `_activity`) forward so edits survive round-trip. Plan targets card reads `days_per_week` from `widget.data` rather than hardcoding from goal. Closed 2026-04-24 (PR-FIX-4). |
 | Force-unwrap `!` on map keys or `.first` on possibly-empty lists | Null-safe the map read (`(m['k'] as num?)?.toDouble() ?? 0.0`) and always guard `.first` with `isNotEmpty`. Closed 2026-04-24 (PR-FIX-2) in macros maps (home_provider + nutrition_provider), `exercise_type.first` (3 files), `sentences.last`, `options.keys.first`, `diet_plan_screen` shuffle result, `todayDay!` in train_screen. |
+| "Failed to generate referral code" on fresh accounts | `referral_codes.user_id` FK pointed at `public.users(id)`, but the Invite-Friends flow fires before onboarding sync populates `public.users` — so new testers hit silent FK violations on all 5 insert retries. Migration 035 (2026-04-24, APK-test-1-batch) drops the FK and re-adds it against `auth.users(id)` + adds `UNIQUE(user_id)`. This is the ONLY user-scoped FK pointing at `auth.users` — do not normalize it. |
+| Prediction card renders raw JSON | Gemini occasionally returns JSON-shaped responses (`{"predictions":[{...}]}`) even when the prompt asks for plain prose. Two-layer defense: (1) both prediction prompts in `prediction_service.dart` + `onboarding_provider.dart` carry explicit "DO NOT return JSON. DO NOT wrap in code fences. DO NOT include keys like predictions/timeframe/summary"; (2) `PredictionNotifier._sanitisePredictionText` in `ai_coach_provider.dart` detects `{`/`[`/` ``` ` prefixes, JSON-parses, extracts `summary`/`tagline`/`text`/`prediction`/`predictions[0].summary`, and WRITES the cleaned value back to Hive so the decode runs at most once per stored value. Fallback strips common JSON syntax. Never render `configBox['prediction_text']` without this guard. |
+| Forgot-password link invisible on email sign-in screen | Pre-2026-04-24 the "Forgot password?" link lived only inside `_buildWelcomeView` (the pre-email, three-button landing view) in `sign_in_screen.dart`. Once a user tapped CONTINUE WITH EMAIL and committed to the email form, the link was gone — exactly when they'd realize they forgot the password. Fixed in APK-test-1-batch: duplicated the `GestureDetector → ForgotPasswordSheet.show` into `_buildEmailView` directly below the SIGN IN button, guarded by `if (!_isSignUp)` so it doesn't show during sign-up. Web redirect (to `icanbefitter.vercel.app/reset`) unchanged; in-app deep-link completion still deferred (F2). |
+| Swap → "+ ADD EXERCISE" opens a picker instead of a create form | Pre-2026-04-24 the `__ADD_MODE__` sentinel in `active_workout_screen._showSwapSheet.onAdd` called `_showExercisePickerSheet` which opened the existing-exercise search sheet — user then had to pick/search and manually re-swap after. Fixed via `_openCreateAndAutoSwap`: on the sentinel, opens `CreateCustomExerciseSheet` directly. On save, auto-swaps the new exercise into the captured slot (preserves weight/rest from the original), invalidates `todayWorkoutProvider + currentPlanProvider + calendarWeekProvider`, and shows a 5s snackbar with UNDO that calls `swapExercise(index, original)` to restore. Do NOT revert to the picker path — it's a 2-tap vs 1-tap regression. |
+| Custom exercise created but not visible in My Submissions | Two distinct failure modes: (a) `MySubmissionsScreen`/`_MySubmissionsBody` filters to `submitted_to_library=true`, so DRAFT exercises (user didn't tick "Share with AVYA community") never appear there — by design; (b) fire-and-forget `unawaited(SyncService.instance.syncCustomItemsNow())` can be interrupted by the user immediately backgrounding the app. The UX fix is D6 on Train: `_buildYourExercisesSection` uses `ValueListenableBuilder<customBox>` so the new exercise shows up instantly as a chip with `DRAFT`/`PENDING`/`APPROVED` badge regardless of submission state. The sync fix is observability: `_projectCustomExercise` already whitelists columns (since 2026-04-18), and `_syncCustomItems` now logs the payload in `kDebugMode` + the exercise name on errors. |
+| Plan-screen preview numbers disagreed with saved profile | `_computeTargets` used to run a reduced goal-only formula (`weight × 32 + 250` for build_muscle, `weight × 2` for protein) that ignored body_fat, height, activity, and pace. Saved profile went through `BmrCalculator.calculateTargets` with all inputs → different numbers on preview vs DB. Fixed in APK-test-1-batch: preview calls the canonical `BmrCalculator.calculateTargets` with every input from `widget.data` (weight, height, DOB-derived age, sex, activity, goal, pace, target_weight, body_fat_pct). Weight delta is now `target - current` rounded, with a `HOLD` special case when abs(diff) < 0.5. Only `days_per_week` keeps a goal-based fallback (for legacy chat-flow deep-links). |
+| Submissions entry confusing — two separate rows | Pre-APK-test-1-batch Profile showed "Review Community Items" (bottom sheet) + "My Submissions" (route) as two separate rows under SHARE & GROW. Testers kept tapping "Review Community Items" expecting to see their own submissions too. Consolidated into a single `Submissions` row at `/profile/submissions` which opens `SubmissionsScreen` with a 2-segment pill toggle: MY SUBMISSIONS + COMMUNITY REVIEW. Uses a handrolled pill (not Material `TabBar`) styled like `WardChip` since the old coach-screen `_buildStatusPill` primitive was deleted 2026-04-18. Legacy `/profile/my-submissions` route kept for deep-link safety — will be retired after one release cycle. |
