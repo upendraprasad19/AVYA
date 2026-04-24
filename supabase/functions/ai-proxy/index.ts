@@ -31,6 +31,10 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import {
+  type Memory,
+  retrieveRelevantMemories,
+} from "../_shared/memory_retrieval.ts";
+import {
   geminiChat,
   MODEL_FLASH,
   MODEL_FLASH_LITE,
@@ -118,6 +122,27 @@ function stripJsonFences(raw: string): string {
     .replace(/```json?\n?/gi, "")
     .replace(/```/g, "")
     .trim();
+}
+
+/**
+ * Format retrieved memories as a bulleted block for system-prompt
+ * injection. Content capped at 200 chars/line to bound prompt growth
+ * (5 matches × 200 chars ≈ 1 KB max). Empty string when no memories —
+ * caller concatenates unconditionally.
+ */
+function formatRetrievalBlock(memories: Memory[]): string {
+  if (memories.length === 0) return "";
+  const lines = memories.map((m) => {
+    const date = (m.created_at ?? "").slice(0, 10); // YYYY-MM-DD
+    const snippet = m.content.length > 200
+      ? m.content.slice(0, 197) + "..."
+      : m.content;
+    return `- [${date}, ${m.source_type}] ${snippet}`;
+  });
+  return (
+    "\n\nRelevant context from earlier conversations (semantic match):\n" +
+    lines.join("\n")
+  );
 }
 
 /** Uniform error response shape. */
@@ -503,6 +528,29 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       }
     }
 
+    // ── Phase B — semantic retrieval ─────────────────────────────
+    // Embed the user's message, look up top-5 past memories above
+    // 0.65 cosine similarity. All failure modes return empty memories
+    // + a `source` code; no throws. We fall back to the existing
+    // full-dump coachingNotes path when memories is empty.
+    // Spec: docs/superpowers/specs/2026-04-24-semantic-retrieval-design.md
+    let retrieval: Awaited<ReturnType<typeof retrieveRelevantMemories>> = {
+      memories: [],
+      source: "empty",
+    };
+    if (isChatChannel) {
+      retrieval = await retrieveRelevantMemories(
+        supabaseClient,
+        userId,
+        message,
+      );
+      if (retrieval.source !== "retrieval" && retrieval.source !== "empty") {
+        console.warn(
+          `[ai-proxy] memory_retrieval fallback: source=${retrieval.source} user_id=${userId}`,
+        );
+      }
+    }
+
     // ── Build system prompt ───────────────────────────────────────
     const baseSystemPrompt =
       "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
@@ -531,16 +579,24 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
 
     // Assemble in the spec'd order: base prompt → [3] coach_memory →
-    // snapshot. The block self-labels [3] in renderCoachMemoryBlock,
-    // and prepending it to the base used to put it before blocks
-    // [1]/[2] of the 7-block layout. Empty coachMemoryBlock (private
-    // mode, no row, or non-chat channel) is dropped by the truthy
-    // check.
+    // snapshot → [Phase B] retrieval. The coach_memory block self-labels
+    // [3] in renderCoachMemoryBlock; empty value (private mode, no row,
+    // or non-chat channel) is dropped by the truthy check.
+    //
+    // Size envelope (not separately validated — size is bounded by
+    // construction):
+    //   baseSystemPrompt          ≈ 1.5 KB
+    //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
+    //   snapshot_json             ≤ 10 KB (input check at line 412)
+    //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
+    // Total ceiling ≈ 15 KB, well under Gemini's context limit.
     const promptParts: string[] = [baseSystemPrompt];
     if (coachMemoryBlock) promptParts.push(coachMemoryBlock);
     if (snapshot_json) {
       promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
     }
+    const retrievalBlock = formatRetrievalBlock(retrieval.memories);
+    if (retrievalBlock) promptParts.push(retrievalBlock);
     const systemPrompt = promptParts.join("\n\n");
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
@@ -618,9 +674,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       created_at: new Date().toISOString(),
     });
 
-    // Silent embedding accumulation for both free + PRO tiers. Free
-    // users don't get retrieval (no latency), but their memory is
-    // ready if they upgrade. Fire-and-forget.
+    // Embedding accumulation for both free + PRO tiers. Retrieval
+    // (Phase B, above at the top of the chat handler) also runs for
+    // all tiers — the original Phase-A-only plan was to gate retrieval
+    // on PRO, but we chose all-users at launch (brainstorm 2026-04-24)
+    // since the per-turn embed cost is ~$0.00001 and the coaching
+    // quality lift is a free-tier retention asset. Fire-and-forget.
     //
     // Skip when the model emitted only tool calls (no conversational
     // text to embed). Append a one-line intent summary so retrieval

@@ -72,10 +72,33 @@ class SubscriptionService {
   ///
   /// Checks Hive configBox for the `isPro` flag and verifies the local
   /// expiry date has not passed. If expired, immediately downgrades.
+  ///
+  /// Also runs a "who does this Hive state belong to?" check: if the
+  /// profile stored in Hive has an `id` that doesn't match the current
+  /// Supabase session's user id, the Hive cache is from another
+  /// account (Android Auto Backup restore, dev-build Hive copy, manual
+  /// tamper). Force-downgrade and return free. This is the defensive
+  /// layer that catches leaks the startup id-mismatch guard misses.
   bool isPro() {
     final configBox = _hive.configBox;
     final pro = configBox.get(_isProKey, defaultValue: false) as bool;
     if (!pro) return false;
+
+    // Defense-in-depth: PRO + Hive-profile.id ≠ session.id means the
+    // Hive cache is from a different account. Don't trust any of it.
+    try {
+      final profile = _hive.userBox.get('profile');
+      final localId = (profile is Map) ? profile['id'] as String? : null;
+      final sessionId = SupabaseService.instance.currentUser?.id;
+      if (localId != null && sessionId != null && localId != sessionId) {
+        _downgradeLocally();
+        return false;
+      }
+    } catch (_) {
+      // Box not open / Supabase not initialized — fall through to the
+      // existing expiry check. The startup guard in splash_screen covers
+      // the not-yet-initialized case.
+    }
 
     final expiresAtRaw = configBox.get(_expiresAtKey);
     if (expiresAtRaw == null) {
@@ -322,10 +345,24 @@ class SubscriptionService {
 
   // ── Private ─────────────────────────────────────────────────
 
-  /// Soft-lock: set isPro = false. All data is kept; PRO features
-  /// simply show a paywall.
+  /// Soft-lock: clear ALL PRO-state keys from Hive. User-visible data
+  /// (workout history, logs, templates) is untouched — only the PRO
+  /// entitlement cache is wiped so the next `isPro()` returns false and
+  /// `expiresAt`-dependent UI (subscription card renewal date, "days
+  /// until expiry" banner, etc.) stops showing stale dates.
+  ///
+  /// Why not just flip `_isProKey` to false: leaving `_expiresAtKey`
+  /// and `_planKey` around means a subscription card that reads those
+  /// directly (not via `isPro()`) can still show the old account's
+  /// renewal date — exactly the bug observed 2026-04-24 with the
+  /// Auto-Backup-leaked icanbefitter@gmail.com PRO state showing up on
+  /// a fresh upendra.prasad@thinkingcode.com account as "renews 18 May".
   Future<void> _downgradeLocally() async {
     final configBox = _hive.configBox;
     await configBox.put(_isProKey, false);
+    await configBox.delete(_expiresAtKey);
+    await configBox.delete(_planKey);
+    await configBox.delete('localActivationAt');
+    await configBox.delete(_lastVerifiedKey);
   }
 }
