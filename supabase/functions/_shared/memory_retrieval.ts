@@ -39,10 +39,43 @@ export type RetrievalResult = {
   source: RetrievalSource;
 };
 
+export type GetEmbeddingFn = (
+  text: string,
+  taskType: string,
+) => Promise<number[] | null>;
+
 export type RetrievalOptions = {
   matchCount?: number;
   threshold?: number;
+  /** Hard cap on the embedding network call (ms). Defaults to 3000.
+   * On expiry, the function returns `{ memories: [], source: 'no_embedding' }`
+   * — the never-throw contract holds. Prevents a Gemini embedding-service
+   * degradation from hanging chat responses indefinitely. */
+  embeddingTimeoutMs?: number;
+  /** Test seam — defaults to the real `getEmbedding` from `./embeddings.ts`.
+   * Unit tests inject a stub that returns a fake 768-length vector so the
+   * RPC branch can be exercised without a live Gemini API call. */
+  getEmbeddingFn?: GetEmbeddingFn;
 };
+
+/** Hard-cap the embedding call. Resolves `null` on timeout so the never-throw
+ * contract of [retrieveRelevantMemories] holds. */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<T | null>([
+      promise,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /**
  * Retrieve the most semantically relevant past memories for this user.
@@ -50,7 +83,6 @@ export type RetrievalOptions = {
  * Never throws. All failure modes return `{ memories: [], source: <code> }`
  * so the caller can unconditionally proceed to fallback behavior.
  */
-// deno-lint-ignore no-explicit-any
 export async function retrieveRelevantMemories(
   // deno-lint-ignore no-explicit-any
   supabaseClient: any,
@@ -60,11 +92,19 @@ export async function retrieveRelevantMemories(
 ): Promise<RetrievalResult> {
   const matchCount = options.matchCount ?? 5;
   const threshold = options.threshold ?? 0.65;
+  const timeoutMs = options.embeddingTimeoutMs ?? 3000;
+  const embed = options.getEmbeddingFn ?? getEmbedding;
 
   // 1. Embed the query — RETRIEVAL_QUERY task type is critical for Gemini's
   //    asymmetric embedding model. Phase A writes use RETRIEVAL_DOCUMENT;
   //    mixing them degrades recall significantly.
-  const queryEmbedding = await getEmbedding(query, "RETRIEVAL_QUERY");
+  //
+  //    Timeout wraps the network call so an upstream Gemini degradation
+  //    can't hang the chat response.
+  const queryEmbedding = await withTimeout(
+    embed(query, "RETRIEVAL_QUERY"),
+    timeoutMs,
+  );
   if (!queryEmbedding) {
     return { memories: [], source: "no_embedding" };
   }

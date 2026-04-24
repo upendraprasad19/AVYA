@@ -1,12 +1,19 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { retrieveRelevantMemories } from "./memory_retrieval.ts";
 
-// Deno's module resolver makes mocking imported functions awkward. We
-// inject dependencies via a second-argument pattern in production, but
-// the simplest unit-test surface is a stub Supabase client whose rpc()
-// returns whatever the test sets up. We do NOT mock getEmbedding here —
-// it's tested separately; we feed the stub Supabase client the exact
-// vector the real embedding call would emit for the test query.
+// Tests inject a stub `getEmbeddingFn` via `RetrievalOptions` so we never
+// hit the real Gemini API in the test environment. The stub returns a
+// fake 768-length vector — the exact contents don't matter because the
+// stub Supabase client's rpc() is also fake; all it needs is a non-null
+// value to exercise the RPC branch.
+
+const FAKE_EMBEDDING = new Array<number>(768).fill(0.1);
+const okEmbed = async (_text: string, _taskType: string) => FAKE_EMBEDDING;
+const nullEmbed = async (_text: string, _taskType: string) => null;
+const hangEmbed = (_text: string, _taskType: string) =>
+  new Promise<number[] | null>(() => {
+    // never resolves — exercises the withTimeout path
+  });
 
 function stubSupabase(rpcImpl: (name: string, args: unknown) => unknown) {
   return {
@@ -41,6 +48,7 @@ Deno.test("retrieveRelevantMemories — happy path returns ranked matches", asyn
     stub,
     "1574f7c6-5cf1-411b-9ebc-61471445285a",
     "my knee hurts after squats",
+    { getEmbeddingFn: okEmbed },
   );
 
   assertEquals(result.source, "retrieval");
@@ -55,30 +63,48 @@ Deno.test("retrieveRelevantMemories — zero matches returns source:empty", asyn
     stub,
     "00000000-0000-0000-0000-000000000000",
     "unrelated query that matches nothing",
+    { getEmbeddingFn: okEmbed },
   );
 
   assertEquals(result.source, "empty");
   assertEquals(result.memories.length, 0);
 });
 
-// To test the no_embedding branch we shadow the getEmbedding import by
-// using an import map or a specialised test module. Simpler option: stub
-// at the Deno module level via import.meta trick. Cleanest in practice:
-// export an internal seam.
+Deno.test("retrieveRelevantMemories — embedding returns null → source:no_embedding", async () => {
+  // The stub should never be called because the function short-circuits.
+  const stub = stubSupabase(() => {
+    throw new Error("rpc should not be called when embedding failed");
+  });
 
-// Deno.test("retrieveRelevantMemories — embedding failure returns no_embedding", ...)
-// SKIPPED in Task 4.
-// Rationale: Deno doesn't support jest.mock-style module-level substitution
-// without an import-map or rewriting the source to take an injected
-// embedding function. Rather than restructure the API surface for a single
-// test case, we rely on the explicit `if (!queryEmbedding)` early-return in
-// the implementation + manual smoke verification in Task 9 (trigger
-// Gemini timeout by pointing GEMINI_API_KEY at an invalid host).
+  const result = await retrieveRelevantMemories(
+    stub,
+    "1574f7c6-5cf1-411b-9ebc-61471445285a",
+    "anything",
+    { getEmbeddingFn: nullEmbed },
+  );
 
-Deno.test({
-  name: "retrieveRelevantMemories — embedding failure path (manual verify)",
-  ignore: true, // see comment above
-  fn: () => {},
+  assertEquals(result.source, "no_embedding");
+  assertEquals(result.memories.length, 0);
+});
+
+Deno.test("retrieveRelevantMemories — embedding hang triggers timeout → source:no_embedding", async () => {
+  // Stub that hangs forever; the withTimeout wrapper should abandon it.
+  const stub = stubSupabase(() => {
+    throw new Error("rpc should not be called when embedding timed out");
+  });
+
+  const result = await retrieveRelevantMemories(
+    stub,
+    "1574f7c6-5cf1-411b-9ebc-61471445285a",
+    "anything",
+    {
+      getEmbeddingFn: hangEmbed,
+      embeddingTimeoutMs: 50, // fast test — real default is 3000 ms
+    },
+  );
+
+  assertEquals(result.source, "no_embedding");
+  assertEquals(result.memories.length, 0);
 });
 
 Deno.test("retrieveRelevantMemories — rpc error returns source:rpc_error", async () => {
@@ -92,6 +118,7 @@ Deno.test("retrieveRelevantMemories — rpc error returns source:rpc_error", asy
     stub,
     "1574f7c6-5cf1-411b-9ebc-61471445285a",
     "anything",
+    { getEmbeddingFn: okEmbed },
   );
 
   assertEquals(result.source, "rpc_error");
