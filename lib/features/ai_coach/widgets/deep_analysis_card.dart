@@ -14,7 +14,8 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// Free users see blurred content with a PRO overlay + sharp 2-px
 /// accent upgrade slab.
 ///
-/// The [onUpgradeTap] callback should call `subscription.gate('reasoning_tab')`
+/// The [onUpgradeTap] callback should call
+/// `subscription.gate(AppConstants.featureAiCoachUnlimited, ...)`
 /// to properly route PRO vs free users.
 class DeepAnalysisCard extends StatelessWidget {
   final bool isPro;

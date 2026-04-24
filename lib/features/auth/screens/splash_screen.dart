@@ -90,7 +90,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _initAndNavigate() async {
     await Future.wait([
-      _runDeferredInit().catchError((_) {}), // Never block navigation on init failure
+      _runDeferredInit().catchError((err, stack) { // Never block navigation on init failure
+        debugPrint('[Splash] deferred init error: $err');
+        // TODO(follow-up): surface fatal init errors (e.g. corrupted Hive) via a
+        // dedicated /error route with a "Reinstall required" message and request_id.
+      }),
       Future.delayed(const Duration(milliseconds: 3000)),
     ]);
     _navigateNext();

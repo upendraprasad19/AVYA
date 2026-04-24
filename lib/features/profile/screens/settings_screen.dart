@@ -310,10 +310,17 @@ class _SignOutButton extends StatelessWidget {
       onTap: () async {
         try {
           await ref.read(authNotifierProvider.notifier).signOut();
-          if (context.mounted) context.go('/sign-in');
-        } catch (_) {
-          // Swallow; sign-out errors are rare and non-actionable here.
+        } catch (e) {
+          debugPrint('[Settings] signOut error: $e');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Sign-out had an issue — session cleared locally.'),
+              ),
+            );
+          }
         }
+        if (context.mounted) context.go('/sign-in');
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),

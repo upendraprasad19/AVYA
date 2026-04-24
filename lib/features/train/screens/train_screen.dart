@@ -402,12 +402,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             label: 'START WORKOUT',
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
-            onPressed: () {
-              ref
-                  .read(activeWorkoutProvider.notifier)
-                  .startWorkout(workout);
-              context.go('/train/active-workout');
-            },
+            onPressed: () => SubscriptionService.instance.gate(
+              AppConstants.featureActiveWorkoutMode,
+              onPro: () {
+                ref
+                    .read(activeWorkoutProvider.notifier)
+                    .startWorkout(workout);
+                context.go('/train/active-workout');
+              },
+              onFree: () => showPaywallSheet(
+                context,
+                feature: 'Active Workout Mode',
+              ),
+            ),
           ),
         ],
       ),
@@ -875,10 +882,17 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             label: 'START WORKOUT',
             leading: const Icon(Icons.play_arrow_rounded,
                 size: 16, color: AppColors.bgDeep),
-            onPressed: () {
-              ref.read(activeWorkoutProvider.notifier).startWorkout(day);
-              context.go('/train/active-workout');
-            },
+            onPressed: () => SubscriptionService.instance.gate(
+              AppConstants.featureActiveWorkoutMode,
+              onPro: () {
+                ref.read(activeWorkoutProvider.notifier).startWorkout(day);
+                context.go('/train/active-workout');
+              },
+              onFree: () => showPaywallSheet(
+                context,
+                feature: 'Active Workout Mode',
+              ),
+            ),
           ),
         ],
       ),

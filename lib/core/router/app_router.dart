@@ -27,6 +27,7 @@ import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dar
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
 import 'package:icanbefitter/features/profile/screens/notifications_screen.dart';
+import 'package:icanbefitter/features/profile/screens/notification_settings_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
@@ -335,6 +336,20 @@ class AppRouter {
                     name: 'notificationsInbox',
                     builder: (context, state) => const NotificationsScreen(),
                   ),
+                  GoRoute(
+                    path: 'notification-settings',
+                    name: 'notificationSettings',
+                    builder: (context, state) {
+                      final extra =
+                          state.extra as Map<String, dynamic>? ?? {};
+                      return NotificationSettingsScreen(
+                        notifPrefs: extra['notifPrefs'] as Map<String, dynamic>? ?? {},
+                        isPro: extra['isPro'] as bool? ?? false,
+                        onSave: extra['onSave'] as ValueChanged<Map<String, dynamic>>? ??
+                            (_) {},
+                      );
+                    },
+                  ),
                 ],
               ),
             ],
@@ -355,7 +370,8 @@ class AppRouter {
     // plan / chat) as "on onboarding" so the stepped flow can navigate
     // between its own screens without the not-onboarded redirect
     // bouncing the user back to /onboarding every tap.
-    final isOnOnboarding = state.matchedLocation.startsWith('/onboarding');
+    final isOnOnboarding = state.matchedLocation.startsWith('/onboarding') ||
+        state.matchedLocation.startsWith('/plan-generation');
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;
