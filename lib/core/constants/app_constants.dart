@@ -78,6 +78,14 @@ class AppConstants {
   /// Beat My Coach challenge interval in days (disabled — Phase 2).
   static const int beatMyCoachIntervalDays = 14;
 
+  // ── Terms & Privacy ───────────────────────────────────────
+
+  /// Current ToS/Privacy-Policy version. Bumping this re-prompts every user
+  /// via [TermsModal] on next launch (Hive flag is stamped with the version
+  /// at accept time; mismatch = re-show). Also persisted on the Supabase
+  /// `users.terms_version` column for audit.
+  static const String termsVersion = 'v1';
+
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';
 

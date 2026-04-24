@@ -157,13 +157,18 @@ class AiBreakdownCard extends ConsumerWidget {
             ),
           ),
 
-          // Macros — semantic per-macro colors per spec
+          // Macros — PRO / CARB / FAT / FIBER / KCAL. Colors:
+          // protein=gold, carb=parchment, fat=ghee-amber, fiber=teal, kcal=parchment.
           _macroCol(item.protein, 'PRO', AppColors.accent),
-          const SizedBox(width: 8),
-          _macroCol(item.carbs, 'CARB', AppColors.warn),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
+          _macroCol(item.carbs, 'CARB', AppColors.textPrimary),
+          const SizedBox(width: 6),
+          _macroCol(item.fat, 'FAT', AppColors.warn),
+          const SizedBox(width: 6),
+          _macroCol('${item.fiber}g', 'FIBER', AppColors.ok),
+          const SizedBox(width: 6),
           _macroCol('${item.calories}', 'KCAL', AppColors.textPrimary),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
           // Edit button — tappable
           GestureDetector(

@@ -305,6 +305,16 @@ class AuthNotifier extends Notifier<AuthState2> {
     state = const AuthState2();
   }
 
+  /// Back out of the OTP step to the phone-input step (keeps other state
+  /// idle, so the UI re-renders the phone entry view and lets the user
+  /// edit their number instead of being stuck on OTP entry).
+  void resetPhoneFlow() {
+    state = state.copyWith(
+      status: AuthStatus.idle,
+      otpSent: false,
+    );
+  }
+
   // ── Private ───────────────────────────────────────────────────
 
   /// Ensures local Hive state is correct after sign-in.
@@ -344,6 +354,19 @@ class AuthNotifier extends Notifier<AuthState2> {
       await _supabase.client.from('users').update({
         'last_active_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', user.id);
+
+      // Sync ToS/Privacy acceptance from Hive (stamped by TermsModal).
+      // Only writes if Hive has a value — never overwrites a server-side
+      // timestamp with null.
+      final termsAcceptedAt = userBox.get('terms_accepted_at');
+      final termsVersion = userBox.get('terms_version');
+      if (termsAcceptedAt is String && termsAcceptedAt.isNotEmpty) {
+        await _supabase.client.from('users').update({
+          'terms_accepted_at': termsAcceptedAt,
+          if (termsVersion is String && termsVersion.isNotEmpty)
+            'terms_version': termsVersion,
+        }).eq('id', user.id);
+      }
     } catch (e) {
       debugPrint('users table upsert failed: $e');
       // Non-fatal for sign-in, but AI chat may fail if row is missing.
