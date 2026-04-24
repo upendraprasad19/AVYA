@@ -320,6 +320,15 @@ class _StatsScreenState extends State<StatsScreen> {
             extra: {
               ...widget.initial ?? const <String, dynamic>{},
               'goal': widget.goal,
+              if (_weight.text.isNotEmpty)
+                'current_weight_kg': double.tryParse(_weight.text),
+              if (_targetWeight.text.isNotEmpty)
+                'target_weight_kg': double.tryParse(_targetWeight.text),
+              if (_height.text.isNotEmpty)
+                'height_cm': double.tryParse(_height.text),
+              if (_bodyFat.text.isNotEmpty)
+                'body_fat_pct': double.tryParse(_bodyFat.text),
+              'activity_level': _activity,
             },
           ),
           child: Container(
@@ -385,6 +394,17 @@ class _StatsScreenState extends State<StatsScreen> {
         ),
       );
       return;
+    }
+    // L4 — non-blocking feedback when body fat is left blank so the user
+    // knows the 18% default was applied. Does NOT block CONTINUE.
+    if (_bodyFat.text.trim().isEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              "We'll estimate body fat at 18% — you can refine later in Profile."),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
     // AI.1 — target_weight_kg rides along in the route extras. AI.3
     // wires plan_screen to consume it instead of inferring from goal

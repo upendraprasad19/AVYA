@@ -215,10 +215,21 @@ class _GoalScreenState extends State<GoalScreen> {
     return Row(
       children: [
         GestureDetector(
-          onTap: () => context.go(
-            '/onboarding/identity',
-            extra: widget.identity ?? const {},
-          ),
+          onTap: () {
+            // L5 — identity should always be present; absence means the
+            // user deep-linked directly to /onboarding/goal or a
+            // router bug dropped the extras.
+            assert(widget.identity != null,
+                'GoalScreen should always receive identity extras');
+            if (widget.identity == null) {
+              debugPrint(
+                  '[GoalScreen] BACK navigation missing identity map — user may have deep-linked');
+            }
+            context.go(
+              '/onboarding/identity',
+              extra: widget.identity ?? const {},
+            );
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
