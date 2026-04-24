@@ -988,6 +988,11 @@ class SyncService {
           if (log['total_carbs'] != null)
             'total_carbs': log['total_carbs'],
           if (log['total_fat'] != null) 'total_fat': log['total_fat'],
+          // Migration 034 (2026-04-24) — fiber was previously dropped from
+          // the cloud projection even though Hive wrote it. AI coach's
+          // `_getTodayNutrition` now references `fiber_g` so the column
+          // must hydrate.
+          'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
         await _supabase.client.from("nutrition_logs").upsert(

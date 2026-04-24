@@ -173,7 +173,7 @@ class WelcomeScreen extends StatelessWidget {
     return Column(
       children: [
         GestureDetector(
-          onTap: () => context.go('/onboarding/goal'),
+          onTap: () => context.go('/onboarding/identity'),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),

@@ -759,7 +759,7 @@ class AiCoachRepository {
     final todayStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    double calories = 0, protein = 0, carbs = 0, fat = 0;
+    double calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
 
     for (final raw in nutritionBox.values) {
       if (raw is! Map) continue;
@@ -770,6 +770,7 @@ class AiCoachRepository {
         protein += (log['total_protein'] as num?)?.toDouble() ?? 0;
         carbs += (log['total_carbs'] as num?)?.toDouble() ?? 0;
         fat += (log['total_fat'] as num?)?.toDouble() ?? 0;
+        fiber += (log['total_fiber'] as num?)?.toDouble() ?? 0;
       }
     }
 
@@ -795,6 +796,10 @@ class AiCoachRepository {
       'protein_g': protein.round(),
       'carbs_g': carbs.round(),
       'fat_g': fat.round(),
+      // Migration 034 (2026-04-24) — surface fiber in the AI snapshot so
+      // Gemini can coach on the #1 Indian-audience macro gap.
+      'fiber_g': fiber.round(),
+      'fiber_target_g': 30,
       'water_ml': waterMl,
       'urine_status': ?urineStatus,
     };

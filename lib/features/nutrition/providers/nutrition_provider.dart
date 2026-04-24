@@ -1044,10 +1044,14 @@ final customFoodProvider =
 class MealTypeNotifier extends Notifier<String> {
   @override
   String build() {
-    final hour = DateTime.now().hour;
-    if (hour < 11) return 'breakfast';
-    if (hour < 15) return 'lunch';
-    if (hour < 19) return 'dinner';
+    // Time-windowed inference, matching `inferMealSlot` in
+    // meal_slot_inference.dart. Kept inline here to avoid an import cycle
+    // from the provider layer; keep windows in sync if edited.
+    final now = DateTime.now();
+    final mins = now.hour * 60 + now.minute;
+    if (mins >= 5 * 60 && mins < 10 * 60 + 30) return 'breakfast';
+    if (mins >= 11 * 60 + 30 && mins < 15 * 60 + 30) return 'lunch';
+    if (mins >= 18 * 60 && mins < 22 * 60) return 'dinner';
     return 'snacks';
   }
 

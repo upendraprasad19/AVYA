@@ -16,6 +16,7 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import '../providers/nutrition_provider.dart';
+import 'ai_breakdown_card.dart' show MealSlotChip;
 
 /// Camera-based meal scanning card with usage counter.
 ///
@@ -413,10 +414,17 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final id = 'nlog_${now.millisecondsSinceEpoch}';
 
+    // Slot — inferred default or user-override via the MealSlotChip shown
+    // at the top of the editor (PR Part C.3, 2026-04-24). Reads the same
+    // `mealTypeProvider` the AI breakdown card writes to, so a scan made
+    // right after an AI log stays on the same slot unless the user
+    // flips it.
+    final mealType = ref.read(mealTypeProvider);
+
     HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
-      'meal_type': 'snacks',
+      'meal_type': mealType,
       'food_name': _mealNameCtrl.text.trim().isEmpty
           ? 'Scanned Meal'
           : _mealNameCtrl.text.trim(),
@@ -451,9 +459,32 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch so the chip rebuilds when the user picks a different slot from
+    // the popup menu.
+    final slot = ref.watch(mealTypeProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Slot chip row — Logging to: 🍱 LUNCH ▾
+        Row(
+          children: [
+            Text(
+              'LOGGING TO',
+              style: AppTypography.monoXs.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(width: 8),
+            MealSlotChip(
+              slot: slot,
+              onSelected: (s) =>
+                  ref.read(mealTypeProvider.notifier).select(s),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         // Editable meal name + live total
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,

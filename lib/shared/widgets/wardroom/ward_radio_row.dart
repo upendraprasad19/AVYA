@@ -56,9 +56,16 @@ class WardRadioRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 44,
+              // Widened from 44 → 56 dp: 7-char codes like "RECOMP" /
+              // "PERFORM" were wrapping to two lines at 10sp mono +
+              // 2px letter-spacing. 56dp fits a 7-char label comfortably
+              // without crowding the middle title column.
+              width: 56,
               child: Text(
                 rowKey,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
                 style: AppTypography.mono.copyWith(
                   color: selected ? AppColors.accent : AppColors.textMute,
                   letterSpacing: 2,

@@ -29,39 +29,7 @@ class WeekSelector extends StatefulWidget {
 }
 
 class _WeekSelectorState extends State<WeekSelector> {
-  final ScrollController _scrollController = ScrollController();
-  static const double _tabWidth = 62;
   static const double _tabSpacing = 4;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
-  }
-
-  @override
-  void didUpdateWidget(covariant WeekSelector oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedWeek != widget.selectedWeek) {
-      _scrollToSelected();
-    }
-  }
-
-  void _scrollToSelected() {
-    if (!_scrollController.hasClients) return;
-    final target = (widget.selectedWeek - 1) * (_tabWidth + _tabSpacing);
-    final viewportWidth = _scrollController.position.viewportDimension;
-    final offset = (target - viewportWidth / 2 + _tabWidth / 2)
-        .clamp(0.0, _scrollController.position.maxScrollExtent);
-    _scrollController.animateTo(offset,
-        duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,70 +37,77 @@ class _WeekSelectorState extends State<WeekSelector> {
 
     return SizedBox(
       height: 44,
-      child: ListView.separated(
-        controller: _scrollController,
-        scrollDirection: Axis.horizontal,
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-        itemCount: widget.totalWeeks,
-        separatorBuilder: (_, index) => const SizedBox(width: _tabSpacing),
-        itemBuilder: (context, index) {
-          final week = index + 1;
-          final isSelected = week == widget.selectedWeek;
+        child: Row(
+          children: List.generate(widget.totalWeeks, (index) {
+            final week = index + 1;
+            final isSelected = week == widget.selectedWeek;
 
-          final label = 'W$week';
-          String? sub;
-          if (planStart != null && isSelected) {
-            final weekStart = planStart.add(Duration(days: index * 7));
-            final weekEnd = weekStart.add(const Duration(days: 6));
-            sub = '${_formatShort(weekStart)}–${_formatShort(weekEnd)}';
-          }
+            final label = 'W$week';
+            String? sub;
+            if (planStart != null && isSelected) {
+              final weekStart = planStart.add(Duration(days: index * 7));
+              final weekEnd = weekStart.add(const Duration(days: 6));
+              sub = (weekStart.month == weekEnd.month)
+                  ? '${_formatShort(weekStart)}–${weekEnd.day}'
+                  : '${_formatShort(weekStart)}–${_formatShort(weekEnd)}';
+            }
 
-          final fg = isSelected ? AppColors.bgDeep : AppColors.textDim;
-          final bg = isSelected ? AppColors.accent : AppColors.card;
-          final border = isSelected ? AppColors.accent : AppColors.line2;
+            final fg = isSelected ? AppColors.bgDeep : AppColors.textDim;
+            final bg = isSelected ? AppColors.accent : AppColors.card;
+            final border = isSelected ? AppColors.accent : AppColors.line2;
 
-          return GestureDetector(
-            onTap: () => widget.onSelect(week),
-            child: Container(
-              width: _tabWidth,
-              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(AppRadius.sharp),
-                border: Border.all(color: border),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      style: AppTypography.monoXs.copyWith(
-                        fontSize: 10,
-                        color: fg,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                        height: 1.1,
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                    left: index == 0 ? 0 : _tabSpacing / 2,
+                    right: index == widget.totalWeeks - 1 ? 0 : _tabSpacing / 2),
+                child: GestureDetector(
+                  onTap: () => widget.onSelect(week),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(color: border),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            label,
+                            style: AppTypography.monoXs.copyWith(
+                              fontSize: 10,
+                              color: fg,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.5,
+                              height: 1.1,
+                            ),
+                          ),
+                          if (sub != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              sub.toUpperCase(),
+                              style: AppTypography.monoXs.copyWith(
+                                color: fg.withValues(alpha: 0.85),
+                                fontSize: 7,
+                                letterSpacing: 1,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (sub != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        sub.toUpperCase(),
-                        style: AppTypography.monoXs.copyWith(
-                          color: fg.withValues(alpha: 0.85),
-                          fontSize: 7,
-                          letterSpacing: 1,
-                          height: 1.1,
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          }),
+        ),
       ),
     );
   }

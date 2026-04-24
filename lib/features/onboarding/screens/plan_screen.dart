@@ -77,7 +77,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     return Row(
       children: [
         Text(
-          '04 \u00B7 04',
+          '05 \u00B7 05',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -389,9 +389,20 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
               };
               return (weight + targetDelta).clamp(40.0, 250.0);
             }();
-      final now = DateTime.now();
-      final age = (widget.data['age'] as int?) ?? 30;
-      final dob = DateTime(now.year - age, now.month, now.day);
+      // Date of birth is now collected on Identity (step 01·05). Pull
+      // it directly; fall back to the legacy `age`-derived DOB only for
+      // deep-linked legacy-chat users who never hit the stepped flow.
+      DateTime dob;
+      final dobString = widget.data['date_of_birth'];
+      if (dobString is String) {
+        dob = DateTime.tryParse(dobString) ?? DateTime(2000, 1, 1);
+      } else if (dobString is DateTime) {
+        dob = dobString;
+      } else {
+        final now = DateTime.now();
+        final age = (widget.data['age'] as int?) ?? 30;
+        dob = DateTime(now.year - age, now.month, now.day);
+      }
 
       // fitness_experience, days_per_week, equipment_access,
       // pace_preference now come directly from the Details screen.
@@ -435,8 +446,15 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         _ => 'desk_job',
       };
 
+      // Full name now comes from Identity step (collected pre-Goal).
+      // Fallback to email prefix for legacy chat-flow users.
+      final identityName = (widget.data['full_name'] as String?)?.trim();
+      final fullName = (identityName != null && identityName.isNotEmpty)
+          ? identityName
+          : email.split('@').first;
+
       final notifier = ref.read(onboardingProvider.notifier);
-      notifier.setAnswer('full_name', email.split('@').first);
+      notifier.setAnswer('full_name', fullName);
       notifier.setAnswer('email', email);
       notifier.setAnswer('date_of_birth', dob.toIso8601String());
       notifier.setAnswer(
