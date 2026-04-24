@@ -65,6 +65,10 @@ dependencies:
   # Firebase project (AVYA) already has google-services.json wired.
   firebase_core: ^3.11.0
   firebase_crashlytics: ^4.3.4
+  # intl_phone_field — country-aware phone input for sign-in (India default,
+  # 10-digit validation, auto-strips leading 0, emits full E.164 for Supabase
+  # auth.signInWithOtp).
+  intl_phone_field: ^3.2.0
 
 dev_dependencies:
   flutter_test:
