@@ -185,7 +185,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
             const Icon(Icons.search, color: AppColors.textDisabled, size: 40),
             const SizedBox(height: 8),
             Text(
-              'Search from 5,000+ foods',
+              'Search foods',
               style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
             ),
             const SizedBox(height: 20),

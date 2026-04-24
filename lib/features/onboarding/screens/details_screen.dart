@@ -209,7 +209,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     return Row(
       children: [
         Text(
-          '03 \u00B7 04',
+          '04 \u00B7 05',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -222,7 +222,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
             children: [
               Container(height: 1, color: AppColors.line2),
               FractionallySizedBox(
-                widthFactor: 3 / 4,
+                widthFactor: 4 / 5,
                 child: Container(height: 1, color: AppColors.accent),
               ),
             ],

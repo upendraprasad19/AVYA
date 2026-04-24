@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup / Device Transfer rules.
+
+  Excludes Hive files (app_flutter/) from cloud backup and device transfer.
+  Fixes cross-account leak bug where a prior account's Hive data (workoutBox
+  templates, nutrition logs, coach memory) was silently restored onto a new
+  install signed into the same Google account, bypassing _ensureLocalUser's
+  sign-in-time mismatch check.
+
+  Belt-and-suspenders: main.dart also runs a startup profile-id validation
+  that clears Hive if the local profile.id doesn't match the current session
+  user.id. Exclusion here prevents the leak; the startup check catches any
+  future path we haven't anticipated.
+
+  Android 12+ honours <cloud-backup> and <device-transfer> separately.
+  Older Android reads this file via android:fullBackupContent in the manifest
+  (same schema works for both).
+-->
+<data-extraction-rules>
+  <cloud-backup>
+    <exclude domain="file" path="app_flutter" />
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="file" path="app_flutter" />
+  </device-transfer>
+</data-extraction-rules>

@@ -29,9 +29,7 @@ class _StatsScreenState extends State<StatsScreen> {
   late final TextEditingController _weight;
   late final TextEditingController _targetWeight;
   late final TextEditingController _height;
-  late final TextEditingController _age;
   late final TextEditingController _bodyFat;
-  late String _sex;
   late String _activity;
 
   @override
@@ -62,13 +60,9 @@ class _StatsScreenState extends State<StatsScreen> {
     _height = TextEditingController(
       text: (init['height_cm'] as num?)?.toStringAsFixed(0) ?? '175',
     );
-    _age = TextEditingController(
-      text: (init['age'] as int?)?.toString() ?? '30',
-    );
     _bodyFat = TextEditingController(
       text: (init['body_fat_pct'] as num?)?.toStringAsFixed(0) ?? '18',
     );
-    _sex = (init['sex'] as String?) ?? 'male';
     _activity = (init['activity_level'] as String?) ?? 'moderate';
   }
 
@@ -77,7 +71,6 @@ class _StatsScreenState extends State<StatsScreen> {
     _weight.dispose();
     _targetWeight.dispose();
     _height.dispose();
-    _age.dispose();
     _bodyFat.dispose();
     super.dispose();
   }
@@ -99,8 +92,6 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 24),
                 _header(),
                 const SizedBox(height: 22),
-                _sexSelector(),
-                const SizedBox(height: 14),
                 _statGrid(),
                 const SizedBox(height: 14),
                 _activitySelector(),
@@ -118,7 +109,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Row(
       children: [
         Text(
-          '02 \u00B7 04',
+          '03 \u00B7 05',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -131,7 +122,7 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Container(height: 1, color: AppColors.line2),
               FractionallySizedBox(
-                widthFactor: 2 / 4,
+                widthFactor: 3 / 5,
                 child: Container(height: 1, color: AppColors.accent),
               ),
             ],
@@ -196,62 +187,10 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _sexSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'SEX',
-          style: AppTypography.monoXs.copyWith(
-            color: AppColors.textMute,
-            letterSpacing: 2,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            _pill('MALE', 'male'),
-            _pill('FEMALE', 'female'),
-            _pill('OTHER', 'other'),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _pill(String label, String value) {
-    final selected = _sex == value;
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: GestureDetector(
-          onTap: () => setState(() => _sex = value),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? AppColors.accent : AppColors.card,
-              border: Border.all(
-                color: selected ? AppColors.accent : AppColors.line2,
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.sharp),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: AppTypography.mono.copyWith(
-                fontSize: 10,
-                color: selected ? AppColors.bgDeep : AppColors.textDim,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  // Sex + age inputs removed 2026-04-24. Sex now lives on the new
+  // Identity screen (step 01·05). Age is derived from date_of_birth
+  // (also collected on Identity) at plan-commit time, so it's not
+  // captured directly here anymore.
 
   Widget _statGrid() {
     return LayoutBuilder(
@@ -290,15 +229,6 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'HEIGHT',
                 unit: 'CM',
                 controller: _height,
-                decimal: false,
-              ),
-            ),
-            SizedBox(
-              width: tileWidth,
-              child: _StatField(
-                label: 'AGE',
-                unit: 'YRS',
-                controller: _age,
                 decimal: false,
               ),
             ),
@@ -387,7 +317,10 @@ class _StatsScreenState extends State<StatsScreen> {
         GestureDetector(
           onTap: () => context.go(
             '/onboarding/goal',
-            extra: {'goal': widget.goal},
+            extra: {
+              ...widget.initial ?? const <String, dynamic>{},
+              'goal': widget.goal,
+            },
           ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -436,14 +369,13 @@ class _StatsScreenState extends State<StatsScreen> {
   void _onCalibrate() {
     final weight = double.tryParse(_weight.text);
     final height = double.tryParse(_height.text);
-    final age = int.tryParse(_age.text);
     final bodyFat = double.tryParse(_bodyFat.text);
     final targetWeight = double.tryParse(_targetWeight.text);
-    if (weight == null || height == null || age == null) {
+    if (weight == null || height == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Check weight, height, and age — those need numbers.',
+            'Check weight and height — those need numbers.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.textPrimary,
             ),
@@ -458,17 +390,17 @@ class _StatsScreenState extends State<StatsScreen> {
     // wires plan_screen to consume it instead of inferring from goal
     // + weight.
     final resolvedTarget = (targetWeight ?? weight).clamp(40.0, 250.0);
-    // AI.2 — now routes to Details (Experience / Pace / Days / Equipment)
-    // which then continues to Plan. Previously went straight to Plan.
+    // Carry forward everything that came in (full_name, date_of_birth,
+    // sex from Identity) plus this screen's captures. Details screen
+    // forwards the same into Plan.
     context.go(
       '/onboarding/details',
       extra: {
+        ...widget.initial ?? const <String, dynamic>{},
         'goal': widget.goal,
-        'sex': _sex,
         'weight_kg': weight,
         'target_weight_kg': resolvedTarget,
         'height_cm': height,
-        'age': age,
         'body_fat_pct': bodyFat ?? 18.0,
         'activity_level': _activity,
       },

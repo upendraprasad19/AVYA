@@ -301,6 +301,24 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         targetWeightKg: targetWeightKg > 0 ? targetWeightKg : null,
       );
 
+      // Fields set via setAnswer in plan_screen._onReportForDuty that were
+      // previously NOT copied into the profile map. Without these, a fresh
+      // account shipped with `injuries == null` / `diet_preference == null`
+      // / `body_fat_percent == null` / `start_date == null` / `city == null`
+      // in Hive → the home-screen profile-completeness nudge flagged
+      // "Injuries" (and other Tier-2 fields) as missing for every new user.
+      // Fixed 2026-04-24: carry the answers through to the saved profile.
+      final injuries = (a['injuries'] as List<dynamic>?)?.cast<String>() ??
+          <String>['none'];
+      final dietPreference =
+          (a['diet_preference'] as String?) ?? 'veg';
+      final bodyFatPercent = _parseDouble(a['body_fat_percent']);
+      // String field (`this_monday` / `next_monday` / etc.) distinct
+      // from the local DateTime-typed `startDate` used below for
+      // `generateAndSchedule`.
+      final startDateKey = (a['start_date'] as String?) ?? 'this_monday';
+      final city = a['city'] as String?;
+
       final profile = {
         'full_name': fullName,
         'date_of_birth': dobString,
@@ -315,6 +333,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'equipment_access': equipmentAccess,
         'lifestyle_activity': lifestyleActivity,
         'activity_level': activityLevel,
+        'injuries': injuries,
+        'diet_preference': dietPreference,
+        'body_fat_percent': bodyFatPercent,
+        'start_date': startDateKey,
+        if (city != null && city.isNotEmpty) 'city': city,
         'bmr': targets.bmr,
         'tdee': targets.tdee,
         'daily_calories': targets.dailyCalories,
@@ -564,7 +587,12 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         'lifestyle_activity': profile['lifestyle_activity'],
         'pace_preference': profile['pace_preference'],
         'diet_preference': profile['diet_preference'],
-        'injuries': profile['injuries']?.toString(),
+        // Pass the List<String> directly; supabase_flutter serialises it
+        // to a Postgres text[] literal. Prior `.toString()` produced the
+        // string "[none]" which was overwriting the local List on
+        // cross-device restore and breaking the completeness check.
+        // Fix lands with migration 033 (injuries column text → text[]).
+        'injuries': profile['injuries'],
         'city': profile['city'],
         'bmr': profile['bmr'],
         'tdee': profile['tdee'],

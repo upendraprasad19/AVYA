@@ -102,6 +102,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Supabase must come first — auth state is needed by _navigateNext.
     await SupabaseService.instance.initialize();
 
+    // Cross-account Hive leak guard. If the local `userBox['profile']['id']`
+    // doesn't match the restored session's `currentUser.id`, force a clear +
+    // sign-out. Catches Android Auto Backup restores, dev-build Hive copies,
+    // and any future path that sneaks foreign data past `_ensureLocalUser`'s
+    // one-time sign-in mismatch check. The manifest-level exclusion in
+    // `data_extraction_rules.xml` is the primary defense; this is belt-and-
+    // suspenders.
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      final localId = (profile is Map) ? profile['id'] as String? : null;
+      final sessionId = SupabaseService.instance.currentUser?.id;
+      if (localId != null && sessionId != null && localId != sessionId) {
+        debugPrint(
+            '[splash] Hive/session id mismatch — local=$localId session=$sessionId. Clearing.');
+        await UserRepository.instance.clearAllData();
+        await SupabaseService.instance.client.auth.signOut();
+      }
+    } catch (e) {
+      debugPrint('[splash] profile-id mismatch check failed (non-fatal): $e');
+    }
+
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
     await SeedService.instance.seedIfNeeded();

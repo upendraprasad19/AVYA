@@ -22,6 +22,7 @@ import '../widgets/saved_meals_section.dart';
 import '../widgets/food_search_sheet.dart';
 import '../widgets/barcode_scan_sheet.dart';
 import '../widgets/custom_food_sheet.dart';
+import '../widgets/log_to_slot_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -34,7 +35,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   bool _isLoading = true;
   bool _isInsightsExpanded = false;
   bool _isWaterExpanded = true;
-  int _logTabIndex = 0;
 
   @override
   void initState() {
@@ -123,10 +123,13 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   }
 
   Widget _buildDietPlanButton() {
+    // Compact pill (PR Part C.1, 2026-04-24) — shrunk to keep the
+    // Fraunces serif title "Fueling the plan" on one line on 360dp
+    // phones. Label 10sp / padding 8/4 / icon 14.
     return GestureDetector(
       onTap: () => context.go('/nutrition/diet-plan'),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: AppColors.accentSoft,
           borderRadius: BorderRadius.circular(AppRadius.sharp),
@@ -137,12 +140,13 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           children: [
             const Icon(Icons.restaurant_menu,
                 color: AppColors.accent, size: 14),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Text(
               'DIET PLAN',
               style: AppTypography.mono.copyWith(
+                fontSize: 10,
                 color: AppColors.accent,
-                letterSpacing: 2,
+                letterSpacing: 1.5,
               ),
             ),
           ],
@@ -161,25 +165,35 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final weeklyData = ref.watch(weeklyNutritionProvider);
     final savedMeals = ref.watch(savedMealsProvider);
 
+    // Layout reshuffle (PR Part C.2, 2026-04-24 — "Direction A+"):
+    //   1. Today's Summary (projection inlined as italic under bars)
+    //   2. Always-visible ⚡ AI input + SCAN peer (was 2-tab Log Food)
+    //   3. Conditional AI breakdown card (appears after analyse)
+    //   4. Today's Meals (4 fixed slots)
+    //   5. Hydration
+    //   6. Search & Custom (demoted, grouped under SEARCH & CUSTOM eyebrow)
+    //   7. Insights & Trends accordion
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // ── 1. Today's Summary (calorie ring + macro bars + TDEE tooltip) ──
+        // ── 1. Today's Summary (calorie ring + macro bars + projection) ──
         _sectionLabel('TODAY\'S SUMMARY', topPadding: 10),
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildCalorieCard(nutrition, targets: targets),
+          child: _buildCalorieCard(
+            nutrition,
+            targets: targets,
+            profile: profile,
+          ),
         ),
-        // Bug #24 — goal projection subtitle
-        _buildProjectionSubtitle(profile),
         const SizedBox(height: 10),
 
-        // ── 2. Unified Log Food Card (AI + Scan + Search) ──
+        // ── 2. Always-visible ⚡ AI input + SCAN peer ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildUnifiedLogCard(),
+          child: _buildAiInputCard(),
         ),
         const SizedBox(height: 10),
 
@@ -189,15 +203,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           const SizedBox(height: 10),
         ],
 
-        // ── 4. Inline Water Tracker (moved above meals) ──
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding),
-          child: _buildInlineWaterTracker(),
-        ),
-        const SizedBox(height: 10),
-
-        // ── 5. Today's Meals ──
+        // ── 4. Today's Meals (moved up per C.2) ──
         _sectionLabel('TODAY\'S MEALS'),
         Padding(
           padding: const EdgeInsets.symmetric(
@@ -209,25 +215,34 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               plannedSlots: plannedSlots,
               onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
               onEdit: (meal) => _showEditMacrosSheet(context, meal),
-              // AG.1 — tapping "+ LOG" on an empty slot opens the food
-              // search with the slot preselected. AH.5 — when that slot
-              // has a saved diet-plan hint, also pre-fill the query with
-              // the planned food name so the user lands on matching
-              // results instead of an empty search.
-              onLogSlot: (slot) {
-                final planned = plannedSlots[slot];
-                showFoodSearchSheet(
-                  context,
-                  mealType: slot,
-                  initialQuery: planned?.firstFoodName,
-                );
-              },
+              // C.4 — tapping "+ LOG" now opens LogToSlotSheet with the
+              // slot locked. The sheet offers AI / SCAN / SEARCH tabs.
+              onLogSlot: (slot) =>
+                  LogToSlotSheet.show(context, slot: slot),
             );
           }),
         ),
         const SizedBox(height: 10),
 
-        // ── 6. Saved Meals (hidden if empty) ──
+        // ── 5. Hydration (unchanged content, position unchanged
+        //      relative to meals per "Direction A+") ──
+        Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding),
+          child: _buildInlineWaterTracker(),
+        ),
+        const SizedBox(height: 10),
+
+        // ── 6. Search & Custom (demoted under its own eyebrow) ──
+        _sectionLabel('SEARCH & CUSTOM'),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding),
+          child: _buildSearchAndCustomCard(),
+        ),
+        const SizedBox(height: 10),
+
+        // ── 7. Saved Meals (hidden if empty, still above Insights) ──
         if (savedMeals.isNotEmpty) ...[
           _sectionLabel('SAVED MEALS'),
           Padding(
@@ -238,7 +253,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           const SizedBox(height: 10),
         ],
 
-        // ── 7. Insights & Trends (collapsed by default) ──
+        // ── 8. Insights & Trends (collapsed by default) ──
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
@@ -267,8 +282,11 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
 
   // ── Calorie Ring + Macro Bars Card ─────────────────────────────
 
-  Widget _buildCalorieCard(DailyNutritionData nutrition,
-      {Map<String, double> targets = const {}}) {
+  Widget _buildCalorieCard(
+    DailyNutritionData nutrition, {
+    Map<String, double> targets = const {},
+    Map<String, dynamic> profile = const {},
+  }) {
     final consumed = nutrition.calories.round();
     final target = nutrition.calorieTarget.round();
     final remaining = (target - consumed).clamp(0, target);
@@ -277,10 +295,15 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final waterMl = ref.watch(waterIntakeProvider);
     const waterTarget = 3000;
 
+    final projectionLine = _projectionLine(profile);
+
     return WardCard(
       variant: WardCardVariant.hero,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
         children: [
           // Calorie ring — Wardroom animated ring with Fraunces big number
           SizedBox(
@@ -386,11 +409,34 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
           ),
         ],
       ),
+          // Inline italic projection callout under the macro bars
+          // (PR Part C.2, 2026-04-24). Was a standalone line under the
+          // card; now lives inside the card body as a one-line Fraunces-
+          // italic readout.
+          if (projectionLine != null) ...[
+            const SizedBox(height: 10),
+            const WardRule(margin: EdgeInsets.zero),
+            const SizedBox(height: 8),
+            Text(
+              projectionLine,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
+                fontStyle: FontStyle.italic,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  // Bug #24 — projection subtitle below the daily target card.
-  Widget _buildProjectionSubtitle(Map<String, dynamic> profile) {
+  /// Returns a short projection sentence (e.g. "On track to hit 65kg by
+  /// May 31 — ~8 wks") or null when the user has no goal / target set.
+  /// Factored out of the old `_buildProjectionSubtitle` so the calorie
+  /// card can inline it instead of rendering as a standalone line under
+  /// the card.
+  String? _projectionLine(Map<String, dynamic> profile) {
     final currentKg = (profile['current_weight_kg'] as num?)?.toDouble();
     final targetKg = (profile['target_weight_kg'] as num?)?.toDouble();
     final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
@@ -402,7 +448,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         currentKg == null ||
         targetKg == null ||
         (currentKg - targetKg).abs() <= 0.1) {
-      return const SizedBox.shrink();
+      return null;
     }
 
     final p = BmrCalculator.projectGoalDate(
@@ -411,36 +457,19 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
       pacePreference: pace,
     );
 
-    String line;
+    if (p.weeks <= 0) return null;
     if (p.weeks > 104) {
-      line =
-          "PROJECTION \u00B7 YOU'LL REACH ${targetKg.toStringAsFixed(0)}KG IN >2 YEARS";
-    } else if (p.weeks <= 0) {
-      return const SizedBox.shrink();
-    } else {
-      const months = [
-        'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-        'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-      ];
-      final dateStr = '${months[p.date.month - 1]} ${p.date.day}';
-      line =
-          "PROJECTION \u00B7 YOU'LL HIT ${targetKg.toStringAsFixed(0)}KG BY $dateStr (~${p.weeks.round()} WKS)";
+      return 'On track to reach ${targetKg.toStringAsFixed(0)}kg in > 2 years';
     }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.gutter,
-        vertical: 6,
-      ),
-      child: Text(
-        line,
-        style: AppTypography.monoXs.copyWith(
-          color: AppColors.textMute,
-          letterSpacing: 1.5,
-        ),
-      ),
-    );
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final dateStr = '${months[p.date.month - 1]} ${p.date.day}';
+    return 'On track to hit ${targetKg.toStringAsFixed(0)}kg by $dateStr'
+        ' (~${p.weeks.round()} wks)';
   }
+
 
   Widget _macroRow({
     required String label,
@@ -479,173 +508,163 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     );
   }
 
-  // ── Unified Log Food Card ────────────────────────────────────
+  // ── Always-visible AI input card (C.2) ───────────────────────
 
-  Widget _buildUnifiedLogCard() {
+  /// Replaces the old 2-tab [AI | SCAN] `_buildUnifiedLogCard`. AI text
+  /// input is always visible; SCAN is a peer button beside ANALYSE that
+  /// opens the camera flow inline. Search + Custom Food moved to their
+  /// own demoted section below Hydration (see `_buildSearchAndCustomCard`).
+  Widget _buildAiInputCard() {
     return WardCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'LOG FOOD',
-            style: AppTypography.mono.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Tab bar — Mono-caps underline pattern
+          // Eyebrow
           Row(
             children: [
-              _logTab(0, 'AI'),
-              const SizedBox(width: 8),
-              _logTab(1, 'SCAN'),
+              const Icon(Icons.auto_awesome,
+                  color: AppColors.accent, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'WHAT DID YOU JUST EAT?',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 14),
-          // Tab content
-          if (_logTabIndex == 0)
-            Column(
-              children: [
-                const FoodLoggerSection(),
-                const SizedBox(height: 10),
-                // Search 5,000+ foods
-                GestureDetector(
-                  onTap: () => showFoodSearchSheet(context),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 14, horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.input,
-                      borderRadius:
-                          BorderRadius.circular(AppRadius.sharp),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.search,
-                            color: AppColors.textDim, size: 18),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Search 5,000+ foods...',
-                          style: AppTypography.body.copyWith(
-                            color: AppColors.textDim,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Create custom food
-                GestureDetector(
-                  onTap: () => showCustomFoodSheet(context),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 13, horizontal: 14),
-                    decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(AppRadius.sharp),
-                      border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.35),
-                          width: 2),
-                      color: AppColors.accentSoft,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.add_circle_outline,
-                            color: AppColors.accent, size: 18),
-                        const SizedBox(width: 10),
-                        Text(
-                          'CREATE CUSTOM FOOD',
-                          style: AppTypography.mono.copyWith(
-                            color: AppColors.accent,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            Column(
-              children: [
-                const ScanMealSection(),
-                const SizedBox(height: 12),
-                const CartAuditorSection(),
-                const SizedBox(height: 10),
-                // Barcode scan
-                GestureDetector(
-                  onTap: () => showBarcodeScanSheet(context),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 13, horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentSoft,
-                      borderRadius:
-                          BorderRadius.circular(AppRadius.sharp),
-                      border: Border.all(
-                          color: AppColors.accent.withValues(alpha: 0.35),
-                          width: 2),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.qr_code_scanner,
-                            color: AppColors.accent, size: 18),
-                        const SizedBox(width: 10),
-                        Text(
-                          'SCAN PRODUCT BARCODE',
-                          style: AppTypography.mono.copyWith(
-                            color: AppColors.accent,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const Spacer(),
-                        const WardChip(
-                          label: 'FREE',
-                          tone: WardChipTone.gold,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 10),
+
+          // AI text input + ANALYSE & LOG button (existing widget)
+          const FoodLoggerSection(),
+
+          const SizedBox(height: 10),
+
+          // SCAN peer — opens the scan flow inline. The full ScanMealSection
+          // widget lives here so state (loading, result editor) renders in
+          // place once the user picks a photo.
+          const ScanMealSection(),
         ],
       ),
     );
   }
 
-  Widget _logTab(int index, String label) {
-    final isActive = index == _logTabIndex;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _logTabIndex = index),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                label,
-                style: AppTypography.mono.copyWith(
-                  color:
-                      isActive ? AppColors.accent : AppColors.textMute,
-                  letterSpacing: 2,
-                ),
+  // ── Search & Custom card (C.2 demoted) ───────────────────────
+
+  /// Groups Search foods + Create custom food + Cart Auditor + Barcode
+  /// under a single "SEARCH & CUSTOM" eyebrow, demoted below Hydration.
+  /// These were previously hoisted into the main Log Food tabs, which
+  /// turned out to be noise for most users who prefer the AI input.
+  Widget _buildSearchAndCustomCard() {
+    return WardCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Search foods (C.5 — honest 93-item copy, not "5,000+")
+          GestureDetector(
+            onTap: () => showFoodSearchSheet(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 14, horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.input,
+                borderRadius:
+                    BorderRadius.circular(AppRadius.sharp),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search,
+                      color: AppColors.textDim, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Search foods',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Container(
-              height: 2,
-              color: isActive ? AppColors.accent : AppColors.line2,
+          ),
+          const SizedBox(height: 8),
+          // Create custom food
+          GestureDetector(
+            onTap: () => showCustomFoodSheet(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 13, horizontal: 14),
+              decoration: BoxDecoration(
+                borderRadius:
+                    BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.35),
+                    width: 2),
+                color: AppColors.accentSoft,
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.add_circle_outline,
+                      color: AppColors.accent, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'CREATE CUSTOM FOOD',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.accent,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+
+          // Cart Auditor (grocery screenshot)
+          const CartAuditorSection(),
+          const SizedBox(height: 10),
+
+          // Barcode scan
+          GestureDetector(
+            onTap: () => showBarcodeScanSheet(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  vertical: 13, horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.accentSoft,
+                borderRadius:
+                    BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.35),
+                    width: 2),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.qr_code_scanner,
+                      color: AppColors.accent, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'SCAN PRODUCT BARCODE',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.accent,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const Spacer(),
+                  const WardChip(
+                    label: 'FREE',
+                    tone: WardChipTone.gold,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -24,9 +24,18 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// The final profile write happens in PR AB (PlanScreen) — this screen
 /// only stages the selection in the route extra.
 class GoalScreen extends StatefulWidget {
-  const GoalScreen({super.key, this.initialGoal});
+  const GoalScreen({
+    super.key,
+    this.initialGoal,
+    this.identity,
+  });
 
   final String? initialGoal;
+
+  /// Route-extras carrying forward Identity's `full_name`, `date_of_birth`,
+  /// and `sex`. Forwarded verbatim to Stats / Details / Plan so the final
+  /// profile write at REPORT FOR DUTY has every field it needs.
+  final Map<String, dynamic>? identity;
 
   @override
   State<GoalScreen> createState() => _GoalScreenState();
@@ -106,7 +115,7 @@ class _GoalScreenState extends State<GoalScreen> {
     return Row(
       children: [
         Text(
-          '01 \u00B7 04',
+          '02 \u00B7 05',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -119,7 +128,7 @@ class _GoalScreenState extends State<GoalScreen> {
             children: [
               Container(height: 1, color: AppColors.line2),
               FractionallySizedBox(
-                widthFactor: 1 / 4,
+                widthFactor: 2 / 5,
                 child: Container(height: 1, color: AppColors.accent),
               ),
             ],
@@ -206,7 +215,10 @@ class _GoalScreenState extends State<GoalScreen> {
     return Row(
       children: [
         GestureDetector(
-          onTap: () => context.go('/onboarding'),
+          onTap: () => context.go(
+            '/onboarding/identity',
+            extra: widget.identity ?? const {},
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
@@ -229,7 +241,10 @@ class _GoalScreenState extends State<GoalScreen> {
           child: GestureDetector(
             onTap: () => context.go(
               '/onboarding/stats',
-              extra: {'goal': _selected},
+              extra: {
+                ...?widget.identity,
+                'goal': _selected,
+              },
             ),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14),

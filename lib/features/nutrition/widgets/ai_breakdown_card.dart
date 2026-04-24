@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/nutrition_provider.dart';
+import '../services/meal_slot_inference.dart';
 
 /// Shows the AI-analysed food breakdown card with items, macros, and save/cancel.
 class AiBreakdownCard extends ConsumerWidget {
@@ -37,6 +38,11 @@ class AiBreakdownCard extends ConsumerWidget {
       );
     }
 
+    // Slot chip — time-inferred default, user can override via popup menu.
+    // Writing through `mealTypeProvider` so the SCAN flow (or any other
+    // consumer) can pick the same slot if they share the card.
+    final slot = ref.watch(mealTypeProvider);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: WardCard(
@@ -63,6 +69,29 @@ class AiBreakdownCard extends ConsumerWidget {
                 ],
               ),
             ),
+
+            // Slot chip row — Logging to: 🍱 LUNCH ▾
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: Row(
+                children: [
+                  Text(
+                    'LOGGING TO',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textMute,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  MealSlotChip(
+                    slot: slot,
+                    onSelected: (s) =>
+                        ref.read(mealTypeProvider.notifier).select(s),
+                  ),
+                ],
+              ),
+            ),
+
             const WardRule(gold: true, margin: EdgeInsets.zero),
 
             // Food items
@@ -78,8 +107,9 @@ class AiBreakdownCard extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () =>
-                          ref.read(aiBreakdownProvider.notifier).saveMeal(),
+                      onTap: () => ref
+                          .read(aiBreakdownProvider.notifier)
+                          .saveMeal(mealType: slot),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
@@ -359,6 +389,90 @@ class AiBreakdownCard extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Inline chip that shows the inferred meal slot with a dropdown caret.
+/// Tap opens a 4-option `PopupMenuButton` so the user can override the
+/// inference (e.g. logging yesterday's dinner at noon).
+///
+/// Reused across the AI-breakdown card and the scan-meal editor to keep
+/// the affordance consistent.
+class MealSlotChip extends StatelessWidget {
+  const MealSlotChip({
+    super.key,
+    required this.slot,
+    required this.onSelected,
+  });
+
+  final String slot;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final emoji = mealSlotEmoji(slot);
+    final label = mealSlotLabel(slot);
+
+    return PopupMenuButton<String>(
+      onSelected: onSelected,
+      tooltip: 'Change meal slot',
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        side: const BorderSide(color: AppColors.line2),
+      ),
+      itemBuilder: (ctx) => [
+        for (final s in mealSlotKeys)
+          PopupMenuItem<String>(
+            value: s,
+            child: Row(
+              children: [
+                Text(mealSlotEmoji(s)),
+                const SizedBox(width: 8),
+                Text(
+                  mealSlotLabel(s),
+                  style: AppTypography.mono.copyWith(
+                    color: s == slot
+                        ? AppColors.accent
+                        : AppColors.textPrimary,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.accentSoft,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.30),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 13)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.mono.copyWith(
+                color: AppColors.accent,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.arrow_drop_down,
+              color: AppColors.accent,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
