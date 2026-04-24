@@ -132,7 +132,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   const SizedBox(height: 16),
                   WardButton(
                     label: 'GO TO TRAINING',
-                    onPressed: () => context.go('/train'),
+                    onPressed: () {
+                      if (Navigator.canPop(context)) {
+                        context.pop();
+                      } else {
+                        context.go('/train');
+                      }
+                    },
                     fullWidth: false,
                   ),
                 ],
@@ -439,7 +445,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           children: [
             // Back button
             GestureDetector(
-              onTap: () => context.go('/train'),
+              onTap: () {
+                if (Navigator.canPop(context)) {
+                  context.pop();
+                } else {
+                  context.go('/train');
+                }
+              },
               child: const Padding(
                 padding: EdgeInsets.only(right: 10),
                 child: Icon(Icons.arrow_back_ios_new,
@@ -873,7 +885,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           TextButton(
             onPressed: () {
               // Apply user-edited duration before completing
-              final editedMins = int.tryParse(minCtrl.text) ?? mins;
+              final editedMins =
+                  (int.tryParse(minCtrl.text) ?? mins).clamp(0, 999);
               final editedSecs =
                   (int.tryParse(secCtrl.text) ?? secs).clamp(0, 59);
               final totalSeconds = editedMins * 60 + editedSecs;

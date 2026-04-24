@@ -38,7 +38,6 @@ import '../widgets/slim_achievements_card.dart';
 import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
-import 'notification_settings_screen.dart';
 import 'package:icanbefitter/shared/widgets/community_review_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -677,15 +676,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: 'Notifications',
                   subtitle: '$enabledNotifCount/5 enabled',
                   trailing: const ProfileRowChevron(),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => NotificationSettingsScreen(
-                      notifPrefs: _notifPrefs,
-                      isPro: subInfo.isPro,
-                      onSave: (prefs) {
+                  onTap: () => context.push(
+                    '/profile/notification-settings',
+                    extra: {
+                      'notifPrefs': _notifPrefs,
+                      'isPro': subInfo.isPro,
+                      'onSave': (Map<String, dynamic> prefs) {
                         setState(() => _notifPrefs = prefs);
                         _saveNotificationPreferences();
                       },
-                    )),
+                    },
                   ),
                 ),
                 ProfileRow(
