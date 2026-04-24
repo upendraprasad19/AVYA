@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -1647,6 +1648,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (userId != null) {
         SyncService.instance.syncProfileNow(userId);
       }
+      unawaited(SyncService.instance.pushSnapshot());
 
       // Bug #12: Invalidate/regenerate prediction when target weight changes.
       final targetWeightChanged =

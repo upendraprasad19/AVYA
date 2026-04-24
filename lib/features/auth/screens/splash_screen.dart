@@ -156,7 +156,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
-    SyncService.instance.checkAndSync();
+    unawaited(SyncService.instance.checkAndSync());
 
     // F1 · Refresh subscription state on every app launch so PRO survives
     // logout/login and cross-device sessions without requiring a PRO-feature

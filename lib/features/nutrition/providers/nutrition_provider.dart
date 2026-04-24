@@ -918,6 +918,8 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     });
 
     ref.invalidateSelf();
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 
   /// Re-log a saved meal.
@@ -966,6 +968,8 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
   Future<void> deleteSavedMeal(String id) async {
     await HiveService.instance.nutritionBox.delete(id);
     ref.invalidateSelf();
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 
@@ -1033,6 +1037,7 @@ class CustomFoodNotifier extends Notifier<void> {
 
     // Background sync to Supabase
     NutritionRepository.syncCustomFoodToSupabase(data: food);
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 
@@ -1343,6 +1348,8 @@ class DeleteNutritionLogNotifier extends Notifier<void> {
     await HiveService.instance.nutritionBox.delete(logId);
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
+    unawaited(SyncService.instance.syncNutritionData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 

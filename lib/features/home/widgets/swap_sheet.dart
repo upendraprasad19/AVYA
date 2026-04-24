@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 
@@ -122,9 +124,8 @@ class _SwapSheetState extends State<SwapSheet> {
       isPro: _isPro,
     );
 
-    if (!mounted) return;
-
     if (result != null) {
+      if (!mounted) return;
       setState(() {
         _errorText = result;
         _isSwapping = false;
@@ -132,6 +133,11 @@ class _SwapSheetState extends State<SwapSheet> {
       return;
     }
 
+    // Fire-and-forget sync so AI coach and cloud tables reflect the swap.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
+
+    if (!mounted) return;
     Navigator.of(context).pop();
     widget.onSwapComplete?.call();
     ScaffoldMessenger.of(context).showSnackBar(
