@@ -93,15 +93,12 @@ class _StreakBadgeState extends State<StreakBadge>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Gold dot.
-            Text(
-              '\u25CF',
-              style: AppTypography.monoXs.copyWith(
-                fontSize: 9,
-                color: AppColors.accent,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w700,
-              ),
+            // Fire emoji — color-emoji carries its own color; AppColors.accent
+            // tint does not apply. Size bumped to 12 to read balanced against
+            // the 11px streak number.
+            const Text(
+              '\u{1F525}',
+              style: TextStyle(fontSize: 12, height: 1),
             ),
             const SizedBox(width: 4),
             Text(
