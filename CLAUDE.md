@@ -370,6 +370,11 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 **Cloud `workout_log_exercises`** — per-exercise summary table written by the Flutter app. Key semantics: `set_number` = total completed sets (NOT "which set"); `weight_kg` = best across sets; `exercise_id` = exercise_name (stable identity for cross-week grouping). See §11 "Exercise Log Cloud Contract".
 
+**Column-type notes (post-migration):**
+- `user_profile.injuries` — `text[]` (migration 033, 2026-04-24). Previously `text` — client was syncing `List.toString()` → `"[none]"` and round-tripping to broken state. Now passes the List directly; default `ARRAY['none']::TEXT[]`. Legacy rows backfilled from stringified shapes.
+- `users.terms_accepted_at` + `users.terms_version` — DPDP audit trail columns (migration 032, 2026-04-20). Stamped by `TermsModal` (Hive) and synced up on first post-auth users upsert in `_ensureLocalUser`. Bump `AppConstants.termsVersion` to force re-prompt.
+- `nutrition_logs.total_fiber NUMERIC DEFAULT 0` (migration 034, 2026-04-24). Historical rows stay at 0 — `nutrition_log_items` has no fiber column, so no backfill source. New logs carry the value from the Hive `nlog_*` row via `_syncNutritionLogs`. Feeds the AI coach via `_getTodayNutrition.fiber_g` / `fiber_target_g: 30`.
+
 **RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
 
 ---
@@ -834,48 +839,61 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 
 ---
 
-## 13a. ONBOARDING (stepped flow — default since PR Y–AB, expanded in PR AI 2026-04-20)
+## 13a. ONBOARDING (stepped flow — default since PR Y–AB, expanded in PR AI 2026-04-20 → 5 steps on `feat/onboarding-train-nutrition` 2026-04-24)
 
-**Current default flow (Wardroom + AI):**
+**Current default flow (5 visible steps):**
 
 ```
 Welcome       (/onboarding)            → sets no state, just CTA  (unnumbered)
    ↓
-Goal          (/onboarding/goal)       → primary_goal             (01 · 04)
+Identity      (/onboarding/identity)   → full_name, date_of_birth,
+                                         sex                       (01 · 05)
    ↓
-Stats         (/onboarding/stats)      → sex, current_weight_kg,
+Goal          (/onboarding/goal)       → primary_goal              (02 · 05)
+   ↓
+Stats         (/onboarding/stats)      → current_weight_kg,
                                          target_weight_kg, height_cm,
-                                         age, body_fat_pct,
-                                         activity_level            (02 · 04)
+                                         body_fat_pct,
+                                         activity_level             (03 · 05)
    ↓
 Details       (/onboarding/details)    → fitness_experience,
                                          pace_preference,
                                          days_per_week,
-                                         equipment_access          (03 · 04)
+                                         equipment_access           (04 · 05)
    ↓
 Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
                                          OnboardingNotifier.completeOnboarding()
-                                                                   (04 · 04)
+                                                                    (05 · 05)
 ```
 
 - **State passing:** `GoRouter` `state.extra` (a `Map<String, dynamic>`) between screens —
-  **no premature provider commits.** The notifier only runs once, on the final tap.
+  **no premature provider commits.** The notifier only runs once, on the final tap. Each
+  screen spreads the incoming extras (`...widget.initial`) into its outgoing extras so
+  every field captured upstream survives to Plan.
+- **Sex moved from Stats to Identity.** Stats no longer shows the 3-pill sex selector.
+- **Age dropped entirely.** `date_of_birth` (captured on Identity via date picker, min age
+  13) is the canonical field. `plan_screen` computes `age` on the fly for `BmrCalculator`;
+  `age` is never stored to Hive or Supabase.
 - **Fields still defaulted by the stepped flow** (user can edit via Profile → Edit Profile):
   - `lifestyle_activity` — inferred from `activity_level` (1:1 mapping).
   - `diet_preference` — defaults to `'veg'` (Indian-first default).
   - `injuries` — defaults to `['none']` (matches `edit_profile_screen` convention).
   - `start_date` — hardcoded to `'this_monday'`.
+  - `city` — optional, not collected during onboarding.
+  These four **are now persisted** to Hive by `completeOnboarding` (pre-2026-04-24 bug: they
+  were set via `setAnswer` in plan_screen but never copied into the final profile map → home
+  completeness nudge falsely flagged "Injuries" for every new user).
 - **Legacy chat fallback:** the pre-PR-Y chat-based flow is still reachable at
-  `/onboarding/chat` (`onboarding_chat_screen.dart`). Retained for rollback only — retirement
-  scheduled for PR AJ once AI is validated end-to-end.
+  `/onboarding/chat` (`onboarding_chat_screen.dart`). Retained for rollback only.
 - **Auth redirect gotcha:** `GoRouter._authRedirect` uses
   `location.startsWith('/onboarding')` (NOT `location == '/onboarding'`), so taps on
-  `/onboarding/goal` / `/stats` / `/details` / `/plan` aren't bounced back to Welcome. This
-  was the nav bug fixed in commit `17faa86` — any regression here will make the stepped flow
-  look like every tap does nothing.
+  `/onboarding/identity` / `/goal` / `/stats` / `/details` / `/plan` aren't bounced back to
+  Welcome. This was the nav bug fixed in commit `17faa86`.
 - **Inference fallback:** `plan_screen._onReportForDuty` keeps the old switch-expression
   inference rules as fallback for fields missing from `widget.data` (legacy chat users,
-  deep-links, corrupted route extras). Fallback must never become the default path.
+  deep-links, corrupted route extras). Fallback must never become the default path. The
+  DOB path falls back to `DateTime(now.year - age, ...)` when `date_of_birth` is missing
+  and `age` happens to be present — only legacy chat users hit this.
 
 ---
 
@@ -1121,3 +1139,10 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | Weekly Report sparkline dips to 0 between weigh-ins | By design only for calories/protein/workouts (zero-fill = genuinely no activity). Weight series is **forward-filled** from last known — if you see it dropping to zero on un-weighed days, `weeklyReportDataProvider` has regressed. |
 | AI coach greets "Good morning." with no name | `userProfileProvider['full_name']` is null or still the bootstrap 'User' placeholder. Greeting falls back silently; no bug. If a real name is in Hive but the greeting still reads generic, verify `userProfileProvider` is returning the latest map (should invalidate on profile edits). |
 | Superset A / rest timer still shows cyan after palette rotation | `train_provider.supersetColor()` and `RestTimerData.timerColor` used hardcoded `Color(0xFF00D4FF)`. PR AH.C1 swapped to `AppColors.accent`/`warn`/`bad`. Any new hardcoded color literal in a shared provider is a token-hygiene regression — grep `0xFF00D4FF` / `0xFF07090e` / `0xFFeef2f7` periodically. |
+| Profile completeness nudge stuck on "Injuries" for new users | `completeOnboarding` in `onboarding_provider.dart` MUST copy `injuries`, `diet_preference`, `body_fat_percent`, `start_date` (as `startDateKey` — don't collide with the DateTime-typed `startDate` used for scheduling), and `city` from `state.answers` into the saved profile map. Before 2026-04-24 these were set via `setAnswer` in `plan_screen` but never persisted → `userBox['profile']['injuries']` was null → `profileCompletenessProvider.val is List` check failed → "Injuries" flagged missing indefinitely. Fixed on `feat/onboarding-train-nutrition` 2026-04-24. |
+| Injuries round-trips to cloud as `"[none]"` string | `onboarding_provider._syncOnboardingToSupabase` must pass `profile['injuries']` directly (a List<String>), NOT `.toString()` it. `supabase_flutter` serializes the List to a Postgres `text[]` literal. Pre-2026-04-24 code called `.toString()` → string `"[none]"` landed in the cloud `text` column → cross-device restore merged it back into Hive as a String → completeness check broke again. Paired with migration 033 which moved the column from `text` → `text[]`. |
+| RECOMP / PERFORM wrap to 2 lines on Goal screen | `WardRadioRow` left-label column was fixed at 44 dp; with `AppTypography.mono` 10sp + 2px letter-spacing, 6+ char codes overflowed. Fixed 2026-04-24 by widening to 56 dp and adding `maxLines: 1, softWrap: false, overflow: clip`. If you add a new `rowKey` longer than 7 chars, either shorten it or bump the column width again. |
+| Cross-account Hive leak on fresh sign-up | Android Auto Backup was default-enabled (no `allowBackup="false"` / `dataExtractionRules` in AndroidManifest), so Hive files survived reinstall on any device signed into the same Google account — prior user's templates / logs / coach memory showed up on a fresh account. Fixed 2026-04-24 with `data_extraction_rules.xml` excluding `app_flutter/` + `splash_screen._runDeferredInit` startup check that clears Hive + signs out when `userBox['profile']['id']` ≠ `currentUser.id`. Both layers required; removing either re-opens the leak. |
+| Train screen week chips / "No stats yet" card narrow | Both had children sized to content because parents used `CrossAxisAlignment.start` or fixed-width scrollable chips. Fixed 2026-04-24: `week_selector.dart` swapped `ListView.separated` for `Row`+`Expanded`; `stats_grid.dart` parent Column flipped cross-axis to `stretch`. Any future similar "card sitting narrow on Train" regression will be the same class of bug. |
+| Fiber invisible to AI coach | Hive has always stored `total_fiber` on `nlog_*` rows and the UI showed a fiber bar, but `nutrition_logs` had no `total_fiber` column (migration 003 omission) and `_getTodayNutrition()` only summed cal/P/C/F. AI coach couldn't reference fiber intake. Fixed 2026-04-24: migration 034 adds the column; `_syncNutritionLogs` projects it; `_getTodayNutrition` returns `fiber_g` + `fiber_target_g: 30` in the snapshot. Gemini picks up the keys automatically via JSON-stringified snapshot — no prompt edit needed. Historical rows default to 0 since `nutrition_log_items` has no fiber column to backfill from. |
+| Nutrition page's "Search 5,000+ foods" is a lie | Actual seed is 93 per §18. Copy was trust-breaking. Corrected 2026-04-24 to `"Search foods"` in both `nutrition_screen.dart` and `food_search_sheet.dart` empty state. If the library ever grows past a few hundred items, revisit. |
