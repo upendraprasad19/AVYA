@@ -121,6 +121,33 @@ function stripJsonFences(raw: string): string {
     .trim();
 }
 
+/**
+ * Format retrieved memories as a bulleted block for system-prompt
+ * injection. Content capped at 200 chars/line to bound prompt growth
+ * (5 matches × 200 chars ≈ 1 KB max). Empty string when no memories —
+ * caller concatenates unconditionally.
+ */
+function formatRetrievalBlock(
+  memories: Array<{
+    content: string;
+    source_type: string;
+    created_at: string;
+  }>,
+): string {
+  if (memories.length === 0) return "";
+  const lines = memories.map((m) => {
+    const date = (m.created_at ?? "").slice(0, 10); // YYYY-MM-DD
+    const snippet = m.content.length > 200
+      ? m.content.slice(0, 197) + "..."
+      : m.content;
+    return `- [${date}, ${m.source_type}] ${snippet}`;
+  });
+  return (
+    "\n\nRelevant context from earlier conversations (semantic match):\n" +
+    lines.join("\n")
+  );
+}
+
 /** Uniform error response shape. */
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
   return new Response(
@@ -510,7 +537,6 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // + a `source` code; no throws. We fall back to the existing
     // full-dump coachingNotes path when memories is empty.
     // Spec: docs/superpowers/specs/2026-04-24-semantic-retrieval-design.md
-    // deno-lint-ignore no-unused-vars
     let retrieval: Awaited<ReturnType<typeof retrieveRelevantMemories>> = {
       memories: [],
       source: "empty",
@@ -566,6 +592,8 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     if (snapshot_json) {
       promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
     }
+    const retrievalBlock = formatRetrievalBlock(retrieval.memories);
+    if (retrievalBlock) promptParts.push(retrievalBlock);
     const systemPrompt = promptParts.join("\n\n");
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
