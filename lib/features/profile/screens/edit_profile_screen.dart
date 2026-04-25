@@ -1618,7 +1618,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
         if (shouldReschedule == true && mounted) {
           final profile = ref.read(userProfileProvider);
-          final experience = (profile['detected_experience_level'] as String?) ?? 'beginner';
+          final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
           final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
 
           final savedDays = HiveService.instance.configBox
