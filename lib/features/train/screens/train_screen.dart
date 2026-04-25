@@ -409,19 +409,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             label: 'START WORKOUT',
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
-            onPressed: () => SubscriptionService.instance.gate(
-              AppConstants.featureActiveWorkoutMode,
-              onPro: () {
-                ref
-                    .read(activeWorkoutProvider.notifier)
-                    .startWorkout(workout);
-                context.go('/train/active-workout');
-              },
-              onFree: () => showPaywallSheet(
-                context,
-                feature: 'Active Workout Mode',
-              ),
-            ),
+            onPressed: () {
+              ref.read(activeWorkoutProvider.notifier).startWorkout(workout);
+              context.go('/train/active-workout');
+            },
           ),
         ],
       ),
@@ -884,22 +875,15 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ],
           ],
           const SizedBox(height: 10),
-          // START WORKOUT button — the explicit gate
+          // START WORKOUT button — always available (Q6 made free)
           WardButton(
             label: 'START WORKOUT',
             leading: const Icon(Icons.play_arrow_rounded,
                 size: 16, color: AppColors.bgDeep),
-            onPressed: () => SubscriptionService.instance.gate(
-              AppConstants.featureActiveWorkoutMode,
-              onPro: () {
-                ref.read(activeWorkoutProvider.notifier).startWorkout(day);
-                context.go('/train/active-workout');
-              },
-              onFree: () => showPaywallSheet(
-                context,
-                feature: 'Active Workout Mode',
-              ),
-            ),
+            onPressed: () {
+              ref.read(activeWorkoutProvider.notifier).startWorkout(day);
+              context.go('/train/active-workout');
+            },
           ),
         ],
       ),
