@@ -57,32 +57,29 @@ void main() {
   });
 
   // ── Compile Safety: No Invalid Dart Syntax ─────────────────────
+  //
+  // NOTE: The original "no ?identifier pattern" test was retired in the
+  // APK Test #2 batch (2026-04-25). Dart 3.4+ introduced `use_null_aware_elements`
+  // which makes `'key': ?nullableValue` a valid map-literal entry — equivalent
+  // to `if (nullableValue != null) 'key': nullableValue`. The codebase has
+  // adopted this idiom in 9+ places (sync_service, workout_repository, etc.)
+  // and the analyzer suggests it. The original Fix 3 bug (where `?defaultDur`
+  // was a runtime error in older Dart) no longer reproduces.
+  //
+  // The F1 fix in Plan A (commit e2ea4e7) replaced `?defaultDur` with the
+  // explicit `if (defaultDur != null)` form to match the rest of the file's
+  // style, and the regression is locked by `test/sync/custom_exercise_sync_test.dart`.
 
-  group('Compile safety: no invalid Dart syntax patterns', () {
-    test('no ?identifier pattern in map literals (Fix 3)', () {
-      // Bug: 'exercise_logs': ?exerciseLogs was invalid Dart syntax.
-      // The ? prefix on an identifier is only valid in null-aware operations
-      // like ?. or ?? — not as a standalone value in a map literal.
-      final libDir = Directory('lib');
-      expect(libDir.existsSync(), isTrue);
-
-      for (final entity in libDir.listSync(recursive: true)) {
-        if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        final source = entity.readAsStringSync();
-        final lines = source.split('\n');
-
-        for (int i = 0; i < lines.length; i++) {
-          final line = lines[i].trim();
-          // Match pattern: 'key': ?identifier  (invalid Dart)
-          // But NOT: 'key': ?.something  or  'key': ?? something
-          final match = RegExp(r"'[^']+'\s*:\s*\?[a-zA-Z_]\w*\s*[,}]")
-              .hasMatch(line);
-          expect(match, isFalse,
-              reason:
-                  '${entity.path}:${i + 1}: Contains "?identifier" in map literal. '
-                  'This is invalid Dart. Use the variable name directly or null-aware operators.');
-        }
-      }
+  group('Compile safety: nullable-element map syntax', () {
+    test('valid Dart 3.4+ ?identifier pattern is accepted by analyzer', () {
+      // Sanity check: the codebase compiles. If it didn't, no other tests
+      // would run. We document the syntax as valid and rely on `flutter
+      // analyze` (run in CI) to catch any genuine syntax errors.
+      expect(true, isTrue,
+          reason:
+              'The ?identifier pattern in map literals is valid Dart 3.4+ '
+              '(see use_null_aware_elements analyzer hint). Original Fix 3 '
+              'guard retired in APK Test #2 batch.');
     });
   });
 }

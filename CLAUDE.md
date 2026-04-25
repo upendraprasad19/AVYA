@@ -354,7 +354,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (36 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (37 Tables — Supabase Postgres)
 
 > Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
 
@@ -367,7 +367,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 | Visual (1) | `progress_photos` |
 | AI (3) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory` |
 | Telemetry (1) | `client_errors` |
-| Monetisation (6) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes` |
+| Monetisation (7) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes`, `referral_redemptions` |
 | Community (2) | `community_reviews`, `memory_embeddings` |
 
 **FK direction quirk — `referral_codes` is the ONLY table with an FK to `auth.users(id)`.** Every other user-scoped table FKs to `public.users(id)` because those tables are populated only after the onboarding sync path has inserted the user into `public.users`. Referral-code generation fires on-demand from Profile → Invite Friends, which can happen BEFORE `public.users` has the user's row (fresh sign-up, onboarding not yet completed). Migration 035 (2026-04-24) repointed the FK to `auth.users` + added `UNIQUE(user_id)` after silent FK violations on new-account testers produced the "Failed to generate referral code" toast. Do not "normalize" this FK back to `public.users` without understanding that timing dependency.
@@ -384,10 +384,15 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 **Column-type notes (post-migration):**
 - `user_profile.injuries` — `text[]` (migration 033, 2026-04-24). Previously `text` — client was syncing `List.toString()` → `"[none]"` and round-tripping to broken state. Now passes the List directly; default `ARRAY['none']::TEXT[]`. Legacy rows backfilled from stringified shapes.
-- `users.terms_accepted_at` + `users.terms_version` — DPDP audit trail columns (migration 032, 2026-04-20). Stamped by `TermsModal` (Hive) and synced up on first post-auth users upsert in `_ensureLocalUser`. Bump `AppConstants.termsVersion` to force re-prompt.
+- `users.terms_accepted_at` + `users.terms_version` — DPDP audit trail columns (migration 032, 2026-04-20). Stamped by `TermsModal` (Hive) and synced up on first post-auth users upsert in `_ensureLocalUser`. Bump `AppConstants.termsVersion` to force re-prompt. **APK Test #2 batch (2026-04-25):** also synced DOWN from `users.terms_accepted_at`/`terms_version` to Hive on `_ensureLocalUser` so returning users skip the standalone `TermsModal` after logout.
 - `nutrition_logs.total_fiber NUMERIC DEFAULT 0` (migration 034, 2026-04-24). Historical rows stay at 0 — `nutrition_log_items` has no fiber column, so no backfill source. New logs carry the value from the Hive `nlog_*` row via `_syncNutritionLogs`. Feeds the AI coach via `_getTodayNutrition.fiber_g` / `fiber_target_g: 30`.
+- `user_profile.onboarding_completed_at TIMESTAMPTZ` (migration 036, 2026-04-25). Set by `OnboardingNotifier.completeOnboarding` on successful upsert. Read by `RestoringScreen` (post-auth gate) to decide between `/home` (onboarded) vs `/onboarding/mission-brief` (new user) vs resume-onboarding (mid-flow). Backfilled from existing rows where `primary_goal IS NOT NULL` (3/3 onboarded users at migration time).
+- `referral_codes.expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '7 days')` (migration 037, 2026-04-25). Codes expire 7 days after generation. `getOrCreateReferralCode()` filters by `expires_at > now()`; expired codes show REGENERATE button in InviteFriendsSheet. Pre-existing codes were given fresh 7-day windows starting from migration time (not retroactively expired).
+- `referral_redemptions` table (migration 037, 2026-04-25). Audit row per redemption: `code, referrer_id, referee_id, redeemed_at, days_granted_each`. UNIQUE on `referee_id` (one code per receiver, ever). FK to `auth.users(id)` for both referrer and referee. CHECK constraint blocks self-referral.
 
-**RPC:** `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
+**RPC:**
+- `increment_promo_used_count(p_code text)` — atomically increments `promo_codes.used_count`. Called from `razorpay-webhook` after subscription insert (only when `alreadyProcessed === false`).
+- `redeem_referral_atomic(p_code, p_referrer_id, p_referee_id, p_days)` — migration 038, 2026-04-25. Atomic both-side reward write: inserts audit row + extends both subscriptions in a single transaction. Used by `redeem-referral` Edge Function v10. Note: `subscriptions` column adapted to `status='active'` (not `active=true` boolean); `source` column not present in this project's `subscriptions` schema.
 
 ---
 
@@ -522,7 +527,6 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart`. Grouped by role:
 ### PRO Feature Keys
 ```
 phases_2_to_12         → auto-generate new 4-week plan after Week 4
-active_workout_mode    → active workout logging screen
 ai_coach_unlimited     → unlimited AI messages (free = 15/day for 30 days)
 weekly_ai_report       → weekly nutrition report ongoing (free = first report only)
 progress_photos        → full photo timeline
@@ -533,6 +537,17 @@ voice_notes            → push-to-talk voice input to AI coach
 morning_alert_pro      → AI-personalised morning message (free = generic push)
 prediction_monthly     → fresh prediction card every month (free = once at onboarding)
 adaptive_workouts      → AI workout adjustments from biometrics (Phase 2)
+```
+
+**Q6 / APK Test #2 (2026-04-25):** `active_workout_mode` was REMOVED from PRO. Active workout logging is always free for everyone — table-stakes for any fitness app, gating it killed the entry-level experience without driving conversions. The `featureActiveWorkoutMode` constant is kept as `@Deprecated` so legacy callers don't break, but `_highValueFeatures` now contains exactly 3 features: `phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`. Lock-down test in `test/subscription/high_value_features_test.dart`.
+
+**`_highValueFeatures` exact set (server-verified via `verifyFromServer()`):**
+```dart
+static const Set<String> _highValueFeatures = {
+  AppConstants.featurePhases2To12,
+  AppConstants.featureAiCoachUnlimited,
+  AppConstants.featureProgressPhotos,
+};
 ```
 
 ### Shareable Cards (ALL FREE — growth engine)
@@ -863,32 +878,60 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 
 ---
 
-## 13a. ONBOARDING (stepped flow — default since PR Y–AB, expanded in PR AI 2026-04-20 → 5 steps on `feat/onboarding-train-nutrition` 2026-04-24)
+## 13a. ONBOARDING (stepped flow — default since PR Y–AB, expanded over PR AI 2026-04-20, APK Test #1 2026-04-24, APK Test #2 2026-04-25)
 
-**Current default flow (5 visible steps):**
+**Current default flow for NEW users (6 screens — Mission Brief inserted between sign-up and Identity in APK Test #2):**
 
 ```
-Welcome       (/onboarding)            → sets no state, just CTA  (unnumbered)
+Welcome       (/onboarding)            → sets no state, just CTA           (unnumbered)
+   ↓ [BEGIN ENLISTMENT]
+[sign-up via email/Google/phone]
    ↓
-Identity      (/onboarding/identity)   → full_name, date_of_birth,
-                                         sex                       (01 · 05)
+[/restoring]                            → branded gate; awaits user_profile lookup
+                                          + restoreFromCloud() in parallel
+   ↓ (no row in user_profile → new user)
+Mission Brief (/onboarding/mission-brief) → founder photo + locked copy +
+                                            subtle Instagram link;
+                                            CONTINUE → Identity            (step 00)
    ↓
-Goal          (/onboarding/goal)       → primary_goal              (02 · 05)
+Identity      (/onboarding/identity)   → full_name, date_of_birth, sex     (01 · 05)
    ↓
-Stats         (/onboarding/stats)      → current_weight_kg,
-                                         target_weight_kg, height_cm,
-                                         body_fat_pct,
-                                         activity_level             (03 · 05)
+Goal          (/onboarding/goal)       → primary_goal                      (02 · 05)
    ↓
-Details       (/onboarding/details)    → fitness_experience,
-                                         pace_preference,
-                                         days_per_week,
-                                         equipment_access           (04 · 05)
+Stats         (/onboarding/stats)      → current_weight_kg, target_weight_kg,
+                                         height_cm, body_fat_pct,
+                                         activity_level                    (03 · 05)
+   ↓
+Details       (/onboarding/details)    → fitness_experience, pace_preference,
+                                         days_per_week, equipment_access   (04 · 05)
    ↓
 Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
                                          OnboardingNotifier.completeOnboarding()
-                                                                    (05 · 05)
+                                                                            (05 · 05)
 ```
+
+**Flow for RETURNING users (post-logout sign-in):**
+
+```
+[sign-in via email/Google/phone]
+   ↓
+[/restoring]                            → SELECT user_id, onboarding_completed_at
+                                          FROM user_profile + restoreFromCloud()
+   ↓
+   ├─ row + onboarding_completed_at IS NOT NULL
+   │   → await full restore → /home (15s timeout safety)
+   │
+   ├─ row + onboarding_completed_at IS NULL  (mid-onboarding abandonment)
+   │   → cancel restore → resume at first missing step
+   │       (Identity if name null → Goal if goal null → Stats → Details → Plan)
+   │
+   └─ no row (new user just signed up)
+       → /onboarding/mission-brief
+```
+
+**RestoringScreen** (`lib/features/auth/screens/restoring_screen.dart`) is the post-auth gate added in APK Test #2 (Q1). It shows a branded "Pulling your dispatch. Stand by, soldier." screen with a pulsing AVYA seal + 3-dot animation. After 15 seconds without completion, a CONTINUE button lets the user escape to home (restore continues in background).
+
+`SyncService.restoreFromCloud()` returns `RestoreResult { succeeded, cancelled, error }` and supports `cancelInflightRestore()` so the RestoringScreen can abandon when the user is determined to be new (no `user_profile` row).
 
 - **State passing:** `GoRouter` `state.extra` (a `Map<String, dynamic>`) between screens —
   **no premature provider commits.** The notifier only runs once, on the final tap. Each
@@ -938,12 +981,15 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   04-24 the Stats → Details navigation button was labelled "CALIBRATE PLAN", misleading since
   plan calibration doesn't happen until REPORT FOR DUTY on step 05. Renamed to `CONTINUE →`;
   behavior unchanged.
-- **Details screen layout uses equal-height sections with in-section fade**
-  (APK-test-1-batch). Experience + Pace render as `_FadeRow` (3 compact rows each; unselected
-  at 45% opacity + `textGhost` code). Days/Week + Equipment render as `_ChipRow` (single
-  horizontal row of 4 pills). Defaults are pre-selected: Intermediate / Balanced / 4 days /
-  Basic gym. Layout is tuned for 360×640 dp with a `SingleChildScrollView` safety net; if
-  a future change adds a 5th section, it will scroll. Custom `_FadeRow`/`_ChipRow` widgets
+- **Details screen is now ALL chip rows** (APK-test-2-batch / Q8, supersedes APK-test-1-batch
+  fade-row layout). All 4 sections render as horizontal chip rows: Experience (3 chips:
+  Beginner / Intermediate / Advanced), Pace (3 chips: Steady / Balanced / Aggressive),
+  Days/Week (4 chips: 3 / 4 / 5 / 6), Equipment (2×2 grid: Bodyweight / Dumbbells / Basic Gym
+  / Full Gym — labels too long for single row at 360 dp). Selected chip = gold-fill + black
+  w700 + opacity 1.0. Unselected = transparent + textGhost border + textDim text + opacity
+  0.55. Cross-fades 150 ms on tap. Description line below each row updates on selection.
+  Defaults pre-selected (Intermediate / Balanced / 4 / Basic Gym) so CONTINUE always works.
+  The previous APK-test-1 `_FadeRow`/`_ChipRow` widgets
   live in `details_screen.dart` (not Wardroom primitives) — if reused elsewhere, promote to
   `lib/shared/widgets/wardroom/`.
 - **Identity screen name field auto-focuses with inline validation** (APK-test-1-batch).
@@ -1218,3 +1264,20 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 | Custom exercise created but not visible in My Submissions | Two distinct failure modes: (a) `MySubmissionsScreen`/`_MySubmissionsBody` filters to `submitted_to_library=true`, so DRAFT exercises (user didn't tick "Share with AVYA community") never appear there — by design; (b) fire-and-forget `unawaited(SyncService.instance.syncCustomItemsNow())` can be interrupted by the user immediately backgrounding the app. The UX fix is D6 on Train: `_buildYourExercisesSection` uses `ValueListenableBuilder<customBox>` so the new exercise shows up instantly as a chip with `DRAFT`/`PENDING`/`APPROVED` badge regardless of submission state. The sync fix is observability: `_projectCustomExercise` already whitelists columns (since 2026-04-18), and `_syncCustomItems` now logs the payload in `kDebugMode` + the exercise name on errors. |
 | Plan-screen preview numbers disagreed with saved profile | `_computeTargets` used to run a reduced goal-only formula (`weight × 32 + 250` for build_muscle, `weight × 2` for protein) that ignored body_fat, height, activity, and pace. Saved profile went through `BmrCalculator.calculateTargets` with all inputs → different numbers on preview vs DB. Fixed in APK-test-1-batch: preview calls the canonical `BmrCalculator.calculateTargets` with every input from `widget.data` (weight, height, DOB-derived age, sex, activity, goal, pace, target_weight, body_fat_pct). Weight delta is now `target - current` rounded, with a `HOLD` special case when abs(diff) < 0.5. Only `days_per_week` keeps a goal-based fallback (for legacy chat-flow deep-links). |
 | Submissions entry confusing — two separate rows | Pre-APK-test-1-batch Profile showed "Review Community Items" (bottom sheet) + "My Submissions" (route) as two separate rows under SHARE & GROW. Testers kept tapping "Review Community Items" expecting to see their own submissions too. Consolidated into a single `Submissions` row at `/profile/submissions` which opens `SubmissionsScreen` with a 2-segment pill toggle: MY SUBMISSIONS + COMMUNITY REVIEW. Uses a handrolled pill (not Material `TabBar`) styled like `WardChip` since the old coach-screen `_buildStatusPill` primitive was deleted 2026-04-18. Legacy `/profile/my-submissions` route kept for deep-link safety — will be retired after one release cycle. |
+| Logout → re-sign-in dumps user back to onboarding | Splash navigated to `/home` or `/onboarding` BEFORE `unawaited(checkAndSync())` finished restoring Hive from cloud. Router checked `configBox['onboarding_completed']` (cleared during logout) → false → sent to `/onboarding`. Fixed in APK-test-2-batch (Q1): new `RestoringScreen` at `/restoring` is the post-auth gate. SELECT `user_id, onboarding_completed_at FROM user_profile` runs in parallel with `restoreFromCloud()`. Three-way branch: onboarded user awaits restore → `/home` (15s timeout safety); mid-onboarding user resumes at first missing step; new user routes to `/onboarding/mission-brief`. Migration 036 added the explicit `onboarding_completed_at` column so the gate has a cloud-side source of truth that survives logout-wipe. Never revert to the splash-only flow — the cascade fixes B3 sync verification, F2 restore, F3 "Account not synced" coach error all in one. |
+| Prediction card shows YAML-style key:value | Gemini interpreted "no JSON, no code fences" as "use a different structured shape" and emitted flat YAML: `outcome_3_months: weight_kg:77.5. body.` The first parse guard (APK Test #1, JSON-only) had an early-return at `trimmed.startsWith('{') \|\| '['` that passed YAML through unmodified. APK Test #2 / F4 extends `_sanitisePredictionText` with a third branch: regex `^[a-z_][a-z_0-9]*\s*:` finds 1+ snake_case key:value lines, picks the longest prose value (>20 chars + spaces), or falls back to stripping keys and joining values. Prompt also hardened to forbid "colon-separated keys" (not just JSON). Triple defense: prompt → JSON guard → key:value guard. Cleaned text written back to Hive so decode runs once per stored value. |
+| Stale "Legs B scheduled" insight after regen + complete | `aiInsightProvider` reads from `WorkoutScheduleService.getScheduleForDate(now)` — no automatic Riverpod invalidation when Hive schedule changes. After plan regenerate or workout completion, the home AI insight card kept showing the pre-mutation insight. Fixed APK-test-2-batch / F5: explicit `ref.invalidate(aiInsightProvider)` added to `edit_profile_screen._save` regen path AND `train_provider.completeWorkout`. Day rollover already invalidated it correctly. Source-grep regression test in `test/providers/ai_insight_invalidation_test.dart`. |
+| V4 plan generator drops 8→4 exercises on edit-profile regen | `edit_profile_screen.dart:1621` read `profile['detected_experience_level']` — a key NEVER WRITTEN by onboarding or profile updates. Defaulted to `'beginner'` → `VolumeFilter.targetCount(beginner, 5) = 4`. Fixed APK-test-2-batch / F6: read `profile['fitness_experience']` (canonical key written by onboarding step 04 + edit_profile itself); fallback bumped from `'beginner'` to `'intermediate'` to match onboarding's pre-selected default. |
+| Logging type lost through swap | `workout_schedule_service.dart` `swapExerciseInDay` fell back to `'weight_reps'` whenever the replacement payload didn't carry `logging_type` — even when the replacement existed in `exerciseBox` or `customBox` with a different type. Symptom: swap from Handstand Hold (timed) to Handstand Pushup → KG/REPS columns instead of timed. Fixed APK-test-2-batch / F7: new `LoggingTypeResolver.resolve(exercise, exerciseLibrary, customLibrary)` checks payload → customBox → exerciseBox by name BEFORE falling back. Caller still falls back to `original['logging_type']`, then `'weight_reps'` as last resort. |
+| Adding 3rd set wipes set 2's typed values | `_ExerciseCardState.didUpdateWidget` called `_disposeControllers() + _initControllers()` — full rebuild — on every set count change. Any in-flight typed text (not yet committed to provider) was wiped because the new controllers came up empty. Fixed APK-test-2-batch / F8: didUpdateWidget now appends new TextEditingControllers when count grows (preserving indices `[0..oldCount-1]`) and disposes trailing ones when count shrinks. Symmetric for all 4 controller lists (`_weightControllers, _repsControllers, _durationControllers, _distanceControllers`). Exercise-name change still does full rebuild (correct behavior for swap). |
+| WK 17 wrong on home header | Home header used calendar-year week math: `((now - Jan 1) / 7).floor() + 1`. For 2026-04-25 that's WK 17 — meaningless to a user starting Phase I last week. Fixed APK-test-2-batch / F9: replaced with `WorkoutScheduleService.getCurrentWeekNumber()` (the canonical plan-relative week, already used elsewhere). |
+| `?defaultDur` invalid syntax in `_projectCustomExercise` | The map literal had `'default_duration_secs': ?defaultDur,`. Originally thought to be invalid Dart causing silent custom-exercise sync failures (B3 cascade). **Update:** Dart 3.4+ added `use_null_aware_elements` lint making `?identifier` a VALID nullable-element shorthand for `if (x != null) 'key': x`. The codebase has 9+ instances of this pattern in `ai_coach_repository`, `workout_repository`, `edit_profile_screen`. APK Test #2 / F1 still replaced this specific instance with the explicit `if (defaultDur != null)` form for stylistic consistency with surrounding code. The original "no ?identifier" contract test at `test/contracts/edge_function_safety_test.dart` was retired since the syntax is now legitimate. |
+| Active workout gated as PRO | Was killing the entry-level experience without driving conversions — every fitness app lets you log workouts for free. Fixed APK-test-2-batch / Q6: `featureActiveWorkoutMode` removed from `_highValueFeatures`. All `gate(featureActiveWorkoutMode, ...)` calls in `train_screen.dart` replaced with direct navigation. Constant kept as `@Deprecated` so legacy callers don't break. PRO conversion levers unchanged (phases 2–12, AI coach unlimited, photos, weekly report, voice, etc.). Lock-down test in `test/subscription/high_value_features_test.dart`. |
+| Referral code lifetime ambiguous to receiver | APK Test #2 / Q4 locked: codes expire 7 days from generation (single 7-day clock everywhere). Migration 037 added `referral_codes.expires_at TIMESTAMPTZ DEFAULT (now() + interval '7 days')`. `getOrCreateReferralCode()` filters by `.gt('expires_at', now())`; `regenerateReferralCode()` forces a fresh 7-day code (used by REGENERATE button when the current code expires). `redeem-referral` Edge Function v10 validates: format → expiry → self-referral → receiver signup ≤ 7 days → idempotency (UNIQUE on `referee_id`) → `redeem_referral_atomic` RPC. Both sides get +7 days PRO. WhatsApp share copy: "Use my code AVYA-XXXXXXXX within 7 days → 7 days of PRO, free." |
+| Phase 2-12 invisible to free users | Train screen previously capped the week selector at 4 weeks — free users couldn't see what they were paying for. APK Test #2 / Q7 extends the selector to 12 weeks (3 phases) with PHASE I / II (PRO) / III (PRO) headers + lock glyph on weeks 5–12 for free users. Tap any locked week → `/train/preview?phase=II&week=5&day=1` renders a real workout via `previewPlanProvider` (calls `PlanGenerator.instance.generateV4()` with the user's actual profile — goal/equipment/days/experience). State-aware banner: "Complete Phase I to unlock Phase II — your AI coach generates the next 4 weeks the moment you finish." Free users see UPGRADE TO PRO bottom CTA + cross-link to `/train/roadmap`. |
+| Today card title truncates and macros are wasteful | "LEGS B · Rela…" was getting cut off because the right-column macro grid ate too much horizontal space, AND each macro tile took 3 vertical lines (eyebrow / number / bar). APK Test #2 / Q9 fixes both: column ratio shifted from ~50/50 to 60/40 (left wider). Title gets `maxLines: 2` — never truncates. Each macro tile collapses to 2 lines: row 1 has `EYEBROW` (mono 10sp left) + `1820/2983` (Fraunces 16sp right-aligned), row 2 has the bar full tile width. Number format: `1820/2983` (no spaces around `/`), `kg` lowercase, `k` abbreviation on STEPS target ≥ 1000. Completed state: DONE chip + VIEW CARD button paired in left column (anchored to workout, never floats over macros — was the obs #15 ambiguity). Best-lift on its own line below. Eyebrow stays inside left column per user's explicit "don't add a top-row eyebrow" feedback. |
+| Receipt summary line hides per-set progression | Old format was cumulative: `Dumbbell Curl 4 sets · 21 reps · 23kg`. The 23kg was best across sets, hiding the actual progression (10×10, 15×7, 20×5, 22.5×3). APK Test #2 / Q10 changes per-exercise rendering to bracketed chip Wrap. Each chip: `10 kg × 10 reps` (weight_reps), `× 10 reps` (bodyweight), `+10 kg × 8 reps` (weighted bodyweight), `60 secs` (timed), `15 secs · 2 km` (cardio). 1px `line2` border, 6dp radius, 12sp DM Sans. Wrap when full. Quote line is now category-aware: 30 quotes in `assets/data/workout_quotes.json` tagged by category (push/pull/legs/core/full_body/cardio/arms/general). `QuotePicker.pickForCategory(category, seed)` filters by category, falls back to `general`. Selection seeded by workout_log_id so the same workout always gets the same quote. |
+| Train empty-state cards waste 280dp | MY TEMPLATES + YOUR EXERCISES empty cards were tall WardCard with centered icon + title + subtitle (~140dp each, ~280dp total wasted vertical space). APK Test #2 / Q11: replaced with single-line hint text below section header: `No templates yet — tap + CREATE to build one.` / `No custom exercises yet — tap + CREATE to add one.` Gold-accent + bold `+ CREATE` word inside the hint is tappable via `GestureDetector`, calls the same handler as the section header pill. Two affordances, both compact. Saves ~250dp total. |
+| Auth sub-views (email form, phone OTP, forgot password) had no AVYA branding | Welcome screen had a beautiful gold-ringed AVYA seal + tagline; tap "Continue with email" and the next screen was a bare form — broke visual continuity (user obs #23). APK Test #2 / Q3: new `AuthHeader` widget at `lib/features/auth/widgets/auth_header.dart` adds compact letterhead (36dp gold-ring AVYA seal + mono "RECRUIT REGISTRY" eyebrow + 60dp gold rule + Fraunces title) to all sub-views. Welcome retains its full hero — only sub-views inherit the compact header. |
+| Privacy/Terms standalone modal interrupts post-logout flow | Pre-APK-test-2 the `TermsModal` fired on every cold launch when Hive was wiped, even for returning users who'd already accepted. APK Test #2 / Q2: (a) Welcome screen has inline footer "By continuing, you agree to our [Privacy Policy] and [Terms]" linking to external URLs; (b) signup form has a pre-checked checkbox above SIGN UP button gating the button (uncheck = button disabled); (c) returning users have `users.terms_accepted_at` synced FROM cloud TO Hive on `_ensureLocalUser`, so `TermsModal` skip gate (`accepted != null && version == AppConstants.termsVersion`) succeeds without them needing to re-accept. Pre-checked default is the common Indian fintech pattern (CRED, Zerodha, Razorpay). Tapping SIGN UP with a visible-and-tickable checkbox is the affirmative action under DPDP. |
+| Founder credibility lost in cold sign-up flow | New users had no idea who built AVYA or why the plans were trustworthy — just a generic onboarding flow. APK Test #2 / Q5: new step 00 `MissionBriefScreen` at `/onboarding/mission-brief` inserted between sign-up and Identity (new users only — returning users skip via the restore flow). 96dp gold-ringed founder photo (`assets/founder/upendra.jpg`, converted from HEIC) + locked copy: *"I built AVYA because every fitness app I tried treated me like a number. The plans you'll see in this app aren't algorithmic guesses — they're shaped by 14 years of military training and certified coaching practice. The AI executes the playbook. The playbook is mine. Jai Hind!"* Italic-gold emphasis on "aren't algorithmic guesses" and "The playbook is mine." Subtle inline Instagram link "Daily wins on Instagram → @icanbefitter" (handle is gold + underlined, opens IG app via `instagram://user?username=icanbefitter` with web fallback). Single primary CTA `CONTINUE →` (BEGIN ENLISTMENT already lives on Welcome). Plus micro-references on Plan screen ("Plan shaped by 14 years of disciplined coaching." below REPORT FOR DUTY) and AI coach (`is_first_ever_message: true` flag passed in context for first-message system-prompt prefix). |

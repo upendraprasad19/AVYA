@@ -77,15 +77,22 @@ void main() {
     });
 
     // L4: Stats CONTINUE must show a non-blocking snackbar when body fat is empty.
+    //
+    // Copy was updated in APK Test #1 batch (2026-04-24) — the old
+    // "We'll estimate body fat at 18% — you can refine later in Profile."
+    // string was misleading (Mifflin-St Jeor doesn't use body fat at all).
+    // New copy clarifies what actually happens: weight + height are used,
+    // and body fat can be added later via Profile.
     test('L4: stats_screen shows body-fat default snackbar when field is blank',
         () {
       final src = _read('stats_screen.dart');
       expect(
         src.contains(
-            "We'll estimate body fat at 18% — you can refine later in Profile."),
+            "Skipping body fat \\u2014 using weight + height. Scan later from Profile to refine."),
         isTrue,
         reason:
-            'Stats _onCalibrate must show snackbar when body-fat field is blank',
+            'Stats _onCalibrate must show the updated snackbar copy when '
+            'body-fat field is blank (post APK Test #1).',
       );
       expect(
         src.contains('_bodyFat.text.trim().isEmpty'),

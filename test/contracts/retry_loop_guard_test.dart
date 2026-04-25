@@ -98,13 +98,21 @@ void main() {
           .firstWhere((e) => e.key.contains('ai_coach_provider.dart'))
           .value;
 
-      // Extract the send() method body (from declaration to next method or end)
-      final sendStart = source.indexOf('Future<void> send(String message');
-      expect(sendStart, isNot(-1), reason: 'send() method must exist');
+      // Find the send() method declaration. It may span multiple lines:
+      //   Future<void> send(
+      //     String message, {
+      //     String? existingCoachKey,
+      //   }) async {
+      // ...so match on the multi-line declaration shape, not the old
+      // single-line `'Future<void> send(String message'` literal.
+      final sendStart = RegExp(
+        r'Future<void>\s+send\s*\(',
+      ).firstMatch(source);
+      expect(sendStart, isNotNull,
+          reason: 'send() method must exist on AiCoachProvider/equivalent');
 
       // Get everything from send() declaration to the next top-level method
-      // We look for 'return send(' which is the recursive call pattern
-      final sendBody = source.substring(sendStart);
+      final sendBody = source.substring(sendStart!.start);
 
       // Should NOT contain 'return send(' — that's the recursive call
       expect(sendBody.contains('return send('), isFalse,
@@ -129,21 +137,24 @@ void main() {
               'It should be removed since we no longer retry.');
     });
 
-    test('auth error path refreshes token but shows error (no retry)', () {
+    test('auth error path refreshes token (single inline retry)', () {
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('ai_coach_provider.dart'))
           .value;
 
-      // Must still call ensureFreshToken on auth errors (to fix the token
-      // for the NEXT user-initiated send)
-      expect(source, contains('ensureFreshToken'),
+      // Must call refreshSession() on auth errors. The original test looked
+      // for an `ensureFreshToken` helper that was inlined in a 2026-04 refactor;
+      // the canonical call is now `auth.refreshSession()` directly.
+      expect(source, contains('refreshSession'),
           reason:
-              'Auth error path must still refresh token for next attempt');
+              'Auth error path must refresh the session token (single inline '
+              'retry, not recursive).');
 
-      // Must show an error message to the user (not silently retry)
-      expect(source, contains("'Session expired"),
+      // Must detect the auth error class
+      expect(source, contains('Session expired'),
           reason:
-              'Auth error must surface a "Session expired" message to user');
+              'Auth error must include "Session expired" in the detection set '
+              'so JWT-expired responses route through the refresh path.');
     });
   });
 
