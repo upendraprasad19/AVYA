@@ -241,12 +241,20 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        // Step 3 — update the reserved row with real telemetry. Fire-and-forget
-        // so the response doesn't block on this final write.
+        // Step 3 — update the reserved row with real telemetry + the
+        // parsed JSON response. Fire-and-forget so the HTTP response
+        // doesn't block on this final write.
+        //
+        // Bug fix (2026-04-25, F11 server-side): the UPDATE previously
+        // omitted `ai_response` entirely, leaving every row with the
+        // empty placeholder string. Tokens were charged but the
+        // response never landed in the audit row, breaking analytics
+        // + the AI coach's ability to reference past food analyses.
         if (reservationId) {
           supabaseClient
             .from("ai_coach_interactions")
             .update({
+              ai_response: JSON.stringify(parsed),
               model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
               tokens_used: tokensUsed,
             })
