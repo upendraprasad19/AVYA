@@ -1502,6 +1502,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(allExercisePRsProvider);
+    ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after complete
     // Note: weightHistoryProvider not invalidated — workout completion
     // doesn't change weight data (weight is logged separately).
   }

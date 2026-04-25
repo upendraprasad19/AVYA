@@ -1643,6 +1643,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(currentPlanProvider);
       ref.invalidate(todayWorkoutProvider);
       ref.invalidate(calendarWeekProvider);
+      ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
