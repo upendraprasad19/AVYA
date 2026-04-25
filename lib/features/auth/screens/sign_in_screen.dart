@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 import '../providers/auth_provider.dart';
+import '../widgets/auth_header.dart';
 import '../widgets/forgot_password_sheet.dart';
 import '../widgets/terms_modal.dart';
 
@@ -363,28 +364,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Widget _buildEmailView(AuthNotifier authNotifier, bool isLoading) {
     return Column(
       children: [
-        const SizedBox(height: 20),
-
-        // Back button
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            onPressed: isLoading
-                ? null
-                : () => setState(() {
-                      _currentView = _SignInView.main;
-                      _isSignUp = false;
-                    }),
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
-              color: AppColors.textPrimary,
-              size: 20,
-            ),
-          ),
+        AuthHeader(
+          eyebrow: 'RECRUIT REGISTRY',
+          title: _isSignUp ? 'Sign up' : 'Sign in',
+          onBack: isLoading
+              ? null
+              : () => setState(() {
+                    _currentView = _SignInView.main;
+                    _isSignUp = false;
+                  }),
         ),
-        const SizedBox(height: 12),
-
-        const SizedBox(height: 32),
 
         // Email form
         Form(
@@ -515,29 +504,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 20),
-
-        // Back to main (discards any pending OTP state).
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            onPressed: isLoading
-                ? null
-                : () => setState(() {
-                      _currentView = _SignInView.main;
-                      _otpController.clear();
-                      _resendTimer?.cancel();
-                      _resendSecondsRemaining = 0;
-                      authNotifier.resetState();
-                    }),
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
-              color: AppColors.textPrimary,
-              size: 20,
-            ),
-          ),
+        AuthHeader(
+          eyebrow: 'RECRUIT REGISTRY',
+          title: authState.otpSent ? 'Enter the code' : 'Phone sign in',
+          onBack: isLoading
+              ? null
+              : () => setState(() {
+                    _currentView = _SignInView.main;
+                    _otpController.clear();
+                    _resendTimer?.cancel();
+                    _resendSecondsRemaining = 0;
+                    authNotifier.resetState();
+                  }),
         ),
-        const SizedBox(height: 12),
 
         // Phone input / OTP section.
         if (!authState.otpSent) ...[
