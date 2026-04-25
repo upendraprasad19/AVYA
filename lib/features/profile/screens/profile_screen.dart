@@ -31,6 +31,8 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
 import '../providers/profile_provider.dart';
+import '../providers/referral_eligibility_provider.dart';
+import '../screens/apply_referral_sheet.dart';
 import '../widgets/profile_identity.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
@@ -622,6 +624,62 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // removed.
               const SectionHeader('SHARE & GROW'),
               _buildCard([
+                // Q4: Apply Referral Code — visible only within 7-day signup
+                // window AND when the user hasn't redeemed a referral yet.
+                // Tap opens ApplyReferralSheet; on success the provider is
+                // invalidated so the tile disappears automatically.
+                ...ref.watch(referralEligibilityProvider).when(
+                  data: (state) {
+                    if (!state.isEligible) return const <Widget>[];
+                    return <Widget>[
+                      ProfileRow(
+                        icon: Icons.card_giftcard_outlined,
+                        iconBgColor: AppColors.accentSoft,
+                        iconColor: AppColors.accent,
+                        title: 'Apply Referral Code',
+                        subtitle: '7 days of PRO when you apply a code',
+                        titleSuffix: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${state.daysRemaining}D LEFT',
+                            style: AppTypography.monoXs.copyWith(
+                              letterSpacing: 0.8,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        trailing: const ProfileRowChevron(),
+                        onTap: () async {
+                          final ok = await ApplyReferralSheet.show(context);
+                          if (ok == true && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '7 days of PRO unlocked!',
+                                  style: AppTypography.body.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                backgroundColor: AppColors.card,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                            ref.invalidate(referralEligibilityProvider);
+                          }
+                        },
+                      ),
+                    ];
+                  },
+                  loading: () => const <Widget>[],
+                  error: (e, st) => const <Widget>[],
+                ),
                 ProfileRow(
                   icon: Icons.card_giftcard,
                   title: 'Invite Friends',
