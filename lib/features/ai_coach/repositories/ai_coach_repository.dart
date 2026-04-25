@@ -31,7 +31,15 @@ class AiCoachRepository {
     final progress = UserRepository.instance.getProgress() ?? {};
     final preferences = UserRepository.instance.getPreferences() ?? {};
 
+    // Detect if this is the user's first-ever message to the coach
+    // by checking if coachBox has any prior interactions
+    final priorMessages = _hive.coachBox.values
+        .where((v) => v is Map && (v['user_message'] as String?)?.isNotEmpty == true)
+        .length;
+    final isFirstEverMessage = priorMessages == 0;
+
     return {
+      'is_first_ever_message': isFirstEverMessage,
       'profile': {
         'name': profile['full_name'] ?? '',
         'age': _calculateAge(profile['date_of_birth'] as String?),

@@ -318,6 +318,17 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                   ),
           ),
         ),
+        const SizedBox(height: 12),
+        Center(
+          child: Text(
+            'Plan shaped by 14 years of disciplined coaching.',
+            style: AppTypography.bodyS.copyWith(
+              color: AppColors.textMute,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
         const SizedBox(height: 10),
         GestureDetector(
           onTap: () => context.go(
