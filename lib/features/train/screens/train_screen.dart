@@ -1514,24 +1514,28 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           const SizedBox(height: 10),
 
           if (templates.isEmpty)
-            WardCard(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Row(
                 children: [
-                  const Icon(Icons.fitness_center_outlined,
-                      size: 28, color: AppColors.textDim),
-                  const SizedBox(height: 8),
                   Text(
-                    'No templates yet',
-                    style: AppTypography.h3.copyWith(
-                      fontSize: 13,
-                      color: AppColors.textDim,
+                    'No templates yet — tap ',
+                    style: AppTypography.bodyS
+                        .copyWith(color: AppColors.textDim),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.go('/train/template-builder'),
+                    child: Text(
+                      '+ CREATE',
+                      style: AppTypography.bodyS.copyWith(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    'Tap Create to build a custom workout',
-                    style: AppTypography.bodySm
+                    ' to build one.',
+                    style: AppTypography.bodyS
                         .copyWith(color: AppColors.textDim),
                   ),
                 ],
@@ -1938,27 +1942,28 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             builder: (context, box, _) {
               final exercises = _collectCustomExercises(box);
               if (exercises.isEmpty) {
-                return WardCard(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Column(
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Row(
                     children: [
-                      const Icon(
-                        Icons.fitness_center_outlined,
-                        size: 28,
-                        color: AppColors.textDim,
-                      ),
-                      const SizedBox(height: 8),
                       Text(
-                        'No custom exercises yet',
-                        style: AppTypography.h3.copyWith(
-                          fontSize: 13,
-                          color: AppColors.textDim,
+                        'No custom exercises yet — tap ',
+                        style: AppTypography.bodyS
+                            .copyWith(color: AppColors.textDim),
+                      ),
+                      GestureDetector(
+                        onTap: () => _openCreateCustomExerciseSheet(context),
+                        child: Text(
+                          '+ CREATE',
+                          style: AppTypography.bodyS.copyWith(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
                       Text(
-                        'Tap + CREATE to add one',
-                        style: AppTypography.bodySm
+                        ' to add one.',
+                        style: AppTypography.bodyS
                             .copyWith(color: AppColors.textDim),
                       ),
                     ],
