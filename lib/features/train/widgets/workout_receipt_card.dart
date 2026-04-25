@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
+import '../services/quote_picker.dart';
 
 // ── Category-specific taglines ───────────────────────────────────
 const _taglinesPull = <String>[
@@ -149,6 +150,11 @@ class WorkoutReceiptData {
   });
 
   int get totalExercises => exercises.length;
+
+  /// Public seed for quote/tagline selection — same workout always produces
+  /// the same value so [WorkoutReceiptCard] and [QuotePicker] stay in sync.
+  int get taglineSeed =>
+      _taglineSeed(date, workoutName, totalVolumeKg, totalSets);
 
   /// Deterministic tagline seed — same (date, name, volume, sets) produces
   /// the same tagline across every render.
@@ -466,17 +472,30 @@ class WorkoutReceiptCard extends StatelessWidget {
               _buildStreakBadge(),
             ],
 
-            // Tagline
+            // Category-tagged quote (deterministic per workout seed)
             const SizedBox(height: 14),
-            Text(
-              tagline,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                fontStyle: FontStyle.italic,
-                color: AppColors.textMute,
+            FutureBuilder<String>(
+              future: QuotePicker.pickForCategory(
+                category: QuotePicker.categoryForWorkout(data.workoutName),
+                seed: data.taglineSeed,
               ),
+              builder: (context, snapshot) {
+                // While loading, fall back to the pre-computed tagline so
+                // there is never a flash of empty space.
+                final quote = (snapshot.hasData && snapshot.data!.isNotEmpty)
+                    ? snapshot.data!
+                    : tagline;
+                return Text(
+                  quote,
+                  style: GoogleFonts.getFont(
+                    'DM Sans',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    fontStyle: FontStyle.italic,
+                    color: AppColors.textMute,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -526,30 +545,62 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   List<Widget> _buildExerciseRows() {
     return data.exercises.map((ex) {
-      final detail = _exerciseDetail(ex);
-      // Left: DM Sans body (paragraph voice). Right: JB Mono tabular stats.
+      final chips = _buildSetChips(ex);
       return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                ex.name,
-                style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.w600,
+            // Exercise name + total sets count header
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ex.name.toUpperCase(),
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                Text(
+                  '${ex.sets} set${ex.sets == 1 ? '' : 's'}',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              detail,
-              style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
+            const SizedBox(height: 6),
+            // Per-set chips wrapped
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: chips,
             ),
           ],
         ),
       );
     }).toList();
+  }
+
+  /// Build set chips for one exercise. Uses per-set breakdown when available;
+  /// gracefully degrades to a single cumulative chip for legacy logs.
+  List<Widget> _buildSetChips(ReceiptExercise ex) {
+    if (ex.perSetBreakdown.isNotEmpty) {
+      return ex.perSetBreakdown
+          .map((s) => _SetChip(loggingType: ex.loggingType, set: s))
+          .toList();
+    }
+    // Graceful degradation: one chip showing cumulative summary.
+    final label = _exerciseDetail(ex);
+    return [
+      _SetChip.fromLabel(label),
+    ];
   }
 
   /// Format a duration in seconds as e.g. "3s", "45s", "2m 0s", "10m".
@@ -700,4 +751,81 @@ class WorkoutReceiptCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A single bracketed set chip used in the receipt exercise breakdown.
+///
+/// 1px parchment border, transparent fill, logging-type-aware label.
+/// Falls back to [fromLabel] for legacy logs without per-set data.
+class _SetChip extends StatelessWidget {
+  const _SetChip({required this.loggingType, required this.set});
+
+  final String loggingType;
+  final ReceiptSet set;
+
+  factory _SetChip.fromLabel(String label) =>
+      _SetChip(loggingType: '_raw', set: _RawLabelSet(label));
+
+  String _formatLabel() {
+    final weight = set.weightKg;
+    final reps = set.reps;
+    final dur = set.durationSeconds;
+
+    switch (loggingType) {
+      case 'weight_reps':
+        final w = weight != null && weight > 0
+            ? '${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg'
+            : '0 kg';
+        return '$w × ${reps ?? 0} reps';
+      case 'bodyweight_reps':
+        return '× ${reps ?? 0} reps';
+      case 'weighted_bodyweight':
+        final w = weight != null && weight > 0
+            ? '+${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg'
+            : '+0 kg';
+        return '$w × ${reps ?? 0} reps';
+      case 'timed':
+        return '${dur ?? 0} secs';
+      case 'cardio':
+        final parts = <String>[];
+        if (dur != null && dur > 0) parts.add('${dur}s');
+        return parts.isNotEmpty ? parts.join(' · ') : '—';
+      case 'distance':
+        return reps != null && reps > 0 ? '$reps reps' : '—';
+      case '_raw':
+        // fromLabel path — label stored on set directly.
+        if (set is _RawLabelSet) return (set as _RawLabelSet).label;
+        return '—';
+      default:
+        return reps != null && reps > 0 ? '$reps reps' : '—';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.line2, width: 1),
+        color: Colors.transparent,
+      ),
+      child: Text(
+        _formatLabel(),
+        style: AppTypography.bodyS.copyWith(
+          color: AppColors.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+/// Internal sentinel used by [_SetChip.fromLabel] to carry a pre-formatted
+/// label through the [ReceiptSet] interface without adding public API.
+class _RawLabelSet extends ReceiptSet {
+  final String label;
+  const _RawLabelSet(this.label)
+      : super(weightKg: null, reps: null, durationSeconds: null);
 }
