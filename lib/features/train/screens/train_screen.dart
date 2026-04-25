@@ -201,6 +201,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
                       onSelect: (week) {
+                          final isProUser =
+                              SubscriptionService.instance.isPro();
+                          // Weeks 5-12 are PRO-only. Free users tapping a
+                          // locked week chip are routed to the read-only
+                          // preview screen (Q7 surface C) instead of
+                          // selecting a week they can't access.
+                          if (!isProUser && week >= 5) {
+                            final phase = week <= 8 ? 'II' : 'III';
+                            context.push(
+                                '/train/preview?phase=$phase&week=$week&day=1');
+                            return;
+                          }
                           ref.read(selectedWeekProvider.notifier).select(week);
                           ref.read(expandedDayProvider.notifier).collapse();
                         },

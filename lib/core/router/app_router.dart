@@ -20,6 +20,7 @@ import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
 import 'package:icanbefitter/features/train/screens/graduation_screen.dart';
 import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
+import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
@@ -307,6 +308,25 @@ class AppRouter {
                     name: 'phaseRoadmap',
                     builder: (context, state) =>
                         const PhaseRoadmapScreen(),
+                  ),
+                  GoRoute(
+                    path: 'preview',
+                    name: 'previewWorkout',
+                    builder: (context, state) {
+                      final phase =
+                          state.uri.queryParameters['phase'] ?? 'I';
+                      final week = int.tryParse(
+                              state.uri.queryParameters['week'] ?? '') ??
+                          1;
+                      final day = int.tryParse(
+                              state.uri.queryParameters['day'] ?? '') ??
+                          1;
+                      return PreviewWorkoutScreen(
+                        phaseNumber: phase,
+                        week: week,
+                        day: day,
+                      );
+                    },
                   ),
                 ],
               ),
