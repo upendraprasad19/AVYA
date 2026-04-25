@@ -593,6 +593,16 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   /// Falls back to mock data if Edge Function is unreachable.
   Future<void> analyse(String text) async {
     try {
+      // F11 — refresh subscription cache to avoid stale-PRO/free state after restore.
+      // Cheap (~50ms hit if cache miss); resolves the most-likely cause of
+      // rate-limit trigger firing on a user who's actually under their daily cap.
+      try {
+        await SubscriptionService.instance.verifyFromServer();
+      } catch (_) {
+        // Non-fatal — continue with cached state. Server-side trigger is the
+        // authoritative gate.
+      }
+
       final response = await SupabaseService.instance.callFunction(
         AppConstants.aiProxyFunction,
         body: {
@@ -629,8 +639,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         );
         return;
       }
-    } catch (e) {
-      debugPrint('[NutritionProvider.analyseText] error: $e');
+    } catch (e, stack) {
+      // F11 — detailed instrumentation for food analysis failures
+      if (kDebugMode) {
+        debugPrint('[F11 food_analysis] error: $e');
+        debugPrint('[F11 food_analysis] stack: $stack');
+      }
+
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
                           msg.contains('unauthorized') || msg.contains('jwt') ||
@@ -638,6 +653,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final isServiceError = msg.contains('503') || msg.contains('502') ||
                              msg.contains('unavailable') || msg.contains('non-2xx') ||
                              msg.contains('food ai') || msg.contains('food analysis failed');
+      final isRateLimitError = msg.contains('food_text_daily_limit_reached') ||
+                               msg.contains('daily food analysis limit') ||
+                               msg.contains('429') || msg.contains('rate limit');
+      final isMessageTooLong = msg.contains('message too long') ||
+                               msg.contains('exceeds maximum');
+      final isSnapshotTooLarge = msg.contains('snapshot too large') ||
+                                 msg.contains('context too large');
 
       // Auto-refresh session on auth error (same pattern as AI Coach).
       // User can tap "Analyse & Log" again without signing out.
@@ -650,11 +672,17 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         }
       }
 
-      final errorMsg = isAuthError
-          ? 'Session refreshed. Please tap Analyse again.'
-          : isServiceError
-              ? 'AI food analysis is temporarily unavailable. Please try again shortly.'
-              : 'AI analysis failed. Please check your connection and try again.';
+      final errorMsg = isRateLimitError
+          ? 'Daily food analysis limit reached. Try again tomorrow or upgrade to PRO.'
+          : isAuthError
+              ? 'Session refreshed. Please tap Analyse again.'
+              : isMessageTooLong
+                  ? 'That description is too long (max 5000 chars). Please shorten it.'
+                  : isSnapshotTooLarge
+                      ? 'Your nutrition data is unusually large. Please try a shorter question.'
+                      : isServiceError
+                          ? 'The AI is temporarily unavailable. Please try again in a minute.'
+                          : 'Could not analyse that. Please try a clearer description.';
       state = AiBreakdownData(
         mealName: text,
         totalKcal: 0,
