@@ -144,7 +144,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             debugPrint('[SignIn] Referral redemption failed (will retry on next launch): $e');
           });
         }
-        context.go('/splash');
+        // Q1: Route through RestoringScreen instead of /splash.
+        // RestoringScreen runs the post-auth decision tree:
+        //   onboarded → restore + /home
+        //   mid-onboarding → resume at correct step
+        //   no profile row → /onboarding/mission-brief
+        context.go('/restoring');
       }
     });
 

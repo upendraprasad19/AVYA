@@ -13,13 +13,34 @@ import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
+/// Result of a [SyncService.restoreFromCloudForUser] call.
+class RestoreResult {
+  final bool succeeded;
+  final bool cancelled;
+  final Object? error;
+
+  RestoreResult.success()
+      : succeeded = true,
+        cancelled = false,
+        error = null;
+
+  RestoreResult.cancelled()
+      : succeeded = false,
+        cancelled = true,
+        error = null;
+
+  RestoreResult.failed(this.error)
+      : succeeded = false,
+        cancelled = false;
+}
+
 /// Handles background data sync between Hive (local) and Supabase (cloud).
 ///
 /// Schedule:
 ///   - Immediately: custom foods/exercises (community contribution)
 ///   - Daily 11 PM IST: user_daily_snapshot for AI context
 ///   - Weekly (app launch if >7 days): full sync of all logs
-///   - On restore (new device): pull 30d (free) / 90d (PRO) from Supabase
+///   - On restore (new device): pull full history from Supabase
 class SyncService {
   SyncService._();
   static final SyncService _instance = SyncService._();
@@ -27,6 +48,18 @@ class SyncService {
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
+
+  // ── Restore cancellation flag ───────────────────────────────
+
+  /// Set to true by [cancelInflightRestore] to abort a running
+  /// [restoreFromCloudForUser] call between restore steps.
+  bool _restoreCancelled = false;
+
+  /// Signals any in-flight [restoreFromCloudForUser] to abort between steps.
+  /// Safe to call even if no restore is running.
+  void cancelInflightRestore() {
+    _restoreCancelled = true;
+  }
 
   // ── Hive syncBox Keys ───────────────────────────────────────
 
@@ -642,6 +675,62 @@ class SyncService {
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
+    }
+  }
+
+  /// Cancellable restore used by [RestoringScreen].
+  ///
+  /// Returns [RestoreResult.success] when all steps complete,
+  /// [RestoreResult.cancelled] if [cancelInflightRestore] was called between
+  /// steps, or [RestoreResult.failed] on an unrecoverable error.
+  ///
+  /// The cancellation flag is reset at the start of each call so callers can
+  /// safely call this multiple times.
+  Future<RestoreResult> restoreFromCloudForUser() async {
+    _restoreCancelled = false;
+    final userId = _supabase.currentUser?.id;
+    if (userId == null) {
+      return RestoreResult.failed('No authenticated user');
+    }
+
+    try {
+      const since = '2020-01-01T00:00:00Z';
+
+      // Step A — profile + lightweight data
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await Future.wait([
+        _restoreUserProfile(userId),
+        _restoreUserProgress(userId),
+        _restoreCustomExercises(userId),
+        _restoreCustomFoods(userId),
+        _restoreWorkoutTemplates(userId),
+        _restoreUserPreferences(userId),
+      ]);
+
+      // Step B — bulk history
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await Future.wait([
+        _restoreWorkoutLogs(userId, since),
+        _restoreExerciseLogs(userId, since),
+        _restoreScheduleCompletions(userId, since),
+        _restoreWeightLogs(userId, since),
+        _restoreStepsLogs(userId, since),
+        _restoreNutritionLogs(userId, since),
+        _restoreMeasurements(userId, since),
+        _restoreWorkoutPlan(userId),
+        _restoreWaterLogs(userId, since),
+        _restoreSleepLogs(userId, since),
+        _restoreStreaks(userId),
+        _restoreScheduledWorkouts(userId, since),
+        _restoreSavedMeals(userId),
+        _restoreCoachInteractions(userId, since),
+      ]);
+
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      return RestoreResult.success();
+    } catch (e) {
+      debugPrint('[SyncService.restoreFromCloudForUser] $e');
+      return RestoreResult.failed(e);
     }
   }
 

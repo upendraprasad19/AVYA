@@ -1,0 +1,273 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+
+/// Gate screen shown immediately after sign-in success.
+///
+/// Parallel: queries [user_profile.onboarding_completed_at] + starts
+/// [SyncService.restoreFromCloudForUser].
+///
+/// Decision tree:
+///   row + onboarding_completed_at IS NOT NULL → await restore → /home
+///   row + onboarding_completed_at IS NULL     → cancel restore → resume onboarding
+///   no row                                    → cancel restore → /onboarding/mission-brief
+///
+/// 15-second safety net: if restore is still running, shows an escape CTA
+/// that lets the user skip straight to /home.
+class RestoringScreen extends ConsumerStatefulWidget {
+  const RestoringScreen({super.key});
+
+  @override
+  ConsumerState<RestoringScreen> createState() => _RestoringScreenState();
+}
+
+class _RestoringScreenState extends ConsumerState<RestoringScreen> {
+  bool _showTimeoutCta = false;
+  Timer? _timeoutTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted) setState(() => _showTimeoutCta = true);
+    });
+    _kickoffRestore();
+  }
+
+  Future<void> _kickoffRestore() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      if (mounted) context.go('/');
+      return;
+    }
+
+    // Parallel: profile lookup + start restore in background
+    final profileFuture = supabase
+        .from('user_profile')
+        .select('user_id, onboarding_completed_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    final restoreFuture = SyncService.instance.restoreFromCloudForUser();
+
+    final profile = await profileFuture;
+
+    if (profile == null) {
+      // Brand-new user with no profile row — cancel restore, go to Mission Brief
+      SyncService.instance.cancelInflightRestore();
+      if (mounted) context.go('/onboarding/mission-brief');
+      return;
+    }
+
+    if (profile['onboarding_completed_at'] == null) {
+      // Mid-onboarding user — cancel restore, jump to first missing step
+      SyncService.instance.cancelInflightRestore();
+      if (mounted) {
+        final route = await _resolveOnboardingResumeRoute(user.id);
+        if (mounted) context.go(route);
+      }
+      return;
+    }
+
+    // Fully onboarded user — await restore then go home
+    await restoreFuture;
+    if (!mounted) return;
+    context.go('/home');
+  }
+
+  /// Looks at the user_profile row and returns the earliest missing onboarding
+  /// step so the user can pick up where they left off.
+  Future<String> _resolveOnboardingResumeRoute(String userId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final profile = await supabase
+          .from('user_profile')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (profile == null) return '/onboarding/mission-brief';
+      if (profile['full_name'] == null) return '/onboarding/identity';
+      if (profile['primary_goal'] == null) return '/onboarding/goal';
+      if (profile['current_weight_kg'] == null) return '/onboarding/stats';
+      if (profile['fitness_experience'] == null) return '/onboarding/details';
+      return '/onboarding/plan';
+    } catch (_) {
+      return '/onboarding';
+    }
+  }
+
+  void _onContinueAnyway() {
+    _timeoutTimer?.cancel();
+    if (mounted) context.go('/home');
+  }
+
+  @override
+  void dispose() {
+    _timeoutTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Seal mark
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.accent, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                      blurRadius: 24,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Image.asset(
+                  'assets/avya_icon.png',
+                  width: 48,
+                  height: 48,
+                  errorBuilder: (context, error, stack) => Icon(
+                    Icons.shield_outlined,
+                    color: AppColors.accent,
+                    size: 40,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(width: 80, height: 1, color: AppColors.accent),
+              const SizedBox(height: 32),
+              Text(
+                'Pulling your dispatch.',
+                style: AppTypography.titleL.copyWith(fontSize: 22),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Stand by, soldier.',
+                style: AppTypography.bodyM.copyWith(
+                  color: AppColors.accent,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 32),
+              const _AnimatedDots(key: ValueKey('restoring-dots')),
+              const Spacer(),
+              if (_showTimeoutCta)
+                Padding(
+                  key: const ValueKey('restoring-timeout-cta'),
+                  padding: const EdgeInsets.only(bottom: 32),
+                  child: Column(
+                    children: [
+                      Text(
+                        'This is taking a while.',
+                        style: AppTypography.bodyM.copyWith(
+                          color: AppColors.textDim,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: _onContinueAnyway,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: AppColors.accent),
+                            shape: const StadiumBorder(),
+                          ),
+                          child: Text(
+                            'CONTINUE  →',
+                            style: AppTypography.mono.copyWith(
+                              fontSize: 13,
+                              color: AppColors.accent,
+                              letterSpacing: 1.4,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Animated pulsing dots ────────────────────────────────────────
+
+class _AnimatedDots extends StatefulWidget {
+  const _AnimatedDots({super.key});
+
+  @override
+  State<_AnimatedDots> createState() => _AnimatedDotsState();
+}
+
+class _AnimatedDotsState extends State<_AnimatedDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (i) {
+            final phase = (t + i / 3) % 1.0;
+            final opacity = (0.5 + 0.5 * (1 - (2 * phase - 1).abs()))
+                .clamp(0.0, 1.0);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.accent.withValues(alpha: opacity),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}

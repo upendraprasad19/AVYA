@@ -584,6 +584,10 @@ Format (use • not JSON):
         'last_active_at': DateTime.now().toIso8601String(),
       },
       profileData: {
+        // Q1 decision tree: RestoringScreen checks this column to determine
+        // whether onboarding was completed. Must be written atomically with
+        // the rest of the profile so the row is always in a consistent state.
+        'onboarding_completed_at': DateTime.now().toIso8601String(),
         'date_of_birth': profile['date_of_birth'],
         'gender': profile['gender'],
         'height_cm': profile['height_cm'],
