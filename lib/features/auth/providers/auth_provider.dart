@@ -437,10 +437,12 @@ class AuthNotifier extends Notifier<AuthState2> {
             await userBox.put('progress', mergedProgress);
           }
 
-          // Hydrate AI trial start from server (preserves trial across devices).
+          // Hydrate AI trial start + terms acceptance from server.
+          // terms_accepted_at is synced so TermsModal never re-fires on a
+          // new device when the user already accepted on another device.
           final userRows = await supabase
               .from('users')
-              .select('ai_chat_started_at')
+              .select('ai_chat_started_at, terms_accepted_at, terms_version')
               .eq('id', user.id)
               .limit(1);
           if (userRows.isNotEmpty) {
@@ -448,6 +450,23 @@ class AuthNotifier extends Notifier<AuthState2> {
                 userRows.first['ai_chat_started_at'] as String?;
             if (serverTrialStart != null) {
               await configBox.put('ai_trial_start', serverTrialStart);
+            }
+            // Restore terms acceptance so TermsModal skips on new devices.
+            final serverTermsAt =
+                userRows.first['terms_accepted_at'] as String?;
+            final serverTermsVersion =
+                userRows.first['terms_version'] as String?;
+            if (serverTermsAt != null && serverTermsAt.isNotEmpty) {
+              // Only write if Hive doesn't already have a stamp — local
+              // timestamp is more precise (it came from this device's user
+              // interaction) and should not be overwritten by a cloud value.
+              final localTermsAt = userBox.get('terms_accepted_at');
+              if (localTermsAt == null) {
+                await userBox.put('terms_accepted_at', serverTermsAt);
+                if (serverTermsVersion != null) {
+                  await userBox.put('terms_version', serverTermsVersion);
+                }
+              }
             }
           }
 

@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -52,6 +54,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _isSignUp = false;
   bool _obscurePassword = true;
   _SignInView _currentView = _SignInView.main;
+
+  /// Pre-checked per Q2 decision (DPDP-compliant: visible + tickable
+  /// checkbox present; tapping CREATE ACCOUNT with checkbox checked
+  /// is the affirmative action). Common Indian fintech pattern
+  /// (CRED, Zerodha, Razorpay).
+  bool _privacyAccepted = true;
 
   @override
   void initState() {
@@ -429,10 +437,23 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Privacy/Terms checkbox — only shown during sign-up.
+              // Pre-checked (true) to reduce friction while still providing
+              // a visible, tickable affordance for DPDP compliance.
+              if (_isSignUp) ...[
+                _PrivacyCheckboxRow(
+                  value: _privacyAccepted,
+                  onChanged: (v) => setState(() => _privacyAccepted = v ?? false),
+                ),
+                const SizedBox(height: 12),
+              ],
+
               // Sign In / Sign Up button
               _buildPrimaryButton(
                 label: _isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN WITH EMAIL',
                 isLoading: isLoading,
+                // Gate the CREATE ACCOUNT button on checkbox acceptance.
+                enabled: !_isSignUp || _privacyAccepted,
                 onPressed: () {
                   if (!_formKey.currentState!.validate()) return;
                   final email = _emailController.text.trim();
@@ -822,41 +843,46 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     required String label,
     required bool isLoading,
     required VoidCallback onPressed,
+    bool enabled = true,
   }) {
+    final isDisabled = !enabled || isLoading;
     return SizedBox(
       width: double.infinity,
       height: 52,
-      child: Material(
-        color: AppColors.accent,
-        borderRadius: BorderRadius.circular(AppRadius.sharp),
-        child: InkWell(
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: Material(
+          color: AppColors.accent,
           borderRadius: BorderRadius.circular(AppRadius.sharp),
-          onTap: isLoading ? null : onPressed,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.accent, width: 2),
-              borderRadius: BorderRadius.circular(AppRadius.sharp),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-            child: Center(
-              child: isLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.black,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            onTap: isDisabled ? null : onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.accent, width: 2),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.black,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 12,
+                          color: AppColors.bgDeep,
+                          letterSpacing: 2.5,
+                          height: 1,
+                        ),
                       ),
-                    )
-                  : Text(
-                      label,
-                      style: AppTypography.h3.copyWith(
-                        fontSize: 12,
-                        color: AppColors.bgDeep,
-                        letterSpacing: 2.5,
-                        height: 1,
-                      ),
-                    ),
+              ),
             ),
           ),
         ),
@@ -879,6 +905,102 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
         ),
         const Expanded(child: Divider(color: AppColors.line2, thickness: 1)),
+      ],
+    );
+  }
+}
+
+/// Privacy/Terms checkbox row shown above the CREATE ACCOUNT button
+/// during email sign-up. Pre-checked; links open Privacy Policy and Terms
+/// in the external browser. The tappable link areas are handled by
+/// [TapGestureRecognizer] to avoid nesting [GestureDetector] inside the row.
+class _PrivacyCheckboxRow extends StatefulWidget {
+  const _PrivacyCheckboxRow({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  State<_PrivacyCheckboxRow> createState() => _PrivacyCheckboxRowState();
+}
+
+class _PrivacyCheckboxRowState extends State<_PrivacyCheckboxRow> {
+  final _privacyRecognizer = TapGestureRecognizer();
+  final _termsRecognizer = TapGestureRecognizer();
+
+  @override
+  void initState() {
+    super.initState();
+    _privacyRecognizer.onTap = () => launchUrl(
+          Uri.parse('https://icanbefitter.com/privacy'),
+          mode: LaunchMode.externalApplication,
+        );
+    _termsRecognizer.onTap = () => launchUrl(
+          Uri.parse('https://icanbefitter.com/terms'),
+          mode: LaunchMode.externalApplication,
+        );
+  }
+
+  @override
+  void dispose() {
+    _privacyRecognizer.dispose();
+    _termsRecognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: widget.value,
+            activeColor: AppColors.accent,
+            checkColor: AppColors.bgDeep,
+            side: const BorderSide(color: AppColors.border, width: 1.5),
+            onChanged: widget.onChanged,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: AppTypography.bodyS.copyWith(
+                color: AppColors.textPrimary,
+                height: 1.4,
+              ),
+              children: [
+                const TextSpan(text: 'I agree to the '),
+                TextSpan(
+                  text: 'Privacy Policy',
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.accent,
+                  ),
+                  recognizer: _privacyRecognizer,
+                ),
+                const TextSpan(text: ' and '),
+                TextSpan(
+                  text: 'Terms',
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.accent,
+                  ),
+                  recognizer: _termsRecognizer,
+                ),
+                const TextSpan(text: '.'),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }

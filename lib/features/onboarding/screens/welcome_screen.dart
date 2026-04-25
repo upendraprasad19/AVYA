@@ -1,5 +1,7 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -207,7 +209,7 @@ class WelcomeScreen extends StatelessWidget {
                 const TextSpan(text: 'Already a member? '),
                 TextSpan(
                   text: 'SIGN IN',
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.accent,
                     fontWeight: FontWeight.w700,
                   ),
@@ -216,7 +218,80 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        _PrivacyFooter(),
       ],
+    );
+  }
+}
+
+/// Inline "By continuing, you agree to our Privacy Policy and Terms."
+/// footer shown at the bottom of the welcome screen CTA section.
+class _PrivacyFooter extends StatefulWidget {
+  @override
+  State<_PrivacyFooter> createState() => _PrivacyFooterState();
+}
+
+class _PrivacyFooterState extends State<_PrivacyFooter> {
+  final _privacyRecognizer = TapGestureRecognizer();
+  final _termsRecognizer = TapGestureRecognizer();
+
+  @override
+  void initState() {
+    super.initState();
+    _privacyRecognizer.onTap = () => launchUrl(
+          Uri.parse('https://icanbefitter.com/privacy'),
+          mode: LaunchMode.externalApplication,
+        );
+    _termsRecognizer.onTap = () => launchUrl(
+          Uri.parse('https://icanbefitter.com/terms'),
+          mode: LaunchMode.externalApplication,
+        );
+  }
+
+  @override
+  void dispose() {
+    _privacyRecognizer.dispose();
+    _termsRecognizer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: AppTypography.bodyS.copyWith(
+            color: AppColors.textMute,
+            height: 1.4,
+          ),
+          children: [
+            const TextSpan(text: 'By continuing, you agree to our '),
+            TextSpan(
+              text: 'Privacy Policy',
+              style: const TextStyle(
+                color: AppColors.accent,
+                decoration: TextDecoration.underline,
+                decorationColor: AppColors.accent,
+              ),
+              recognizer: _privacyRecognizer,
+            ),
+            const TextSpan(text: ' and '),
+            TextSpan(
+              text: 'Terms',
+              style: const TextStyle(
+                color: AppColors.accent,
+                decoration: TextDecoration.underline,
+                decorationColor: AppColors.accent,
+              ),
+              recognizer: _termsRecognizer,
+            ),
+            const TextSpan(text: '.'),
+          ],
+        ),
+      ),
     );
   }
 }
