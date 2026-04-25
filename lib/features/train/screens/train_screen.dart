@@ -159,6 +159,43 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                     ),
                     const SizedBox(height: 8),
 
+                    // VIEW ROADMAP pill — Q7 surface A entry point
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 10),
+                      child: GestureDetector(
+                        onTap: () => context.push('/train/roadmap'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.input,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.accent),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.map_outlined,
+                                  size: 16, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Text(
+                                'VIEW THE 12-WEEK ROADMAP',
+                                style: AppTypography.mono.copyWith(
+                                  fontSize: 11,
+                                  letterSpacing: 1.2,
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(Icons.arrow_forward,
+                                  size: 14, color: AppColors.accent),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
                     // Week selector tabs
                     WeekSelector(
                       totalWeeks: plan.weeks.length.clamp(1, 12),

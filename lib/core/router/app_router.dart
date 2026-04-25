@@ -19,6 +19,7 @@ import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
 import 'package:icanbefitter/features/train/screens/graduation_screen.dart';
+import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
@@ -300,6 +301,12 @@ class AppRouter {
                     name: 'graduation',
                     builder: (context, state) =>
                         const GraduationScreen(),
+                  ),
+                  GoRoute(
+                    path: 'roadmap',
+                    name: 'phaseRoadmap',
+                    builder: (context, state) =>
+                        const PhaseRoadmapScreen(),
                   ),
                 ],
               ),
