@@ -1561,7 +1561,7 @@ class SyncService {
         'default_reps': src['default_reps'].toString(),
       if (src['default_rest_secs'] != null)
         'default_rest_secs': src['default_rest_secs'],
-      'default_duration_secs': ?defaultDur,
+      if (defaultDur != null) 'default_duration_secs': defaultDur,
       if (src['submitted_to_library'] != null)
         'submitted_to_library': src['submitted_to_library'],
       if (src['approved_for_library'] != null)
