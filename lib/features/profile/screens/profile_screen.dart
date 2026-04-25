@@ -40,6 +40,7 @@ import '../widgets/slim_achievements_card.dart';
 import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
+import '../screens/invite_friends_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -685,7 +686,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: 'Invite Friends',
                   subtitle: 'Both get 7 days PRO free',
                   trailing: const ProfileRowChevron(),
-                  onTap: () => _showInviteFriends(),
+                  onTap: () => InviteFriendsSheet.show(context),
                 ),
                 // S1 (2026-04-24) — the pre-APK-1-batch split of
                 // "Review Community Items" (bottom sheet) and
@@ -1910,101 +1911,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _launchUrl(String url) {
     launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _showInviteFriends() async {
-    String? referralCode;
-    try {
-      referralCode = await SupabaseService.instance.getOrCreateReferralCode();
-    } catch (e) {
-      debugPrint('[ProfileScreen._showInviteFriends] $e');
-    }
-
-    if (referralCode == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to generate referral code',
-              style: AppTypography.bodySm,
-            ),
-            backgroundColor: AppColors.bad,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'INVITE FRIENDS',
-                style: AppTypography.mono.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 2.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Invite Friends',
-                style: AppTypography.h2,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Share your code with friends. When they sign up, both of you get 7 days of PRO free!',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
-              ),
-              const SizedBox(height: 20),
-              // Code display — Wardroom hero card with Fraunces numeric
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.33)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      referralCode!,
-                      style: AppTypography.h2.copyWith(
-                        color: AppColors.accent,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              WardButton(
-                label: 'Share My Code',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Share.share(
-                    'Join me on AVYA Fit! Use my referral code $referralCode to get 7 days of PRO free. Download: https://icanbefitter.vercel.app',
-                    subject: 'AVYA Fit Referral',
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   /// Wraps children in a Wardroom card.
