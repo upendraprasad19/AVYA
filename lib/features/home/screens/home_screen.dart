@@ -386,7 +386,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Derive WK number + current phase for the letterhead suffix.
     final weekOfYear =
-        ((now.difference(DateTime(now.year, 1, 1)).inDays) / 7).floor() + 1;
+        WorkoutScheduleService.instance.getCurrentWeekNumber();
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
 
