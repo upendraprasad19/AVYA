@@ -1197,11 +1197,35 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   @override
   void didUpdateWidget(covariant _ExerciseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final newNumSets = int.tryParse(widget.exercise.sets) ?? 3;
-    if (newNumSets != _weightControllers.length ||
-        oldWidget.exercise.name != widget.exercise.name) {
+    final oldCount = int.tryParse(oldWidget.exercise.sets) ?? 3;
+    final newCount = int.tryParse(widget.exercise.sets) ?? 3;
+
+    // Exercise swap: full rebuild needed (different pre-fills, weight, reps).
+    if (oldWidget.exercise.name != widget.exercise.name) {
       _disposeControllers();
       _initControllers();
+      return;
+    }
+
+    // Set count unchanged: nothing to do.
+    if (newCount == oldCount) return;
+
+    if (newCount > oldCount) {
+      // Append: preserve [0..oldCount-1] controllers, add new ones for the rest.
+      for (var i = oldCount; i < newCount; i++) {
+        _weightControllers.add(TextEditingController());
+        _repsControllers.add(TextEditingController());
+        _durationControllers.add(TextEditingController());
+        _distanceControllers.add(TextEditingController());
+      }
+    } else {
+      // Shrink: dispose trailing controllers from [newCount..oldCount-1].
+      for (var i = oldCount - 1; i >= newCount; i--) {
+        _weightControllers.removeAt(i).dispose();
+        _repsControllers.removeAt(i).dispose();
+        _durationControllers.removeAt(i).dispose();
+        _distanceControllers.removeAt(i).dispose();
+      }
     }
   }
 
