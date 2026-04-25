@@ -1,11 +1,14 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// First-run welcome screen — matches the handoff
@@ -19,9 +22,23 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   with italic-gold emphasis on "serious" + DM Sans 14 dim body +
 ///   three numbered feature ticks (mono 11 gold number + DM Sans 13).
 /// * CTA: full-width gold "BEGIN ENLISTMENT →" slab + "Already a
-///   member? SIGN IN" mono caption.
-class WelcomeScreen extends StatelessWidget {
+///   member? SIGN IN" mono caption + optional referral code field +
+///   privacy footer.
+class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
+
+  @override
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
+  final _referralController = TextEditingController();
+
+  @override
+  void dispose() {
+    _referralController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +233,63 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+        // \u2500\u2500 Optional referral code field \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 0),
+          child: Column(
+            children: [
+              TextField(
+                controller: _referralController,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9\-]')),
+                  LengthLimitingTextInputFormatter(13),
+                ],
+                decoration: InputDecoration(
+                  hintText: 'Got a code? AVYA-XXXXXXXX',
+                  hintStyle: AppTypography.mono.copyWith(
+                    color: AppColors.textGhost,
+                    fontSize: 12,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.input,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.accent,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                ),
+                onChanged: (v) {
+                  ref
+                      .read(referralCodeStashProvider.notifier)
+                      .setCode(v.trim().toUpperCase());
+                },
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Apply within 7 days of signup',
+                style: AppTypography.bodyS.copyWith(
+                  color: AppColors.textMute,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),

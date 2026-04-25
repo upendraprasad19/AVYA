@@ -4,9 +4,11 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
 import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
@@ -459,6 +461,36 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // Fire-and-forget: generate AI prediction card in background.
       // Non-blocking — user proceeds to home screen immediately.
       _generatePrediction(profile);
+
+      // ── Referral code redemption ───────────────────────────────
+      // Apply any code entered on the Welcome screen. Runs after the
+      // public.users row is guaranteed to exist (written by
+      // _syncOnboardingToSupabase above). Non-fatal — a failed redeem
+      // must never block the user from reaching home.
+      final stashedCode = ref.read(referralCodeStashProvider).trim();
+      if (stashedCode.isNotEmpty) {
+        try {
+          final response = await SupabaseService.instance.client.functions
+              .invoke('redeem-referral', body: {'code': stashedCode});
+          if (response.status == 200) {
+            debugPrint('[referral] redeemed $stashedCode at onboarding');
+            // Refresh subscription cache so any PRO grant reflects immediately.
+            try {
+              await SubscriptionService.instance.verifyFromServer();
+            } catch (_) {
+              // Non-fatal — user will get correct status on next launch.
+            }
+          } else {
+            debugPrint(
+                '[referral] redeem failed at onboarding: ${response.data}');
+          }
+        } catch (e) {
+          debugPrint('[referral] redeem exception at onboarding: $e');
+        } finally {
+          // Clear stash regardless of outcome so it isn't replayed.
+          ref.read(referralCodeStashProvider.notifier).clear();
+        }
+      }
 
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
