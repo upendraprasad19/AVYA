@@ -1,16 +1,21 @@
 /**
  * redeem-referral — Redeems a referral code and grants 7-day PRO to both parties.
  *
- * Input:  { code: "AVYA-UP1234" }
- * Output: { success: true, message: "..." }
- *     or: { success: false, reason: "..." }
+ * Validation cascade (Q4 spec):
+ *   1. Format check (AVYA-XXXXXXXX)
+ *   2. Code lookup + expires_at < now()
+ *   3. Self-referral block
+ *   4. Receiver eligibility window (signup ≤ 7 days ago)
+ *   5. Idempotency check (UNIQUE on referee_id)
+ *   6. Atomic write via redeem_referral_atomic RPC
+ *   7. 23505 race fallback returns 200 with alreadyRedeemed:true
+ *
+ * Input:  { code: "AVYA-XXXXXXXX" }
+ * Output: { days_granted: 7, request_id: "..." }
+ *     or: { error: "...", request_id: "..." }
+ *     or: { alreadyRedeemed: true, request_id: "..." }
  *
  * Requires JWT auth — the referee must be logged in.
- *
- * Race-condition safe:
- *   - Relies on UNIQUE(referee_id) DB constraint to prevent double-redemption
- *   - Uses atomic SQL for subscription extension (no read-then-write)
- *   - Caps referrals per code at 50 to prevent farming
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -23,11 +28,125 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const CODE_FORMAT = /^AVYA-[A-Z0-9]{8}$/;
+const SIGNUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const DAYS_GRANTED = 7;
 
-const MAX_REDEMPTIONS_PER_CODE = 50;
-const PRO_DAYS = 7;
+interface RedeemRequest {
+  code?: string;
+}
+
+export async function handleRedeemReferral(
+  body: RedeemRequest,
+  supabase: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const requestId = crypto.randomUUID().split("-")[0];
+
+  // 0. Get authenticated user
+  const { data: authData, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !authData?.user) {
+    return new Response(
+      JSON.stringify({ error: "Authentication required", request_id: requestId }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+  const referee = authData.user;
+
+  // 1. Format check
+  const code = (body.code ?? "").trim().toUpperCase();
+  if (!CODE_FORMAT.test(code)) {
+    return jsonError(400, "Codes look like AVYA-XXXXXXXX.", requestId);
+  }
+
+  // 2. Code lookup + expiry
+  const { data: codeRow, error: codeErr } = await supabase
+    .from("referral_codes")
+    .select("user_id, expires_at")
+    .eq("code", code)
+    .single();
+  if (codeErr || !codeRow) {
+    return jsonError(400, "We don't recognize that code.", requestId);
+  }
+  if (new Date(codeRow.expires_at).getTime() < Date.now()) {
+    return jsonError(
+      400,
+      "This code has expired. Ask your friend to send a fresh one.",
+      requestId,
+    );
+  }
+
+  // 3. Self-referral block
+  if (codeRow.user_id === referee.id) {
+    return jsonError(400, "Can't refer yourself, soldier 🫡", requestId);
+  }
+
+  // 4. Receiver eligibility window (7 days from signup)
+  const refereeSignupAge = Date.now() - new Date(referee.created_at).getTime();
+  if (refereeSignupAge > SIGNUP_WINDOW_MS) {
+    return jsonError(
+      400,
+      "Referral codes are for new recruits — within 7 days of signup.",
+      requestId,
+    );
+  }
+
+  // 5. Idempotency check
+  const { data: existing } = await supabase
+    .from("referral_redemptions")
+    .select("id")
+    .eq("referee_id", referee.id)
+    .maybeSingle();
+  if (existing) {
+    return jsonError(400, "Code already applied to your account.", requestId);
+  }
+
+  // 6. Atomic write via RPC
+  const { error: rpcErr } = await supabase.rpc("redeem_referral_atomic", {
+    p_code: code,
+    p_referrer_id: codeRow.user_id,
+    p_referee_id: referee.id,
+    p_days: DAYS_GRANTED,
+  });
+
+  if (rpcErr) {
+    // 7. 23505 race fallback — two concurrent requests slipped past step 5
+    if (rpcErr.code === "23505") {
+      return new Response(
+        JSON.stringify({ alreadyRedeemed: true, request_id: requestId }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    console.error(`[redeem-referral] request_id=${requestId}`, rpcErr);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  return new Response(
+    JSON.stringify({ days_granted: DAYS_GRANTED, request_id: requestId }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+}
+
+function jsonError(status: number, message: string, requestId: string): Response {
+  return new Response(
+    JSON.stringify({ error: message, request_id: requestId }),
+    {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -35,176 +154,32 @@ serve(async (req: Request) => {
   }
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   try {
-    // Get the JWT token to identify the referee
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "Not authenticated" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const authHeader = req.headers.get("Authorization") ?? "";
 
-    // Create authenticated client to get user
-    const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "Invalid session" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
 
-    const refereeId = user.id;
-
-    // Service role client for writes
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    const body = await req.json();
-    const code = (body?.code ?? "").trim().toUpperCase();
-
-    if (!code || code.length > 20) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "Invalid code format" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Look up the referral code
-    const { data: referralCode, error: lookupErr } = await supabase
-      .from("referral_codes")
-      .select("*")
-      .eq("code", code)
-      .single();
-
-    if (lookupErr || !referralCode) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "Invalid referral code" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const referrerId = referralCode.user_id as string;
-
-    // Can't refer yourself
-    if (referrerId === refereeId) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "You can't use your own referral code" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Check redemption cap (anti-farming)
-    const { count: redemptionCount } = await supabase
-      .from("referral_redemptions")
-      .select("id", { count: "exact", head: true })
-      .eq("referrer_id", referrerId);
-
-    if ((redemptionCount ?? 0) >= MAX_REDEMPTIONS_PER_CODE) {
-      return new Response(
-        JSON.stringify({ success: false, reason: "This referral code has reached its limit" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Insert redemption record — UNIQUE(referee_id) constraint prevents race conditions.
-    // If two concurrent requests try to redeem for the same referee, one will fail here.
-    const { error: insertErr } = await supabase
-      .from("referral_redemptions")
-      .insert({
-        referrer_id: referrerId,
-        referee_id: refereeId,
-        referrer_rewarded: true,
-        referee_rewarded: true,
-      });
-
-    if (insertErr) {
-      // Unique constraint violation = already redeemed
-      if (insertErr.code === "23505") {
-        return new Response(
-          JSON.stringify({ success: false, reason: "You've already used a referral code" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      console.error("Insert error:", insertErr);
-      return new Response(
-        JSON.stringify({ success: false, reason: "Failed to redeem code" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Grant 7-day PRO to BOTH parties using atomic SQL to avoid race conditions.
-    const grantPro = async (userId: string) => {
-      // Check if user already has an active subscription
-      const { data: existingSub } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .limit(1);
-
-      if (existingSub && existingSub.length > 0) {
-        // Extend atomically via Postgres function — no read-then-write race
-        await supabase.rpc("extend_subscription", {
-          p_user_id: userId,
-          p_days: PRO_DAYS,
-        });
-      } else {
-        // No active sub — create a new 7-day subscription
-        const now = new Date();
-        const endDate = new Date(now.getTime() + PRO_DAYS * 86400000);
-        await supabase
-          .from("subscriptions")
-          .insert({
-            user_id: userId,
-            plan: "referral",
-            status: "active",
-            start_date: now.toISOString(),
-            end_date: endDate.toISOString(),
-          });
-
-        // Update users table for the new subscription
-        await supabase
-          .from("users")
-          .update({
-            subscription_status: "pro",
-            subscription_expires_at: endDate.toISOString(),
-          })
-          .eq("id", userId);
-      }
-    };
-
-    // Grant sequentially to avoid concurrent writes on the same user
-    // (edge case: user refers themselves via a bug — already guarded above)
-    await grantPro(referrerId);
-    await grantPro(refereeId);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Referral redeemed! Both you and your friend get 7 days of PRO.",
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    const body = await req.json().catch(() => ({})) as RedeemRequest;
+    return await handleRedeemReferral(body, supabase);
   } catch (err) {
-    // Already returning a sanitised body — add request_id for log correlation.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[redeem-referral] request_id=${requestId}`, err);
     return new Response(
-      JSON.stringify({
-        success: false,
-        reason: "Something went wrong. Please try again.",
-        request_id: requestId,
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
