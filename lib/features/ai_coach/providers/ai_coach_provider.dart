@@ -683,61 +683,149 @@ class PredictionData {
 class PredictionNotifier extends Notifier<PredictionData> {
   /// Sanitises a prediction_text value stored in Hive.
   ///
-  /// Gemini sometimes returns JSON (e.g. `{"predictions":[...]}`) even when
-  /// the prompt asks for plain prose. Rather than showing raw JSON in the
-  /// card, try to pull out a human-readable field; on failure, strip the
-  /// most common JSON artefacts. The cleaned value is written back to Hive
-  /// so the guard runs at most once per value.
+  /// Gemini sometimes returns JSON (e.g. `{"predictions":[...]}`) or YAML-
+  /// style flat key:value output (e.g. `outcome_3_months: weight_kg:77.5`)
+  /// even when the prompt asks for plain prose. Rather than showing raw
+  /// structured text in the card, this method:
+  ///   1. Handles JSON / code-fence shapes (existing logic).
+  ///   2. NEW (F4): detects YAML-style snake_case key:value lines and
+  ///      extracts the longest prose value, or joins stripped values.
+  ///   3. Returns plain prose unchanged.
+  ///
+  /// The cleaned value is written back to Hive via [_writeBackToHive] so
+  /// the decode path runs at most once per stored value.
   static String? _sanitisePredictionText(String? raw) {
     if (raw == null) return null;
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;
-    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return raw;
 
-    // Strip ```json ... ``` fences if Gemini wrapped the JSON.
-    var body = trimmed;
-    if (body.startsWith('```')) {
-      body = body.replaceFirst(RegExp(r'^```(json)?\n?'), '');
-      if (body.endsWith('```')) body = body.substring(0, body.length - 3);
-      body = body.trim();
-    }
+    // 1. JSON / code-fence path (existing logic — preserved byte-for-byte)
+    if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('```')) {
+      var body = trimmed;
+      if (body.startsWith('```')) {
+        body = body.replaceFirst(RegExp(r'^```(json)?\n?'), '');
+        if (body.endsWith('```')) body = body.substring(0, body.length - 3);
+        body = body.trim();
+      }
 
-    try {
-      final decoded = json.decode(body);
-      if (decoded is Map) {
-        for (final key in ['summary', 'tagline', 'text', 'prediction']) {
-          final v = decoded[key];
-          if (v is String && v.trim().isNotEmpty) return v.trim();
-        }
-        final preds = decoded['predictions'];
-        if (preds is List && preds.isNotEmpty) {
-          final first = preds.first;
-          if (first is Map) {
-            for (final key in ['summary', 'tagline', 'text', 'timeframe']) {
-              final v = first[key];
-              if (v is String && v.trim().isNotEmpty) return v.trim();
+      try {
+        final decoded = json.decode(body);
+        if (decoded is Map) {
+          for (final key in ['summary', 'tagline', 'text', 'prediction']) {
+            final v = decoded[key];
+            if (v is String && v.trim().isNotEmpty) {
+              final cleaned = v.trim();
+              _writeBackToHive(cleaned);
+              return cleaned;
             }
-          } else if (first is String && first.trim().isNotEmpty) {
-            return first.trim();
+          }
+          final preds = decoded['predictions'];
+          if (preds is List && preds.isNotEmpty) {
+            final first = preds.first;
+            if (first is Map) {
+              for (final key in ['summary', 'tagline', 'text', 'timeframe']) {
+                final v = first[key];
+                if (v is String && v.trim().isNotEmpty) {
+                  final cleaned = v.trim();
+                  _writeBackToHive(cleaned);
+                  return cleaned;
+                }
+              }
+            } else if (first is String && first.trim().isNotEmpty) {
+              final cleaned = first.trim();
+              _writeBackToHive(cleaned);
+              return cleaned;
+            }
+          }
+        } else if (decoded is List && decoded.isNotEmpty) {
+          final first = decoded.first;
+          if (first is String && first.trim().isNotEmpty) {
+            final cleaned = first.trim();
+            _writeBackToHive(cleaned);
+            return cleaned;
           }
         }
-      } else if (decoded is List && decoded.isNotEmpty) {
-        final first = decoded.first;
-        if (first is String && first.trim().isNotEmpty) return first.trim();
+      } catch (_) {
+        // Fall through to artefact-stripping fallback below.
       }
-    } catch (_) {
-      // Fall through to the artefact-stripping fallback.
+
+      // Last-ditch: remove obvious JSON syntax so the user sees something
+      // readable rather than `{"predictions":[{...`.
+      final stripped = body
+          .replaceAll(RegExp(r'[\{\}\[\]"]'), '')
+          .replaceAll(RegExp(r'\s*,\s*'), ' · ')
+          .replaceAll(RegExp(r'\s*:\s*'), ': ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (stripped.isNotEmpty) {
+        _writeBackToHive(stripped);
+        return stripped;
+      }
+      return null;
     }
 
-    // Last-ditch: remove obvious JSON syntax so the user sees something
-    // readable rather than `{"predictions":[{...`.
-    final stripped = body
-        .replaceAll(RegExp(r'[\{\}\[\]"]'), '')
-        .replaceAll(RegExp(r'\s*,\s*'), ' · ')
-        .replaceAll(RegExp(r'\s*:\s*'), ': ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    return stripped.isEmpty ? null : stripped;
+    // 2. NEW — YAML-style flat key:value detection (F4)
+    // Heuristic: 1+ lines starting with "snake_case_word:" suggests Gemini
+    // chose a structured shape despite the prompt forbidding JSON.
+    final keyValuePattern = RegExp(r'^[a-z_][a-z_0-9]*\s*:', multiLine: true);
+    final matches = keyValuePattern.allMatches(trimmed).toList();
+    if (matches.isNotEmpty) {
+      final lines = trimmed.split('\n');
+      String? bestProseLine;
+
+      for (final line in lines) {
+        final colonIdx = line.indexOf(':');
+        if (colonIdx == -1) continue;
+        final key = line.substring(0, colonIdx).trim();
+        // Only treat as a "key" if it looks like a snake_case identifier
+        if (!RegExp(r'^[a-z_][a-z_0-9]*$').hasMatch(key)) continue;
+        final value = line.substring(colonIdx + 1).trim();
+
+        // Pick the longest value that looks like prose (>20 chars, has spaces)
+        if (value.length > 20 && value.contains(' ')) {
+          if (bestProseLine == null || value.length > bestProseLine.length) {
+            bestProseLine = value;
+          }
+        }
+      }
+
+      if (bestProseLine != null) {
+        _writeBackToHive(bestProseLine);
+        return bestProseLine;
+      }
+
+      // No long prose value — strip keys, join values
+      final values = <String>[];
+      for (final line in lines) {
+        final colonIdx = line.indexOf(':');
+        if (colonIdx == -1) {
+          final trimmedLine = line.trim();
+          if (trimmedLine.isNotEmpty) values.add(trimmedLine);
+          continue;
+        }
+        final value = line.substring(colonIdx + 1).trim();
+        if (value.isNotEmpty) values.add(value);
+      }
+      if (values.isNotEmpty) {
+        final joined = values.join(' · ');
+        _writeBackToHive(joined);
+        return joined;
+      }
+    }
+
+    // 3. Plain prose — pass through unchanged
+    return raw;
+  }
+
+  /// Writes a sanitised prediction text back to Hive so the decode path
+  /// runs at most once per stored value. Non-fatal — caller still gets the
+  /// cleaned string even if the write fails.
+  static void _writeBackToHive(String cleaned) {
+    try {
+      HiveService.instance.configBox.put('prediction_text', cleaned);
+    } catch (_) {
+      // Non-fatal — caller still gets the cleaned string.
+    }
   }
 
   @override
@@ -745,8 +833,10 @@ class PredictionNotifier extends Notifier<PredictionData> {
     final configBox = HiveService.instance.configBox;
     final rawText = configBox.get('prediction_text') as String?;
     final predText = _sanitisePredictionText(rawText);
-    // Overwrite the Hive value with the cleaned version so the expensive
-    // decode path runs at most once per value.
+    // _sanitisePredictionText calls _writeBackToHive internally when it
+    // transforms the value, so we only need a fallback put here for the
+    // case where predText != rawText but no write was done (shouldn't
+    // happen, but kept for safety).
     if (predText != null && predText != rawText) {
       configBox.put('prediction_text', predText);
     }
@@ -790,6 +880,13 @@ class PredictionNotifier extends Notifier<PredictionData> {
       ref.invalidateSelf();
     }
   }
+
+  /// Test-only forwarder — exposes [_sanitisePredictionText] so that
+  /// [PredictionNotifierTestExports] can unit-test the sanitiser without
+  /// production code needing to know the forwarder exists.
+  @visibleForTesting
+  static String? sanitisePredictionTextForTest(String? raw) =>
+      _sanitisePredictionText(raw);
 }
 
 final predictionProvider =
@@ -1071,3 +1168,13 @@ class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
 final workoutDraftProvider =
     NotifierProvider<WorkoutDraftNotifier, WorkoutDraft?>(
         WorkoutDraftNotifier.new);
+
+// ── Test Exports (F4) ────────────────────────────────────────────
+
+/// Exposes [PredictionNotifier.sanitisePredictionTextForTest] for unit tests.
+/// Production code must never call this directly.
+@visibleForTesting
+class PredictionNotifierTestExports {
+  static String? sanitise(String? raw) =>
+      PredictionNotifier.sanitisePredictionTextForTest(raw);
+}

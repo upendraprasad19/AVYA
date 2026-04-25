@@ -516,15 +516,22 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         }
       }
 
+      const rulesBlock = '''
+CRITICAL OUTPUT RULES:
+- Reply in plain English sentences or bullet points only.
+- DO NOT use any structured format.
+- DO NOT prefix lines with labels like "outcome:", "weight_kg:", "summary:", "prediction:", or any colon-separated keys.
+- DO NOT return JSON. DO NOT wrap in code fences.
+- Just write 2-4 bullet points of prose. Direct address ("you").
+- 80 words maximum.''';
+
       final predictionPrompt = '''Predict realistic fitness outcomes at 3, 6, and 12 months.
 
 Profile: ${profile['gender']}, age $age, ${profile['height_cm']}cm, ${profile['current_weight_kg']}kg → ${profile['target_weight_kg']}kg goal
 Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
 Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
 BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
-
-Reply as plain text bullet points ONLY. Max 80 words.
-DO NOT return JSON. DO NOT wrap in code fences. DO NOT include keys like "predictions", "timeframe", or "summary". Plain bullets only.
+$rulesBlock
 
 Format (use • not JSON):
 • Weight: 74kg → 71kg (3mo) → 69kg (6mo) → 67kg (12mo)
