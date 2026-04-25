@@ -8,16 +8,26 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Step 04 · 05 of the stepped onboarding flow — training details capture.
 ///
-/// **APK test #1 batch (2026-04-24) — redesign D3.**
-/// Previously this screen stacked four full-height `WardRadioRow`
-/// sections, requiring a tall vertical scroll (14 rows + 4 labels on
-/// every device). The user feedback: "less intense, easier". The
-/// redesign holds four equal-weight sections with a fade-on-unselected
-/// treatment — the selected option carries full parchment text + gold
-/// left-border, unselected options sit at `textGhost` and 45% opacity
-/// so the section stays scannable without shouting. Defaults are
-/// pre-selected (Intermediate · Balanced · 4 days · Basic gym) so
-/// tapping CONTINUE with zero changes never produces a broken profile.
+/// **APK test #2 batch (2026-04-25) — redesign Q8.**
+/// All 4 sections converted to chip rows (D3-redux: selected chip was
+/// faded due to opacity wiring bug in the prior `_FadeSection` approach;
+/// the new uniform `_ChipSection` + `_Chip` layout fixes selection
+/// visibility and unifies the visual language across the screen).
+///
+/// Selected chip = gold-fill + `bgDeep` w700 text + opacity 1.0.
+/// Unselected chip = transparent + `textGhost` border + `textDim` text
+/// + opacity 0.55, 150 ms cross-fade.
+///
+/// Experience: 3 inline chips (Beginner / Intermediate / Advanced).
+/// Pace:       3 inline chips (Steady / Balanced / Aggressive).
+/// Days/Week:  4 inline chips (3 / 4 / 5 / 6).
+/// Equipment:  2 × 2 grid (labels too long for a single row at 360 dp).
+///
+/// Description line below each section updates on selection — user sees
+/// context for the chosen option without per-chip clutter.
+///
+/// Defaults pre-selected (Intermediate / Balanced / 4 / Basic Gym) so
+/// CONTINUE always works with zero interactions.
 ///
 /// Data in: `{goal, sex, weight_kg, target_weight_kg, height_cm,
 /// date_of_birth, body_fat_pct, activity_level}` (from Stats).
@@ -39,29 +49,33 @@ class _DetailsScreenState extends State<DetailsScreen> {
   late int _daysPerWeek;
   late String _equipment;
 
-  @override
-  void initState() {
-    super.initState();
-    _experience =
-        (widget.data['fitness_experience'] as String?) ?? 'intermediate';
-    _pace = (widget.data['pace_preference'] as String?) ?? 'balanced';
-    _daysPerWeek = (widget.data['days_per_week'] as int?) ?? 4;
-    _equipment =
-        (widget.data['equipment_access'] as String?) ?? 'basic_gym';
-  }
-
-  static const _experiences = <_Option<String>>[
-    _Option(value: 'beginner', code: 'NEW', title: 'Beginner', subtitle: 'under 6 months'),
-    _Option(value: 'intermediate', code: 'STEADY', title: 'Intermediate', subtitle: '6 mo \u2013 2 yrs'),
-    _Option(value: 'advanced', code: 'SEASONED', title: 'Advanced', subtitle: '2+ years'),
+  // ── Experience ────────────────────────────────────────────────────────
+  static const _experiences = <_ChipOption<String>>[
+    _ChipOption(value: 'beginner',     label: 'Beginner'),
+    _ChipOption(value: 'intermediate', label: 'Intermediate'),
+    _ChipOption(value: 'advanced',     label: 'Advanced'),
   ];
 
-  static const _paces = <_Option<String>>[
-    _Option(value: 'slow', code: 'EASY', title: 'Steady', subtitle: 'easiest to stick with'),
-    _Option(value: 'balanced', code: 'STANDARD', title: 'Balanced', subtitle: 'evidence-based'),
-    _Option(value: 'aggressive', code: 'PUSH', title: 'Aggressive', subtitle: 'upper safe limit'),
+  static const _experienceDescriptions = <String, String>{
+    'beginner':     'First 6 months of structured training.',
+    'intermediate': '6 – 24 months of consistent training.',
+    'advanced':     '24 + months of serious training.',
+  };
+
+  // ── Pace ──────────────────────────────────────────────────────────────
+  static const _paces = <_ChipOption<String>>[
+    _ChipOption(value: 'slow',       label: 'Steady'),
+    _ChipOption(value: 'balanced',   label: 'Balanced'),
+    _ChipOption(value: 'aggressive', label: 'Aggressive'),
   ];
 
+  static const _paceDescriptions = <String, String>{
+    'slow':       'Slow, sustainable — easiest to stick with.',
+    'balanced':   'Evidence-based standard transformation rate.',
+    'aggressive': 'Fast pace, high commitment, upper safe limit.',
+  };
+
+  // ── Days / week ───────────────────────────────────────────────────────
   static const _days = <_ChipOption<int>>[
     _ChipOption(value: 3, label: '3'),
     _ChipOption(value: 4, label: '4'),
@@ -69,12 +83,52 @@ class _DetailsScreenState extends State<DetailsScreen> {
     _ChipOption(value: 6, label: '6'),
   ];
 
+  String _daysDescription() => switch (_daysPerWeek) {
+        3 => '3 days · time-tight, efficient sessions.',
+        4 => '4 days · most sustainable split.',
+        5 => '5 days · serious commitment.',
+        6 => '6 days · advanced high-frequency split.',
+        _ => '$_daysPerWeek days per week.',
+      };
+
+  // ── Equipment ─────────────────────────────────────────────────────────
   static const _equipments = <_ChipOption<String>>[
-    _ChipOption(value: 'bodyweight', label: 'BW'),
-    _ChipOption(value: 'home_dumbbells', label: 'DB'),
-    _ChipOption(value: 'basic_gym', label: 'BASIC'),
-    _ChipOption(value: 'full_gym', label: 'FULL'),
+    _ChipOption(value: 'bodyweight',    label: 'Bodyweight'),
+    _ChipOption(value: 'home_dumbbells', label: 'Dumbbells'),
+    _ChipOption(value: 'basic_gym',     label: 'Basic Gym'),
+    _ChipOption(value: 'full_gym',      label: 'Full Gym'),
   ];
+
+  static const _equipmentDescriptions = <String, String>{
+    'bodyweight':     'No equipment needed — anywhere, anytime.',
+    'home_dumbbells': 'Adjustable dumbbells at home.',
+    'basic_gym':      'Standard gym setup, barbells + machines.',
+    'full_gym':       'Full commercial gym access.',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _experience  = (widget.data['fitness_experience'] as String?) ?? 'intermediate';
+    _pace        = (widget.data['pace_preference']    as String?) ?? 'balanced';
+    _daysPerWeek = (widget.data['days_per_week']      as int?)    ?? 4;
+    _equipment   = (widget.data['equipment_access']   as String?) ?? 'basic_gym';
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────
+
+  void _onContinue() {
+    final enriched = <String, dynamic>{
+      ...widget.data,
+      'fitness_experience': _experience,
+      'pace_preference':    _pace,
+      'days_per_week':      _daysPerWeek,
+      'equipment_access':   _equipment,
+    };
+    context.go('/onboarding/plan', extra: enriched);
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -95,43 +149,40 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 const SizedBox(height: 18),
                 Expanded(
                   child: SingleChildScrollView(
-                    // Physics hint: the content is tuned to fit a
-                    // 360x640 viewport without scrolling. The scroll
-                    // view is a safety net for smaller devices so the
-                    // CTA never disappears off-screen; healthy defaults
-                    // ensure almost every user sees no scroll.
+                    // Safety net for small-viewport devices; content is tuned
+                    // to fit 360×640 dp without scrolling.
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _FadeSection<String>(
+                        _ChipSection<String>(
                           label: 'EXPERIENCE',
                           options: _experiences,
                           selected: _experience,
-                          onSelect: (v) =>
-                              setState(() => _experience = v),
+                          description: _experienceDescriptions[_experience] ?? '',
+                          onSelect: (v) => setState(() => _experience = v),
                         ),
-                        const SizedBox(height: 14),
-                        _FadeSection<String>(
+                        const SizedBox(height: 18),
+                        _ChipSection<String>(
                           label: 'PACE',
                           options: _paces,
                           selected: _pace,
+                          description: _paceDescriptions[_pace] ?? '',
                           onSelect: (v) => setState(() => _pace = v),
                         ),
-                        const SizedBox(height: 14),
-                        _ChipRow<int>(
-                          label: 'DAYS PER WEEK',
+                        const SizedBox(height: 18),
+                        _ChipSection<int>(
+                          label: 'DAYS / WEEK',
                           options: _days,
                           selected: _daysPerWeek,
-                          onSelect: (v) =>
-                              setState(() => _daysPerWeek = v),
+                          description: _daysDescription(),
+                          onSelect: (v) => setState(() => _daysPerWeek = v),
                         ),
-                        const SizedBox(height: 14),
-                        _ChipRow<String>(
-                          label: 'EQUIPMENT',
+                        const SizedBox(height: 18),
+                        _EquipmentSection(
                           options: _equipments,
                           selected: _equipment,
-                          onSelect: (v) =>
-                              setState(() => _equipment = v),
+                          description: _equipmentDescriptions[_equipment] ?? '',
+                          onSelect: (v) => setState(() => _equipment = v),
                         ),
                       ],
                     ),
@@ -151,7 +202,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     return Row(
       children: [
         Text(
-          '04 \u00B7 05',
+          '04 · 05',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             letterSpacing: 2,
@@ -258,7 +309,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
               ),
               alignment: Alignment.center,
               child: Text(
-                'CONTINUE \u2192',
+                'CONTINUE →',
                 style: AppTypography.mono.copyWith(
                   fontSize: 12,
                   color: AppColors.bgDeep,
@@ -272,176 +323,25 @@ class _DetailsScreenState extends State<DetailsScreen> {
       ],
     );
   }
-
-  void _onContinue() {
-    final enriched = <String, dynamic>{
-      ...widget.data,
-      'fitness_experience': _experience,
-      'pace_preference': _pace,
-      'days_per_week': _daysPerWeek,
-      'equipment_access': _equipment,
-    };
-    context.go('/onboarding/plan', extra: enriched);
-  }
 }
 
-/// 3-option section with in-section fade. Each row has a 44dp mono code
-/// gutter, title, and optional subtitle. Selected row: full parchment +
-/// gold left-bar + accent code. Unselected: 45% opacity + textGhost
-/// code + textDim title so it visually recedes without disappearing.
-class _FadeSection<T> extends StatelessWidget {
-  const _FadeSection({
+// ── Chip section (single row of chips + description) ──────────────────────
+
+/// A labelled row of equal-width chips with a description line below.
+/// Used for Experience (3), Pace (3), and Days/Week (4).
+class _ChipSection<T> extends StatelessWidget {
+  const _ChipSection({
     required this.label,
     required this.options,
     required this.selected,
-    required this.onSelect,
-  });
-
-  final String label;
-  final List<_Option<T>> options;
-  final T selected;
-  final ValueChanged<T> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6, left: 2),
-          child: Text(
-            label,
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 2,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        for (var i = 0; i < options.length; i++) ...[
-          _FadeRow<T>(
-            option: options[i],
-            selected: selected == options[i].value,
-            onTap: () => onSelect(options[i].value),
-          ),
-          if (i < options.length - 1) const SizedBox(height: 4),
-        ],
-      ],
-    );
-  }
-}
-
-class _FadeRow<T> extends StatelessWidget {
-  const _FadeRow({
-    required this.option,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _Option<T> option;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: selected ? 1.0 : 0.45,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.cardTop : Colors.transparent,
-            border: Border(
-              left: BorderSide(
-                color: selected ? AppColors.accent : Colors.transparent,
-                width: selected ? 2 : 0,
-              ),
-              top: BorderSide(
-                color: selected ? AppColors.accent : AppColors.line2,
-              ),
-              right: BorderSide(
-                color: selected ? AppColors.accent : AppColors.line2,
-              ),
-              bottom: BorderSide(
-                color: selected ? AppColors.accent : AppColors.line2,
-              ),
-            ),
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 56,
-                child: Text(
-                  option.code,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.clip,
-                  style: AppTypography.mono.copyWith(
-                    color: selected
-                        ? AppColors.accent
-                        : AppColors.textGhost,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      option.title,
-                      style: AppTypography.body.copyWith(
-                        fontSize: 15,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w400,
-                        color: selected
-                            ? AppColors.textPrimary
-                            : AppColors.textDim,
-                      ),
-                    ),
-                    if (option.subtitle.isNotEmpty)
-                      Text(
-                        option.subtitle,
-                        style: AppTypography.micro.copyWith(
-                          color: AppColors.textMute,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact 4-chip row used for Days / Equipment. Single horizontal line
-/// with a mono eyebrow label above. Chip widths are proportional
-/// (Expanded) so the row always fills the available width.
-class _ChipRow<T> extends StatelessWidget {
-  const _ChipRow({
-    required this.label,
-    required this.options,
-    required this.selected,
+    required this.description,
     required this.onSelect,
   });
 
   final String label;
   final List<_ChipOption<T>> options;
   final T selected;
+  final String description;
   final ValueChanged<T> onSelect;
 
   @override
@@ -451,11 +351,11 @@ class _ChipRow<T> extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 6, left: 2),
+          padding: const EdgeInsets.only(bottom: 8, left: 2),
           child: Text(
             label,
             style: AppTypography.monoXs.copyWith(
-              color: AppColors.textMute,
+              color: AppColors.accent,
               letterSpacing: 2,
               fontWeight: FontWeight.w600,
             ),
@@ -475,11 +375,83 @@ class _ChipRow<T> extends StatelessWidget {
             ],
           ],
         ),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+        ),
       ],
     );
   }
 }
 
+// ── Equipment section (2 × 2 grid + description) ──────────────────────────
+
+/// 2 × 2 chip grid for Equipment. Labels are too long to fit 4 in a
+/// single row at 360 dp so we break into two rows of two.
+class _EquipmentSection extends StatelessWidget {
+  const _EquipmentSection({
+    required this.options,
+    required this.selected,
+    required this.description,
+    required this.onSelect,
+  });
+
+  final List<_ChipOption<String>> options;
+  final String selected;
+  final String description;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          child: Text(
+            'EQUIPMENT',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        for (var row = 0; row < 2; row++) ...[
+          Row(
+            children: [
+              for (var col = 0; col < 2; col++) ...[
+                Expanded(
+                  child: _Chip<String>(
+                    option: options[row * 2 + col],
+                    selected: options[row * 2 + col].value == selected,
+                    onTap: () => onSelect(options[row * 2 + col].value),
+                  ),
+                ),
+                if (col == 0) const SizedBox(width: 6),
+              ],
+            ],
+          ),
+          if (row == 0) const SizedBox(height: 6),
+        ],
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Chip ──────────────────────────────────────────────────────────────────
+
+/// Single selectable chip.
+/// Selected  → gold-fill + `bgDeep` w700 text + opacity 1.0.
+/// Unselected → transparent + `textGhost` border + `textDim` text
+///              + opacity 0.55. Both states cross-fade at 150 ms.
 class _Chip<T> extends StatelessWidget {
   const _Chip({
     required this.option,
@@ -501,22 +473,22 @@ class _Chip<T> extends StatelessWidget {
         opacity: selected ? 1.0 : 0.55,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: selected ? AppColors.accent : AppColors.card,
+            color: selected ? AppColors.accent : Colors.transparent,
             border: Border.all(
-              color: selected ? AppColors.accent : AppColors.line2,
+              color: selected ? AppColors.accent : AppColors.textGhost,
             ),
             borderRadius: BorderRadius.circular(AppRadius.sharp),
           ),
           alignment: Alignment.center,
           child: Text(
             option.label,
-            style: AppTypography.mono.copyWith(
-              fontSize: 11,
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(
+              fontSize: 13,
               color: selected ? AppColors.bgDeep : AppColors.textDim,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
         ),
@@ -525,19 +497,7 @@ class _Chip<T> extends StatelessWidget {
   }
 }
 
-class _Option<T> {
-  const _Option({
-    required this.value,
-    required this.code,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final T value;
-  final String code;
-  final String title;
-  final String subtitle;
-}
+// ── Data class ────────────────────────────────────────────────────────────
 
 class _ChipOption<T> {
   const _ChipOption({required this.value, required this.label});
