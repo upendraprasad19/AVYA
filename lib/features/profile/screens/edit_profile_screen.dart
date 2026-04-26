@@ -1523,6 +1523,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
 
+      // Bug B fix (APK Test #3, 2026-04-26): Edit Profile previously wrote
+      // only to Hive. user_profile in Supabase stayed empty/stale forever,
+      // which broke AI coach context (the snapshot reads from Hive but
+      // server-side helpers like rolling-context need the cloud row).
+      // Fire-and-forget so sync failures don't block the Save UX.
+      final supaUserId = SupabaseService.instance.client.auth.currentUser?.id;
+      if (supaUserId != null) {
+        unawaited(SyncService.instance.syncProfileNow(supaUserId));
+        unawaited(SyncService.instance.pushSnapshot());
+      }
+
       // Refresh downstream views that cache profile-derived targets/state.
       ref.invalidate(userStatsProvider);
       ref.invalidate(nutritionSummaryProvider);
