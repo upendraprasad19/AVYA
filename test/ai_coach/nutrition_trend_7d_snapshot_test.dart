@@ -6,6 +6,7 @@
 // day.
 
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -18,7 +19,13 @@ void main() {
   late Directory tempDir;
 
   setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
     tempDir = await Directory.systemTemp.createTemp('aicoach_trend_test_');
+    // Mock path_provider so HiveService.init()'s Hive.initFlutter() works
+    // outside a Flutter app binding.
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => tempDir.path);
     Hive.init(tempDir.path);
     await HiveService.instance.init();
   });
