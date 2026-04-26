@@ -1,61 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:icanbefitter/core/services/rank_ladder_data.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/rank_insignia.dart';
 
-/// Full 12-week phase roadmap (3 phases × 4 weeks).
+/// 12-week + lifetime phase roadmap.
 ///
-/// Route: `/train/roadmap`  (Plan C Task 8 / Q7 surface B)
+/// Route: `/train/roadmap` (registered in app_router.dart).
 ///
-/// Free users: Phase I card active, Phases II-III locked with lock icon.
-///   Sticky UPGRADE TO PRO bottom CTA always visible.
-/// PRO users: all three cards tappable (navigates to /train/preview — added
-///   in Task 9). No sticky CTA.
+/// Vertical timeline. Sections (top to bottom):
+///   1. Header: DEPLOYMENT 01 · FOUNDATION  WK N/12  X% complete
+///   2. W1 marker (current position when user is in week 1)
+///   3. Phase I — Foundation (W1-4)
+///      Promotion marker at W2 (SD1)
+///   4. Phase II — Strength (W5-8) — PRO 🔒 for free users
+///      Promotion marker at W4 (LS — between phase blocks)
+///   5. Phase III — Hypertrophy (W9-12) — PRO 🔒 for free users
+///   6. W12 promotion marker → PETTY OFFICER · DEBRIEF + DEPLOYMENT 02
+///   7. Year 1 divider band
+///   8. W26 (CPO), W52 (MCPO 1-Year Service Pin)
+///   9. Year 2 divider band
+///  10. W104 (Sub Lieutenant — Officer Commission, gold stripe)
+///  11. Years 3-5 divider band
+///  12. W156 (LtCdr), W208 (Cdr), W260 (Captain — faint)
+///
+/// Tap any rank marker → small detail sheet with insignia + gate +
+/// progress.
 class PhaseRoadmapScreen extends ConsumerWidget {
   const PhaseRoadmapScreen({super.key});
-
-  static const _phases = <_PhaseInfo>[
-    _PhaseInfo(
-      number: 'I',
-      name: 'FOUNDATION',
-      weekRange: 'Wk 1–4',
-      focus: 'Movement patterns + baseline strength.',
-      bullets: [
-        'Master the big lifts under load',
-        'Build the work-capacity engine',
-        'Sample: Full Body A · 6 exercises · 60 min',
-      ],
-    ),
-    _PhaseInfo(
-      number: 'II',
-      name: 'STRENGTH BLOCK',
-      weekRange: 'Wk 5–8',
-      focus: 'Heavier compounds, lower reps, real progression.',
-      bullets: [
-        'Strength benchmarks established',
-        '+5–10% on big lifts over 4 weeks',
-        'Sample: Heavy Push · 7 exercises · 75 min',
-      ],
-    ),
-    _PhaseInfo(
-      number: 'III',
-      name: 'HYPERTROPHY',
-      weekRange: 'Wk 9–12',
-      focus: 'Volume push. Muscle-building emphasis.',
-      bullets: [
-        'Lean mass gains visible',
-        'Higher rep ranges, tighter rest periods',
-        'Sample: Chest + Triceps · 8 exercises · 70 min',
-      ],
-    ),
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isPro = SubscriptionService.instance.isPro();
+    final currentWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
+    final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -64,7 +49,7 @@ class PhaseRoadmapScreen extends ConsumerWidget {
         elevation: 0,
         titleSpacing: 0,
         title: Text(
-          'Phase Roadmap',
+          'Roadmap',
           style: AppTypography.titleL.copyWith(fontSize: 20),
         ),
         leading: IconButton(
@@ -72,30 +57,83 @@ class PhaseRoadmapScreen extends ConsumerWidget {
           onPressed: () => context.pop(),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-        itemCount: _phases.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 14),
-        itemBuilder: (context, i) {
-          final phase = _phases[i];
-          final isActive = i == 0;
-          final isLocked = !isActive && !isPro;
-          return _PhaseCard(
-            phase: phase,
-            isActive: isActive,
-            isLocked: isLocked,
-            onTap: () {
-              if (isActive) return; // Phase I already in progress — no nav
-              if (isLocked) {
-                showPaywallSheetPhaseVariant(context);
-              } else {
-                // Task 9 adds the preview screen; for now nothing happens
-                // for PRO users (route is not yet registered).
-                // TODO(task9): context.push('/train/preview?phase=...');
-              }
-            },
-          );
-        },
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+        children: [
+          _DeploymentHeader(
+            currentWeek: currentWeek,
+            completePct: completePct,
+          ),
+          const SizedBox(height: 16),
+
+          // ── Phase I (free) ────────────────────────────
+          _PhaseBlock(
+            number: 'I',
+            name: 'FOUNDATION',
+            weekRange: 'W1 – W4',
+            description: 'Push / Pull / Legs · 6 ex/day',
+            isLocked: false,
+            isActive: currentWeek <= 4,
+          ),
+
+          _PromotionMarker(rankCode: 'SD1', whenLabel: 'W2'),
+          _PromotionMarker(rankCode: 'LS', whenLabel: 'W4'),
+
+          // ── Phase II (PRO) ────────────────────────────
+          _PhaseBlock(
+            number: 'II',
+            name: 'STRENGTH',
+            weekRange: 'W5 – W8',
+            description: 'Heavier compounds, lower reps, real progression.',
+            isLocked: !isPro,
+            isActive: currentWeek >= 5 && currentWeek <= 8,
+            onTapPreview: isPro
+                ? () => context.push('/train/preview?phase=II&week=5&day=1')
+                : null,
+          ),
+
+          // ── Phase III (PRO) ───────────────────────────
+          _PhaseBlock(
+            number: 'III',
+            name: 'HYPERTROPHY',
+            weekRange: 'W9 – W12',
+            description: 'Volume push. Muscle-building emphasis.',
+            isLocked: !isPro,
+            isActive: currentWeek >= 9 && currentWeek <= 12,
+            onTapPreview: isPro
+                ? () => context.push('/train/preview?phase=III&week=9&day=1')
+                : null,
+          ),
+
+          _PromotionMarker(
+            rankCode: 'PO',
+            whenLabel: 'W12 — DEBRIEF + DEPLOYMENT 02',
+            emphasised: true,
+          ),
+
+          // ── Year 1 band ───────────────────────────────
+          const _YearBand(label: 'YEAR 1'),
+          _PromotionMarker(rankCode: 'CPO', whenLabel: 'W26'),
+          _PromotionMarker(
+            rankCode: 'MCPO',
+            whenLabel: 'W52 · 1-YEAR SERVICE PIN',
+          ),
+
+          // ── Year 2 band ───────────────────────────────
+          const _YearBand(label: 'YEAR 2'),
+          _PromotionMarker(
+            rankCode: 'SubLt',
+            whenLabel: 'W104 · OFFICER COMMISSION',
+            emphasised: true,
+          ),
+
+          // ── Years 3-5 band ────────────────────────────
+          const _YearBand(label: 'YEARS 3 — 5'),
+          _PromotionMarker(rankCode: 'LtCdr', whenLabel: 'W156'),
+          _PromotionMarker(rankCode: 'Cdr', whenLabel: 'W208'),
+          _PromotionMarker(rankCode: 'Capt', whenLabel: 'W260', faint: true),
+          const SizedBox(height: 20),
+        ],
       ),
       bottomNavigationBar: isPro
           ? null
@@ -128,152 +166,325 @@ class PhaseRoadmapScreen extends ConsumerWidget {
   }
 }
 
-// ── Data class ───────────────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────
 
-class _PhaseInfo {
-  final String number;
-  final String name;
-  final String weekRange;
-  final String focus;
-  final List<String> bullets;
-
-  const _PhaseInfo({
-    required this.number,
-    required this.name,
-    required this.weekRange,
-    required this.focus,
-    required this.bullets,
+class _DeploymentHeader extends StatelessWidget {
+  const _DeploymentHeader({
+    required this.currentWeek,
+    required this.completePct,
   });
-}
-
-// ── Phase card ───────────────────────────────────────────────────────────────
-
-class _PhaseCard extends StatelessWidget {
-  const _PhaseCard({
-    required this.phase,
-    required this.isActive,
-    required this.isLocked,
-    required this.onTap,
-  });
-
-  final _PhaseInfo phase;
-  final bool isActive;
-  final bool isLocked;
-  final VoidCallback onTap;
+  final int currentWeek;
+  final int completePct;
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DEPLOYMENT 01 · FOUNDATION',
+          style: AppTypography.mono.copyWith(
+            color: AppColors.accent,
+            fontSize: 11,
+            letterSpacing: 2.0,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'WK $currentWeek / 12  —  $completePct% complete',
+          style: AppTypography.h3.copyWith(
+            fontSize: 15,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(2),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: (currentWeek / 12).clamp(0.0, 1.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Phase block ───────────────────────────────────────────────────
+
+class _PhaseBlock extends StatelessWidget {
+  const _PhaseBlock({
+    required this.number,
+    required this.name,
+    required this.weekRange,
+    required this.description,
+    required this.isLocked,
+    required this.isActive,
+    this.onTapPreview,
+  });
+
+  final String number;
+  final String name;
+  final String weekRange;
+  final String description;
+  final bool isLocked;
+  final bool isActive;
+  final VoidCallback? onTapPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = isActive
+        ? AppColors.accent
+        : (isLocked
+            ? AppColors.line2
+            : AppColors.accent.withValues(alpha: 0.3));
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLocked
+          ? () => showPaywallSheetPhaseVariant(context)
+          : onTapPreview,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isActive ? AppColors.accent : AppColors.line2,
-            width: isActive ? 1.5 : 1,
-          ),
+          border: Border.all(color: borderColor, width: isActive ? 1.5 : 1),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            // ── Header row: circle + name + week range + status icon ──────
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.accent),
-                    color: isActive ? AppColors.accentBg : Colors.transparent,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    phase.number,
-                    style: AppTypography.mono.copyWith(
-                      fontSize: 12,
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.accent),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                number,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 12,
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    phase.name,
-                    style: AppTypography.titleL.copyWith(fontSize: 16),
-                  ),
-                ),
-                Text(
-                  phase.weekRange,
-                  style: AppTypography.mono.copyWith(
-                    fontSize: 9,
-                    color: AppColors.textMute,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (isActive)
-                  const Icon(Icons.check_circle, size: 16, color: AppColors.ok)
-                else if (isLocked)
-                  const Icon(Icons.lock, size: 14, color: AppColors.accent),
-              ],
-            ),
-
-            // ── Gold rule divider ─────────────────────────────────────────
-            const SizedBox(height: 12),
-            Container(width: 56, height: 1, color: AppColors.line),
-            const SizedBox(height: 12),
-
-            // ── Focus line ────────────────────────────────────────────────
-            Text(
-              phase.focus,
-              style: AppTypography.bodyM.copyWith(
-                color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        name,
+                        style: AppTypography.titleL.copyWith(fontSize: 14),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        weekRange,
+                        style: AppTypography.mono.copyWith(
+                          fontSize: 9,
+                          letterSpacing: 1.0,
+                          color: AppColors.textMute,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: AppTypography.bodyS.copyWith(
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isLocked)
+              const Icon(Icons.lock, size: 14, color: AppColors.accent)
+            else if (isActive)
+              const Icon(Icons.check_circle, size: 16, color: AppColors.ok),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-            // ── Bullets ───────────────────────────────────────────────────
-            ...phase.bullets.map(
-              (b) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
+// ── Promotion marker ──────────────────────────────────────────────
+
+class _PromotionMarker extends StatelessWidget {
+  const _PromotionMarker({
+    required this.rankCode,
+    required this.whenLabel,
+    this.emphasised = false,
+    this.faint = false,
+  });
+
+  final String rankCode;
+  final String whenLabel;
+  final bool emphasised;
+  final bool faint;
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = rankByCode(rankCode) ?? rankByCode('SD2')!;
+    final opacity = faint ? 0.4 : 1.0;
+
+    return Opacity(
+      opacity: opacity,
+      child: GestureDetector(
+        onTap: () => _showRankDetail(context, entry),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              const SizedBox(width: 32),
+              Container(
+                width: 1,
+                height: 30,
+                color: AppColors.line2,
+              ),
+              const SizedBox(width: 14),
+              RankInsignia(
+                rankCode: rankCode,
+                size: emphasised ? 32 : 24,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '• ',
-                      style: AppTypography.bodyS
-                          .copyWith(color: AppColors.accent),
+                      entry.displayName.toUpperCase(),
+                      style: AppTypography.mono.copyWith(
+                        fontSize: emphasised ? 11 : 10,
+                        letterSpacing: 1.3,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    Expanded(
-                      child: Text(
-                        b,
-                        style: AppTypography.bodyS
-                            .copyWith(color: AppColors.textDim),
+                    const SizedBox(height: 2),
+                    Text(
+                      whenLabel,
+                      style: AppTypography.bodyS.copyWith(
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-
-            // ── PRO tap hint (unlocked non-active phases only) ─────────────
-            if (!isActive && !isLocked) ...[
-              const SizedBox(height: 8),
-              Text(
-                'TAP ANY WEEK FOR A PREVIEW →',
-                style: AppTypography.mono.copyWith(
-                  fontSize: 9,
-                  letterSpacing: 1.2,
-                  color: AppColors.accent,
-                ),
-              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRankDetail(BuildContext context, RankLadderEntry entry) {
+    final next = RankService.instance.getNextRank();
+    final current = RankService.instance.getCurrentRank();
+    final isEarned = entry.ordinal <= current.entry.ordinal;
+    final progressText = isEarned
+        ? 'Earned'
+        : (next != null && next.entry.code == entry.code
+            ? (next.daysUntilEligible != null
+                ? '${next.daysUntilEligible} days to go'
+                : 'Working toward this rank')
+            : 'Locked');
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                RankInsignia(rankCode: entry.code, size: 56),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.displayName,
+                        style: AppTypography.titleL.copyWith(fontSize: 18),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${entry.minWeeks} weeks since signup minimum',
+                        style: AppTypography.bodyS.copyWith(
+                          color: AppColors.textDim,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              progressText,
+              style: AppTypography.mono.copyWith(
+                color: AppColors.accent,
+                fontSize: 11,
+                letterSpacing: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Year band ─────────────────────────────────────────────────────
+
+class _YearBand extends StatelessWidget {
+  const _YearBand({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          Expanded(child: Container(height: 1, color: AppColors.line2)),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: AppTypography.mono.copyWith(
+              fontSize: 10,
+              letterSpacing: 2.0,
+              color: AppColors.textMute,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Container(height: 1, color: AppColors.line2)),
+        ],
       ),
     );
   }
