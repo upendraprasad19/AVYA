@@ -158,12 +158,19 @@ void main() {
         seed: 42,
       ));
 
-      // (a) total protein >= 95% of target
+      // (a) total protein in [95%, 115%] of target
       final totalProtein = plan.fold<int>(0, (s, m) => s + m.totalProtein);
       expect(
         totalProtein,
         greaterThanOrEqualTo((protein * 0.95).floor()),
-        reason: '$label: total protein ${totalProtein}g must hit >= 95% of '
+        reason: '$label: protein deficit guard — total protein ${totalProtein}g '
+            'must hit >= 95% of ${protein}g target',
+      );
+      expect(
+        totalProtein,
+        lessThanOrEqualTo((protein * 1.15).round()),
+        reason: '$label: protein surplus guard (Option D Pass 4 trim) — '
+            'total protein ${totalProtein}g must stay <= 115% of '
             '${protein}g target',
       );
 
