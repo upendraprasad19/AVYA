@@ -109,6 +109,10 @@ class AiService {
     if (size() <= _maxSnapshotBytes) return working;
 
     // Drop order — least load-bearing first.
+    // NOTE: `current_rank` + `weeks_until_next_rank` are deliberately
+    // NOT in this list. They are tiny (~50 bytes combined) and identity-
+    // bearing — the coach's greeting depends on them. They survive
+    // every trim path automatically.
     const trimSteps = [
       'step_history_7d',
       'weight_trend',

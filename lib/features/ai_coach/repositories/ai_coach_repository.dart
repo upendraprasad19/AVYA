@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -74,6 +75,13 @@ class AiCoachRepository {
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
       'coach_memory': _getCoachMemoryForContext(),
+
+      // APK Test #3 / Obs 1: rank context. Coach uses these for greeting
+      // and nudge copy ("Promoted to Leading Seaman" / "16 workouts to
+      // make Petty Officer"). ~50 bytes typical.
+      'current_rank': _getCurrentRankSnapshot(),
+      'weeks_until_next_rank': _getWeeksUntilNextRank(),
+
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
@@ -935,6 +943,43 @@ class AiCoachRepository {
       return mem.toJson();
     } catch (e) {
       debugPrint('[AiCoachRepository] coach_memory read failed: $e');
+      return null;
+    }
+  }
+
+  /// Compact rank summary for AI context. Reads denormalized
+  /// current_rank_code (no network round-trip).
+  Map<String, dynamic> _getCurrentRankSnapshot() {
+    try {
+      final current = RankService.instance.getCurrentRank();
+      return {
+        'code': current.entry.code,
+        'name': current.entry.displayName,
+        'category': current.entry.category,
+        'ordinal': current.entry.ordinal,
+      };
+    } catch (e) {
+      debugPrint('[AiCoachRepository._getCurrentRankSnapshot] $e');
+      return {'code': 'SD2', 'name': 'Seaman 2nd Class', 'ordinal': 0};
+    }
+  }
+
+  /// Weeks/workouts until the user's next promotion. Returns null when
+  /// already at Capt (terminal).
+  Map<String, dynamic>? _getWeeksUntilNextRank() {
+    try {
+      final next = RankService.instance.getNextRank();
+      if (next == null) return null;
+      return {
+        'next_code': next.entry.code,
+        'next_name': next.entry.displayName,
+        if (next.daysUntilEligible != null)
+          'days_remaining': next.daysUntilEligible,
+        if (next.workoutsRemaining != null)
+          'workouts_remaining': next.workoutsRemaining,
+      };
+    } catch (e) {
+      debugPrint('[AiCoachRepository._getWeeksUntilNextRank] $e');
       return null;
     }
   }
