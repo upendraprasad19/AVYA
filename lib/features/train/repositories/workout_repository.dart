@@ -1359,6 +1359,22 @@ class WorkoutRepository {
     final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
     return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
+
+  /// Sum of `volume_kg` across every exercise log in Hive. Returned
+  /// as a list of doubles so callers can sum / aggregate. Reads
+  /// raw box once — O(n) over the workoutBox key set, called only
+  /// from Profile Service Record on screen build (rare).
+  List<double> getAllExerciseLogKeysForLifetimeSum() {
+    final out = <double>[];
+    for (final v in _hive.workoutBox.values) {
+      if (v is! Map) continue;
+      final type = v['type']?.toString();
+      if (type != 'exercise_log') continue;
+      final raw = v['volume_kg'];
+      if (raw is num) out.add(raw.toDouble());
+    }
+    return out;
+  }
 }
 
 /// Thrown by [WorkoutRepository.createCustomExercise] for input validation

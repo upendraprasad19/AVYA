@@ -34,6 +34,7 @@ import '../providers/profile_provider.dart';
 import '../providers/referral_eligibility_provider.dart';
 import '../screens/apply_referral_sheet.dart';
 import '../widgets/profile_identity.dart';
+import '../widgets/service_record_section.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/slim_achievements_card.dart';
@@ -417,6 +418,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 divider: true,
               ),
               const SizedBox(height: 10),
+
+              // APK Test #3 / Obs 1: SERVICE RECORD above bio stats.
+              // Ladder + lifetime stats. ServiceRecordSection reads
+              // RankService.getLadder() + WorkoutRepository lifetime
+              // volume on each rebuild (cheap; called rarely).
+              const ServiceRecordSection(),
 
               // 1. Profile identity with banner + avatar
               ProfileIdentity(
