@@ -57,8 +57,31 @@ final previewPlanProvider =
   final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
   final equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
   final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+  // APK Test #3 / Phase exercise count fix: fallback must match
+  // onboarding's pre-selected default. APK Test #2 / F6 lesson: a
+  // 'beginner' fallback drives VolumeFilter.targetCount(beginner, 5) = 4
+  // exercises, but the user's actual plan was built with their
+  // 'intermediate' default → 6 exercises. The mismatch is the 6/7/8 vs
+  // 8 confusion in roadmap previews. NEVER reset to 'beginner' here.
   final experienceLevel =
-      (profile['fitness_experience'] as String?) ?? 'beginner';
+      (profile['fitness_experience'] as String?) ?? 'intermediate';
+
+  // Debug-mode loud signal when key fields are missing — prevents the
+  // silent default from hiding a profile-shape regression.
+  assert(() {
+    if (profile['fitness_experience'] == null) {
+      // ignore: avoid_print
+      print('[previewPlanProvider] WARN — fitness_experience missing on '
+          'profile, falling back to "intermediate". If this fires for a '
+          'real user post-onboarding, the profile shape has regressed.');
+    }
+    if (profile['days_per_week'] == null) {
+      // ignore: avoid_print
+      print('[previewPlanProvider] WARN — days_per_week missing on '
+          'profile, falling back to 4.');
+    }
+    return true;
+  }());
   final injuries = (profile['injuries'] as List?)
           ?.whereType<String>()
           .where((s) => s != 'none')
