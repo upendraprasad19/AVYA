@@ -42,6 +42,7 @@ export 'ward_kv_row.dart';
 export 'ward_letterhead.dart';
 export 'ward_phase_block.dart';
 export 'ward_phase_dots.dart';
+export 'rank_insignia.dart';
 export 'ward_radio_row.dart';
 export 'ward_ring.dart';
 export 'ward_rule.dart';
