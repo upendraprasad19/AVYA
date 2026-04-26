@@ -605,7 +605,32 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     }
     const retrievalBlock = formatRetrievalBlock(retrieval.memories);
     if (retrievalBlock) promptParts.push(retrievalBlock);
-    const systemPrompt = promptParts.join("\n\n");
+    let systemPrompt = promptParts.join("\n\n");
+
+    // Bug C fix (APK Test #3, 2026-04-26): inject the current IST day of
+    // week so Gemini stops hallucinating "today, Monday" on a Sunday.
+    // ai-proxy v47 had zero day-injection — model guessed.
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const todayName = istNow.toLocaleDateString("en-US", {
+      weekday: "long",
+      timeZone: "Asia/Kolkata",
+    });
+    const todayIso = istNow.toISOString().split("T")[0];
+
+    const dayInjection = `Today is ${todayName}, ${todayIso} (IST). When the user asks about "today", use this exact date and weekday.\n\n`;
+
+    const antiFabricationRule = `
+IMPORTANT — Anti-fabrication rule:
+Do NOT invent statistics. NEVER cite percentages, averages, frequencies,
+or trends about the user's missed workouts, skipped days, attendance
+patterns, or behavior unless the snapshot's "recent_logs",
+"coach_notices", "nutrition_trend_7d", or "meals_today" actually contains
+data supporting that claim. If asked about behavior with insufficient
+data, say so honestly: "I don't have enough data on your Monday pattern
+yet" — never make up a number.
+`;
+
+    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule;
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
     // Replaces the previous single-shot geminiChat() with a 3-round
