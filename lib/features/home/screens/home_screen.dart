@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
@@ -200,6 +201,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       padding: EdgeInsets.zero,
       children: [
         _buildHeader(ref),
+        // APK Test #3 / Obs 1: one-line rank chip directly below the
+        // streak counter inside the header. No spacing changes — sits
+        // in the natural gap between header and date display.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0, AppSpacing.gutter, 6),
+          child: Builder(builder: (context) {
+            final current = RankService.instance.getCurrentRank();
+            final next = RankService.instance.getNextRank();
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: RankChip(
+                rankCode: current.entry.code,
+                displayName: current.entry.displayName,
+                countdownText: next == null
+                    ? null
+                    : (next.daysUntilEligible != null
+                        ? 'NEXT IN ${next.daysUntilEligible} DAYS'
+                        : 'NEXT IN —'),
+                isTerminal: current.entry.isTerminal,
+                onTap: () => context.push('/train/roadmap'),
+              ),
+            );
+          }),
+        ),
         _buildDateDisplay(),
         const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),
         _buildStreakWarning(ref),
