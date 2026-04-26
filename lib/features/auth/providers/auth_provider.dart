@@ -368,8 +368,18 @@ class AuthNotifier extends Notifier<AuthState2> {
         }).eq('id', user.id);
       }
     } catch (e) {
-      debugPrint('users table upsert failed: $e');
-      // Non-fatal for sign-in, but AI chat may fail if row is missing.
+      debugPrint('[_ensureLocalUser] users table upsert failed: $e');
+      // Bug A defense (2026-04-26): silent-swallow let an orphan public.users
+      // row block sync for 48h. Surface PostgrestException codes 23505 / 23503
+      // to the cloud so future failures are auditable across devices.
+      String errorType = 'users_upsert_failed';
+      final eStr = e.toString();
+      if (eStr.contains('23505')) errorType = 'users_unique_violation_23505';
+      if (eStr.contains('23503')) errorType = 'users_fk_violation_23503';
+      // Posts to the `log-client-error` Edge Function (see _logClientError).
+      unawaited(_logClientError(user.id, errorType, eStr));
+      // Non-fatal for sign-in flow, but AI chat / sync may fail until
+      // resolved. Now visible in client_errors instead of only debugPrint.
     }
 
     // F2/F3 · Always pull the cloud profile on sign-in and merge into Hive.
@@ -574,6 +584,30 @@ class AuthNotifier extends Notifier<AuthState2> {
       } catch (_) {
         // Non-critical — push notifications will still work on next launch.
       }
+    }
+  }
+
+  /// Posts a single error event to the `log-client-error` Edge Function.
+  /// Fire-and-forget. Catches its own errors so logging never throws.
+  Future<void> _logClientError(
+    String userId,
+    String errorType,
+    String message,
+  ) async {
+    try {
+      await _supabase.client.functions.invoke(
+        'log-client-error',
+        body: {
+          'user_id': userId,
+          'error_type': errorType,
+          'message': message.length > 1000
+              ? message.substring(0, 1000)
+              : message,
+          'source': 'auth_provider._ensureLocalUser',
+        },
+      );
+    } catch (_) {
+      // Swallow — error logging must never break the host flow.
     }
   }
 
