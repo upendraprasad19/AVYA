@@ -456,8 +456,10 @@ class UrineColorNotifier extends Notifier<int> {
       'label': index >= 0 && index < _labels.length ? _labels[index] : 'unknown',
       'recorded_at': now.toIso8601String(),
     });
-    // Refresh AI coach snapshot — urine color is part of the hydration
-    // context the coach uses for dehydration warnings.
+    // APK Test #3 / Plan D Task 1 sync-gap close. Previously only
+    // pushSnapshot fired here; the health_logs cloud row never updated
+    // until the next launch's full sync. Mirror the addWater pattern.
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }
@@ -1063,8 +1065,10 @@ class CustomFoodNotifier extends Notifier<void> {
     // dedupe against future imports of the same food).
     await HiveService.instance.foodBox.put(id, food);
 
-    // Background sync to Supabase
+    // Sync (Plan D Task 1): single-item upsert + full custom-items
+    // projection (mirror of Train) + AI snapshot.
     NutritionRepository.syncCustomFoodToSupabase(data: food);
+    unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }
