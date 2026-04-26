@@ -94,6 +94,13 @@ class AiCoachRepository {
       // 0-3 templates), well under the 9.5KB compaction cap.
       'custom_exercises': _readCustomExercises(),
       'saved_templates': _readSavedTemplates(),
+
+      // APK Test #3 / Q6.3 (2026-04-26): expand snapshot so the AI coach
+      // can reference what the user actually ate today and across the
+      // last 7 days. Per-turn cost ~500-700 bytes; both keys drop early
+      // in _compactContext so they never push past the 9.5 KB ceiling.
+      'meals_today': _getMealsToday(),
+      'nutrition_trend_7d': _getNutritionTrend7d(),
     };
   }
 
@@ -822,6 +829,126 @@ class AiCoachRepository {
       'urine_status': ?urineStatus,
     };
   }
+
+  /// Reads today's nlog_* rows from nutritionBox, groups by meal_type,
+  /// and returns a list of {slot, items, total_kcal, total_protein_g}
+  /// maps. Up to 4 slots (breakfast/lunch/dinner/snacks). Slot order
+  /// follows insertion order — slots without rows are omitted entirely
+  /// (rather than zero-filled) so the AI sees only meals the user
+  /// actually logged.
+  List<Map<String, dynamic>> _getMealsToday() {
+    final nutritionBox = _hive.nutritionBox;
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, "0")}-'
+        '${now.day.toString().padLeft(2, "0")}';
+
+    // Preserve canonical slot order: breakfast → lunch → dinner → snacks.
+    const slotOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
+    final bySlot = <String, List<Map<String, dynamic>>>{};
+
+    for (final raw in nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['date'] != todayStr) continue;
+      // Only group rows with the standard nlog_* shape (skip saved-meal
+      // template rows etc. — they don't carry meal_type at log time).
+      final id = log['id'] as String? ?? '';
+      if (!id.startsWith('nlog_')) continue;
+      final mealType = (log['meal_type'] as String?)?.toLowerCase();
+      if (mealType == null || mealType.isEmpty) continue;
+      // Snap the various aliases the app uses to canonical slot keys.
+      final slot = _canonicalSlot(mealType);
+
+      bySlot.putIfAbsent(slot, () => []).add({
+        'name': log['food_name'] ?? 'Unknown',
+        'kcal': (log['total_calories'] as num?)?.toInt() ?? 0,
+        'protein_g': (log['total_protein'] as num?)?.toInt() ?? 0,
+        'carbs_g': (log['total_carbs'] as num?)?.toInt() ?? 0,
+        'fat_g': (log['total_fat'] as num?)?.toInt() ?? 0,
+      });
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final slot in slotOrder) {
+      final rows = bySlot[slot];
+      if (rows == null || rows.isEmpty) continue;
+      var totalK = 0;
+      var totalP = 0;
+      for (final r in rows) {
+        totalK += (r['kcal'] as int);
+        totalP += (r['protein_g'] as int);
+      }
+      result.add({
+        'slot': slot,
+        'items': rows,
+        'total_kcal': totalK,
+        'total_protein_g': totalP,
+      });
+    }
+    return result;
+  }
+
+  String _canonicalSlot(String raw) {
+    final s = raw.toLowerCase();
+    if (s == 'snack' || s == 'snacks' || s == 'mid_morning' ||
+        s == 'evening' || s == 'mid-morning' || s == 'evening_snack') {
+      return 'snacks';
+    }
+    if (s == 'breakfast') return 'breakfast';
+    if (s == 'lunch') return 'lunch';
+    if (s == 'dinner') return 'dinner';
+    return 'snacks'; // unknown → bucket into snacks
+  }
+
+  /// Returns the last 7 days of daily totals, newest-first.
+  /// Days without any nlog_* row are zero-filled so the model sees a
+  /// stable 7-element timeline (and can detect the difference between
+  /// "logged 0" and "didn't log").
+  List<Map<String, dynamic>> _getNutritionTrend7d() {
+    final nutritionBox = _hive.nutritionBox;
+    final result = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < 7; i++) {
+      final d = DateTime.now().subtract(Duration(days: i));
+      final dateStr =
+          '${d.year}-${d.month.toString().padLeft(2, "0")}-'
+          '${d.day.toString().padLeft(2, "0")}';
+
+      var calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
+      for (final raw in nutritionBox.values) {
+        if (raw is! Map) continue;
+        final log = Map<String, dynamic>.from(raw);
+        if (log['date'] != dateStr) continue;
+        final id = log['id'] as String? ?? '';
+        if (!id.startsWith('nlog_')) continue;
+        calories += (log['total_calories'] as num?)?.toInt() ?? 0;
+        protein += (log['total_protein'] as num?)?.toInt() ?? 0;
+        carbs += (log['total_carbs'] as num?)?.toInt() ?? 0;
+        fat += (log['total_fat'] as num?)?.toInt() ?? 0;
+        fiber += (log['total_fiber'] as num?)?.toInt() ?? 0;
+      }
+      result.add({
+        'date': dateStr,
+        'calories': calories,
+        'protein_g': protein,
+        'carbs_g': carbs,
+        'fat_g': fat,
+        'fiber_g': fiber,
+      });
+    }
+    return result;
+  }
+
+  /// Test-only seam exposing _getMealsToday for unit tests that don't
+  /// want to construct the entire snapshot.
+  @visibleForTesting
+  List<Map<String, dynamic>> mealsTodayForTest() => _getMealsToday();
+
+  /// Test-only seam exposing _getNutritionTrend7d.
+  @visibleForTesting
+  List<Map<String, dynamic>> nutritionTrend7dForTest() =>
+      _getNutritionTrend7d();
 
   Map<String, dynamic> _getLatestWeight() {
     final healthBox = _hive.healthBox;
