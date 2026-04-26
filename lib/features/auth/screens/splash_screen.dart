@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -161,6 +162,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
     unawaited(SyncService.instance.checkAndSync());
+    // APK Test #3 / Obs 1: catch-up promotions for users who passed a
+    // milestone while the app was uninstalled / signed out.
+    unawaited(RankService.instance.evaluateAndPromote());
 
     // F1 · Refresh subscription state on every app launch so PRO survives
     // logout/login and cross-device sessions without requiring a PRO-feature
