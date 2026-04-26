@@ -115,6 +115,8 @@ class AiService {
     // every trim path automatically.
     const trimSteps = [
       'step_history_7d',
+      'meals_today',
+      'nutrition_trend_7d',
       'weight_trend',
       'nutrition_trend',
       'exercise_history',
