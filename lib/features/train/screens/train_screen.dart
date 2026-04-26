@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
@@ -106,6 +107,28 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // APK Test #3 / Obs 1: rank chip at top of Train
+                    // tab content. Tap → roadmap. Reads denormalized
+                    // current_rank_code via RankService.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenPadding, 14, AppSpacing.screenPadding, 0),
+                      child: Builder(builder: (context) {
+                        final current = RankService.instance.getCurrentRank();
+                        final next = RankService.instance.getNextRank();
+                        return RankChip(
+                          rankCode: current.entry.code,
+                          displayName: current.entry.displayName,
+                          countdownText: next == null
+                              ? null
+                              : (next.daysUntilEligible != null
+                                  ? 'NEXT IN ${next.daysUntilEligible} DAYS'
+                                  : 'NEXT IN —'),
+                          isTerminal: current.entry.isTerminal,
+                          onTap: () => context.push('/train/roadmap'),
+                        );
+                      }),
+                    ),
                     // 1. Plan header with progress bar
                     _buildPlanHeader(plan, selectedWeek, weekDays),
 
@@ -145,12 +168,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 14),
 
-                    // 3. This Week section label
+                    // APK Test #3 / Obs 1: deployment header above
+                    // Roadmap pill. Communicates that THIS WEEK is one
+                    // chapter of a 12-week deployment, not the whole story.
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.screenPadding),
                       child: Text(
-                        'THIS WEEK',
+                        'DEPLOYMENT 01 — FOUNDATION  (WEEK ${plan.currentWeek} OF 12)',
                         style: AppTypography.mono.copyWith(
                           color: AppColors.textMute,
                           letterSpacing: 2,
@@ -195,6 +220,21 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                         ),
                       ),
                     ),
+
+                    // 3. This Week section label — moved BELOW Roadmap
+                    // pill per APK Test #3 / Obs 1 ordering decision.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenPadding),
+                      child: Text(
+                        'THIS WEEK',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textMute,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
                     // Week selector tabs
                     WeekSelector(
