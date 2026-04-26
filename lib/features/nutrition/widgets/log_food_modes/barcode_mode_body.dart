@@ -1,75 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/theme/spacing.dart';
-import 'package:icanbefitter/core/theme/typography.dart';
+import '../barcode_scan_sheet.dart' show BarcodeBody;
 
-/// BARCODE mode body for `LogFoodSheet`. Refactored from
-/// `_BarcodeScanSheet` to render inside the parent sheet rather than
-/// opening as a separate modal. Keeps the same MobileScanner controller
-/// + result-editor flow; on save, calls [onLogged].
+/// BARCODE mode body for `LogFoodSheet`. Delegates to the reusable
+/// `BarcodeBody` widget extracted from `barcode_scan_sheet.dart`. The
+/// shared body handles: MobileScanner controller lifecycle, barcode
+/// lookup via `BarcodeService`, result-editor (serving slider, macros,
+/// meal-type pills) and the Hive write + sync fan-out on save.
 ///
-/// NOTE: This task creates the body shell. The full implementation
-/// reuses the result-editor logic from `barcode_scan_sheet.dart` — see
-/// Task 6 where the legacy `_BarcodeScanSheet` body is extracted into a
-/// shared `BarcodeBody` and the entry-point `showBarcodeScanSheet`
-/// helper kept for any external callers (none today).
-class BarcodeModeBody extends ConsumerStatefulWidget {
+/// Calling [onLogged] dismisses the parent sheet — typically the
+/// `LogFoodSheet` host invokes `Navigator.maybePop` here.
+class BarcodeModeBody extends ConsumerWidget {
   const BarcodeModeBody({super.key, required this.onLogged});
 
   final VoidCallback onLogged;
 
   @override
-  ConsumerState<BarcodeModeBody> createState() => _BarcodeModeBodyState();
-}
-
-class _BarcodeModeBodyState extends ConsumerState<BarcodeModeBody> {
-  final _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    facing: CameraFacing.back,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Placeholder shell — Task 6 will fill this in by extracting the
-    // _BarcodeScanSheetState build body from barcode_scan_sheet.dart
-    // verbatim (controller is already wired here).
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.gutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'POINT YOUR CAMERA AT A PRODUCT BARCODE',
-            style: AppTypography.mono.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 12),
-          AspectRatio(
-            aspectRatio: 1.0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.input,
-                borderRadius: BorderRadius.circular(AppRadius.card),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                child: MobileScanner(controller: _controller),
-              ),
-            ),
-          ),
-          // Body finalised in Task 6.
-        ],
-      ),
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    return BarcodeBody(onLogged: onLogged);
   }
 }
