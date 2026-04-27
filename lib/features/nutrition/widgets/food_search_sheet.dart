@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -44,6 +46,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
   Map<String, dynamic>? _selectedFood;
   double _quantityG = 100;
   String _mealType = 'snacks';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -80,6 +83,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -148,8 +152,13 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
               child: TextField(
                 controller: _searchController,
                 autofocus: true,
-                onChanged: (q) =>
-                    ref.read(foodSearchProvider.notifier).search(q),
+                onChanged: (q) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                    if (!mounted) return;
+                    ref.read(foodSearchProvider.notifier).search(q);
+                  });
+                },
                 style: AppTypography.body.copyWith(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search foods (e.g. paneer tikka, idli)...',
