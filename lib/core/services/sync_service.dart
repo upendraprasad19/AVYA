@@ -671,6 +671,7 @@ class SyncService {
         _restoreSavedMeals(userId),
         _restoreUserPreferences(userId),
         _restoreCoachInteractions(userId, since),
+        _restoreCoachMemory(userId), // B7 — skip induction on returning device
       ]);
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
@@ -724,6 +725,7 @@ class SyncService {
         _restoreScheduledWorkouts(userId, since),
         _restoreSavedMeals(userId),
         _restoreCoachInteractions(userId, since),
+        _restoreCoachMemory(userId), // B7 — skip induction on returning device
       ]);
 
       if (_restoreCancelled) return RestoreResult.cancelled();
@@ -2924,6 +2926,50 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreCoachInteractions] $e');
+    }
+  }
+
+  /// Pulls coach_memory induction state from Supabase into local coachBox.
+  ///
+  /// Run on restoreFromCloud so returning users (new device or post-logout)
+  /// skip the InductionScreen — the cloud row already has [induction_completed_at]
+  /// and all muster answers. If the user has no coach_memory row yet (un-inducted),
+  /// maybeSingle() returns null and we skip silently.
+  Future<void> _restoreCoachMemory(String userId) async {
+    try {
+      final row = await _supabase.client
+          .from('coach_memory')
+          .select(
+            'committed_at, committed_to_lt_cdr, induction_completed_at, '
+            'why_now, definition_of_winning, known_injuries, '
+            'typical_wake_time, preferred_workout_time, body_part_priorities',
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (row == null) return;
+
+      final coach = _hive.coachBox;
+      const keys = [
+        'committed_at',
+        'committed_to_lt_cdr',
+        'induction_completed_at',
+        'why_now',
+        'definition_of_winning',
+        'known_injuries',
+        'typical_wake_time',
+        'preferred_workout_time',
+        'body_part_priorities',
+      ];
+      for (final key in keys) {
+        final v = row[key];
+        if (v != null) await coach.put(key, v);
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreCoachMemory] $e');
+      unawaited(_reportSyncFailure(
+        opType: 'restore_coach_memory',
+        error: e,
+      ));
     }
   }
 
