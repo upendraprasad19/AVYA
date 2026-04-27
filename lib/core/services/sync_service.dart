@@ -156,6 +156,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._backfillCustomEntityIds] $e');
+      try {
+        await _reportSyncFailure(opType: 'backfill_custom_entity_ids', error: e);
+      } catch (_) {}
     }
   }
 
@@ -409,6 +412,9 @@ class SyncService {
           debugPrint(
             '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
           );
+          try {
+            await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
+          } catch (_) {}
         }
       }
 
@@ -416,6 +422,9 @@ class SyncService {
     } catch (e) {
       // Offline — will retry next scheduled run.
       debugPrint('[SyncService.pushSnapshot] $e');
+      try {
+        await _reportSyncFailure(opType: 'push_snapshot', error: e);
+      } catch (_) {}
     }
   }
 
@@ -458,6 +467,9 @@ class SyncService {
     } catch (e) {
       // Partial sync failure — next launch will retry.
       debugPrint('[SyncService.weeklyFullSync] $e');
+      try {
+        await _reportSyncFailure(opType: 'weekly_full_sync', error: e);
+      } catch (_) {}
     }
   }
 
@@ -481,6 +493,9 @@ class SyncService {
     } catch (e) {
       // Offline — will sync on next weekly sync.
       debugPrint('[SyncService.syncWorkoutData] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_workout_data', error: e);
+      } catch (_) {}
     }
   }
 
@@ -505,6 +520,9 @@ class SyncService {
     } catch (e) {
       // Offline — will sync on next daily full sync.
       debugPrint('[SyncService.syncNutritionData] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_nutrition_data', error: e);
+      } catch (_) {}
     }
   }
 
@@ -649,6 +667,9 @@ class SyncService {
       );
     } catch (e) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
+      } catch (_) {}
     }
   }
 
@@ -693,6 +714,9 @@ class SyncService {
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_from_cloud', error: e);
+      } catch (_) {}
     }
   }
 
@@ -782,6 +806,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._syncFitnessSummary] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_fitness_summary', error: e);
+      } catch (_) {}
     }
   }
 
@@ -809,6 +836,9 @@ class SyncService {
     } catch (e) {
       // Offline or error — silently skip.
       debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'pull_cross_channel_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1205,6 +1235,9 @@ class SyncService {
       await _syncWeightLogs(userId);
     } catch (e) {
       debugPrint('[SyncService.syncWeightNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_weight_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1250,6 +1283,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService.syncSleepNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_sleep_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1264,6 +1300,9 @@ class SyncService {
       await _syncMeasurements(userId);
     } catch (e) {
       debugPrint('[SyncService.syncMeasurementsNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_measurements_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1558,6 +1597,9 @@ class SyncService {
       await _syncUserProgress(userId);
     } catch (e) {
       debugPrint('[SyncService.syncProgressNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_progress_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1831,6 +1873,9 @@ class SyncService {
       await _setTimestamp(_lastCustomSyncKey);
     } catch (e) {
       debugPrint('[SyncService._syncCustomItems] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_custom_items', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2586,6 +2631,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncWorkoutPlan] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_workout_plan', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2612,6 +2660,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncUserProgress] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_user_progress', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2711,6 +2762,9 @@ class SyncService {
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());
     } catch (e) {
       debugPrint('[SyncService.syncCommunityItems] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_community_items', error: e);
+      } catch (_) {}
     }
   }
 
