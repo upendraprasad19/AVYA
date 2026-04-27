@@ -77,81 +77,87 @@ class ExerciseRepository {
     List<String>? targetMuscles,
     List<String>? excludeMuscles,
   }) {
-    var results = getAll();
+    // Precompute normalized values for filter predicates
+    final equipLower = equipment != null && equipment.isNotEmpty
+        ? equipment.map((e) => e.toLowerCase()).toSet()
+        : null;
+    final suitableLower = suitableFor?.toLowerCase();
+    final targetLower =
+        targetMuscles != null && targetMuscles.isNotEmpty
+            ? targetMuscles.map((m) => m.toLowerCase()).toList()
+            : null;
+    final excludeLower =
+        excludeMuscles != null && excludeMuscles.isNotEmpty
+            ? excludeMuscles.map((m) => m.toLowerCase()).toList()
+            : null;
+    final categoryLower = category?.toLowerCase();
 
-    if (category != null) {
-      results = results
-          .where((e) =>
-              (e['category'] as String?)?.toLowerCase() ==
-              category.toLowerCase())
-          .toList();
-    }
+    // Single fused filter predicate
+    var results = getAll().where((e) {
+      // 1. Category filter
+      if (categoryLower != null) {
+        final eCat = (e['category'] as String?)?.toLowerCase();
+        if (eCat != categoryLower) return false;
+      }
 
-    if (equipment != null && equipment.isNotEmpty) {
-      final equipLower = equipment.map((e) => e.toLowerCase()).toSet();
-      results = results.where((e) {
+      // 2. Equipment filter
+      if (equipLower != null) {
         final needed = e['equipment_needed'];
-        if (needed == null) return true; // bodyweight
-        if (needed is List) {
+        if (needed != null && needed is List) {
           // Exercise is usable if ALL its required equipment is in user's set.
-          return needed.every((item) {
+          final hasAllEquip = needed.every((item) {
             final lower = item.toString().toLowerCase();
             return equipLower.contains(lower) ||
                 lower == 'none' ||
                 lower == 'bodyweight';
           });
+          if (!hasAllEquip) return false;
         }
-        return true;
-      }).toList();
-    }
+      }
 
-    if (suitableFor != null) {
-      results = results.where((e) {
+      // 3. Suitable for filter
+      if (suitableLower != null) {
         final suitable = e['suitable_for'];
-        if (suitable == null) return true;
         if (suitable is List) {
-          return suitable.any(
-            (s) => s.toString().toLowerCase() == suitableFor.toLowerCase(),
+          final hasSuitable = suitable.any(
+            (s) => s.toString().toLowerCase() == suitableLower,
           );
+          if (!hasSuitable) return false;
+        } else if (suitable != null) {
+          return false;
         }
-        return true;
-      }).toList();
-    }
+      }
 
-    if (foundationalOnly) {
-      results = results
-          .where((e) => e['is_foundational'] == true)
-          .toList();
-    }
+      // 4. Foundational only filter
+      if (foundationalOnly && e['is_foundational'] != true) {
+        return false;
+      }
 
-    // Filter by target muscles: exercise must have at least one primary_muscle
-    // that contains any of the target muscle strings (case-insensitive).
-    if (targetMuscles != null && targetMuscles.isNotEmpty) {
-      final targets =
-          targetMuscles.map((m) => m.toLowerCase()).toList();
-      results = results.where((e) {
+      // 5. Target muscles filter
+      if (targetLower != null) {
         final muscles = e['primary_muscles'];
         if (muscles is! List || muscles.isEmpty) return false;
-        return muscles.any((m) {
+        final hasTarget = muscles.any((m) {
           final ml = m.toString().toLowerCase();
-          return targets.any((t) => ml.contains(t));
+          return targetLower.any((t) => ml.contains(t));
         });
-      }).toList();
-    }
+        if (!hasTarget) return false;
+      }
 
-    // Exclude exercises whose primary_muscles match any excluded muscle string.
-    if (excludeMuscles != null && excludeMuscles.isNotEmpty) {
-      final excludes =
-          excludeMuscles.map((m) => m.toLowerCase()).toList();
-      results = results.where((e) {
+      // 6. Exclude muscles filter
+      if (excludeLower != null) {
         final muscles = e['primary_muscles'];
-        if (muscles is! List || muscles.isEmpty) return true;
-        return !muscles.any((m) {
-          final ml = m.toString().toLowerCase();
-          return excludes.any((ex) => ml.contains(ex));
-        });
-      }).toList();
-    }
+        if (muscles is List && muscles.isNotEmpty) {
+          final hasExcluded = muscles.any((m) {
+            final ml = m.toString().toLowerCase();
+            return excludeLower.any((ex) => ml.contains(ex));
+          });
+          if (hasExcluded) return false;
+        }
+      }
+
+      return true;
+    }).toList();
 
     // Sort compounds first.
     results.sort((a, b) {
@@ -200,86 +206,92 @@ class ExerciseRepository {
     List<String>? injuryExclusions,
     int? limit,
   }) {
-    var results = getAll();
+    // Precompute normalized values for filter predicates
+    final tierLower = equipmentTier?.isNotEmpty == true
+        ? equipmentTier!.toLowerCase()
+        : null;
+    final suitableLower = suitableFor?.toLowerCase();
+    final injuryLower = injuryExclusions != null && injuryExclusions.isNotEmpty
+        ? injuryExclusions.map((i) => i.toLowerCase()).toList()
+        : null;
 
-    // 1. Movement pattern (ALWAYS applied — never dropped)
-    results = results.where((e) =>
-        _fieldContains(e['movement_pattern'], movementPattern)).toList();
+    // Single fused filter predicate
+    var results = getAll().where((e) {
+      // 1. Movement pattern (ALWAYS applied — never dropped)
+      if (!_fieldContains(e['movement_pattern'], movementPattern)) return false;
 
-    // 2. Target focus (substring match on target_focus field)
-    if (targetFocus != null && targetFocus.isNotEmpty) {
-      results = results.where((e) =>
-          _fieldSubstringMatch(e['target_focus'], targetFocus)).toList();
-    }
+      // 2. Target focus (substring match on target_focus field)
+      if (targetFocus != null && targetFocus.isNotEmpty) {
+        if (!_fieldSubstringMatch(e['target_focus'], targetFocus)) return false;
+      }
 
-    // 2b. Target muscle (broader — matches if target_focus contains the muscle name)
-    if (targetMuscle != null && targetMuscle.isNotEmpty) {
-      results = results.where((e) {
-        if (_fieldSubstringMatch(e['target_focus'], targetMuscle)) return true;
-        final muscles = e['primary_muscles'];
-        if (muscles is List) {
-          final tm = targetMuscle.toLowerCase();
-          return muscles.any((m) => m.toString().toLowerCase().contains(tm));
-        }
-        return false;
-      }).toList();
-    }
-
-    // 3. Equipment tier (exercise must include user's tier in its equipment_tier list)
-    if (equipmentTier != null && equipmentTier.isNotEmpty) {
-      final tier = equipmentTier.toLowerCase();
-      results = results.where((e) {
-        final tiers = e['equipment_tier'];
-        if (tiers is! List || tiers.isEmpty) return true;
-        return tiers.any((t) => t.toString().toLowerCase() == tier);
-      }).toList();
-    }
-
-    // 4. Exercise type (compound / isolation)
-    if (exerciseType != null && exerciseType.isNotEmpty) {
-      results = results.where((e) =>
-          _fieldContains(e['exercise_type'], exerciseType)).toList();
-    }
-
-    // 5. Suitable for (experience level)
-    if (suitableFor != null) {
-      results = results.where((e) {
-        final suitable = e['suitable_for'];
-        if (suitable == null) return true;
-        if (suitable is List) {
-          return suitable.any(
-            (s) => s.toString().toLowerCase() == suitableFor.toLowerCase(),
-          );
-        }
-        return true;
-      }).toList();
-    }
-
-    // 6. Foundational only (Phase 1)
-    if (foundationalOnly) {
-      results = results.where((e) => e['is_foundational'] == true).toList();
-    }
-
-    // 7. Exclude already-selected names
-    if (excludeNames != null && excludeNames.isNotEmpty) {
-      results = results.where((e) =>
-          !excludeNames.contains(e['name'] as String? ?? '')).toList();
-    }
-
-    // 8. Injury exclusion
-    if (injuryExclusions != null && injuryExclusions.isNotEmpty) {
-      results = results.where((e) {
-        final contra = e['injury_contraindications'];
-        if (contra is! List || contra.isEmpty) return true;
-        for (final injury in injuryExclusions) {
-          if (contra.any((c) =>
-              c.toString().toLowerCase() == injury.toLowerCase())) {
+      // 2b. Target muscle (broader — matches if target_focus contains the muscle name)
+      if (targetMuscle != null && targetMuscle.isNotEmpty) {
+        if (!_fieldSubstringMatch(e['target_focus'], targetMuscle)) {
+          final muscles = e['primary_muscles'];
+          if (muscles is List) {
+            final tm = targetMuscle.toLowerCase();
+            final hasTarget = muscles.any(
+              (m) => m.toString().toLowerCase().contains(tm),
+            );
+            if (!hasTarget) return false;
+          } else {
             return false;
           }
         }
-        return true;
-      }).toList();
-    }
+      }
+
+      // 3. Equipment tier (exercise must include user's tier in its equipment_tier list)
+      if (tierLower != null) {
+        final tiers = e['equipment_tier'];
+        if (tiers is! List || tiers.isEmpty) {
+          return true; // No tier specified on exercise, pass
+        }
+        final hasTier =
+            tiers.any((t) => t.toString().toLowerCase() == tierLower);
+        if (!hasTier) return false;
+      }
+
+      // 4. Exercise type (compound / isolation)
+      if (exerciseType != null && exerciseType.isNotEmpty) {
+        if (!_fieldContains(e['exercise_type'], exerciseType)) return false;
+      }
+
+      // 5. Suitable for (experience level)
+      if (suitableLower != null) {
+        final suitable = e['suitable_for'];
+        if (suitable is List) {
+          final hasSuitable = suitable.any(
+            (s) => s.toString().toLowerCase() == suitableLower,
+          );
+          if (!hasSuitable) return false;
+        } else if (suitable != null) {
+          return false;
+        }
+      }
+
+      // 6. Foundational only (Phase 1)
+      if (foundationalOnly && e['is_foundational'] != true) return false;
+
+      // 7. Exclude already-selected names
+      if (excludeNames != null && excludeNames.isNotEmpty) {
+        if (excludeNames.contains(e['name'] as String? ?? '')) return false;
+      }
+
+      // 8. Injury exclusion
+      if (injuryLower != null) {
+        final contra = e['injury_contraindications'];
+        if (contra is List && contra.isNotEmpty) {
+          for (final injury in injuryLower) {
+            if (contra.any((c) => c.toString().toLowerCase() == injury)) {
+              return false;
+            }
+          }
+        }
+      }
+
+      return true;
+    }).toList();
 
     // Sort: compounds first, then by priority_tier, then foundational first
     results.sort((a, b) {
