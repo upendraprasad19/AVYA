@@ -74,6 +74,35 @@ class WorkoutRepository {
   final WorkoutScheduleService _schedule = WorkoutScheduleService.instance;
   final HiveService _hive = HiveService.instance;
 
+  // ── Secondary date index (D7) ────────────────────────────────
+  //
+  // Lazy-built map from YYYY-MM-DD → list of exlog_* Hive keys.
+  // Built once on first fallback miss; nulled out on every exlog write.
+  // Eliminates the O(n) full-box scan in the getExerciseLogsForDate
+  // fallback path for legacy entries that predate the primary index.
+  Map<String, List<String>>? _exlogDateIndex;
+
+  void _invalidateExlogDateIndex() {
+    _exlogDateIndex = null;
+  }
+
+  Map<String, List<String>> _ensureExlogDateIndex() {
+    final cached = _exlogDateIndex;
+    if (cached != null) return cached;
+    final byDate = <String, List<String>>{};
+    for (final key in _hive.workoutBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('exlog_')) continue;
+      final raw = _hive.workoutBox.get(key);
+      if (raw is! Map) continue;
+      final dateStr = raw['date'] as String?;
+      if (dateStr == null) continue;
+      byDate.putIfAbsent(dateStr, () => []).add(k);
+    }
+    _exlogDateIndex = byDate;
+    return byDate;
+  }
+
   // ── Streak Calculation ───────────────────────────────────────
 
   /// Calculates the current workout streak by scanning the schedule backwards.
@@ -322,13 +351,15 @@ class WorkoutRepository {
       if (logs.isNotEmpty) return logs;
     }
 
-    // Fallback: full scan for pre-index data (before this optimisation).
+    // Fallback: pre-index data (legacy entries without exercise_log_index_$date).
+    // Use the lazily-built secondary date index instead of scanning the entire box.
+    final cachedKeys = _ensureExlogDateIndex()[dateStr] ?? const [];
     final logs = <Map<String, dynamic>>[];
-    for (final raw in _hive.workoutBox.values) {
+    for (final key in cachedKeys) {
+      final raw = _hive.workoutBox.get(key);
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       if (map['type'] != 'exercise_log') continue;
-      if (map['date'] != dateStr) continue;
       logs.add(map);
     }
 
@@ -955,6 +986,12 @@ class WorkoutRepository {
     }
 
     await _hive.workoutBox.put(logId, logMap);
+
+    // Invalidate the secondary date index (D7) so the next fallback
+    // read picks up the new key. The primary index written below means
+    // well-indexed callers never touch this path, but legacy-data callers
+    // would see stale results without this clear.
+    _invalidateExlogDateIndex();
 
     // Append to the per-date index for O(1) reads by
     // [getExerciseLogsForDate]. Multiple workouts on the same day all
