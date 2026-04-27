@@ -100,7 +100,7 @@ When free user approaches/hits the 10/day cap:
 
 ## SECTION 4 — THE RANK LADDER
 
-9-RUNG INDIAN NAVY LIFETIME LADDER:
+10-RUNG INDIAN NAVY LIFETIME LADDER:
 
 STREAK + WEEKS TRACK (sequential, ends at MCPO):
 1. Seaman 2nd Class (SEAMAN_2) — earned at induction
