@@ -977,6 +977,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_workout_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1053,11 +1056,17 @@ class SyncService {
             } catch (e) {
               debugPrint(
                   '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
+              try {
+                await _reportSyncFailure(opType: 'upsert_workout_log_sets', error: e);
+              } catch (_) {}
             }
           }
         }
       } catch (e) {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_exercise_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1088,6 +1097,9 @@ class SyncService {
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_schedule_completion', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1165,11 +1177,17 @@ class SyncService {
               }, onConflict: 'id');
             } catch (itemErr) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
+              try {
+                await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
+              } catch (_) {}
             }
           }
         }
       } catch (e) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_nutrition_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1225,6 +1243,9 @@ class SyncService {
           }, onConflict: 'id');
         } catch (e) {
           debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
+          try {
+            await _reportSyncFailure(opType: 'upsert_sleep_log_chat', error: e);
+          } catch (_) {}
         }
       }
     } catch (e) {
@@ -1266,6 +1287,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_weight_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1292,6 +1316,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncMeasurements] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_body_measurement', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1318,6 +1345,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncSleepLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_sleep_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1346,6 +1376,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncStepsLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_daily_steps', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1371,6 +1404,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncUrineColorLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_urine_color_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1393,6 +1429,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncWaterLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_water_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1416,6 +1455,9 @@ class SyncService {
         }, onConflict: 'user_id,week_start');
       } catch (e) {
         debugPrint('[SyncService._syncStreaks] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_streak', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1724,6 +1766,9 @@ class SyncService {
               '[SyncService._syncCustomItems] exercise '
               '"${payload['name']}" key=$key: $e',
             );
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_exercise', error: e);
+            } catch (_) {}
           }
         } else if (key.startsWith('custom_food_')) {
           final payload = _projectCustomFood(raw, userId);
@@ -1742,6 +1787,9 @@ class SyncService {
               '[SyncService._syncCustomItems] food '
               '"${payload['name']}" key=$key: $e',
             );
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_food', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -1758,6 +1806,9 @@ class SyncService {
                 .upsert(_projectCustomExercise(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_exercise_legacy', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -1770,6 +1821,9 @@ class SyncService {
                 .upsert(_projectCustomFood(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy food: $e');
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_food_legacy', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -2741,6 +2795,9 @@ class SyncService {
             }, onConflict: 'id');
           } catch (exErr) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
+            try {
+              await _reportSyncFailure(opType: 'upsert_template_exercise', error: exErr);
+            } catch (_) {}
           }
         }
       } catch (e) {
