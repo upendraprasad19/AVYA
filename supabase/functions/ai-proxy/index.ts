@@ -560,6 +560,32 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       }
     }
 
+    // ICBF_LOG embed-tag protocol — preserved from pre-CAPTAIN_MANUAL v48.
+    // These are technical instructions for the conversational logging system,
+    // NOT persona content. Manual covers identity/voice; this covers the
+    // app-specific tag protocol that the parser at line 101 consumes.
+    const ICBF_LOG_INSTRUCTIONS = `
+FITNESS DATA LOGGING — INSTANT:
+When the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:
+<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>
+Measurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54).
+Water: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml.
+RULES:
+- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions.
+- The tag is stripped server-side — do not mention it in your visible response.
+- One tag per response maximum.
+
+WORKOUT LOGGING — MULTI-TURN:
+- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet.
+- If user provides exercise details, parse them and emit:
+<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>
+Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).
+`;
+
     // ── Build system prompt ───────────────────────────────────────
     // Task A2 (APK Test #4, 2026-04-27): replaced the old generic
     // "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness
@@ -569,19 +595,25 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // _shared/captain_manual.ts. The Manual is the single source of truth
     // for coach identity, voice, and operational rules.
     //
-    // Assemble in the spec'd order: CAPTAIN_MANUAL → [3] coach_memory →
-    // snapshot → [Phase B] retrieval. The coach_memory block self-labels
-    // [3] in renderCoachMemoryBlock; empty value (private mode, no row,
-    // or non-chat channel) is dropped by the truthy check.
+    // A3 (APK Test #4, 2026-04-27): restored ICBF_LOG_INSTRUCTIONS as a
+    // separate constant after CAPTAIN_MANUAL. The tag protocol is technical,
+    // not persona — the parser at line 101 still consumes these tags but v49
+    // dropped the instructions, silently breaking conversational logging.
+    //
+    // Assemble in the spec'd order: CAPTAIN_MANUAL → ICBF_LOG_INSTRUCTIONS
+    // → [3] coach_memory → snapshot → [Phase B] retrieval. The coach_memory
+    // block self-labels [3] in renderCoachMemoryBlock; empty value (private
+    // mode, no row, or non-chat channel) is dropped by the truthy check.
     //
     // Size envelope (not separately validated — size is bounded by
     // construction):
     //   CAPTAIN_MANUAL            ≈ 4–5 KB
+    //   ICBF_LOG_INSTRUCTIONS     ≈ 1.5 KB
     //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
     //   snapshot_json             ≤ 10 KB (input check at line 412)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
-    // Total ceiling ≈ 18 KB, well under Gemini 2.5 Flash context limit.
-    const promptParts: string[] = [CAPTAIN_MANUAL];
+    // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
+    const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];
     if (coachMemoryBlock) promptParts.push(coachMemoryBlock);
     if (snapshot_json) {
       promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
