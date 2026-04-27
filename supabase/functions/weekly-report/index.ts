@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
+import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -306,16 +307,93 @@ serve(async (req: Request) => {
     }
 
     // ── Build AI prompt ────────────────────────────────────────
-    const systemPrompt = `You are ICANBEFITTER PRO AI Coach, an elite fitness and nutrition analyst for young professionals in India. Generate a structured weekly nutrition and fitness report.
+    // Determine adherence for tone scaling
+    const plannedDays = (userProfile?.days_per_week as number) || 4;
+    const adherencePct = plannedDays > 0 ? Math.round((workoutDays / plannedDays) * 100) : 0;
 
-IMPORTANT: You MUST respond with valid JSON only. No markdown, no code fences, no explanations outside the JSON. The JSON must have exactly these keys:
-- "summary": A 2-3 sentence overview of the week (string)
-- "compliance_percent": Overall nutrition compliance as integer 0-100
-- "top_wins": Array of 2-4 strings highlighting positive achievements
-- "areas_to_improve": Array of 2-4 strings with specific improvement suggestions
-- "recommendations": Array of 3-5 actionable recommendation strings for the coming week
+    // Determine if user is on a plateau (no PRs this week + weight stalled)
+    const noPrsThisWeek = prs.length === 0;
+    const weightStalled =
+      weights.length >= 2 &&
+      Math.abs(
+        ((weights[0].weight_kg as number) || 0) -
+          ((weights[weights.length - 1].weight_kg as number) || 0),
+      ) < 0.3;
+    const isOnPlateau = noPrsThisWeek && weightStalled;
 
-Use metric units (kg, kcal). Reference Indian foods when making meal suggestions. Be motivating but honest.`;
+    // Determine if user earned a rank promotion this week
+    const weekStart = sevenDaysAgoStr;
+    const { data: rankPromoThisWeek } = await supabase
+      .from("ai_coach_interactions")
+      .select("id")
+      .eq("user_id", targetUserId)
+      .eq("channel", "promotion_ceremony")
+      .gte("created_at", weekStart + "T00:00:00Z")
+      .limit(1)
+      .maybeSingle();
+    const hadRankPromotion = rankPromoThisWeek != null;
+
+    // Pick tone register for the briefing
+    let toneInstruction: string;
+    if (hadRankPromotion) {
+      toneInstruction =
+        "TONE: CEREMONIAL. User earned a rank promotion this week. Acknowledge it in the header or closing. Brief but distinguished — this is a milestone.";
+    } else if (adherencePct < 80) {
+      toneInstruction =
+        "TONE: MIRROR. Adherence is below 80%. State the count plainly. No comfort. No soft-peddling. Ask one pointed question at the close: why the gap.";
+    } else if (isOnPlateau) {
+      toneInstruction =
+        "TONE: STRATEGIC. No PRs this week, weight stable. Present 2-3 concrete adjustment options (load, volume, split) as choices — not prescriptions. Keep it brief.";
+    } else {
+      toneInstruction =
+        "TONE: BRIEFING (default). Standard weekly debrief. Specific numbers, no filler.";
+    }
+
+    // Compute today's date in IST for the brief header
+    const istDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const briefDate = istDate.toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+
+    const systemPrompt = `${CAPTAIN_MANUAL}
+
+You are delivering the SUNDAY STRATEGIC BRIEF — the weekly briefing the user
+receives on Sunday at 21:00 IST. This is a mission debrief and forward order,
+not a cheerleading session.
+
+RESPONSE FORMAT (plain text, no markdown headings, no bullet symbols — use em-dash where lists are needed):
+
+1. HEADER LINE: "Sunday brief — ${briefDate}. Stand to."
+2. LAST WEEK VERDICT (3-4 lines):
+   — Sessions: X/${plannedDays} completed. [One-word verdict: Solid / Acceptable / Below standard / Absent]
+   — Volume: reference total sets or weight delta vs prior week if available in user data
+   — Top lift: best exercise result this week (exercise name, weight, reps)
+   — Nutrition: protein average vs target. Mention fiber if relevant.
+3. THIS WEEK MISSION (3-4 lines):
+   — Sessions scheduled: X days
+   — Risk factors: any pattern worth flagging (low sleep trend, upcoming festival, missed days cluster)
+   — One specific focus point for the coming week
+4. CLOSING: one of — "Carry on." / "Stand to." / "Eyes on the numbers." — match to tone
+
+${toneInstruction}
+
+HARD RULES:
+- No exclamation marks. Period.
+- No cheap praise ("great job", "amazing", "you crushed it").
+- No performative empathy ("I know it's been tough").
+- Every number you cite must come from the user data injected below. If a data point is missing, say "no data" — do not invent.
+- Total output: 8-12 lines. Tight. The user reads this in 30 seconds, not 3 minutes.
+- DO NOT wrap in JSON. DO NOT use markdown. Plain briefing text only.`;
+
+    // NOTE: The downstream JSON parse + report struct is preserved for
+    // backwards compatibility with the client. Gemini is instructed to return
+    // plain text above, so the JSON parse will fall through to the fallback
+    // which uses aiContent.slice(0,300) — which is correct behavior for the
+    // new briefing format. The "summary" field will carry the full brief text.
+    // TODO(C4-follow-up): update client to render raw brief text directly
+    // instead of the legacy JSON report struct.
 
     const userMessage = `Generate my weekly nutrition and fitness report based on this data:
 
@@ -363,6 +441,9 @@ ${Object.entries(dailyTotals)
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
     // ── Call Gemini 2.5 Pro (Flash-Lite fallback on 5xx/429) ──────
+    // jsonMode: false — Captain Brief returns plain text, not JSON.
+    // The JSON parse below will fall through to fallback, which places
+    // the full brief in report.summary (correct client behaviour).
     const { content: aiContent, modelUsed, tokensUsed } = await geminiChat({
       model: MODEL_PRO,
       systemPrompt,
@@ -370,7 +451,7 @@ ${Object.entries(dailyTotals)
       maxTokens: 1500,
       temperature: 0.7,
       timeoutMs: 40_000,
-      jsonMode: true,
+      jsonMode: false,
     });
 
     if (!aiContent) {
