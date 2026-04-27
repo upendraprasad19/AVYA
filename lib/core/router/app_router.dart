@@ -24,6 +24,8 @@ import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart'
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
+import 'package:icanbefitter/features/ai_coach/screens/induction_screen.dart';
+import 'package:icanbefitter/features/ai_coach/screens/muster_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
@@ -256,6 +258,18 @@ class AppRouter {
         },
       ),
 
+      // ── Captain's induction + muster (full-screen, no tab bar) ───────────
+      GoRoute(
+        path: '/coach/induction',
+        name: 'coachInduction',
+        builder: (context, state) => const InductionScreen(),
+      ),
+      GoRoute(
+        path: '/coach/muster',
+        name: 'coachMuster',
+        builder: (context, state) => const MusterScreen(),
+      ),
+
       // ── Main shell with 5 tabs ────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -448,12 +462,20 @@ class AppRouter {
     // bouncing the user back to /onboarding every tap.
     final isOnOnboarding = state.matchedLocation.startsWith('/onboarding') ||
         state.matchedLocation.startsWith('/plan-generation');
+    // Induction + muster are post-auth, pre-home full-screen flows.
+    // Let them self-navigate without redirect interference.
+    final isOnCoachInduction =
+        state.matchedLocation.startsWith('/coach/induction') ||
+        state.matchedLocation.startsWith('/coach/muster');
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;
 
     // Let the post-auth gate handle its own branching.
     if (isOnRestoring) return null;
+
+    // Let induction/muster handle their own navigation.
+    if (isOnCoachInduction) return null;
 
     // Guard against Hive not yet initialized (startup race).
     if (!HiveService.instance.isInitialized) return null;
