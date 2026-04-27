@@ -148,6 +148,42 @@ class AiCoachRepository {
       // with knowledge of current exercise, set#, weight, reps, RPE history.
       // ~100-150 bytes when present; drops early in _compactContext (null = 0 bytes).
       'active_workout': ActiveWorkoutPersistence.readState(),
+
+      // APK Test #4 / A8: induction commitment + 5-question muster answers.
+      // Plan B writes these on user induction (3-message intro + I COMMIT
+      // button + 5-question interview). A8 exposes them so Captain Manual §2
+      // (Lt Cdr Contract recall) and §10.1 idea #1 (why-now anchor recall)
+      // have data the moment Plan B ships. All null-safe for un-inducted users.
+      // ~100-200 bytes when present; 0 bytes (null/false/empty) until Plan B.
+      ..._getInductionAndMusterKeys(),
+    };
+  }
+
+  /// Reads induction commitment + 5-question muster answers from coachBox.
+  /// Returns 9 null-safe keys. All keys default to null/false/empty when
+  /// the user has not yet completed Plan B's induction flow.
+  Map<String, dynamic> _getInductionAndMusterKeys() {
+    final coach = _hive.coachBox;
+
+    final committedAt = coach.get('committed_at') as String?;
+    int? daysSinceCommitment;
+    if (committedAt != null) {
+      final dt = DateTime.tryParse(committedAt);
+      if (dt != null) daysSinceCommitment = DateTime.now().difference(dt).inDays;
+    }
+
+    return {
+      'committed_at': committedAt,
+      'committed_to_lt_cdr': (coach.get('committed_to_lt_cdr') as bool?) ?? false,
+      'days_since_commitment': daysSinceCommitment,
+      'why_now': coach.get('why_now') as String?,
+      'definition_of_winning': coach.get('definition_of_winning') as String?,
+      'known_injuries':
+          (coach.get('known_injuries') as List?) ?? const <String>[],
+      'typical_wake_time': coach.get('typical_wake_time') as String?,
+      'preferred_workout_time': coach.get('preferred_workout_time') as String?,
+      'body_part_priorities':
+          (coach.get('body_part_priorities') as List?) ?? const <String>[],
     };
   }
 

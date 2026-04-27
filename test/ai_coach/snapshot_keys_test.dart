@@ -620,4 +620,65 @@ void main() {
       await ActiveWorkoutPersistence.clearState();
     });
   });
+
+  // APK Test #4 / A8: induction commitment + 5-question muster answer keys.
+  // Plan B will write these on user induction (3-message intro + I COMMIT
+  // button + 5-question interview). A8 exposes them so Captain Manual §2
+  // (Lt Cdr Contract recall) and §10.1 idea #1 (why-now anchor recall) have
+  // data the moment Plan B ships.
+  group('induction + muster keys', () {
+    test('all keys are null/false/empty for un-inducted user', () async {
+      await HiveService.instance.coachBox.clear();
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['committed_at'], isNull);
+      expect(ctx['committed_to_lt_cdr'], false);
+      expect(ctx['days_since_commitment'], isNull);
+      expect(ctx['why_now'], isNull);
+      expect(ctx['definition_of_winning'], isNull);
+      expect(ctx['known_injuries'], isEmpty);
+      expect(ctx['typical_wake_time'], isNull);
+      expect(ctx['preferred_workout_time'], isNull);
+      expect(ctx['body_part_priorities'], isEmpty);
+    });
+
+    test('committed_at + days_since_commitment after recordCommitment-like write',
+        () async {
+      final fiveDaysAgo =
+          DateTime.now().subtract(const Duration(days: 5)).toIso8601String();
+      await HiveService.instance.coachBox.put('committed_at', fiveDaysAgo);
+      await HiveService.instance.coachBox.put('committed_to_lt_cdr', true);
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['committed_at'], fiveDaysAgo);
+      expect(ctx['committed_to_lt_cdr'], true);
+      expect(ctx['days_since_commitment'], 5);
+    });
+
+    test('muster answers round-trip', () async {
+      await HiveService.instance.coachBox.put('why_now', 'wedding in October');
+      await HiveService.instance.coachBox.put(
+          'definition_of_winning', 'feel strong');
+      await HiveService.instance.coachBox
+          .put('known_injuries', ['lower back', 'right knee']);
+      await HiveService.instance.coachBox.put('typical_wake_time', '06:30');
+      await HiveService.instance.coachBox
+          .put('preferred_workout_time', '07:00');
+      await HiveService.instance.coachBox
+          .put('body_part_priorities', ['back', 'shoulders']);
+
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['why_now'], 'wedding in October');
+      expect(ctx['definition_of_winning'], 'feel strong');
+      expect(ctx['known_injuries'], ['lower back', 'right knee']);
+      expect(ctx['typical_wake_time'], '06:30');
+      expect(ctx['preferred_workout_time'], '07:00');
+      expect(ctx['body_part_priorities'], ['back', 'shoulders']);
+    });
+
+    test('days_since_commitment handles malformed committed_at gracefully',
+        () async {
+      await HiveService.instance.coachBox.put('committed_at', 'not-a-date');
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['days_since_commitment'], isNull);
+    });
+  });
 }
