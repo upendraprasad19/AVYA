@@ -906,21 +906,42 @@ class SyncService {
         .from('weight_logs')
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
-        .listen((rows) async {
-          for (final row in rows) {
-            final date = row['date'] as String? ?? '';
-            final key = 'weight_$date';
-            if (_hive.healthBox.get(key) == null) {
-              await _hive.healthBox.put(key, {
-                'type': 'weight_log',
-                'date': date,
-                'weight_kg': row['weight_kg'],
-                'created_at': row['created_at'],
-                'source': 'realtime',
-              });
+        .listen(
+          (rows) async {
+            try {
+              for (final row in rows) {
+                final date = row['date'] as String? ?? '';
+                final key = 'weight_$date';
+                if (_hive.healthBox.get(key) == null) {
+                  await _hive.healthBox.put(key, {
+                    'type': 'weight_log',
+                    'date': date,
+                    'weight_kg': row['weight_kg'],
+                    'created_at': row['created_at'],
+                    'source': 'realtime',
+                  });
+                }
+              }
+            } catch (e, st) {
+              debugPrint('[realtime] weight_logs handler failed: $e\n$st');
+              try {
+                await _reportSyncFailure(
+                  opType: 'realtime_handler_weight_logs',
+                  error: e,
+                );
+              } catch (_) {
+                // ignore: avoid_catches_without_on_clauses
+              }
+              // do NOT rethrow — keep stream alive
             }
-          }
-        });
+          },
+          onError: (e, st) {
+            debugPrint('[realtime] weight_logs stream error: $e\n$st');
+            // ignore: discarded_futures
+            _reportSyncFailure(opType: 'realtime_stream_weight_logs', error: e)
+                .catchError((_) {});
+          },
+        );
   }
 
   /// Cancels realtime subscriptions (call on app background or logout).
