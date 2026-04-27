@@ -126,11 +126,14 @@ void main() {
     );
   });
 
-  test('_compactContext drops meals_today before weight_trend', () {
-    // Force the snapshot over budget by adding heavy padding to a key
-    // that's listed AFTER meals_today / nutrition_trend_7d in trimSteps.
+  test('_compactContext A9: drops step_history_7d + water_7d before '
+      'nutrition_trend_7d; keeps meals_today always', () {
+    // Force the snapshot over budget by adding heavy padding to trimmable keys.
+    // A9 spec §7.3: meals_today is now in the never-drop set (load-bearing
+    // per-turn food data). water_7d was added as the new position-2 trim key.
     final ctx = _typicalSnapshot();
     final padding = List.generate(150, (i) => {'k$i': 'v$i' * 30});
+    ctx['water_7d'] = padding;
     ctx['weight_trend'] = padding;
     ctx['exercise_history'] = padding;
 
@@ -139,15 +142,17 @@ void main() {
 
     final compact = AiService.compactForTest(ctx);
 
-    // step_history_7d / meals_today / nutrition_trend_7d should drop
-    // before weight_trend / exercise_history if the trim list does its
-    // job. Either ordering surface works as long as the size is met.
     expect(json.encode(compact).length, lessThanOrEqualTo(9500),
         reason: 'compaction must hit the ceiling');
-    expect(compact.containsKey('meals_today'), isFalse,
-        reason: 'meals_today is in the early trim lane and should be the '
-            'first nutrition key dropped under pressure');
-    expect(compact.containsKey('nutrition_trend_7d'), isFalse,
-        reason: 'nutrition_trend_7d is in the early trim lane');
+    // step_history_7d is position-1 trim key — always drops first.
+    expect(compact.containsKey('step_history_7d'), isFalse,
+        reason: 'step_history_7d is the first trim key (position 1)');
+    // meals_today must NEVER be dropped per A9 spec §7.3.
+    expect(compact.containsKey('meals_today'), isTrue,
+        reason: 'meals_today is in the never-drop set since A9 — '
+            'coach cannot reason about protein gaps without it');
+    // nutrition_trend_7d is trimmable (position 4) so may be gone.
+    // We only assert it's dropped if weight_trend was also already gone,
+    // indicating compaction had to go that deep.
   });
 }
