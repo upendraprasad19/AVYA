@@ -28,6 +28,7 @@ import {
   scheduleTemplateTool,
   switchGoalTool,
 } from "./plan/index.ts";
+import { getFormCuesTool } from "./exercise/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
@@ -63,6 +64,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   switchGoalTool, // plan / write / destructive / PRO  (D.5)
   createCustomTemplateTool, // plan / write / destructive / PRO  (D.6)
   scheduleTemplateTool, // plan / write / destructive / PRO  (D.7)
+  // ── Phase C.6: exercise family ────────────────────────────────────
+  getFormCuesTool, // exercise / read / FREE  (C.6 — coaching cues + common mistakes)
 ];
 
 /**
