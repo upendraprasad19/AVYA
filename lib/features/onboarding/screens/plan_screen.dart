@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/onboarding_provider.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 
 /// Final step (3/3) of the handoff onboarding flow — plan preview +
 /// commit (`design_handoff_wardroom/src/screens/onboarding.jsx`
@@ -503,7 +504,8 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         });
         return;
       }
-      context.go('/home');
+      final alreadyInducted = InductionService.instance.inductionCompleted;
+      context.go(alreadyInducted ? '/home' : '/coach/induction');
     } catch (e) {
       if (!mounted) return;
       setState(() {

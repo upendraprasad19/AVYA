@@ -37,6 +37,7 @@ import 'package:icanbefitter/features/profile/screens/notifications_screen.dart'
 import 'package:icanbefitter/features/profile/screens/notification_settings_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 
 /// GoRouter configuration with auth redirect logic.
 ///
@@ -474,8 +475,17 @@ class AppRouter {
     // Let the post-auth gate handle its own branching.
     if (isOnRestoring) return null;
 
-    // Let induction/muster handle their own navigation.
-    if (isOnCoachInduction) return null;
+    // Idempotency: already-inducted users landing on /coach/induction or
+    // /coach/muster (deep-link, hot reload, back-navigation) get bounced to
+    // /home. Un-inducted users pass through so InductionScreen/MusterScreen
+    // can run their flows.
+    if (isOnCoachInduction) {
+      if (HiveService.instance.isInitialized &&
+          InductionService.instance.inductionCompleted) {
+        return '/home';
+      }
+      return null;
+    }
 
     // Guard against Hive not yet initialized (startup race).
     if (!HiveService.instance.isInitialized) return null;

@@ -108,4 +108,25 @@ void main() {
       );
     });
   });
+
+  group('REPORT FOR DUTY routing', () {
+    test('navigates to /coach/induction for un-inducted user', () {
+      // coachBox is cleared in setUp — inductionCompleted is false
+      expect(InductionService.instance.inductionCompleted, false);
+      final destination = InductionService.instance.inductionCompleted
+          ? '/home'
+          : '/coach/induction';
+      expect(destination, '/coach/induction');
+    });
+
+    test('navigates to /home for already-inducted user', () async {
+      await InductionService.instance.recordCommitment();
+      await InductionService.instance.completeMuster();
+      expect(InductionService.instance.inductionCompleted, true);
+      final destination = InductionService.instance.inductionCompleted
+          ? '/home'
+          : '/coach/induction';
+      expect(destination, '/home');
+    });
+  });
 }
