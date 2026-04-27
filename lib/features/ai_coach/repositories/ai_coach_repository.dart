@@ -109,6 +109,16 @@ class AiCoachRepository {
       ..._computeDataWindowGrounding(),
       'nutrition_logs_count_7d': _countNutritionLogsLast7Days(),
       'sleep_logs_count_7d': _countSleepLogsLast7Days(),
+
+      // APK Test #4 / A4: workout schedule snapshot keys.
+      // Closes audit A2 (yesterday_workout) and OBS-1 gap (today's session
+      // contents visible to coach without user having to repeat them).
+      // week_lookahead gives the coach full context for schedule questions
+      // ("what's my plan this week?", "when's my next leg day?").
+      // ~150-400 bytes typical (7 entries × 4 fields each).
+      'today_workout': _getTodayWorkout(),
+      'yesterday_workout': _getYesterdayWorkout(),
+      'week_lookahead': _getWeekLookahead(),
     };
   }
 
@@ -1219,5 +1229,75 @@ class AiCoachRepository {
       count++;
     }
     return count;
+  }
+
+  // ---------------------------------------------------------------------------
+  // APK Test #4 / A4 — Workout schedule snapshot helpers
+  // ---------------------------------------------------------------------------
+
+  /// Returns today's scheduled workout as {type, status, exercises[]} or null
+  /// if no `schedule_<today>` key exists in workoutBox (pure rest day / no
+  /// plan seeded yet).
+  ///
+  /// Falls back to `workout_name` when the `type` field is absent (some legacy
+  /// schedule entries were written without an explicit `type` key).
+  Map<String, dynamic>? _getTodayWorkout() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final schedule = _hive.workoutBox.get('schedule_$today');
+    if (schedule is! Map) return null;
+    return {
+      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+      'status': (schedule['status'] ?? 'pending') as String,
+      'exercises': (schedule['exercises'] as List?) ?? const [],
+    };
+  }
+
+  /// Returns yesterday's scheduled workout as {type, status} or null if no
+  /// `schedule_<yesterday>` key exists. Omits the exercises list (yesterday's
+  /// session contents are less useful than the status — completed/skipped).
+  Map<String, dynamic>? _getYesterdayWorkout() {
+    final yesterday = DateTime.now()
+        .subtract(const Duration(days: 1))
+        .toIso8601String()
+        .substring(0, 10);
+    final schedule = _hive.workoutBox.get('schedule_$yesterday');
+    if (schedule is! Map) return null;
+    return {
+      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+      'status': (schedule['status'] ?? 'unknown') as String,
+    };
+  }
+
+  /// Returns the 7-day lookahead starting today (today + next 6 days).
+  ///
+  /// Each entry: {day: 'Mon', date: '2026-04-28', type: 'PUSH A', status: 'pending'}.
+  /// Days without a `schedule_<date>` key are returned as REST entries
+  /// ({type: 'REST', status: 'rest'}) — NOT null — so the coach always sees
+  /// a complete 7-day picture without gaps.
+  List<Map<String, dynamic>> _getWeekLookahead() {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final results = <Map<String, dynamic>>[];
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().add(Duration(days: i));
+      final dateStr = date.toIso8601String().substring(0, 10);
+      final dayName = dayNames[(date.weekday - 1) % 7];
+      final schedule = _hive.workoutBox.get('schedule_$dateStr');
+      if (schedule is Map) {
+        results.add({
+          'day': dayName,
+          'date': dateStr,
+          'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+          'status': (schedule['status'] ?? 'pending') as String,
+        });
+      } else {
+        results.add({
+          'day': dayName,
+          'date': dateStr,
+          'type': 'REST',
+          'status': 'rest',
+        });
+      }
+    }
+    return results;
   }
 }
