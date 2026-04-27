@@ -1515,6 +1515,47 @@ class SyncService {
   /// waiting for the next weekly sync. Catches its own errors.
   Future<void> syncCustomItemsNow() => _syncCustomItems();
 
+  /// Upserts coach_memory induction columns to Supabase.
+  /// Only non-null Hive fields are included — preserves partial induction
+  /// state without overwriting cloud columns with null when the user hasn't
+  /// yet completed the muster. Uses migration 042 columns.
+  /// Fire-and-forget per CLAUDE.md §15.
+  Future<void> syncCoachMemoryNow(String userId) async {
+    try {
+      final coach = _hive.coachBox;
+      final payload = <String, dynamic>{
+        'user_id': userId,
+      };
+      // Helper: only include when non-null — preserves partial induction state.
+      void putIfPresent(String key) {
+        final v = coach.get(key);
+        if (v != null) payload[key] = v;
+      }
+      putIfPresent('committed_at');
+      final ltcdr = coach.get('committed_to_lt_cdr');
+      if (ltcdr is bool) payload['committed_to_lt_cdr'] = ltcdr;
+      putIfPresent('induction_completed_at');
+      putIfPresent('why_now');
+      putIfPresent('definition_of_winning');
+      putIfPresent('known_injuries');
+      putIfPresent('typical_wake_time');
+      putIfPresent('preferred_workout_time');
+      putIfPresent('body_part_priorities');
+
+      await _supabase.client
+          .from('coach_memory')
+          .upsert(payload, onConflict: 'user_id')
+          .select()
+          .single();
+    } catch (e, st) {
+      debugPrint('[SyncService.syncCoachMemoryNow] coach_memory upsert failed: $e');
+      unawaited(_reportSyncFailure(
+        opType: 'upsert_coach_memory_induction',
+        error: e,
+      ));
+    }
+  }
+
   /// Pushes user-created custom foods and exercises to Supabase
   /// for community contribution.
   ///
