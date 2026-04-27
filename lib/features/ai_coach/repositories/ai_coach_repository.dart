@@ -988,39 +988,58 @@ class AiCoachRepository {
   /// Days without any nlog_* row are zero-filled so the model sees a
   /// stable 7-element timeline (and can detect the difference between
   /// "logged 0" and "didn't log").
+  ///
+  /// Refactored to single-pass O(N) bucketing (was O(7N) — 7 separate
+  /// iterations over nutritionBox.values).
   List<Map<String, dynamic>> _getNutritionTrend7d() {
     final nutritionBox = _hive.nutritionBox;
-    final result = <Map<String, dynamic>>[];
+    final now = DateTime.now();
 
-    for (var i = 0; i < 7; i++) {
-      final d = DateTime.now().subtract(Duration(days: i));
-      final dateStr =
-          '${d.year}-${d.month.toString().padLeft(2, "0")}-'
-          '${d.day.toString().padLeft(2, "0")}';
+    // Build the set of 7 date strings we care about so we can ignore
+    // anything outside the window in O(1) per record.
+    final windowDates = <String>[
+      for (var i = 0; i < 7; i++)
+        () {
+          final d = now.subtract(Duration(days: i));
+          return '${d.year}-${d.month.toString().padLeft(2, "0")}-'
+              '${d.day.toString().padLeft(2, "0")}';
+        }(),
+    ];
+    final windowSet = windowDates.toSet();
 
-      var calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
-      for (final raw in nutritionBox.values) {
-        if (raw is! Map) continue;
-        final log = Map<String, dynamic>.from(raw);
-        if (log['date'] != dateStr) continue;
-        final id = log['id'] as String? ?? '';
-        if (!id.startsWith('nlog_')) continue;
-        calories += (log['total_calories'] as num?)?.toInt() ?? 0;
-        protein += (log['total_protein'] as num?)?.toInt() ?? 0;
-        carbs += (log['total_carbs'] as num?)?.toInt() ?? 0;
-        fat += (log['total_fat'] as num?)?.toInt() ?? 0;
-        fiber += (log['total_fiber'] as num?)?.toInt() ?? 0;
-      }
-      result.add({
-        'date': dateStr,
-        'calories': calories,
-        'protein_g': protein,
-        'carbs_g': carbs,
-        'fat_g': fat,
-        'fiber_g': fiber,
-      });
+    // Single pass: bucket every nlog_* record by date.
+    final byDate = <String, Map<String, int>>{};
+    for (final raw in nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      final id = log['id'] as String? ?? '';
+      if (!id.startsWith('nlog_')) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null || !windowSet.contains(dateStr)) continue;
+
+      final bucket = byDate.putIfAbsent(
+        dateStr,
+        () => {'calories': 0, 'protein_g': 0, 'carbs_g': 0, 'fat_g': 0, 'fiber_g': 0},
+      );
+      bucket['calories'] = bucket['calories']! + ((log['total_calories'] as num?)?.toInt() ?? 0);
+      bucket['protein_g'] = bucket['protein_g']! + ((log['total_protein'] as num?)?.toInt() ?? 0);
+      bucket['carbs_g'] = bucket['carbs_g']! + ((log['total_carbs'] as num?)?.toInt() ?? 0);
+      bucket['fat_g'] = bucket['fat_g']! + ((log['total_fat'] as num?)?.toInt() ?? 0);
+      bucket['fiber_g'] = bucket['fiber_g']! + ((log['total_fiber'] as num?)?.toInt() ?? 0);
     }
-    return result;
+
+    // Reconstruct the 7-element newest-first list, zero-filling gaps.
+    return [
+      for (final dateStr in windowDates)
+        {
+          'date': dateStr,
+          'calories': byDate[dateStr]?['calories'] ?? 0,
+          'protein_g': byDate[dateStr]?['protein_g'] ?? 0,
+          'carbs_g': byDate[dateStr]?['carbs_g'] ?? 0,
+          'fat_g': byDate[dateStr]?['fat_g'] ?? 0,
+          'fiber_g': byDate[dateStr]?['fiber_g'] ?? 0,
+        },
+    ];
   }
 
   /// Test-only seam exposing _getMealsToday for unit tests that don't
