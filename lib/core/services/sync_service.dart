@@ -335,6 +335,9 @@ class SyncService {
         await pushSnapshot();
       } catch (e) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
+        try {
+          await _reportSyncFailure(opType: 'check_and_sync_snapshot', error: e);
+        } catch (_) {}
       }
 
       // Pull approved community foods/exercises.
@@ -359,6 +362,9 @@ class SyncService {
         _healthSyncCompleter!.complete();
       }
       debugPrint('[SyncService.checkAndSync] $e');
+      try {
+        await _reportSyncFailure(opType: 'check_and_sync', error: e);
+      } catch (_) {}
     }
   }
 
@@ -779,6 +785,9 @@ class SyncService {
       return RestoreResult.success();
     } catch (e) {
       debugPrint('[SyncService.restoreFromCloudForUser] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_from_cloud_for_user', error: e);
+      } catch (_) {}
       return RestoreResult.failed(e);
     }
   }
@@ -2904,6 +2913,9 @@ class SyncService {
         }
       } catch (e) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_workout_template', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -2966,6 +2978,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_templates', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2996,6 +3011,9 @@ class SyncService {
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_scheduled_workout', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -3031,6 +3049,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreScheduledWorkouts] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_scheduled_workouts', error: e);
+      } catch (_) {}
     }
   }
 
@@ -3059,6 +3080,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncSavedMeals] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_saved_meal', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -3095,6 +3119,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreSavedMeals] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_saved_meals', error: e);
+      } catch (_) {}
     }
   }
 
@@ -3116,6 +3143,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncUserPreferences] $e');
+      try {
+        await _reportSyncFailure(opType: 'upsert_user_preferences', error: e);
+      } catch (_) {}
     }
   }
 
@@ -3145,6 +3175,9 @@ class SyncService {
       await _hive.userBox.put('preferences', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_preferences', error: e);
+      } catch (_) {}
     }
   }
 
@@ -3173,6 +3206,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_coach_interaction', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -3208,6 +3244,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreCoachInteractions] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_coach_interactions', error: e);
+      } catch (_) {}
     }
   }
 
