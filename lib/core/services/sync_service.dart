@@ -426,28 +426,31 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncWorkoutLogs(userId),
-        _syncExerciseLogs(userId),
-        _syncScheduleCompletions(userId),
-        _syncNutritionLogs(userId),
-        _syncWeightLogs(userId),
-        _syncMeasurements(userId),
-        _syncSleepLogs(userId),
-        _syncStepsLogs(userId), // F20
-        _syncStreaks(userId),
-        _syncUserProfile(userId),
-        _syncUrineColorLogs(userId),
-        _syncWaterLogs(userId),
-        _syncWorkoutPlan(userId),
-        _syncUserProgress(userId),
-        // ── New sync gap methods ──
-        _syncWorkoutTemplates(userId),
-        _syncScheduledWorkouts(userId),
-        _syncSavedMeals(userId),
-        _syncUserPreferences(userId),
-        _syncCoachInteractions(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_workouts', _syncWorkoutLogs(userId)),
+          _safeRestoreOp('sync_exercises', _syncExerciseLogs(userId)),
+          _safeRestoreOp('sync_schedule_completions', _syncScheduleCompletions(userId)),
+          _safeRestoreOp('sync_nutrition', _syncNutritionLogs(userId)),
+          _safeRestoreOp('sync_weight', _syncWeightLogs(userId)),
+          _safeRestoreOp('sync_measurements', _syncMeasurements(userId)),
+          _safeRestoreOp('sync_sleep', _syncSleepLogs(userId)),
+          _safeRestoreOp('sync_steps', _syncStepsLogs(userId)), // F20
+          _safeRestoreOp('sync_streaks', _syncStreaks(userId)),
+          _safeRestoreOp('sync_user_profile', _syncUserProfile(userId)),
+          _safeRestoreOp('sync_urine', _syncUrineColorLogs(userId)),
+          _safeRestoreOp('sync_water', _syncWaterLogs(userId)),
+          _safeRestoreOp('sync_workout_plan', _syncWorkoutPlan(userId)),
+          _safeRestoreOp('sync_user_progress', _syncUserProgress(userId)),
+          // ── New sync gap methods ──
+          _safeRestoreOp('sync_templates', _syncWorkoutTemplates(userId)),
+          _safeRestoreOp('sync_scheduled_workouts', _syncScheduledWorkouts(userId)),
+          _safeRestoreOp('sync_saved_meals', _syncSavedMeals(userId)),
+          _safeRestoreOp('sync_preferences', _syncUserPreferences(userId)),
+          _safeRestoreOp('sync_coach_interactions', _syncCoachInteractions(userId)),
+        ],
+        eagerError: false,
+      );
 
       await _setTimestamp(_lastFullSyncKey);
     } catch (e) {
@@ -465,11 +468,14 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncWorkoutLogs(userId),
-        _syncExerciseLogs(userId),
-        _syncScheduleCompletions(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_workout_logs', _syncWorkoutLogs(userId)),
+          _safeRestoreOp('sync_exercise_logs', _syncExerciseLogs(userId)),
+          _safeRestoreOp('sync_schedule_completions', _syncScheduleCompletions(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline — will sync on next weekly sync.
       debugPrint('[SyncService.syncWorkoutData] $e');
@@ -487,10 +493,13 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncNutritionLogs(userId),
-        _syncWaterLogs(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_nutrition_logs', _syncNutritionLogs(userId)),
+          _safeRestoreOp('sync_water_logs', _syncWaterLogs(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline — will sync on next daily full sync.
       debugPrint('[SyncService.syncNutritionData] $e');
@@ -625,14 +634,17 @@ class SyncService {
   /// empty-Hive so we don't re-download GBs every launch.
   Future<void> restoreLightweightAlways(String userId) async {
     try {
-      await Future.wait([
-        _restoreUserProfile(userId),
-        _restoreUserProgress(userId),
-        _restoreCustomExercises(userId),
-        _restoreCustomFoods(userId),
-        _restoreWorkoutTemplates(userId),
-        _restoreUserPreferences(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
     }
@@ -649,30 +661,33 @@ class SyncService {
       // and storage per user is negligible (~1-2MB/year).
       const since = '2020-01-01T00:00:00Z';
 
-      await Future.wait([
-        _restoreWorkoutLogs(userId, since),
-        _restoreExerciseLogs(userId, since),
-        _restoreScheduleCompletions(userId, since),
-        _restoreCustomExercises(userId),
-        _restoreCustomFoods(userId),
-        _restoreWeightLogs(userId, since),
-        _restoreStepsLogs(userId, since), // F20
-        _restoreNutritionLogs(userId, since),
-        _restoreMeasurements(userId, since),
-        _restoreUserProfile(userId),
-        _restoreUserProgress(userId),
-        _restoreWorkoutPlan(userId),
-        _restoreWaterLogs(userId, since),
-        _restoreSleepLogs(userId, since),
-        _restoreStreaks(userId),
-        // ── New restore methods ──
-        _restoreWorkoutTemplates(userId),
-        _restoreScheduledWorkouts(userId, since),
-        _restoreSavedMeals(userId),
-        _restoreUserPreferences(userId),
-        _restoreCoachInteractions(userId, since),
-        _restoreCoachMemory(userId), // B7 — skip induction on returning device
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
+          _safeRestoreOp('exercise_logs', _restoreExerciseLogs(userId, since)),
+          _safeRestoreOp('schedule_completions', _restoreScheduleCompletions(userId, since)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
+          _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)), // F20
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
+          _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('streaks', _restoreStreaks(userId)),
+          // ── New restore methods ──
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
+          _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+          _safeRestoreOp('coach_interactions', _restoreCoachInteractions(userId, since)),
+          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
@@ -699,34 +714,40 @@ class SyncService {
 
       // Step A — profile + lightweight data
       if (_restoreCancelled) return RestoreResult.cancelled();
-      await Future.wait([
-        _restoreUserProfile(userId),
-        _restoreUserProgress(userId),
-        _restoreCustomExercises(userId),
-        _restoreCustomFoods(userId),
-        _restoreWorkoutTemplates(userId),
-        _restoreUserPreferences(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+        ],
+        eagerError: false,
+      );
 
       // Step B — bulk history
       if (_restoreCancelled) return RestoreResult.cancelled();
-      await Future.wait([
-        _restoreWorkoutLogs(userId, since),
-        _restoreExerciseLogs(userId, since),
-        _restoreScheduleCompletions(userId, since),
-        _restoreWeightLogs(userId, since),
-        _restoreStepsLogs(userId, since),
-        _restoreNutritionLogs(userId, since),
-        _restoreMeasurements(userId, since),
-        _restoreWorkoutPlan(userId),
-        _restoreWaterLogs(userId, since),
-        _restoreSleepLogs(userId, since),
-        _restoreStreaks(userId),
-        _restoreScheduledWorkouts(userId, since),
-        _restoreSavedMeals(userId),
-        _restoreCoachInteractions(userId, since),
-        _restoreCoachMemory(userId), // B7 — skip induction on returning device
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
+          _safeRestoreOp('exercise_logs', _restoreExerciseLogs(userId, since)),
+          _safeRestoreOp('schedule_completions', _restoreScheduleCompletions(userId, since)),
+          _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
+          _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)),
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
+          _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('streaks', _restoreStreaks(userId)),
+          _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
+          _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
+          _safeRestoreOp('coach_interactions', _restoreCoachInteractions(userId, since)),
+          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device
+        ],
+        eagerError: false,
+      );
 
       if (_restoreCancelled) return RestoreResult.cancelled();
       return RestoreResult.success();
@@ -775,11 +796,14 @@ class SyncService {
       final since =
           DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
 
-      await Future.wait([
-        _pullWeightLogs(userId, since),
-        _pullNutritionLogs(userId, since),
-        _pullMeasurements(userId, since),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('pull_weight', _pullWeightLogs(userId, since)),
+          _safeRestoreOp('pull_nutrition', _pullNutritionLogs(userId, since)),
+          _safeRestoreOp('pull_measurements', _pullMeasurements(userId, since)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline or error — silently skip.
       debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
@@ -1407,6 +1431,24 @@ class SyncService {
         error: error,
         retryCount: retryCount,
       );
+
+  /// Wraps a restore/sync future so one table failure cannot abort the others
+  /// in a [Future.wait] call.
+  ///
+  /// On failure the error is logged locally and reported to `client_errors`
+  /// via [_reportSyncFailure] with `opType = 'restore_<label>'`. The wrapper
+  /// always completes normally so that `eagerError: false` propagation still
+  /// works correctly (any remaining tasks in the wait list continue).
+  Future<void> _safeRestoreOp(String label, Future<void> task) async {
+    try {
+      await task;
+    } catch (e) {
+      debugPrint('[sync/restore] $label failed: $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_$label', error: e);
+      } catch (_) {}
+    }
+  }
 
   /// Fire-and-forget telemetry for a sync failure. Sends one row to
   /// `client_errors` via the `log-client-error` Edge Function so we stop
