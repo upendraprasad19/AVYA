@@ -101,6 +101,14 @@ class AiCoachRepository {
       // in _compactContext so they never push past the 9.5 KB ceiling.
       'meals_today': _getMealsToday(),
       'nutrition_trend_7d': _getNutritionTrend7d(),
+
+      // APK Test #4 / A3: anti-fabrication grounding keys.
+      // Captain Manual §8 references these to refuse history-beyond-window
+      // claims ("no data from last year — 8 days on roster").
+      // ~60-80 bytes. Dropped last in _compactContext (very small).
+      ..._computeDataWindowGrounding(),
+      'nutrition_logs_count_7d': _countNutritionLogsLast7Days(),
+      'sleep_logs_count_7d': _countSleepLogsLast7Days(),
     };
   }
 
@@ -1115,5 +1123,101 @@ class AiCoachRepository {
   /// Written by SyncService from the nightly rolling-context Edge Function.
   String _getFitnessSummary() {
     return _hive.coachBox.get('fitness_summary') as String? ?? '';
+  }
+
+  // ── Anti-fabrication grounding helpers (APK Test #4 / A3) ────────────────
+  //
+  // The Captain Manual §8 references these keys to refuse
+  // history-beyond-window claims ("no data from last year — 8 days on
+  // roster"). Without them the Manual's grounding rules have nothing to
+  // check against and the model can drift back into fabrication.
+  //
+  // Cost: one O(n) scan of workoutBox + nutritionBox + healthBox.
+  // Typical user has < 500 entries across all three. Negligible on-device.
+
+  /// Computes `data_window_days`, `first_workout_date`, and
+  /// `workout_logs_count` from workoutBox `wlog_*` rows.
+  ///
+  /// Returns `data_window_days: 0` and `first_workout_date: null` when
+  /// there are no workout logs (fresh user / pre-onboarding state).
+  Map<String, dynamic> _computeDataWindowGrounding() {
+    final box = _hive.workoutBox;
+    final wlogKeys =
+        box.keys.where((k) => k.toString().startsWith('wlog_')).toList();
+
+    if (wlogKeys.isEmpty) {
+      return {
+        'data_window_days': 0,
+        'first_workout_date': null,
+        'workout_logs_count': 0,
+      };
+    }
+
+    DateTime? earliestDate;
+    for (final key in wlogKeys) {
+      final log = box.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+      if (earliestDate == null || date.isBefore(earliestDate)) {
+        earliestDate = date;
+      }
+    }
+
+    if (earliestDate == null) {
+      // Keys exist but none had a parseable 'date' field — treat as 0.
+      return {
+        'data_window_days': 0,
+        'first_workout_date': null,
+        'workout_logs_count': wlogKeys.length,
+      };
+    }
+
+    final daysSince = DateTime.now().difference(earliestDate).inDays;
+    return {
+      'data_window_days': daysSince,
+      'first_workout_date': earliestDate.toIso8601String().substring(0, 10),
+      'workout_logs_count': wlogKeys.length,
+    };
+  }
+
+  /// Counts `nlog_*` rows in nutritionBox whose `date` field falls within
+  /// the last 7 days. Rows outside the window or with unparseable dates
+  /// are silently skipped.
+  int _countNutritionLogsLast7Days() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    int count = 0;
+    for (final key in _hive.nutritionBox.keys) {
+      if (!key.toString().startsWith('nlog_')) continue;
+      final log = _hive.nutritionBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count;
+  }
+
+  /// Counts `sleep_log_*` rows in healthBox whose `date` field falls within
+  /// the last 7 days. Rows outside the window or with unparseable dates
+  /// are silently skipped.
+  int _countSleepLogsLast7Days() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    int count = 0;
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('sleep_log_')) continue;
+      final log = _hive.healthBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count;
   }
 }
