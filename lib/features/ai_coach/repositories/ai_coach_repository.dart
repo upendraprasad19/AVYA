@@ -119,6 +119,13 @@ class AiCoachRepository {
       'today_workout': _getTodayWorkout(),
       'yesterday_workout': _getYesterdayWorkout(),
       'week_lookahead': _getWeekLookahead(),
+
+      // APK Test #4 / A5: full plan structure summary.
+      // Closes OBS-2 (coach was asking "what exercises are in your leg day?"
+      // even though the plan was generated locally and stored in Hive).
+      // Deduped by session name so PPL never emits PUSH A twice.
+      // ~200-600 bytes typical (3-6 unique sessions × 4-10 exercises each).
+      'current_plan_summary': _getCurrentPlanSummary(),
     };
   }
 
@@ -1299,5 +1306,77 @@ class AiCoachRepository {
       }
     }
     return results;
+  }
+
+  /// Returns a deduplicated view of all unique sessions scheduled in the
+  /// next 7 days (today + 6), with each session's exercise list.
+  ///
+  /// Shape:
+  /// ```
+  /// {
+  ///   'phase': int,
+  ///   'week': int,
+  ///   'days_per_week': int,
+  ///   'weekly_sessions': [
+  ///     {
+  ///       'name': 'PUSH A',
+  ///       'exercises': [
+  ///         {'name': 'Bench Press', 'sets': 4, 'reps': '8-10', 'weight': 60},
+  ///       ],
+  ///     },
+  ///   ],
+  /// }
+  /// ```
+  ///
+  /// Deduplication: uses session `type` (or `workout_name` fallback) as the
+  /// key. The first occurrence wins; duplicates (e.g. PUSH A on Tue + Fri)
+  /// are dropped so the coach sees one canonical PUSH A exercise list.
+  ///
+  /// REST days (no `schedule_<date>` key) are silently skipped.
+  /// Exercise fields are projected to {name, sets, reps, weight} only —
+  /// logging_type / rest_seconds / warmup_protocol don't belong in the
+  /// ~200-600 byte summary.
+  Map<String, dynamic> _getCurrentPlanSummary() {
+    final progress = (_hive.userBox.get('progress') as Map?) ?? const {};
+    final profile = (_hive.userBox.get('profile') as Map?) ?? const {};
+
+    final phase = (progress['phase'] as int?) ?? 1;
+    final week = (progress['week'] as int?) ?? 1;
+    final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+
+    // Iterate today + 6 days, dedup by session name (first occurrence wins).
+    final weeklySessionsMap = <String, Map<String, dynamic>>{};
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().add(Duration(days: i));
+      final dateStr = date.toIso8601String().substring(0, 10);
+      final schedule = _hive.workoutBox.get('schedule_$dateStr');
+      if (schedule is! Map) continue;
+
+      final type = (schedule['type'] ?? schedule['workout_name']) as String?;
+      if (type == null || type == 'REST') continue;
+      if (weeklySessionsMap.containsKey(type)) continue;
+
+      final exercises = ((schedule['exercises'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((ex) => <String, dynamic>{
+                'name': ex['name'],
+                'sets': ex['sets'],
+                'reps': ex['reps'],
+                'weight': ex['weight'],
+              })
+          .toList();
+
+      weeklySessionsMap[type] = {
+        'name': type,
+        'exercises': exercises,
+      };
+    }
+
+    return {
+      'phase': phase,
+      'week': week,
+      'days_per_week': daysPerWeek,
+      'weekly_sessions': weeklySessionsMap.values.toList(),
+    };
   }
 }
