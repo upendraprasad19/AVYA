@@ -76,12 +76,6 @@ class AiCoachRepository {
       'coaching_notes': _getCoachingNotes(),
       'coach_memory': _getCoachMemoryForContext(),
 
-      // APK Test #3 / Obs 1: rank context. Coach uses these for greeting
-      // and nudge copy ("Promoted to Leading Seaman" / "16 workouts to
-      // make Petty Officer"). ~50 bytes typical.
-      'current_rank': _getCurrentRankSnapshot(),
-      'weeks_until_next_rank': _getWeeksUntilNextRank(),
-
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
@@ -126,6 +120,23 @@ class AiCoachRepository {
       // Deduped by session name so PPL never emits PUSH A twice.
       // ~200-600 bytes typical (3-6 unique sessions × 4-10 exercises each).
       'current_plan_summary': _getCurrentPlanSummary(),
+
+      // APK Test #4 / A6: sleep, water, streak freezes, subscription, rank
+      // progression, cadence, and ETA to next rank promotion.
+      // Closes audit A1 (sleep_7d), A3 (streak_freezes), P2 (subscription).
+      // Total size: ~300-500 bytes typical. All null-safe with sensible defaults.
+      'sleep_7d': _getSleep7d(),
+      'water_7d': _getWater7d(),
+      'streak_freezes_available': _getStreakFreezesAvailable(),
+      'streak_freezes_refill_date': _getStreakFreezesRefillDate(),
+      'subscription': _getSubscriptionState(),
+      'current_rank': _getCurrentRankFromLadder(),
+      'next_rank': _getNextRankFromLadder(),
+      'eta_next_promotion': _getEtaNextPromotion(),
+      'cadence': {
+        'workouts_per_week_4w': _computeWorkoutsPerWeekLast4Weeks(),
+        'plan_target': ((_hive.userBox.get('profile') as Map?)?['days_per_week'] as int?) ?? 4,
+      },
     };
   }
 
@@ -1377,6 +1388,251 @@ class AiCoachRepository {
       'week': week,
       'days_per_week': daysPerWeek,
       'weekly_sessions': weeklySessionsMap.values.toList(),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // APK Test #4 / A6 — Sleep, water, freezes, subscription, rank, cadence, ETA
+  // ---------------------------------------------------------------------------
+
+  /// Rank ladder matching Captain Manual §4 (10 rungs).
+  /// Used for next_rank computation and ETA math — no network round-trip.
+  static const _rankLadder = [
+    {'code': 'SEAMAN_2', 'display': 'Seaman 2nd Class', 'requirements': <String, int>{}},
+    {'code': 'SEAMAN_1', 'display': 'Seaman 1st Class', 'requirements': {'workouts': 7, 'weeks': 1}},
+    {'code': 'LEADING_SEAMAN', 'display': 'Leading Seaman', 'requirements': {'workouts': 16, 'weeks': 4}},
+    {'code': 'PETTY_OFFICER', 'display': 'Petty Officer', 'requirements': {'workouts': 60, 'weeks': 12}},
+    {'code': 'CHIEF_PETTY_OFFICER', 'display': 'Chief Petty Officer', 'requirements': {'workouts': 100, 'weeks': 26}},
+    {'code': 'MASTER_CHIEF', 'display': 'Master Chief Petty Officer', 'requirements': {'streak_weeks_unbroken': 52}},
+    {'code': 'SUB_LIEUTENANT', 'display': 'Sub Lieutenant', 'requirements': {'workouts': 100}},
+    {'code': 'LIEUTENANT_COMMANDER', 'display': 'Lieutenant Commander', 'requirements': {'workouts': 200}},
+    {'code': 'COMMANDER', 'display': 'Commander', 'requirements': {'workouts': 300}},
+    {'code': 'CAPTAIN', 'display': 'Captain', 'requirements': {'workouts': 500}},
+  ];
+
+  /// Returns sleep logs from the last 7 days as `{date, hours}` ascending.
+  ///
+  /// Keys read: `sleep_log_<YYYY-MM-DD>` in healthBox, written by
+  /// `BiometricNotifier.logSleep` with `sleep_hours` field.
+  /// Supports `hours` field as fallback for legacy entries.
+  List<Map<String, dynamic>> _getSleep7d() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final results = <Map<String, dynamic>>[];
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('sleep_log_')) continue;
+      final log = _hive.healthBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      // Primary field is sleep_hours (BiometricNotifier); fall back to hours
+      // for entries written by cloud-restore paths.
+      final h = (log['sleep_hours'] as num?) ?? (log['hours'] as num?) ?? 0;
+      results.add({'date': dateStr, 'hours': h.toDouble()});
+    }
+    results.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+    return results;
+  }
+
+  /// Returns water intake for the last 7 days as `{date, ml}` ascending.
+  ///
+  /// Keys read: `water_ml_<YYYY-MM-DD>` in healthBox, written by
+  /// `WaterIntakeNotifier` as a plain int (ml). Falls back to Map shape
+  /// (`total_ml` key) for legacy/restored entries.
+  List<Map<String, dynamic>> _getWater7d() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final results = <Map<String, dynamic>>[];
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('water_ml_')) continue;
+      // Extract the date portion from the key name (water_ml_YYYY-MM-DD)
+      final datePart = key.toString().substring('water_ml_'.length);
+      final date = DateTime.tryParse(datePart);
+      if (date == null || date.isBefore(cutoff)) continue;
+      final raw = _hive.healthBox.get(key);
+      final ml = (raw is int)
+          ? raw
+          : (raw is Map)
+              ? ((raw['total_ml'] as num?)?.toInt() ?? 0)
+              : 0;
+      results.add({'date': datePart, 'ml': ml});
+    }
+    results.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+    return results;
+  }
+
+  /// Reads streak freezes available (int) from userBox progress dict.
+  int _getStreakFreezesAvailable() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    return (progress?['streak_freezes_available'] as int?) ?? 0;
+  }
+
+  /// Reads the ISO date string of the last streak-freeze refill (or null).
+  String? _getStreakFreezesRefillDate() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    return progress?['streak_freezes_last_refill'] as String?;
+  }
+
+  /// Returns subscription state from configBox.
+  ///
+  /// `tier`: 'pro' | 'free'
+  /// `expires_at`: ISO string or null
+  /// `plan`: 'monthly' | 'yearly' | null
+  /// `auto_renew`: bool (default false)
+  Map<String, dynamic> _getSubscriptionState() {
+    final config = _hive.configBox;
+    final isPro = config.get('isPro') == true;
+    final expiresAtRaw = config.get('expiresAt');
+    String? expiresAtIso;
+    if (expiresAtRaw is String) {
+      expiresAtIso = expiresAtRaw;
+    } else if (expiresAtRaw is DateTime) {
+      expiresAtIso = expiresAtRaw.toIso8601String();
+    }
+    return {
+      'tier': isPro ? 'pro' : 'free',
+      'expires_at': expiresAtIso,
+      'plan': config.get('plan') as String?,
+      'auto_renew': (config.get('auto_renew') as bool?) ?? false,
+    };
+  }
+
+  /// Returns the user's current rank, defaulting to SEAMAN_2 for fresh users.
+  ///
+  /// Note: this is a SEPARATE helper from `_getCurrentRankSnapshot()` which
+  /// delegates to `RankService`. This helper reads directly from profile and
+  /// uses the local `_rankLadder` constant for display names — no RankService
+  /// dependency so it's safe in unit tests without RankService init.
+  Map<String, dynamic> _getCurrentRankFromLadder() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    final code = (profile?['current_rank_code'] as String?) ?? 'SEAMAN_2';
+    final entry = _rankLadder.firstWhere(
+      (r) => r['code'] == code,
+      orElse: () => _rankLadder.first,
+    );
+    final totalWorkouts = _hive.workoutBox.keys
+        .where((k) => k.toString().startsWith('wlog_'))
+        .length;
+    final earnedAt = profile?['current_rank_earned_at'] as String?;
+    return {
+      'code': entry['code'] as String,
+      'display': entry['display'] as String,
+      'earned_at': earnedAt,
+      'total_workouts': totalWorkouts,
+    };
+  }
+
+  /// Returns the next rank entry from the ladder with `remaining` and
+  /// `binding_constraint`, or null when the user is already at CAPTAIN.
+  Map<String, dynamic>? _getNextRankFromLadder() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    final currentCode = (profile?['current_rank_code'] as String?) ?? 'SEAMAN_2';
+    final currentIdx = _rankLadder.indexWhere((r) => r['code'] == currentCode);
+    if (currentIdx == -1 || currentIdx >= _rankLadder.length - 1) return null;
+
+    final next = _rankLadder[currentIdx + 1];
+    final reqs = next['requirements'] as Map<String, int>;
+
+    final totalWorkouts = _hive.workoutBox.keys
+        .where((k) => k.toString().startsWith('wlog_'))
+        .length;
+    final grounding = _computeDataWindowGrounding();
+    final weeksElapsed = ((grounding['data_window_days'] as int) / 7).floor();
+
+    final remaining = <String, int>{};
+    String binding = 'workouts';
+    int maxRemaining = -1;
+
+    reqs.forEach((k, required) {
+      int current = 0;
+      if (k == 'workouts') current = totalWorkouts;
+      else if (k == 'weeks') current = weeksElapsed;
+      // streak_weeks_unbroken: TODO — use real streak in a future batch
+      final rem = (required - current).clamp(0, required);
+      remaining[k] = rem;
+      if (rem > maxRemaining) {
+        maxRemaining = rem;
+        binding = k;
+      }
+    });
+
+    return {
+      'code': next['code'] as String,
+      'display': next['display'] as String,
+      'requirements': Map<String, dynamic>.from(reqs),
+      'current_state': {
+        'workouts': totalWorkouts,
+        'weeks': weeksElapsed,
+      },
+      'remaining': remaining,
+      'binding_constraint': binding,
+    };
+  }
+
+  /// Counts workout logs (`wlog_*`) in the last 28 days and returns the
+  /// average workouts per week (count / 4.0).
+  double _computeWorkoutsPerWeekLast4Weeks() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 28));
+    int count = 0;
+    for (final key in _hive.workoutBox.keys) {
+      if (!key.toString().startsWith('wlog_')) continue;
+      final log = _hive.workoutBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count / 4.0;
+  }
+
+  /// Returns ETA to next promotion in days at two cadences:
+  /// - `at_current_cadence`: based on actual workouts/week over last 28 days.
+  ///   Returns `days: 999` when current cadence is 0 (never trains).
+  /// - `at_plan_cadence`: based on `profile.days_per_week` target.
+  ///
+  /// Returns null when user is already at CAPTAIN (terminal rank) or
+  /// when `next_rank` is null.
+  Map<String, dynamic>? _getEtaNextPromotion() {
+    final next = _getNextRankFromLadder();
+    if (next == null) return null;
+
+    final remaining = next['remaining'] as Map<String, int>;
+    final remainingWorkouts = remaining['workouts'] ?? 0;
+
+    if (remainingWorkouts == 0) {
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      return {
+        'at_current_cadence': {'days': 0, 'date': today},
+        'at_plan_cadence': {'days': 0, 'date': today},
+      };
+    }
+
+    final currentCadence = _computeWorkoutsPerWeekLast4Weeks();
+    final profile = _hive.userBox.get('profile') as Map?;
+    final planCadence = (profile?['days_per_week'] as int?) ?? 4;
+
+    final daysAtCurrent = currentCadence > 0
+        ? (remainingWorkouts * 7 / currentCadence).ceil()
+        : 999; // sentinel for zero-cadence users
+    final daysAtPlan = (remainingWorkouts * 7 / planCadence).ceil();
+
+    return {
+      'at_current_cadence': {
+        'days': daysAtCurrent,
+        'date': DateTime.now()
+            .add(Duration(days: daysAtCurrent))
+            .toIso8601String()
+            .substring(0, 10),
+      },
+      'at_plan_cadence': {
+        'days': daysAtPlan,
+        'date': DateTime.now()
+            .add(Duration(days: daysAtPlan))
+            .toIso8601String()
+            .substring(0, 10),
+      },
     };
   }
 }

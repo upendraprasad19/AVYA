@@ -1,12 +1,23 @@
 // test/ai_coach/snapshot_keys_test.dart
 //
-// TDD tests for APK Test #4 / Task A4: today_workout, yesterday_workout,
-// and week_lookahead snapshot keys added to AiCoachRepository.buildAiContext().
+// TDD tests for APK Test #4 / Task A4+A6: snapshot keys added to
+// AiCoachRepository.buildAiContext().
 //
-// Keys under test:
+// A4 keys:
 //   today_workout     — Map {type, status, exercises} or null if no schedule
 //   yesterday_workout — Map {type, status} or null if no schedule
 //   week_lookahead    — List of 7 {day, date, type, status}; REST for missing days
+//
+// A6 keys:
+//   sleep_7d                  — List of {date, hours} ascending, last 7 days
+//   water_7d                  — List of {date, ml} ascending, last 7 days
+//   streak_freezes_available  — int, default 0
+//   streak_freezes_refill_date — string ISO or null
+//   subscription              — {tier, expires_at, plan, auto_renew}
+//   current_rank              — {code, display, earned_at, total_workouts}
+//   next_rank                 — {code, display, requirements, remaining, binding_constraint} or null
+//   eta_next_promotion        — {at_current_cadence, at_plan_cadence} or null
+//   cadence                   — {workouts_per_week_4w, plan_target}
 
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -39,6 +50,8 @@ void main() {
   setUp(() async {
     await HiveService.instance.workoutBox.clear();
     await HiveService.instance.userBox.clear();
+    await HiveService.instance.healthBox.clear();
+    await HiveService.instance.configBox.clear();
   });
 
   String todayIso() => DateTime.now().toIso8601String().substring(0, 10);
@@ -276,6 +289,306 @@ void main() {
       expect(firstExercise.keys, containsAll(['name', 'sets', 'reps', 'weight']));
       expect(firstExercise['logging_type'], isNull);
       expect(firstExercise['rest_seconds'], isNull);
+    });
+  });
+
+  // ── A6 tests ──────────────────────────────────────────────────────────────
+
+  group('sleep_7d', () {
+    test('returns list of {date, hours} for last 7 days, ascending by date',
+        () async {
+      for (int i = 0; i < 5; i++) {
+        final d = DateTime.now().subtract(Duration(days: i));
+        final dateStr = d.toIso8601String().substring(0, 10);
+        await HiveService.instance.healthBox.put(
+          'sleep_log_$dateStr',
+          {'date': dateStr, 'sleep_hours': 7.0 + i * 0.1},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['sleep_7d'], isList);
+      final s = ctx['sleep_7d'] as List;
+      expect(s.length, 5);
+      // Ascending by date
+      final dates = s.map((e) => (e as Map)['date'] as String).toList();
+      final sorted = [...dates]..sort();
+      expect(dates, sorted);
+    });
+
+    test('each entry has date and hours keys', () async {
+      final d = DateTime.now();
+      final dateStr = d.toIso8601String().substring(0, 10);
+      await HiveService.instance.healthBox.put(
+        'sleep_log_$dateStr',
+        {'date': dateStr, 'sleep_hours': 7.5},
+      );
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final s = ctx['sleep_7d'] as List;
+      final entry = s.first as Map;
+      expect(entry['date'], dateStr);
+      expect(entry['hours'], closeTo(7.5, 0.01));
+    });
+
+    test('excludes sleep logs older than 7 days', () async {
+      final old = DateTime.now().subtract(const Duration(days: 30));
+      final oldStr = old.toIso8601String().substring(0, 10);
+      await HiveService.instance.healthBox.put(
+        'sleep_log_$oldStr',
+        {'date': oldStr, 'sleep_hours': 8.0},
+      );
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['sleep_7d'], isEmpty);
+    });
+
+    test('returns empty list when no sleep logs exist', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['sleep_7d'], isEmpty);
+    });
+  });
+
+  group('water_7d', () {
+    test('returns list of {date, ml} for last 7 days, ascending by date',
+        () async {
+      for (int i = 0; i < 3; i++) {
+        final d = DateTime.now().subtract(Duration(days: i));
+        final dateStr = d.toIso8601String().substring(0, 10);
+        await HiveService.instance.healthBox.put('water_ml_$dateStr', 2000 + i * 100);
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['water_7d'], isList);
+      final w = ctx['water_7d'] as List;
+      expect(w.length, 3);
+      final dates = w.map((e) => (e as Map)['date'] as String).toList();
+      final sorted = [...dates]..sort();
+      expect(dates, sorted);
+    });
+
+    test('excludes water logs older than 7 days', () async {
+      final old = DateTime.now().subtract(const Duration(days: 10));
+      final oldStr = old.toIso8601String().substring(0, 10);
+      await HiveService.instance.healthBox.put('water_ml_$oldStr', 1500);
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['water_7d'], isEmpty);
+    });
+  });
+
+  group('streak_freezes', () {
+    test('reads from progress dict with defaults', () async {
+      await HiveService.instance.userBox.put('progress', {
+        'streak_freezes_available': 2,
+        'streak_freezes_last_refill': '2026-04-21',
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['streak_freezes_available'], 2);
+      expect(ctx['streak_freezes_refill_date'], '2026-04-21');
+    });
+
+    test('defaults to 0 / null when progress missing', () async {
+      await HiveService.instance.userBox.delete('progress');
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['streak_freezes_available'], 0);
+      expect(ctx['streak_freezes_refill_date'], isNull);
+    });
+
+    test('defaults to 0 when streak_freezes_available key absent', () async {
+      await HiveService.instance.userBox.put('progress', <String, dynamic>{});
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['streak_freezes_available'], 0);
+    });
+  });
+
+  group('subscription', () {
+    test('reflects free tier when isPro false', () async {
+      await HiveService.instance.configBox.put('isPro', false);
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final sub = ctx['subscription'] as Map;
+      expect(sub['tier'], 'free');
+    });
+
+    test('reflects pro tier when isPro true with expiresAt', () async {
+      final expiry = DateTime.now().add(const Duration(days: 90));
+      await HiveService.instance.configBox.put('isPro', true);
+      await HiveService.instance.configBox.put('expiresAt', expiry.toIso8601String());
+      await HiveService.instance.configBox.put('plan', 'monthly');
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final sub = ctx['subscription'] as Map;
+      expect(sub['tier'], 'pro');
+      expect(sub['expires_at'], isNotNull);
+      expect(sub['plan'], 'monthly');
+    });
+
+    test('has all required keys', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final sub = ctx['subscription'] as Map;
+      expect(sub.keys, containsAll(['tier', 'expires_at', 'plan', 'auto_renew']));
+    });
+
+    test('free tier when configBox empty', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final sub = ctx['subscription'] as Map;
+      expect(sub['tier'], 'free');
+    });
+  });
+
+  group('current_rank', () {
+    test('defaults to SEAMAN_2 for fresh user with no profile', () async {
+      await HiveService.instance.userBox.delete('profile');
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final r = ctx['current_rank'] as Map;
+      expect(r['code'], 'SEAMAN_2');
+      expect(r['display'], 'Seaman 2nd Class');
+    });
+
+    test('reads stored rank code from profile', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'PETTY_OFFICER',
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final r = ctx['current_rank'] as Map;
+      expect(r['code'], 'PETTY_OFFICER');
+      expect(r['display'], 'Petty Officer');
+    });
+
+    test('includes total_workouts count', () async {
+      for (int i = 0; i < 5; i++) {
+        final d = DateTime.now().subtract(Duration(days: i));
+        await HiveService.instance.workoutBox.put(
+          'wlog_${d.millisecondsSinceEpoch}',
+          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'PUSH A'},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final r = ctx['current_rank'] as Map;
+      expect(r['total_workouts'], 5);
+    });
+  });
+
+  group('next_rank', () {
+    test('returns next ladder entry with binding_constraint for SEAMAN_2',
+        () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'SEAMAN_2',
+      });
+      // Seed 2 workouts (need 7 for next rank)
+      for (int i = 0; i < 2; i++) {
+        final d = DateTime.now().subtract(Duration(days: i));
+        await HiveService.instance.workoutBox.put(
+          'wlog_${d.millisecondsSinceEpoch}',
+          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'PUSH A'},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final next = ctx['next_rank'] as Map;
+      expect(next['code'], 'SEAMAN_1');
+      expect(next['requirements']['workouts'], 7);
+      expect((next['remaining'] as Map)['workouts'], 5); // 7 - 2
+      expect(next['binding_constraint'], isA<String>());
+    });
+
+    test('returns null at top rank CAPTAIN', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'CAPTAIN',
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['next_rank'], isNull);
+    });
+
+    test('remaining is clamped to 0 when already meeting requirement', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'SEAMAN_2',
+      });
+      // Seed 10 workouts (more than required 7)
+      for (int i = 0; i < 10; i++) {
+        final d = DateTime.now().subtract(Duration(days: i));
+        await HiveService.instance.workoutBox.put(
+          'wlog_${d.millisecondsSinceEpoch}',
+          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'X'},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final next = ctx['next_rank'] as Map;
+      expect((next['remaining'] as Map)['workouts'], 0);
+    });
+  });
+
+  group('cadence', () {
+    test('plan_target reads days_per_week from profile (default 4)', () async {
+      await HiveService.instance.userBox.put('profile', {'days_per_week': 5});
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect((ctx['cadence'] as Map)['plan_target'], 5);
+    });
+
+    test('plan_target defaults to 4 when profile missing', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect((ctx['cadence'] as Map)['plan_target'], 4);
+    });
+
+    test('workouts_per_week_4w computed from last 28 days workout count / 4',
+        () async {
+      // Seed 8 workouts across last 28 days = 2/week
+      for (int i = 0; i < 8; i++) {
+        final d = DateTime.now().subtract(Duration(days: i * 3));
+        await HiveService.instance.workoutBox.put(
+          'wlog_${d.millisecondsSinceEpoch}',
+          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'X'},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final cadence = ctx['cadence'] as Map;
+      expect(cadence['workouts_per_week_4w'], closeTo(2.0, 0.5));
+    });
+
+    test('workouts_per_week_4w is 0.0 with no workouts', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect((ctx['cadence'] as Map)['workouts_per_week_4w'], 0.0);
+    });
+  });
+
+  group('eta_next_promotion', () {
+    test('returns null at top rank CAPTAIN', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'CAPTAIN',
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['eta_next_promotion'], isNull);
+    });
+
+    test('computes days at plan cadence when no workouts yet', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'SEAMAN_2',
+        'days_per_week': 4,
+      });
+      // No workouts seeded — needs 7 total for SEAMAN_1
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final eta = ctx['eta_next_promotion'] as Map;
+      expect(eta['at_plan_cadence'], isNotNull);
+      final atPlan = eta['at_plan_cadence'] as Map;
+      expect(atPlan['days'], isA<int>());
+      // 7 workouts at 4/wk = 1.75 weeks ≈ 12-13 days
+      expect(atPlan['days'], greaterThanOrEqualTo(10));
+      expect(atPlan['days'], lessThanOrEqualTo(16));
+    });
+
+    test('computes days at current cadence and plan cadence', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'SEAMAN_2',
+        'days_per_week': 4,
+      });
+      // 4 workouts in last 28 days = 1/wk; need 7 total for SEAMAN_1
+      for (int i = 0; i < 4; i++) {
+        final d = DateTime.now().subtract(Duration(days: i * 7));
+        await HiveService.instance.workoutBox.put(
+          'wlog_${d.millisecondsSinceEpoch}',
+          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'X'},
+        );
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final eta = ctx['eta_next_promotion'] as Map;
+      expect(eta['at_current_cadence'], isNotNull);
+      expect(eta['at_plan_cadence'], isNotNull);
+      expect((eta['at_current_cadence'] as Map)['days'], isA<int>());
+      expect((eta['at_plan_cadence'] as Map)['days'], isA<int>());
+      expect((eta['at_current_cadence'] as Map)['date'], isA<String>());
     });
   });
 }
