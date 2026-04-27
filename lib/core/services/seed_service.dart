@@ -52,6 +52,14 @@ class SeedService {
   static const int _exerciseLibraryVersion = 4;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
+  /// Bump this integer whenever the bundled food_database.json changes
+  /// (new foods added, existing foods modified, schema extended). On app
+  /// launch, if the stored version is less than this, foods are re-seeded.
+  /// putAll() is idempotent — existing entries are overwritten with the
+  /// same data while new entries are added.
+  static const int _foodLibraryVersion = 2;
+  static const String _foodVersionKey = 'food_library_version';
+
   final HiveService _hive = HiveService.instance;
 
   /// Checks if seed data has already been loaded; if not, seeds both
@@ -76,7 +84,17 @@ class SeedService {
     final needExerciseUpgrade =
         exercisesSeeded && storedExVersion < _exerciseLibraryVersion;
 
-    if (alreadySeeded && exercisesSeeded && foodsSeeded && !needExerciseUpgrade) {
+    // Check if food library needs a version upgrade (new foods added).
+    final storedFdVersion =
+        configBox.get(_foodVersionKey, defaultValue: 0) as int;
+    final needFoodUpgrade =
+        foodsSeeded && storedFdVersion < _foodLibraryVersion;
+
+    if (alreadySeeded &&
+        exercisesSeeded &&
+        foodsSeeded &&
+        !needExerciseUpgrade &&
+        !needFoodUpgrade) {
       return;
     }
 
@@ -87,11 +105,13 @@ class SeedService {
     if (alreadySeeded && !foodsSeeded) {
       await configBox.put(_foodsSeededKey, true);
     }
-    if (alreadySeeded) return;
+    // Don't early-return here if a version upgrade is needed — legacy installs
+    // may have alreadySeeded=true but stale library versions.
+    if (alreadySeeded && !needExerciseUpgrade && !needFoodUpgrade) return;
 
     // Seed each asset independently — partial failures don't block the other.
     final needExercises = !exercisesSeeded || needExerciseUpgrade;
-    final needFoods = !foodsSeeded;
+    final needFoods = !foodsSeeded || needFoodUpgrade;
 
     await Future.wait(
       [
@@ -143,7 +163,10 @@ class SeedService {
       final entries = await compute(_parseJsonToIdMap, jsonString);
       await _hive.foodBox.putAll(entries);
       await _hive.configBox.put(_foodsSeededKey, true);
-      debugPrint('[SeedService] Foods seeded: ${entries.length} items');
+      await _hive.configBox.put(_foodVersionKey, _foodLibraryVersion);
+      debugPrint(
+        '[SeedService] Foods seeded: ${entries.length} items (v$_foodLibraryVersion)',
+      );
     } catch (e) {
       debugPrint('[SeedService._seedFoods] FAILED: $e');
       // Will retry on next launch since _foodsSeededKey stays false.
