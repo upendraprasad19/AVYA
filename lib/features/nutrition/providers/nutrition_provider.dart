@@ -830,6 +830,7 @@ class FoodLogNotifier extends Notifier<void> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
 
     ref.invalidate(dailyNutritionProvider);
@@ -887,6 +888,7 @@ class FoodLogNotifier extends Notifier<void> {
     updated['total_fiber'] = fiber.round();
     await box.put(logId, updated);
     NutritionRepository.syncLogToSupabase(data: updated);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
