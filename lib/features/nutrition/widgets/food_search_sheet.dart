@@ -42,6 +42,16 @@ class _FoodSearchSheet extends ConsumerStatefulWidget {
 }
 
 class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
+  static final _countBasedRegex = RegExp(
+    r'^\d+\s*(egg|roti|chapati|paratha|slice|piece|pc|cup|scoop|tbsp|tsp|glass|bowl|serving|idli|dosa|puri|vada|samosa|pakora|tikki)',
+    caseSensitive: false,
+  );
+
+  static final _unitExtractRegex = RegExp(
+    r'\d+\s*(?:small|medium|large|big)?\s*(.*)',
+    caseSensitive: false,
+  );
+
   final _searchController = TextEditingController();
   Map<String, dynamic>? _selectedFood;
   double _quantityG = 100;
@@ -541,17 +551,11 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
   List<Widget> _buildPortionButtons(String servingDesc, double servingG) {
     final lower = servingDesc.toLowerCase();
     // Detect count-based servings
-    final isCountBased = RegExp(
-      r'^\d+\s*(egg|roti|chapati|paratha|slice|piece|pc|cup|scoop|tbsp|tsp|glass|bowl|serving|idli|dosa|puri|vada|samosa|pakora|tikki)',
-      caseSensitive: false,
-    ).hasMatch(lower);
+    final isCountBased = _countBasedRegex.hasMatch(lower);
 
     if (isCountBased && servingG > 0) {
       // Extract the unit name from serving desc (e.g., "1 large egg" → "egg")
-      final unitMatch = RegExp(
-        r'\d+\s*(?:small|medium|large|big)?\s*(.*)',
-        caseSensitive: false,
-      ).firstMatch(servingDesc);
+      final unitMatch = _unitExtractRegex.firstMatch(servingDesc);
       final unitName = unitMatch?.group(1)?.trim() ?? servingDesc;
 
       final buttons = <Widget>[];
