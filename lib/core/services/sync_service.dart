@@ -197,7 +197,9 @@ class SyncService {
     try {
       await _supabase.client
           .from('user_profile')
-          .upsert(payload, onConflict: 'user_id');
+          .upsert(payload, onConflict: 'user_id')
+          .select()
+          .single();
       return Result.ok(null);
     } catch (e) {
       return Result.err(SyncError.classify(e));
@@ -1609,7 +1611,9 @@ class SyncService {
     // Failures bubble up uncaught (caller's try/catch → debugPrint).
     await _supabase.client
         .from('user_profile')
-        .upsert(payload, onConflict: 'user_id');
+        .upsert(payload, onConflict: 'user_id')
+        .select()
+        .single();
   }
 
   /// True if `v` is a non-null, non-empty-string value.
