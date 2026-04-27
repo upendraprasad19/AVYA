@@ -11,6 +11,7 @@ import {
 } from "./workout/index.ts";
 import {
   getExerciseHistoryTool,
+  getPRTimelineTool,
   getProgressSummaryTool,
   getPromotionStatusTool,
   logPRTool,
@@ -57,6 +58,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   getExerciseHistoryTool, // progress / read / PRO  (D.1)
   logPRTool, // progress / write / trivial / FREE  (D.2)
   getPromotionStatusTool, // progress / read / FREE  (C5 — rank ladder + ETAs)
+  getPRTimelineTool, // progress / read / FREE  (C7 — dated PR history, optional date range)
   // ── Phase D.3: plan family ────────────────────────────────────────
   // First plan-family tool. Append future plan tools below this marker.
   regeneratePlanBlockTool, // plan / write / destructive / PRO  (D.3)
