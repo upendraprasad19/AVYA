@@ -2039,6 +2039,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2070,6 +2073,9 @@ class SyncService {
       } catch (e) {
         // Non-fatal — falls back to summary-only restore.
         debugPrint('[SyncService._restoreExerciseLogs] per-set fetch failed: $e');
+        try {
+          await _reportSyncFailure(opType: 'restore_exercise_log_sets_fetch', error: e);
+        } catch (_) {}
       }
 
       for (final row in rows) {
@@ -2166,6 +2172,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_exercise_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2201,6 +2210,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreScheduleCompletions] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2237,6 +2249,9 @@ class SyncService {
       await _hive.customBox.put('custom_exercises', existingList);
     } catch (e) {
       debugPrint('[SyncService._restoreCustomExercises] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_custom_exercises', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2272,6 +2287,9 @@ class SyncService {
       await _hive.customBox.put('custom_foods', existingList);
     } catch (e) {
       debugPrint('[SyncService._restoreCustomFoods] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_custom_foods', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2297,6 +2315,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWeightLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_weight_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2355,6 +2376,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_nutrition_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2377,6 +2401,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreMeasurements] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_measurements', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2409,6 +2436,9 @@ class SyncService {
       await _hive.userBox.put('profile', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProfile] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_profile', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2437,6 +2467,9 @@ class SyncService {
       await _hive.userBox.put('progress', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProgress] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_progress', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2479,6 +2512,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWaterLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_water_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2506,6 +2542,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreSleepLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_sleep_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2539,6 +2578,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreStepsLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_steps_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2588,6 +2630,9 @@ class SyncService {
       await healthBox.put('streaks', existing);
     } catch (e) {
       debugPrint('[SyncService._restoreStreaks] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_streaks', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2707,6 +2752,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutPlan] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_plan', error: e);
+      } catch (_) {}
     }
   }
 
