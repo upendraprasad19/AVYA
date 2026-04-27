@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -589,6 +590,34 @@ void main() {
       expect((eta['at_current_cadence'] as Map)['days'], isA<int>());
       expect((eta['at_plan_cadence'] as Map)['days'], isA<int>());
       expect((eta['at_current_cadence'] as Map)['date'], isA<String>());
+    });
+  });
+
+  // APK Test #4 / A7: active_workout snapshot key
+  // Exposes mid-workout state so Captain can answer set-advice questions.
+  group('active_workout', () {
+    test('returns null when no active session', () {
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['active_workout'], isNull);
+    });
+
+    test('returns active state when set logged', () async {
+      await ActiveWorkoutPersistence.writeState(
+        exerciseName: 'Bench Press',
+        currentSet: 2,
+        totalSets: 4,
+        weight: 60,
+        repsTarget: 8,
+        repsCompleted: 8,
+        rpeHistory: [7.0],
+        restRemainingSecs: 90,
+      );
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['active_workout'], isNotNull);
+      expect((ctx['active_workout'] as Map)['exercise'], 'Bench Press');
+      expect((ctx['active_workout'] as Map)['current_set'], 2);
+      // Cleanup
+      await ActiveWorkoutPersistence.clearState();
     });
   });
 }

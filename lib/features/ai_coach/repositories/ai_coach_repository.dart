@@ -8,6 +8,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
+import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 import '../services/identity_signal_detector.dart';
 import '../models/coach_memory.dart';
 
@@ -137,6 +138,16 @@ class AiCoachRepository {
         'workouts_per_week_4w': _computeWorkoutsPerWeekLast4Weeks(),
         'plan_target': ((_hive.userBox.get('profile') as Map?)?['days_per_week'] as int?) ?? 4,
       },
+
+      // APK Test #4 / A7: mid-workout state for real-time coaching context.
+      // Written on every set log by ActiveWorkoutPersistence.writeState().
+      // Cleared on workout completion or abandonment.
+      // Auto-clears stale entries (>2h) on read so it's never leftover.
+      // Null when user is not actively in a workout session.
+      // Closes audit A4 — Captain can now answer "should I add another set?"
+      // with knowledge of current exercise, set#, weight, reps, RPE history.
+      // ~100-150 bytes when present; drops early in _compactContext (null = 0 bytes).
+      'active_workout': ActiveWorkoutPersistence.readState(),
     };
   }
 

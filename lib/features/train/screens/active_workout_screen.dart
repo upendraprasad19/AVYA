@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
+import '../services/active_workout_persistence.dart';
 import '../../home/providers/home_provider.dart';
 import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/exercise_swap_sheet.dart';
@@ -39,6 +40,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    // A7: clear mid-workout snapshot on any screen exit (back-button, system
+    // nav, or auto-dismiss). Completion/cancellation paths also call this
+    // explicitly so the AI coach sees null state immediately rather than
+    // waiting for the next app lifecycle event.
+    ActiveWorkoutPersistence.clearState();
     super.dispose();
   }
 
@@ -983,6 +989,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               ref
                   .read(activeWorkoutProvider.notifier)
                   .setElapsedSeconds(totalSeconds);
+              // A7: clear mid-workout state immediately on completion so
+              // the AI coach snapshot reflects null (session over) right away.
+              ActiveWorkoutPersistence.clearState();
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).completeWorkout();
             },
@@ -1036,6 +1045,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ),
           TextButton(
             onPressed: () {
+              // A7: clear mid-workout state immediately on abandonment.
+              ActiveWorkoutPersistence.clearState();
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).cancelWorkout();
               context.go('/train');
@@ -1253,6 +1264,45 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         durationSeconds: int.tryParse(_durationControllers[setIdx].text),
         distanceKm: double.tryParse(_distanceControllers[setIdx].text),
       ),
+    );
+  }
+
+  /// A7: Persist current mid-workout state to Hive so the AI coach snapshot
+  /// reflects what the user is actively doing. Called after every set log.
+  /// Uses the values from the set at [setIdx] as the most-recently-touched set.
+  void _persistActiveState(int setIdx) {
+    final numSets = _numSets;
+    // Count completed sets (warm-up sets excluded by the provider's
+    // completedSets getter, but here we capture the raw toggle state for
+    // the snapshot — fine since the coach just needs approximate context).
+    final completedSets = List.generate(numSets, (i) =>
+        widget.data.isSetChecked(widget.exerciseIndex, i)).where((c) => c).length;
+
+    // Weight: from the set being logged; fall back to first weight controller.
+    final weightText = setIdx < _weightControllers.length
+        ? _weightControllers[setIdx].text
+        : _weightControllers.isNotEmpty ? _weightControllers.first.text : '';
+    // Reps: prefer reps controller; fall back to duration (timed/cardio).
+    final repsText = setIdx < _repsControllers.length
+        ? _repsControllers[setIdx].text
+        : '';
+    final repsCompleted = int.tryParse(repsText) ??
+        (setIdx < _durationControllers.length
+            ? int.tryParse(_durationControllers[setIdx].text) ?? 0
+            : 0);
+
+    // current_set = number of sets completed so far (including the one just logged).
+    // total_sets = configured set count for this exercise.
+    ActiveWorkoutPersistence.writeState(
+      exerciseName: widget.exercise.name,
+      currentSet: completedSets.clamp(1, numSets),
+      totalSets: numSets,
+      weight: double.tryParse(weightText),
+      repsTarget: int.tryParse(widget.exercise.reps) ??
+          _parseRepsMidpoint(widget.exercise.reps),
+      repsCompleted: repsCompleted,
+      rpeHistory: const [], // RPE not surfaced per-set in current UI
+      restRemainingSecs: null, // rest timer hidden per user feedback
     );
   }
 
@@ -1617,6 +1667,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                       if (alreadyChecked) {
                                         _captureSetValues(setIdx);
                                         widget.onToggleSet(setIdx);
+                                        // A7: update snapshot on uncheck too —
+                                        // reflects the revised completed-set count.
+                                        _persistActiveState(setIdx);
                                         return;
                                       }
 
@@ -1654,6 +1707,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
                                       _captureSetValues(setIdx);
                                       widget.onToggleSet(setIdx);
+                                      // A7: persist snapshot after every set check-off
+                                      // so the Captain knows current mid-workout state.
+                                      _persistActiveState(setIdx);
                                     },
                                   ),
                                 ),
