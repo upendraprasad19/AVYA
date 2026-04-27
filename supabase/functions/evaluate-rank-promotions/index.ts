@@ -19,8 +19,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   EvalState,
   highestQualified,
+  LADDER,
   ranksUpTo,
 } from "../_shared/rank_engine.ts";
+import {
+  formatPromotionCeremony,
+  rankAddressFor,
+  rankDisplayFor,
+} from "../_shared/ceremony_text.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -127,6 +133,61 @@ serve(async (req: Request) => {
           continue;
         }
         promoted += toInsert.length;
+
+        // Insert a Captain-voice ceremony row in ai_coach_interactions for
+        // each newly-earned rank, in ladder order. The client surfaces these
+        // via _restoreCoachInteractions → coachBox → ChatHistoryNotifier.
+        //
+        // We reconstruct "old rank" as the highest code already on file
+        // before this batch (existingCodes), falling back to "SD2" for a
+        // brand-new user. Then we walk the toInsert list in ladder order.
+        const ladderOrder = LADDER.map((r) => r.code);
+        const sortedNew = toInsert
+          .map((row) => row.rank_code)
+          .sort(
+            (a, b) => ladderOrder.indexOf(a) - ladderOrder.indexOf(b),
+          );
+
+        // Determine the starting "previous" rank for ceremony sequencing.
+        let prevCode: string = existingCodes.size > 0
+          ? [...existingCodes].sort(
+              (a, b) => ladderOrder.indexOf(a) - ladderOrder.indexOf(b),
+            ).at(-1)! // highest existing rank before this batch
+          : "SD2";
+
+        for (const newCode of sortedNew) {
+          const ceremonyText = formatPromotionCeremony({
+            oldRankAddress: rankAddressFor(prevCode),
+            oldRankCode: prevCode,
+            newRankCode: newCode,
+            newRankDisplay: rankDisplayFor(newCode),
+            newRankAddress: rankAddressFor(newCode),
+            totalWorkouts: state.totalWorkouts,
+            weeksHeld: state.weeksSinceSignup,
+          });
+
+          const { error: ceremonyErr } = await supabase
+            .from("ai_coach_interactions")
+            .insert({
+              user_id: userId,
+              channel: "promotion_ceremony",
+              user_message: "",
+              ai_response: ceremonyText,
+              model_used: "ceremony_template",
+              created_at: new Date().toISOString(),
+            });
+
+          if (ceremonyErr) {
+            // Non-fatal — log but keep going. The rank_promotion row is
+            // already committed; a missing ceremony message is recoverable.
+            console.warn(
+              `[evaluate-rank-promotions] user=${userId} ceremony insert err for ${newCode}`,
+              ceremonyErr,
+            );
+          }
+
+          prevCode = newCode;
+        }
       }
 
       // Sync denormalized current rank.
