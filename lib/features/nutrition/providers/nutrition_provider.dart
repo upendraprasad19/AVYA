@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
@@ -1064,6 +1065,10 @@ class CustomFoodNotifier extends Notifier<void> {
     // Also add to foodBox so it appears in search (keyed by stable id for
     // dedupe against future imports of the same food).
     await HiveService.instance.foodBox.put(id, food);
+
+    // Invalidate diet plan generator index so the new food is visible on
+    // the next plan generation (indices are rebuilt lazily on next call).
+    DietPlanGenerator.instance.clearCache();
 
     // Sync (Plan D Task 1): single-item upsert + full custom-items
     // projection (mirror of Train) + AI snapshot.

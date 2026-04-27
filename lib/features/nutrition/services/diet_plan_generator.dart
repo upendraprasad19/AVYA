@@ -98,6 +98,55 @@ class DietPlanGenerator {
 
   final FoodRepository _foodRepo;
 
+  // ── Lazily-built indices (O(N) build, O(1) lookup afterwards) ────
+  //
+  // Built once on the first generate() call. Nulled by clearCache() when
+  // the food database changes (e.g. user adds a custom food).
+  //
+  // _allFoodsCache    — snapshot of _foodRepo.getAll() so we don't rebuild
+  //                     the Hive list on every lookup within a single call.
+  // _byNameIndex      — lower(name) → food row; covers _findFoodByName.
+  // _byCategoryIndex  — category → food rows; covers _pickFiller + swaps.
+  List<Map<String, dynamic>>? _allFoodsCache;
+  Map<String, Map<String, dynamic>>? _byNameIndex;
+  Map<String, List<Map<String, dynamic>>>? _byCategoryIndex;
+
+  /// Rebuilds indices if not yet initialised.
+  void _ensureIndices() {
+    if (_byNameIndex != null) return; // already built
+
+    final all = _foodRepo.getAll();
+    _allFoodsCache = all;
+
+    final nameIdx = <String, Map<String, dynamic>>{};
+    final catIdx = <String, List<Map<String, dynamic>>>{};
+    for (final f in all) {
+      final name = (f['name'] as String?)?.toLowerCase();
+      if (name != null) nameIdx[name] = f;
+      final cat = (f['category'] as String?)?.toLowerCase();
+      if (cat != null) catIdx.putIfAbsent(cat, () => []).add(f);
+    }
+    _byNameIndex = nameIdx;
+    _byCategoryIndex = catIdx;
+  }
+
+  /// O(1) lookup by exact name (case-insensitive).
+  Map<String, dynamic>? _findFoodByNameIndexed(String name) =>
+      _byNameIndex?[name.toLowerCase()];
+
+  /// O(K) access to all foods in [category] (K = category size).
+  List<Map<String, dynamic>> _foodsByCategory(String category) =>
+      _byCategoryIndex?[category.toLowerCase()] ?? const [];
+
+  /// Call whenever the food list changes (custom food added/deleted).
+  /// Next generate() will rebuild indices from the new snapshot.
+  void clearCache() {
+    _allFoodsCache = null;
+    _byNameIndex = null;
+    _byCategoryIndex = null;
+  }
+
+
   // ── Anchor protein sets, by meal slot. Names match food_database.json
   //    rows. Filtered against diet_preference downstream.
   static const _breakfastAnchorNames = {
@@ -218,6 +267,7 @@ class DietPlanGenerator {
   ];
 
   List<DietMealPlan> generate(DietPlanInputs inputs) {
+    _ensureIndices(); // O(N) once; O(1) on subsequent calls
     final rng = Random(inputs.seed ?? DateTime.now().day);
 
     final meals = <DietMealPlan>[];
@@ -341,7 +391,7 @@ class DietPlanGenerator {
   }) {
     final candidates = <Map<String, dynamic>>[];
     for (final name in def.anchorPoolNames) {
-      final f = _findFoodByName(name);
+      final f = _findFoodByNameIndexed(name);
       if (f != null && _passesDiet(f, dietPref)) candidates.add(f);
     }
     if (candidates.isEmpty) return null;
@@ -431,8 +481,7 @@ class DietPlanGenerator {
     }
 
     for (final cat in categories) {
-      final pool = _foodRepo
-          .getByCategory(cat)
+      final pool = _foodsByCategory(cat)
           .where((f) =>
               !avoidIds.contains(f['id']) && _passesDiet(f, dietPref))
           .toList();
@@ -485,7 +534,7 @@ class DietPlanGenerator {
     final slotDef = _slotDefs[targetMealIdx];
     final anchorCandidates = <Map<String, dynamic>>[];
     for (final name in slotDef.anchorPoolNames) {
-      final f = _findFoodByName(name);
+      final f = _findFoodByNameIndexed(name);
       if (f == null) continue;
       if (existingIds.contains(f['id'])) continue;
       if (!_passesDiet(f, dietPref)) continue;
@@ -503,8 +552,7 @@ class DietPlanGenerator {
     }
 
     // Strategy B: same-category swap (original behavior).
-    final samePool = _foodRepo
-        .getByCategory(current.category)
+    final samePool = _foodsByCategory(current.category)
         .where((f) =>
             f['id'] != current.foodId &&
             !existingIds.contains(f['id']) &&
@@ -536,7 +584,7 @@ class DietPlanGenerator {
     final crossPool = <Map<String, dynamic>>[];
     for (final cat in proteinBearingCats) {
       if (cat == current.category) continue; // already tried in B
-      crossPool.addAll(_foodRepo.getByCategory(cat).where((f) =>
+      crossPool.addAll(_foodsByCategory(cat).where((f) =>
           !existingIds.contains(f['id']) &&
           _passesDiet(f, dietPref) &&
           ((f['protein_std'] as num?)?.toDouble() ?? 0.0) > current.protein));
@@ -630,7 +678,7 @@ class DietPlanGenerator {
       final inBand = <Map<String, dynamic>>[];
       final relaxed = <Map<String, dynamic>>[];
       for (final cat in def.fillerCategories) {
-        for (final f in _foodRepo.getByCategory(cat)) {
+        for (final f in _foodsByCategory(cat)) {
           final id = f['id'] as String?;
           if (id == null || id == current.foodId) continue;
           if (existingIds.contains(id)) continue;
@@ -708,7 +756,8 @@ class DietPlanGenerator {
   DietPlanFoodItem? _highestProteinFallback(String dietPref) {
     Map<String, dynamic>? best;
     double bestP = 0.0;
-    for (final f in _foodRepo.getAll()) {
+    // Use the already-snapshotted list (_ensureIndices called before generate).
+    for (final f in _allFoodsCache ?? _foodRepo.getAll()) {
       if (!_passesDiet(f, dietPref)) continue;
       final p = (f['protein_std'] as num?)?.toDouble() ?? 0.0;
       if (p > bestP) {
@@ -717,13 +766,6 @@ class DietPlanGenerator {
       }
     }
     return best == null ? null : _toItem(best, isAnchor: true);
-  }
-
-  Map<String, dynamic>? _findFoodByName(String name) {
-    for (final f in _foodRepo.getAll()) {
-      if ((f['name'] as String?) == name) return f;
-    }
-    return null;
   }
 
   bool _passesDiet(Map<String, dynamic> food, String dietPref) {
