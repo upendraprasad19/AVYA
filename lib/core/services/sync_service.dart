@@ -1143,6 +1143,62 @@ class SyncService {
     }
   }
 
+  /// Pushes recent sleep entries to Supabase `sleep_logs`. Fire-and-forget per
+  /// CLAUDE.md §15. Handles two Hive storage patterns:
+  ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
+  ///   • List key      `sleep_logs`             (conversational AI tool path)
+  Future<void> syncSleepNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      // Handle per-day keys (standard path) via existing helper
+      await _syncSleepLogs(userId);
+      // Handle list key written by conversational_log_handler._logSleep
+      final healthBox = _hive.healthBox;
+      final listRaw = healthBox.get('sleep_logs');
+      if (listRaw is! List || listRaw.isEmpty) return;
+      for (final item in listRaw) {
+        if (item is! Map) continue;
+        final log = Map<String, dynamic>.from(item);
+        final dateStr = log['date'] as String?;
+        if (dateStr == null) continue;
+        final hours = (log['duration_hrs'] as num?)?.toDouble() ??
+            (log['sleep_hours'] as num?)?.toDouble() ??
+            (log['hours'] as num?)?.toDouble();
+        if (hours == null) continue;
+        final id = log['id'] as String? ?? 'sleep_chat_${log['created_at'] ?? dateStr}';
+        try {
+          await _supabase.client.from('sleep_logs').upsert({
+            'id': _deterministicId('sleep_logs_$dateStr'),
+            'user_id': userId,
+            'date': dateStr,
+            'duration_hrs': hours,
+            if (log['quality'] != null) 'quality': log['quality'],
+            'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          }, onConflict: 'id');
+        } catch (e) {
+          debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService.syncSleepNow] $e');
+    }
+  }
+
+  /// Pushes recent body measurements to Supabase `body_measurements`.
+  /// Fire-and-forget per CLAUDE.md §15. Delegates to existing `_syncMeasurements`
+  /// which reads `measurement_YYYY-MM-DD` keys — the same pattern written by
+  /// conversational_log_handler._logMeasurement.
+  Future<void> syncMeasurementsNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncMeasurements(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncMeasurementsNow] $e');
+    }
+  }
+
   Future<void> _syncWeightLogs(String userId) async {
     final healthBox = _hive.healthBox;
     // Writers use per-day keys like 'weight_2026-04-07', NOT a single list key.

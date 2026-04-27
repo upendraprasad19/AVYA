@@ -117,6 +117,7 @@ class ConversationalLogHandler {
     });
 
     await healthBox.put('sleep_logs', logs);
+    unawaited(SyncService.instance.syncSleepNow());
     unawaited(SyncService.instance.pushSnapshot());
     return true;
   }
@@ -148,6 +149,7 @@ class ConversationalLogHandler {
     record[type] = valueCm;
     record['updated_at'] = now.toIso8601String();
     await healthBox.put(key, record);
+    unawaited(SyncService.instance.syncMeasurementsNow());
     unawaited(SyncService.instance.pushSnapshot());
     return true;
   }
