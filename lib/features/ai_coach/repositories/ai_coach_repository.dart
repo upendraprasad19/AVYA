@@ -1405,8 +1405,8 @@ class AiCoachRepository {
     final progress = (_hive.userBox.get('progress') as Map?) ?? const {};
     final profile = (_hive.userBox.get('profile') as Map?) ?? const {};
 
-    final phase = (progress['phase'] as int?) ?? 1;
-    final week = (progress['week'] as int?) ?? 1;
+    final phase = (progress['current_phase'] as int?) ?? 1;
+    final week = (progress['current_week'] as int?) ?? 1;
     final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
 
     // Iterate today + 6 days, dedup by session name (first occurrence wins).

@@ -179,8 +179,8 @@ void main() {
     test('reads phase + week from progress dict, days_per_week from profile',
         () async {
       await HiveService.instance.userBox.put('progress', {
-        'phase': 2,
-        'week': 3,
+        'current_phase': 2,
+        'current_week': 3,
       });
       await HiveService.instance.userBox.put('profile', {
         'days_per_week': 5,
