@@ -666,11 +666,21 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final hasWorkoutDraft = ref.watch(workoutDraftProvider) != null;
 
     // Phase A.11 — typed tool intents (pending + recently-settled, kept by prune)
+    // C-6: secondary filter on the Hive `intent_<id>_dispatched_at` marker.
+    // If the in-memory provider state thinks an intent is still pending but the
+    // Hive marker shows it's already been dispatched (hot restart edge case),
+    // hide it from the chat thread so cards never pile up. Primary state of
+    // truth remains ToolIntent.status.
+    final coachBox = HiveService.instance.coachBox;
     final visibleIntents = ref.watch(pendingToolIntentsProvider).where((i) {
-      return i.status == ToolIntentStatus.pending ||
+      if (i.status == ToolIntentStatus.pending ||
           i.status == ToolIntentStatus.executing ||
-          i.status == ToolIntentStatus.failed ||
-          i.status == ToolIntentStatus.executed ||
+          i.status == ToolIntentStatus.failed) {
+        // Defensive: drop if Hive marker says we already dispatched.
+        if (coachBox.get('intent_${i.id}_dispatched_at') != null) return false;
+        return true;
+      }
+      return i.status == ToolIntentStatus.executed ||
           i.status == ToolIntentStatus.rejected ||
           i.status == ToolIntentStatus.expired;
     }).toList();
