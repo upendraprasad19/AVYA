@@ -296,70 +296,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 22),
 
-        // ── Referral code (always visible, prominent) ───────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'REFERRAL CODE (OPTIONAL)',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: _referralController,
-          style: AppTypography.body.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 16,
-          ),
-          cursorColor: AppColors.accent,
-          maxLength: 20,
-          decoration: InputDecoration(
-            hintText: 'AVYA-XXXX1234',
-            hintStyle: AppTypography.body.copyWith(
-              color: AppColors.textMute,
-              fontSize: 16,
-            ),
-            prefixIcon: const Icon(
-              Icons.card_giftcard,
-              color: AppColors.accent,
-              size: 20,
-            ),
-            counterText: '',
-            filled: true,
-            fillColor: AppColors.input,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              borderSide: BorderSide(
-                color: AppColors.accent.withValues(alpha: 0.3),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              borderSide: BorderSide(
-                color: AppColors.accent.withValues(alpha: 0.3),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              borderSide: const BorderSide(
-                color: AppColors.accent,
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
+        // U8 fix (Test #4 hotfix): referral code input REMOVED from welcome
+        // landing view. Referral entry now lives in:
+        //   (a) sign-up form (when _isSignUp == true) — see _buildEmailView
+        //   (b) Profile → Invite Friends sheet (see invite_friends_sheet.dart)
+        //
+        // Welcome screen had it visible to all (signin + signup) which was
+        // confusing UX — sign-in users have no business entering a referral.
 
         // ── Social proof ────────────────────────────────────
         Text(
@@ -444,6 +387,80 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 },
               ),
               const SizedBox(height: 24),
+
+              // U8 fix: Referral code field — shown only during sign-up.
+              // Sign-in users have no business entering a referral code.
+              // The existing redemption flow in the success listener
+              // (_referralController.text.trim()) is already wired up
+              // and reused here — no new handler needed.
+              if (_isSignUp) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'REFERRAL CODE (OPTIONAL)',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textDim,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _referralController,
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                  ),
+                  cursorColor: AppColors.accent,
+                  maxLength: 20,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    hintText: 'AVYA-XXXX1234',
+                    hintStyle: AppTypography.body.copyWith(
+                      color: AppColors.textMute,
+                      fontSize: 15,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.card_giftcard_outlined,
+                      color: AppColors.textDim,
+                      size: 18,
+                    ),
+                    counterText: '',
+                    filled: true,
+                    fillColor: AppColors.input,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      borderSide: BorderSide(
+                        color: AppColors.border,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      borderSide: BorderSide(
+                        color: AppColors.border,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      borderSide: const BorderSide(
+                        color: AppColors.accent,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Have a referral code? Apply for +7 days PRO.',
+                  style: AppTypography.bodySm.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textDim,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Privacy/Terms checkbox — only shown during sign-up.
               // Pre-checked (true) to reduce friction while still providing

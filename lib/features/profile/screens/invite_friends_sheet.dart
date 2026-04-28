@@ -38,10 +38,22 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
   bool _loading = true;
   bool _regenerating = false;
 
+  // U8 fix: "Apply someone else's code" section
+  final _applyController = TextEditingController();
+  bool _applying = false;
+  String? _applyError;
+  String? _applySuccess;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _applyController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -67,6 +79,43 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
       }
     } finally {
       if (mounted) setState(() => _regenerating = false);
+    }
+  }
+
+  Future<void> _applyCode() async {
+    final code = _applyController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+    setState(() {
+      _applying = true;
+      _applyError = null;
+      _applySuccess = null;
+    });
+    try {
+      final response = await SupabaseService.instance.callFunction(
+        'redeem-referral',
+        body: {'code': code},
+      );
+      if (!mounted) return;
+      // FunctionResponse.data is dynamic; cast to map for key access.
+      final data = response.data;
+      final body = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+      final success = body['success'] == true;
+      final error = body['error'] as String?;
+      setState(() {
+        _applying = false;
+        if (success) {
+          _applySuccess = 'Code applied — +7 days PRO added!';
+          _applyController.clear();
+        } else {
+          _applyError = error ?? 'Invalid or expired code. Please check and try again.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _applying = false;
+        _applyError = 'Could not apply code. Please try again.';
+      });
     }
   }
 
@@ -231,6 +280,122 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
                       label: 'Share My Code',
                       onPressed: _share,
                     ),
+
+                  // U8 fix: Apply someone else's referral code
+                  const SizedBox(height: 28),
+                  Container(
+                    width: double.infinity,
+                    height: 1,
+                    color: AppColors.border,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'GOT A CODE?',
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      color: AppColors.textDim,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _applyController,
+                          style: AppTypography.bodyM.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                          textCapitalization: TextCapitalization.characters,
+                          maxLength: 20,
+                          decoration: InputDecoration(
+                            hintText: 'AVYA-XXXX1234',
+                            hintStyle: AppTypography.bodyM.copyWith(
+                              color: AppColors.textMute,
+                            ),
+                            counterText: '',
+                            filled: true,
+                            fillColor: AppColors.input,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              borderSide: BorderSide(color: AppColors.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              borderSide: BorderSide(color: AppColors.border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              borderSide: const BorderSide(
+                                color: AppColors.accent,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _applying ? null : _applyCode,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accentSoft,
+                            foregroundColor: AppColors.accent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              side: BorderSide(
+                                color: AppColors.accent.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                          ),
+                          child: _applying
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.accent,
+                                  ),
+                                )
+                              : Text(
+                                  'APPLY',
+                                  style: AppTypography.mono.copyWith(
+                                    fontSize: 11,
+                                    letterSpacing: 1.4,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_applySuccess != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _applySuccess!,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.ok,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (_applyError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _applyError!,
+                      style: AppTypography.bodySm.copyWith(
+                        color: AppColors.bad,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
                 ],
               ),
       ),
