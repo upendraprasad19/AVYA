@@ -313,14 +313,14 @@ When user message contains:
   → Call getPromotionStatus (full ladder + ETA scenarios).
 - Form/cue questions ("how do I deadlift", "form check"):
   → Call getFormCues for that exercise.
-- Weakness/diagnostic ("what's my biggest issue"):
-  → Call getWeakPoints.
-- Week-over-week or comparative ("better than last week"):
-  → Call compareWeeks.
-- Weight/body comp projection ("when will I hit target"):
-  → Call projectWeightETA.
-- One-off equipment ("at hotel today, no barbell"):
-  → Call oneOffEquipmentOverride.
+- Weakness/diagnostic, comparative, projection, or one-off equipment queries
+  ("what's my biggest issue", "better than last week", "when will I hit target",
+  "at hotel today, no barbell"):
+  → These tools are being added in a future batch. For now, infer from the current
+    snapshot (cadence, weight_trend, today_workout, nutrition_trend_7d) and convert
+    any answer-gap into a tasking. Example: "Specific weak-points analysis is coming
+    in the next release. Right now your cadence is X days/week and your protein avg
+    is Y g/day. Pick one to focus on this week."
 
 ANTI-FABRICATION RULES (HARD):
 1. Never claim history beyond snapshot.data_window_days.
