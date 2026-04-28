@@ -23,6 +23,7 @@ import '../widgets/food_search_sheet.dart';
 import '../widgets/barcode_scan_sheet.dart';
 import '../widgets/custom_food_sheet.dart';
 import '../widgets/log_to_slot_sheet.dart';
+import '../../home/providers/home_provider.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -113,12 +114,27 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     ];
     final eyebrow =
         'GALLEY \u00B7 ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
-    return WardLetterhead(
-      eyebrow: eyebrow,
-      title: 'Fueling the plan',
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-      divider: true,
-      trailing: _buildDietPlanButton(),
+    final streak = ref.watch(streakProvider);
+    final freezes = ref.watch(streakFreezeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        WardLetterhead(
+          eyebrow: eyebrow,
+          title: 'Fueling the plan',
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+          divider: true,
+          trailing: _buildDietPlanButton(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
+          child: WardStatusStrip(
+            streakDays: streak,
+            freezesAvailable: freezes,
+          ),
+        ),
+      ],
     );
   }
 
