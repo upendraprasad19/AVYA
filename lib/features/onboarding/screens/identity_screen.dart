@@ -11,7 +11,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// Collects the three "who are you" basics before any body-metric or
 /// goal-specific questions:
 ///   * `full_name`  — text input, required
-///   * `date_of_birth` — date picker, required, min age 13
+///   * `date_of_birth` — date picker, required, min age 10
 ///   * `sex` — Male / Female / Other, required
 ///
 /// Moved here from Stats (sex) and derived-from-age (DOB) so the flow
@@ -70,8 +70,12 @@ class _IdentityScreenState extends State<IdentityScreen> {
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    // Min-age 13: max selectable DOB is today-13y.
-    final max = DateTime(now.year - 13, now.month, now.day);
+    // Min-age 10: max selectable DOB is today-10y.
+    // U10 fix (Test #4 hotfix): lowered from 13 → 10 per user observation
+    // ("i tried inserting date of my son as 2019, i was unable").
+    // Trade-off: less COPPA-aligned but simpler. Track for legal review
+    // post-Test #4. Guardian-managed accounts for under-10 remain out of scope.
+    final max = DateTime(now.year - 10, now.month, now.day);
     final seed = _dob ?? DateTime(now.year - 25, 1, 1);
     final picked = await showDatePicker(
       context: context,
