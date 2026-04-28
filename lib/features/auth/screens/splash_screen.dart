@@ -256,33 +256,91 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       return;
     }
 
-    final isOnboarded = HiveService.instance.configBox
+    final flagOnboarded = HiveService.instance.configBox
         .get('onboarding_completed', defaultValue: false) as bool;
 
-    // Guard: even if the flag is set, verify the profile has real data.
-    // A stale Hive can have onboarding_completed=true but only a minimal
-    // stub profile ({id, email}) — e.g. after a failed sync or browser
-    // storage surviving across rebuilds. Redirect to onboarding in that case.
+    // Layer 4 (Plan A) reconciliation rule.
+    //
+    // OBS-3 root cause: returning user has populated user_profile row
+    // (goal/experience/weight all set) but onboarding_completed_at is
+    // NULL on the cloud + onboarding_completed flag was never set/got
+    // wiped from Hive. Pre-fix flow routed them back to /onboarding.
+    //
+    // New rule:
+    //   isOnboarded = configBox['onboarding_completed'] == true
+    //              || profile['onboarding_completed_at'] != null
+    //              || (primary_goal != null
+    //                  && fitness_experience != null
+    //                  && current_weight_kg != null)
+    //
+    // If the populated-but-NULL case fires, self-heal by stamping
+    // onboarding_completed_at in Hive + firing syncProfileNow so the
+    // inconsistency can never recur.
+    //
+    // Note: this branch lands here in splash_screen because
+    // RestoringScreen (the canonical Layer-4 location per the plan)
+    // does not exist on this branch — we branched off main, which
+    // pre-dates feat/apk-test-4-batch's RestoringScreen introduction.
+    final profile = HiveService.instance.userBox.get('profile');
+    final profileMap = profile is Map ? profile : null;
+    final hasOnboardedFlag =
+        profileMap != null && profileMap['onboarding_completed_at'] != null;
+    final hasCorePlanFields = profileMap != null &&
+        profileMap['primary_goal'] != null &&
+        profileMap['fitness_experience'] != null &&
+        profileMap['current_weight_kg'] != null;
+    final isOnboarded =
+        flagOnboarded || hasOnboardedFlag || hasCorePlanFields;
+
     if (isOnboarded) {
-      final profile = HiveService.instance.userBox.get('profile');
-      if (profile is Map) {
-        final hasRealData =
-            profile['primary_goal'] != null || profile['height_cm'] != null;
-        if (!hasRealData) {
-          // Clear the stale flag so onboarding can proceed.
-          HiveService.instance.configBox.delete('onboarding_completed');
-          context.go('/onboarding');
-          return;
+      // Self-heal — populated profile but flag never stamped.
+      if (!hasOnboardedFlag && hasCorePlanFields) {
+        debugPrint(
+          '[splash] self-heal: profile populated but '
+          'onboarding_completed_at is NULL — stamping now.',
+        );
+        final user = SupabaseService.instance.currentUser;
+        if (user != null) {
+          // Fire-and-forget — non-fatal if it fails; next launch retries.
+          unawaited(
+            _stampOnboardingCompletedAt(user.id).catchError((e) {
+              debugPrint('[splash] self-heal stamp failed: $e');
+            }),
+          );
         }
       }
-    }
-
-    if (!isOnboarded) {
-      context.go('/onboarding');
+      // Guard: even if onboarded flag/fields say yes, the legacy
+      // pre-Test-5 behavior also checked for a stub-only profile.
+      // Keep that safety net — if Hive only has {id, email} and
+      // none of goal/height are present, flag was a false positive.
+      if (!hasCorePlanFields &&
+          profileMap != null &&
+          profileMap['primary_goal'] == null &&
+          profileMap['height_cm'] == null) {
+        HiveService.instance.configBox.delete('onboarding_completed');
+        context.go('/onboarding');
+        return;
+      }
+      context.go('/home');
       return;
     }
 
-    context.go('/home');
+    context.go('/onboarding');
+  }
+
+  /// Layer 4 self-heal — stamps `onboarding_completed_at = NOW()` on both
+  /// Hive and Supabase so the populated-but-NULL state can't recur.
+  ///
+  /// Adapted from the plan's RestoringScreen helper. Lives on splash
+  /// because RestoringScreen does not exist on this branch.
+  Future<void> _stampOnboardingCompletedAt(String userId) async {
+    final stampedAt = DateTime.now().toUtc().toIso8601String();
+    final profileBox = HiveService.instance.userBox;
+    final existing = (profileBox.get('profile') as Map?) ?? <dynamic, dynamic>{};
+    final merged = Map<String, dynamic>.from(existing.cast<String, dynamic>());
+    merged['onboarding_completed_at'] = stampedAt;
+    await profileBox.put('profile', merged);
+    unawaited(SyncService.instance.syncProfileNow(userId));
   }
 
   @override
