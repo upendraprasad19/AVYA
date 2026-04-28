@@ -33,7 +33,7 @@ Map<String, dynamic> _bigCtx() {
       'days_per_week': 6,
       'weekly_sessions': [],
     },
-    'current_rank': {'code': 'SEAMAN_2', 'display': 'Seaman 2nd Class'},
+    'current_rank': {'code': 'SD2', 'display': 'Seaman 2nd Class'},
     'subscription': {
       'tier': 'free',
       'expires_at': null,
@@ -193,7 +193,7 @@ void main() {
         'workout_logs_count': 2,
         'today_workout': {'type': 'PUSH A', 'status': 'pending'},
         'current_plan_summary': {'phase': 1, 'week': 2},
-        'current_rank': {'code': 'SEAMAN_2'},
+        'current_rank': {'code': 'SD2'},
         'subscription': {'tier': 'free'},
         'committed_at': '2026-04-27T12:00:00Z',
         'meals_today': [

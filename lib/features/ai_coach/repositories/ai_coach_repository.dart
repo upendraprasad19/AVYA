@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -1448,20 +1449,8 @@ class AiCoachRepository {
   // APK Test #4 / A6 — Sleep, water, freezes, subscription, rank, cadence, ETA
   // ---------------------------------------------------------------------------
 
-  /// Rank ladder matching Captain Manual §4 (10 rungs).
-  /// Used for next_rank computation and ETA math — no network round-trip.
-  static const _rankLadder = [
-    {'code': 'SEAMAN_2', 'display': 'Seaman 2nd Class', 'requirements': <String, int>{}},
-    {'code': 'SEAMAN_1', 'display': 'Seaman 1st Class', 'requirements': {'workouts': 7, 'weeks': 1}},
-    {'code': 'LEADING_SEAMAN', 'display': 'Leading Seaman', 'requirements': {'workouts': 16, 'weeks': 4}},
-    {'code': 'PETTY_OFFICER', 'display': 'Petty Officer', 'requirements': {'workouts': 60, 'weeks': 12}},
-    {'code': 'CHIEF_PETTY_OFFICER', 'display': 'Chief Petty Officer', 'requirements': {'workouts': 100, 'weeks': 26}},
-    {'code': 'MASTER_CHIEF', 'display': 'Master Chief Petty Officer', 'requirements': {'streak_weeks_unbroken': 52}},
-    {'code': 'SUB_LIEUTENANT', 'display': 'Sub Lieutenant', 'requirements': {'workouts': 100}},
-    {'code': 'LIEUTENANT_COMMANDER', 'display': 'Lieutenant Commander', 'requirements': {'workouts': 200}},
-    {'code': 'COMMANDER', 'display': 'Commander', 'requirements': {'workouts': 300}},
-    {'code': 'CAPTAIN', 'display': 'Captain', 'requirements': {'workouts': 500}},
-  ];
+  // _rankLadder removed — use kRankLadder from rank_ladder_data.dart instead
+  // (canonical short codes: SD2, SD1, LS, PO, CPO, MCPO, SubLt, LtCdr, Cdr, Capt)
 
   /// Returns sleep logs from the last 7 days as `{date, hours}` ascending.
   ///
@@ -1550,38 +1539,39 @@ class AiCoachRepository {
     };
   }
 
-  /// Returns the user's current rank, defaulting to SEAMAN_2 for fresh users.
-  /// Reads directly from profile using the local `_rankLadder` constant —
-  /// no RankService dependency so it's safe in unit tests without RankService init.
+  /// Returns the user's current rank, defaulting to SD2 for fresh users.
+  /// Reads directly from profile using the canonical kRankLadder from
+  /// rank_ladder_data.dart — no RankService dependency so it's safe in unit
+  /// tests without RankService init.
   Map<String, dynamic> _getCurrentRankFromLadder() {
     final profile = _hive.userBox.get('profile') as Map?;
-    final code = (profile?['current_rank_code'] as String?) ?? 'SEAMAN_2';
-    final entry = _rankLadder.firstWhere(
-      (r) => r['code'] == code,
-      orElse: () => _rankLadder.first,
-    );
+    final code = (profile?['current_rank_code'] as String?) ?? 'SD2';
+    final entry = rankByCode(code) ?? kRankLadder.first;
     final totalWorkouts = _hive.workoutBox.keys
         .where((k) => k.toString().startsWith('wlog_'))
         .length;
     final earnedAt = profile?['current_rank_earned_at'] as String?;
     return {
-      'code': entry['code'] as String,
-      'display': entry['display'] as String,
+      'code': entry.code,
+      'display': entry.displayName,
       'earned_at': earnedAt,
       'total_workouts': totalWorkouts,
     };
   }
 
   /// Returns the next rank entry from the ladder with `remaining` and
-  /// `binding_constraint`, or null when the user is already at CAPTAIN.
+  /// `binding_constraint`, or null when the user is already at Capt (terminal).
+  ///
+  /// Uses canonical kRankLadder short codes (SD2, SD1, LS, PO, CPO, MCPO,
+  /// SubLt, LtCdr, Cdr, Capt) and kRankGates for gate requirements.
   Map<String, dynamic>? _getNextRankFromLadder() {
     final profile = _hive.userBox.get('profile') as Map?;
-    final currentCode = (profile?['current_rank_code'] as String?) ?? 'SEAMAN_2';
-    final currentIdx = _rankLadder.indexWhere((r) => r['code'] == currentCode);
-    if (currentIdx == -1 || currentIdx >= _rankLadder.length - 1) return null;
+    final currentCode = (profile?['current_rank_code'] as String?) ?? 'SD2';
+    final currentIdx = kRankLadder.indexWhere((r) => r.code == currentCode);
+    if (currentIdx == -1 || currentIdx >= kRankLadder.length - 1) return null;
 
-    final next = _rankLadder[currentIdx + 1];
-    final reqs = next['requirements'] as Map<String, int>;
+    final next = kRankLadder[currentIdx + 1];
+    final gate = kRankGates[next.code];
 
     final totalWorkouts = _hive.workoutBox.keys
         .where((k) => k.toString().startsWith('wlog_'))
@@ -1589,15 +1579,33 @@ class AiCoachRepository {
     final grounding = _computeDataWindowGrounding();
     final weeksElapsed = ((grounding['data_window_days'] as int) / 7).floor();
 
+    // Build requirements map from gate (mirrors getPromotionStatus.ts logic)
+    final reqs = <String, int>{};
+    if ((gate?.totalWorkoutsAtLeast ?? 0) > 0) {
+      reqs['workouts'] = gate!.totalWorkoutsAtLeast!;
+    }
+    if ((gate?.streakAtLeast ?? 0) > 0) {
+      reqs['streak_days'] = gate!.streakAtLeast!;
+    }
+    if ((gate?.minWeeksSinceSignup ?? next.minWeeks) > 0) {
+      reqs['weeks'] = gate?.minWeeksSinceSignup ?? next.minWeeks;
+    }
+    if ((gate?.deploymentsCompleteAtLeast ?? 0) > 0) {
+      reqs['deployments'] = gate!.deploymentsCompleteAtLeast!;
+    }
+
     final remaining = <String, int>{};
     String binding = 'workouts';
     int maxRemaining = -1;
 
     reqs.forEach((k, required) {
       int current = 0;
-      if (k == 'workouts') current = totalWorkouts;
-      else if (k == 'weeks') current = weeksElapsed;
-      // streak_weeks_unbroken: TODO — use real streak in a future batch
+      if (k == 'workouts') {
+        current = totalWorkouts;
+      } else if (k == 'weeks') {
+        current = weeksElapsed;
+      }
+      // streak_days and deployments default to 0 — ETA is conservative
       final rem = (required - current).clamp(0, required);
       remaining[k] = rem;
       if (rem > maxRemaining) {
@@ -1607,8 +1615,8 @@ class AiCoachRepository {
     });
 
     return {
-      'code': next['code'] as String,
-      'display': next['display'] as String,
+      'code': next.code,
+      'display': next.displayName,
       'requirements': Map<String, dynamic>.from(reqs),
       'current_state': {
         'workouts': totalWorkouts,

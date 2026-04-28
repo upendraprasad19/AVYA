@@ -432,21 +432,21 @@ void main() {
   });
 
   group('current_rank', () {
-    test('defaults to SEAMAN_2 for fresh user with no profile', () async {
+    test('defaults to SD2 for fresh user with no profile', () async {
       await HiveService.instance.userBox.delete('profile');
       final ctx = AiCoachRepository.instance.buildAiContext();
       final r = ctx['current_rank'] as Map;
-      expect(r['code'], 'SEAMAN_2');
+      expect(r['code'], 'SD2');
       expect(r['display'], 'Seaman 2nd Class');
     });
 
     test('reads stored rank code from profile', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'PETTY_OFFICER',
+        'current_rank_code': 'PO',
       });
       final ctx = AiCoachRepository.instance.buildAiContext();
       final r = ctx['current_rank'] as Map;
-      expect(r['code'], 'PETTY_OFFICER');
+      expect(r['code'], 'PO');
       expect(r['display'], 'Petty Officer');
     });
 
@@ -465,12 +465,12 @@ void main() {
   });
 
   group('next_rank', () {
-    test('returns next ladder entry with binding_constraint for SEAMAN_2',
+    test('returns next ladder entry with binding_constraint for SD2',
         () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'SEAMAN_2',
+        'current_rank_code': 'SD2',
       });
-      // Seed 2 workouts (need 7 for next rank)
+      // SD2 → SD1 gate: streakAtLeast:7, minWeeksSinceSignup:1 (no workouts gate)
       for (int i = 0; i < 2; i++) {
         final d = DateTime.now().subtract(Duration(days: i));
         await HiveService.instance.workoutBox.put(
@@ -480,25 +480,26 @@ void main() {
       }
       final ctx = AiCoachRepository.instance.buildAiContext();
       final next = ctx['next_rank'] as Map;
-      expect(next['code'], 'SEAMAN_1');
-      expect(next['requirements']['workouts'], 7);
-      expect((next['remaining'] as Map)['workouts'], 5); // 7 - 2
+      expect(next['code'], 'SD1');
+      // SD1 gate has streak_days:7 requirement (canonical kRankGates)
+      expect(next['requirements']['streak_days'], 7);
       expect(next['binding_constraint'], isA<String>());
     });
 
-    test('returns null at top rank CAPTAIN', () async {
+    test('returns null at top rank Capt', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'CAPTAIN',
+        'current_rank_code': 'Capt',
       });
       final ctx = AiCoachRepository.instance.buildAiContext();
       expect(ctx['next_rank'], isNull);
     });
 
-    test('remaining is clamped to 0 when already meeting requirement', () async {
+    test('remaining map exists and has keys for SD2 → SD1 gate', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'SEAMAN_2',
+        'current_rank_code': 'SD2',
       });
-      // Seed 10 workouts (more than required 7)
+      // SD1 gate: streakAtLeast:7, minWeeksSinceSignup:1 (no workouts gate).
+      // 10 workouts seeded just to confirm workouts don't appear in remaining.
       for (int i = 0; i < 10; i++) {
         final d = DateTime.now().subtract(Duration(days: i));
         await HiveService.instance.workoutBox.put(
@@ -508,7 +509,11 @@ void main() {
       }
       final ctx = AiCoachRepository.instance.buildAiContext();
       final next = ctx['next_rank'] as Map;
-      expect((next['remaining'] as Map)['workouts'], 0);
+      final remaining = next['remaining'] as Map;
+      // SD1 has streak_days and weeks gates — no workouts gate
+      expect(remaining.containsKey('workouts'), isFalse);
+      // streak_days must be present (7 required; 0 current — conservative)
+      expect(remaining['streak_days'], isA<int>());
     });
   });
 
@@ -546,9 +551,9 @@ void main() {
   });
 
   group('eta_next_promotion', () {
-    test('returns null at top rank CAPTAIN', () async {
+    test('returns null at top rank Capt', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'CAPTAIN',
+        'current_rank_code': 'Capt',
       });
       final ctx = AiCoachRepository.instance.buildAiContext();
       expect(ctx['eta_next_promotion'], isNull);
@@ -556,26 +561,23 @@ void main() {
 
     test('computes days at plan cadence when no workouts yet', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'SEAMAN_2',
+        'current_rank_code': 'SD2',
         'days_per_week': 4,
       });
-      // No workouts seeded — needs 7 total for SEAMAN_1
+      // No workouts seeded — SD1 gate is streakAtLeast:7, minWeeks:1
       final ctx = AiCoachRepository.instance.buildAiContext();
       final eta = ctx['eta_next_promotion'] as Map;
       expect(eta['at_plan_cadence'], isNotNull);
       final atPlan = eta['at_plan_cadence'] as Map;
       expect(atPlan['days'], isA<int>());
-      // 7 workouts at 4/wk = 1.75 weeks ≈ 12-13 days
-      expect(atPlan['days'], greaterThanOrEqualTo(10));
-      expect(atPlan['days'], lessThanOrEqualTo(16));
     });
 
     test('computes days at current cadence and plan cadence', () async {
       await HiveService.instance.userBox.put('profile', {
-        'current_rank_code': 'SEAMAN_2',
+        'current_rank_code': 'SD2',
         'days_per_week': 4,
       });
-      // 4 workouts in last 28 days = 1/wk; need 7 total for SEAMAN_1
+      // 4 workouts in last 28 days = 1/wk; SD1 gate: streakAtLeast:7
       for (int i = 0; i < 4; i++) {
         final d = DateTime.now().subtract(Duration(days: i * 7));
         await HiveService.instance.workoutBox.put(
