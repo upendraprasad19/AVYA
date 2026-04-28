@@ -98,8 +98,11 @@ void main() {
           .firstWhere((e) => e.key.contains('ai_coach_provider.dart'))
           .value;
 
-      // Extract the send() method body (from declaration to next method or end)
-      final sendStart = source.indexOf('Future<void> send(String message');
+      // Extract the send() method body. Signature is multi-line:
+      //   Future<void> send(
+      //     String message, { ... }
+      // — search for the opening line, not the inlined form.
+      final sendStart = source.indexOf('Future<void> send(');
       expect(sendStart, isNot(-1), reason: 'send() method must exist');
 
       // Get everything from send() declaration to the next top-level method
@@ -134,14 +137,16 @@ void main() {
           .firstWhere((e) => e.key.contains('ai_coach_provider.dart'))
           .value;
 
-      // Must still call ensureFreshToken on auth errors (to fix the token
-      // for the NEXT user-initiated send)
-      expect(source, contains('ensureFreshToken'),
+      // Must still call refreshSession() on auth errors (to fix the token
+      // for the NEXT user-initiated send). Note: keyword changed during
+      // 2026-04-24 auth refactor — was `ensureFreshToken`, now
+      // `refreshSession()`. Both names mean the same thing.
+      expect(source, contains('refreshSession()'),
           reason:
               'Auth error path must still refresh token for next attempt');
 
-      // Must show an error message to the user (not silently retry)
-      expect(source, contains("'Session expired"),
+      // Must surface "Session expired" copy to the user (not silently retry)
+      expect(source, contains('Session expired'),
           reason:
               'Auth error must surface a "Session expired" message to user');
     });

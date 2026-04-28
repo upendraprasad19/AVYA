@@ -34,7 +34,17 @@ class GuardedBox<T> {
   final String _ownerHash;
   final String _ownerFullId;
 
+  /// Test-only escape hatch. When `true`, [_assertOwnership] is a no-op.
+  /// Production code must NEVER set this. Intended for unit tests that
+  /// don't initialise Supabase — without this flag, every guarded box
+  /// access throws because `Supabase.instance` isn't available.
+  ///
+  /// Reset to `false` in test tearDown so a leak across tests can't grant
+  /// ownership-bypass to subsequent suites.
+  static bool testBypassOwnership = false;
+
   void _assertOwnership() {
+    if (testBypassOwnership) return;
     final session = Supabase.instance.client.auth.currentUser?.id;
     if (session == null) {
       throw HiveOwnershipException(
