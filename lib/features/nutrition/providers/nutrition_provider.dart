@@ -1002,6 +1002,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
 
     // Increment times_used counter on the saved meal and sync to cloud.
