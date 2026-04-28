@@ -66,10 +66,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _isSaving = false;
   late bool _isMetric; // true = KG/CM, false = LBS/IN
 
-  // Track original plan-affecting values for rescheduling detection
+  // Track original plan-affecting values for rescheduling detection.
+  // V4 pipeline plan-driving inputs (per CLAUDE.md §12 + plan_engine/):
+  //   daysPerWeek + goal + equipment + fitness_experience drive the split
+  //   resolver + volume filter + exercise selector. session_duration_minutes
+  //   + physique_focus + injuries drive sequencing + warmup/cooldown +
+  //   exclusion masks. ALL must trigger reschedule on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
+  late String _originalFitnessExperience;
+  late int? _originalSessionDuration;
+  late String _originalPhysiqueFocus;
+  late List<String> _originalInjuries;
 
   // Track original target weight for prediction invalidation (Bug #12)
   late double _originalTargetWeight;
@@ -169,10 +178,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     }
 
-    // Capture original values for rescheduling detection
+    // Capture original values for rescheduling detection.
+    // _injuries is captured as List.of(...) so later edits via the chip
+    // row don't mutate the original snapshot (List references are aliased
+    // in Dart; without List.of we'd compare a list to itself).
     _originalDaysPerWeek = _daysPerWeek;
     _originalGoal = _goal;
     _originalEquipment = _equipment;
+    _originalFitnessExperience = _fitnessExperience;
+    _originalSessionDuration = _sessionDuration;
+    _originalPhysiqueFocus = _physiqueFocus;
+    _originalInjuries = List<String>.of(_injuries);
     _originalTargetWeight = targetKgRaw ?? 0.0;
   }
 
