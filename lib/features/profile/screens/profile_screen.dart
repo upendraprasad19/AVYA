@@ -42,6 +42,7 @@ import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
 import '../screens/invite_friends_sheet.dart';
+import '../widgets/rank_chip_full_width.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -410,14 +411,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // Wardroom letterhead — mono eyebrow + Fraunces title above identity card
-              const WardLetterhead(
-                eyebrow: 'OFFICER \u00B7 DOSSIER',
-                title: 'Profile',
-                padding: EdgeInsets.fromLTRB(22, 14, 22, 12),
-                divider: true,
+              // U7 — unified tab header (D-6). WardTabHeader + RankChipFullWidth
+              // replaces old WardLetterhead. Avatar tap is a no-op here since
+              // we are already on Profile. Profile identity card below provides
+              // the detailed user context.
+              WardTabHeader(
+                eyebrow: 'DOSSIER',
+                avatarInitial: ref.watch(userInitialProvider),
+                streakDays: ref.watch(streakProvider),
+                freezesAvailable: ref.watch(streakFreezeProvider),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
+              const RankChipFullWidth(),
+              const SizedBox(height: 6),
 
               // 1. Profile identity with banner + avatar
               ProfileIdentity(
