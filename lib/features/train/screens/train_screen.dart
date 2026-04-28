@@ -8,11 +8,11 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
-import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -107,28 +107,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // APK Test #3 / Obs 1: rank chip at top of Train
-                    // tab content. Tap → roadmap. Reads denormalized
-                    // current_rank_code via RankService.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.screenPadding, 14, AppSpacing.screenPadding, 0),
-                      child: Builder(builder: (context) {
-                        final current = RankService.instance.getCurrentRank();
-                        final next = RankService.instance.getNextRank();
-                        return RankChip(
-                          rankCode: current.entry.code,
-                          displayName: current.entry.displayName,
-                          countdownText: next == null
-                              ? null
-                              : (next.daysUntilEligible != null
-                                  ? 'NEXT IN ${next.daysUntilEligible} DAYS'
-                                  : 'NEXT IN —'),
-                          isTerminal: current.entry.isTerminal,
-                          onTap: () => context.push('/train/roadmap'),
-                        );
-                      }),
+                    // U7 — unified tab header (D-3). WardTabHeader +
+                    // RankChipFullWidth replaces the old compact RankChip
+                    // at the top of the Train tab.
+                    WardTabHeader(
+                      eyebrow: 'TRAIN',
+                      avatarInitial: ref.watch(userInitialProvider),
+                      streakDays: ref.watch(streakProvider),
+                      freezesAvailable: ref.watch(streakFreezeProvider),
+                      onAvatarTap: () => context.go('/profile'),
                     ),
+                    const SizedBox(height: 4),
+                    const RankChipFullWidth(),
+                    const SizedBox(height: 8),
                     // 1. Plan header with progress bar
                     _buildPlanHeader(plan, selectedWeek, weekDays),
 
