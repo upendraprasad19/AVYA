@@ -69,4 +69,28 @@ Two distinct root causes:
 
 ### Hive marker per plan C-4/C-6
 
-The plan asks for `coachBox['intent_<id>_dispatched_at'] = DateTime.now()` to filter cards. **This is redundant** — `pendingToolIntentsProvider` already tracks status via `ToolIntent.status` and `_updateStatus` after execute. Filtering by `intent.status != executed && != rejected` in the screen's `where` clause is the cleaner equivalent. Will use status field, not new Hive key, to avoid duplicate-state-of-truth bugs.
+The plan asks for `coachBox['intent_<id>_dispatched_at'] = DateTime.now()` to filter cards. The primary state of truth is `ToolIntent.status` in `PendingToolIntentsNotifier` (lives in Riverpod state). The Hive marker is added as **belt-and-braces secondary state** that survives hot restart / low-memory kill — written in the central `execute()` flow at the end of the success path, applied to all 17 tool types. The chat screen's render code uses `intent.status`, not the Hive marker, as the primary filter (it's faster — no I/O on every rebuild).
+
+## C-5 verification: pausePlan
+
+`_executePausePlan` (tool_dispatcher.dart L668–700) is the canonical handler. Verified:
+- Reads `start_date` + `days` + `reason` from intent payload (validates both required fields).
+- Calls `WorkoutScheduleService.instance.pauseRange(startDate:, days:, reason:)` (line 739 of workout_schedule_service.dart, returns `Future<List<String>>` of paused dates).
+- Catches typed `PausePlanException` → friendly user message via `_pausePlanErrorMessage` (handles `past_date`, `no_schedules_in_range`).
+- Clears planner cache via `PausePlanPlanner.instance.clearCache(intent.id)` on success.
+- Outer execute() fires the standard workout-family invalidation + syncWorkoutData + pushSnapshot batch.
+- Outer execute() now also stamps the dispatched-at Hive marker (added in C-4 commit).
+
+No code change required — the path was correct before this batch.
+
+## C-6 verification: terminal-state filtering
+
+`_buildDestructiveIntentTile` now branches on `intent.status` to render:
+- `executed` → green "Applied: ..." pill via `_buildIntentTerminalPill`.
+- `rejected` → muted "Dismissed: ..." pill.
+- `expired` → muted "Expired: ..." pill.
+- pending / executing / failed → full review card with APPLY + DISMISS WardButtons.
+
+This collapses settled intents to a small one-line pill instead of leaving the full review card in place, which was the "cards pile up" symptom in the original bug report.
+
+The `pendingToolIntentsProvider.prune()` method (provider L73-84) already removes settled intents older than 5 minutes from the in-memory list, so the pills self-cleanup over time.
