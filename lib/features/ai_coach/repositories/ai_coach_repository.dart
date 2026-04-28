@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -1200,42 +1199,6 @@ class AiCoachRepository {
     }
   }
 
-  /// Compact rank summary for AI context. Reads denormalized
-  /// current_rank_code (no network round-trip).
-  Map<String, dynamic> _getCurrentRankSnapshot() {
-    try {
-      final current = RankService.instance.getCurrentRank();
-      return {
-        'code': current.entry.code,
-        'name': current.entry.displayName,
-        'category': current.entry.category,
-        'ordinal': current.entry.ordinal,
-      };
-    } catch (e) {
-      debugPrint('[AiCoachRepository._getCurrentRankSnapshot] $e');
-      return {'code': 'SD2', 'name': 'Seaman 2nd Class', 'ordinal': 0};
-    }
-  }
-
-  /// Weeks/workouts until the user's next promotion. Returns null when
-  /// already at Capt (terminal).
-  Map<String, dynamic>? _getWeeksUntilNextRank() {
-    try {
-      final next = RankService.instance.getNextRank();
-      if (next == null) return null;
-      return {
-        'next_code': next.entry.code,
-        'next_name': next.entry.displayName,
-        if (next.daysUntilEligible != null)
-          'days_remaining': next.daysUntilEligible,
-        if (next.workoutsRemaining != null)
-          'workouts_remaining': next.workoutsRemaining,
-      };
-    } catch (e) {
-      debugPrint('[AiCoachRepository._getWeeksUntilNextRank] $e');
-      return null;
-    }
-  }
 
   /// Returns the rolling conversation summary from coachBox.
   /// Written by SyncService from the nightly rolling-context Edge Function.
@@ -1588,11 +1551,8 @@ class AiCoachRepository {
   }
 
   /// Returns the user's current rank, defaulting to SEAMAN_2 for fresh users.
-  ///
-  /// Note: this is a SEPARATE helper from `_getCurrentRankSnapshot()` which
-  /// delegates to `RankService`. This helper reads directly from profile and
-  /// uses the local `_rankLadder` constant for display names — no RankService
-  /// dependency so it's safe in unit tests without RankService init.
+  /// Reads directly from profile using the local `_rankLadder` constant —
+  /// no RankService dependency so it's safe in unit tests without RankService init.
   Map<String, dynamic> _getCurrentRankFromLadder() {
     final profile = _hive.userBox.get('profile') as Map?;
     final code = (profile?['current_rank_code'] as String?) ?? 'SEAMAN_2';
