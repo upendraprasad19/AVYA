@@ -120,26 +120,76 @@ async function handler(
   const totalWorkouts = totalWorkoutsCount ?? 0;
 
   // ── 4. Actual cadence: workouts in last 28 days → workouts/week ───────────
+  // NOTE: workout_logs uses logged_at (completed_at does not exist on this table).
   const cutoff28 = new Date(Date.now() - 28 * 86_400_000).toISOString();
   const { count: recent28Count } = await sb
     .from("workout_logs")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .gte("completed_at", cutoff28);
+    .gte("logged_at", cutoff28);
   const actualCadence = Number(((recent28Count ?? 0) / 4).toFixed(2));
 
-  // ── 5. Progress row: streak + deployments + gap ───────────────────────────
+  // ── 5. Progress row: deployments via current_phase ────────────────────────
+  // user_progress does NOT have current_streak_days, deployments_complete, or
+  // longest_gap_days. We derive:
+  //   deploymentsComplete = current_phase - 1  (each phase = 1 deployment done)
+  // streakDays and longestGapDays are computed inline from workout_logs.date below.
   const { data: progressRow } = await sb
     .from("user_progress")
-    .select("current_streak_days, deployments_complete, longest_gap_days")
+    .select("current_phase")
     .eq("user_id", userId)
     .maybeSingle();
 
-  const streakDays = (progressRow?.current_streak_days as number | undefined) ?? 0;
-  const deploymentsComplete =
-    (progressRow?.deployments_complete as number | undefined) ?? 0;
-  const longestGapDays =
-    (progressRow?.longest_gap_days as number | undefined) ?? 0;
+  const deploymentsComplete = Math.max(
+    0,
+    ((progressRow?.current_phase as number | undefined) ?? 1) - 1,
+  );
+
+  // ── 5a. Streak + gap: computed inline from workout_logs.date ─────────────
+  // Pull distinct workout dates from the last year to compute streak and gap.
+  const cutoff365 = new Date(Date.now() - 365 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const { data: dateLogs } = await sb
+    .from("workout_logs")
+    .select("date")
+    .eq("user_id", userId)
+    .gte("date", cutoff365)
+    .order("date", { ascending: false });
+
+  // Deduplicate dates and sort descending
+  const sortedDates = [
+    ...new Set(
+      (dateLogs ?? []).map((r: { date: string }) => r.date as string),
+    ),
+  ].sort((a, b) => b.localeCompare(a));
+
+  let streakDays = 0;
+  let longestGapDays = 0;
+  if (sortedDates.length > 0) {
+    // Current streak: count consecutive days back from today/yesterday
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let cursor = todayStr;
+    for (const d of sortedDates) {
+      const dayDiff =
+        (new Date(cursor).getTime() - new Date(d).getTime()) / 86_400_000;
+      if (dayDiff <= 1.5) {
+        streakDays++;
+        cursor = d;
+      } else {
+        break;
+      }
+    }
+
+    // Longest gap: max gap between consecutive workout dates
+    for (let i = 0; i < sortedDates.length - 1; i++) {
+      const gap =
+        (new Date(sortedDates[i]).getTime() -
+          new Date(sortedDates[i + 1]).getTime()) /
+        86_400_000;
+      if (gap > longestGapDays) longestGapDays = Math.floor(gap);
+    }
+  }
 
   // ── 6. Current rank index ─────────────────────────────────────────────────
   const currentIdx = LADDER.findIndex((r) => r.code === currentRankCode);
