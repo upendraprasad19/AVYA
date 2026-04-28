@@ -1004,7 +1004,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     NutritionRepository.syncLogToSupabase(data: logMap);
     unawaited(SyncService.instance.pushSnapshot());
 
-    // Increment times_used counter on the saved meal
+    // Increment times_used counter on the saved meal and sync to cloud.
     final savedId = savedMeal['id'] as String?;
     if (savedId != null) {
       final existing = HiveService.instance.nutritionBox.get(savedId);
@@ -1012,6 +1012,8 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
         final updated = Map<String, dynamic>.from(existing);
         updated['times_used'] = ((updated['times_used'] as int?) ?? 0) + 1;
         await HiveService.instance.nutritionBox.put(savedId, updated);
+        // Push the updated counter to Supabase so cloud stays in sync.
+        unawaited(SyncService.instance.syncSavedMealsNow());
       }
     }
 

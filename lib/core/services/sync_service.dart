@@ -296,6 +296,10 @@ class SyncService {
       }
       _healthSyncCompleter!.complete();
 
+      // Drain any telemetry failures that were queued during the previous
+      // session because _reportSyncFailure itself hit a network error.
+      unawaited(drainTelemetryQueue());
+
       // Backfill custom-entity ids for pre-F8/F22 entries. Runs at most
       // once — the scan is O(customBox.length) and quick.
       await _backfillCustomEntityIds();
@@ -1563,6 +1567,63 @@ class SyncService {
     }
   }
 
+  // ── Telemetry failure queue ─────────────────────────────────
+  // When _reportSyncFailure itself fails (network error, 5xx, etc.) the failure
+  // was previously silently dropped. The queue below persists up to 50 entries
+  // in syncBox and drains them on the next checkAndSync call (app launch).
+
+  static const String _telemetryQueueKey = 'pending_telemetry_failures';
+  static const int _telemetryQueueMax = 50;
+
+  /// Enqueues a failed telemetry report so it can be retried on next launch.
+  /// Last-resort — all exceptions are swallowed to prevent infinite recursion.
+  Future<void> _enqueueTelemetryFailure(String opType, Object error) async {
+    try {
+      final queue =
+          (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
+              [];
+      final msg = error.toString();
+      queue.insert(0, {
+        'op_type': opType,
+        'error': msg.substring(0, msg.length.clamp(0, 500)),
+        'queued_at': DateTime.now().toIso8601String(),
+      });
+      // Cap at max to prevent unbounded Hive growth on persistent failures.
+      while (queue.length > _telemetryQueueMax) {
+        queue.removeLast();
+      }
+      await _hive.syncBox.put(_telemetryQueueKey, queue);
+    } catch (_) {
+      // Last-resort — truly silent.
+    }
+  }
+
+  /// Drains the telemetry failure queue, retrying each entry via
+  /// [_reportSyncFailure]. Entries that succeed are removed; those that still
+  /// fail are re-enqueued for the following launch.
+  ///
+  /// Called fire-and-forget from [checkAndSync] on every app launch.
+  Future<void> drainTelemetryQueue() async {
+    final queue =
+        (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
+            [];
+    if (queue.isEmpty) return;
+
+    final remaining = <Map>[];
+    for (final entry in queue) {
+      try {
+        await _reportSyncFailure(
+          opType: (entry['op_type'] as String?) ?? 'unknown',
+          error: (entry['error'] as String?) ?? 'unknown',
+        );
+        // Success — don't re-add to remaining.
+      } catch (_) {
+        remaining.add(entry); // Still failing — keep for next attempt.
+      }
+    }
+    await _hive.syncBox.put(_telemetryQueueKey, remaining);
+  }
+
   /// Fire-and-forget telemetry for a sync failure. Sends one row to
   /// `client_errors` via the `log-client-error` Edge Function so we stop
   /// being blind to payload-rejection failures in prod.
@@ -1592,8 +1653,29 @@ class SyncService {
         },
       );
     } catch (_) {
-      // Telemetry must never throw — swallow everything. Local debugPrint
-      // above has already left a breadcrumb for dev builds.
+      // Telemetry call itself failed — enqueue for next-launch retry so no
+      // failure is silently dropped. _enqueueTelemetryFailure is truly silent.
+      await _enqueueTelemetryFailure(opType, error);
+    }
+  }
+
+  /// Immediately pushes all saved meals to Supabase `user_saved_meals`, including
+  /// the updated `times_used` counter.
+  ///
+  /// Called fire-and-forget from [SavedMealsNotifier.relogSavedMeal] so that the
+  /// counter stays in sync with the cloud copy. The private [_syncSavedMeals] does
+  /// the actual upsert work; this is the public wrapper that resolves the user-id
+  /// and delegates.
+  Future<void> syncSavedMealsNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncSavedMeals(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncSavedMealsNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_saved_meals_now', error: e);
+      } catch (_) {}
     }
   }
 
