@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1566,13 +1566,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // posterior chain priority); injuries drive exclusion masks in the
       // exercise selector. ALL must trigger reschedule on change to keep
       // today's schedule consistent with the saved profile.
-      final planChanged = _daysPerWeek != _originalDaysPerWeek ||
-          _goal != _originalGoal ||
-          _equipment != _originalEquipment ||
-          _fitnessExperience != _originalFitnessExperience ||
-          _sessionDuration != _originalSessionDuration ||
-          _physiqueFocus != _originalPhysiqueFocus ||
-          !listEquals(_injuries, _originalInjuries);
+      final planChanged = computePlanChanged(
+        daysPerWeek: _daysPerWeek,
+        originalDaysPerWeek: _originalDaysPerWeek,
+        goal: _goal,
+        originalGoal: _originalGoal,
+        equipment: _equipment,
+        originalEquipment: _originalEquipment,
+        fitnessExperience: _fitnessExperience,
+        originalFitnessExperience: _originalFitnessExperience,
+        sessionDuration: _sessionDuration,
+        originalSessionDuration: _originalSessionDuration,
+        physiqueFocus: _physiqueFocus,
+        originalPhysiqueFocus: _originalPhysiqueFocus,
+        injuries: _injuries,
+        originalInjuries: _originalInjuries,
+      );
 
       if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
         final changes = <String>[];
@@ -1758,4 +1767,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+}
+
+/// Pure helper extracted from `_EditProfileScreenState._save` so the
+/// reschedule trigger can be unit-tested without instantiating the
+/// widget. Mirrors the boolean exactly — keep in sync with B-2.
+@visibleForTesting
+bool computePlanChanged({
+  required int daysPerWeek,
+  required int originalDaysPerWeek,
+  required String goal,
+  required String originalGoal,
+  required String equipment,
+  required String originalEquipment,
+  required String fitnessExperience,
+  required String originalFitnessExperience,
+  required int? sessionDuration,
+  required int? originalSessionDuration,
+  required String physiqueFocus,
+  required String originalPhysiqueFocus,
+  required List<String> injuries,
+  required List<String> originalInjuries,
+}) {
+  return daysPerWeek != originalDaysPerWeek ||
+      goal != originalGoal ||
+      equipment != originalEquipment ||
+      fitnessExperience != originalFitnessExperience ||
+      sessionDuration != originalSessionDuration ||
+      physiqueFocus != originalPhysiqueFocus ||
+      !listEquals(injuries, originalInjuries);
 }
