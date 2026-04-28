@@ -163,11 +163,24 @@ class RankService {
       }
     }
 
+    // B4: clamp both values to non-negative as a defense-in-depth measure.
+    // Individual paths already guard with > 0, but this ensures callers
+    // that skip the guard (e.g. chip headers) never render a negative number.
     return RankInfo(
       entry: nextEntry,
-      daysUntilEligible: daysOut,
-      workoutsRemaining: workoutsOut,
+      daysUntilEligible: daysOut?.clamp(0, 365),
+      workoutsRemaining: workoutsOut?.clamp(0, 10000),
     );
+  }
+
+  /// Days until the user reaches the next rank.
+  ///
+  /// Returns 0 if: at top rank, requirements already met, or no days gate.
+  /// ALWAYS non-negative. Shared helper so both chip header and profile
+  /// RANK card use the same value with the same sign.
+  int daysUntilNextRank() {
+    final next = getNextRank();
+    return next?.daysUntilEligible?.clamp(0, 365) ?? 0;
   }
 
   List<LadderEntryView> getLadder() {

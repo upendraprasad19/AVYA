@@ -194,7 +194,10 @@ class _ServiceRecordSectionState extends ConsumerState<ServiceRecordSection> {
     if (user != null) {
       final createdAt = DateTime.tryParse(user.createdAt);
       if (createdAt != null) {
-        serviceDays = DateTime.now().difference(createdAt).inDays;
+        // B4: clamp to non-negative — createdAt can be a UTC timestamp
+        // that, when compared to device local time, produces a negative
+        // inDays value (clock skew or timezone mismatch).
+        serviceDays = DateTime.now().difference(createdAt).inDays.clamp(0, 36500);
       }
     }
 
