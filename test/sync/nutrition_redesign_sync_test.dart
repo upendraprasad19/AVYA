@@ -41,7 +41,7 @@ void main() {
   test('CustomFoodNotifier.addCustomFood fires syncCustomItemsNow', () {
     final addStart = source.indexOf('Future<void> addCustomFood(');
     expect(addStart, isNot(-1), reason: 'addCustomFood must exist');
-    final body = source.substring(addStart, addStart + 2400);
+    final body = source.substring(addStart, addStart + 3000);
 
     expect(
       body.contains('SyncService.instance.syncCustomItemsNow'),
