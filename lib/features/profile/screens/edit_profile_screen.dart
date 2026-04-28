@@ -1585,6 +1585,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (_equipment != _originalEquipment) {
           changes.add('Equipment: ${_equipmentOptions[_originalEquipment]} → ${_equipmentOptions[_equipment]}');
         }
+        if (_fitnessExperience != _originalFitnessExperience) {
+          String label(String e) => e[0].toUpperCase() + e.substring(1);
+          changes.add('Experience: ${label(_originalFitnessExperience)} → ${label(_fitnessExperience)}');
+        }
+        if (_sessionDuration != _originalSessionDuration) {
+          String fmt(int? d) => d == null ? '—' : '$d min';
+          changes.add('Session: ${fmt(_originalSessionDuration)} → ${fmt(_sessionDuration)}');
+        }
+        if (_physiqueFocus != _originalPhysiqueFocus) {
+          String label(String f) {
+            switch (f) {
+              case 'glutes_legs':
+                return 'Glutes & Legs';
+              case 'chest_shoulders_arms':
+                return 'Chest, Shoulders & Arms';
+              case 'strength':
+                return 'Strength';
+              case 'balanced':
+              default:
+                return 'Balanced';
+            }
+          }
+          changes.add('Focus: ${label(_originalPhysiqueFocus)} → ${label(_physiqueFocus)}');
+        }
+        if (!listEquals(_injuries, _originalInjuries)) {
+          changes.add('Injuries: ${_originalInjuries.length} → ${_injuries.length} listed');
+        }
 
         final shouldReschedule = await showDialog<bool>(
           context: context,
