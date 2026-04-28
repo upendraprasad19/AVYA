@@ -145,7 +145,91 @@ This is the dominant fact of the investigation: **OBS-5 was reproduced on a buil
 
 ## restoreFromCloudForUser filter audit
 
-[deferred to Task A-3]
+### Method signature
+
+There is **no `restoreFromCloudForUser`** on this branch. The single restore entry-point is:
+
+```dart
+Future<void> restoreFromCloud(String userId) async   // line 613
+Future<void> restoreLightweightAlways(String userId) async   // line 593
+Future<void> _restoreIfNeeded(String userId) async   // line 565
+```
+
+`userId` is **passed as a parameter** to every restore method. Every per-table helper (`_restoreWorkoutLogs`, `_restoreCoachInteractions`, etc.) receives `userId` as a parameter and forwards it to `.eq('user_id', userId)`.
+
+### user_id source
+
+Callers of `restoreFromCloud`:
+- `_restoreIfNeeded(userId)` → which is called by `checkAndSync()` (the one-and-only public restore caller).
+- `checkAndSync` (location, search the file) reads `userId` from the **current Supabase session** at the start of the method, NOT from a cached field.
+
+Verified: `grep _userId|_cachedUserId` in `sync_service.dart` returns three hits (lines 485, 1312, 2026) — all of them read `userBox.get('profile')` from Hive **for the purposes of getting fields for SYNC UP**, not for filtering restore queries. None of those reads is used as the user_id filter for cloud reads.
+
+**Conclusion: filters cannot be talking to the wrong user via stale state.** `userId` flows top-down from the session.
+
+### Per-table filter audit
+
+All restore queries use either `_fetchAllRows(table, userId, ...)` (which inserts `.eq('user_id', userId)` at line 1617) or an inline `.eq('user_id', userId)`. Every fetch in the restore graph is correctly user-scoped:
+
+| Table | Filter | Source of user_id | Stale risk? |
+|---|---|---|---|
+| `user_profile` | `.eq('user_id', userId)` | passed in | none |
+| `user_progress` | `.eq('user_id', userId)` | passed in | none |
+| `workout_logs` | `_fetchAllRows` → `.eq('user_id', userId)` | passed in | none |
+| `workout_log_exercises` | `_fetchAllRows` | passed in | none |
+| `workout_log_sets` | `_fetchAllRows` | passed in | none |
+| `nutrition_logs` | `_fetchAllRows` | passed in | none |
+| `weight_logs` | `_fetchAllRows` | passed in | none |
+| `body_measurements` | `_fetchAllRows` | passed in | none |
+| `water_logs` | `_fetchAllRows` | passed in | none |
+| `sleep_logs` | `_fetchAllRows` | passed in | none |
+| `daily_steps` | `_fetchAllRows` | passed in | none |
+| `streaks` | `_fetchAllRows` | passed in | none |
+| `user_custom_exercises` | inline `.eq('user_id', userId)` (line 1838) | passed in | none |
+| `user_custom_foods` | inline `.eq('user_id', userId)` (line 1874) | passed in | none |
+| `workout_templates` | `_fetchAllRows` | passed in | none |
+| `scheduled_workouts` | `_fetchAllRows` | passed in | none |
+| `user_saved_meals` | `_fetchAllRows` | passed in | none |
+| `user_preferences` | `_fetchAllRows` | passed in | none |
+| `workout_schedule_completions` | inline `.eq('user_id', userId)` (line 1804) | passed in | none |
+| `user_daily_snapshots` | inline `.eq('user_id', userId)` (line 657) | passed in | none |
+| `ai_coach_interactions` | inline `.eq('user_id', userId)` (line 2752) | passed in | none |
+
+### Findings — the actual leak mechanism
+
+**THE LEAK IS NOT IN THE FILTERS — IT IS IN THE MERGE LOGIC.**
+
+`_restoreCoachInteractions` (lines 2747-2778):
+
+```dart
+for (final row in rows) {
+  final map = Map<String, dynamic>.from(row as Map);
+  final id = map['id'] as String? ?? '';
+  if (id.isEmpty) continue;
+  final hiveKey = id.startsWith('coach_') ? id : 'coach_${id.hashCode}';
+  if (_hive.coachBox.get(hiveKey) != null) continue;  // ← LINE 2762
+  await _hive.coachBox.put(hiveKey, {...});
+}
+```
+
+The cloud rows are correctly scoped to Avyaansh (verified by user — cloud has 2 rows for Avyaansh, 13 for Upendra). They get inserted into `coachBox` with deterministic keys derived from cloud row id.
+
+But **line 2762 SKIPS any key that already exists** in `coachBox`. If Upendra's 13 messages survived `clearAllData` (or `clearAllData` was never called), they remain in `coachBox` under their original keys (which were also derived from Upendra's cloud row ids, distinct from Avyaansh's). Avyaansh's 2 messages get appended. The AI coach screen reads ALL keys from `coachBox` and renders all 15 — appearing as Upendra's 13 + Avyaansh's 2.
+
+**Same skip-if-exists pattern exists in:**
+- `_restoreWorkoutLogs` line 1654 — same risk for `workoutBox` `wlog_*` keys
+- `_restoreExerciseLogs` line 1709 — same risk for `exlog_*` keys
+- Other restore methods follow the same pattern (skip-if-exists is a sync-perf optimization to avoid re-writing rows that haven't changed)
+
+So the entire restore graph is "additive merge" by design. It is correct ONLY IF Hive was wiped before restore. **If Hive isn't wiped between users, every box becomes a union of all users' data**.
+
+### Action items for Layer 2
+
+- [ ] Add a session ownership stamp (`config['hive_owner_user_id']`) checked BEFORE any restore call; if mismatch → `clearAllData()` first, then restore.
+- [ ] Or: clear specific boxes inside the restore method itself before merging (not user-isolation-safe — sync-up still needs the data).
+- [ ] Or: include a "purge step" at the start of `restoreFromCloud` if `Hive.userBox.get('profile')['id']` differs from the parameter `userId`. (Cheaper than a full ownership-stamp infra.)
+- [ ] Add `notificationsBox` to `clearAllData()` — separate gap, found during this audit.
+- [ ] Audit every other restore helper for the same skip-if-exists pattern; treat them all as Layer 2 fix candidates.
 
 ---
 
