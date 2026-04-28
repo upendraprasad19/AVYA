@@ -12,7 +12,6 @@ import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
-import '../widgets/streak_badge.dart';
 import '../widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../widgets/weekly_calendar.dart';
@@ -275,67 +274,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // -- Header ---------------------------------------------------------
+  //
+  // D-5 (APK Test #5 Plan D): replaced the legacy WELCOME BACK row with
+  // the standardised WardLetterhead structure — `DAILY · TUE 28 APR`
+  // eyebrow + dynamic time-of-day greeting + 44 dp avatar in the
+  // letterhead's leadingAvatar slot. The streak / freeze cluster moved
+  // into a WardStatusStrip directly below the gold rule so the standing
+  // cluster is consistent across tabs (Daily, Train, Nutrition, Profile).
 
   Widget _buildHeader(WidgetRef ref) {
-    final firstName = ref.watch(userFirstNameProvider);
     final initial = ref.watch(userInitialProvider);
+    final firstName = ref.watch(userFirstNameProvider);
+    final greeting = ref.watch(userGreetingProvider);
     final streak = ref.watch(streakProvider);
+    final freezes = ref.watch(streakFreezeProvider);
     final profile = ref.watch(userProfileProvider);
     final avatarUrl = profile['avatar_url'] as String?;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.gutter,
-        14,
-        AppSpacing.gutter,
-        10,
-      ),
-      child: Row(
-        children: [
-          WardAvatar(
+    final now = DateTime.now();
+    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const monthShort = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    ];
+    final eyebrow =
+        'DAILY · ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        WardLetterhead(
+          eyebrow: eyebrow,
+          title: '$greeting, $firstName.',
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+          divider: true,
+          leadingAvatar: WardAvatar(
             initial: initial,
             size: 44,
             image: (avatarUrl != null && avatarUrl.isNotEmpty)
                 ? NetworkImage(avatarUrl)
                 : null,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'WELCOME BACK,',
-                  style: AppTypography.mono.copyWith(
-                    color: AppColors.textDim,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  '$firstName \u{1F44B}',
-                  style: AppTypography.h3.copyWith(
-                    fontSize: 18,
-                    height: 1.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
+          child: GestureDetector(
             // F14 · Tap to open the streak explainer modal.
             onTap: () => StreakExplainerSheet.show(
               context,
-              freezesAvailable: ref.read(streakFreezeProvider),
+              freezesAvailable: freezes,
               isPro: SubscriptionService.instance.isPro(),
             ),
-            child: StreakBadge(
-              days: streak,
-              freezesAvailable: ref.watch(streakFreezeProvider),
+            child: WardStatusStrip(
+              streakDays: streak,
+              freezesAvailable: freezes,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
