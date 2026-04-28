@@ -528,13 +528,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Profile completeness (shows until 100%)
-              const ProfileCompletenessCard(),
+              // U6 fix (Test #4 hotfix): ServiceRecordSection (RANK card)
+              // moved ABOVE ProfileCompletenessCard per user observation:
+              // "lets use the blank space indicated to mention the rank with
+              // drop down. saves space. and also move the rank to above
+              // profile completion block."
+              // OBS-5: collapsed by default, tap to expand full ladder.
+              const ServiceRecordSection(),
               const SizedBox(height: 8),
 
-              // OBS-5: RANK card — collapsed by default, tap to expand full
-              // ladder (SERVICE RECORD). Positioned above Daily Goals.
-              const ServiceRecordSection(),
+              // Profile completeness (shows until 100%)
+              const ProfileCompletenessCard(),
               const SizedBox(height: 8),
 
               // #2 Daily Completion summary
