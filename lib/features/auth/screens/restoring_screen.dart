@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Gate screen shown immediately after sign-in success.
 ///
@@ -78,7 +80,38 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // Fully onboarded user — await restore then go home
     await restoreFuture;
     if (!mounted) return;
+    await _ensureOwnershipBeforeHome(user.id);
+    if (!mounted) return;
     context.go('/home');
+  }
+
+  /// B5: Ownership guard — before navigating to /home, verify that Hive's
+  /// [last_authenticated_user_id] matches the current session user.id.
+  ///
+  /// Catches the race where Hive contained a previous user's data and either:
+  ///   - _ensureLocalUser ran before syncBox was stamped (startup ordering), OR
+  ///   - the restore completed for the wrong account.
+  ///
+  /// On mismatch: force-clear Hive, re-stamp ownership, re-restore.
+  Future<void> _ensureOwnershipBeforeHome(String sessionUserId) async {
+    final hive = HiveService.instance;
+    final hiveOwnerId =
+        hive.syncBox.get(HiveService.lastAuthenticatedUserIdKey) as String?;
+
+    if (hiveOwnerId != null && hiveOwnerId != sessionUserId) {
+      debugPrint(
+          '[RestoringScreen] Hive ownership mismatch '
+          '(hive=$hiveOwnerId, session=$sessionUserId). Force-clearing.');
+      await UserRepository.instance.clearAllData();
+      await hive.syncBox.put(HiveService.lastAuthenticatedUserIdKey, sessionUserId);
+      // Re-attempt restore for the correct user. Non-fatal if it fails —
+      // user lands on home with empty local state which will fill on next sync.
+      try {
+        await SyncService.instance.restoreFromCloudForUser();
+      } catch (e) {
+        debugPrint('[RestoringScreen] re-restore after ownership fix failed: $e');
+      }
+    }
   }
 
   /// Looks at the user_profile row and returns the earliest missing onboarding
