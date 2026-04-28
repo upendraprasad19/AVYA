@@ -326,17 +326,42 @@ class AuthNotifier extends Notifier<AuthState2> {
     final configBox = _hive.configBox;
     final existing = userBox.get('profile');
 
-    // If Hive has a profile that isn't provably this user's, wipe it.
-    // Covers three cases:
-    //   1. Different user was logged in (existingId != user.id)
-    //   2. Old profile has no 'id' field (set via onboarding without id) —
-    //      we can't confirm it belongs to the new user, so clear it.
-    //   3. Incomplete sign-out left stale data behind.
+    // B1 layer 2/3: Cross-account safety net — two checks, either fires.
+    //   (a) existing profile id mismatches new user.id → leftover from
+    //       failed/incomplete sign-out
+    //   (b) syncBox['last_authenticated_user_id'] mismatches → other boxes
+    //       (e.g., notificationsBox before A1) stale; survives the
+    //       'existing == null' case the original guard missed
+    final syncBox = _hive.syncBox;
+    bool needsClear = false;
+    String? clearReason;
+
     if (existing != null) {
       final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
       if (existingId == null || existingId != user.id) {
-        await UserRepository.instance.clearAllData();
+        needsClear = true;
+        clearReason = 'profile id mismatch (had=$existingId, now=${user.id})';
       }
+    }
+    if (!needsClear) {
+      final lastAuthId = syncBox.get(HiveService.lastAuthenticatedUserIdKey) as String?;
+      if (lastAuthId != null && lastAuthId != user.id) {
+        needsClear = true;
+        clearReason = 'last_authenticated_user_id mismatch (had=$lastAuthId, now=${user.id})';
+      }
+    }
+    if (needsClear) {
+      debugPrint('[auth/_ensureLocalUser] Cross-account guard fired: $clearReason. Clearing Hive.');
+      await UserRepository.instance.clearAllData();
+    }
+
+    // B1 layer 3: stamp current user.id as Hive's owner (write BEFORE the
+    // rest of _ensureLocalUser so a later failure doesn't leave Hive
+    // "ownerless").
+    try {
+      await syncBox.put(HiveService.lastAuthenticatedUserIdKey, user.id);
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] failed to stamp last_authenticated_user_id: $e');
     }
 
     // Ensure user exists in public.users table (Edge Functions need this).
