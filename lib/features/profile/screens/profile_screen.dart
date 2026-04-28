@@ -419,12 +419,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 10),
 
-              // APK Test #3 / Obs 1: SERVICE RECORD above bio stats.
-              // Ladder + lifetime stats. ServiceRecordSection reads
-              // RankService.getLadder() + WorkoutRepository lifetime
-              // volume on each rebuild (cheap; called rarely).
-              const ServiceRecordSection(),
-
               // 1. Profile identity with banner + avatar
               ProfileIdentity(
                 name: name,
@@ -536,6 +530,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
               // Profile completeness (shows until 100%)
               const ProfileCompletenessCard(),
+              const SizedBox(height: 8),
+
+              // OBS-5: RANK card — collapsed by default, tap to expand full
+              // ladder (SERVICE RECORD). Positioned above Daily Goals.
+              const ServiceRecordSection(),
               const SizedBox(height: 8),
 
               // #2 Daily Completion summary

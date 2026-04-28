@@ -9,44 +9,180 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// Profile SERVICE RECORD section.
+/// Profile RANK card.
 ///
-/// Sits ABOVE bio stats. Two parts:
+/// Collapsed (default): shows current rank name + total workouts +
+/// next-rank ETA. Tap the header to expand.
 ///
-///   (a) Letterhead + ladder vertical list. Earned rungs render
-///       with full-color insignia + earned date. Locked rungs
-///       render dimmed insignia + gate description.
-///
-///   (b) Lifetime stats row — deployments completed / service days
-///       (from auth.users.created_at) / total volume (kg).
-class ServiceRecordSection extends ConsumerWidget {
+/// Expanded: reveals the full ladder list under a "SERVICE RECORD"
+/// sub-label, plus the lifetime stats row (deployments / service days
+/// / total volume).
+class ServiceRecordSection extends ConsumerStatefulWidget {
   const ServiceRecordSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ServiceRecordSection> createState() =>
+      _ServiceRecordSectionState();
+}
+
+class _ServiceRecordSectionState extends ConsumerState<ServiceRecordSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = RankService.instance.getCurrentRank();
+    final next = RankService.instance.getNextRank();
     final ladder = RankService.instance.getLadder();
     final lifetime = _readLifetimeStats();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.gutter, 14, AppSpacing.gutter, 18,
+        AppSpacing.gutter, 0, AppSpacing.gutter, 0,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const WardLetterhead(
-            eyebrow: 'SERVICE · RECORD',
-            title: 'Lifetime ladder',
-            padding: EdgeInsets.fromLTRB(0, 0, 0, 12),
-            divider: true,
-          ),
-          for (final entry in ladder)
-            _LadderRow(entry: entry),
-          const SizedBox(height: 14),
-          _LifetimeStatsRow(stats: lifetime),
-        ],
+      child: WardCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Tappable header row ─────────────────────────────
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.card),
+                bottom: Radius.circular(AppRadius.card),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  children: [
+                    Text(
+                      'RANK',
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 10,
+                        letterSpacing: 1.6,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textDim,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Always-visible: current rank summary ────────────
+            Container(height: 1, color: AppColors.border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              child: _buildCurrentRankSummary(current, next),
+            ),
+
+            // ── Conditionally-visible: full ladder ──────────────
+            if (_expanded) ...[
+              Container(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                child: Text(
+                  'SERVICE RECORD',
+                  style: AppTypography.mono.copyWith(
+                    fontSize: 9,
+                    letterSpacing: 1.4,
+                    color: AppColors.textMute,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              for (final entry in ladder)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+                  child: _LadderRow(entry: entry),
+                ),
+              const SizedBox(height: 10),
+              Container(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                child: _LifetimeStatsRow(stats: lifetime),
+              ),
+            ],
+          ],
+        ),
       ),
     );
+  }
+
+  /// One-line (or two-line) current rank summary:
+  ///   Current: "Seaman 2nd Class"
+  ///   Subline:  "2 workouts · Next: Seaman 1st Class in ~5 workouts"
+  ///   OR if at top rank: "2 workouts · Top rank achieved"
+  Widget _buildCurrentRankSummary(RankInfo current, RankInfo? next) {
+    final nextLabel = _nextRankLabel(next);
+
+    return Row(
+      children: [
+        RankInsignia(
+          rankCode: current.entry.code,
+          size: 32,
+          dimmed: false,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                current.entry.displayName.toUpperCase(),
+                style: AppTypography.mono.copyWith(
+                  fontSize: 11,
+                  letterSpacing: 1.3,
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (nextLabel != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  nextLabel,
+                  style: AppTypography.bodyS.copyWith(
+                    color: AppColors.textDim,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        // Tap hint chip
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Text(
+            _expanded ? 'HIDE' : 'VIEW ALL',
+            style: AppTypography.mono.copyWith(
+              fontSize: 8,
+              letterSpacing: 1.2,
+              color: AppColors.textMute,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _nextRankLabel(RankInfo? next) {
+    if (next == null) return 'Top rank achieved';
+    final name = next.entry.displayName;
+    if (next.workoutsRemaining != null && next.workoutsRemaining! > 0) {
+      return 'Next: $name in ~${next.workoutsRemaining} workouts';
+    }
+    if (next.daysUntilEligible != null && next.daysUntilEligible! > 0) {
+      return 'Next: $name in ~${next.daysUntilEligible} days';
+    }
+    return 'Next: $name — almost there';
   }
 
   _LifetimeStats _readLifetimeStats() {
@@ -62,10 +198,8 @@ class ServiceRecordSection extends ConsumerWidget {
       }
     }
 
-    final deployments =
-        (progress['deployments_complete'] as int?) ?? 0;
+    final deployments = (progress['deployments_complete'] as int?) ?? 0;
 
-    // Sum lifetime volume across all exercise logs in Hive.
     double totalVolumeKg = 0;
     final volumes = repo.getAllExerciseLogKeysForLifetimeSum();
     for (final v in volumes) {
@@ -156,24 +290,19 @@ class _LifetimeStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WardCard(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(child: _stat('DEPLOYMENTS', '${stats.deployments}')),
-            Container(width: 1, height: 28, color: AppColors.line2),
-            Expanded(child: _stat('SERVICE DAYS', '${stats.serviceDays}')),
-            Container(width: 1, height: 28, color: AppColors.line2),
-            Expanded(
-              child: _stat(
-                'TOTAL VOLUME',
-                '${stats.totalVolumeKg} kg',
-              ),
-            ),
-          ],
+    return Row(
+      children: [
+        Expanded(child: _stat('DEPLOYMENTS', '${stats.deployments}')),
+        Container(width: 1, height: 28, color: AppColors.line2),
+        Expanded(child: _stat('SERVICE DAYS', '${stats.serviceDays}')),
+        Container(width: 1, height: 28, color: AppColors.line2),
+        Expanded(
+          child: _stat(
+            'TOTAL VOLUME',
+            '${stats.totalVolumeKg} kg',
+          ),
         ),
-      ),
+      ],
     );
   }
 
