@@ -6,6 +6,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -270,33 +271,21 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Sign out BEFORE clearing Hive so the router never sees
   /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> signOut() async {
-    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-
-    // Atomic logout (F16): set a marker BEFORE wiping Hive. If the app is
-    // force-killed mid-clear (OS eviction, power loss), `main.dart` will
-    // detect the marker on next launch and re-run `clearAllData` before any
-    // other code reads a half-wiped box.
-    final hive = HiveService.instance;
     try {
-      await hive.configBox.put('logout_in_progress', true);
-    } catch (_) {/* configBox not open yet / unavailable — best effort */}
-
-    // 1. Terminate session (local scope always works offline).
-    try {
-      await _supabase.client.auth.signOut(scope: SignOutScope.global);
-    } catch (_) {
-      try {
-        await _supabase.client.auth.signOut(scope: SignOutScope.local);
-      } catch (_) {}
+      await UserRepository.instance.clearAllData();
+    } catch (e) {
+      debugPrint('[auth/signOut] clearAllData failed: $e');
     }
-    // 2. Clear all user data after session is gone.
-    await UserRepository.instance.clearAllData();
-
-    // 3. Atomic logout complete — clear the marker.
     try {
-      await hive.configBox.delete('logout_in_progress');
-    } catch (_) {/* configBox was just cleared; flag is already gone */}
-
+      await HiveUserSession.deleteAllFilesForCurrentUser();
+    } catch (e) {
+      debugPrint('[auth/signOut] deleteAllFilesForCurrentUser failed: $e');
+    }
+    try {
+      await _supabase.client.auth.signOut();
+    } catch (e) {
+      debugPrint('[auth/signOut] supabase signOut failed: $e');
+    }
     state = const AuthState2(status: AuthStatus.idle);
   }
 
@@ -556,6 +545,12 @@ class AuthNotifier extends Notifier<AuthState2> {
         // Non-critical — push notifications will still work on next launch.
       }
     }
+
+    // Layer 2.3 — open per-user namespaced boxes BEFORE any UI mounts
+    // that might read user-scoped Hive (RestoringScreen + everything
+    // downstream). Idempotent — re-running for the same user is a
+    // no-op. Different user → previous boxes closed first.
+    await HiveUserSession.openForUser(user.id);
   }
 
   /// Checks if user_profile row is missing in Supabase and pushes local

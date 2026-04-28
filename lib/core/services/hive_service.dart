@@ -38,49 +38,36 @@ class HiveService with WidgetsBindingObserver {
   static const String configBoxName = 'configBox';
   static const String notificationsBoxName = 'notificationsBox';
 
-  static const List<String> _allBoxNames = [
+  /// Shared boxes — opened by `init()` before runApp. Available to all
+  /// users / no users.
+  static const List<String> _sharedBoxNames = <String>[
+    exerciseBoxName,
+    foodBoxName,
+    syncBoxName,
+    configBoxName,
+  ];
+
+  /// User-scoped boxes — opened by `HiveUserSession.openForUser(id)`
+  /// AFTER auth resolves. Each gets a `_<8hex>` namespace suffix.
+  // ignore: unused_field
+  static const List<String> _userScopedBoxNames = <String>[
     userBoxName,
     workoutBoxName,
     nutritionBoxName,
     healthBoxName,
-    exerciseBoxName,
-    foodBoxName,
     customBoxName,
     coachBoxName,
-    syncBoxName,
-    configBoxName,
     notificationsBoxName,
   ];
 
-  /// Initialize Hive: register adapters and open all boxes.
-  ///
-  /// Must be called once in main() before runApp().
-  /// Safe to call multiple times — skips if already initialized.
   Future<void> init() async {
     if (_initialized) return;
-
     await Hive.initFlutter();
-
-    // Register custom Hive adapters here as models are created.
-    // For now we use Map<dynamic, dynamic> storage (no adapters needed).
-    // Example:
-    //   Hive.registerAdapter(UserProfileAdapter());
-
-    // Open all boxes in parallel for fastest startup.
-    // Uses safe open — if a box is corrupted, it is deleted and recreated
-    // rather than crashing the app in an irrecoverable loop.
-    await Future.wait(
-      _allBoxNames.map((name) => _safeOpenBox(name)),
-    );
-
-    _initialized = true;
-
-    // Register lifecycle observer for periodic compact on pause.
-    try {
-      WidgetsBinding.instance.addObserver(this);
-    } catch (_) {
-      // Not running inside a Flutter binding (e.g. unit tests) — skip.
+    for (final name in _sharedBoxNames) {
+      await _safeOpenBox(name);
     }
+    WidgetsBinding.instance.addObserver(this);
+    _initialized = true;
   }
 
   // ── Lifecycle-driven compaction ──────────────────────────────
