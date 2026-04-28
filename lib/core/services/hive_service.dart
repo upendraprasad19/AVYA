@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'hive_user_session.dart';
+
 /// Singleton service that manages all Hive boxes.
 ///
 /// Registers adapters and opens all 10 boxes on app startup.
@@ -133,7 +135,19 @@ class HiveService with WidgetsBindingObserver {
 
       for (final name in _compactableBoxNames) {
         try {
-          await Hive.box(name).compact();
+          final ownerId = HiveUserSession.currentOwnerFullId;
+          // User-scoped boxes only compact when a user is signed in.
+          // Shared boxes (configBox excluded — see _compactableBoxNames
+          // comment on line ~104) compact regardless.
+          final isUserScoped = HiveUserSession.userScopedBoxRoots.contains(name);
+          if (isUserScoped && ownerId == null) {
+            continue;
+          }
+          final actualBoxName = isUserScoped
+              ? HiveUserSession.namespacedBoxName(name, ownerId!)
+              : name;
+          if (!Hive.isBoxOpen(actualBoxName)) continue;
+          await Hive.box(actualBoxName).compact();
         } catch (e) {
           debugPrint('[HiveService._maybeCompact] $name: $e');
         }
@@ -174,18 +188,42 @@ class HiveService with WidgetsBindingObserver {
   }
 
   // ── Convenience getters for each box ──────────────────────────
-
-  Box get userBox => getBox(userBoxName);
-  Box get workoutBox => getBox(workoutBoxName);
-  Box get nutritionBox => getBox(nutritionBoxName);
-  Box get healthBox => getBox(healthBoxName);
+  //
+  // Shared boxes (read-only seed + app-level config) resolve to a
+  // single global box.
   Box get exerciseBox => getBox(exerciseBoxName);
   Box get foodBox => getBox(foodBoxName);
-  Box get customBox => getBox(customBoxName);
-  Box get coachBox => getBox(coachBoxName);
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
-  Box get notificationsBox => getBox(notificationsBoxName);
+
+  // User-scoped boxes resolve to `<root>_<8hex>` based on the current
+  // HiveUserSession owner. Throws StateError if no user is signed in
+  // (caller bug — UI should never read user-scoped Hive on the
+  // unauthenticated splash screen).
+  Box get userBox => _userScopedBox(userBoxName);
+  Box get workoutBox => _userScopedBox(workoutBoxName);
+  Box get nutritionBox => _userScopedBox(nutritionBoxName);
+  Box get healthBox => _userScopedBox(healthBoxName);
+  Box get customBox => _userScopedBox(customBoxName);
+  Box get coachBox => _userScopedBox(coachBoxName);
+  Box get notificationsBox => _userScopedBox(notificationsBoxName);
+
+  Box _userScopedBox(String root) {
+    if (!_initialized) {
+      throw StateError(
+        'HiveService.init() must be called before accessing boxes.',
+      );
+    }
+    final ownerId = HiveUserSession.currentOwnerFullId;
+    if (ownerId == null) {
+      throw StateError(
+        'HiveUserSession not opened — cannot access user-scoped box "$root". '
+        'Call HiveUserSession.openForUser(userId) after sign-in.',
+      );
+    }
+    final boxName = HiveUserSession.namespacedBoxName(root, ownerId);
+    return Hive.box(boxName);
+  }
 
   /// Test-only hook. Marks the singleton as initialized after the test
   /// has opened the boxes itself with raw `Hive.openBox`. Avoids calling
