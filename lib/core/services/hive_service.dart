@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'guarded_box.dart';
 import 'hive_user_session.dart';
 
 /// Singleton service that manages all Hive boxes.
@@ -183,34 +184,33 @@ class HiveService with WidgetsBindingObserver {
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
 
-  // User-scoped boxes resolve to `<root>_<8hex>` based on the current
-  // HiveUserSession owner. Throws StateError if no user is signed in
-  // (caller bug — UI should never read user-scoped Hive on the
-  // unauthenticated splash screen).
-  Box get userBox => _userScopedBox(userBoxName);
-  Box get workoutBox => _userScopedBox(workoutBoxName);
-  Box get nutritionBox => _userScopedBox(nutritionBoxName);
-  Box get healthBox => _userScopedBox(healthBoxName);
-  Box get customBox => _userScopedBox(customBoxName);
-  Box get coachBox => _userScopedBox(coachBoxName);
-  Box get notificationsBox => _userScopedBox(notificationsBoxName);
+  // User-scoped boxes — now wrapped by GuardedBox for ownership
+  // assertion on every operation. The Box getters return the raw
+  // underlying box for backward compatibility with existing call
+  // sites; the GuardedBox getters are preferred for new code.
 
-  Box _userScopedBox(String root) {
-    if (!_initialized) {
-      throw StateError(
-        'HiveService.init() must be called before accessing boxes.',
-      );
-    }
-    final ownerId = HiveUserSession.currentOwnerFullId;
-    if (ownerId == null) {
-      throw StateError(
-        'HiveUserSession not opened — cannot access user-scoped box "$root". '
-        'Call HiveUserSession.openForUser(userId) after sign-in.',
-      );
-    }
-    final boxName = HiveUserSession.namespacedBoxName(root, ownerId);
-    return Hive.box(boxName);
-  }
+  Box get userBox => userBoxGuarded.rawBox;
+  Box get workoutBox => workoutBoxGuarded.rawBox;
+  Box get nutritionBox => nutritionBoxGuarded.rawBox;
+  Box get healthBox => healthBoxGuarded.rawBox;
+  Box get customBox => customBoxGuarded.rawBox;
+  Box get coachBox => coachBoxGuarded.rawBox;
+  Box get notificationsBox => notificationsBoxGuarded.rawBox;
+
+  GuardedBox<dynamic> get userBoxGuarded =>
+      wrapUserScopedBox<dynamic>(userBoxName);
+  GuardedBox<dynamic> get workoutBoxGuarded =>
+      wrapUserScopedBox<dynamic>(workoutBoxName);
+  GuardedBox<dynamic> get nutritionBoxGuarded =>
+      wrapUserScopedBox<dynamic>(nutritionBoxName);
+  GuardedBox<dynamic> get healthBoxGuarded =>
+      wrapUserScopedBox<dynamic>(healthBoxName);
+  GuardedBox<dynamic> get customBoxGuarded =>
+      wrapUserScopedBox<dynamic>(customBoxName);
+  GuardedBox<dynamic> get coachBoxGuarded =>
+      wrapUserScopedBox<dynamic>(coachBoxName);
+  GuardedBox<dynamic> get notificationsBoxGuarded =>
+      wrapUserScopedBox<dynamic>(notificationsBoxName);
 
   /// Test-only hook. Marks the singleton as initialized after the test
   /// has opened the boxes itself with raw `Hive.openBox`. Avoids calling
