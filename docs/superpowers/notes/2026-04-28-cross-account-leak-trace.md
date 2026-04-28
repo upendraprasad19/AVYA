@@ -233,9 +233,25 @@ So the entire restore graph is "additive merge" by design. It is correct ONLY IF
 
 ---
 
-## Auto Backup XML
+## Auto Backup XML verification
 
-[deferred to Task A-4]
+- AndroidManifest references `data_extraction_rules`: **yes** (already present, not added in this task) — `android:dataExtractionRules="@xml/data_extraction_rules"` AND `android:fullBackupContent="@xml/data_extraction_rules"` (legacy Android 11 and below).
+- `allowBackup`: **`false`** (already set).
+- `data_extraction_rules.xml` exists: **yes** (1130 bytes, last modified 2026-04-27).
+- `app_flutter/` excluded from cloud-backup: **yes** — `<exclude domain="file" path="app_flutter" />` inside `<cloud-backup>`.
+- `app_flutter/` excluded from device-transfer: **yes** — same exclude rule inside `<device-transfer>`.
+
+Note: the project memory references `path="app_flutter/"` (trailing slash) but the on-disk file uses `path="app_flutter"` (no trailing slash). For `domain="file"`, Android matches the path as a prefix; both forms work in practice. No fix required. The exclusion exists, scopes the right directory, and shipped with the +3 APK build that produced OBS-5.
+
+**Conclusion: Auto Backup leak path is closed.** The Android Auto Backup mechanism cannot have contributed to OBS-5 because (a) `allowBackup="false"` blocks it entirely on Android 11+, and (b) even if a legacy device honoured `fullBackupContent`, `app_flutter/` is on the exclusion list. The reproduction scenario for OBS-5 was a sign-out + sign-in within the same install — backup/restore was never involved.
+
+The leak path is **purely in-process Hive merging** (per Task A-3). Layer 2 must address the merge logic, not the backup XML.
+
+---
+
+## Recommendation for Layer 2 design
+
+Layer 2 (Tasks A-5 onward) should focus on **per-restore ownership enforcement**, not Android Auto Backup (already closed) and not restore-query filtering (already correct). Specifically: introduce a `HiveUserSession` (or equivalent) that stamps `configBox['hive_owner_user_id']` on every successful sign-in and reads it BEFORE any `restoreFromCloud` / `restoreLightweightAlways` invocation. If the stamp differs from the current session's `user.id` (or is missing), call `clearAllData` first and re-stamp. This closes the gap that `splash_screen.dart:123` cannot close (the "localId is null" window) AND the gap that `ProfileScreen._performSignOut` opens by skipping `_ensureLocalUser` on the next sign-in. Secondary fix: add `notificationsBox` to `clearAllData` so the wipe is total. Tertiary: consider whether the skip-if-exists pattern in `_restoreCoachInteractions` and friends should additionally verify ownership at the row level (defense-in-depth) — e.g. stamp each `coachBox` value with `owner_user_id` and refuse to read entries that don't match the active session.
 
 ---
 
