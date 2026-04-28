@@ -311,6 +311,11 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// If the user previously completed onboarding (has a profile in Supabase),
   /// restores the onboarding flag so they skip onboarding on re-login.
   Future<void> _ensureLocalUser(User user) async {
+    // Layer 2.3 — open per-user namespaced boxes FIRST, before any code
+    // reads user-scoped Hive. Idempotent — re-running for same user is a no-op.
+    // Different user → previous boxes closed first.
+    await HiveUserSession.openForUser(user.id);
+
     final userBox = _hive.userBox;
     final configBox = _hive.configBox;
     final existing = userBox.get('profile');
@@ -545,12 +550,6 @@ class AuthNotifier extends Notifier<AuthState2> {
         // Non-critical — push notifications will still work on next launch.
       }
     }
-
-    // Layer 2.3 — open per-user namespaced boxes BEFORE any UI mounts
-    // that might read user-scoped Hive (RestoringScreen + everything
-    // downstream). Idempotent — re-running for the same user is a
-    // no-op. Different user → previous boxes closed first.
-    await HiveUserSession.openForUser(user.id);
   }
 
   /// Checks if user_profile row is missing in Supabase and pushes local
