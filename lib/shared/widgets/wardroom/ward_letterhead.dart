@@ -30,6 +30,7 @@ class WardLetterhead extends StatelessWidget {
     this.eyebrow,
     this.title,
     this.trailing,
+    this.leadingAvatar,
     this.divider = true,
     this.dividerStyle,
     this.padding = const EdgeInsets.fromLTRB(22, 56, 22, 14),
@@ -39,6 +40,13 @@ class WardLetterhead extends StatelessWidget {
   final String? eyebrow;
   final String? title;
   final Widget? trailing;
+
+  /// Optional widget rendered to the LEFT of the eyebrow + title block.
+  /// Designed for the 44 dp avatar pattern on the Home letterhead, but
+  /// any caller-sized widget works. When null, no left column is added
+  /// and existing call sites render unchanged.
+  final Widget? leadingAvatar;
+
   final bool divider;
   final WardDivider? dividerStyle;
   final EdgeInsets padding;
@@ -54,6 +62,11 @@ class WardLetterhead extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (leadingAvatar != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: leadingAvatar!,
+            ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
