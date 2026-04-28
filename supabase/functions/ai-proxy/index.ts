@@ -15,12 +15,12 @@
  *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
  *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
  *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
- *   (default)           → gemini-2.5-flash, chat — 15/day free cap, PRO unlimited
+ *   (default)           → gemini-2.5-flash, chat — 10/day free forever, PRO unlimited
  *
  * Gating (server-side, never trust client):
  *   isPro = SELECT 1 FROM subscriptions WHERE user_id AND status='active' AND end_date > now()
- *   Free-tier chat: 15/day in `ai_coach_interactions` (channel='app') + 30-day trial window
- *   PRO: no daily cap, no trial window
+ *   Free-tier chat: 10/day in `ai_coach_interactions` (channel='app') — forever, no trial
+ *   PRO: no daily cap
  *
  * Auth: verify_jwt is DISABLED on this function's gateway config because
  * of the Supabase middleware bug that 401's valid JWTs. We validate the
@@ -57,8 +57,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const FREE_DAILY_LIMIT = 15;
-const FREE_TRIAL_DAYS = 30;
+// OQ-1 decision: free users get 10 messages/day forever (no time-limited trial).
+// Captain Manual reflects this. Never re-introduce a trial window without an OQ change.
+const FREE_DAILY_LIMIT = 10;
 const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
 // Human-readable labels for the ai_coach_interactions.model_used column.
@@ -422,41 +423,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       return err(400, "Snapshot too large");
     }
 
-    // ── isPro gate: PRO → no trial, no daily cap. Free → trial + 15/day. ──
+    // ── isPro gate: PRO → no daily cap. Free → 10 msg/day forever (OQ-1). ──
     const isProUser = await checkPro(supabaseClient, userId);
 
     if (!isProUser) {
-      // Free-tier gates: start/bump trial window, count today's messages.
-      const { data: userData, error: userError } = await supabaseClient
-        .from("users")
-        .select("ai_chat_started_at")
-        .eq("id", userId)
-        .single();
-
-      if (userError || !userData) return err(404, "User not found");
-
-      let aiChatStartedAt = userData.ai_chat_started_at as string | null;
-      if (!aiChatStartedAt) {
-        const now = new Date().toISOString();
-        await supabaseClient
-          .from("users")
-          .update({ ai_chat_started_at: now })
-          .eq("id", userId);
-        aiChatStartedAt = now;
-      }
-
-      const daysSinceStart = Math.floor(
-        (Date.now() - new Date(aiChatStartedAt).getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
-
-      if (daysSinceStart > FREE_TRIAL_DAYS) {
-        return err(403, "Free AI trial expired", {
-          code: "TRIAL_EXPIRED",
-          days_used: daysSinceStart,
-        });
-      }
-
+      // Free-tier gate: 10 messages/day in perpetuity — no trial window.
+      // OQ-1 decision: free tier gets 10/day forever. Captain Manual reflects this.
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
 

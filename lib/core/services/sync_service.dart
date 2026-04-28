@@ -1277,7 +1277,6 @@ class SyncService {
             (log['sleep_hours'] as num?)?.toDouble() ??
             (log['hours'] as num?)?.toDouble();
         if (hours == null) continue;
-        final id = log['id'] as String? ?? 'sleep_chat_${log['created_at'] ?? dateStr}';
         try {
           await _supabase.client.from('sleep_logs').upsert({
             'id': _deterministicId('sleep_logs_$dateStr'),
@@ -1847,7 +1846,7 @@ class SyncService {
           .upsert(payload, onConflict: 'user_id')
           .select()
           .single();
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('[SyncService.syncCoachMemoryNow] coach_memory upsert failed: $e');
       unawaited(_reportSyncFailure(
         opType: 'upsert_coach_memory_induction',
