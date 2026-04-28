@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -241,6 +242,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // ── Compact Header (avatar + title + mode tabs + menu) ──
                 _buildCompactHeader(isPro, channel, telegramConnected),
 
+                // D-8 status strip — streak + freeze always; no rank chip
+                // on AI Coach (roadmap is source of truth per spec §6.3.3).
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+                  child: WardStatusStrip(
+                    streakDays: ref.watch(streakProvider),
+                    freezesAvailable: ref.watch(streakFreezeProvider),
+                  ),
+                ),
+
                 // ── Message count indicator ──
                 _buildMessageCountIndicator(isPro, messageCount),
 
@@ -389,7 +400,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'YOUR AI COACH \u00B7 24/7',
+                  'THE BRIDGE \u00B7 24/7',
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
                     letterSpacing: 2.5,
@@ -397,36 +408,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Builder(builder: (_) {
-                  final hour = DateTime.now().hour;
-                  final tod = hour < 12
-                      ? 'morning'
-                      : hour < 17
-                          ? 'afternoon'
-                          : 'evening';
-                  // AH.9 — pull the user's first name from the profile so
-                  // the greeting reads "Good morning, Upendra." rather
-                  // than the generic "Good morning.". Profile stores
-                  // `full_name`; we use the first whitespace-separated
-                  // token. Falls back silently when the name is missing
-                  // or still the bootstrap 'User' placeholder.
-                  final profile = ref.watch(userProfileProvider);
-                  final fullName =
-                      (profile['full_name'] as String? ?? '').trim();
-                  final firstName = fullName.isEmpty || fullName == 'User'
-                      ? null
-                      : fullName.split(RegExp(r'\s+')).first;
-                  final greeting = firstName != null
-                      ? 'Good $tod, $firstName.'
-                      : 'Good $tod.';
-                  return Text(
-                    greeting,
-                    style: AppTypography.h3.copyWith(
-                      height: 1.0,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  );
-                }),
+                // D-8 (Plan D): Title is the recruit's acknowledgement
+                // to the Captain — short, on-brand, no "CAPTAIN" duplicate
+                // with the eyebrow.
+                Text(
+                  'Aye Captain',
+                  style: AppTypography.h3.copyWith(
+                    height: 1.0,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ],
             ),
           ),
