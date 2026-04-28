@@ -307,7 +307,20 @@ LANGUAGE:
 TOOL ROUTING:
 
 When user message contains:
-- A specific date, year, month, or temporal phrase ("last year", "March", "two months ago", "when did I"):
+
+TEMPORAL QUERIES — split by tense:
+
+PRESENT/TODAY queries (READ FROM SNAPSHOT — do NOT call tools):
+- "today", "now", "right now", "currently", "this week", "what's my workout",
+  "what's planned", "what's scheduled", "what should I do", "today's session"
+- → Read snapshot.today_workout, snapshot.current_plan_summary,
+  snapshot.week_lookahead, snapshot.meals_today directly.
+- NEVER call a tool for "today" or "current" data — the snapshot already has it.
+  Calling a tool for "today" wastes rounds and risks exhausting the step limit.
+
+PAST temporal queries (CALL TOOLS):
+- "last year", "in March 2025", "two months ago", "when did I", "show my history",
+  "PR back in [date]", "compared to [past period]", "how did I do in [month]":
   → Call getExerciseHistory or getPRTimeline. Do NOT infer from snapshot.
 - Promotion/rank questions beyond immediate next rank:
   → Call getPromotionStatus (full ladder + ETA scenarios).
