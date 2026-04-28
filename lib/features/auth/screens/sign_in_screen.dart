@@ -16,7 +16,6 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/forgot_password_sheet.dart';
-import '../widgets/terms_modal.dart';
 
 /// Enum for the current sign-in view.
 enum _SignInView { main, email, phone }
@@ -64,14 +63,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   void initState() {
     super.initState();
-    // On first launch, gate the screen behind a blocking ToS/Privacy modal.
-    // Once accepted, [TermsModal.maybeShow] records the acceptance timestamp
-    // in Hive (userBox['terms_accepted_at']) so it doesn't re-appear. On
-    // sign-in completion, the stored timestamp is synced up to Supabase's
-    // `users.terms_accepted_at` column.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) TermsModal.maybeShow(context);
-    });
+    // OBS-A fix (Test #4 batch): TermsModal trigger REMOVED on sign-in screen mount.
+    //
+    // The Q2 design (APK Test #2) covers ToS/Privacy via:
+    //   (a) inline footer on welcome screen
+    //   (b) pre-checked checkbox above SIGN UP button (gates the button)
+    //   (c) returning users have users.terms_accepted_at synced from cloud
+    //       to Hive on _ensureLocalUser (auth_provider.dart:466)
+    //
+    // The modal call here was a pre-Q2 leftover that fired on every sign-in
+    // screen mount, including the gap between sign-out and sign-in completion
+    // (before cloud sync rehydrates Hive). Returning users hit it incorrectly.
+    // Q2 design fully replaces it; the modal is no longer needed on this path.
   }
 
   @override
