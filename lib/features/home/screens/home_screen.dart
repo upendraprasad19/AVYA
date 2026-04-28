@@ -6,16 +6,12 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
-import '../widgets/streak_badge.dart';
-import '../widgets/streak_explainer_sheet.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
@@ -36,7 +32,7 @@ import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
-import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -200,31 +196,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _buildHeader(ref),
-        // APK Test #3 / Obs 1: one-line rank chip directly below the
-        // streak counter inside the header. No spacing changes — sits
-        // in the natural gap between header and date display.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0, AppSpacing.gutter, 6),
-          child: Builder(builder: (context) {
-            final current = RankService.instance.getCurrentRank();
-            final next = RankService.instance.getNextRank();
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: RankChip(
-                rankCode: current.entry.code,
-                displayName: current.entry.displayName,
-                countdownText: next == null
-                    ? null
-                    : (next.daysUntilEligible != null
-                        ? 'NEXT IN ${next.daysUntilEligible} DAYS'
-                        : 'NEXT IN —'),
-                isTerminal: current.entry.isTerminal,
-                onTap: () => context.push('/train/roadmap'),
-              ),
-            );
-          }),
+        // U7 — unified tab header (D-2). WardTabHeader replaces the old
+        // per-screen avatar+greeting row. Rank chip moves to a dedicated
+        // full-width RankChipFullWidth row so Y-position is identical on
+        // every tab (no visual jump on tab switch).
+        WardTabHeader(
+          eyebrow: 'DAILY BRIEF',
+          avatarInitial: ref.watch(userInitialProvider),
+          streakDays: ref.watch(streakProvider),
+          freezesAvailable: ref.watch(streakFreezeProvider),
+          onAvatarTap: () => context.go('/profile'),
         ),
+        const SizedBox(height: 4),
+        const RankChipFullWidth(),
+        const SizedBox(height: 8),
         _buildDateDisplay(),
         const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),
         _buildStreakWarning(ref),
@@ -296,71 +281,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: 20),
       ],
-    );
-  }
-
-  // -- Header ---------------------------------------------------------
-
-  Widget _buildHeader(WidgetRef ref) {
-    final firstName = ref.watch(userFirstNameProvider);
-    final initial = ref.watch(userInitialProvider);
-    final streak = ref.watch(streakProvider);
-    final profile = ref.watch(userProfileProvider);
-    final avatarUrl = profile['avatar_url'] as String?;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.gutter,
-        14,
-        AppSpacing.gutter,
-        10,
-      ),
-      child: Row(
-        children: [
-          WardAvatar(
-            initial: initial,
-            size: 44,
-            image: (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? NetworkImage(avatarUrl)
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'WELCOME BACK,',
-                  style: AppTypography.mono.copyWith(
-                    color: AppColors.textDim,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  '$firstName \u{1F44B}',
-                  style: AppTypography.h3.copyWith(
-                    fontSize: 18,
-                    height: 1.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            // F14 · Tap to open the streak explainer modal.
-            onTap: () => StreakExplainerSheet.show(
-              context,
-              freezesAvailable: ref.read(streakFreezeProvider),
-              isPro: SubscriptionService.instance.isPro(),
-            ),
-            child: StreakBadge(
-              days: streak,
-              freezesAvailable: ref.watch(streakFreezeProvider),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
