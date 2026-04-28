@@ -949,10 +949,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final workoutSummary =
         report['workout_summary'] as Map<String, dynamic>?;
 
+    // C4 follow-up: the new Sunday Strategic Brief returns plain text (8-12
+    // lines, Captain voice) which the server stores in `summary` via the
+    // JSON-parse fallback path. Detect this by checking whether the legacy
+    // bullet lists are all empty — if so, it's the new brief format and the
+    // full prose lives in summary. Legacy reports carry non-empty bullet lists.
+    final isFullBrief =
+        summary.isNotEmpty && topWins.isEmpty && areasToImprove.isEmpty && recommendations.isEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header card
+        // Header card — renders the full brief or the legacy short summary
         Container(
           padding: const EdgeInsets.all(AppSpacing.cardPadding),
           decoration: BoxDecoration(
@@ -981,8 +989,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 '$periodStart to $periodEnd',
                 style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
               ),
-              const SizedBox(height: 12),
-              Text(summary, style: AppTypography.bodyL),
+              if (summary.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                if (isFullBrief)
+                  // New format: full multi-line Captain's brief.
+                  // softWrap: true is the Flutter default, but stated explicitly
+                  // for clarity. height: 1.6 gives readable line spacing for the
+                  // 8-12 line plain-text brief (mono voice, dense content).
+                  Text(
+                    summary,
+                    softWrap: true,
+                    style: AppTypography.bodyL.copyWith(
+                      height: 1.6,
+                      color: AppColors.textPrimary,
+                    ),
+                  )
+                else
+                  // Legacy format: 2-3 sentence summary string.
+                  Text(summary, style: AppTypography.bodyL),
+              ],
             ],
           ),
         ),

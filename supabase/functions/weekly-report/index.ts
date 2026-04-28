@@ -390,10 +390,9 @@ HARD RULES:
     // NOTE: The downstream JSON parse + report struct is preserved for
     // backwards compatibility with the client. Gemini is instructed to return
     // plain text above, so the JSON parse will fall through to the fallback
-    // which uses aiContent.slice(0,300) — which is correct behavior for the
-    // new briefing format. The "summary" field will carry the full brief text.
-    // TODO(C4-follow-up): update client to render raw brief text directly
-    // instead of the legacy JSON report struct.
+    // struct. The full brief text is stored in "summary"; legacy bullet fields
+    // (top_wins / areas_to_improve / recommendations) are empty arrays.
+    // Client renders summary as a full multi-line text block (C4 follow-up done).
 
     const userMessage = `Generate my weekly nutrition and fitness report based on this data:
 
@@ -485,18 +484,19 @@ ${Object.entries(dailyTotals)
 
       report = JSON.parse(cleaned);
     } catch {
-      // If AI didn't return valid JSON, build a fallback
-      console.error("Failed to parse AI response as JSON, using fallback");
+      // If AI didn't return valid JSON, the new C4 plain-text brief path
+      // lands here by design. Store the full brief text in summary — do not
+      // truncate. Legacy bullet fields are left empty so the client can
+      // detect the new format (non-empty summary + empty lists).
+      console.error(
+        "AI response is plain text (new brief format) — using fallback struct",
+      );
       report = {
-        summary: aiContent.slice(0, 300),
+        summary: aiContent.trim(),
         compliance_percent: compliancePercent,
-        top_wins: ["Logged nutrition data this week"],
-        areas_to_improve: ["Try to hit your calorie target more consistently"],
-        recommendations: [
-          "Focus on protein intake at every meal",
-          "Log all meals for better tracking accuracy",
-          "Stay consistent with your workout schedule",
-        ],
+        top_wins: [],
+        areas_to_improve: [],
+        recommendations: [],
       };
     }
 
