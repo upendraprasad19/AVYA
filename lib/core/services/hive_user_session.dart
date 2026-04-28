@@ -72,6 +72,10 @@ class HiveUserSession {
       await closeAll();
     }
 
+    // One-shot migration — copies pre-namespacing shared box contents
+    // into the namespaced box on first sign-in after upgrade.
+    await _migrateLegacySharedBoxes(userId);
+
     final hash = userId.replaceAll('-', '').substring(0, 8);
     for (final root in userScopedBoxRoots) {
       final boxName = namespacedBoxName(root, userId);
@@ -87,6 +91,53 @@ class HiveUserSession {
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;
     debugPrint('[HiveUserSession] opened 7 boxes for user $hash');
+  }
+
+  /// One-shot migration: if a pre-namespacing shared box exists for any
+  /// user-scoped root AND the per-user namespaced box for [userId]
+  /// doesn't already have data, copy contents over and delete the
+  /// shared box. Idempotent — second invocation finds no shared box
+  /// to migrate, returns immediately.
+  ///
+  /// Skipped silently if the shared box is empty or fails to open.
+  static Future<void> _migrateLegacySharedBoxes(String userId) async {
+    for (final root in userScopedBoxRoots) {
+      final namespaced = namespacedBoxName(root, userId);
+      try {
+        // If namespaced already has any keys, migration already ran for
+        // this user OR they signed in fresh post-namespacing. Skip.
+        if (Hive.isBoxOpen(namespaced)) {
+          if (Hive.box(namespaced).keys.isNotEmpty) continue;
+        }
+
+        // Try to open the legacy shared box. If it doesn't exist on
+        // disk, openBox creates an empty one — check keys count and
+        // delete-empty if so.
+        final legacy = await Hive.openBox(root);
+        if (legacy.keys.isEmpty) {
+          await legacy.close();
+          await Hive.deleteBoxFromDisk(root);
+          continue;
+        }
+
+        // Open namespaced (creates if needed), copy every key/value,
+        // close + delete legacy.
+        final dest = Hive.isBoxOpen(namespaced)
+            ? Hive.box(namespaced)
+            : await Hive.openBox(namespaced);
+        for (final key in legacy.keys) {
+          await dest.put(key, legacy.get(key));
+        }
+        await legacy.close();
+        await Hive.deleteBoxFromDisk(root);
+        debugPrint(
+          '[HiveUserSession] migrated $root → $namespaced (${dest.keys.length} keys)',
+        );
+      } catch (e) {
+        debugPrint('[HiveUserSession] migration $root failed: $e');
+        // Non-fatal — fresh start, cloud has the data anyway.
+      }
+    }
   }
 
   /// Close + clear references to all user-scoped boxes. Files remain
