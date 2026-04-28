@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
@@ -51,8 +53,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -61,8 +61,33 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // -- Header --
-                _buildHeader(now),
+                // U7 — unified tab header (D-4). WardTabHeader + RankChipFullWidth
+                // replaces old WardLetterhead. Diet plan button preserved as
+                // a sub-row below the rank chip (tab-specific content).
+                WardTabHeader(
+                  eyebrow: 'FUEL',
+                  avatarInitial: ref.watch(userInitialProvider),
+                  streakDays: ref.watch(streakProvider),
+                  freezesAvailable: ref.watch(streakFreezeProvider),
+                  onAvatarTap: () => context.go('/profile'),
+                ),
+                const SizedBox(height: 4),
+                const RankChipFullWidth(),
+                const SizedBox(height: 4),
+                // Diet plan button — preserved tab-specific action
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Fueling the plan',
+                        style: AppTypography.h3.copyWith(fontSize: 16),
+                      ),
+                      const Spacer(),
+                      _buildDietPlanButton(),
+                    ],
+                  ),
+                ),
 
                 // -- Content --
                 Expanded(
@@ -92,28 +117,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         ),
       );
     }
-  }
-
-  // ── Header ─────────────────────────────────────────────────────
-
-  Widget _buildHeader(DateTime now) {
-    // Handoff: eyebrow "GALLEY · TUE 14 APR" (3-letter weekday + day +
-    // month-short) + Fraunces 30 title "Fueling the plan" + trailing
-    // button + single gold rule.
-    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    const monthShort = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-    ];
-    final eyebrow =
-        'GALLEY \u00B7 ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
-    return WardLetterhead(
-      eyebrow: eyebrow,
-      title: 'Fueling the plan',
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-      divider: true,
-      trailing: _buildDietPlanButton(),
-    );
   }
 
   Widget _buildDietPlanButton() {
