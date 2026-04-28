@@ -136,6 +136,22 @@ class ProfileIdentity extends StatelessWidget {
                           )
                         : null,
                   ),
+                  // D-9 (Plan D): floating eyebrow on banner top-left @ ~65%
+                  // alpha — "DOSSIER · OFFICER" letterhead identity for the
+                  // Profile tab without crowding the banner.
+                  Positioned(
+                    left: 16,
+                    top: 12,
+                    child: Text(
+                      'DOSSIER · OFFICER',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textPrimary.withValues(alpha: 0.65),
+                        letterSpacing: 1.6,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                   // Edit icon (top-right) - always visible to replace banner
                   Positioned(
                     right: 12,
@@ -248,6 +264,18 @@ class ProfileIdentity extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        // D-9 (Plan D): gold rule closes the Profile letterhead — eyebrow
+        // (on banner) + title (name) + rule. Status strip with streak +
+        // freeze + rank chip is rendered by profile_screen below this
+        // widget.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0, AppSpacing.gutter, 8),
+          child: Container(
+            height: 1,
+            width: 60,
+            color: AppColors.accent,
           ),
         ),
       ],
