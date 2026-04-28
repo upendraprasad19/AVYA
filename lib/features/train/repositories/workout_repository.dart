@@ -105,6 +105,48 @@ class WorkoutRepository {
 
   // ── Streak Calculation ───────────────────────────────────────
 
+  /// Earliest date the user could legitimately have completed a workout.
+  ///
+  /// [calculateCurrentStreak] stops the walk-back at this anchor — dates
+  /// BEFORE it are silently skipped (no penalty, no freeze consumption)
+  /// because the user didn't have the app yet.
+  ///
+  /// Anchor = earliest of: onboarding_completed_at, first_workout_date.
+  /// Returns null if neither is available → 365-day walk-back unchanged.
+  DateTime? _earliestUserAnchor() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    if (profile == null) return null;
+
+    DateTime? earliest;
+
+    void consider(String? iso) {
+      if (iso == null || iso.isEmpty) return;
+      final dt = DateTime.tryParse(iso);
+      if (dt == null) return;
+      if (earliest == null || dt.isBefore(earliest!)) {
+        earliest = dt;
+      }
+    }
+
+    consider(profile['onboarding_completed_at'] as String?);
+
+    // Also check the earliest wlog_ entry so manual-import users are covered.
+    String? earliestWlogDate;
+    for (final key in _hive.workoutBox.keys) {
+      if (!key.toString().startsWith('wlog_')) continue;
+      final log = _hive.workoutBox.get(key);
+      if (log is! Map) continue;
+      final d = log['date'] as String?;
+      if (d == null) continue;
+      if (earliestWlogDate == null || d.compareTo(earliestWlogDate) < 0) {
+        earliestWlogDate = d;
+      }
+    }
+    consider(earliestWlogDate);
+
+    return earliest;
+  }
+
   /// Calculates the current workout streak by scanning the schedule backwards.
   ///
   /// Schedule-aware: rest days are invisible and never break the streak.
@@ -113,6 +155,11 @@ class WorkoutRepository {
   int calculateCurrentStreak() {
     int streak = 0;
     final today = DateTime.now();
+
+    // B2: stop walk-back before the user's earliest anchor (signup /
+    // first workout). Schedule rows before that date are plan-generator
+    // artefacts — the user couldn't have completed them.
+    final anchor = _earliestUserAnchor();
 
     // Load freeze data for consumption during streak calculation
     final progress = UserRepository.instance.getProgress() ?? {};
@@ -138,6 +185,13 @@ class WorkoutRepository {
 
     for (int i = 0; i < 365; i++) {
       final date = today.subtract(Duration(days: i));
+
+      // B2: stop before user's onboarding anchor — pre-account schedule rows
+      // must never penalise or consume freezes.
+      if (anchor != null && date.isBefore(anchor)) {
+        break;
+      }
+
       final dateStr = formatDateKey(date);
       final raw = scheduleCache[dateStr];
 
