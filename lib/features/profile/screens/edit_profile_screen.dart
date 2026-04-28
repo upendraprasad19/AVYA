@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1555,10 +1555,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(userInitialProvider);
       ref.invalidate(userGreetingProvider);
 
-      // Detect plan-affecting field changes and offer rescheduling
+      // Detect plan-affecting field changes and offer rescheduling.
+      // Experience drives VolumeFilter.targetCount → exercise count per day.
+      // Beginner/Inter/Advanced × 3-6 days = 4 to 10 exercises. Without this,
+      // bumping intermediate→advanced wouldn't trigger reschedule and today's
+      // plan would keep showing the old 4-7 exercises forever.
+      //
+      // session_duration_minutes drives split count + cardio finisher length;
+      // physique_focus drives muscle slot weighting (e.g. glutes_legs adds
+      // posterior chain priority); injuries drive exclusion masks in the
+      // exercise selector. ALL must trigger reschedule on change to keep
+      // today's schedule consistent with the saved profile.
       final planChanged = _daysPerWeek != _originalDaysPerWeek ||
           _goal != _originalGoal ||
-          _equipment != _originalEquipment;
+          _equipment != _originalEquipment ||
+          _fitnessExperience != _originalFitnessExperience ||
+          _sessionDuration != _originalSessionDuration ||
+          _physiqueFocus != _originalPhysiqueFocus ||
+          !listEquals(_injuries, _originalInjuries);
 
       if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
         final changes = <String>[];
