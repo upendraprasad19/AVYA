@@ -156,6 +156,30 @@ class AiCoachRepository {
       // have data the moment Plan B ships. All null-safe for un-inducted users.
       // ~100-200 bytes when present; 0 bytes (null/false/empty) until Plan B.
       ..._getInductionAndMusterKeys(),
+
+      // Closeout snapshot keys — P1/P2 audit gaps missed in Plan A execution.
+      // All read from existing Hive data; no new infrastructure.
+      //
+      //   pr_timeline_summary  (P1 G-10) — top 5 PRs by recency, with set_date.
+      //   goal_changed_at      (P1)      — ISO timestamp from profile (written by
+      //                                    switchGoal tool_dispatcher). Null for
+      //                                    users who have never changed goal.
+      //   body_measurements    (P2)      — latest cm per type (chest/waist/hips/arms)
+      //                                    from healthBox measurement_* keys.
+      //   onboarding_completed_at (P2)  — from profile (set by completeOnboarding).
+      //   phase_transitions    (P2)      — last 3 entries from progress.phase_history
+      //                                    if present (empty list otherwise).
+      //   recent_meal_deletes  (P1)      — last 5 food-log deletions from
+      //                                    nutritionBox['recent_deletes'] (written by
+      //                                    deleteFoodLog since this batch).
+      //
+      // Total ~400-600 bytes typical; all drop via _compactContext if needed.
+      'pr_timeline_summary': _getPRTimelineSummary(),
+      'goal_changed_at': _getGoalChangedAt(),
+      'body_measurements': _getBodyMeasurements(),
+      'onboarding_completed_at': _getOnboardingCompletedAt(),
+      'phase_transitions': _getPhaseTransitions(),
+      'recent_meal_deletes': _getRecentMealDeletes(),
     };
   }
 
@@ -1652,6 +1676,156 @@ class AiCoachRepository {
     }
     return count / 4.0;
   }
+
+  // ── Closeout snapshot-key helpers (APK Test #4 audit P1/P2 gaps) ──────
+
+  /// Top 5 PRs by recency (one entry per exercise, most-recent date wins).
+  ///
+  /// Iterates all `exlog_*` keys with `is_pr == true`, deduplicates by
+  /// exercise name keeping the entry with the latest `date`, then returns
+  /// the 5 most-recently-set PRs sorted descending by `set_date`.
+  ///
+  /// Closes audit P1 G-10.
+  Map<String, dynamic> _getPRTimelineSummary() {
+    final box = _hive.workoutBox;
+    final byExercise = <String, Map<String, dynamic>>{};
+    int totalPrs = 0;
+
+    for (final key in box.keys) {
+      if (!key.toString().startsWith('exlog_')) continue;
+      final log = box.get(key);
+      if (log is! Map) continue;
+      if (log['is_pr'] != true) continue;
+      totalPrs++;
+      final name = log['exercise_name'] as String?;
+      final dateStr = log['date'] as String?;
+      if (name == null || dateStr == null) continue;
+      final existing = byExercise[name];
+      if (existing == null ||
+          (existing['set_date'] as String).compareTo(dateStr) < 0) {
+        byExercise[name] = {
+          'exercise': name,
+          'weight': (log['weight_kg'] as num?)?.toDouble() ?? 0,
+          'reps': (log['reps_completed'] as num?)?.toInt() ?? 0,
+          'set_date': dateStr,
+        };
+      }
+    }
+
+    final recent = byExercise.values.toList()
+      ..sort((a, b) =>
+          (b['set_date'] as String).compareTo(a['set_date'] as String));
+
+    return {
+      'total_prs': totalPrs,
+      'recent_prs': recent.take(5).toList(),
+    };
+  }
+
+  /// ISO timestamp of the last primary_goal change, or null if never changed.
+  ///
+  /// The `switchGoal` tool_dispatcher stamps `goal_changed_at` on every
+  /// goal change via the AI coach. Returns null for users whose goal has
+  /// never been changed (field simply won't be in profile map).
+  ///
+  /// Also tolerates the legacy key `primary_goal_updated_at` for forward
+  /// compat with any alternative write path.
+  String? _getGoalChangedAt() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    return profile?['goal_changed_at'] as String? ??
+        profile?['primary_goal_updated_at'] as String?;
+  }
+
+  /// Latest body measurement per type from `healthBox['measurement_YYYY-MM-DD']`.
+  ///
+  /// Supported types: `chest`, `waist`, `hips`, `arms`.
+  /// If the user has logged the same type on multiple dates, the value from
+  /// the most recent date is returned.  Returns an empty map when no
+  /// measurements have been recorded yet.
+  ///
+  /// Closes audit P2 body-composition awareness gap.
+  Map<String, dynamic> _getBodyMeasurements() {
+    final results = <String, dynamic>{};
+    final latestByType = <String, DateTime>{};
+
+    for (final key in _hive.healthBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('measurement_')) continue;
+      final raw = _hive.healthBox.get(key);
+      if (raw is! Map) continue;
+      final dateStr = raw['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      for (final field in ['chest', 'waist', 'hips', 'arms']) {
+        final v = (raw[field] as num?)?.toDouble();
+        if (v == null) continue;
+        final prev = latestByType[field];
+        if (prev == null || date.isAfter(prev)) {
+          latestByType[field] = date;
+          results[field] = v;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /// ISO timestamp when the user completed onboarding (REPORT FOR DUTY).
+  ///
+  /// Written by `OnboardingNotifier.completeOnboarding` and stored in
+  /// `userBox['profile']['onboarding_completed_at']`. Synced down from
+  /// `user_profile.onboarding_completed_at` (migration 036) on restore
+  /// so returning users have it populated.
+  ///
+  /// Returns null for legacy users whose profile predates the field.
+  String? _getOnboardingCompletedAt() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    return profile?['onboarding_completed_at'] as String?;
+  }
+
+  /// Last 3 phase transition events from `userBox['progress']['phase_history']`.
+  ///
+  /// Each entry has: `from_phase`, `to_phase`, `transitioned_at` (ISO string).
+  /// Returns an empty list when no phase history is recorded (the write path
+  /// that stamps this list is a planned future enhancement; the read side is
+  /// implemented now so it works the moment the write side ships).
+  List<Map<String, dynamic>> _getPhaseTransitions() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    final history = progress?['phase_history'] as List?;
+    if (history == null || history.isEmpty) return const [];
+    return history
+        .whereType<Map>()
+        .take(3)
+        .map((m) => {
+              'from_phase': m['from_phase'],
+              'to_phase': m['to_phase'],
+              'transitioned_at': m['transitioned_at'],
+            })
+        .toList();
+  }
+
+  /// Last 5 food-log deletions from `nutritionBox['recent_deletes']`.
+  ///
+  /// Written by `deleteFoodLog` in `nutrition_provider.dart` (added in this
+  /// batch). Each entry: `food_name`, `meal_type`, `calories`, `deleted_at`,
+  /// `logged_date`. The list is capped at 10 on the write side; we take the
+  /// top 5 to keep snapshot size bounded.
+  ///
+  /// Closes audit P1 — coach can now acknowledge "you deleted your lunch
+  /// entry" and advise on re-logging without the user having to explain.
+  List<Map<String, dynamic>> _getRecentMealDeletes() {
+    final raw = _hive.nutritionBox.get('recent_deletes');
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .take(5)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  // ── ETA helper (must stay after closeout helpers) ───────────────────────
 
   /// Returns ETA to next promotion in days at two cadences:
   /// - `at_current_cadence`: based on actual workouts/week over last 28 days.

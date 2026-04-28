@@ -841,7 +841,32 @@ class FoodLogNotifier extends Notifier<void> {
   }
 
   Future<void> deleteFoodLog(String logId) async {
-    await HiveService.instance.nutritionBox.delete(logId);
+    final box = HiveService.instance.nutritionBox;
+
+    // Write deletion audit log BEFORE the delete so we can still read
+    // the log entry.  Coach uses this to acknowledge corrections like
+    // "you removed your lunch Biryani entry" without the user re-explaining.
+    final logEntry = box.get(logId);
+    if (logEntry is Map) {
+      final deletes = (box.get('recent_deletes') as List?)
+              ?.whereType<Map>()
+              .toList() ??
+          <Map>[];
+      deletes.insert(0, {
+        'food_name': logEntry['food_name'] ?? logEntry['name'] ?? '',
+        'meal_type': logEntry['meal_type'] ?? '',
+        'calories': logEntry['total_calories'] ?? logEntry['calories'] ?? 0,
+        'deleted_at': DateTime.now().toIso8601String(),
+        'logged_date': logEntry['date'] ?? '',
+      });
+      // Cap at 10 entries to keep the list bounded.
+      while (deletes.length > 10) {
+        deletes.removeLast();
+      }
+      await box.put('recent_deletes', deletes);
+    }
+
+    await box.delete(logId);
     // Delete is a mutation too — AI coach needs to see the correction.
     unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
