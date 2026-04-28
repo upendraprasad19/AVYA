@@ -51,5 +51,6 @@ export 'ward_seal_badge.dart';
 export 'ward_session_row.dart';
 export 'ward_spark.dart';
 export 'ward_stat_tile.dart';
+export 'ward_tab_header.dart';
 export 'ward_toggle.dart';
 export 'ward_unit_toggle.dart';
