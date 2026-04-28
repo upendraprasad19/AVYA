@@ -174,6 +174,19 @@ class ToolDispatcher {
       }
       unawaited(SyncService.instance.pushSnapshot());
 
+      // C-4 / C-6: stamp a Hive marker so the chat thread can filter out
+      // already-dispatched intents even if the in-memory provider state is
+      // lost (hot restart, low-memory background kill). The marker is a
+      // belt-and-braces complement to ToolIntent.status — primary state
+      // remains in PendingToolIntentsNotifier; this just survives process
+      // death.
+      try {
+        await HiveService.instance.coachBox.put(
+          'intent_${intent.id}_dispatched_at',
+          DateTime.now().toIso8601String(),
+        );
+      } catch (_) {/* never block on telemetry */}
+
       return result;
     } on ConcurrentEditException catch (e) {
       return ToolExecutionResult.failure(
