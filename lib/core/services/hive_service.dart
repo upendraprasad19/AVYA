@@ -36,6 +36,12 @@ class HiveService with WidgetsBindingObserver {
   static const String configBoxName = 'configBox';
   static const String notificationsBoxName = 'notificationsBox';
 
+  /// Key in syncBox storing the Supabase user.id of the account whose data
+  /// currently lives in Hive. Cross-account leak guard (B1 layer 2).
+  /// Stamped on every successful sign-in by `_ensureLocalUser`.
+  /// Read by `_ensureLocalUser` and RestoringScreen to detect mismatch.
+  static const String lastAuthenticatedUserIdKey = 'last_authenticated_user_id';
+
   static const List<String> _allBoxNames = [
     userBoxName,
     workoutBoxName,
