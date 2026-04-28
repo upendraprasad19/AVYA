@@ -240,7 +240,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               const AnchorGlyph(size: 12),
               const SizedBox(width: 8),
               Text(
-                'PHASE ${plan.phase} \u00B7 ${plan.phaseName.toUpperCase()}',
+                'TRAIN \u00B7 WK $selectedWeek OF ${plan.weeks.length}',
                 style: AppTypography.monoXs.copyWith(
                   color: AppColors.accent,
                   letterSpacing: 3,
@@ -250,25 +250,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          RichText(
-            text: TextSpan(
-              style: AppTypography.h2.copyWith(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-                letterSpacing: -0.3,
-              ),
-              children: [
-                TextSpan(text: 'Week $selectedWeek of ${plan.weeks.length}'),
-                TextSpan(
-                  text: '  \u00B7  $completedDays/$totalWorkoutDays done',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textDim,
-                  ),
-                ),
-              ],
+          // D-6 (Plan D): Fraunces title is the phase name; week + done
+          // count moved to a subtitle line below.
+          Text(
+            plan.phaseName,
+            style: AppTypography.h2.copyWith(
+              fontSize: 28,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$completedDays of $totalWorkoutDays sessions complete',
+            style: AppTypography.body.copyWith(
+              fontSize: 13,
+              color: AppColors.textDim,
             ),
           ),
           const SizedBox(height: 10),
@@ -277,6 +275,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             height: 4,
             trailingLabel: '$progressPercent%',
             trailingColor: AppColors.accent,
+          ),
+          const SizedBox(height: 10),
+          // D-6 status strip — streak + freeze always; no rank chip on Train
+          // (roadmap is source of truth for rank info per spec).
+          WardStatusStrip(
+            streakDays: ref.watch(streakProvider),
+            freezesAvailable: ref.watch(streakFreezeProvider),
           ),
         ],
       ),
