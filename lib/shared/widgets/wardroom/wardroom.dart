@@ -35,6 +35,7 @@ export 'ward_dashed_border.dart';
 export 'ward_dispatch_header.dart';
 export 'ward_eyebrow.dart';
 export 'ward_frame.dart';
+export 'ward_freeze_badge.dart';
 export 'ward_glass_grid.dart';
 export 'ward_glyphs.dart';
 export 'ward_insight_quote.dart';
