@@ -201,20 +201,32 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  // ── Main View ──────────────────────────────────────────────────
+  // ── Main View — Direction B redesign (U9, APK Test #4) ───────────
+  //
+  // Changes vs previous version:
+  // - All 3 auth buttons unified to dark+gold-outline style
+  // - 'CONTINUE WITH' → 'ENLIST VIA' (Captain voice)
+  // - 'OR' divider → 'AUX' with thin gold rules
+  // - 'AI-POWERED FITNESS & NUTRITION' → 'FITNESS · NUTRITION · DISCIPLINE'
+  // - Manifesto line: 'Discipline. Honest data. Twelve months. We change the man.'
+  // - 'JOIN 10,000+...' → 'ENLISTED · 18,866 SAILORS ACTIVE'
+  // - Mil-stamp footer: 'AVYA · v1.0.0+3 · ISSUED 2026'
+  // - 'Forgot password?' → 'RESET ACCESS'
+  // - Vertical spacing tightened ~20%
 
   Widget _buildMainView(AuthNotifier authNotifier, bool isLoading) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const SizedBox(height: 22),
+        const SizedBox(height: 18),
 
-        // Tagline — sits on the solid bg below the hero band.
+        // Tagline — Direction B: discipline-first
         Text(
-          'AI-POWERED FITNESS & NUTRITION',
+          'FITNESS · NUTRITION · DISCIPLINE',
           style: AppTypography.mono.copyWith(
-            color: AppColors.textDim,
-            letterSpacing: 2,
+            color: AppColors.accent,
+            letterSpacing: 2.0,
+            fontSize: 10,
           ),
           textAlign: TextAlign.center,
         ),
@@ -224,96 +236,204 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           style: AppTypography.mono.copyWith(
             color: AppColors.textMute,
             letterSpacing: 2,
+            fontSize: 9,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 18),
 
-        // ── Continue with Google — PRIMARY ──────────────────
-        _buildSharpButton(
-          label: 'CONTINUE WITH GOOGLE',
+        // Captain-voice manifesto
+        Text(
+          'Discipline. Honest data.\nTwelve months. We change the man.',
+          textAlign: TextAlign.center,
+          style: AppTypography.body.copyWith(
+            fontSize: 13,
+            height: 1.5,
+            fontStyle: FontStyle.italic,
+            color: AppColors.textDim,
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // ── ENLIST VIA GOOGLE — all buttons unified dark+gold-outline ──
+        _buildEnlistButton(
+          label: 'ENLIST VIA GOOGLE',
           icon: Icons.g_mobiledata,
-          iconSize: 28,
-          background: Colors.white,
-          foreground: Colors.black,
-          border: Colors.white,
+          iconSize: 26,
           onPressed: isLoading
               ? null
               : () => authNotifier.signInWithGoogle(),
           isLoading: isLoading,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // ── Continue with Phone — SECONDARY ─────────────────
-        _buildSharpButton(
-          label: 'CONTINUE WITH PHONE',
+        // ── ENLIST VIA PHONE ────────────────────────────────
+        _buildEnlistButton(
+          label: 'ENLIST VIA PHONE',
           icon: Icons.phone_outlined,
-          iconSize: 20,
-          background: AppColors.card,
-          foreground: AppColors.textPrimary,
-          border: AppColors.line2,
+          iconSize: 18,
           onPressed: isLoading
               ? null
               : () => setState(() => _currentView = _SignInView.phone),
           isLoading: false,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // ── Divider ─────────────────────────────────────────
-        _buildDivider(),
-        const SizedBox(height: 20),
+        // ── AUX divider (replaces OR) ────────────────────────
+        _buildAuxDivider(),
+        const SizedBox(height: 16),
 
-        // ── Continue with Email — TERTIARY ──────────────────
-        _buildSharpButton(
-          label: 'CONTINUE WITH EMAIL',
+        // ── ENLIST VIA EMAIL ─────────────────────────────────
+        _buildEnlistButton(
+          label: 'ENLIST VIA EMAIL',
           icon: Icons.email_outlined,
-          iconSize: 20,
-          background: Colors.transparent,
-          foreground: AppColors.accent,
-          border: AppColors.accent,
+          iconSize: 18,
           onPressed: isLoading
               ? null
               : () => setState(() => _currentView = _SignInView.email),
           isLoading: false,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
 
-        // ── Forgot password link ────────────────────────────
+        // ── RESET ACCESS (formerly Forgot password?) ────────
         GestureDetector(
           onTap: isLoading ? null : () => ForgotPasswordSheet.show(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              'Forgot password?',
-              style: AppTypography.bodySm.copyWith(
+              'RESET ACCESS',
+              style: AppTypography.mono.copyWith(
                 color: AppColors.accent,
+                fontSize: 10,
+                letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
               ),
               textAlign: TextAlign.center,
             ),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 18),
 
         // U8 fix (Test #4 hotfix): referral code input REMOVED from welcome
-        // landing view. Referral entry now lives in:
-        //   (a) sign-up form (when _isSignUp == true) — see _buildEmailView
-        //   (b) Profile → Invite Friends sheet (see invite_friends_sheet.dart)
-        //
-        // Welcome screen had it visible to all (signin + signup) which was
-        // confusing UX — sign-in users have no business entering a referral.
+        // landing view. Referral entry now lives in sign-up form + Profile.
 
-        // ── Social proof ────────────────────────────────────
+        // ── Social proof — Direction B ───────────────────────
         Text(
-          'JOIN 10,000+ INDIANS ON THEIR FITNESS JOURNEY',
+          'ENLISTED · 18,866 SAILORS ACTIVE',
           style: AppTypography.monoXs.copyWith(
-            color: AppColors.textMute,
-            letterSpacing: 1.5,
+            color: AppColors.textDim,
+            letterSpacing: 1.6,
+            fontSize: 9,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
+
+        // ── Mil-stamp footer ─────────────────────────────────
+        Text(
+          'AVYA · v1.0.0+3 · ISSUED 2026',
+          textAlign: TextAlign.center,
+          style: AppTypography.mono.copyWith(
+            fontSize: 8,
+            letterSpacing: 1.4,
+            color: AppColors.textMute,
+          ),
+        ),
+        const SizedBox(height: 18),
+      ],
+    );
+  }
+
+  /// Direction B auth button — uniform dark+gold-outline for all 3 providers.
+  /// Replaces the old white Google / dim Phone / accent Email trio.
+  Widget _buildEnlistButton({
+    required String label,
+    required IconData icon,
+    required double iconSize,
+    required VoidCallback? onPressed,
+    required bool isLoading,
+  }) {
+    final disabled = onPressed == null;
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: Opacity(
+        opacity: disabled ? 0.45 : 1,
+        child: Material(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            onTap: onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.4),
+                  width: 1.4,
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+              child: isLoading
+                  ? Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, size: iconSize, color: AppColors.accent),
+                        const SizedBox(width: 12),
+                        Text(
+                          label,
+                          style: AppTypography.mono.copyWith(
+                            fontSize: 13,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// AUX divider — replaces old "OR" divider.
+  Widget _buildAuxDivider() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 1,
+            color: AppColors.accent.withValues(alpha: 0.2),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'AUX',
+          style: AppTypography.mono.copyWith(
+            fontSize: 9,
+            letterSpacing: 2.0,
+            color: AppColors.textMute,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: AppColors.accent.withValues(alpha: 0.2),
+          ),
+        ),
       ],
     );
   }
@@ -804,66 +924,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  Widget _buildSharpButton({
-    required String label,
-    required IconData icon,
-    required double iconSize,
-    required Color background,
-    required Color foreground,
-    required Color border,
-    required VoidCallback? onPressed,
-    required bool isLoading,
-  }) {
-    final disabled = onPressed == null;
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: Opacity(
-        opacity: disabled ? 0.45 : 1,
-        child: Material(
-          color: background,
-          borderRadius: BorderRadius.circular(AppRadius.sharp),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppRadius.sharp),
-            onTap: onPressed,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: border, width: 2),
-                borderRadius: BorderRadius.circular(AppRadius.sharp),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-              child: isLoading
-                  ? SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: foreground,
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, size: iconSize, color: foreground),
-                        const SizedBox(width: 10),
-                        Text(
-                          label,
-                          style: AppTypography.h3.copyWith(
-                            fontSize: 12,
-                            color: foreground,
-                            letterSpacing: 2.5,
-                            height: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPrimaryButton({
     required String label,
     required bool isLoading,
@@ -915,24 +975,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AppColors.line2, thickness: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'OR',
-            style: AppTypography.mono.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 2,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: AppColors.line2, thickness: 1)),
-      ],
-    );
-  }
 }
 
 /// Privacy/Terms checkbox row shown above the CREATE ACCOUNT button
@@ -1093,7 +1135,18 @@ class _HeroLogoBand extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
+                  // Direction B (U9): serial-number arc below wordmark.
+                  Text(
+                    '· REGISTRATION OPEN · 2026 ·',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 8,
+                      letterSpacing: 1.6,
+                      color: AppColors.accent.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     'ICANBEFITTER',
                     style: AppTypography.monoXs.copyWith(
