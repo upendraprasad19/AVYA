@@ -42,7 +42,6 @@ import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
 import '../screens/invite_friends_sheet.dart';
-import '../widgets/rank_chip_full_width.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -411,19 +410,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // U7 — unified tab header (D-6). WardTabHeader + RankChipFullWidth
-              // replaces old WardLetterhead. Avatar tap is a no-op here since
-              // we are already on Profile. Profile identity card below provides
-              // the detailed user context.
-              WardTabHeader(
-                eyebrow: 'DOSSIER',
-                avatarInitial: ref.watch(userInitialProvider),
-                streakDays: ref.watch(streakProvider),
-                freezesAvailable: ref.watch(streakFreezeProvider),
-              ),
-              const SizedBox(height: 4),
-              const RankChipFullWidth(),
-              const SizedBox(height: 6),
+              // Plan D D-9 — Profile uses ProfileIdentity (banner + 80dp
+              // avatar overlap + name + EDIT button + gold rule) as its
+              // letterhead. The floating DOSSIER · OFFICER eyebrow is
+              // overlaid on the banner @ ~65% alpha inside ProfileIdentity.
+              // No unified WardTabHeader.
 
               // 1. Profile identity with banner + avatar
               ProfileIdentity(

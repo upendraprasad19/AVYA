@@ -19,7 +19,10 @@ import '../widgets/profile_nudge_card.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
+import '../widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/widgets/plan_expired_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
@@ -32,7 +35,6 @@ import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
-import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -196,19 +198,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // U7 — unified tab header (D-2). WardTabHeader replaces the old
-        // per-screen avatar+greeting row. Rank chip moves to a dedicated
-        // full-width RankChipFullWidth row so Y-position is identical on
-        // every tab (no visual jump on tab switch).
-        WardTabHeader(
-          eyebrow: 'DAILY BRIEF',
-          avatarInitial: ref.watch(userInitialProvider),
-          streakDays: ref.watch(streakProvider),
-          freezesAvailable: ref.watch(streakFreezeProvider),
-          onAvatarTap: () => context.go('/profile'),
-        ),
-        const SizedBox(height: 4),
-        const RankChipFullWidth(),
+        // Plan D D-5 letterhead — restored after Phase 2 merge replaced it
+        // with U7. WardLetterhead with 44dp avatar in leadingAvatar slot +
+        // dynamic DAILY · <weekday> <day> <month> eyebrow + time-of-day
+        // greeting + first-name title + status strip below.
+        Builder(builder: (_) {
+          final initial = ref.watch(userInitialProvider);
+          final firstName = ref.watch(userFirstNameProvider);
+          final greeting = ref.watch(userGreetingProvider);
+          final streak = ref.watch(streakProvider);
+          final freezes = ref.watch(streakFreezeProvider);
+          final profile = ref.watch(userProfileProvider);
+          final avatarUrl = profile['avatar_url'] as String?;
+          final now = DateTime.now();
+          const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+          const monthShort = [
+            'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+            'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+          ];
+          final eyebrow =
+              'DAILY · ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              WardLetterhead(
+                eyebrow: eyebrow,
+                title: '$greeting, $firstName.',
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+                divider: true,
+                leadingAvatar: WardAvatar(
+                  initial: initial,
+                  size: 44,
+                  image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? NetworkImage(avatarUrl)
+                      : null,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
+                child: GestureDetector(
+                  onTap: () => StreakExplainerSheet.show(
+                    context,
+                    freezesAvailable: freezes,
+                    isPro: SubscriptionService.instance.isPro(),
+                  ),
+                  child: WardStatusStrip(
+                    streakDays: streak,
+                    freezesAvailable: freezes,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
         const SizedBox(height: 8),
         _buildDateDisplay(),
         const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),

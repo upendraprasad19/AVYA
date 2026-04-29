@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,7 +13,6 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
-import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -241,22 +239,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // U7 — unified tab header (D-5). WardTabHeader +
-                // RankChipFullWidth above the coach-specific compact header.
-                // The compact header (coach avatar, greeting, mode tabs) is
-                // preserved as tab-specific content below.
-                WardTabHeader(
-                  eyebrow: 'DISPATCH',
-                  avatarInitial: ref.watch(userInitialProvider),
-                  streakDays: ref.watch(streakProvider),
-                  freezesAvailable: ref.watch(streakFreezeProvider),
-                  onAvatarTap: () => context.go('/profile'),
-                ),
-                const SizedBox(height: 4),
-                const RankChipFullWidth(),
-                const SizedBox(height: 4),
-
-                // ── Compact Header (avatar + title + mode tabs + menu) ──
+                // Plan D D-8 — AI Coach uses _buildCompactHeader as its
+                // letterhead (THE BRIDGE · 24/7 eyebrow + Aye Captain
+                // Fraunces title). No unified WardTabHeader.
                 _buildCompactHeader(isPro, channel, telegramConnected),
 
                 // D-8 status strip — streak + freeze always; no rank chip

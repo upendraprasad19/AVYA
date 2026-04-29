@@ -10,7 +10,6 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
-import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -107,20 +106,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // U7 — unified tab header (D-3). WardTabHeader +
-                    // RankChipFullWidth replaces the old compact RankChip
-                    // at the top of the Train tab.
-                    WardTabHeader(
-                      eyebrow: 'TRAIN',
-                      avatarInitial: ref.watch(userInitialProvider),
-                      streakDays: ref.watch(streakProvider),
-                      freezesAvailable: ref.watch(streakFreezeProvider),
-                      onAvatarTap: () => context.go('/profile'),
-                    ),
-                    const SizedBox(height: 4),
-                    const RankChipFullWidth(),
-                    const SizedBox(height: 8),
-                    // 1. Plan header with progress bar
+                    // Plan D D-6 — Train uses _buildPlanHeader as its
+                    // letterhead (TRAIN · WK N OF M eyebrow + phase name
+                    // Fraunces title + status strip + progress bar).
+                    // No WardTabHeader / RankChipFullWidth — rank info lives
+                    // on the dedicated /train/roadmap screen per Q10.
                     _buildPlanHeader(plan, selectedWeek, weekDays),
 
                     const SizedBox(height: 14),
