@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -40,10 +42,21 @@ class _FoodSearchSheet extends ConsumerStatefulWidget {
 }
 
 class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
+  static final _countBasedRegex = RegExp(
+    r'^\d+\s*(egg|roti|chapati|paratha|slice|piece|pc|cup|scoop|tbsp|tsp|glass|bowl|serving|idli|dosa|puri|vada|samosa|pakora|tikki)',
+    caseSensitive: false,
+  );
+
+  static final _unitExtractRegex = RegExp(
+    r'\d+\s*(?:small|medium|large|big)?\s*(.*)',
+    caseSensitive: false,
+  );
+
   final _searchController = TextEditingController();
   Map<String, dynamic>? _selectedFood;
   double _quantityG = 100;
   String _mealType = 'snacks';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -80,6 +93,7 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -148,8 +162,13 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
               child: TextField(
                 controller: _searchController,
                 autofocus: true,
-                onChanged: (q) =>
-                    ref.read(foodSearchProvider.notifier).search(q),
+                onChanged: (q) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                    if (!mounted) return;
+                    ref.read(foodSearchProvider.notifier).search(q);
+                  });
+                },
                 style: AppTypography.body.copyWith(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Search foods (e.g. paneer tikka, idli)...',
@@ -532,17 +551,11 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
   List<Widget> _buildPortionButtons(String servingDesc, double servingG) {
     final lower = servingDesc.toLowerCase();
     // Detect count-based servings
-    final isCountBased = RegExp(
-      r'^\d+\s*(egg|roti|chapati|paratha|slice|piece|pc|cup|scoop|tbsp|tsp|glass|bowl|serving|idli|dosa|puri|vada|samosa|pakora|tikki)',
-      caseSensitive: false,
-    ).hasMatch(lower);
+    final isCountBased = _countBasedRegex.hasMatch(lower);
 
     if (isCountBased && servingG > 0) {
       // Extract the unit name from serving desc (e.g., "1 large egg" → "egg")
-      final unitMatch = RegExp(
-        r'\d+\s*(?:small|medium|large|big)?\s*(.*)',
-        caseSensitive: false,
-      ).firstMatch(servingDesc);
+      final unitMatch = _unitExtractRegex.firstMatch(servingDesc);
       final unitName = unitMatch?.group(1)?.trim() ?? servingDesc;
 
       final buttons = <Widget>[];

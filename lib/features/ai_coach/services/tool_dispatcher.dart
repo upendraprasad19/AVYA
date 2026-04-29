@@ -170,7 +170,9 @@ class ToolDispatcher {
       if (intent.type == 'create_custom_template') {
         try {
           ref.invalidate(templatesProvider);
-        } catch (_) {/* ignore */}
+        } catch (e, st) {
+          debugPrint('[tool_dispatcher] invalidate templatesProvider failed: $e\n$st');
+        }
       }
       unawaited(SyncService.instance.pushSnapshot());
 
@@ -1226,22 +1228,32 @@ class ToolDispatcher {
     // Nutrition tab daily/weekly grids) as a manual food log.
     try {
       ref.invalidate(dailyNutritionProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate dailyNutritionProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(weeklyNutritionProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate weeklyNutritionProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(nutritionSummaryProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate nutritionSummaryProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(recentFoodLogsProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate recentFoodLogsProvider failed: $e\n$st');
+    }
     // adjust_caloric_target writes a target_override_<date> key; the
     // macro-target readers (profile MY TARGETS card, diet plan screen) need
     // to re-read the override-aware target.
     try {
       ref.invalidate(macroTargetsProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate macroTargetsProvider failed: $e\n$st');
+    }
   }
 
   void _invalidateProfileProviders(Ref ref) {
@@ -1251,10 +1263,14 @@ class ToolDispatcher {
     // try/caught so one missing provider doesn't block the rest.
     try {
       ref.invalidate(userProfileProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate userProfileProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(userStatsProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate userStatsProvider failed: $e\n$st');
+    }
   }
 
   void _invalidateWorkoutProviders(Ref ref) {
@@ -1265,22 +1281,34 @@ class ToolDispatcher {
     // common upper bound that ref.invalidate accepts.
     try {
       ref.invalidate(currentPlanProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate currentPlanProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(workoutStatsProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate workoutStatsProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(calendarWeekProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate calendarWeekProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(streakProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate streakProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(todayWorkoutProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate todayWorkoutProvider failed: $e\n$st');
+    }
     try {
       ref.invalidate(allExercisePRsProvider);
-    } catch (_) {/* ignore */}
+    } catch (e, st) {
+      debugPrint('[tool_dispatcher] invalidate allExercisePRsProvider failed: $e\n$st');
+    }
   }
 
   String _todayDateString() {

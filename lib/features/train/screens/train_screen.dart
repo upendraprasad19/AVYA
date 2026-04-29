@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
-import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -104,6 +107,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // U7 — unified tab header (D-3). WardTabHeader +
+                    // RankChipFullWidth replaces the old compact RankChip
+                    // at the top of the Train tab.
+                    WardTabHeader(
+                      eyebrow: 'TRAIN',
+                      avatarInitial: ref.watch(userInitialProvider),
+                      streakDays: ref.watch(streakProvider),
+                      freezesAvailable: ref.watch(streakFreezeProvider),
+                      onAvatarTap: () => context.go('/profile'),
+                    ),
+                    const SizedBox(height: 4),
+                    const RankChipFullWidth(),
+                    const SizedBox(height: 8),
                     // 1. Plan header with progress bar
                     _buildPlanHeader(plan, selectedWeek, weekDays),
 
@@ -143,7 +159,61 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 14),
 
-                    // 3. This Week section label
+                    // APK Test #3 / Obs 1: deployment header above
+                    // Roadmap pill. Communicates that THIS WEEK is one
+                    // chapter of a 12-week deployment, not the whole story.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenPadding),
+                      child: Text(
+                        'DEPLOYMENT 01 — FOUNDATION  (WEEK ${plan.currentWeek} OF 12)',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textMute,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // VIEW ROADMAP pill — Q7 surface A entry point
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 10),
+                      child: GestureDetector(
+                        onTap: () => context.push('/train/roadmap'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.input,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.accent),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.map_outlined,
+                                  size: 16, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Text(
+                                'VIEW THE 12-WEEK ROADMAP',
+                                style: AppTypography.mono.copyWith(
+                                  fontSize: 11,
+                                  letterSpacing: 1.2,
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(Icons.arrow_forward,
+                                  size: 14, color: AppColors.accent),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // 3. This Week section label — moved BELOW Roadmap
+                    // pill per APK Test #3 / Obs 1 ordering decision.
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.screenPadding),
@@ -162,6 +232,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
                       onSelect: (week) {
+                          final isProUser =
+                              SubscriptionService.instance.isPro();
+                          // Weeks 5-12 are PRO-only. Free users tapping a
+                          // locked week chip are routed to the read-only
+                          // preview screen (Q7 surface C) instead of
+                          // selecting a week they can't access.
+                          if (!isProUser && week >= 5) {
+                            final phase = week <= 8 ? 'II' : 'III';
+                            context.push(
+                                '/train/preview?phase=$phase&week=$week&day=1');
+                            return;
+                          }
                           ref.read(selectedWeekProvider.notifier).select(week);
                           ref.read(expandedDayProvider.notifier).collapse();
                         },
@@ -192,8 +274,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
                     const SizedBox(height: 20),
 
-                    // CREATE CUSTOM EXERCISE section
-                    _buildCreateCustomExerciseSection(context),
+                    // YOUR EXERCISES section — header + CREATE pill +
+                    // horizontal chip row showing all custom exercises
+                    // with their approval status. Replaces the older
+                    // full-width "Create Custom Exercise" card (saves
+                    // vertical space and surfaces DRAFT/PENDING
+                    // state visibly, per APK-test-1-batch D4/D6).
+                    _buildYourExercisesSection(context),
 
                     const SizedBox(height: 20),
                   ],
@@ -407,19 +494,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             label: 'START WORKOUT',
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
-            onPressed: () => SubscriptionService.instance.gate(
-              AppConstants.featureActiveWorkoutMode,
-              onPro: () {
-                ref
-                    .read(activeWorkoutProvider.notifier)
-                    .startWorkout(workout);
-                context.go('/train/active-workout');
-              },
-              onFree: () => showPaywallSheet(
-                context,
-                feature: 'Active Workout Mode',
-              ),
-            ),
+            onPressed: () {
+              ref.read(activeWorkoutProvider.notifier).startWorkout(workout);
+              context.go('/train/active-workout');
+            },
           ),
         ],
       ),
@@ -882,22 +960,15 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             ],
           ],
           const SizedBox(height: 10),
-          // START WORKOUT button — the explicit gate
+          // START WORKOUT button — always available (Q6 made free)
           WardButton(
             label: 'START WORKOUT',
             leading: const Icon(Icons.play_arrow_rounded,
                 size: 16, color: AppColors.bgDeep),
-            onPressed: () => SubscriptionService.instance.gate(
-              AppConstants.featureActiveWorkoutMode,
-              onPro: () {
-                ref.read(activeWorkoutProvider.notifier).startWorkout(day);
-                context.go('/train/active-workout');
-              },
-              onFree: () => showPaywallSheet(
-                context,
-                feature: 'Active Workout Mode',
-              ),
-            ),
+            onPressed: () {
+              ref.read(activeWorkoutProvider.notifier).startWorkout(day);
+              context.go('/train/active-workout');
+            },
           ),
         ],
       ),
@@ -1479,24 +1550,28 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
           const SizedBox(height: 10),
 
           if (templates.isEmpty)
-            WardCard(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 8),
+              child: Row(
                 children: [
-                  const Icon(Icons.fitness_center_outlined,
-                      size: 28, color: AppColors.textDim),
-                  const SizedBox(height: 8),
                   Text(
-                    'No templates yet',
-                    style: AppTypography.h3.copyWith(
-                      fontSize: 13,
-                      color: AppColors.textDim,
+                    'No templates yet — tap ',
+                    style: AppTypography.bodyS
+                        .copyWith(color: AppColors.textDim),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.go('/train/template-builder'),
+                    child: Text(
+                      '+ CREATE',
+                      style: AppTypography.bodyS.copyWith(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    'Tap Create to build a custom workout',
-                    style: AppTypography.bodySm
+                    ' to build one.',
+                    style: AppTypography.bodyS
                         .copyWith(color: AppColors.textDim),
                   ),
                 ],
@@ -1858,67 +1933,200 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     );
   }
 
-  // ── Create Custom Exercise Section ──────────────────────────────
+  // ── Your Exercises Section (D4 / D6) ─────────────────────────────
+  //
+  // Replaces the pre-2026-04-24 full-width "Create Custom Exercise"
+  // WardCard with a header-plus-chips layout that mirrors MY TEMPLATES.
+  // Users can see every exercise they've created, with a visible
+  // approval state (DRAFT / PENDING / APPROVED) so the path from
+  // create -> community -> approved is legible without opening Profile.
 
-  Widget _buildCreateCustomExerciseSection(BuildContext context) {
+  Widget _buildYourExercisesSection(BuildContext context) {
+    final customBox = HiveService.instance.customBox;
+
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: WardCard(
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            backgroundColor: Colors.transparent,
-            isScrollControlled: true,
-            builder: (_) => CreateCustomExerciseSheet(
-              onCreated: (exercise) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Exercise created! It\'s now available in all workout pickers.',
-                      style: AppTypography.bodySm,
-                    ),
-                    backgroundColor: AppColors.card,
-                    behavior: SnackBarBehavior.floating,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'YOUR EXERCISES',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _openCreateCustomExerciseSheet(context),
+                child: const WardChip(
+                  label: '+ CREATE',
+                  tone: WardChipTone.gold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // ValueListenableBuilder rebuilds the chip row whenever the
+          // Hive customBox mutates — so new exercises appear as soon as
+          // CreateCustomExerciseSheet._save writes them.
+          ValueListenableBuilder<Box<dynamic>>(
+            valueListenable: customBox.listenable(),
+            builder: (context, box, _) {
+              final exercises = _collectCustomExercises(box);
+              if (exercises.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        'No custom exercises yet — tap ',
+                        style: AppTypography.bodyS
+                            .copyWith(color: AppColors.textDim),
+                      ),
+                      GestureDetector(
+                        onTap: () => _openCreateCustomExerciseSheet(context),
+                        child: Text(
+                          '+ CREATE',
+                          style: AppTypography.bodyS.copyWith(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        ' to add one.',
+                        style: AppTypography.bodyS
+                            .copyWith(color: AppColors.textDim),
+                      ),
+                    ],
                   ),
                 );
-              },
+              }
+              return SizedBox(
+                height: 68,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: exercises.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) =>
+                      _CustomExerciseChip(exercise: exercises[i]),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reads every `custom_exercise_*` entry from the Hive customBox and
+  /// returns them newest-first. Filters out malformed entries.
+  List<Map<String, dynamic>> _collectCustomExercises(Box<dynamic> box) {
+    final out = <Map<String, dynamic>>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('custom_exercise_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      map['_key'] = key;
+      out.add(map);
+    }
+    // Newest first. Hive keys are `custom_exercise_<ms>` so string
+    // descending sort == recency order.
+    out.sort((a, b) => (b['_key'] as String).compareTo(a['_key'] as String));
+    return out;
+  }
+
+  void _openCreateCustomExerciseSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => CreateCustomExerciseSheet(
+        onCreated: (exercise) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Exercise saved. Showing in YOUR EXERCISES.',
+                style: AppTypography.bodySm,
+              ),
+              backgroundColor: AppColors.card,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         },
-        child: Row(
-          children: [
-            const Icon(
-              Icons.add_circle_outline,
-              size: 20,
-              color: AppColors.accent,
+      ),
+    );
+  }
+}
+
+/// Horizontal chip for a custom exercise on the Train screen, showing
+/// name + approval status. Status rules:
+///   * `approved_for_library=true`          -> APPROVED (ok)
+///   * `submitted_to_library=true` only     -> PENDING  (warn)
+///   * neither                               -> DRAFT    (textMute)
+class _CustomExerciseChip extends StatelessWidget {
+  const _CustomExerciseChip({required this.exercise});
+
+  final Map<String, dynamic> exercise;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = exercise['name'] as String? ?? 'Unnamed';
+    final submitted = exercise['submitted_to_library'] == true;
+    final approved = exercise['approved_for_library'] == true;
+
+    final (String statusLabel, Color statusColor) = approved
+        ? ('APPROVED', AppColors.ok)
+        : submitted
+            ? ('PENDING', AppColors.warn)
+            : ('DRAFT', AppColors.textMute);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.line2),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.h3.copyWith(
+              fontSize: 13,
+              color: AppColors.textPrimary,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Create Custom Exercise',
-                    style: AppTypography.h3.copyWith(fontSize: 14),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Add your own exercises to use in workouts',
-                    style: AppTypography.bodySm
-                        .copyWith(color: AppColors.textDim),
-                  ),
-                ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (approved) ...[
+                Icon(Icons.check_circle_outline, size: 11, color: statusColor),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                statusLabel,
+                style: AppTypography.monoXs.copyWith(
+                  color: statusColor,
+                  letterSpacing: 1.8,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: AppColors.textDim,
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

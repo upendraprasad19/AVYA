@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
@@ -1492,6 +1493,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     unawaited(SyncService.instance.syncWorkoutData());
     unawaited(SyncService.instance.syncProgressNow());
     unawaited(SyncService.instance.pushSnapshot());
+    // APK Test #3 / Obs 1: re-evaluate rank on every workout. Idempotent —
+    // upsert with onConflict on (user_id, rank_code). Catches in-session
+    // promotions (e.g. SD1 firing on workout 7) the moment they qualify.
+    unawaited(RankService.instance.evaluateAndPromote());
 
     // Refresh all affected providers. Riverpod batches invalidations within
     // the same synchronous frame — these won't cause separate rebuilds.
@@ -1502,6 +1507,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(allExercisePRsProvider);
+    ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after complete
     // Note: weightHistoryProvider not invalidated — workout completion
     // doesn't change weight data (weight is logged separately).
   }

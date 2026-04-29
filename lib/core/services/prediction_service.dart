@@ -27,11 +27,21 @@ class PredictionService {
       final workoutsDone = progress?['total_workouts_done'] ?? 0;
       final streakDays = progress?['current_streak_days'] ?? 0;
 
+      const rulesBlock = '''
+CRITICAL OUTPUT RULES:
+- Reply in plain English sentences or bullet points only.
+- DO NOT use any structured format.
+- DO NOT prefix lines with labels like "outcome:", "weight_kg:", "summary:", "prediction:", or any colon-separated keys.
+- DO NOT return JSON. DO NOT wrap in code fences.
+- Just write 2-4 bullet points of prose. Direct address ("you").
+- 80 words maximum.''';
+
       final prompt = '''Predict realistic 12-week fitness outcomes.
 
 Data: $name, ${weight}kg → ${target}kg, goal=$goal, $workoutsDone workouts done, $streakDays day streak.
+$rulesBlock
 
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+Format (use • not JSON):
 • Weight: current → 4wk → 8wk → 12wk
 • Body fat estimate change
 • Key lift projections

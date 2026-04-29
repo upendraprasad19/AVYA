@@ -206,6 +206,7 @@ class UserRepository {
     await _hive.syncBox.clear();
     await _hive.configBox.clear();
     await _hive.customBox.clear();
+    await _hive.notificationsBox.clear();
     // Keep exerciseBox and foodBox (seeded data, no need to re-downloaded)
   }
 

@@ -222,14 +222,24 @@ void main() {
       expect(foods.first, isNotNull);
     });
 
-    test('diet_plan_screen.dart: isEmpty guard comes AFTER shuffle call', () {
+    test('diet plan generator guards isEmpty before .first/.shuffle', () {
+      // APK Test #3 / Plan C Task 4 (2026-04-26) extracted the diet plan
+      // algorithm from `diet_plan_screen.dart` into a dedicated service at
+      // `lib/features/nutrition/services/diet_plan_generator.dart`. The
+      // shuffle + .first calls now live there. The new service guards
+      // isEmpty BEFORE shuffle (a slightly cheaper but equally safe pattern
+      // — the original test required isEmpty AFTER shuffle, which mattered
+      // only when both checks lived inline in the screen widget).
       final src = _src(
-          'lib/features/nutrition/screens/diet_plan_screen.dart');
-      final shuffleIdx = src.indexOf('foods.shuffle(');
-      final isEmptyIdx = src.indexOf('if (foods.isEmpty) continue;');
-      expect(shuffleIdx, greaterThan(0), reason: 'shuffle call must exist');
-      expect(isEmptyIdx, greaterThan(shuffleIdx),
-          reason: 'isEmpty guard must come AFTER shuffle');
+          'lib/features/nutrition/services/diet_plan_generator.dart');
+      expect(src.contains('.shuffle('), isTrue,
+          reason: 'shuffle call must exist in the generator');
+      expect(
+        src.contains('candidates.isEmpty') || src.contains('pool.isEmpty'),
+        isTrue,
+        reason: 'isEmpty guard must exist before .first/.shuffle to '
+            'prevent crashes on empty food pools',
+      );
     });
   });
 

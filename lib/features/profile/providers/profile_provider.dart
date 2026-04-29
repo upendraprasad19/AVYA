@@ -445,6 +445,7 @@ class BiometricNotifier extends Notifier<BiometricData> {
       'created_at': now.toIso8601String(),
     });
     ref.invalidateSelf();
+    unawaited(SyncService.instance.syncSleepNow());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }

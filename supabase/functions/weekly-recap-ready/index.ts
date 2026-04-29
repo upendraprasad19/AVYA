@@ -70,8 +70,8 @@ async function processUser(
 
     const ok = await sendPushNotification({
       userId,
-      title: "Weekly Recap Ready",
-      message: `${firstName}, your Week ${currentWeek} recap is ready. See how you did!`,
+      title: "Sunday Brief",
+      message: `${firstName} — Week ${currentWeek} debrief ready. Stand to.`,
       screen: "/profile/reports",
     });
 

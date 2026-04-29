@@ -12,8 +12,6 @@ import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
-import '../widgets/streak_explainer_sheet.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
@@ -34,7 +32,7 @@ import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
-import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/rank_chip_full_width.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -198,7 +196,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _buildHeader(ref),
+        // U7 — unified tab header (D-2). WardTabHeader replaces the old
+        // per-screen avatar+greeting row. Rank chip moves to a dedicated
+        // full-width RankChipFullWidth row so Y-position is identical on
+        // every tab (no visual jump on tab switch).
+        WardTabHeader(
+          eyebrow: 'DAILY BRIEF',
+          avatarInitial: ref.watch(userInitialProvider),
+          streakDays: ref.watch(streakProvider),
+          freezesAvailable: ref.watch(streakFreezeProvider),
+          onAvatarTap: () => context.go('/profile'),
+        ),
+        const SizedBox(height: 4),
+        const RankChipFullWidth(),
+        const SizedBox(height: 8),
         _buildDateDisplay(),
         const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),
         _buildStreakWarning(ref),
@@ -273,69 +284,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // -- Header ---------------------------------------------------------
-  //
-  // D-5 (APK Test #5 Plan D): replaced the legacy WELCOME BACK row with
-  // the standardised WardLetterhead structure — `DAILY · TUE 28 APR`
-  // eyebrow + dynamic time-of-day greeting + 44 dp avatar in the
-  // letterhead's leadingAvatar slot. The streak / freeze cluster moved
-  // into a WardStatusStrip directly below the gold rule so the standing
-  // cluster is consistent across tabs (Daily, Train, Nutrition, Profile).
-
-  Widget _buildHeader(WidgetRef ref) {
-    final initial = ref.watch(userInitialProvider);
-    final firstName = ref.watch(userFirstNameProvider);
-    final greeting = ref.watch(userGreetingProvider);
-    final streak = ref.watch(streakProvider);
-    final freezes = ref.watch(streakFreezeProvider);
-    final profile = ref.watch(userProfileProvider);
-    final avatarUrl = profile['avatar_url'] as String?;
-
-    final now = DateTime.now();
-    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    const monthShort = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-    ];
-    final eyebrow =
-        'DAILY · ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        WardLetterhead(
-          eyebrow: eyebrow,
-          title: '$greeting, $firstName.',
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-          divider: true,
-          leadingAvatar: WardAvatar(
-            initial: initial,
-            size: 44,
-            image: (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? NetworkImage(avatarUrl)
-                : null,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
-          child: GestureDetector(
-            // F14 · Tap to open the streak explainer modal.
-            onTap: () => StreakExplainerSheet.show(
-              context,
-              freezesAvailable: freezes,
-              isPro: SubscriptionService.instance.isPro(),
-            ),
-            child: WardStatusStrip(
-              streakDays: streak,
-              freezesAvailable: freezes,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   // -- Streak Warning -------------------------------------------------
 
   Widget _buildStreakWarning(WidgetRef ref) {
@@ -383,7 +331,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Derive WK number + current phase for the letterhead suffix.
     final weekOfYear =
-        ((now.difference(DateTime(now.year, 1, 1)).inDays) / 7).floor() + 1;
+        WorkoutScheduleService.instance.getCurrentWeekNumber();
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
 

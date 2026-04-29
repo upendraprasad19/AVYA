@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
+import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 import '../services/identity_signal_detector.dart';
 import '../models/coach_memory.dart';
 
@@ -31,7 +33,15 @@ class AiCoachRepository {
     final progress = UserRepository.instance.getProgress() ?? {};
     final preferences = UserRepository.instance.getPreferences() ?? {};
 
+    // Detect if this is the user's first-ever message to the coach
+    // by checking if coachBox has any prior interactions
+    final priorMessages = _hive.coachBox.values
+        .where((v) => v is Map && (v['user_message'] as String?)?.isNotEmpty == true)
+        .length;
+    final isFirstEverMessage = priorMessages == 0;
+
     return {
+      'is_first_ever_message': isFirstEverMessage,
       'profile': {
         'name': profile['full_name'] ?? '',
         'age': _calculateAge(profile['date_of_birth'] as String?),
@@ -66,6 +76,7 @@ class AiCoachRepository {
       'personal_records': _getPersonalRecords(),
       'coaching_notes': _getCoachingNotes(),
       'coach_memory': _getCoachMemoryForContext(),
+
       'fitness_summary': _getFitnessSummary(),
       'motivational_style': preferences['motivational_style'] ?? 'encouraging',
       'coach_notices': _getCoachNotices(),
@@ -78,6 +89,125 @@ class AiCoachRepository {
       // 0-3 templates), well under the 9.5KB compaction cap.
       'custom_exercises': _readCustomExercises(),
       'saved_templates': _readSavedTemplates(),
+
+      // APK Test #3 / Q6.3 (2026-04-26): expand snapshot so the AI coach
+      // can reference what the user actually ate today and across the
+      // last 7 days. Per-turn cost ~500-700 bytes; both keys drop early
+      // in _compactContext so they never push past the 9.5 KB ceiling.
+      'meals_today': _getMealsToday(),
+      'nutrition_trend_7d': _getNutritionTrend7d(),
+
+      // APK Test #4 / A3: anti-fabrication grounding keys.
+      // Captain Manual §8 references these to refuse history-beyond-window
+      // claims ("no data from last year — 8 days on roster").
+      // ~60-80 bytes. Dropped last in _compactContext (very small).
+      ..._computeDataWindowGrounding(),
+      'nutrition_logs_count_7d': _countNutritionLogsLast7Days(),
+      'sleep_logs_count_7d': _countSleepLogsLast7Days(),
+
+      // APK Test #4 / A4: workout schedule snapshot keys.
+      // Closes audit A2 (yesterday_workout) and OBS-1 gap (today's session
+      // contents visible to coach without user having to repeat them).
+      // week_lookahead gives the coach full context for schedule questions
+      // ("what's my plan this week?", "when's my next leg day?").
+      // ~150-400 bytes typical (7 entries × 4 fields each).
+      'today_workout': _getTodayWorkout(),
+      'yesterday_workout': _getYesterdayWorkout(),
+      'week_lookahead': _getWeekLookahead(),
+
+      // APK Test #4 / A5: full plan structure summary.
+      // Closes OBS-2 (coach was asking "what exercises are in your leg day?"
+      // even though the plan was generated locally and stored in Hive).
+      // Deduped by session name so PPL never emits PUSH A twice.
+      // ~200-600 bytes typical (3-6 unique sessions × 4-10 exercises each).
+      'current_plan_summary': _getCurrentPlanSummary(),
+
+      // APK Test #4 / A6: sleep, water, streak freezes, subscription, rank
+      // progression, cadence, and ETA to next rank promotion.
+      // Closes audit A1 (sleep_7d), A3 (streak_freezes), P2 (subscription).
+      // Total size: ~300-500 bytes typical. All null-safe with sensible defaults.
+      'sleep_7d': _getSleep7d(),
+      'water_7d': _getWater7d(),
+      'streak_freezes_available': _getStreakFreezesAvailable(),
+      'streak_freezes_refill_date': _getStreakFreezesRefillDate(),
+      'subscription': _getSubscriptionState(),
+      'current_rank': _getCurrentRankFromLadder(),
+      'next_rank': _getNextRankFromLadder(),
+      'eta_next_promotion': _getEtaNextPromotion(),
+      'cadence': {
+        'workouts_per_week_4w': _computeWorkoutsPerWeekLast4Weeks(),
+        'plan_target': ((_hive.userBox.get('profile') as Map?)?['days_per_week'] as int?) ?? 4,
+      },
+
+      // APK Test #4 / A7: mid-workout state for real-time coaching context.
+      // Written on every set log by ActiveWorkoutPersistence.writeState().
+      // Cleared on workout completion or abandonment.
+      // Auto-clears stale entries (>2h) on read so it's never leftover.
+      // Null when user is not actively in a workout session.
+      // Closes audit A4 — Captain can now answer "should I add another set?"
+      // with knowledge of current exercise, set#, weight, reps, RPE history.
+      // ~100-150 bytes when present; drops early in _compactContext (null = 0 bytes).
+      'active_workout': ActiveWorkoutPersistence.readState(),
+
+      // APK Test #4 / A8: induction commitment + 5-question muster answers.
+      // Plan B writes these on user induction (3-message intro + I COMMIT
+      // button + 5-question interview). A8 exposes them so Captain Manual §2
+      // (Lt Cdr Contract recall) and §10.1 idea #1 (why-now anchor recall)
+      // have data the moment Plan B ships. All null-safe for un-inducted users.
+      // ~100-200 bytes when present; 0 bytes (null/false/empty) until Plan B.
+      ..._getInductionAndMusterKeys(),
+
+      // Closeout snapshot keys — P1/P2 audit gaps missed in Plan A execution.
+      // All read from existing Hive data; no new infrastructure.
+      //
+      //   pr_timeline_summary  (P1 G-10) — top 5 PRs by recency, with set_date.
+      //   goal_changed_at      (P1)      — ISO timestamp from profile (written by
+      //                                    switchGoal tool_dispatcher). Null for
+      //                                    users who have never changed goal.
+      //   body_measurements    (P2)      — latest cm per type (chest/waist/hips/arms)
+      //                                    from healthBox measurement_* keys.
+      //   onboarding_completed_at (P2)  — from profile (set by completeOnboarding).
+      //   phase_transitions    (P2)      — last 3 entries from progress.phase_history
+      //                                    if present (empty list otherwise).
+      //   recent_meal_deletes  (P1)      — last 5 food-log deletions from
+      //                                    nutritionBox['recent_deletes'] (written by
+      //                                    deleteFoodLog since this batch).
+      //
+      // Total ~400-600 bytes typical; all drop via _compactContext if needed.
+      'pr_timeline_summary': _getPRTimelineSummary(),
+      'goal_changed_at': _getGoalChangedAt(),
+      'body_measurements': _getBodyMeasurements(),
+      'onboarding_completed_at': _getOnboardingCompletedAt(),
+      'phase_transitions': _getPhaseTransitions(),
+      'recent_meal_deletes': _getRecentMealDeletes(),
+    };
+  }
+
+  /// Reads induction commitment + 5-question muster answers from coachBox.
+  /// Returns 9 null-safe keys. All keys default to null/false/empty when
+  /// the user has not yet completed Plan B's induction flow.
+  Map<String, dynamic> _getInductionAndMusterKeys() {
+    final coach = _hive.coachBox;
+
+    final committedAt = coach.get('committed_at') as String?;
+    int? daysSinceCommitment;
+    if (committedAt != null) {
+      final dt = DateTime.tryParse(committedAt);
+      if (dt != null) daysSinceCommitment = DateTime.now().difference(dt).inDays;
+    }
+
+    return {
+      'committed_at': committedAt,
+      'committed_to_lt_cdr': (coach.get('committed_to_lt_cdr') as bool?) ?? false,
+      'days_since_commitment': daysSinceCommitment,
+      'why_now': coach.get('why_now') as String?,
+      'definition_of_winning': coach.get('definition_of_winning') as String?,
+      'known_injuries':
+          (coach.get('known_injuries') as List?) ?? const <String>[],
+      'typical_wake_time': coach.get('typical_wake_time') as String?,
+      'preferred_workout_time': coach.get('preferred_workout_time') as String?,
+      'body_part_priorities':
+          (coach.get('body_part_priorities') as List?) ?? const <String>[],
     };
   }
 
@@ -807,6 +937,145 @@ class AiCoachRepository {
     };
   }
 
+  /// Reads today's nlog_* rows from nutritionBox, groups by meal_type,
+  /// and returns a list of {slot, items, total_kcal, total_protein_g}
+  /// maps. Up to 4 slots (breakfast/lunch/dinner/snacks). Slot order
+  /// follows insertion order — slots without rows are omitted entirely
+  /// (rather than zero-filled) so the AI sees only meals the user
+  /// actually logged.
+  List<Map<String, dynamic>> _getMealsToday() {
+    final nutritionBox = _hive.nutritionBox;
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, "0")}-'
+        '${now.day.toString().padLeft(2, "0")}';
+
+    // Preserve canonical slot order: breakfast → lunch → dinner → snacks.
+    const slotOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
+    final bySlot = <String, List<Map<String, dynamic>>>{};
+
+    for (final raw in nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['date'] != todayStr) continue;
+      // Only group rows with the standard nlog_* shape (skip saved-meal
+      // template rows etc. — they don't carry meal_type at log time).
+      final id = log['id'] as String? ?? '';
+      if (!id.startsWith('nlog_')) continue;
+      final mealType = (log['meal_type'] as String?)?.toLowerCase();
+      if (mealType == null || mealType.isEmpty) continue;
+      // Snap the various aliases the app uses to canonical slot keys.
+      final slot = _canonicalSlot(mealType);
+
+      bySlot.putIfAbsent(slot, () => []).add({
+        'name': log['food_name'] ?? 'Unknown',
+        'kcal': (log['total_calories'] as num?)?.toInt() ?? 0,
+        'protein_g': (log['total_protein'] as num?)?.toInt() ?? 0,
+        'carbs_g': (log['total_carbs'] as num?)?.toInt() ?? 0,
+        'fat_g': (log['total_fat'] as num?)?.toInt() ?? 0,
+      });
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final slot in slotOrder) {
+      final rows = bySlot[slot];
+      if (rows == null || rows.isEmpty) continue;
+      var totalK = 0;
+      var totalP = 0;
+      for (final r in rows) {
+        totalK += (r['kcal'] as int);
+        totalP += (r['protein_g'] as int);
+      }
+      result.add({
+        'slot': slot,
+        'items': rows,
+        'total_kcal': totalK,
+        'total_protein_g': totalP,
+      });
+    }
+    return result;
+  }
+
+  String _canonicalSlot(String raw) {
+    final s = raw.toLowerCase();
+    if (s == 'snack' || s == 'snacks' || s == 'mid_morning' ||
+        s == 'evening' || s == 'mid-morning' || s == 'evening_snack') {
+      return 'snacks';
+    }
+    if (s == 'breakfast') return 'breakfast';
+    if (s == 'lunch') return 'lunch';
+    if (s == 'dinner') return 'dinner';
+    return 'snacks'; // unknown → bucket into snacks
+  }
+
+  /// Returns the last 7 days of daily totals, newest-first.
+  /// Days without any nlog_* row are zero-filled so the model sees a
+  /// stable 7-element timeline (and can detect the difference between
+  /// "logged 0" and "didn't log").
+  ///
+  /// Refactored to single-pass O(N) bucketing (was O(7N) — 7 separate
+  /// iterations over nutritionBox.values).
+  List<Map<String, dynamic>> _getNutritionTrend7d() {
+    final nutritionBox = _hive.nutritionBox;
+    final now = DateTime.now();
+
+    // Build the set of 7 date strings we care about so we can ignore
+    // anything outside the window in O(1) per record.
+    final windowDates = <String>[
+      for (var i = 0; i < 7; i++)
+        () {
+          final d = now.subtract(Duration(days: i));
+          return '${d.year}-${d.month.toString().padLeft(2, "0")}-'
+              '${d.day.toString().padLeft(2, "0")}';
+        }(),
+    ];
+    final windowSet = windowDates.toSet();
+
+    // Single pass: bucket every nlog_* record by date.
+    final byDate = <String, Map<String, int>>{};
+    for (final raw in nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      final id = log['id'] as String? ?? '';
+      if (!id.startsWith('nlog_')) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null || !windowSet.contains(dateStr)) continue;
+
+      final bucket = byDate.putIfAbsent(
+        dateStr,
+        () => {'calories': 0, 'protein_g': 0, 'carbs_g': 0, 'fat_g': 0, 'fiber_g': 0},
+      );
+      bucket['calories'] = bucket['calories']! + ((log['total_calories'] as num?)?.toInt() ?? 0);
+      bucket['protein_g'] = bucket['protein_g']! + ((log['total_protein'] as num?)?.toInt() ?? 0);
+      bucket['carbs_g'] = bucket['carbs_g']! + ((log['total_carbs'] as num?)?.toInt() ?? 0);
+      bucket['fat_g'] = bucket['fat_g']! + ((log['total_fat'] as num?)?.toInt() ?? 0);
+      bucket['fiber_g'] = bucket['fiber_g']! + ((log['total_fiber'] as num?)?.toInt() ?? 0);
+    }
+
+    // Reconstruct the 7-element newest-first list, zero-filling gaps.
+    return [
+      for (final dateStr in windowDates)
+        {
+          'date': dateStr,
+          'calories': byDate[dateStr]?['calories'] ?? 0,
+          'protein_g': byDate[dateStr]?['protein_g'] ?? 0,
+          'carbs_g': byDate[dateStr]?['carbs_g'] ?? 0,
+          'fat_g': byDate[dateStr]?['fat_g'] ?? 0,
+          'fiber_g': byDate[dateStr]?['fiber_g'] ?? 0,
+        },
+    ];
+  }
+
+  /// Test-only seam exposing _getMealsToday for unit tests that don't
+  /// want to construct the entire snapshot.
+  @visibleForTesting
+  List<Map<String, dynamic>> mealsTodayForTest() => _getMealsToday();
+
+  /// Test-only seam exposing _getNutritionTrend7d.
+  @visibleForTesting
+  List<Map<String, dynamic>> nutritionTrend7dForTest() =>
+      _getNutritionTrend7d();
+
   Map<String, dynamic> _getLatestWeight() {
     final healthBox = _hive.healthBox;
     String? latestDate;
@@ -931,9 +1200,647 @@ class AiCoachRepository {
     }
   }
 
+
   /// Returns the rolling conversation summary from coachBox.
   /// Written by SyncService from the nightly rolling-context Edge Function.
   String _getFitnessSummary() {
     return _hive.coachBox.get('fitness_summary') as String? ?? '';
+  }
+
+  // ── Anti-fabrication grounding helpers (APK Test #4 / A3) ────────────────
+  //
+  // The Captain Manual §8 references these keys to refuse
+  // history-beyond-window claims ("no data from last year — 8 days on
+  // roster"). Without them the Manual's grounding rules have nothing to
+  // check against and the model can drift back into fabrication.
+  //
+  // Cost: one O(n) scan of workoutBox + nutritionBox + healthBox.
+  // Typical user has < 500 entries across all three. Negligible on-device.
+
+  /// Computes `data_window_days`, `first_workout_date`, and
+  /// `workout_logs_count` from workoutBox `wlog_*` rows.
+  ///
+  /// Returns `data_window_days: 0` and `first_workout_date: null` when
+  /// there are no workout logs (fresh user / pre-onboarding state).
+  Map<String, dynamic> _computeDataWindowGrounding() {
+    final box = _hive.workoutBox;
+    final wlogKeys =
+        box.keys.where((k) => k.toString().startsWith('wlog_')).toList();
+
+    if (wlogKeys.isEmpty) {
+      return {
+        'data_window_days': 0,
+        'first_workout_date': null,
+        'workout_logs_count': 0,
+      };
+    }
+
+    DateTime? earliestDate;
+    for (final key in wlogKeys) {
+      final log = box.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+      if (earliestDate == null || date.isBefore(earliestDate)) {
+        earliestDate = date;
+      }
+    }
+
+    if (earliestDate == null) {
+      // Keys exist but none had a parseable 'date' field — treat as 0.
+      return {
+        'data_window_days': 0,
+        'first_workout_date': null,
+        'workout_logs_count': wlogKeys.length,
+      };
+    }
+
+    final daysSince = DateTime.now().difference(earliestDate).inDays;
+    return {
+      'data_window_days': daysSince,
+      'first_workout_date': earliestDate.toIso8601String().substring(0, 10),
+      'workout_logs_count': wlogKeys.length,
+    };
+  }
+
+  /// Counts `nlog_*` rows in nutritionBox whose `date` field falls within
+  /// the last 7 days. Rows outside the window or with unparseable dates
+  /// are silently skipped.
+  int _countNutritionLogsLast7Days() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    int count = 0;
+    for (final key in _hive.nutritionBox.keys) {
+      if (!key.toString().startsWith('nlog_')) continue;
+      final log = _hive.nutritionBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count;
+  }
+
+  /// Counts `sleep_log_*` rows in healthBox whose `date` field falls within
+  /// the last 7 days. Rows outside the window or with unparseable dates
+  /// are silently skipped.
+  int _countSleepLogsLast7Days() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    int count = 0;
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('sleep_log_')) continue;
+      final log = _hive.healthBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count;
+  }
+
+  // ---------------------------------------------------------------------------
+  // APK Test #4 / A4 — Workout schedule snapshot helpers
+  // ---------------------------------------------------------------------------
+
+  /// Returns today's scheduled workout as {type, status, exercises[]} or null
+  /// if no `schedule_<today>` key exists in workoutBox (pure rest day / no
+  /// plan seeded yet).
+  ///
+  /// Falls back to `workout_name` when the `type` field is absent (some legacy
+  /// schedule entries were written without an explicit `type` key).
+  Map<String, dynamic>? _getTodayWorkout() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final schedule = _hive.workoutBox.get('schedule_$today');
+    if (schedule is! Map) return null;
+    return {
+      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+      'status': (schedule['status'] ?? 'pending') as String,
+      'exercises': (schedule['exercises'] as List?) ?? const [],
+    };
+  }
+
+  /// Returns yesterday's scheduled workout as {type, status} or null if no
+  /// `schedule_<yesterday>` key exists. Omits the exercises list (yesterday's
+  /// session contents are less useful than the status — completed/skipped).
+  Map<String, dynamic>? _getYesterdayWorkout() {
+    final yesterday = DateTime.now()
+        .subtract(const Duration(days: 1))
+        .toIso8601String()
+        .substring(0, 10);
+    final schedule = _hive.workoutBox.get('schedule_$yesterday');
+    if (schedule is! Map) return null;
+    return {
+      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+      'status': (schedule['status'] ?? 'unknown') as String,
+    };
+  }
+
+  /// Returns the 7-day lookahead starting today (today + next 6 days).
+  ///
+  /// Each entry: {day: 'Mon', date: '2026-04-28', type: 'PUSH A', status: 'pending'}.
+  /// Days without a `schedule_<date>` key are returned as REST entries
+  /// ({type: 'REST', status: 'rest'}) — NOT null — so the coach always sees
+  /// a complete 7-day picture without gaps.
+  List<Map<String, dynamic>> _getWeekLookahead() {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final results = <Map<String, dynamic>>[];
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().add(Duration(days: i));
+      final dateStr = date.toIso8601String().substring(0, 10);
+      final dayName = dayNames[(date.weekday - 1) % 7];
+      final schedule = _hive.workoutBox.get('schedule_$dateStr');
+      if (schedule is Map) {
+        results.add({
+          'day': dayName,
+          'date': dateStr,
+          'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+          'status': (schedule['status'] ?? 'pending') as String,
+        });
+      } else {
+        results.add({
+          'day': dayName,
+          'date': dateStr,
+          'type': 'REST',
+          'status': 'rest',
+        });
+      }
+    }
+    return results;
+  }
+
+  /// Returns a deduplicated view of all unique sessions scheduled in the
+  /// next 7 days (today + 6), with each session's exercise list.
+  ///
+  /// Shape:
+  /// ```
+  /// {
+  ///   'phase': int,
+  ///   'week': int,
+  ///   'days_per_week': int,
+  ///   'weekly_sessions': [
+  ///     {
+  ///       'name': 'PUSH A',
+  ///       'exercises': [
+  ///         {'name': 'Bench Press', 'sets': 4, 'reps': '8-10', 'weight': 60},
+  ///       ],
+  ///     },
+  ///   ],
+  /// }
+  /// ```
+  ///
+  /// Deduplication: uses session `type` (or `workout_name` fallback) as the
+  /// key. The first occurrence wins; duplicates (e.g. PUSH A on Tue + Fri)
+  /// are dropped so the coach sees one canonical PUSH A exercise list.
+  ///
+  /// REST days (no `schedule_<date>` key) are silently skipped.
+  /// Exercise fields are projected to {name, sets, reps, weight} only —
+  /// logging_type / rest_seconds / warmup_protocol don't belong in the
+  /// ~200-600 byte summary.
+  Map<String, dynamic> _getCurrentPlanSummary() {
+    final progress = (_hive.userBox.get('progress') as Map?) ?? const {};
+    final profile = (_hive.userBox.get('profile') as Map?) ?? const {};
+
+    final phase = (progress['current_phase'] as int?) ?? 1;
+    final week = (progress['current_week'] as int?) ?? 1;
+    final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
+
+    // Iterate today + 6 days, dedup by session name (first occurrence wins).
+    final weeklySessionsMap = <String, Map<String, dynamic>>{};
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().add(Duration(days: i));
+      final dateStr = date.toIso8601String().substring(0, 10);
+      final schedule = _hive.workoutBox.get('schedule_$dateStr');
+      if (schedule is! Map) continue;
+
+      final type = (schedule['type'] ?? schedule['workout_name']) as String?;
+      if (type == null || type == 'REST') continue;
+      if (weeklySessionsMap.containsKey(type)) continue;
+
+      final exercises = ((schedule['exercises'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((ex) => <String, dynamic>{
+                'name': ex['name'],
+                'sets': ex['sets'],
+                'reps': ex['reps'],
+                'weight': ex['weight'],
+              })
+          .toList();
+
+      weeklySessionsMap[type] = {
+        'name': type,
+        'exercises': exercises,
+      };
+    }
+
+    return {
+      'phase': phase,
+      'week': week,
+      'days_per_week': daysPerWeek,
+      'weekly_sessions': weeklySessionsMap.values.toList(),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // APK Test #4 / A6 — Sleep, water, freezes, subscription, rank, cadence, ETA
+  // ---------------------------------------------------------------------------
+
+  // _rankLadder removed — use kRankLadder from rank_ladder_data.dart instead
+  // (canonical short codes: SD2, SD1, LS, PO, CPO, MCPO, SubLt, LtCdr, Cdr, Capt)
+
+  /// Returns sleep logs from the last 7 days as `{date, hours}` ascending.
+  ///
+  /// Keys read: `sleep_log_<YYYY-MM-DD>` in healthBox, written by
+  /// `BiometricNotifier.logSleep` with `sleep_hours` field.
+  /// Supports `hours` field as fallback for legacy entries.
+  List<Map<String, dynamic>> _getSleep7d() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final results = <Map<String, dynamic>>[];
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('sleep_log_')) continue;
+      final log = _hive.healthBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      // Primary field is sleep_hours (BiometricNotifier); fall back to hours
+      // for entries written by cloud-restore paths.
+      final h = (log['sleep_hours'] as num?) ?? (log['hours'] as num?) ?? 0;
+      results.add({'date': dateStr, 'hours': h.toDouble()});
+    }
+    results.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+    return results;
+  }
+
+  /// Returns water intake for the last 7 days as `{date, ml}` ascending.
+  ///
+  /// Keys read: `water_ml_<YYYY-MM-DD>` in healthBox, written by
+  /// `WaterIntakeNotifier` as a plain int (ml). Falls back to Map shape
+  /// (`total_ml` key) for legacy/restored entries.
+  List<Map<String, dynamic>> _getWater7d() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final results = <Map<String, dynamic>>[];
+    for (final key in _hive.healthBox.keys) {
+      if (!key.toString().startsWith('water_ml_')) continue;
+      // Extract the date portion from the key name (water_ml_YYYY-MM-DD)
+      final datePart = key.toString().substring('water_ml_'.length);
+      final date = DateTime.tryParse(datePart);
+      if (date == null || date.isBefore(cutoff)) continue;
+      final raw = _hive.healthBox.get(key);
+      final ml = (raw is int)
+          ? raw
+          : (raw is Map)
+              ? ((raw['total_ml'] as num?)?.toInt() ?? 0)
+              : 0;
+      results.add({'date': datePart, 'ml': ml});
+    }
+    results.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+    return results;
+  }
+
+  /// Reads streak freezes available (int) from userBox progress dict.
+  int _getStreakFreezesAvailable() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    return (progress?['streak_freezes_available'] as int?) ?? 0;
+  }
+
+  /// Reads the ISO date string of the last streak-freeze refill (or null).
+  String? _getStreakFreezesRefillDate() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    return progress?['streak_freezes_last_refill'] as String?;
+  }
+
+  /// Returns subscription state from configBox.
+  ///
+  /// `tier`: 'pro' | 'free'
+  /// `expires_at`: ISO string or null
+  /// `plan`: 'monthly' | 'yearly' | null
+  /// `auto_renew`: bool (default false)
+  Map<String, dynamic> _getSubscriptionState() {
+    final config = _hive.configBox;
+    final isPro = config.get('isPro') == true;
+    final expiresAtRaw = config.get('expiresAt');
+    String? expiresAtIso;
+    if (expiresAtRaw is String) {
+      expiresAtIso = expiresAtRaw;
+    } else if (expiresAtRaw is DateTime) {
+      expiresAtIso = expiresAtRaw.toIso8601String();
+    }
+    return {
+      'tier': isPro ? 'pro' : 'free',
+      'expires_at': expiresAtIso,
+      'plan': config.get('plan') as String?,
+      'auto_renew': (config.get('auto_renew') as bool?) ?? false,
+    };
+  }
+
+  /// Returns the user's current rank, defaulting to SD2 for fresh users.
+  /// Reads directly from profile using the canonical kRankLadder from
+  /// rank_ladder_data.dart — no RankService dependency so it's safe in unit
+  /// tests without RankService init.
+  Map<String, dynamic> _getCurrentRankFromLadder() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    final code = (profile?['current_rank_code'] as String?) ?? 'SD2';
+    final entry = rankByCode(code) ?? kRankLadder.first;
+    final totalWorkouts = _hive.workoutBox.keys
+        .where((k) => k.toString().startsWith('wlog_'))
+        .length;
+    final earnedAt = profile?['current_rank_earned_at'] as String?;
+    return {
+      'code': entry.code,
+      'display': entry.displayName,
+      'earned_at': earnedAt,
+      'total_workouts': totalWorkouts,
+    };
+  }
+
+  /// Returns the next rank entry from the ladder with `remaining` and
+  /// `binding_constraint`, or null when the user is already at Capt (terminal).
+  ///
+  /// Uses canonical kRankLadder short codes (SD2, SD1, LS, PO, CPO, MCPO,
+  /// SubLt, LtCdr, Cdr, Capt) and kRankGates for gate requirements.
+  Map<String, dynamic>? _getNextRankFromLadder() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    final currentCode = (profile?['current_rank_code'] as String?) ?? 'SD2';
+    final currentIdx = kRankLadder.indexWhere((r) => r.code == currentCode);
+    if (currentIdx == -1 || currentIdx >= kRankLadder.length - 1) return null;
+
+    final next = kRankLadder[currentIdx + 1];
+    final gate = kRankGates[next.code];
+
+    final totalWorkouts = _hive.workoutBox.keys
+        .where((k) => k.toString().startsWith('wlog_'))
+        .length;
+    final grounding = _computeDataWindowGrounding();
+    final weeksElapsed = ((grounding['data_window_days'] as int) / 7).floor();
+
+    // Build requirements map from gate (mirrors getPromotionStatus.ts logic)
+    final reqs = <String, int>{};
+    if ((gate?.totalWorkoutsAtLeast ?? 0) > 0) {
+      reqs['workouts'] = gate!.totalWorkoutsAtLeast!;
+    }
+    if ((gate?.streakAtLeast ?? 0) > 0) {
+      reqs['streak_days'] = gate!.streakAtLeast!;
+    }
+    if ((gate?.minWeeksSinceSignup ?? next.minWeeks) > 0) {
+      reqs['weeks'] = gate?.minWeeksSinceSignup ?? next.minWeeks;
+    }
+    if ((gate?.deploymentsCompleteAtLeast ?? 0) > 0) {
+      reqs['deployments'] = gate!.deploymentsCompleteAtLeast!;
+    }
+
+    final remaining = <String, int>{};
+    String binding = 'workouts';
+    int maxRemaining = -1;
+
+    reqs.forEach((k, required) {
+      int current = 0;
+      if (k == 'workouts') {
+        current = totalWorkouts;
+      } else if (k == 'weeks') {
+        current = weeksElapsed;
+      }
+      // streak_days and deployments default to 0 — ETA is conservative
+      final rem = (required - current).clamp(0, required);
+      remaining[k] = rem;
+      if (rem > maxRemaining) {
+        maxRemaining = rem;
+        binding = k;
+      }
+    });
+
+    return {
+      'code': next.code,
+      'display': next.displayName,
+      'requirements': Map<String, dynamic>.from(reqs),
+      'current_state': {
+        'workouts': totalWorkouts,
+        'weeks': weeksElapsed,
+      },
+      'remaining': remaining,
+      'binding_constraint': binding,
+    };
+  }
+
+  /// Counts workout logs (`wlog_*`) in the last 28 days and returns the
+  /// average workouts per week (count / 4.0).
+  double _computeWorkoutsPerWeekLast4Weeks() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 28));
+    int count = 0;
+    for (final key in _hive.workoutBox.keys) {
+      if (!key.toString().startsWith('wlog_')) continue;
+      final log = _hive.workoutBox.get(key);
+      if (log is! Map) continue;
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null || date.isBefore(cutoff)) continue;
+      count++;
+    }
+    return count / 4.0;
+  }
+
+  // ── Closeout snapshot-key helpers (APK Test #4 audit P1/P2 gaps) ──────
+
+  /// Top 5 PRs by recency (one entry per exercise, most-recent date wins).
+  ///
+  /// Iterates all `exlog_*` keys with `is_pr == true`, deduplicates by
+  /// exercise name keeping the entry with the latest `date`, then returns
+  /// the 5 most-recently-set PRs sorted descending by `set_date`.
+  ///
+  /// Closes audit P1 G-10.
+  Map<String, dynamic> _getPRTimelineSummary() {
+    final box = _hive.workoutBox;
+    final byExercise = <String, Map<String, dynamic>>{};
+    int totalPrs = 0;
+
+    for (final key in box.keys) {
+      if (!key.toString().startsWith('exlog_')) continue;
+      final log = box.get(key);
+      if (log is! Map) continue;
+      if (log['is_pr'] != true) continue;
+      totalPrs++;
+      final name = log['exercise_name'] as String?;
+      final dateStr = log['date'] as String?;
+      if (name == null || dateStr == null) continue;
+      final existing = byExercise[name];
+      if (existing == null ||
+          (existing['set_date'] as String).compareTo(dateStr) < 0) {
+        byExercise[name] = {
+          'exercise': name,
+          'weight': (log['weight_kg'] as num?)?.toDouble() ?? 0,
+          'reps': (log['reps_completed'] as num?)?.toInt() ?? 0,
+          'set_date': dateStr,
+        };
+      }
+    }
+
+    final recent = byExercise.values.toList()
+      ..sort((a, b) =>
+          (b['set_date'] as String).compareTo(a['set_date'] as String));
+
+    return {
+      'total_prs': totalPrs,
+      'recent_prs': recent.take(5).toList(),
+    };
+  }
+
+  /// ISO timestamp of the last primary_goal change, or null if never changed.
+  ///
+  /// The `switchGoal` tool_dispatcher stamps `goal_changed_at` on every
+  /// goal change via the AI coach. Returns null for users whose goal has
+  /// never been changed (field simply won't be in profile map).
+  ///
+  /// Also tolerates the legacy key `primary_goal_updated_at` for forward
+  /// compat with any alternative write path.
+  String? _getGoalChangedAt() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    return profile?['goal_changed_at'] as String? ??
+        profile?['primary_goal_updated_at'] as String?;
+  }
+
+  /// Latest body measurement per type from `healthBox['measurement_YYYY-MM-DD']`.
+  ///
+  /// Supported types: `chest`, `waist`, `hips`, `arms`.
+  /// If the user has logged the same type on multiple dates, the value from
+  /// the most recent date is returned.  Returns an empty map when no
+  /// measurements have been recorded yet.
+  ///
+  /// Closes audit P2 body-composition awareness gap.
+  Map<String, dynamic> _getBodyMeasurements() {
+    final results = <String, dynamic>{};
+    final latestByType = <String, DateTime>{};
+
+    for (final key in _hive.healthBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('measurement_')) continue;
+      final raw = _hive.healthBox.get(key);
+      if (raw is! Map) continue;
+      final dateStr = raw['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      for (final field in ['chest', 'waist', 'hips', 'arms']) {
+        final v = (raw[field] as num?)?.toDouble();
+        if (v == null) continue;
+        final prev = latestByType[field];
+        if (prev == null || date.isAfter(prev)) {
+          latestByType[field] = date;
+          results[field] = v;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /// ISO timestamp when the user completed onboarding (REPORT FOR DUTY).
+  ///
+  /// Written by `OnboardingNotifier.completeOnboarding` and stored in
+  /// `userBox['profile']['onboarding_completed_at']`. Synced down from
+  /// `user_profile.onboarding_completed_at` (migration 036) on restore
+  /// so returning users have it populated.
+  ///
+  /// Returns null for legacy users whose profile predates the field.
+  String? _getOnboardingCompletedAt() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    return profile?['onboarding_completed_at'] as String?;
+  }
+
+  /// Last 3 phase transition events from `userBox['progress']['phase_history']`.
+  ///
+  /// Each entry has: `from_phase`, `to_phase`, `transitioned_at` (ISO string).
+  /// Returns an empty list when no phase history is recorded (the write path
+  /// that stamps this list is a planned future enhancement; the read side is
+  /// implemented now so it works the moment the write side ships).
+  List<Map<String, dynamic>> _getPhaseTransitions() {
+    final progress = _hive.userBox.get('progress') as Map?;
+    final history = progress?['phase_history'] as List?;
+    if (history == null || history.isEmpty) return const [];
+    return history
+        .whereType<Map>()
+        .take(3)
+        .map((m) => {
+              'from_phase': m['from_phase'],
+              'to_phase': m['to_phase'],
+              'transitioned_at': m['transitioned_at'],
+            })
+        .toList();
+  }
+
+  /// Last 5 food-log deletions from `nutritionBox['recent_deletes']`.
+  ///
+  /// Written by `deleteFoodLog` in `nutrition_provider.dart` (added in this
+  /// batch). Each entry: `food_name`, `meal_type`, `calories`, `deleted_at`,
+  /// `logged_date`. The list is capped at 10 on the write side; we take the
+  /// top 5 to keep snapshot size bounded.
+  ///
+  /// Closes audit P1 — coach can now acknowledge "you deleted your lunch
+  /// entry" and advise on re-logging without the user having to explain.
+  List<Map<String, dynamic>> _getRecentMealDeletes() {
+    final raw = _hive.nutritionBox.get('recent_deletes');
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .take(5)
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  // ── ETA helper (must stay after closeout helpers) ───────────────────────
+
+  /// Returns ETA to next promotion in days at two cadences:
+  /// - `at_current_cadence`: based on actual workouts/week over last 28 days.
+  ///   Returns `days: 999` when current cadence is 0 (never trains).
+  /// - `at_plan_cadence`: based on `profile.days_per_week` target.
+  ///
+  /// Returns null when user is already at CAPTAIN (terminal rank) or
+  /// when `next_rank` is null.
+  Map<String, dynamic>? _getEtaNextPromotion() {
+    final next = _getNextRankFromLadder();
+    if (next == null) return null;
+
+    final remaining = next['remaining'] as Map<String, int>;
+    final remainingWorkouts = remaining['workouts'] ?? 0;
+
+    if (remainingWorkouts == 0) {
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      return {
+        'at_current_cadence': {'days': 0, 'date': today},
+        'at_plan_cadence': {'days': 0, 'date': today},
+      };
+    }
+
+    final currentCadence = _computeWorkoutsPerWeekLast4Weeks();
+    final profile = _hive.userBox.get('profile') as Map?;
+    final planCadence = (profile?['days_per_week'] as int?) ?? 4;
+
+    final daysAtCurrent = currentCadence > 0
+        ? (remainingWorkouts * 7 / currentCadence).ceil()
+        : 999; // sentinel for zero-cadence users
+    final daysAtPlan = (remainingWorkouts * 7 / planCadence).ceil();
+
+    return {
+      'at_current_cadence': {
+        'days': daysAtCurrent,
+        'date': DateTime.now()
+            .add(Duration(days: daysAtCurrent))
+            .toIso8601String()
+            .substring(0, 10),
+      },
+      'at_plan_cadence': {
+        'days': daysAtPlan,
+        'date': DateTime.now()
+            .add(Duration(days: daysAtPlan))
+            .toIso8601String()
+            .substring(0, 10),
+      },
+    };
   }
 }

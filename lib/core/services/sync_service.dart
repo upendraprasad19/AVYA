@@ -13,13 +13,34 @@ import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
+/// Result of a [SyncService.restoreFromCloudForUser] call.
+class RestoreResult {
+  final bool succeeded;
+  final bool cancelled;
+  final Object? error;
+
+  RestoreResult.success()
+      : succeeded = true,
+        cancelled = false,
+        error = null;
+
+  RestoreResult.cancelled()
+      : succeeded = false,
+        cancelled = true,
+        error = null;
+
+  RestoreResult.failed(this.error)
+      : succeeded = false,
+        cancelled = false;
+}
+
 /// Handles background data sync between Hive (local) and Supabase (cloud).
 ///
 /// Schedule:
 ///   - Immediately: custom foods/exercises (community contribution)
 ///   - Daily 11 PM IST: user_daily_snapshot for AI context
 ///   - Weekly (app launch if >7 days): full sync of all logs
-///   - On restore (new device): pull 30d (free) / 90d (PRO) from Supabase
+///   - On restore (new device): pull full history from Supabase
 class SyncService {
   SyncService._();
   static final SyncService _instance = SyncService._();
@@ -27,6 +48,18 @@ class SyncService {
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
+
+  // ── Restore cancellation flag ───────────────────────────────
+
+  /// Set to true by [cancelInflightRestore] to abort a running
+  /// [restoreFromCloudForUser] call between restore steps.
+  bool _restoreCancelled = false;
+
+  /// Signals any in-flight [restoreFromCloudForUser] to abort between steps.
+  /// Safe to call even if no restore is running.
+  void cancelInflightRestore() {
+    _restoreCancelled = true;
+  }
 
   // ── Hive syncBox Keys ───────────────────────────────────────
 
@@ -123,6 +156,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._backfillCustomEntityIds] $e');
+      try {
+        await _reportSyncFailure(opType: 'backfill_custom_entity_ids', error: e);
+      } catch (_) {}
     }
   }
 
@@ -164,7 +200,9 @@ class SyncService {
     try {
       await _supabase.client
           .from('user_profile')
-          .upsert(payload, onConflict: 'user_id');
+          .upsert(payload, onConflict: 'user_id')
+          .select()
+          .single();
       return Result.ok(null);
     } catch (e) {
       return Result.err(SyncError.classify(e));
@@ -258,6 +296,10 @@ class SyncService {
       }
       _healthSyncCompleter!.complete();
 
+      // Drain any telemetry failures that were queued during the previous
+      // session because _reportSyncFailure itself hit a network error.
+      unawaited(drainTelemetryQueue());
+
       // Backfill custom-entity ids for pre-F8/F22 entries. Runs at most
       // once — the scan is O(customBox.length) and quick.
       await _backfillCustomEntityIds();
@@ -297,6 +339,9 @@ class SyncService {
         await pushSnapshot();
       } catch (e) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
+        try {
+          await _reportSyncFailure(opType: 'check_and_sync_snapshot', error: e);
+        } catch (_) {}
       }
 
       // Pull approved community foods/exercises.
@@ -321,6 +366,9 @@ class SyncService {
         _healthSyncCompleter!.complete();
       }
       debugPrint('[SyncService.checkAndSync] $e');
+      try {
+        await _reportSyncFailure(opType: 'check_and_sync', error: e);
+      } catch (_) {}
     }
   }
 
@@ -374,6 +422,9 @@ class SyncService {
           debugPrint(
             '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
           );
+          try {
+            await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
+          } catch (_) {}
         }
       }
 
@@ -381,6 +432,9 @@ class SyncService {
     } catch (e) {
       // Offline — will retry next scheduled run.
       debugPrint('[SyncService.pushSnapshot] $e');
+      try {
+        await _reportSyncFailure(opType: 'push_snapshot', error: e);
+      } catch (_) {}
     }
   }
 
@@ -393,33 +447,39 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncWorkoutLogs(userId),
-        _syncExerciseLogs(userId),
-        _syncScheduleCompletions(userId),
-        _syncNutritionLogs(userId),
-        _syncWeightLogs(userId),
-        _syncMeasurements(userId),
-        _syncSleepLogs(userId),
-        _syncStepsLogs(userId), // F20
-        _syncStreaks(userId),
-        _syncUserProfile(userId),
-        _syncUrineColorLogs(userId),
-        _syncWaterLogs(userId),
-        _syncWorkoutPlan(userId),
-        _syncUserProgress(userId),
-        // ── New sync gap methods ──
-        _syncWorkoutTemplates(userId),
-        _syncScheduledWorkouts(userId),
-        _syncSavedMeals(userId),
-        _syncUserPreferences(userId),
-        _syncCoachInteractions(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_workouts', _syncWorkoutLogs(userId)),
+          _safeRestoreOp('sync_exercises', _syncExerciseLogs(userId)),
+          _safeRestoreOp('sync_schedule_completions', _syncScheduleCompletions(userId)),
+          _safeRestoreOp('sync_nutrition', _syncNutritionLogs(userId)),
+          _safeRestoreOp('sync_weight', _syncWeightLogs(userId)),
+          _safeRestoreOp('sync_measurements', _syncMeasurements(userId)),
+          _safeRestoreOp('sync_sleep', _syncSleepLogs(userId)),
+          _safeRestoreOp('sync_steps', _syncStepsLogs(userId)), // F20
+          _safeRestoreOp('sync_streaks', _syncStreaks(userId)),
+          _safeRestoreOp('sync_user_profile', _syncUserProfile(userId)),
+          _safeRestoreOp('sync_urine', _syncUrineColorLogs(userId)),
+          _safeRestoreOp('sync_water', _syncWaterLogs(userId)),
+          _safeRestoreOp('sync_workout_plan', _syncWorkoutPlan(userId)),
+          _safeRestoreOp('sync_user_progress', _syncUserProgress(userId)),
+          // ── New sync gap methods ──
+          _safeRestoreOp('sync_templates', _syncWorkoutTemplates(userId)),
+          _safeRestoreOp('sync_scheduled_workouts', _syncScheduledWorkouts(userId)),
+          _safeRestoreOp('sync_saved_meals', _syncSavedMeals(userId)),
+          _safeRestoreOp('sync_preferences', _syncUserPreferences(userId)),
+          _safeRestoreOp('sync_coach_interactions', _syncCoachInteractions(userId)),
+        ],
+        eagerError: false,
+      );
 
       await _setTimestamp(_lastFullSyncKey);
     } catch (e) {
       // Partial sync failure — next launch will retry.
       debugPrint('[SyncService.weeklyFullSync] $e');
+      try {
+        await _reportSyncFailure(opType: 'weekly_full_sync', error: e);
+      } catch (_) {}
     }
   }
 
@@ -432,14 +492,20 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncWorkoutLogs(userId),
-        _syncExerciseLogs(userId),
-        _syncScheduleCompletions(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_workout_logs', _syncWorkoutLogs(userId)),
+          _safeRestoreOp('sync_exercise_logs', _syncExerciseLogs(userId)),
+          _safeRestoreOp('sync_schedule_completions', _syncScheduleCompletions(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline — will sync on next weekly sync.
       debugPrint('[SyncService.syncWorkoutData] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_workout_data', error: e);
+      } catch (_) {}
     }
   }
 
@@ -454,13 +520,19 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
 
-      await Future.wait([
-        _syncNutritionLogs(userId),
-        _syncWaterLogs(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('sync_nutrition_logs', _syncNutritionLogs(userId)),
+          _safeRestoreOp('sync_water_logs', _syncWaterLogs(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline — will sync on next daily full sync.
       debugPrint('[SyncService.syncNutritionData] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_nutrition_data', error: e);
+      } catch (_) {}
     }
   }
 
@@ -518,7 +590,7 @@ class SyncService {
           'lifestyle_activity': p['lifestyle_activity'],
           'pace_preference': p['pace_preference'],
           'diet_preference': p['diet_preference'],
-          'injuries': p['injuries']?.toString(),
+          'injuries': p['injuries'] is List ? p['injuries'] : <String>[],
           'city': p['city'],
           'bmr': p['bmr'],
           'tdee': p['tdee'],
@@ -592,16 +664,22 @@ class SyncService {
   /// empty-Hive so we don't re-download GBs every launch.
   Future<void> restoreLightweightAlways(String userId) async {
     try {
-      await Future.wait([
-        _restoreUserProfile(userId),
-        _restoreUserProgress(userId),
-        _restoreCustomExercises(userId),
-        _restoreCustomFoods(userId),
-        _restoreWorkoutTemplates(userId),
-        _restoreUserPreferences(userId),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
+      } catch (_) {}
     }
   }
 
@@ -616,32 +694,105 @@ class SyncService {
       // and storage per user is negligible (~1-2MB/year).
       const since = '2020-01-01T00:00:00Z';
 
-      await Future.wait([
-        _restoreWorkoutLogs(userId, since),
-        _restoreExerciseLogs(userId, since),
-        _restoreScheduleCompletions(userId, since),
-        _restoreCustomExercises(userId),
-        _restoreCustomFoods(userId),
-        _restoreWeightLogs(userId, since),
-        _restoreStepsLogs(userId, since), // F20
-        _restoreNutritionLogs(userId, since),
-        _restoreMeasurements(userId, since),
-        _restoreUserProfile(userId),
-        _restoreUserProgress(userId),
-        _restoreWorkoutPlan(userId),
-        _restoreWaterLogs(userId, since),
-        _restoreSleepLogs(userId, since),
-        _restoreStreaks(userId),
-        // ── New restore methods ──
-        _restoreWorkoutTemplates(userId),
-        _restoreScheduledWorkouts(userId, since),
-        _restoreSavedMeals(userId),
-        _restoreUserPreferences(userId),
-        _restoreCoachInteractions(userId, since),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
+          _safeRestoreOp('exercise_logs', _restoreExerciseLogs(userId, since)),
+          _safeRestoreOp('schedule_completions', _restoreScheduleCompletions(userId, since)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
+          _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)), // F20
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
+          _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('streaks', _restoreStreaks(userId)),
+          // ── New restore methods ──
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
+          _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+          _safeRestoreOp('coach_interactions', _restoreCoachInteractions(userId, since)),
+          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_from_cloud', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Cancellable restore used by [RestoringScreen].
+  ///
+  /// Returns [RestoreResult.success] when all steps complete,
+  /// [RestoreResult.cancelled] if [cancelInflightRestore] was called between
+  /// steps, or [RestoreResult.failed] on an unrecoverable error.
+  ///
+  /// The cancellation flag is reset at the start of each call so callers can
+  /// safely call this multiple times.
+  Future<RestoreResult> restoreFromCloudForUser() async {
+    _restoreCancelled = false;
+    final userId = _supabase.currentUser?.id;
+    if (userId == null) {
+      return RestoreResult.failed('No authenticated user');
+    }
+
+    try {
+      const since = '2020-01-01T00:00:00Z';
+
+      // Step A — profile + lightweight data
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await Future.wait(
+        [
+          _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+          _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+          _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+          _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+        ],
+        eagerError: false,
+      );
+
+      // Step B — bulk history
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await Future.wait(
+        [
+          _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
+          _safeRestoreOp('exercise_logs', _restoreExerciseLogs(userId, since)),
+          _safeRestoreOp('schedule_completions', _restoreScheduleCompletions(userId, since)),
+          _safeRestoreOp('weight_logs', _restoreWeightLogs(userId, since)),
+          _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)),
+          _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
+          _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
+          _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('streaks', _restoreStreaks(userId)),
+          _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
+          _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
+          _safeRestoreOp('coach_interactions', _restoreCoachInteractions(userId, since)),
+          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device
+        ],
+        eagerError: false,
+      );
+
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      return RestoreResult.success();
+    } catch (e) {
+      debugPrint('[SyncService.restoreFromCloudForUser] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_from_cloud_for_user', error: e);
+      } catch (_) {}
+      return RestoreResult.failed(e);
     }
   }
 
@@ -668,6 +819,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._syncFitnessSummary] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_fitness_summary', error: e);
+      } catch (_) {}
     }
   }
 
@@ -684,14 +838,20 @@ class SyncService {
       final since =
           DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
 
-      await Future.wait([
-        _pullWeightLogs(userId, since),
-        _pullNutritionLogs(userId, since),
-        _pullMeasurements(userId, since),
-      ]);
+      await Future.wait(
+        [
+          _safeRestoreOp('pull_weight', _pullWeightLogs(userId, since)),
+          _safeRestoreOp('pull_nutrition', _pullNutritionLogs(userId, since)),
+          _safeRestoreOp('pull_measurements', _pullMeasurements(userId, since)),
+        ],
+        eagerError: false,
+      );
     } catch (e) {
       // Offline or error — silently skip.
       debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'pull_cross_channel_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -791,21 +951,42 @@ class SyncService {
         .from('weight_logs')
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
-        .listen((rows) async {
-          for (final row in rows) {
-            final date = row['date'] as String? ?? '';
-            final key = 'weight_$date';
-            if (_hive.healthBox.get(key) == null) {
-              await _hive.healthBox.put(key, {
-                'type': 'weight_log',
-                'date': date,
-                'weight_kg': row['weight_kg'],
-                'created_at': row['created_at'],
-                'source': 'realtime',
-              });
+        .listen(
+          (rows) async {
+            try {
+              for (final row in rows) {
+                final date = row['date'] as String? ?? '';
+                final key = 'weight_$date';
+                if (_hive.healthBox.get(key) == null) {
+                  await _hive.healthBox.put(key, {
+                    'type': 'weight_log',
+                    'date': date,
+                    'weight_kg': row['weight_kg'],
+                    'created_at': row['created_at'],
+                    'source': 'realtime',
+                  });
+                }
+              }
+            } catch (e, st) {
+              debugPrint('[realtime] weight_logs handler failed: $e\n$st');
+              try {
+                await _reportSyncFailure(
+                  opType: 'realtime_handler_weight_logs',
+                  error: e,
+                );
+              } catch (_) {
+                // ignore: avoid_catches_without_on_clauses
+              }
+              // do NOT rethrow — keep stream alive
             }
-          }
-        });
+          },
+          onError: (e, st) {
+            debugPrint('[realtime] weight_logs stream error: $e\n$st');
+            // ignore: discarded_futures
+            _reportSyncFailure(opType: 'realtime_stream_weight_logs', error: e)
+                .catchError((_) {});
+          },
+        );
   }
 
   /// Cancels realtime subscriptions (call on app background or logout).
@@ -839,6 +1020,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_workout_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -915,11 +1099,17 @@ class SyncService {
             } catch (e) {
               debugPrint(
                   '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
+              try {
+                await _reportSyncFailure(opType: 'upsert_workout_log_sets', error: e);
+              } catch (_) {}
             }
           }
         }
       } catch (e) {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_exercise_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -950,6 +1140,9 @@ class SyncService {
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_schedule_completion', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1027,11 +1220,17 @@ class SyncService {
               }, onConflict: 'id');
             } catch (itemErr) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
+              try {
+                await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
+              } catch (_) {}
             }
           }
         }
       } catch (e) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_nutrition_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1049,6 +1248,73 @@ class SyncService {
       await _syncWeightLogs(userId);
     } catch (e) {
       debugPrint('[SyncService.syncWeightNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_weight_now', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Pushes recent sleep entries to Supabase `sleep_logs`. Fire-and-forget per
+  /// CLAUDE.md §15. Handles two Hive storage patterns:
+  ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
+  ///   • List key      `sleep_logs`             (conversational AI tool path)
+  Future<void> syncSleepNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      // Handle per-day keys (standard path) via existing helper
+      await _syncSleepLogs(userId);
+      // Handle list key written by conversational_log_handler._logSleep
+      final healthBox = _hive.healthBox;
+      final listRaw = healthBox.get('sleep_logs');
+      if (listRaw is! List || listRaw.isEmpty) return;
+      for (final item in listRaw) {
+        if (item is! Map) continue;
+        final log = Map<String, dynamic>.from(item);
+        final dateStr = log['date'] as String?;
+        if (dateStr == null) continue;
+        final hours = (log['duration_hrs'] as num?)?.toDouble() ??
+            (log['sleep_hours'] as num?)?.toDouble() ??
+            (log['hours'] as num?)?.toDouble();
+        if (hours == null) continue;
+        try {
+          await _supabase.client.from('sleep_logs').upsert({
+            'id': _deterministicId('sleep_logs_$dateStr'),
+            'user_id': userId,
+            'date': dateStr,
+            'duration_hrs': hours,
+            if (log['quality'] != null) 'quality': log['quality'],
+            'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          }, onConflict: 'id');
+        } catch (e) {
+          debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
+          try {
+            await _reportSyncFailure(opType: 'upsert_sleep_log_chat', error: e);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('[SyncService.syncSleepNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_sleep_now', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Pushes recent body measurements to Supabase `body_measurements`.
+  /// Fire-and-forget per CLAUDE.md §15. Delegates to existing `_syncMeasurements`
+  /// which reads `measurement_YYYY-MM-DD` keys — the same pattern written by
+  /// conversational_log_handler._logMeasurement.
+  Future<void> syncMeasurementsNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncMeasurements(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncMeasurementsNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_measurements_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1072,6 +1338,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_weight_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1098,6 +1367,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncMeasurements] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_body_measurement', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1124,6 +1396,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncSleepLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_sleep_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1152,6 +1427,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncStepsLogs] $key: $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_daily_steps', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1177,6 +1455,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncUrineColorLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_urine_color_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1199,6 +1480,9 @@ class SyncService {
         }, onConflict: 'user_id,date');
       } catch (e) {
         debugPrint('[SyncService._syncWaterLogs] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_water_log', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1222,6 +1506,9 @@ class SyncService {
         }, onConflict: 'user_id,week_start');
       } catch (e) {
         debugPrint('[SyncService._syncStreaks] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_streak', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -1261,6 +1548,81 @@ class SyncService {
         retryCount: retryCount,
       );
 
+  /// Wraps a restore/sync future so one table failure cannot abort the others
+  /// in a [Future.wait] call.
+  ///
+  /// On failure the error is logged locally and reported to `client_errors`
+  /// via [_reportSyncFailure] with `opType = 'restore_<label>'`. The wrapper
+  /// always completes normally so that `eagerError: false` propagation still
+  /// works correctly (any remaining tasks in the wait list continue).
+  Future<void> _safeRestoreOp(String label, Future<void> task) async {
+    try {
+      await task;
+    } catch (e) {
+      debugPrint('[sync/restore] $label failed: $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_$label', error: e);
+      } catch (_) {}
+    }
+  }
+
+  // ── Telemetry failure queue ─────────────────────────────────
+  // When _reportSyncFailure itself fails (network error, 5xx, etc.) the failure
+  // was previously silently dropped. The queue below persists up to 50 entries
+  // in syncBox and drains them on the next checkAndSync call (app launch).
+
+  static const String _telemetryQueueKey = 'pending_telemetry_failures';
+  static const int _telemetryQueueMax = 50;
+
+  /// Enqueues a failed telemetry report so it can be retried on next launch.
+  /// Last-resort — all exceptions are swallowed to prevent infinite recursion.
+  Future<void> _enqueueTelemetryFailure(String opType, Object error) async {
+    try {
+      final queue =
+          (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
+              [];
+      final msg = error.toString();
+      queue.insert(0, {
+        'op_type': opType,
+        'error': msg.substring(0, msg.length.clamp(0, 500)),
+        'queued_at': DateTime.now().toIso8601String(),
+      });
+      // Cap at max to prevent unbounded Hive growth on persistent failures.
+      while (queue.length > _telemetryQueueMax) {
+        queue.removeLast();
+      }
+      await _hive.syncBox.put(_telemetryQueueKey, queue);
+    } catch (_) {
+      // Last-resort — truly silent.
+    }
+  }
+
+  /// Drains the telemetry failure queue, retrying each entry via
+  /// [_reportSyncFailure]. Entries that succeed are removed; those that still
+  /// fail are re-enqueued for the following launch.
+  ///
+  /// Called fire-and-forget from [checkAndSync] on every app launch.
+  Future<void> drainTelemetryQueue() async {
+    final queue =
+        (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
+            [];
+    if (queue.isEmpty) return;
+
+    final remaining = <Map>[];
+    for (final entry in queue) {
+      try {
+        await _reportSyncFailure(
+          opType: (entry['op_type'] as String?) ?? 'unknown',
+          error: (entry['error'] as String?) ?? 'unknown',
+        );
+        // Success — don't re-add to remaining.
+      } catch (_) {
+        remaining.add(entry); // Still failing — keep for next attempt.
+      }
+    }
+    await _hive.syncBox.put(_telemetryQueueKey, remaining);
+  }
+
   /// Fire-and-forget telemetry for a sync failure. Sends one row to
   /// `client_errors` via the `log-client-error` Edge Function so we stop
   /// being blind to payload-rejection failures in prod.
@@ -1290,8 +1652,29 @@ class SyncService {
         },
       );
     } catch (_) {
-      // Telemetry must never throw — swallow everything. Local debugPrint
-      // above has already left a breadcrumb for dev builds.
+      // Telemetry call itself failed — enqueue for next-launch retry so no
+      // failure is silently dropped. _enqueueTelemetryFailure is truly silent.
+      await _enqueueTelemetryFailure(opType, error);
+    }
+  }
+
+  /// Immediately pushes all saved meals to Supabase `user_saved_meals`, including
+  /// the updated `times_used` counter.
+  ///
+  /// Called fire-and-forget from [SavedMealsNotifier.relogSavedMeal] so that the
+  /// counter stays in sync with the cloud copy. The private [_syncSavedMeals] does
+  /// the actual upsert work; this is the public wrapper that resolves the user-id
+  /// and delegates.
+  Future<void> syncSavedMealsNow() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncSavedMeals(userId);
+    } catch (e) {
+      debugPrint('[SyncService.syncSavedMealsNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_saved_meals_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1304,6 +1687,9 @@ class SyncService {
       await _syncUserProgress(userId);
     } catch (e) {
       debugPrint('[SyncService.syncProgressNow] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_progress_now', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1351,7 +1737,7 @@ class SyncService {
       if (_hasValue(p['lifestyle_activity'])) 'lifestyle_activity': p['lifestyle_activity'],
       if (_hasValue(p['pace_preference'])) 'pace_preference': p['pace_preference'],
       if (_hasValue(p['diet_preference'])) 'diet_preference': p['diet_preference'],
-      if (_hasValue(p['injuries'])) 'injuries': p['injuries'].toString(),
+      if (_hasValue(p['injuries'])) 'injuries': p['injuries'] is List ? p['injuries'] : <String>[],
       if (_hasValue(p['city'])) 'city': p['city'],
       if (_hasNumber(p['bmr'])) 'bmr': (p['bmr'] as num).round(),
       if (_hasNumber(p['tdee'])) 'tdee': (p['tdee'] as num).round(),
@@ -1399,7 +1785,9 @@ class SyncService {
     // Failures bubble up uncaught (caller's try/catch → debugPrint).
     await _supabase.client
         .from('user_profile')
-        .upsert(payload, onConflict: 'user_id');
+        .upsert(payload, onConflict: 'user_id')
+        .select()
+        .single();
   }
 
   /// True if `v` is a non-null, non-empty-string value.
@@ -1425,6 +1813,47 @@ class SyncService {
   /// sheet, the create-custom-food sheet) can push to Supabase without
   /// waiting for the next weekly sync. Catches its own errors.
   Future<void> syncCustomItemsNow() => _syncCustomItems();
+
+  /// Upserts coach_memory induction columns to Supabase.
+  /// Only non-null Hive fields are included — preserves partial induction
+  /// state without overwriting cloud columns with null when the user hasn't
+  /// yet completed the muster. Uses migration 042 columns.
+  /// Fire-and-forget per CLAUDE.md §15.
+  Future<void> syncCoachMemoryNow(String userId) async {
+    try {
+      final coach = _hive.coachBox;
+      final payload = <String, dynamic>{
+        'user_id': userId,
+      };
+      // Helper: only include when non-null — preserves partial induction state.
+      void putIfPresent(String key) {
+        final v = coach.get(key);
+        if (v != null) payload[key] = v;
+      }
+      putIfPresent('committed_at');
+      final ltcdr = coach.get('committed_to_lt_cdr');
+      if (ltcdr is bool) payload['committed_to_lt_cdr'] = ltcdr;
+      putIfPresent('induction_completed_at');
+      putIfPresent('why_now');
+      putIfPresent('definition_of_winning');
+      putIfPresent('known_injuries');
+      putIfPresent('typical_wake_time');
+      putIfPresent('preferred_workout_time');
+      putIfPresent('body_part_priorities');
+
+      await _supabase.client
+          .from('coach_memory')
+          .upsert(payload, onConflict: 'user_id')
+          .select()
+          .single();
+    } catch (e) {
+      debugPrint('[SyncService.syncCoachMemoryNow] coach_memory upsert failed: $e');
+      unawaited(_reportSyncFailure(
+        opType: 'upsert_coach_memory_induction',
+        error: e,
+      ));
+    }
+  }
 
   /// Pushes user-created custom foods and exercises to Supabase
   /// for community contribution.
@@ -1453,20 +1882,46 @@ class SyncService {
         if (raw is! Map) continue;
 
         if (key.startsWith('custom_exercise_')) {
+          final payload = _projectCustomExercise(raw, userId);
+          if (kDebugMode) {
+            debugPrint(
+              '[SyncService] upsert user_custom_exercises '
+              'name=${payload['name']} user=$userId id=${payload['id']}',
+            );
+          }
           try {
             await _supabase.client
                 .from('user_custom_exercises')
-                .upsert(_projectCustomExercise(raw, userId), onConflict: 'id');
+                .upsert(payload, onConflict: 'id');
           } catch (e) {
-            debugPrint('[SyncService._syncCustomItems] exercise $key: $e');
+            debugPrint(
+              '[SyncService._syncCustomItems] exercise '
+              '"${payload['name']}" key=$key: $e',
+            );
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_exercise', error: e);
+            } catch (_) {}
           }
         } else if (key.startsWith('custom_food_')) {
+          final payload = _projectCustomFood(raw, userId);
+          if (kDebugMode) {
+            debugPrint(
+              '[SyncService] upsert user_custom_foods '
+              'name=${payload['name']} user=$userId id=${payload['id']}',
+            );
+          }
           try {
             await _supabase.client
                 .from('user_custom_foods')
-                .upsert(_projectCustomFood(raw, userId), onConflict: 'id');
+                .upsert(payload, onConflict: 'id');
           } catch (e) {
-            debugPrint('[SyncService._syncCustomItems] food $key: $e');
+            debugPrint(
+              '[SyncService._syncCustomItems] food '
+              '"${payload['name']}" key=$key: $e',
+            );
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_food', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -1483,6 +1938,9 @@ class SyncService {
                 .upsert(_projectCustomExercise(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_exercise_legacy', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -1495,6 +1953,9 @@ class SyncService {
                 .upsert(_projectCustomFood(item, userId), onConflict: 'id');
           } catch (e) {
             debugPrint('[SyncService._syncCustomItems] legacy food: $e');
+            try {
+              await _reportSyncFailure(opType: 'upsert_custom_food_legacy', error: e);
+            } catch (_) {}
           }
         }
       }
@@ -1502,6 +1963,9 @@ class SyncService {
       await _setTimestamp(_lastCustomSyncKey);
     } catch (e) {
       debugPrint('[SyncService._syncCustomItems] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_custom_items', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1541,7 +2005,7 @@ class SyncService {
         'default_reps': src['default_reps'].toString(),
       if (src['default_rest_secs'] != null)
         'default_rest_secs': src['default_rest_secs'],
-      'default_duration_secs': ?defaultDur,
+      if (defaultDur != null) 'default_duration_secs': defaultDur,
       if (src['submitted_to_library'] != null)
         'submitted_to_library': src['submitted_to_library'],
       if (src['approved_for_library'] != null)
@@ -1665,6 +2129,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1696,6 +2163,9 @@ class SyncService {
       } catch (e) {
         // Non-fatal — falls back to summary-only restore.
         debugPrint('[SyncService._restoreExerciseLogs] per-set fetch failed: $e');
+        try {
+          await _reportSyncFailure(opType: 'restore_exercise_log_sets_fetch', error: e);
+        } catch (_) {}
       }
 
       for (final row in rows) {
@@ -1792,6 +2262,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_exercise_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1827,6 +2300,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreScheduleCompletions] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1863,6 +2339,9 @@ class SyncService {
       await _hive.customBox.put('custom_exercises', existingList);
     } catch (e) {
       debugPrint('[SyncService._restoreCustomExercises] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_custom_exercises', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1898,6 +2377,9 @@ class SyncService {
       await _hive.customBox.put('custom_foods', existingList);
     } catch (e) {
       debugPrint('[SyncService._restoreCustomFoods] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_custom_foods', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1923,6 +2405,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWeightLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_weight_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -1981,6 +2466,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_nutrition_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2003,6 +2491,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreMeasurements] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_measurements', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2035,6 +2526,9 @@ class SyncService {
       await _hive.userBox.put('profile', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProfile] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_profile', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2063,6 +2557,9 @@ class SyncService {
       await _hive.userBox.put('progress', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserProgress] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_progress', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2105,6 +2602,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWaterLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_water_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2132,6 +2632,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreSleepLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_sleep_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2165,6 +2668,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreStepsLogs] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_steps_logs', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2214,6 +2720,9 @@ class SyncService {
       await healthBox.put('streaks', existing);
     } catch (e) {
       debugPrint('[SyncService._restoreStreaks] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_streaks', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2257,6 +2766,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncWorkoutPlan] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_workout_plan', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2283,6 +2795,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncUserProgress] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_user_progress', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2327,6 +2842,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutPlan] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_plan', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2382,6 +2900,9 @@ class SyncService {
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());
     } catch (e) {
       debugPrint('[SyncService.syncCommunityItems] $e');
+      try {
+        await _reportSyncFailure(opType: 'sync_community_items', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2466,10 +2987,16 @@ class SyncService {
             }, onConflict: 'id');
           } catch (exErr) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
+            try {
+              await _reportSyncFailure(opType: 'upsert_template_exercise', error: exErr);
+            } catch (_) {}
           }
         }
       } catch (e) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_workout_template', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -2532,6 +3059,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_workout_templates', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2562,6 +3092,9 @@ class SyncService {
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_scheduled_workout', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -2597,6 +3130,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreScheduledWorkouts] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_scheduled_workouts', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2625,6 +3161,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncSavedMeals] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_saved_meal', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -2661,6 +3200,9 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreSavedMeals] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_saved_meals', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2682,6 +3224,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[SyncService._syncUserPreferences] $e');
+      try {
+        await _reportSyncFailure(opType: 'upsert_user_preferences', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2711,6 +3256,9 @@ class SyncService {
       await _hive.userBox.put('preferences', merged);
     } catch (e) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_user_preferences', error: e);
+      } catch (_) {}
     }
   }
 
@@ -2739,6 +3287,9 @@ class SyncService {
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
+        try {
+          await _reportSyncFailure(opType: 'upsert_coach_interaction', error: e);
+        } catch (_) {}
       }
     }
   }
@@ -2774,6 +3325,53 @@ class SyncService {
       }
     } catch (e) {
       debugPrint('[SyncService._restoreCoachInteractions] $e');
+      try {
+        await _reportSyncFailure(opType: 'restore_coach_interactions', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Pulls coach_memory induction state from Supabase into local coachBox.
+  ///
+  /// Run on restoreFromCloud so returning users (new device or post-logout)
+  /// skip the InductionScreen — the cloud row already has [induction_completed_at]
+  /// and all muster answers. If the user has no coach_memory row yet (un-inducted),
+  /// maybeSingle() returns null and we skip silently.
+  Future<void> _restoreCoachMemory(String userId) async {
+    try {
+      final row = await _supabase.client
+          .from('coach_memory')
+          .select(
+            'committed_at, committed_to_lt_cdr, induction_completed_at, '
+            'why_now, definition_of_winning, known_injuries, '
+            'typical_wake_time, preferred_workout_time, body_part_priorities',
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (row == null) return;
+
+      final coach = _hive.coachBox;
+      const keys = [
+        'committed_at',
+        'committed_to_lt_cdr',
+        'induction_completed_at',
+        'why_now',
+        'definition_of_winning',
+        'known_injuries',
+        'typical_wake_time',
+        'preferred_workout_time',
+        'body_part_priorities',
+      ];
+      for (final key in keys) {
+        final v = row[key];
+        if (v != null) await coach.put(key, v);
+      }
+    } catch (e) {
+      debugPrint('[SyncService._restoreCoachMemory] $e');
+      unawaited(_reportSyncFailure(
+        opType: 'restore_coach_memory',
+        error: e,
+      ));
     }
   }
 

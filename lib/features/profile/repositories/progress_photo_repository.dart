@@ -204,13 +204,74 @@ class ProgressPhotoRepository {
           await _s.client.storage.from(_bucket).remove([path]);
         } catch (e) {
           debugPrint('[ProgressPhotoRepository.delete] storage remove: $e');
-          // Row is gone — orphan object is a later cleanup concern.
+          // Row is gone — log the orphaned object so we can clean it up later
+          // via cleanupOrphanedStorage(). Uses debugPrint only (no SyncService
+          // dependency here); route to client_errors when a lightweight public
+          // reporter is wired into this repository.
+          debugPrint(
+              '[ProgressPhotoRepository.delete] orphaned storage object: $path — $e');
         }
       }
       return true;
     } catch (e) {
       debugPrint('[ProgressPhotoRepository.delete] $e');
       return false;
+    }
+  }
+
+  /// Scans for orphaned Storage objects — objects that exist in the `progress-photos`
+  /// bucket under the user's prefix but have no matching row in `progress_photos`.
+  ///
+  /// Safe to call fire-and-forget; all failures are logged and swallowed. This is
+  /// a best-effort background cleanup that runs when the gallery screen opens after
+  /// a delete that failed to remove the Storage object.
+  Future<void> cleanupOrphanedStorage() async {
+    final userId = _s.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      // List all objects in the user's Storage prefix.
+      final objects =
+          await _s.client.storage.from(_bucket).list(path: userId);
+
+      if (objects.isEmpty) return;
+
+      // Fetch all known storage paths from the DB for this user.
+      final rows = await _s.client
+          .from('progress_photos')
+          .select('storage_path')
+          .eq('user_id', userId);
+      final knownPaths = {
+        for (final r in rows) r['storage_path'] as String? ?? ''
+      }..remove('');
+
+      // Remove any Storage object that has no matching DB row.
+      final orphans = objects
+          .where((o) {
+            final fullPath = '$userId/${o.name}';
+            return !knownPaths.contains(fullPath);
+          })
+          .map((o) => '$userId/${o.name}')
+          .toList();
+
+      if (orphans.isEmpty) return;
+
+      debugPrint(
+          '[ProgressPhotoRepository.cleanupOrphanedStorage] found ${orphans.length} orphan(s): $orphans');
+
+      try {
+        await _s.client.storage.from(_bucket).remove(orphans);
+        debugPrint(
+            '[ProgressPhotoRepository.cleanupOrphanedStorage] removed ${orphans.length} orphan(s)');
+      } catch (e, st) {
+        // Log failure — this is the gap the audit identified (P2).
+        // Route to client_errors when a public reporter is available here.
+        debugPrint(
+            '[ProgressPhotoRepository.cleanupOrphanedStorage] remove failed: $e\n$st');
+      }
+    } catch (e, st) {
+      debugPrint(
+          '[ProgressPhotoRepository.cleanupOrphanedStorage] scan failed: $e\n$st');
     }
   }
 

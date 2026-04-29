@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
@@ -456,8 +457,10 @@ class UrineColorNotifier extends Notifier<int> {
       'label': index >= 0 && index < _labels.length ? _labels[index] : 'unknown',
       'recorded_at': now.toIso8601String(),
     });
-    // Refresh AI coach snapshot — urine color is part of the hydration
-    // context the coach uses for dehydration warnings.
+    // APK Test #3 / Plan D Task 1 sync-gap close. Previously only
+    // pushSnapshot fired here; the health_logs cloud row never updated
+    // until the next launch's full sync. Mirror the addWater pattern.
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }
@@ -593,6 +596,16 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   /// Falls back to mock data if Edge Function is unreachable.
   Future<void> analyse(String text) async {
     try {
+      // F11 — refresh subscription cache to avoid stale-PRO/free state after restore.
+      // Cheap (~50ms hit if cache miss); resolves the most-likely cause of
+      // rate-limit trigger firing on a user who's actually under their daily cap.
+      try {
+        await SubscriptionService.instance.verifyFromServer();
+      } catch (_) {
+        // Non-fatal — continue with cached state. Server-side trigger is the
+        // authoritative gate.
+      }
+
       final response = await SupabaseService.instance.callFunction(
         AppConstants.aiProxyFunction,
         body: {
@@ -629,8 +642,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         );
         return;
       }
-    } catch (e) {
-      debugPrint('[NutritionProvider.analyseText] error: $e');
+    } catch (e, stack) {
+      // F11 — detailed instrumentation for food analysis failures
+      if (kDebugMode) {
+        debugPrint('[F11 food_analysis] error: $e');
+        debugPrint('[F11 food_analysis] stack: $stack');
+      }
+
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
                           msg.contains('unauthorized') || msg.contains('jwt') ||
@@ -638,6 +656,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final isServiceError = msg.contains('503') || msg.contains('502') ||
                              msg.contains('unavailable') || msg.contains('non-2xx') ||
                              msg.contains('food ai') || msg.contains('food analysis failed');
+      final isRateLimitError = msg.contains('food_text_daily_limit_reached') ||
+                               msg.contains('daily food analysis limit') ||
+                               msg.contains('429') || msg.contains('rate limit');
+      final isMessageTooLong = msg.contains('message too long') ||
+                               msg.contains('exceeds maximum');
+      final isSnapshotTooLarge = msg.contains('snapshot too large') ||
+                                 msg.contains('context too large');
 
       // Auto-refresh session on auth error (same pattern as AI Coach).
       // User can tap "Analyse & Log" again without signing out.
@@ -650,11 +675,17 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         }
       }
 
-      final errorMsg = isAuthError
-          ? 'Session refreshed. Please tap Analyse again.'
-          : isServiceError
-              ? 'AI food analysis is temporarily unavailable. Please try again shortly.'
-              : 'AI analysis failed. Please check your connection and try again.';
+      final errorMsg = isRateLimitError
+          ? 'Daily food analysis limit reached. Try again tomorrow or upgrade to PRO.'
+          : isAuthError
+              ? 'Session refreshed. Please tap Analyse again.'
+              : isMessageTooLong
+                  ? 'That description is too long (max 5000 chars). Please shorten it.'
+                  : isSnapshotTooLarge
+                      ? 'Your nutrition data is unusually large. Please try a shorter question.'
+                      : isServiceError
+                          ? 'The AI is temporarily unavailable. Please try again in a minute.'
+                          : 'Could not analyse that. Please try a clearer description.';
       state = AiBreakdownData(
         mealName: text,
         totalKcal: 0,
@@ -799,6 +830,7 @@ class FoodLogNotifier extends Notifier<void> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
 
     ref.invalidate(dailyNutritionProvider);
@@ -809,7 +841,32 @@ class FoodLogNotifier extends Notifier<void> {
   }
 
   Future<void> deleteFoodLog(String logId) async {
-    await HiveService.instance.nutritionBox.delete(logId);
+    final box = HiveService.instance.nutritionBox;
+
+    // Write deletion audit log BEFORE the delete so we can still read
+    // the log entry.  Coach uses this to acknowledge corrections like
+    // "you removed your lunch Biryani entry" without the user re-explaining.
+    final logEntry = box.get(logId);
+    if (logEntry is Map) {
+      final deletes = (box.get('recent_deletes') as List?)
+              ?.whereType<Map>()
+              .toList() ??
+          <Map>[];
+      deletes.insert(0, {
+        'food_name': logEntry['food_name'] ?? logEntry['name'] ?? '',
+        'meal_type': logEntry['meal_type'] ?? '',
+        'calories': logEntry['total_calories'] ?? logEntry['calories'] ?? 0,
+        'deleted_at': DateTime.now().toIso8601String(),
+        'logged_date': logEntry['date'] ?? '',
+      });
+      // Cap at 10 entries to keep the list bounded.
+      while (deletes.length > 10) {
+        deletes.removeLast();
+      }
+      await box.put('recent_deletes', deletes);
+    }
+
+    await box.delete(logId);
     // Delete is a mutation too — AI coach needs to see the correction.
     unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
@@ -856,6 +913,7 @@ class FoodLogNotifier extends Notifier<void> {
     updated['total_fiber'] = fiber.round();
     await box.put(logId, updated);
     NutritionRepository.syncLogToSupabase(data: updated);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(weeklyNutritionProvider);
@@ -944,9 +1002,10 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     };
     await HiveService.instance.nutritionBox.put(id, logMap);
     NutritionRepository.syncLogToSupabase(data: logMap);
+    unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
 
-    // Increment times_used counter on the saved meal
+    // Increment times_used counter on the saved meal and sync to cloud.
     final savedId = savedMeal['id'] as String?;
     if (savedId != null) {
       final existing = HiveService.instance.nutritionBox.get(savedId);
@@ -954,6 +1013,8 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
         final updated = Map<String, dynamic>.from(existing);
         updated['times_used'] = ((updated['times_used'] as int?) ?? 0) + 1;
         await HiveService.instance.nutritionBox.put(savedId, updated);
+        // Push the updated counter to Supabase so cloud stays in sync.
+        unawaited(SyncService.instance.syncSavedMealsNow());
       }
     }
 
@@ -1035,8 +1096,14 @@ class CustomFoodNotifier extends Notifier<void> {
     // dedupe against future imports of the same food).
     await HiveService.instance.foodBox.put(id, food);
 
-    // Background sync to Supabase
+    // Invalidate diet plan generator index so the new food is visible on
+    // the next plan generation (indices are rebuilt lazily on next call).
+    DietPlanGenerator.instance.clearCache();
+
+    // Sync (Plan D Task 1): single-item upsert + full custom-items
+    // projection (mirror of Train) + AI snapshot.
     NutritionRepository.syncCustomFoodToSupabase(data: food);
+    unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }

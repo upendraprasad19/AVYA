@@ -15,12 +15,12 @@
  *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
  *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
  *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
- *   (default)           → gemini-2.5-flash, chat — 15/day free cap, PRO unlimited
+ *   (default)           → gemini-2.5-flash, chat — 10/day free forever, PRO unlimited
  *
  * Gating (server-side, never trust client):
  *   isPro = SELECT 1 FROM subscriptions WHERE user_id AND status='active' AND end_date > now()
- *   Free-tier chat: 15/day in `ai_coach_interactions` (channel='app') + 30-day trial window
- *   PRO: no daily cap, no trial window
+ *   Free-tier chat: 10/day in `ai_coach_interactions` (channel='app') — forever, no trial
+ *   PRO: no daily cap
  *
  * Auth: verify_jwt is DISABLED on this function's gateway config because
  * of the Supabase middleware bug that 401's valid JWTs. We validate the
@@ -45,6 +45,7 @@ import {
 } from "../_shared/coach_memory.ts";
 import { runToolLoop } from "../_shared/tool-loop.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
+import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,8 +57,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const FREE_DAILY_LIMIT = 15;
-const FREE_TRIAL_DAYS = 30;
+// OQ-1 decision: free users get 10 messages/day forever (no time-limited trial).
+// Captain Manual reflects this. Never re-introduce a trial window without an OQ change.
+const FREE_DAILY_LIMIT = 10;
 const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
 // Human-readable labels for the ai_coach_interactions.model_used column.
@@ -241,12 +243,20 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        // Step 3 — update the reserved row with real telemetry. Fire-and-forget
-        // so the response doesn't block on this final write.
+        // Step 3 — update the reserved row with real telemetry + the
+        // parsed JSON response. Fire-and-forget so the HTTP response
+        // doesn't block on this final write.
+        //
+        // Bug fix (2026-04-25, F11 server-side): the UPDATE previously
+        // omitted `ai_response` entirely, leaving every row with the
+        // empty placeholder string. Tokens were charged but the
+        // response never landed in the audit row, breaking analytics
+        // + the AI coach's ability to reference past food analyses.
         if (reservationId) {
           supabaseClient
             .from("ai_coach_interactions")
             .update({
+              ai_response: JSON.stringify(parsed),
               model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
               tokens_used: tokensUsed,
             })
@@ -413,41 +423,12 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       return err(400, "Snapshot too large");
     }
 
-    // ── isPro gate: PRO → no trial, no daily cap. Free → trial + 15/day. ──
+    // ── isPro gate: PRO → no daily cap. Free → 10 msg/day forever (OQ-1). ──
     const isProUser = await checkPro(supabaseClient, userId);
 
     if (!isProUser) {
-      // Free-tier gates: start/bump trial window, count today's messages.
-      const { data: userData, error: userError } = await supabaseClient
-        .from("users")
-        .select("ai_chat_started_at")
-        .eq("id", userId)
-        .single();
-
-      if (userError || !userData) return err(404, "User not found");
-
-      let aiChatStartedAt = userData.ai_chat_started_at as string | null;
-      if (!aiChatStartedAt) {
-        const now = new Date().toISOString();
-        await supabaseClient
-          .from("users")
-          .update({ ai_chat_started_at: now })
-          .eq("id", userId);
-        aiChatStartedAt = now;
-      }
-
-      const daysSinceStart = Math.floor(
-        (Date.now() - new Date(aiChatStartedAt).getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
-
-      if (daysSinceStart > FREE_TRIAL_DAYS) {
-        return err(403, "Free AI trial expired", {
-          code: "TRIAL_EXPIRED",
-          days_used: daysSinceStart,
-        });
-      }
-
+      // Free-tier gate: 10 messages/day in perpetuity — no trial window.
+      // OQ-1 decision: free tier gets 10/day forever. Captain Manual reflects this.
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
 
@@ -551,53 +532,95 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       }
     }
 
-    // ── Build system prompt ───────────────────────────────────────
-    const baseSystemPrompt =
-      "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness coach " +
-      "for young professionals in India — like a father who has been watching closely. " +
-      "Keep responses concise, actionable, and direct. Be caring but honest. " +
-      "Use metric units (kg, cm). Reference Indian foods and context when relevant. " +
-      "If coach_notices are present in the snapshot, weave them naturally into your response " +
-      "(do NOT list them robotically). Reference specific numbers. Celebrate wins. Call out problems directly." +
-      "\n\nFITNESS DATA LOGGING — INSTANT:" +
-      "\nWhen the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:" +
-      '\n<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>' +
-      "\nMeasurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54)." +
-      "\nWater: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml." +
-      "\nRULES:" +
-      "\n- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions." +
-      "\n- The tag is stripped server-side — do not mention it in your visible response." +
-      "\n- One tag per response maximum." +
-      "\n\nWORKOUT LOGGING — MULTI-TURN:" +
-      "\n- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet." +
-      "\n- If user provides exercise details, parse them and emit:" +
-      '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
-      '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).';
+    // ICBF_LOG embed-tag protocol — preserved from pre-CAPTAIN_MANUAL v48.
+    // These are technical instructions for the conversational logging system,
+    // NOT persona content. Manual covers identity/voice; this covers the
+    // app-specific tag protocol that the parser at line 101 consumes.
+    const ICBF_LOG_INSTRUCTIONS = `
+FITNESS DATA LOGGING — INSTANT:
+When the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:
+<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>
+<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>
+Measurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54).
+Water: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml.
+RULES:
+- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions.
+- The tag is stripped server-side — do not mention it in your visible response.
+- One tag per response maximum.
 
-    // Assemble in the spec'd order: base prompt → [3] coach_memory →
-    // snapshot → [Phase B] retrieval. The coach_memory block self-labels
-    // [3] in renderCoachMemoryBlock; empty value (private mode, no row,
-    // or non-chat channel) is dropped by the truthy check.
+WORKOUT LOGGING — MULTI-TURN:
+- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet.
+- If user provides exercise details, parse them and emit:
+<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>
+Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).
+`;
+
+    // ── Build system prompt ───────────────────────────────────────
+    // Task A2 (APK Test #4, 2026-04-27): replaced the old generic
+    // "You are ICANBEFITTER AI Coach, a caring and knowledgeable fitness
+    // coach for young professionals in India — like a father who has been
+    // watching closely..." preamble (plus ICBF_LOG + WORKOUT LOGGING
+    // inline instructions) with CAPTAIN_MANUAL imported from
+    // _shared/captain_manual.ts. The Manual is the single source of truth
+    // for coach identity, voice, and operational rules.
+    //
+    // A3 (APK Test #4, 2026-04-27): restored ICBF_LOG_INSTRUCTIONS as a
+    // separate constant after CAPTAIN_MANUAL. The tag protocol is technical,
+    // not persona — the parser at line 101 still consumes these tags but v49
+    // dropped the instructions, silently breaking conversational logging.
+    //
+    // Assemble in the spec'd order: CAPTAIN_MANUAL → ICBF_LOG_INSTRUCTIONS
+    // → [3] coach_memory → snapshot → [Phase B] retrieval. The coach_memory
+    // block self-labels [3] in renderCoachMemoryBlock; empty value (private
+    // mode, no row, or non-chat channel) is dropped by the truthy check.
     //
     // Size envelope (not separately validated — size is bounded by
     // construction):
-    //   baseSystemPrompt          ≈ 1.5 KB
+    //   CAPTAIN_MANUAL            ≈ 4–5 KB
+    //   ICBF_LOG_INSTRUCTIONS     ≈ 1.5 KB
     //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
     //   snapshot_json             ≤ 10 KB (input check at line 412)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
-    // Total ceiling ≈ 15 KB, well under Gemini's context limit.
-    const promptParts: string[] = [baseSystemPrompt];
+    // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
+    const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];
     if (coachMemoryBlock) promptParts.push(coachMemoryBlock);
     if (snapshot_json) {
       promptParts.push("User's daily snapshot:\n" + JSON.stringify(snapshot_json));
     }
     const retrievalBlock = formatRetrievalBlock(retrieval.memories);
     if (retrievalBlock) promptParts.push(retrievalBlock);
-    const systemPrompt = promptParts.join("\n\n");
+    let systemPrompt = promptParts.join("\n\n");
+
+    // Bug C fix (APK Test #3, 2026-04-26): inject the current IST day of
+    // week so Gemini stops hallucinating "today, Monday" on a Sunday.
+    // ai-proxy v47 had zero day-injection — model guessed.
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const todayName = istNow.toLocaleDateString("en-US", {
+      weekday: "long",
+      timeZone: "Asia/Kolkata",
+    });
+    const todayIso = istNow.toISOString().split("T")[0];
+
+    const dayInjection = `Today is ${todayName}, ${todayIso} (IST). When the user asks about "today", use this exact date and weekday.\n\n`;
+
+    const antiFabricationRule = `
+IMPORTANT — Anti-fabrication rule:
+Do NOT invent statistics. NEVER cite percentages, averages, frequencies,
+or trends about the user's missed workouts, skipped days, attendance
+patterns, or behavior unless the snapshot's "recent_logs",
+"coach_notices", "nutrition_trend_7d", or "meals_today" actually contains
+data supporting that claim. If asked about behavior with insufficient
+data, say so honestly: "I don't have enough data on your Monday pattern
+yet" — never make up a number.
+`;
+
+    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule;
+
+    // Smoke-test log: confirms CAPTAIN_MANUAL is wired in every chat turn.
+    console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")}`);
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
     // Replaces the previous single-shot geminiChat() with a 3-round

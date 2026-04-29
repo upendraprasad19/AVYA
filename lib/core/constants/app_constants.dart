@@ -35,6 +35,10 @@ class AppConstants {
   // ── PRO Feature Keys ──────────────────────────────────────
 
   static const String featurePhases2To12 = 'phases_2_to_12';
+  @Deprecated(
+    'Active workout is always free as of Q6 (APK test #2 batch). '
+    'Kept for legacy code compatibility; do not gate against this.',
+  )
   static const String featureActiveWorkoutMode = 'active_workout_mode';
   static const String featureAiCoachUnlimited = 'ai_coach_unlimited';
   // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle

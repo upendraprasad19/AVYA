@@ -74,7 +74,78 @@ class WorkoutRepository {
   final WorkoutScheduleService _schedule = WorkoutScheduleService.instance;
   final HiveService _hive = HiveService.instance;
 
+  // ── Secondary date index (D7) ────────────────────────────────
+  //
+  // Lazy-built map from YYYY-MM-DD → list of exlog_* Hive keys.
+  // Built once on first fallback miss; nulled out on every exlog write.
+  // Eliminates the O(n) full-box scan in the getExerciseLogsForDate
+  // fallback path for legacy entries that predate the primary index.
+  Map<String, List<String>>? _exlogDateIndex;
+
+  void _invalidateExlogDateIndex() {
+    _exlogDateIndex = null;
+  }
+
+  Map<String, List<String>> _ensureExlogDateIndex() {
+    final cached = _exlogDateIndex;
+    if (cached != null) return cached;
+    final byDate = <String, List<String>>{};
+    for (final key in _hive.workoutBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('exlog_')) continue;
+      final raw = _hive.workoutBox.get(key);
+      if (raw is! Map) continue;
+      final dateStr = raw['date'] as String?;
+      if (dateStr == null) continue;
+      byDate.putIfAbsent(dateStr, () => []).add(k);
+    }
+    _exlogDateIndex = byDate;
+    return byDate;
+  }
+
   // ── Streak Calculation ───────────────────────────────────────
+
+  /// Earliest date the user could legitimately have completed a workout.
+  ///
+  /// [calculateCurrentStreak] stops the walk-back at this anchor — dates
+  /// BEFORE it are silently skipped (no penalty, no freeze consumption)
+  /// because the user didn't have the app yet.
+  ///
+  /// Anchor = earliest of: onboarding_completed_at, first_workout_date.
+  /// Returns null if neither is available → 365-day walk-back unchanged.
+  DateTime? _earliestUserAnchor() {
+    final profile = _hive.userBox.get('profile') as Map?;
+    if (profile == null) return null;
+
+    DateTime? earliest;
+
+    void consider(String? iso) {
+      if (iso == null || iso.isEmpty) return;
+      final dt = DateTime.tryParse(iso);
+      if (dt == null) return;
+      if (earliest == null || dt.isBefore(earliest!)) {
+        earliest = dt;
+      }
+    }
+
+    consider(profile['onboarding_completed_at'] as String?);
+
+    // Also check the earliest wlog_ entry so manual-import users are covered.
+    String? earliestWlogDate;
+    for (final key in _hive.workoutBox.keys) {
+      if (!key.toString().startsWith('wlog_')) continue;
+      final log = _hive.workoutBox.get(key);
+      if (log is! Map) continue;
+      final d = log['date'] as String?;
+      if (d == null) continue;
+      if (earliestWlogDate == null || d.compareTo(earliestWlogDate) < 0) {
+        earliestWlogDate = d;
+      }
+    }
+    consider(earliestWlogDate);
+
+    return earliest;
+  }
 
   /// Calculates the current workout streak by scanning the schedule backwards.
   ///
@@ -85,6 +156,11 @@ class WorkoutRepository {
     int streak = 0;
     final today = DateTime.now();
 
+    // B2: stop walk-back before the user's earliest anchor (signup /
+    // first workout). Schedule rows before that date are plan-generator
+    // artefacts — the user couldn't have completed them.
+    final anchor = _earliestUserAnchor();
+
     // Load freeze data for consumption during streak calculation
     final progress = UserRepository.instance.getProgress() ?? {};
     int freezesAvailable =
@@ -94,10 +170,30 @@ class WorkoutRepository {
     final usedDates = List<String>.from(usedDatesRaw);
     bool freezeConsumedThisCalc = false;
 
+    // Perf: single pass over box.keys to build an in-memory schedule map.
+    // Replaces up to 365 sequential box.get('schedule_<date>') calls (~250ms
+    // cold on a year-old account) with a single iteration + O(1) map lookups.
+    final box = _hive.workoutBox;
+    final Map<String, dynamic> scheduleCache = {};
+    for (final key in box.keys) {
+      final k = key.toString();
+      if (!k.startsWith('schedule_')) continue;
+      final date = k.substring('schedule_'.length);
+      final v = box.get(key);
+      if (v != null) scheduleCache[date] = v;
+    }
+
     for (int i = 0; i < 365; i++) {
       final date = today.subtract(Duration(days: i));
+
+      // B2: stop before user's onboarding anchor — pre-account schedule rows
+      // must never penalise or consume freezes.
+      if (anchor != null && date.isBefore(anchor)) {
+        break;
+      }
+
       final dateStr = formatDateKey(date);
-      final raw = _hive.workoutBox.get('schedule_$dateStr');
+      final raw = scheduleCache[dateStr];
 
       if (raw == null) {
         // No schedule entry — before plan start or gap
@@ -309,13 +405,15 @@ class WorkoutRepository {
       if (logs.isNotEmpty) return logs;
     }
 
-    // Fallback: full scan for pre-index data (before this optimisation).
+    // Fallback: pre-index data (legacy entries without exercise_log_index_$date).
+    // Use the lazily-built secondary date index instead of scanning the entire box.
+    final cachedKeys = _ensureExlogDateIndex()[dateStr] ?? const [];
     final logs = <Map<String, dynamic>>[];
-    for (final raw in _hive.workoutBox.values) {
+    for (final key in cachedKeys) {
+      final raw = _hive.workoutBox.get(key);
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
       if (map['type'] != 'exercise_log') continue;
-      if (map['date'] != dateStr) continue;
       logs.add(map);
     }
 
@@ -943,6 +1041,12 @@ class WorkoutRepository {
 
     await _hive.workoutBox.put(logId, logMap);
 
+    // Invalidate the secondary date index (D7) so the next fallback
+    // read picks up the new key. The primary index written below means
+    // well-indexed callers never touch this path, but legacy-data callers
+    // would see stale results without this clear.
+    _invalidateExlogDateIndex();
+
     // Append to the per-date index for O(1) reads by
     // [getExerciseLogsForDate]. Multiple workouts on the same day all
     // accumulate in this list.
@@ -1358,6 +1462,22 @@ class WorkoutRepository {
   DateTime _getWeekStart(DateTime date) {
     final daysFromMonday = date.weekday - 1; // Monday=1 -> 0
     return DateTime(date.year, date.month, date.day - daysFromMonday);
+  }
+
+  /// Sum of `volume_kg` across every exercise log in Hive. Returned
+  /// as a list of doubles so callers can sum / aggregate. Reads
+  /// raw box once — O(n) over the workoutBox key set, called only
+  /// from Profile Service Record on screen build (rare).
+  List<double> getAllExerciseLogKeysForLifetimeSum() {
+    final out = <double>[];
+    for (final v in _hive.workoutBox.values) {
+      if (v is! Map) continue;
+      final type = v['type']?.toString();
+      if (type != 'exercise_log') continue;
+      final raw = v['volume_kg'];
+      if (raw is num) out.add(raw.toDouble());
+    }
+    return out;
   }
 }
 

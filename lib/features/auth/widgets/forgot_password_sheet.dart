@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/auth/widgets/auth_header.dart';
 
 /// Forgot-password entry sheet. User enters their email, we call Supabase
 /// [GoTrueClient.resetPasswordForEmail] which sends a reset link to that
@@ -111,22 +112,12 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                 ),
               ),
             ),
-            Text(
-              'RESET YOUR PASSWORD',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 2.5,
-                fontWeight: FontWeight.w700,
-              ),
+            AuthHeader(
+              eyebrow: 'RECRUIT REGISTRY',
+              title: 'Reset password',
+              onBack: _sending ? null : () => Navigator.of(context).pop(),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'We\'ll email you a link.',
-              style: AppTypography.h3.copyWith(
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 6),
             TextField(
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
