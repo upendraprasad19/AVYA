@@ -7,35 +7,21 @@
 // grouped shape.
 
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+
+import '../helpers/hive_test_setup.dart';
 
 void main() {
   late Directory tempDir;
 
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    tempDir = await Directory.systemTemp.createTemp('aicoach_test_');
-    // Mock path_provider so HiveService.init()'s Hive.initFlutter() works
-    // outside a Flutter app binding. Without this, `getApplicationDocumentsDirectory`
-    // throws MissingPluginException in pure unit tests.
-    const channel = MethodChannel('plugins.flutter.io/path_provider');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => tempDir.path);
-    Hive.init(tempDir.path);
-    await HiveService.instance.init();
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    await tempDir.delete(recursive: true);
-  });
-
   setUp(() async {
-    await HiveService.instance.nutritionBox.clear();
+    tempDir = await setUpHiveForTests();
+  });
+
+  tearDown(() async {
+    await tearDownHiveForTests(tempDir);
   });
 
   String todayStr() {

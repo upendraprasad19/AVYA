@@ -13,35 +13,21 @@
 //   sleep_logs_count_7d    — int: sleep_log_* rows with date in last 7 days
 
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+
+import '../helpers/hive_test_setup.dart';
 
 void main() {
   late Directory tempDir;
 
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    tempDir = await Directory.systemTemp.createTemp('avya_test_a3_');
-    // Mock path_provider per CLAUDE.md §19 — required for Hive in unit tests.
-    const channel = MethodChannel('plugins.flutter.io/path_provider');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => tempDir.path);
-    Hive.init(tempDir.path);
-    await HiveService.instance.init();
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
-  });
-
   setUp(() async {
-    await HiveService.instance.workoutBox.clear();
-    await HiveService.instance.nutritionBox.clear();
-    await HiveService.instance.healthBox.clear();
+    tempDir = await setUpHiveForTests();
+  });
+
+  tearDown(() async {
+    await tearDownHiveForTests(tempDir);
   });
 
   group('anti-fabrication grounding keys', () {

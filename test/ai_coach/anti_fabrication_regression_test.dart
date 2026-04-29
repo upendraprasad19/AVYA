@@ -16,38 +16,21 @@
 /// Live model behavior is verified separately at on-device verification
 /// time (post-APK-build). CI tests do not call ai-proxy.
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+import '../helpers/hive_test_setup.dart';
 
+void main() {
   late Directory tempDir;
 
-  setUpAll(() async {
-    tempDir = await Directory.systemTemp.createTemp('avya_test_a10_');
-    const channel = MethodChannel('plugins.flutter.io/path_provider');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => tempDir.path);
-    Hive.init(tempDir.path);
-    await HiveService.instance.init();
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
-  });
-
   setUp(() async {
-    await HiveService.instance.workoutBox.clear();
-    await HiveService.instance.nutritionBox.clear();
-    await HiveService.instance.healthBox.clear();
-    await HiveService.instance.userBox.clear();
-    await HiveService.instance.coachBox.clear();
-    await HiveService.instance.configBox.clear();
+    tempDir = await setUpHiveForTests();
+  });
+
+  tearDown(() async {
+    await tearDownHiveForTests(tempDir);
   });
 
   /// Seeds the Hive state that matched the OBS-3 / OBS-4 user:

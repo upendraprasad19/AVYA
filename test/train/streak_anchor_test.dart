@@ -1,34 +1,19 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+import '../helpers/hive_test_setup.dart';
 
+void main() {
   late Directory tempDir;
 
-  setUpAll(() async {
-    tempDir = await Directory.systemTemp.createTemp('avya_test_b2_');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(
-        const MethodChannel('plugins.flutter.io/path_provider'),
-        (call) async => tempDir.path,
-      );
-    Hive.init(tempDir.path);
-    await HiveService.instance.init();
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
-  });
-
   setUp(() async {
-    await HiveService.instance.userBox.clear();
-    await HiveService.instance.workoutBox.clear();
+    tempDir = await setUpHiveForTests();
+  });
+
+  tearDown(() async {
+    await tearDownHiveForTests(tempDir);
   });
 
   String isoDate(DateTime d) => d.toIso8601String().substring(0, 10);
