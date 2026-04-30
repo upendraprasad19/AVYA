@@ -1,13 +1,12 @@
 import 'package:flutter/foundation.dart';
 
 import 'hive_service.dart';
-import 'nutrition_write_service.dart';
 
 /// One-shot migration from `nlog_<timestamp>` (Test #5 and earlier)
 /// to `nlog_<istDateStr>_<mealType>_<hash(items)>` (Plan C).
 ///
-/// Hash function MUST match NutritionWriteService.nlogKey — i.e.
-/// `(items as List).join(',').toLowerCase().hashCode`.
+/// Hash function MUST match NutritionWriteService._stableItemsHash — i.e.
+/// items sorted by name, joined with name|quantityG, semicolon-separated.
 ///
 /// Idempotent — guarded by configBox['nlog_key_migration_v6'].
 class NlogKeyMigrator {
@@ -38,15 +37,16 @@ class NlogKeyMigrator {
       final items = m['items'] as List?;
       if (dateStr == null || items == null) continue;
 
-      // Parse the IST date from the entry to feed nlogKey().
+      // Parse the IST date from the entry.
       DateTime? d;
       try {
         d = DateTime.parse(dateStr);
       } catch (_) {
         continue;
       }
-      final newKey =
-          NutritionWriteService.nlogKey(d, mealType, items.cast<String>());
+
+      // Compute new key using the same hash function as NutritionWriteService.
+      final newKey = _computeLogKey(d, mealType, items);
       byNewKey.putIfAbsent(newKey, () => []).add(MapEntry(oldKey, m));
     }
 
@@ -105,5 +105,40 @@ class NlogKeyMigrator {
     debugPrint(
         '[NlogKeyMigrator] rekeyed=$rekeyed merged=$merged total_after=${box.keys.where((k) => k.toString().startsWith('nlog_')).length}');
     await config.put(_migrationKey, true);
+  }
+
+  /// Mirrors NutritionWriteService.computeLogKey + _stableItemsHash logic.
+  static String _computeLogKey(
+    DateTime istDate,
+    String mealType,
+    List<dynamic> items,
+  ) {
+    final dateStr =
+        '${istDate.year.toString().padLeft(4, '0')}-${istDate.month.toString().padLeft(2, '0')}-${istDate.day.toString().padLeft(2, '0')}';
+    final itemsHash = _stableItemsHash(items);
+    return 'nlog_${dateStr}_${mealType}_$itemsHash';
+  }
+
+  /// Mirrors NutritionWriteService._stableItemsHash.
+  /// Items are {name: String, quantityG: double} maps.
+  static String _stableItemsHash(List<dynamic> items) {
+    // Sort items by name
+    final sorted = [...items].cast<Map<dynamic, dynamic>>();
+    sorted.sort((a, b) {
+      final aName = (a['name'] as String? ?? '').toLowerCase();
+      final bName = (b['name'] as String? ?? '').toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    // Join with name|quantityG format
+    final joined = sorted
+        .map((i) {
+          final name = ((i['name'] as String?) ?? '').toLowerCase().trim();
+          final qty = (i['quantityG'] as num?)?.toDouble() ?? 0.0;
+          return '$name|${qty.toStringAsFixed(1)}';
+        })
+        .join(';');
+
+    return joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
   }
 }
