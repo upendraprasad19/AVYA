@@ -247,8 +247,69 @@ class NutritionWriteService {
     required String logKey,
     bool allowUndo = true,
   }) async {
-    throw UnimplementedError('Implemented in Task C-7');
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(logKey);
+    if (raw == null) {
+      return WriteResult.fail('logKey $logKey not found');
+    }
+
+    if (allowUndo) {
+      _lastDeletedPayload = Map<String, dynamic>.from(raw as Map);
+      _lastDeletedKey = logKey;
+    } else {
+      _lastDeletedPayload = null;
+      _lastDeletedKey = null;
+    }
+
+    try {
+      await box.delete(logKey);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] deleteLog failed: $e\n$st');
+      return WriteResult.fail('Hive delete failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(logKey);
   }
+
+  /// Re-puts the last-deleted log under its original key. Returns an
+  /// error WriteResult if no stash exists.
+  Future<WriteResult> restoreLastDeleted() async {
+    final payload = _lastDeletedPayload;
+    final key = _lastDeletedKey;
+    if (payload == null || key == null) {
+      return WriteResult.fail('nothing to restore');
+    }
+    try {
+      await HiveService.instance.nutritionBox.put(key, payload);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] restoreLastDeleted failed: $e\n$st');
+      return WriteResult.fail('Hive restore failed: $e');
+    }
+    _lastDeletedPayload = null;
+    _lastDeletedKey = null;
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(key);
+  }
+
+  // Stash for undo. Keyed by logKey.
+  Map<String, dynamic>? _lastDeletedPayload;
+  String? _lastDeletedKey;
 
   /// Atomic water log write.
   Future<WriteResult> logWater({
