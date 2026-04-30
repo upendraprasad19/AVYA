@@ -186,24 +186,65 @@ const List<RankLadderEntry> kRankLadder = [
   ),
 ];
 
-/// Spec gates table, ordinal-keyed. Each rank requires BOTH the
+/// Spec gates table, code-keyed. Each rank requires the
 /// `RankLadderEntry.minWeeks` gate AND its `RankGate` payload.
+///
+/// Sailor track (SD1..CPO) — streak primary; relaxed for realism per
+/// spec §10.2.
+/// MCPO — transition rank: completion rate primary + 14-day max gap.
+/// Officer track (SubLt..Capt) — completion-rate primary, no streak.
 const Map<String, RankGate> kRankGates = {
   'SD2': RankGate(),
+  // SD1: STRICT 7-day streak (Q27=α). 1 week elapsed clock starts ticking
+  // from onboarding date (phase_started_at, IST).
   'SD1': RankGate(streakAtLeast: 7, minWeeksSinceSignup: 1),
-  'LS': RankGate(streakAtLeast: 16, minWeeksSinceSignup: 4),
-  'PO': RankGate(streakAtLeast: 60, minWeeksSinceSignup: 12,
-      deploymentsCompleteAtLeast: 1),
-  'CPO': RankGate(streakAtLeast: 100, minWeeksSinceSignup: 26,
-      deploymentsCompleteAtLeast: 2),
-  'MCPO': RankGate(minWeeksSinceSignup: 52, maxGapDays: 14),
-  'SubLt': RankGate(totalWorkoutsAtLeast: 100, minWeeksSinceSignup: 104),
-  'LtCdr': RankGate(totalWorkoutsAtLeast: 200, minWeeksSinceSignup: 156),
-  'Cdr': RankGate(totalWorkoutsAtLeast: 300, minWeeksSinceSignup: 208),
-  'Capt': RankGate(
-    totalWorkoutsAtLeast: 500,
-    minWeeksSinceSignup: 260,
+
+  // Sailor track — streak primary, re-balanced for realism
+  'LS': RankGate(streakAtLeast: 14, minWeeksSinceSignup: 4),
+  'PO': RankGate(
+    streakAtLeast: 30,
+    minWeeksSinceSignup: 12,
+    deploymentsCompleteAtLeast: 2,
+  ),
+  'CPO': RankGate(
+    streakAtLeast: 50,
+    minWeeksSinceSignup: 26,
     deploymentsCompleteAtLeast: 3,
+  ),
+
+  // MCPO transition rank — completion-rate primary (smooths sailor → officer)
+  'MCPO': RankGate(
+    minWeeksSinceSignup: 52,
+    completionRateMinimum: 0.80,
+    completionRateWindowWeeks: 12,
+    maxGapDays: 14,
+  ),
+
+  // Officer track — completion-rate primary, no streak requirement
+  'SubLt': RankGate(
+    minWeeksSinceSignup: 104,
+    completionRateMinimum: 0.80,
+    completionRateWindowWeeks: 26,
+  ),
+  'Lt': RankGate(
+    minWeeksSinceSignup: 130,
+    completionRateMinimum: 0.80,
+    completionRateWindowWeeks: 26,
+  ),
+  'LtCdr': RankGate(
+    minWeeksSinceSignup: 156,
+    completionRateMinimum: 0.80,
+    completionRateWindowWeeks: 52,
+  ),
+  'Cdr': RankGate(
+    minWeeksSinceSignup: 208,
+    completionRateMinimum: 0.80,
+    completionRateWindowWeeks: 52,
+  ),
+  'Capt': RankGate(
+    minWeeksSinceSignup: 260,
+    completionRateMinimum: 0.85,
+    completionRateWindowWeeks: 104,
   ),
 };
 
