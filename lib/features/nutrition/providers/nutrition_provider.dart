@@ -1157,11 +1157,11 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           isScanning: false,
           result: data,
         );
-        // Increment quota only on actual success — not on failure/error
-        await UsageCounterService.instance.increment(
-          AppConstants.featureScanMealPro,
-          SubscriptionService.instance.isPro(),
-        );
+        // Plan C-11: counter increment moved to NutritionWriteService
+        // when the user clicks SAVE in _ScanResultEditor (source: scan).
+        // Pre-Plan C the counter incremented on every successful AI return
+        // even if the user backed out without saving — burning quota for
+        // nothing. Single source of truth = NutritionWriteService.
         return;
       }
 

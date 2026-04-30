@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -392,7 +392,7 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_saving) return;
     final liveItems = _items.where((i) => i.hasContent).toList();
     if (liveItems.isEmpty) {
@@ -409,11 +409,6 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     }
     setState(() => _saving = true);
 
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
-
     // Slot — inferred default or user-override via the MealSlotChip shown
     // at the top of the editor (PR Part C.3, 2026-04-24). Reads the same
     // `mealTypeProvider` the AI breakdown card writes to, so a scan made
@@ -421,40 +416,53 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     // flips it.
     final mealType = ref.read(mealTypeProvider);
 
-    HiveService.instance.nutritionBox.put(id, {
-      'id': id,
-      'date': dateStr,
-      'meal_type': mealType,
-      'food_name': _mealNameCtrl.text.trim().isEmpty
-          ? 'Scanned Meal'
-          : _mealNameCtrl.text.trim(),
-      'total_calories': _totalKcal,
-      'total_protein': _sumMacro((i) => i.protein),
-      'total_carbs': _sumMacro((i) => i.carbs),
-      'total_fat': _sumMacro((i) => i.fat),
-      'total_fiber': _sumMacro((i) => i.fiber),
-      'items': liveItems.map((i) => i.toMap()).toList(),
-      'created_at': now.toIso8601String(),
-      'source': 'scan_meal',
-    });
+    // Plan C-11: route through NutritionWriteService.logMeal so per-item
+    // rows reach nutrition_log_items + featureScanMealPro auto-increments
+    // (closes obs #23 — cloud previously had a top-level row but ZERO
+    // nutrition_log_items rows because scan path bypassed projection).
+    final items = liveItems
+        .map((i) => FoodItem(
+              name: i.nameCtrl.text.trim(),
+              quantityG: 0,
+              calories: i.effectiveKcal(),
+              protein: i.protein,
+              carbs: i.carbs,
+              fat: i.fat,
+              fiber: i.fiber,
+            ))
+        .toList();
 
-    ref.invalidate(dailyNutritionProvider);
-
-    // Fire-and-forget cloud sync + AI coach context refresh. Hive is the
-    // source of truth; these calls are best-effort durability + freshness.
-    // If either fails silently (offline / token expired) the daily full
-    // sync picks it up on next launch.
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-
-    final messenger = ScaffoldMessenger.of(context);
-    ref.read(scanMealProvider.notifier).clear();
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Meal saved ✓'),
-        duration: Duration(seconds: 1),
-      ),
+    final result = await NutritionWriteService.instance.logMeal(
+      date: DateTime.now(),
+      mealType: mealType,
+      items: items,
+      overrideTotalCals: _totalKcal,
+      overrideTotalProtein: _sumMacro((i) => i.protein),
+      source: NutritionWriteSource.scan,
     );
+
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (result.success) {
+      ref.read(scanMealProvider.notifier).clear();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Meal saved ✓'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } else {
+      setState(() => _saving = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Save failed: ${result.errorMessage ?? "unknown error"}',
+            style: AppTypography.body,
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
