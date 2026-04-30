@@ -888,6 +888,14 @@ class FoodLogNotifier extends Notifier<void> {
     ref.invalidate(recentFoodLogsProvider);
   }
 
+  /// Plan C-16 — Edit Macros sheet's Save button now routes through
+  /// [NutritionWriteService.editLog] instead of rewriting the Hive map
+  /// in place. The service recomputes totals (when items[] are passed),
+  /// fires the canonical provider invalidation batch, and triggers the
+  /// both-tables cloud projection.
+  ///
+  /// This wrapper edits TOTALS only (no items[]) — the service's
+  /// `m.addAll(updates)` path applies the macro overrides verbatim.
   Future<void> updateFoodLog({
     required String logId,
     required double calories,
@@ -896,23 +904,16 @@ class FoodLogNotifier extends Notifier<void> {
     required double fat,
     double fiber = 0,
   }) async {
-    final box = HiveService.instance.nutritionBox;
-    final existing = box.get(logId);
-    if (existing == null) return;
-    final updated = Map<String, dynamic>.from(existing as Map);
-    updated['total_calories'] = calories.round();
-    updated['total_protein'] = protein.round();
-    updated['total_carbs'] = carbs.round();
-    updated['total_fat'] = fat.round();
-    updated['total_fiber'] = fiber.round();
-    await box.put(logId, updated);
-    NutritionRepository.syncLogToSupabase(data: updated);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
+    await NutritionWriteService.instance.editLog(
+      logKey: logId,
+      updates: <String, dynamic>{
+        'total_calories': calories.round(),
+        'total_protein': protein.round(),
+        'total_carbs': carbs.round(),
+        'total_fat': fat.round(),
+        'total_fiber': fiber.round(),
+      },
+    );
   }
 }
 
