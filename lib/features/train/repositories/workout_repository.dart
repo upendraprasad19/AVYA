@@ -241,6 +241,45 @@ class WorkoutRepository {
     return streak;
   }
 
+  /// Returns the completion rate (0.0..1.0) of scheduled workout days
+  /// over the rolling window of the last `windowWeeks` weeks ending today
+  /// (IST). Rest days and pre-onboarding placeholders are excluded from
+  /// both numerator and denominator.
+  ///
+  /// Empty window (no scheduled workouts in range) → 0.0.
+  ///
+  /// Used by `RankService._qualifies` for ranks with
+  /// `completionRateMinimum` (MCPO + officer track per spec §10.4).
+  double completionRateOverWindow(int windowWeeks) {
+    if (windowWeeks <= 0) return 0.0;
+    final box = _hive.workoutBox;
+    // IST is UTC+5:30; today derived from IST midnight upper-bound.
+    final nowUtc = DateTime.now().toUtc();
+    final istNow = nowUtc.add(const Duration(hours: 5, minutes: 30));
+    final istToday = DateTime(istNow.year, istNow.month, istNow.day);
+    final windowStart = istToday.subtract(Duration(days: windowWeeks * 7));
+
+    int scheduled = 0;
+    int completed = 0;
+    for (var d = windowStart;
+        !d.isAfter(istToday);
+        d = d.add(const Duration(days: 1))) {
+      final dateStr =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final entry = box.get('schedule_$dateStr') as Map?;
+      if (entry == null) continue;
+      final status = entry['status']?.toString();
+      final reason = entry['reason']?.toString();
+      // Exclude rest days + pre-onboarding placeholders from both sides.
+      if (status == 'rest') continue;
+      if (reason == 'pre_onboarding') continue;
+      scheduled++;
+      if (status == 'completed') completed++;
+    }
+    if (scheduled == 0) return 0.0;
+    return completed / scheduled;
+  }
+
   // ── Plan Queries ──────────────────────────────────────────────
 
   /// Whether a workout plan has been generated and saved to Hive.
