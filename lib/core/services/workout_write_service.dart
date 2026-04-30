@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -445,7 +446,98 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('editLog — implemented in Task A-9');
+    final box = HiveService.instance.workoutBox;
+    final existing = box.get(logKey);
+    if (existing is! Map) {
+      return WriteResult.fail('logKey not found: $logKey');
+    }
+
+    final m = existing.cast<String, dynamic>();
+    final exerciseName = m['exercise_name'] as String?;
+    final dateStr = m['date'] as String?;
+    if (exerciseName == null || dateStr == null) {
+      return WriteResult.fail('log missing exercise_name or date');
+    }
+
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+    try {
+      // Apply updates
+      final updated = <String, dynamic>{...m, ...updates};
+
+      // If sets[] was updated, recompute aggregates
+      if (updates.containsKey('sets')) {
+        final newSets = (updates['sets'] as List).cast<Map>().map((e) {
+          return ExerciseSet.fromMap(e);
+        }).toList();
+        updated['sets'] = newSets.map((s) => s.toMap()).toList();
+        updated['set_number'] = newSets.length;
+        updated['reps_completed'] =
+            newSets.fold<int>(0, (a, s) => a + s.reps);
+        updated['weight_kg'] = newSets.fold<double>(
+            0, (a, s) => s.weightKg > a ? s.weightKg : a);
+        updated['volume_kg'] = newSets.fold<double>(
+            0.0, (a, s) => a + (s.weightKg * s.reps));
+      }
+
+      updated['source'] = source.code;
+      updated['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+
+      // Pre-write the updated entry so PR rescan sees the new weight
+      await box.put(logKey, updated);
+
+      // Chronologically rescan PR for ALL logs of this exercise
+      _rescanAllPrsFor(box, exerciseName);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.editLog] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(logKey);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.editLog] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  /// Walk all logs of [exerciseName] in date-ascending order, mark
+  /// is_pr=true for each weight that strictly exceeds the prior best.
+  void _rescanAllPrsFor(Box box, String exerciseName) {
+    final lower = exerciseName.toLowerCase().trim();
+    final logs = <MapEntry<String, Map<String, dynamic>>>[];
+    for (final k in box.keys) {
+      final ks = k.toString();
+      if (!ks.startsWith('exlog_')) continue;
+      final v = box.get(k);
+      if (v is! Map) continue;
+      final m = v.cast<String, dynamic>();
+      final n = (m['exercise_name'] as String?)?.toLowerCase().trim();
+      if (n != lower) continue;
+      logs.add(MapEntry(ks, m));
+    }
+    logs.sort((a, b) {
+      final ad = a.value['date'] as String? ?? '';
+      final bd = b.value['date'] as String? ?? '';
+      return ad.compareTo(bd);
+    });
+
+    double best = 0.0;
+    for (final entry in logs) {
+      final w = (entry.value['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final isPr = w > best;
+      if (isPr) best = w;
+      final mut = <String, dynamic>{...entry.value, 'is_pr': isPr};
+      box.put(entry.key, mut);
+    }
   }
 
   Future<WriteResult> deleteLog({
@@ -454,7 +546,64 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('deleteLog — implemented in Task A-9');
+    final box = HiveService.instance.workoutBox;
+    final existing = box.get(logKey);
+    if (existing is! Map) {
+      return WriteResult.fail('logKey not found: $logKey');
+    }
+    final m = existing.cast<String, dynamic>();
+    final exerciseName = m['exercise_name'] as String?;
+    final dateStr = m['date'] as String?;
+    if (exerciseName == null || dateStr == null) {
+      return WriteResult.fail('log missing exercise_name or date');
+    }
+
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+    try {
+      // Stash for undo (1-hour TTL)
+      if (allowUndo) {
+        await box.put('undo_$logKey', {
+          'data': jsonEncode(m),
+          'expires_at_ms': DateTime.now()
+              .add(const Duration(hours: 1))
+              .millisecondsSinceEpoch,
+        });
+      }
+
+      await box.delete(logKey);
+
+      // Drop from exercise_log_index_<date>
+      final indexKey = 'exercise_log_index_$dateStr';
+      final idx = (box.get(indexKey) as List?)?.cast<String>().toList() ?? [];
+      idx.remove(logKey);
+      if (idx.isEmpty) {
+        await box.delete(indexKey);
+      } else {
+        await box.put(indexKey, idx);
+      }
+
+      // PR rescan (a deleted PR may promote a prior log)
+      _rescanAllPrsFor(box, exerciseName);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.deleteLog] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(logKey);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.deleteLog] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
