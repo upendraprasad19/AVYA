@@ -27,23 +27,35 @@ class RankLadderEntry {
   });
 }
 
-/// Streak + total-workout gates per rank, mirroring spec section
-/// "Indian Navy 9-rung rank ladder (LOCKED)" — both must satisfy.
+/// Streak + total-workout + completion-rate gates per rank.
+///
+/// Sailor track (SD1..CPO) — streak primary (`streakAtLeast`).
+/// Officer track (SubLt..Capt) — completion-rate primary
+/// (`completionRateMinimum` over `completionRateWindowWeeks`).
+/// MCPO is a transition rank using completion rate alongside `maxGapDays`.
 ///
 /// `streak` is the current workout-day streak from
 /// `WorkoutRepository.calculateCurrentStreak()` — schedule-aware,
-/// rest days invisible.
+/// rest days invisible, resets on missed scheduled workouts only.
+///
+/// `completionRate` is computed by
+/// `WorkoutRepository.completionRateOverWindow(windowWeeks)`:
+/// fraction of scheduled workout days completed in the rolling window.
+/// Rest days + pre-onboarding days excluded from the denominator.
 ///
 /// `totalWorkouts` reads from `progress['total_workouts_done']`.
 ///
-/// `minWeeks` is calendar weeks since signup (auth.users.created_at)
-/// truncated. Always the additional gate alongside streak / count.
+/// `minWeeksSinceSignup` is calendar weeks since signup
+/// (auth.users.created_at; mirrored locally as `phase_started_at` IST)
+/// truncated. Always required alongside any other gates.
 class RankGate {
   final int? streakAtLeast;
   final int? totalWorkoutsAtLeast;
   final int? deploymentsCompleteAtLeast;
   final int? minWeeksSinceSignup;
   final int? maxGapDays; // for MCPO 1-year-active-streak gate
+  final double? completionRateMinimum; // 0.0-1.0 inclusive
+  final int? completionRateWindowWeeks; // lookback window in weeks
 
   const RankGate({
     this.streakAtLeast,
@@ -51,6 +63,8 @@ class RankGate {
     this.deploymentsCompleteAtLeast,
     this.minWeeksSinceSignup,
     this.maxGapDays,
+    this.completionRateMinimum,
+    this.completionRateWindowWeeks,
   });
 }
 
