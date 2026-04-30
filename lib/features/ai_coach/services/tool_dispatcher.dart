@@ -363,7 +363,24 @@ class ToolDispatcher {
           'Invalid mark_workout_complete intent payload.');
     }
 
-    await WorkoutRepository.instance.markWorkoutCompleted(parsed);
+    // Plan A A-12: route through WorkoutWriteService.markCompleted so
+    // schedule_<date>.status='completed' AND wlog_<date> are written
+    // atomically with consistent IST date stamping + source='ai_coach'.
+    final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
+    final durationSec =
+        (intent.payload['duration_seconds'] as num?)?.toInt() ?? 0;
+    final rpe = (intent.payload['rpe'] as num?)?.toInt();
+    final result = await WorkoutWriteService.instance.markCompleted(
+      date: parsed,
+      workoutName: workoutName,
+      durationSec: durationSec,
+      rpe: rpe,
+      // ref: null — outer dispatcher flow handles invalidation + sync.
+    );
+    if (!result.success) {
+      return ToolExecutionResult.failure(
+          result.errorMessage ?? 'Could not mark workout complete.');
+    }
     return ToolExecutionResult.success(data: {'date': date});
   }
 
@@ -543,7 +560,14 @@ class ToolDispatcher {
             updated['day_of_week'] = destDate.weekday - 1; // 0=Mon..6=Sun
             updated['rescheduled_via'] = 'ai_coach';
             updated['rescheduled_at'] = DateTime.now().toIso8601String();
-            await box.put('schedule_${move.toDate}', updated);
+            // Plan A A-12: route through WorkoutWriteService for source +
+            // updated_at_ms stamping. The service uses scheduleKey(date)
+            // which matches the legacy 'schedule_<YYYY-MM-DD>' format.
+            await WorkoutWriteService.instance.upsertScheduled(
+              date: destDate,
+              entry: updated,
+              source: WriteSource.aiCoach,
+            );
             // Only delete the old key if it isn't the same as the new one
             // (defensive — shouldn't happen but a no-op move would dupe).
             if (move.fromDate != move.toDate) {
@@ -609,7 +633,17 @@ class ToolDispatcher {
         if (existing is Map && existing['status'] == 'completed') {
           continue;
         }
-        await box.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
@@ -665,7 +699,17 @@ class ToolDispatcher {
           // Concurrent-edit safety net.
           continue;
         }
-        await box.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
@@ -794,7 +838,17 @@ class ToolDispatcher {
           // Concurrent-edit safety net — completed days stay sacred.
           continue;
         }
-        await wbox.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
