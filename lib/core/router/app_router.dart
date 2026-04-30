@@ -30,6 +30,7 @@ import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
+import 'package:icanbefitter/features/profile/screens/progress_comparison_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
@@ -400,6 +401,15 @@ class AppRouter {
                     path: 'progress-photos',
                     name: 'progressPhotos',
                     builder: (context, state) => const ProgressPhotosScreen(),
+                  ),
+                  GoRoute(
+                    // APK Test #6 / Plan F-11 — Progress Comparison row in
+                    // REPORTS lists baseline + promotion + manual snapshots
+                    // and renders diffs in a bottom sheet.
+                    path: 'progress-comparison',
+                    name: 'progressComparison',
+                    builder: (context, state) =>
+                        const ProgressComparisonScreen(),
                   ),
                   GoRoute(
                     // Legacy route kept for deep-links in notifications

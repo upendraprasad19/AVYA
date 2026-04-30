@@ -606,6 +606,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 6),
+              // APK Test #6 / Plan F-11 \u2014 Progress Comparison row.
+              // Shows starting baseline + promotion + manual snapshots
+              // and renders diffs vs baseline in a bottom sheet. Plan D
+              // Task D-10 will later land a Predictions row above this
+              // one (REPORTS ordering: Predictions \u2192 Progress Comparison
+              // \u2192 Progress Photos).
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.compare_arrows_outlined,
+                  title: 'Progress Comparison',
+                  subtitle: 'Then vs now \u2014 starting stats and milestones',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => context.go('/profile/progress-comparison'),
+                ),
+              ]),
+              const SizedBox(height: 6),
               _buildCard([
                 ProfileRow(
                   icon: Icons.photo_library_outlined,
