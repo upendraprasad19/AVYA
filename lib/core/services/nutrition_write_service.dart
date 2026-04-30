@@ -191,7 +191,55 @@ class NutritionWriteService {
     required String logKey,
     required Map<String, dynamic> updates,
   }) async {
-    throw UnimplementedError('Implemented in Task C-6');
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(logKey);
+    if (raw == null) {
+      return WriteResult.fail('logKey $logKey not found');
+    }
+    final m = Map<String, dynamic>.from(raw as Map);
+
+    // Apply incoming updates
+    m.addAll(updates);
+
+    // If items[] changed, recompute totals
+    if (updates.containsKey('items')) {
+      final rawItems = (updates['items'] as List).cast<dynamic>();
+      final items = rawItems
+          .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      if (items.isEmpty) {
+        return WriteResult.fail(
+          'editLog: items cannot be emptied (use deleteLog)',
+        );
+      }
+      m['items'] = items.map((i) => i.toMap()).toList();
+      m['total_calories'] =
+          items.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
+      m['total_protein'] =
+          items.fold<double>(0, (a, i) => a + i.protein).round();
+      m['total_carbs'] = items.fold<double>(0, (a, i) => a + i.carbs).round();
+      m['total_fat'] = items.fold<double>(0, (a, i) => a + i.fat).round();
+      m['total_fiber'] = items.fold<double>(0, (a, i) => a + i.fiber).round();
+    }
+
+    m['logged_at'] = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      await box.put(logKey, m);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] editLog put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(logKey);
   }
 
   /// Soft-deletes with undo (matches DeleteNutritionLogNotifier pattern).
