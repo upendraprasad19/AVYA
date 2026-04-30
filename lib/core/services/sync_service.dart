@@ -1048,6 +1048,20 @@ class SyncService {
         final exerciseId =
             (log['exercise_name'] as String?) ?? key; // stable identity
 
+        // Plan A A-5: support BOTH the legacy `sets_completed`/`sets_detail`
+        // shape and the new WorkoutWriteService shape (`set_number` count +
+        // `sets` list). Resolve per-set list once; reuse for summary +
+        // per-set rows.
+        final List<Map<String, dynamic>> resolvedSets =
+            _resolvePerSetList(log);
+        final int summarySetCount = resolvedSets.isNotEmpty
+            ? resolvedSets.length
+            : (log['sets_completed'] as num?)?.toInt() ??
+                (log['set_number'] as num?)?.toInt() ??
+                1;
+        final String completedAt = log['created_at'] as String? ??
+            DateTime.now().toIso8601String();
+
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
           'workout_log_id': workoutLogId,
@@ -1055,28 +1069,24 @@ class SyncService {
           'exercise_id': exerciseId,
           'exercise_name': log['exercise_name'] ?? '',
           'logging_type': log['logging_type'],
-          'set_number': log['sets_completed'] ?? 1,
+          'set_number': summarySetCount,
           'reps': log['reps_completed'],
           'weight_kg': log['weight_kg'],
           'duration_seconds': log['duration_seconds'],
           'distance_km': log['distance_km'],
           'is_pr': log['is_pr'] ?? false,
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
-          'completed_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          'completed_at': completedAt,
         }, onConflict: 'id');
 
         // ── PER-SET ROWS (F4) ──
-        // Upserts a row per set from the Hive `sets_detail` list. Natural key
-        // is (workout_log_id, exercise_id, set_number) → idempotent across
-        // re-syncs and retries.
-        final setsDetail = log['sets_detail'];
-        if (setsDetail is List && setsDetail.isNotEmpty) {
-          final completedAt = log['created_at'] as String? ??
-              DateTime.now().toIso8601String();
+        // Upserts a row per set into `workout_log_sets`. Natural key is
+        // (workout_log_id, exercise_id, set_number) → idempotent across
+        // re-syncs and retries. Source: legacy `sets_detail` OR the new
+        // WorkoutWriteService `sets` list (Plan A A-5).
+        if (resolvedSets.isNotEmpty) {
           final rows = <Map<String, dynamic>>[];
-          for (final s in setsDetail) {
-            if (s is! Map) continue;
-            final sm = Map<String, dynamic>.from(s);
+          for (final sm in resolvedSets) {
             final setNum = (sm['set_number'] as num?)?.toInt();
             if (setNum == null) continue;
             rows.add({
@@ -1086,7 +1096,7 @@ class SyncService {
               'set_number': setNum,
               'weight_kg': sm['weight_kg'],
               'reps': sm['reps'],
-              'duration_secs': sm['duration_seconds'],
+              'duration_secs': sm['duration_seconds'] ?? sm['duration_sec'],
               'distance_km': sm['distance_km'],
               'completed_at': completedAt,
             });
@@ -1112,6 +1122,42 @@ class SyncService {
         } catch (_) {}
       }
     }
+  }
+
+  /// Plan A A-5: normalize the per-set list across legacy `sets_detail`
+  /// (had explicit `set_number`) and the new WorkoutWriteService `sets`
+  /// shape (ordinal — set_number derived from index + 1).
+  ///
+  /// Returns a list of maps where each entry has at least `set_number`,
+  /// `weight_kg`, `reps`. May also include `duration_seconds`,
+  /// `duration_sec`, `distance_km`. Empty list → no per-set data
+  /// available (fall back to summary-only).
+  List<Map<String, dynamic>> _resolvePerSetList(Map<String, dynamic> log) {
+    // Prefer legacy `sets_detail` (already has set_number).
+    final detail = log['sets_detail'];
+    if (detail is List && detail.isNotEmpty) {
+      final out = <Map<String, dynamic>>[];
+      for (final s in detail) {
+        if (s is Map) out.add(Map<String, dynamic>.from(s));
+      }
+      if (out.isNotEmpty) return out;
+    }
+    // Fallback to the new WorkoutWriteService shape: `sets` list of
+    // {weight_kg, reps, duration_sec?, logged_at_ms} maps. Stamp
+    // `set_number` from the array index (1-based).
+    final newSets = log['sets'];
+    if (newSets is List && newSets.isNotEmpty) {
+      final out = <Map<String, dynamic>>[];
+      for (var i = 0; i < newSets.length; i++) {
+        final s = newSets[i];
+        if (s is! Map) continue;
+        final m = Map<String, dynamic>.from(s);
+        m['set_number'] = i + 1;
+        out.add(m);
+      }
+      return out;
+    }
+    return const [];
   }
 
   /// Pushes completed schedule entries to workout_schedule_completions.
