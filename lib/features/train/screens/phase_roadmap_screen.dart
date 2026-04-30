@@ -76,8 +76,8 @@ class PhaseRoadmapScreen extends ConsumerWidget {
             isActive: currentWeek <= 4,
           ),
 
-          _PromotionMarker(rankCode: 'SD1', whenLabel: 'W2'),
-          _PromotionMarker(rankCode: 'LS', whenLabel: 'W4'),
+          _PromotionMarker(rankCode: 'SD1', whenLabel: 'WEEK 2'),
+          _PromotionMarker(rankCode: 'LS', whenLabel: 'WEEK 4'),
 
           // ── Phase II (PRO) ────────────────────────────
           _PhaseBlock(
@@ -107,31 +107,32 @@ class PhaseRoadmapScreen extends ConsumerWidget {
 
           _PromotionMarker(
             rankCode: 'PO',
-            whenLabel: 'W12 — DEBRIEF + DEPLOYMENT 02',
+            whenLabel: 'WEEK 12 — DEBRIEF + DEPLOYMENT 02',
             emphasised: true,
           ),
 
           // ── Year 1 band ───────────────────────────────
           const _YearBand(label: 'YEAR 1'),
-          _PromotionMarker(rankCode: 'CPO', whenLabel: 'W26'),
+          _PromotionMarker(rankCode: 'CPO', whenLabel: 'WEEK 26'),
           _PromotionMarker(
             rankCode: 'MCPO',
-            whenLabel: 'W52 · 1-YEAR SERVICE PIN',
+            whenLabel: 'WEEK 52 · 1-YEAR SERVICE PIN',
           ),
 
           // ── Year 2 band ───────────────────────────────
           const _YearBand(label: 'YEAR 2'),
           _PromotionMarker(
             rankCode: 'SubLt',
-            whenLabel: 'W104 · OFFICER COMMISSION',
+            whenLabel: 'WEEK 104 · OFFICER COMMISSION',
             emphasised: true,
           ),
 
           // ── Years 3-5 band ────────────────────────────
           const _YearBand(label: 'YEARS 3 — 5'),
-          _PromotionMarker(rankCode: 'LtCdr', whenLabel: 'W156'),
-          _PromotionMarker(rankCode: 'Cdr', whenLabel: 'W208'),
-          _PromotionMarker(rankCode: 'Capt', whenLabel: 'W260', faint: true),
+          _PromotionMarker(rankCode: 'Lt', whenLabel: 'WEEK 130'),
+          _PromotionMarker(rankCode: 'LtCdr', whenLabel: 'WEEK 156'),
+          _PromotionMarker(rankCode: 'Cdr', whenLabel: 'WEEK 208'),
+          _PromotionMarker(rankCode: 'Capt', whenLabel: 'WEEK 260', faint: true),
           const SizedBox(height: 20),
         ],
       ),
