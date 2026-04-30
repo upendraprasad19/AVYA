@@ -870,8 +870,20 @@ class WorkoutScheduleService {
     swappedB['is_swapped'] = true;
     swappedB['original_date'] = mapA['date'];
 
-    await _hive.workoutBox.put(keyA, swappedA);
-    await _hive.workoutBox.put(keyB, swappedB);
+    // Plan A Task A-16: route schedule swap writes through service so
+    // each end of the swap fires syncWorkoutData → cloud
+    // scheduled_workouts mirrors the swap. Preserves the rich
+    // is_swapped/original_date metadata that rescheduleDay would erase.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: dateA,
+      entry: swappedA,
+      source: WriteSource.schedSwap,
+    );
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: dateB,
+      entry: swappedB,
+      source: WriteSource.schedSwap,
+    );
 
     // Increment swap counter
     await _incrementSwapCount(mondayA);
