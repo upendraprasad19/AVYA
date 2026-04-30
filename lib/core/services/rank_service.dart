@@ -269,6 +269,7 @@ class RankService {
       weeksSinceSignup: weeks,
       deploymentsComplete: deployments,
       longestGapDays: longestGap,
+      workoutRepo: repo,
     );
   }
 
@@ -305,7 +306,40 @@ class RankService {
         s.longestGapDays > gate.maxGapDays!) {
       return false;
     }
+    if (gate.completionRateMinimum != null) {
+      final window = gate.completionRateWindowWeeks ?? 26;
+      final rate = s.completionRate(window);
+      if (rate < gate.completionRateMinimum!) return false;
+    }
     return true;
+  }
+
+  /// Test-only entry point: builds an `_EvalState` from explicit inputs
+  /// (no Hive / Supabase reads) and runs `_qualifies` against the gate
+  /// for [code]. `completionRateOverride` short-circuits the
+  /// `completionRateOverWindow` scan — pass it for officer-rank tests.
+  ///
+  /// Returns `true` iff the rank's gate passes.
+  @visibleForTesting
+  bool testQualify({
+    required String code,
+    int streak = 0,
+    int totalWorkouts = 0,
+    int weeksSinceSignup = 0,
+    int deploymentsComplete = 0,
+    int longestGapDays = 0,
+    double? completionRateOverride,
+  }) {
+    final state = _EvalState(
+      streakDays: streak,
+      totalWorkouts: totalWorkouts,
+      weeksSinceSignup: weeksSinceSignup,
+      deploymentsComplete: deploymentsComplete,
+      longestGapDays: longestGapDays,
+      workoutRepo: WorkoutRepository.instance,
+      completionRateOverride: completionRateOverride,
+    );
+    return _qualifies(code, state);
   }
 }
 
@@ -315,6 +349,8 @@ class _EvalState {
   final int weeksSinceSignup;
   final int deploymentsComplete;
   final int longestGapDays;
+  final WorkoutRepository workoutRepo;
+  final double? completionRateOverride;
 
   const _EvalState({
     required this.streakDays,
@@ -322,5 +358,16 @@ class _EvalState {
     required this.weeksSinceSignup,
     required this.deploymentsComplete,
     required this.longestGapDays,
+    required this.workoutRepo,
+    this.completionRateOverride,
   });
+
+  /// Lazy completion-rate accessor; only invoked when a gate sets
+  /// `completionRateMinimum`. Test code can supply
+  /// `completionRateOverride` to skip the Hive scan.
+  double completionRate(int windowWeeks) {
+    final override = completionRateOverride;
+    if (override != null) return override;
+    return workoutRepo.completionRateOverWindow(windowWeeks);
+  }
 }
