@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -493,22 +495,47 @@ class _FoodSearchSheetState extends ConsumerState<_FoodSearchSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                ref.read(foodLogProvider.notifier).logFood(
-                      food: food,
-                      mealType: _mealType,
+              onPressed: () async {
+                final result =
+                    await NutritionWriteService.instance.logMeal(
+                  date: DateTime.now(),
+                  mealType: _mealType,
+                  items: [
+                    FoodItem(
+                      name: name,
                       quantityG: _quantityG,
-                    );
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Logged $name ($adjustedCals kcal)',
-                      style: AppTypography.body.copyWith(fontSize: 13),
+                      calories: adjustedCals.toDouble(),
+                      protein: adjustedProtein.toDouble(),
+                      carbs: adjustedCarbs.toDouble(),
+                      fat: adjustedFat.toDouble(),
+                      fiber: adjustedFiber.toDouble(),
                     ),
-                    backgroundColor: AppColors.card,
-                  ),
+                  ],
+                  source: NutritionWriteSource.manualSearch,
                 );
+                if (!mounted) return;
+                if (result.success) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Logged $name ($adjustedCals kcal)',
+                        style: AppTypography.body.copyWith(fontSize: 13),
+                      ),
+                      backgroundColor: AppColors.card,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Could not log: ${result.errorMessage ?? "unknown error"}',
+                        style: AppTypography.body.copyWith(fontSize: 13),
+                      ),
+                      backgroundColor: AppColors.card,
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
