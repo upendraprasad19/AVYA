@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -218,6 +219,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
               plannedSlots: plannedSlots,
               onDelete: (logId) => _confirmAndDeleteFoodLog(logId),
               onEdit: (meal) => _showEditMacrosSheet(context, meal),
+              onLongPressMeal: (meal) => _showLogActionMenu(context, meal),
               onLogSlot: (slot) =>
                   LogToSlotSheet.show(context, slot: slot),
             );
@@ -523,6 +525,268 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         const SizedBox(height: 4),
         WardBar(pct: pct, color: color, height: 4),
       ],
+    );
+  }
+
+  // ── Long-press action menu (Plan C-14 / C-15) ─────────────────
+
+  /// Long-press on a logged meal row -> Edit / Delete / Save-as-template
+  /// bottom sheet. Plan C-14 + C-15.
+  Future<void> _showLogActionMenu(
+      BuildContext context, Map<String, dynamic> meal) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.line2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListTile(
+              leading: Icon(Icons.edit_outlined, color: AppColors.textPrimary),
+              title: Text('Edit', style: AppTypography.body),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: Icon(Icons.bookmark_add_outlined,
+                  color: AppColors.textPrimary),
+              title: Text('Save as template', style: AppTypography.body),
+              onTap: () => Navigator.pop(ctx, 'save_template'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: AppColors.bad),
+              title: Text(
+                'Delete',
+                style: AppTypography.body.copyWith(color: AppColors.bad),
+              ),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case 'edit':
+        _showEditMacrosSheet(context, meal);
+        break;
+      case 'delete':
+        await _confirmAndDeleteLog(context, meal);
+        break;
+      case 'save_template':
+        await _saveAsTemplate(context, meal);
+        break;
+    }
+  }
+
+  /// Plan C-14 — Confirm sheet + 10s UNDO snackbar via
+  /// `NutritionWriteService.deleteLog(allowUndo: true)` +
+  /// `restoreLastDeleted()`.
+  Future<void> _confirmAndDeleteLog(
+      BuildContext context, Map<String, dynamic> meal) async {
+    final logKey = meal['id'] as String?;
+    if (logKey == null) return;
+    final name = meal['food_name'] as String? ?? 'this meal';
+    final kcal = (meal['total_calories'] as num?)?.round() ?? 0;
+    final protein = (meal['total_protein'] as num?)?.round() ?? 0;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Delete $name?', style: AppTypography.h3),
+            const SizedBox(height: 10),
+            Text(
+              "$kcal kcal · ${protein}g protein will be removed from today's totals.",
+              style: AppTypography.body.copyWith(color: AppColors.textDim),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text('CANCEL',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textDim,
+                          letterSpacing: 2,
+                        )),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.bad,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text('DELETE',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textPrimary,
+                          letterSpacing: 2,
+                        )),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final result = await NutritionWriteService.instance
+        .deleteLog(logKey: logKey, allowUndo: true);
+    if (!mounted) return;
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not delete: ${result.errorMessage ?? "unknown"}'),
+          backgroundColor: AppColors.card,
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Meal deleted',
+          style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: AppColors.card,
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppColors.accent,
+          onPressed: () async {
+            await NutritionWriteService.instance.restoreLastDeleted();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Plan C-15 — Save-as-template handler. Asks for a name,
+  /// then calls `NutritionWriteService.saveMealAsTemplate`.
+  Future<void> _saveAsTemplate(
+      BuildContext context, Map<String, dynamic> meal) async {
+    final logKey = meal['id'] as String?;
+    if (logKey == null) return;
+    final defaultName = meal['food_name'] as String? ?? 'Saved Meal';
+    final controller = TextEditingController(text: defaultName);
+    final name = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('SAVE AS TEMPLATE',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                )),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: AppTypography.body,
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: AppTypography.body
+                    .copyWith(color: AppColors.textDim),
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.line2),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.accent),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.bgDeep,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () =>
+                    Navigator.pop(ctx, controller.text.trim()),
+                child: Text(
+                  'SAVE',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.bgDeep,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+
+    if (name == null || name.isEmpty || !mounted) return;
+
+    final result = await NutritionWriteService.instance.saveMealAsTemplate(
+      sourceLogKey: logKey,
+      customName: name,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? 'Saved "$name" — find it in SAVED MEALS next time'
+              : 'Save failed: ${result.errorMessage ?? "unknown"}',
+          style: AppTypography.body,
+        ),
+        backgroundColor: AppColors.card,
+      ),
     );
   }
 

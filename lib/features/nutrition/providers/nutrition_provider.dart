@@ -1405,12 +1405,17 @@ class DeleteNutritionLogNotifier extends Notifier<void> {
   @override
   void build() {}
 
+  /// Delegates to [NutritionWriteService.deleteLog] so legacy direct-Hive
+  /// callers also pick up the per-table cloud delete + undo stash
+  /// (Plan C-14).
   Future<void> delete(String logId) async {
-    await HiveService.instance.nutritionBox.delete(logId);
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    final result = await NutritionWriteService.instance
+        .deleteLog(logKey: logId, allowUndo: true);
+    if (!result.success) {
+      // Fall through to a no-op; provider state stays at AsyncData(null).
+      // Caller (UI) shows the snackbar based on its own context.
+      return;
+    }
   }
 }
 
