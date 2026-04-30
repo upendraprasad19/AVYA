@@ -317,7 +317,43 @@ class NutritionWriteService {
     required int ml,
     int? urineColor,
   }) async {
-    throw UnimplementedError('Implemented in Task C-8');
+    if (ml <= 0) {
+      return WriteResult.fail('logWater: ml must be > 0');
+    }
+    final dateStr =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final key = 'water_$dateStr';
+
+    final box = HiveService.instance.nutritionBox;
+    final existing = box.get(key);
+    final current = existing == null
+        ? <String, dynamic>{
+            'date': dateStr,
+            'ml': 0,
+            'urine_color': null,
+          }
+        : Map<String, dynamic>.from(existing as Map);
+
+    current['ml'] = ((current['ml'] as num?)?.toInt() ?? 0) + ml;
+    if (urineColor != null) current['urine_color'] = urineColor;
+    current['logged_at'] = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      await box.put(key, current);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] logWater put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(key);
   }
 
   /// Re-log of an existing saved meal template.
@@ -326,7 +362,22 @@ class NutritionWriteService {
     required DateTime date,
     required String mealType,
   }) async {
-    throw UnimplementedError('Implemented in Task C-8');
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(savedMealKey);
+    if (raw == null) {
+      return WriteResult.fail('saved meal $savedMealKey not found');
+    }
+    final tpl = Map<String, dynamic>.from(raw as Map);
+    final items = ((tpl['items'] as List?) ?? const [])
+        .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+
+    return logMeal(
+      date: date,
+      mealType: mealType,
+      items: items,
+      source: NutritionWriteSource.savedMealRelog,
+    );
   }
 
   /// Promote a logged meal to a saved template.
@@ -334,7 +385,63 @@ class NutritionWriteService {
     required String sourceLogKey,
     String? customName,
   }) async {
-    throw UnimplementedError('Implemented in Task C-8');
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(sourceLogKey);
+    if (raw == null) {
+      return WriteResult.fail('sourceLogKey $sourceLogKey not found');
+    }
+    final src = Map<String, dynamic>.from(raw as Map);
+    final rawItems = ((src['items'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    if (rawItems.isEmpty) {
+      return WriteResult.fail('cannot template a meal with no items');
+    }
+
+    final hash = rawItems
+        .map((i) =>
+            '${(i['name'] ?? '').toString().toLowerCase()}|${i['quantity_g'] ?? 0}')
+        .join(';')
+        .hashCode
+        .toUnsigned(32)
+        .toRadixString(16)
+        .padLeft(8, '0');
+    final templateKey = 'meal_$hash';
+
+    final name = customName ??
+        (rawItems.first['name']?.toString() ?? 'Saved Meal')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+    final payload = <String, dynamic>{
+      'template_key': templateKey,
+      'name': name,
+      'items': rawItems,
+      'total_calories': src['total_calories'] ?? 0,
+      'total_protein': src['total_protein'] ?? 0,
+      'total_carbs': src['total_carbs'] ?? 0,
+      'total_fat': src['total_fat'] ?? 0,
+      'total_fiber': src['total_fiber'] ?? 0,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'is_template': true,
+    };
+
+    try {
+      await box.put(templateKey, payload);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] saveMealAsTemplate failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(templateKey);
   }
 
   // ---- private helpers ----
