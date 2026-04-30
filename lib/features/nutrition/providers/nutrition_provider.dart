@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -722,52 +724,44 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
 
   void clear() => state = null;
 
-  /// Save the analysed meal to nutrition log.
+  /// Save the analysed meal to nutrition log via NutritionWriteService.
+  /// (Plan C-10: routes through service to ensure per-item rows reach
+  /// nutrition_log_items + the aiText counter increments via the
+  /// service's source-based counter wiring.)
   Future<void> saveMeal({String mealType = 'snacks'}) async {
     final data = state;
     if (data == null) return;
 
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final items = data.items.map((item) {
+      final protein =
+          double.tryParse(item.protein.replaceAll('g', '')) ?? 0.0;
+      final carbs = double.tryParse(item.carbs.replaceAll('g', '')) ?? 0.0;
+      final fat = double.tryParse(item.fat.replaceAll('g', '')) ?? 0.0;
+      return FoodItem(
+        name: item.name,
+        quantityG: 0,
+        calories: item.calories.toDouble(),
+        protein: protein,
+        carbs: carbs,
+        fat: fat,
+        fiber: item.fiber.toDouble(),
+      );
+    }).toList();
 
-    int totalProtein = 0;
-    int totalCarbs = 0;
-    int totalFat = 0;
-    int totalFiber = 0;
-    for (final item in data.items) {
-      totalProtein += int.tryParse(item.protein.replaceAll('g', '')) ?? 0;
-      totalCarbs += int.tryParse(item.carbs.replaceAll('g', '')) ?? 0;
-      totalFat += int.tryParse(item.fat.replaceAll('g', '')) ?? 0;
-      totalFiber += item.fiber;
+    if (items.isEmpty) {
+      state = null;
+      return;
     }
 
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
-    final logMap = {
-      'id': id,
-      'date': dateStr,
-      'meal_type': mealType.toLowerCase(),
-      'food_name': data.mealName,
-      'total_calories': data.totalKcal,
-      'total_protein': totalProtein,
-      'total_carbs': totalCarbs,
-      'total_fat': totalFat,
-      'total_fiber': totalFiber,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_text',
-    };
-    await HiveService.instance.nutritionBox.put(id, logMap);
-    NutritionRepository.syncLogToSupabase(data: logMap);
-    // AI coach snapshot refresh — keeps "what did I eat today?" accurate
-    // without waiting for the next app launch.
-    unawaited(SyncService.instance.pushSnapshot());
+    await NutritionWriteService.instance.logMeal(
+      date: DateTime.now(),
+      mealType: mealType.toLowerCase(),
+      items: items,
+      overrideTotalCals: data.totalKcal,
+      source: NutritionWriteSource.aiText,
+    );
 
     state = null;
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
-    BadgeService.instance.checkAll();
   }
 }
 
