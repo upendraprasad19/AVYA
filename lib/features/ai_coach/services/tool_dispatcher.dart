@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
+import '../../../core/services/workout_write_service.dart';
+import '../../../core/services/write_result.dart';
 import '../../home/providers/home_provider.dart'
     show
         calendarWeekProvider,
@@ -264,16 +266,37 @@ class ToolDispatcher {
     // Resolve exercise name from local library (Hive exerciseBox or customBox).
     final name = _resolveExerciseName(exerciseId) ?? exerciseId;
 
-    final logId = await WorkoutRepository.instance.logSetWithPrRescan(
-      exerciseId: exerciseId,
-      exerciseName: name,
-      weightKg: weightKg,
-      reps: reps,
-      sets: sets,
-      // logging type and date default per the helper
+    // Plan A A-11: route through WorkoutWriteService.logExercise — ONE call
+    // with sets[length=N] yields ONE deterministic exlog row, replacing the
+    // old per-set logSetWithPrRescan loop that produced N duplicate rows
+    // (observation #16 root cause).
+    final dateRaw = intent.payload['date'] as String?;
+    final date = (dateRaw == null || dateRaw.isEmpty)
+        ? DateTime.now()
+        : (DateTime.tryParse(dateRaw) ?? DateTime.now());
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final exerciseSets = List<ExerciseSet>.generate(
+      sets,
+      (i) => ExerciseSet(
+        weightKg: weightKg,
+        reps: reps,
+        loggedAtMs: nowMs + i, // tiny offset prevents 60s-window self-dedup
+      ),
     );
+
+    final result = await WorkoutWriteService.instance.logExercise(
+      date: date,
+      exerciseName: name,
+      sets: exerciseSets,
+      source: WriteSource.aiCoach,
+      // ref: null — dispatcher's outer flow handles invalidation + sync.
+    );
+    if (!result.success) {
+      return ToolExecutionResult.failure(
+          result.errorMessage ?? 'Could not log set.');
+    }
     return ToolExecutionResult.success(
-        data: {'log_id': logId, 'exercise_name': name});
+        data: {'log_id': result.logKey, 'exercise_name': name});
   }
 
   /// D.2 logPR — wrapper over `logSetWithPrRescan` for PR claims.
