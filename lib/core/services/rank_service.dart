@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -88,6 +89,17 @@ class RankService {
               toInsert,
               onConflict: 'user_id,rank_code',
             );
+
+        // APK Test #6 / Plan F-10 — capture a promotion snapshot per
+        // newly-inserted rank. Fire-and-forget; idempotent via
+        // (user_id, source='promotion', rank_at_snapshot) check inside
+        // snapshotOnPromotion. UNIQUE (user_id, rank_code) on
+        // rank_promotions ensures we only get here once per rank, so
+        // the snapshot also fires at most once per rank.
+        for (final row in toInsert) {
+          final code = row['rank_code'] as String;
+          unawaited(StatSnapshotService.instance.snapshotOnPromotion(code));
+        }
       }
 
       // Update denormalized current_rank_code only when it actually
