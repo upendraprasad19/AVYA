@@ -143,7 +143,47 @@ class NutritionWriteService {
     required String existingLogKey,
     required List<FoodItem> additionalItems,
   }) async {
-    throw UnimplementedError('Implemented in Task C-5');
+    if (additionalItems.isEmpty) {
+      return WriteResult.fail('appendItemsToMeal: no items to append');
+    }
+
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(existingLogKey);
+    if (raw == null) {
+      return WriteResult.fail('logKey $existingLogKey not found');
+    }
+
+    final m = Map<String, dynamic>.from(raw as Map);
+    final existing = ((m['items'] as List?) ?? const [])
+        .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    final union = [...existing, ...additionalItems];
+
+    m['items'] = union.map((i) => i.toMap()).toList();
+    m['total_calories'] =
+        union.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
+    m['total_protein'] = union.fold<double>(0, (a, i) => a + i.protein).round();
+    m['total_carbs'] = union.fold<double>(0, (a, i) => a + i.carbs).round();
+    m['total_fat'] = union.fold<double>(0, (a, i) => a + i.fat).round();
+    m['total_fiber'] = union.fold<double>(0, (a, i) => a + i.fiber).round();
+    m['logged_at'] = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      await box.put(existingLogKey, m);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] append put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(existingLogKey);
   }
 
   /// Edits an existing log (used by edit-meal sheet).
