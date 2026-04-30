@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../providers/home_provider.dart';
 
 /// Horizontal 7-day calendar strip synced with workout plan from Hive.
@@ -31,9 +32,11 @@ class WeeklyCalendar extends ConsumerWidget {
     // Watch the calendar provider so this widget rebuilds when schedule changes.
     ref.watch(calendarWeekProvider);
 
+    // APK Test #6 spec §3.1 — calendar boundaries derive from IST.
+    // istMidnight strips time-of-day; mondayOfIst yields the IST Monday.
     final now = DateTime.now();
-    final todayDate = DateTime(now.year, now.month, now.day);
-    final weekStart = todayDate.subtract(Duration(days: now.weekday - 1));
+    final todayDate = istMidnight(now);
+    final weekStart = mondayOfIst(now);
     final days = List.generate(7, (i) => weekStart.add(Duration(days: i)));
     final labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -52,6 +55,7 @@ class WeeklyCalendar extends ConsumerWidget {
 
         final type = schedule?['type'] as String? ?? 'none';
         final status = schedule?['status'] as String? ?? 'none';
+        final reason = schedule?['reason'] as String? ?? '';
         final isSwapped = schedule?['is_swapped'] as bool? ?? false;
 
         final isCompleted = status == 'completed';
@@ -62,6 +66,12 @@ class WeeklyCalendar extends ConsumerWidget {
         final isPlanned =
             (isWorkout || isCustomTemplate) && status == 'planned';
         final isMissed = isPast && !isCompleted && (isWorkout || isCustomTemplate);
+        // APK Test #6 obs #7 — pre-onboarding days (joined later in
+        // the calendar week) render distinctly: light-grey 'Joined later'
+        // glyph, NOT the standard rest em-dash. Distinct from isMissed
+        // (which uses bad-tinted minus glyph) because the user wasn't
+        // on the platform — it's not a failure.
+        final isPreOnboarding = isRest && reason == 'pre_onboarding';
 
         Color bgColor;
         Color borderColor;
@@ -89,6 +99,14 @@ class WeeklyCalendar extends ConsumerWidget {
           borderColor = AppColors.line2;
           labelColor = AppColors.textMute;
           dateColor = AppColors.textPrimary;
+        } else if (isPreOnboarding) {
+          // Light-grey 'Joined later' treatment — visually de-emphasised
+          // since the user wasn't on the platform. Border slightly fainter
+          // than line2.
+          bgColor = Colors.transparent;
+          borderColor = AppColors.line2.withValues(alpha: 0.5);
+          labelColor = AppColors.textGhost;
+          dateColor = AppColors.textGhost;
         } else if (isMissed) {
           bgColor = AppColors.bad.withValues(alpha: 0.08);
           borderColor = AppColors.bad.withValues(alpha: 0.25);
@@ -150,6 +168,7 @@ class WeeklyCalendar extends ConsumerWidget {
                       isTravel: isTravel,
                       isSwapped: isSwapped,
                       isMissed: isMissed,
+                      isPreOnboarding: isPreOnboarding,
                     ),
                   ),
                 ],
@@ -169,6 +188,7 @@ class WeeklyCalendar extends ConsumerWidget {
     required bool isTravel,
     required bool isSwapped,
     required bool isMissed,
+    required bool isPreOnboarding,
   }) {
     if (isSwapped) {
       return const Text('\u{1F504}', style: TextStyle(fontSize: 8));
@@ -199,6 +219,16 @@ class WeeklyCalendar extends ConsumerWidget {
         Icons.fitness_center,
         size: 9,
         color: AppColors.textMute,
+      );
+    }
+    if (isPreOnboarding) {
+      // 'Joined later' glyph \u2014 small dot in textGhost so the cell reads
+      // as 'no activity, but not a failure'. Tooltip-equivalent surfaces
+      // via the day-detail sheet on tap.
+      return Icon(
+        Icons.circle,
+        size: 4,
+        color: AppColors.textGhost,
       );
     }
     if (isMissed) {
