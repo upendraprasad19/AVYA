@@ -1,6 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../constants/app_constants.dart';
+import '../../features/home/providers/home_provider.dart'
+    show aiInsightProvider, nutritionSummaryProvider, recentFoodLogsProvider;
+import '../../features/nutrition/providers/nutrition_provider.dart'
+    show dailyNutritionProvider, macroTargetsProvider;
+import 'hive_service.dart';
 import 'nutrition_write_source.dart';
+import 'subscription_service.dart';
+import 'sync_service.dart';
+import 'usage_counter_service.dart';
 import 'write_result.dart';
 
 /// Single canonical writer for `nutrition_logs` + `nutrition_log_items`.
@@ -33,7 +45,6 @@ class NutritionWriteService {
   /// Riverpod container set by `main.dart` so the service can invalidate
   /// providers without holding a `WidgetRef`. Mirrors Plan A's pattern
   /// in WorkoutWriteService.
-  // ignore: unused_field
   ProviderContainer? _container;
   void attachContainer(ProviderContainer c) => _container = c;
 
@@ -47,7 +58,84 @@ class NutritionWriteService {
     int? overrideTotalProtein,
     required NutritionWriteSource source,
   }) async {
-    throw UnimplementedError('Implemented in Task C-3');
+    // 1. Validate
+    if (items.isEmpty) {
+      return WriteResult.fail(
+        'logMeal: items list is empty (rejected to prevent ghost row)',
+      );
+    }
+    if (!isAllowedMealType(mealType)) {
+      return WriteResult.fail(
+        'logMeal: mealType "$mealType" not in {breakfast,lunch,dinner,snacks}',
+      );
+    }
+
+    // 2. Compute key (IST-anchored — caller passes IST DateTime)
+    final key = computeLogKey(istDate: date, mealType: mealType, items: items);
+
+    // 3. Compute totals (Atwater fallback per item if calories=0)
+    final totalCals = overrideTotalCals ??
+        items.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
+    final totalProtein = overrideTotalProtein ??
+        items.fold<double>(0, (a, i) => a + i.protein).round();
+    final totalCarbs = items.fold<double>(0, (a, i) => a + i.carbs).round();
+    final totalFat = items.fold<double>(0, (a, i) => a + i.fat).round();
+    final totalFiber = items.fold<double>(0, (a, i) => a + i.fiber).round();
+
+    final dateStr =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+    final payload = <String, dynamic>{
+      'log_key': key,
+      'date': dateStr,
+      'meal_type': mealType,
+      'total_calories': totalCals,
+      'total_protein': totalProtein,
+      'total_carbs': totalCarbs,
+      'total_fat': totalFat,
+      'total_fiber': totalFiber,
+      'items': items.map((i) => i.toMap()).toList(),
+      'source': source.name,
+      'logged_at': DateTime.now().toUtc().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    // 4. Hive write
+    try {
+      await HiveService.instance.nutritionBox.put(key, payload);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] Hive put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    // 5. Counter increment per source
+    final counterFeature = _counterFeatureForSource(source);
+    if (counterFeature != null) {
+      // Use try/catch — if SubscriptionService isn't initialized in tests
+      // we still want the write to succeed.
+      try {
+        final isPro = SubscriptionService.instance.isPro();
+        unawaited(
+            UsageCounterService.instance.increment(counterFeature, isPro));
+      } catch (e) {
+        debugPrint(
+            '[NutritionWriteService] counter increment skipped (non-fatal): $e');
+      }
+    }
+
+    // 6. Provider invalidation batch (if container attached)
+    _invalidateNutritionProviders();
+
+    // 7. Fire-and-forget cloud sync (writes BOTH nutrition_logs AND
+    //    nutrition_log_items per `_syncNutritionLogs`)
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(key);
   }
 
   /// Appends items to an existing meal log; recomputes totals.
@@ -100,6 +188,39 @@ class NutritionWriteService {
     throw UnimplementedError('Implemented in Task C-8');
   }
 
+  // ---- private helpers ----
+
+  String? _counterFeatureForSource(NutritionWriteSource s) {
+    switch (s) {
+      case NutritionWriteSource.aiText:
+      case NutritionWriteSource.aiCoachTool:
+        return AppConstants.featureAiTextLogPro;
+      case NutritionWriteSource.scan:
+        return AppConstants.featureScanMealPro;
+      case NutritionWriteSource.cart:
+        return AppConstants.featureCartAuditorPro;
+      case NutritionWriteSource.manualSearch:
+      case NutritionWriteSource.barcode:
+      case NutritionWriteSource.savedMealRelog:
+      case NutritionWriteSource.prelog:
+        return null; // free unlimited
+    }
+  }
+
+  void _invalidateNutritionProviders() {
+    final c = _container;
+    if (c == null) return;
+    try {
+      c.invalidate(dailyNutritionProvider);
+      c.invalidate(nutritionSummaryProvider);
+      c.invalidate(recentFoodLogsProvider);
+      c.invalidate(macroTargetsProvider);
+      c.invalidate(aiInsightProvider);
+    } catch (e) {
+      debugPrint('[NutritionWriteService] provider invalidate skipped: $e');
+    }
+  }
+
   // ---- private helpers exposed for testing ----
 
   @visibleForTesting
@@ -125,4 +246,10 @@ class NutritionWriteService {
 
   static bool isAllowedMealType(String type) =>
       _allowedMealTypes.contains(type);
+
+  /// Returns the feature key that increments for [source], or `null` if
+  /// no counter applies. Exposed for test verification.
+  @visibleForTesting
+  static String? counterFeatureForSource(NutritionWriteSource s) =>
+      instance._counterFeatureForSource(s);
 }
