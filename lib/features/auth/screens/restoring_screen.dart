@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -133,10 +134,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (ownerFullId == null) {
       // Boxes never got opened for this user — open them now.
       await HiveUserSession.openForUser(sessionUserId);
-      return;
-    }
-    // currentOwnerFullId is namespaced; check if it tracks sessionUserId.
-    if (!ownerFullId.contains(sessionUserId)) {
+    } else if (!ownerFullId.contains(sessionUserId)) {
+      // currentOwnerFullId is namespaced; check if it tracks sessionUserId.
       debugPrint(
           '[RestoringScreen] Hive ownership mismatch '
           '(hive=$ownerFullId, session=$sessionUserId). Force-clearing.');
@@ -149,6 +148,17 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       } catch (e) {
         debugPrint('[RestoringScreen] re-restore after ownership fix failed: $e');
       }
+    }
+
+    // Plan A Task A-10 — One-shot migration of legacy exlog_<ts>_<hash> keys
+    // to deterministic exlog_<istDateStr>_<hash(name)>. MUST run AFTER
+    // openForUser (so per-user namespaced workoutBox is open) and BEFORE
+    // any provider that lists exlog keys (home/train/calendar all key off
+    // exercise_log_index_<date>). Idempotent — guarded by configBox.
+    try {
+      await ExlogKeyMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[RestoringScreen] ExlogKeyMigrator failed (non-fatal): $e');
     }
   }
 
