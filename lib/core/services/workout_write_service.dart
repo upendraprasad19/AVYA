@@ -289,7 +289,38 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('upsertScheduled — implemented in Task A-7');
+    final dateStr = istDateStr(date);
+    final c = await _acquireLock(dateStr);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final key = scheduleKey(date);
+
+      final stamped = <String, dynamic>{
+        ...entry,
+        'date': dateStr,
+        'source': source.code,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+      await box.put(key, stamped);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.upsertScheduled] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.upsertScheduled] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(dateStr, c);
+    }
   }
 
   Future<WriteResult> rescheduleDay({
