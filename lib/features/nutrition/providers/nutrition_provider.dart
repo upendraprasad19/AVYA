@@ -927,12 +927,23 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     final nutritionBox = HiveService.instance.nutritionBox;
     final results = <Map<String, dynamic>>[];
 
-    for (final raw in nutritionBox.values) {
+    // Plan C-15: Surface BOTH legacy `is_saved_meal=true` saved meal
+    // presets AND new `meal_*` keyed templates with `is_template=true`
+    // (written by NutritionWriteService.saveMealAsTemplate). Templates
+    // missing the legacy `id` field get one synthesised from the Hive
+    // key so SavedMealsSection's RE-LOG flow still works.
+    for (final entry in nutritionBox.toMap().entries) {
+      final raw = entry.value;
       if (raw is! Map) continue;
       final item = Map<String, dynamic>.from(raw);
-      if (item['is_saved_meal'] == true) {
-        results.add(item);
+      final isLegacy = item['is_saved_meal'] == true;
+      final isTemplate = item['is_template'] == true &&
+          entry.key.toString().startsWith('meal_');
+      if (!isLegacy && !isTemplate) continue;
+      if (isTemplate && item['id'] == null) {
+        item['id'] = entry.key.toString();
       }
+      results.add(item);
     }
 
     results.sort((a, b) {
