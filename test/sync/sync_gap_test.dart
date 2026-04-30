@@ -20,12 +20,17 @@ String _src(String relativePath) {
 
 void main() {
   group('sync gap — train_provider completeWorkout', () {
-    test('fires pushSnapshot after syncWorkoutData + syncProgressNow', () {
+    test('routes through WorkoutWriteService + fires syncProgressNow', () {
       final src = _src(
           'lib/features/train/providers/train_provider.dart');
-      expect(src, contains('unawaited(SyncService.instance.syncWorkoutData())'));
+      // Plan A Task A-13: completeWorkout routes per-exercise saves +
+      // schedule completion through WorkoutWriteService. The service
+      // fires unawaited(SyncService.instance.syncWorkoutData()) +
+      // pushSnapshot internally per write — train_provider only needs
+      // to fire syncProgressNow (separate row, not in the write service).
+      expect(src, contains('WorkoutWriteService.instance.logExercise'));
+      expect(src, contains('WorkoutWriteService.instance.markCompleted'));
       expect(src, contains('unawaited(SyncService.instance.syncProgressNow())'));
-      expect(src, contains('unawaited(SyncService.instance.pushSnapshot())'));
     });
   });
 
