@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/nutrition_write_service.dart';
+import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
 import '../../../core/services/workout_write_service.dart';
@@ -1065,6 +1067,7 @@ class ToolDispatcher {
         carbs: carbs,
         fat: fat,
         servingDescription: servingDesc,
+        source: NutritionWriteSource.aiCoachTool,
       );
       return ToolExecutionResult.success(data: {
         'log_id': logId,
@@ -1124,6 +1127,7 @@ class ToolDispatcher {
                       true
                   ? meal['serving_description'] as String
                   : '1 serving',
+          source: NutritionWriteSource.prelog,
           uniqueSuffix: '$i',
         );
         results.add({
@@ -1198,21 +1202,20 @@ class ToolDispatcher {
     }
   }
 
-  /// Write a meal-by-text log to the nutrition Hive box.
+  /// Write a meal-by-text log via NutritionWriteService.
   ///
-  /// Mirrors the shape produced by `FoodLogNotifier.logFood` so the existing
-  /// dashboard readers (`dailyNutritionProvider`, `recentFoodLogsProvider`,
-  /// `nutritionSummaryProvider`) pick it up unchanged. Differences vs. that
-  /// path:
-  ///   • `source: 'ai_coach_tool'` (vs `'manual'`) for telemetry.
-  ///   • `food_id` is null — there's no underlying food-DB row; the AI parsed
-  ///     a free-text description.
-  ///   • `quantity_g` is null — the meal is logged as totals, not per-100g
-  ///     scaled, so quantity_g is meaningless. Dashboard readers treat
-  ///     `total_*` as the source of truth (verified via FoodLogNotifier:
-  ///     totals are pre-computed before put()).
-  ///   • Adds `serving_description` so the receipt-style read paths can show
-  ///     "2 katori dal + 1 katori chawal" instead of a numeric quantity.
+  /// Plan C-13 — routes through the service so:
+  ///   • Hive write + cloud projection (BOTH nutrition_logs AND
+  ///     nutrition_log_items rows) happen via the canonical writer.
+  ///   • Counter increments per source (aiCoachTool → featureAiTextLogPro;
+  ///     prelog → no counter, since speculative pre-logs shouldn't burn
+  ///     the daily AI text quota until the user confirms).
+  ///   • Provider invalidation + fire-and-forget sync runs uniformly.
+  ///
+  /// `uniqueSuffix` is preserved as a no-op for callers (prelog still
+  /// passes it). The service's content-addressed key (format:
+  /// `nlog_[date]_[mealType]_[itemsHash]`) is naturally collision-resistant
+  /// when the items list differs, which is true across all 21 prelog meals.
   Future<String> _writeFoodLogFromIntent({
     required String date,
     required String foodName,
@@ -1222,35 +1225,37 @@ class ToolDispatcher {
     required int carbs,
     required int fat,
     required String servingDescription,
+    required NutritionWriteSource source,
     String? uniqueSuffix,
   }) async {
-    final box = HiveService.instance.nutritionBox;
-    final now = DateTime.now();
-    final ts = now.millisecondsSinceEpoch;
-    // Optional suffix prevents same-millisecond ID collisions in batch writers
-    // (e.g. C.4 prelog iterates up to 21 meals; on a fast device two iterations
-    // can land in the same ms, and box.put would silently overwrite the first).
-    final id = uniqueSuffix != null ? 'nlog_${ts}_$uniqueSuffix' : 'nlog_$ts';
+    final parsed = DateTime.tryParse(date) ?? DateTime.now();
+    final result = await NutritionWriteService.instance.logMeal(
+      date: parsed,
+      mealType: mealType,
+      items: [
+        FoodItem(
+          name: foodName,
+          // Quantity is unknown — the AI parsed free-text and pre-computed
+          // total macros. Setting 0 here is safe: dashboard readers always
+          // use the precomputed total_* fields, and the items-hash stays
+          // stable per (foodName, 0).
+          quantityG: 0,
+          calories: totalCalories.toDouble(),
+          protein: protein.toDouble(),
+          carbs: carbs.toDouble(),
+          fat: fat.toDouble(),
+          fiber: 0,
+        ),
+      ],
+      overrideTotalCals: totalCalories,
+      overrideTotalProtein: protein,
+      source: source,
+    );
 
-    final logMap = <String, dynamic>{
-      'id': id,
-      'date': date,
-      'meal_type': mealType,
-      'food_id': null,
-      'food_name': foodName,
-      'quantity_g': null,
-      'total_calories': totalCalories,
-      'total_protein': protein,
-      'total_carbs': carbs,
-      'total_fat': fat,
-      'total_fiber': 0,
-      'serving_description': servingDescription,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_coach_tool',
-    };
-
-    await box.put(id, logMap);
-    return id;
+    if (!result.success) {
+      throw StateError(result.errorMessage ?? 'logMeal failed');
+    }
+    return result.logKey ?? 'nlog_unknown_$uniqueSuffix';
   }
 
   String _validateMealType(String? raw) {
