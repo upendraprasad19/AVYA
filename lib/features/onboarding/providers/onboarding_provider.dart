@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -503,6 +504,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // stale-empty. Pushing now overwrites that row with the real profile,
       // progress, and computed targets. Fire-and-forget.
       unawaited(SyncService.instance.pushSnapshot());
+
+      // APK Test #6 / Plan F-9 — capture the baseline starting-stats
+      // snapshot. Idempotent (skips if a `source='onboarding'` row
+      // already exists for this user). Fire-and-forget; failure is
+      // non-fatal — the user proceeds to home regardless. Reports →
+      // Progress Comparison reads this row as the baseline for every
+      // future diff.
+      unawaited(StatSnapshotService.instance.snapshotOnboarding());
 
       // Fire-and-forget: generate AI prediction card in background.
       // Non-blocking — user proceeds to home screen immediately.
