@@ -1253,6 +1253,16 @@ class SyncService {
                 : <String, dynamic>{};
             final itemCloudId = _deterministicId('${key}_item_$i');
             try {
+              // Per-item projection — schema-matched. nutrition_log_items
+              // currently has columns: id, log_id, food_id, food_name,
+              // quantity_g, calories, protein, carbs, fat, created_at.
+              // `fiber` is not yet a column on this table (a future
+              // migration will add it for parity with nutrition_logs);
+              // we deliberately skip it here so the upsert doesn't 400.
+              // Plan C-4 (Test #6): close obs #23 by making sure every
+              // Hive nlog_* row produces N nutrition_log_items rows on
+              // sync — verified in test/nutrition_write_service/
+              // logMeal_creates_logs_and_items_atomically_test.dart.
               await _supabase.client.from('nutrition_log_items').upsert({
                 'id': itemCloudId,
                 'log_id': logCloudId,

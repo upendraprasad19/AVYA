@@ -55,6 +55,49 @@ void main() {
     expect(m['source'], 'manualSearch');
   });
 
+  test('Hive items[] payload carries every field _syncNutritionLogs projects to nutrition_log_items', () async {
+    // Contract test for Plan C-4: closes obs #23 by ensuring every
+    // field used by `_syncNutritionLogs` per-item projection is on the
+    // Hive payload. Cloud projection currently writes:
+    //   {id, log_id, food_name, quantity_g, calories, protein, carbs, fat}
+    // (fiber column not yet on nutrition_log_items — future migration).
+    final result = await NutritionWriteService.instance.logMeal(
+      date: DateTime(2026, 5, 1),
+      mealType: 'lunch',
+      items: const [
+        FoodItem(
+            name: 'Chicken',
+            quantityG: 150,
+            calories: 250,
+            protein: 40,
+            carbs: 0,
+            fat: 10,
+            fiber: 0),
+      ],
+      source: NutritionWriteSource.aiCoachTool,
+    );
+    expect(result.success, true);
+    final raw = HiveService.instance.nutritionBox.get(result.logKey!);
+    final m = Map<String, dynamic>.from(raw as Map);
+    final items = (m['items'] as List).cast<Map>();
+    expect(items.length, 1);
+    final it = items.first;
+    // Must carry the projection-required fields
+    for (final k in const [
+      'name',
+      'quantity_g',
+      'calories',
+      'protein',
+      'carbs',
+      'fat',
+      'fiber',
+    ]) {
+      expect(it[k], isNotNull,
+          reason:
+              'Hive items[].$k must be present so SyncService._syncNutritionLogs can project nutrition_log_items rows');
+    }
+  });
+
   test('cloud projection includes per-item rows (closes obs #23)', () async {
     // Unit-level shape check — actual cloud upsert is exercised by
     // integration tests. Asserts the Hive payload carries everything
