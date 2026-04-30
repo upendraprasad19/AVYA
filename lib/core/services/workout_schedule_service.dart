@@ -3,6 +3,7 @@ import '../services/seed_service.dart';
 import '../services/workout_write_service.dart';
 import '../services/write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
@@ -329,8 +330,12 @@ class WorkoutScheduleService {
     );
 
     // 2. Delete future non-completed schedule entries
+    //
+    // APK Test #6 obs #7 + spec §9.4 — `today` is IST midnight, not
+    // device-local midnight. Prevents a Wed-evening UTC user from being
+    // bucketed into Tue's calendar slot.
     final workoutBox = _hive.workoutBox;
-    final today = DateTime(fromDate.year, fromDate.month, fromDate.day);
+    final today = istMidnight(fromDate);
     final planEndStr = _hive.configBox.get(_planEndKey) as String?;
     final planEnd = planEndStr != null ? DateTime.parse(planEndStr) : today.add(const Duration(days: 28));
 
@@ -363,13 +368,63 @@ class WorkoutScheduleService {
     // first-time generation (no existing start date). Overwriting on a
     // days-per-week change resets getCurrentWeekNumber() back to Week 1.
     final existingStart = _hive.configBox.get(_planStartKey) as String?;
-    if (existingStart == null) {
+    final isFirstGeneration = existingStart == null;
+    if (isFirstGeneration) {
       await _hive.configBox.put(_planStartKey, monday.toIso8601String());
       await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
     }
     await workoutBox.put(_planKey, plan.toMap());
     if (preferredDays != null) {
       await _hive.configBox.put('preferred_training_days', preferredDays);
+    }
+
+    // APK Test #6 obs #7 + spec §3.2 — persist phase_started_at on
+    // user_profile so RankService._qualifies and the calendar both have
+    // a single source of truth. phase_started_at = IST midnight of the
+    // onboarding day, NOT Monday-of-week (the old behaviour caused
+    // Wed-joiners to register one phantom week of "missed" Mon/Tue
+    // workouts and bumped weeksSinceSignup forward incorrectly).
+    if (isFirstGeneration) {
+      final profileMap = Map<String, dynamic>.from(
+          _hive.userBox.get('profile') as Map? ?? <String, dynamic>{});
+      profileMap['phase_started_at'] = today.toUtc().toIso8601String();
+      await _hive.userBox.put('profile', profileMap);
+    }
+
+    // APK Test #6 obs #7 — mark pre-onboarding days in the current
+    // calendar week as `pre_onboarding` rest entries (status='rest',
+    // reason='pre_onboarding', workout_name='Joined later'). Distinct
+    // from a normal rest day (reason='planned_rest') so the calendar
+    // can render them with a "Joined later" cue and the pending count
+    // can ignore them. Idempotent — only writes if no schedule exists.
+    if (isFirstGeneration) {
+      for (var d = monday;
+          d.isBefore(today);
+          d = d.add(const Duration(days: 1))) {
+        final dateKey = _dateKey(d);
+        final scheduleKey = '$_schedulePrefix$dateKey';
+        if (workoutBox.get(scheduleKey) == null) {
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: d,
+            entry: {
+              'date': dateKey,
+              'week': 1,
+              'day_of_week': d.weekday - 1,
+              'type': 'rest',
+              'workout_name': 'Joined later',
+              'workout_focus': 'You joined AVYA mid-week',
+              'exercises': <Map<String, dynamic>>[],
+              'week_character': '',
+              'status': 'rest',
+              'reason': 'pre_onboarding',
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null,
+            },
+            source: WriteSource.planGenerator,
+          );
+        }
+      }
     }
 
     // 4. Assign new workouts from today forward, skipping completed dates

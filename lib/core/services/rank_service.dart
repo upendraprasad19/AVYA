@@ -243,7 +243,21 @@ class RankService {
     final totalWorkouts =
         (progress['total_workouts_done'] as int?) ?? 0;
 
+    // APK Test #6 obs #7 + spec §3.2 — prefer phase_started_at on
+    // user_profile (set by generateAndScheduleFromDate to IST midnight
+    // of onboarding day) over auth.users.created_at. Pre-fix, a user
+    // who signed up on a Wed but onboarded the following Mon had
+    // weeksSinceSignup=1 from auth-created-at the moment they finished
+    // onboarding — the gate-relative clock should start when the plan
+    // starts, not when the auth row was minted.
     DateTime? signup = signupAt;
+    if (signup == null) {
+      final profile = UserRepository.instance.getProfile();
+      final phaseStartedAtIso = profile?['phase_started_at'] as String?;
+      if (phaseStartedAtIso != null) {
+        signup = DateTime.tryParse(phaseStartedAtIso);
+      }
+    }
     if (signup == null) {
       final raw = SupabaseService.instance.currentUser?.createdAt;
       if (raw != null) signup = DateTime.tryParse(raw);
