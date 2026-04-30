@@ -68,12 +68,15 @@ class RankGate {
   });
 }
 
-/// 10-rung ladder, ordinal 0..9. Captain is terminal.
+/// 11-rung ladder, ordinal 0..10. Captain is terminal.
+///
+/// Lt (ordinal 7, W130) inserted between SubLt and LtCdr per spec §10.1.
+/// Insignia (`2 thick stripes`) painted by `WardRankInsignia` per Plan D.
 const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'SD2',
     displayName: 'Seaman 2nd Class',
-    shortName: 'Seaman 2nd',
+    shortName: 'SEAMAN 2',
     ordinal: 0,
     minWeeks: 0,
     insigniaAsset: 'rank/sd2.svg',
@@ -83,7 +86,7 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'SD1',
     displayName: 'Seaman 1st Class',
-    shortName: 'Seaman 1st',
+    shortName: 'SEAMAN 1',
     ordinal: 1,
     minWeeks: 1,
     insigniaAsset: 'rank/sd1.svg',
@@ -93,7 +96,7 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'LS',
     displayName: 'Leading Seaman',
-    shortName: 'Leading',
+    shortName: 'LEADING SEAMAN',
     ordinal: 2,
     minWeeks: 4,
     insigniaAsset: 'rank/ls.svg',
@@ -103,7 +106,7 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'PO',
     displayName: 'Petty Officer',
-    shortName: 'Petty Off.',
+    shortName: 'PETTY OFFICER',
     ordinal: 3,
     minWeeks: 12,
     insigniaAsset: 'rank/po.svg',
@@ -113,7 +116,7 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'CPO',
     displayName: 'Chief Petty Officer',
-    shortName: 'Chief PO',
+    shortName: 'CHIEF PO',
     ordinal: 4,
     minWeeks: 26,
     insigniaAsset: 'rank/cpo.svg',
@@ -123,7 +126,7 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'MCPO',
     displayName: 'Master Chief Petty Officer',
-    shortName: 'Master Ch.',
+    shortName: 'MASTER CHIEF',
     ordinal: 5,
     minWeeks: 52,
     insigniaAsset: 'rank/mcpo.svg',
@@ -133,18 +136,29 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'SubLt',
     displayName: 'Sub Lieutenant',
-    shortName: 'Sub Lt',
+    shortName: 'SUB LT',
     ordinal: 6,
     minWeeks: 104,
     insigniaAsset: 'rank/sublt.svg',
     category: 'officer',
     isTerminal: false,
   ),
+  // NEW: Lt inserted at ordinal 7 (W130). Two thick stripes.
+  RankLadderEntry(
+    code: 'Lt',
+    displayName: 'Lieutenant',
+    shortName: 'LIEUTENANT',
+    ordinal: 7,
+    minWeeks: 130,
+    insigniaAsset: 'rank/lt.svg',
+    category: 'officer',
+    isTerminal: false,
+  ),
   RankLadderEntry(
     code: 'LtCdr',
     displayName: 'Lieutenant Commander',
-    shortName: 'Lt Cdr',
-    ordinal: 7,
+    shortName: 'LT CDR',
+    ordinal: 8,
     minWeeks: 156,
     insigniaAsset: 'rank/ltcdr.svg',
     category: 'officer',
@@ -153,8 +167,8 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'Cdr',
     displayName: 'Commander',
-    shortName: 'Cdr',
-    ordinal: 8,
+    shortName: 'CDR',
+    ordinal: 9,
     minWeeks: 208,
     insigniaAsset: 'rank/cdr.svg',
     category: 'officer',
@@ -163,8 +177,8 @@ const List<RankLadderEntry> kRankLadder = [
   RankLadderEntry(
     code: 'Capt',
     displayName: 'Captain',
-    shortName: 'Captain',
-    ordinal: 9,
+    shortName: 'CAPTAIN',
+    ordinal: 10,
     minWeeks: 260,
     insigniaAsset: 'rank/capt.svg',
     category: 'officer',
