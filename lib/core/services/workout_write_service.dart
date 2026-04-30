@@ -329,7 +329,67 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('rescheduleDay — implemented in Task A-8');
+    final fromStr = istDateStr(fromDate);
+    final toStr = istDateStr(toDate);
+    if (fromStr == toStr) {
+      return WriteResult.fail('fromDate and toDate are the same');
+    }
+
+    // Lock both dates (deterministic order to avoid deadlock)
+    final keys = [fromStr, toStr]..sort();
+    final c1 = await _acquireLock(keys[0]);
+    final c2 = await _acquireLock(keys[1]);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final fromKey = scheduleKey(fromDate);
+      final toKey = scheduleKey(toDate);
+
+      final fromRaw = box.get(fromKey);
+      final toRaw = box.get(toKey);
+      final fromEntry = fromRaw is Map
+          ? Map<String, dynamic>.from(fromRaw)
+          : <String, dynamic>{};
+      final toEntry = toRaw is Map
+          ? Map<String, dynamic>.from(toRaw)
+          : <String, dynamic>{};
+
+      // Swap (entries keep their original date stamps but the
+      // workout content moves).
+      final newFrom = <String, dynamic>{
+        ...toEntry,
+        'date': fromStr,
+        'source': source.code,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+      final newTo = <String, dynamic>{
+        ...fromEntry,
+        'date': toStr,
+        'source': source.code,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      await box.put(fromKey, newFrom);
+      await box.put(toKey, newTo);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.rescheduleDay] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(toKey);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.rescheduleDay] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(keys[1], c2);
+      _releaseLock(keys[0], c1);
+    }
   }
 
   Future<WriteResult> regenerateWeek({
@@ -338,7 +398,45 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('regenerateWeek — implemented in Task A-8');
+    final workouts = (params['workouts'] as List?)?.cast<Map>() ?? const [];
+    if (workouts.isEmpty) {
+      return WriteResult.fail('params.workouts must be non-empty');
+    }
+
+    final dateStr = istDateStr(fromDate);
+    final c = await _acquireLock('week_$dateStr');
+    try {
+      final box = HiveService.instance.workoutBox;
+
+      for (var i = 0; i < workouts.length; i++) {
+        final d = fromDate.add(Duration(days: i));
+        final m = Map<String, dynamic>.from(workouts[i]);
+        await box.put(scheduleKey(d), {
+          ...m,
+          'date': istDateStr(d),
+          'source': source.code,
+          'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.regenerateWeek] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok('week_$dateStr');
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.regenerateWeek] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('week_$dateStr', c);
+    }
   }
 
   Future<WriteResult> editLog({
