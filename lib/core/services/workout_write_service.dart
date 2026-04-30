@@ -220,7 +220,67 @@ class WorkoutWriteService {
     int? rpe,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('markCompleted — implemented in Task A-6');
+    if (workoutName.trim().isEmpty) {
+      return WriteResult.fail('workoutName must be non-empty');
+    }
+    if (durationSec < 0) {
+      return WriteResult.fail('durationSec must be >= 0');
+    }
+
+    final dateStr = istDateStr(date);
+    final c = await _acquireLock(dateStr);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final sKey = scheduleKey(date);
+      final wKey = wlogKey(date);
+
+      // 1. Update schedule entry status='completed' (preserve other fields)
+      final sched = box.get(sKey);
+      if (sched is Map) {
+        final m = Map<String, dynamic>.from(sched);
+        m['status'] = 'completed';
+        m['completed_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+        await box.put(sKey, m);
+      } else {
+        // No prior schedule (e.g. AI-coach-only logging) — synthesize one.
+        await box.put(sKey, {
+          'workout_name': workoutName,
+          'status': 'completed',
+          'type': 'logged',
+          'completed_at_ms': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+
+      // 2. Upsert wlog_<date>
+      final wlog = <String, dynamic>{
+        'workout_name': workoutName,
+        'date': dateStr,
+        'duration_seconds': durationSec,
+        if (rpe != null) 'rpe': rpe,
+        'completed_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+      await box.put(wKey, wlog);
+
+      // 3. Fire-and-forget cloud sync
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      // 4. Provider invalidation
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.markCompleted] inv: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(wKey);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.markCompleted] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(dateStr, c);
+    }
   }
 
   Future<WriteResult> upsertScheduled({
