@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -159,6 +160,14 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       await ExlogKeyMigrator.runIfNeeded();
     } catch (e) {
       debugPrint('[RestoringScreen] ExlogKeyMigrator failed (non-fatal): $e');
+    }
+
+    // Migrate nutrition logs from `nlog_<timestamp>` to deterministic
+    // `nlog_<istDateStr>_<mealType>_<hash(items)>` keys. Same guard + safety net.
+    try {
+      await NlogKeyMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[RestoringScreen] NlogKeyMigrator failed (non-fatal): $e');
     }
   }
 
