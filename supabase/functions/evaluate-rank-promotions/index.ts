@@ -21,6 +21,7 @@ import {
   highestQualified,
   LADDER,
   ranksUpTo,
+  completionRateOverWindow,
 } from "../_shared/rank_engine.ts";
 import {
   formatPromotionCeremony,
@@ -81,21 +82,32 @@ serve(async (req: Request) => {
       // Read the per-user progress row for streak + deployments.
       const { data: progressRow } = await supabase
         .from("user_progress")
-        .select("current_streak_days, deployments_complete, longest_gap_days")
+        .select("current_streak_days, deployments_complete, longest_gap_days, last_workout_date")
         .eq("user_id", userId)
         .maybeSingle();
 
+      // Compute days since last workout for the maxGapDays gate (MCPO).
+      let lastWorkoutDaysAgo: number | null = null;
+      const lastWorkoutDate = progressRow?.last_workout_date as string | undefined;
+      if (lastWorkoutDate) {
+        const last = new Date(lastWorkoutDate as string);
+        lastWorkoutDaysAgo = Math.floor(
+          (now.getTime() - last.getTime()) / (24 * 3600 * 1000),
+        );
+      }
+
       const state: EvalState = {
-        streakDays: (progressRow?.current_streak_days as number | undefined) ?? 0,
+        streak: (progressRow?.current_streak_days as number | undefined) ?? 0,
         totalWorkouts: totalWorkouts ?? 0,
         weeksSinceSignup,
         deploymentsComplete:
           (progressRow?.deployments_complete as number | undefined) ?? 0,
-        longestGapDays:
-          (progressRow?.longest_gap_days as number | undefined) ?? 0,
+        lastWorkoutDaysAgo,
+        completionRateProvider: (windowWeeks: number) =>
+          completionRateOverWindow(supabase, userId, windowWeeks),
       };
 
-      const winner = highestQualified(state);
+      const winner = await highestQualified(state);
       const eligibleCodes = ranksUpTo(winner.code).map((r) => r.code);
 
       // What's already on file?
@@ -114,7 +126,7 @@ serve(async (req: Request) => {
           rank_code: c,
           trigger_type: "combined",
           trigger_metadata: {
-            streak: state.streakDays,
+            streak: state.streak,
             total_workouts: state.totalWorkouts,
             weeks: state.weeksSinceSignup,
             source: "cron",
