@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 
@@ -21,6 +22,10 @@ Future<void> wwsTestSetup() async {
 
   Hive.init(_tempDir!.path);
 
+  // Bypass GuardedBox ownership assertion — Supabase isn't initialised
+  // in unit tests. Reset in teardown so leakage doesn't cross suites.
+  GuardedBox.testBypassOwnership = true;
+
   // HiveService.instance.init() registers adapters + opens shared
   // boxes. Must be called before HiveUserSession.openForUser so the
   // user-scoped boxes pick up the same adapter registry.
@@ -33,6 +38,11 @@ Future<void> wwsTestSetup() async {
 }
 
 Future<void> wwsTestTeardown() async {
+  GuardedBox.testBypassOwnership = false;
+  // Close all user-scoped boxes + null out HiveUserSession static state.
+  // Without this, the next test's openForUser is a no-op (idempotent
+  // same-id short-circuit) but the box files have been deleted.
+  await HiveUserSession.closeAll();
   await Hive.deleteFromDisk();
   await Hive.close();
   if (_tempDir != null && await _tempDir!.exists()) {

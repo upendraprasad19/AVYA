@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import 'hive_service.dart';
 import 'sync_service.dart';
@@ -57,7 +57,160 @@ class WorkoutWriteService {
     required WriteSource source,
     WidgetRef? ref,
   }) async {
-    throw UnimplementedError('logExercise — implemented in Task A-4');
+    // 1. Validate
+    if (exerciseName.trim().isEmpty) {
+      return WriteResult.fail('exerciseName must be non-empty');
+    }
+    if (sets.isEmpty) {
+      return WriteResult.fail('sets must be non-empty');
+    }
+    for (final s in sets) {
+      if (s.weightKg < 0) return WriteResult.fail('weightKg must be >= 0');
+      if (s.reps < 0) return WriteResult.fail('reps must be >= 0');
+    }
+
+    final dateStr = istDateStr(date);
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+
+    try {
+      final box = HiveService.instance.workoutBox;
+      final key = exlogKey(date, exerciseName);
+      final existing = box.get(key);
+
+      // 2. Build merged sets[] list with 60s dedup
+      final List<ExerciseSet> mergedSets;
+      if (existing != null) {
+        final m = (existing as Map).cast<String, dynamic>();
+        final existingSets = (m['sets'] as List? ?? const [])
+            .cast<Map>()
+            .map((e) => ExerciseSet.fromMap(e))
+            .toList();
+
+        final List<ExerciseSet> additions = [];
+        for (final candidate in sets) {
+          // Stamp loggedAtMs if caller didn't.
+          final stamped = candidate.loggedAtMs == null
+              ? ExerciseSet(
+                  weightKg: candidate.weightKg,
+                  reps: candidate.reps,
+                  durationSec: candidate.durationSec,
+                  loggedAtMs: DateTime.now().millisecondsSinceEpoch,
+                )
+              : candidate;
+
+          // Dedup against existing sets (60s window).
+          final isDup = existingSets.any((existing) =>
+              stamped.isDuplicateWithin(existing, windowMs: kDedupWindowMs));
+          if (!isDup) additions.add(stamped);
+        }
+
+        mergedSets = [...existingSets, ...additions];
+      } else {
+        mergedSets = sets
+            .map((s) => s.loggedAtMs == null
+                ? ExerciseSet(
+                    weightKg: s.weightKg,
+                    reps: s.reps,
+                    durationSec: s.durationSec,
+                    loggedAtMs: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : s)
+            .toList();
+      }
+
+      // 3. Recompute aggregates
+      final totalReps = mergedSets.fold<int>(0, (a, s) => a + s.reps);
+      final maxWeight = mergedSets.fold<double>(
+          0.0, (a, s) => s.weightKg > a ? s.weightKg : a);
+      final volume = mergedSets.fold<double>(
+          0.0, (a, s) => a + (s.weightKg * s.reps));
+
+      final entry = <String, dynamic>{
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        'sets': mergedSets.map((s) => s.toMap()).toList(),
+        'set_number': mergedSets.length,
+        'reps_completed': totalReps,
+        'weight_kg': maxWeight,
+        'volume_kg': volume,
+        'logging_type': _inferLoggingType(mergedSets),
+        'source': source.code,
+        'notes': ?notes,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // 4. PR rescan (chronological — strict > comparison; existing
+      // pattern from EditWorkoutLogSheet).
+      entry['is_pr'] = _rescanPrFor(box, exerciseName, dateStr, maxWeight);
+
+      // 5. Write Hive
+      await box.put(key, entry);
+
+      // 6. Update exercise_log_index_<date>
+      _appendToIndex(box, dateStr, key);
+
+      // 7. Fire-and-forget cloud sync
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      // 8. Provider invalidation
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService] invalidation failed: $e\n$st');
+        }
+      }
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.logExercise] $e\n$st');
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  String _inferLoggingType(List<ExerciseSet> sets) {
+    final hasDur = sets.any((s) => s.durationSec != null && s.durationSec! > 0);
+    final hasWeight = sets.any((s) => s.weightKg > 0);
+    if (hasDur && !hasWeight) return 'timed';
+    if (hasWeight) return 'weight_reps';
+    return 'bodyweight_reps';
+  }
+
+  bool _rescanPrFor(
+    Box box,
+    String exerciseName,
+    String dateStr,
+    double maxWeight,
+  ) {
+    final lower = exerciseName.toLowerCase().trim();
+    double bestBefore = 0.0;
+    for (final k in box.keys) {
+      if (!k.toString().startsWith('exlog_')) continue;
+      final v = box.get(k);
+      if (v is! Map) continue;
+      final n = (v['exercise_name'] as String?)?.toLowerCase().trim();
+      if (n != lower) continue;
+      final d = v['date'] as String?;
+      if (d == null) continue;
+      if (d.compareTo(dateStr) >= 0) continue; // strict before
+      final w = (v['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      if (w > bestBefore) bestBefore = w;
+    }
+    return maxWeight > bestBefore;
+  }
+
+  void _appendToIndex(Box box, String dateStr, String key) {
+    final indexKey = 'exercise_log_index_$dateStr';
+    final raw = box.get(indexKey);
+    final List<String> list = (raw is List)
+        ? raw.cast<String>().toList()
+        : <String>[];
+    if (!list.contains(key)) list.add(key);
+    box.put(indexKey, list);
   }
 
   Future<WriteResult> markCompleted({
