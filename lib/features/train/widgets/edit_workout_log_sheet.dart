@@ -1,11 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -81,18 +79,19 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 
   // ── Save handler ──────────────────────────────────────────────
+  // Plan A Task A-14: per-row edits route through WorkoutWriteService.editLog.
+  // We construct a per-loggingType updates map (excluding the canonical
+  // `sets` key — service only recomputes from sets when present, and our
+  // existing schema uses `sets_detail` with field names that don't match
+  // ExerciseSet.fromMap exactly). Service handles chronological PR rescan
+  // across all logs of the exercise and fire-and-forget sync.
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
 
-    final box = HiveService.instance.workoutBox;
-    final editedExerciseNames = <String>{};
-
     try {
       for (final row in _rows) {
-        final existing = box.get(row.logId);
-        if (existing is! Map) continue;
-        final log = Map<String, dynamic>.from(existing);
+        final updates = <String, dynamic>{};
 
         if (row.hasPerSetData) {
           // ── Per-set data path: recompute aggregates from individual sets ──
@@ -136,50 +135,49 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
 
           final sets = row.setRows.length;
 
-          // Write aggregates + per-set data
           switch (row.loggingType) {
             case 'weight_reps':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = totalReps;
-              log['weight_kg'] = maxWeight;
-              log['volume_kg'] = volumeKg;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = totalReps;
+              updates['weight_kg'] = maxWeight;
+              updates['volume_kg'] = volumeKg;
               break;
             case 'bodyweight_reps':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = totalReps;
-              log['volume_kg'] = 0.0;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = totalReps;
+              updates['volume_kg'] = 0.0;
               break;
             case 'weighted_bodyweight':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = totalReps;
-              log['weight_kg'] = maxWeight;
-              log['volume_kg'] = volumeKg;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = totalReps;
+              updates['weight_kg'] = maxWeight;
+              updates['volume_kg'] = volumeKg;
               break;
             case 'timed':
-              log['sets_completed'] = sets;
-              log['duration_seconds'] = totalDuration;
-              log['volume_kg'] = 0.0;
+              updates['sets_completed'] = sets;
+              updates['duration_seconds'] = totalDuration;
+              updates['volume_kg'] = 0.0;
               break;
             case 'cardio':
-              log['duration_seconds'] = totalDuration;
-              log['distance_km'] = totalDistance;
-              log['volume_kg'] = 0.0;
+              updates['duration_seconds'] = totalDuration;
+              updates['distance_km'] = totalDistance;
+              updates['volume_kg'] = 0.0;
               break;
             case 'distance':
-              log['distance_km'] = totalDistance;
-              log['weight_kg'] = maxWeight;
-              log['volume_kg'] = 0.0;
+              updates['distance_km'] = totalDistance;
+              updates['weight_kg'] = maxWeight;
+              updates['volume_kg'] = 0.0;
               break;
             default:
-              log['sets_completed'] = sets;
-              log['reps_completed'] = totalReps;
-              log['weight_kg'] = maxWeight;
-              log['volume_kg'] = volumeKg;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = totalReps;
+              updates['weight_kg'] = maxWeight;
+              updates['volume_kg'] = volumeKg;
           }
 
-          log['sets_detail'] = setsDetail;
-          log['best_single_set_reps'] = bestSingleSetReps;
-          log['best_single_set_duration'] = bestSingleSetDuration;
+          updates['sets_detail'] = setsDetail;
+          updates['best_single_set_reps'] = bestSingleSetReps;
+          updates['best_single_set_duration'] = bestSingleSetDuration;
         } else {
           // ── Legacy flattened path (old logs without sets_detail) ──
           final sets = int.tryParse(row.setsCtrl.text) ?? 0;
@@ -190,57 +188,56 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
 
           switch (row.loggingType) {
             case 'weight_reps':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = reps;
-              log['weight_kg'] = weight;
-              log['volume_kg'] = weight * reps;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = reps;
+              updates['weight_kg'] = weight;
+              updates['volume_kg'] = weight * reps;
               break;
             case 'bodyweight_reps':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = reps;
-              log['volume_kg'] = 0.0;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = reps;
+              updates['volume_kg'] = 0.0;
               break;
             case 'weighted_bodyweight':
-              log['sets_completed'] = sets;
-              log['reps_completed'] = reps;
-              log['weight_kg'] = weight;
-              log['volume_kg'] = weight * reps;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = reps;
+              updates['weight_kg'] = weight;
+              updates['volume_kg'] = weight * reps;
               break;
             case 'timed':
-              log['sets_completed'] = sets;
-              log['duration_seconds'] = duration;
-              log['volume_kg'] = 0.0;
+              updates['sets_completed'] = sets;
+              updates['duration_seconds'] = duration;
+              updates['volume_kg'] = 0.0;
               break;
             case 'cardio':
-              log['duration_seconds'] = duration;
-              log['distance_km'] = distance;
-              log['volume_kg'] = 0.0;
+              updates['duration_seconds'] = duration;
+              updates['distance_km'] = distance;
+              updates['volume_kg'] = 0.0;
               break;
             case 'distance':
-              log['distance_km'] = distance;
-              log['weight_kg'] = weight;
-              log['volume_kg'] = 0.0;
+              updates['distance_km'] = distance;
+              updates['weight_kg'] = weight;
+              updates['volume_kg'] = 0.0;
               break;
             default:
-              log['sets_completed'] = sets;
-              log['reps_completed'] = reps;
-              log['weight_kg'] = weight;
-              log['volume_kg'] = weight * reps;
+              updates['sets_completed'] = sets;
+              updates['reps_completed'] = reps;
+              updates['weight_kg'] = weight;
+              updates['volume_kg'] = weight * reps;
           }
         }
 
-        log['edited_at'] = DateTime.now().toIso8601String();
-        await box.put(row.logId, log);
+        updates['edited_at'] = DateTime.now().toIso8601String();
 
-        final exName = log['exercise_name'] as String?;
-        if (exName != null) editedExerciseNames.add(exName);
-      }
-
-      // Recompute is_pr flags for every edited exercise across all history.
-      // A log is a PR iff its value is strictly greater than every prior log
-      // of the same exercise (ordered by date ascending).
-      for (final name in editedExerciseNames) {
-        _recomputePrFlagsForExercise(name);
+        final result = await WorkoutWriteService.instance.editLog(
+          logKey: row.logId,
+          updates: updates,
+          source: WriteSource.editSheet,
+        );
+        if (!result.success) {
+          debugPrint(
+              '[EditWorkoutLogSheet] editLog failed for ${row.logId}: ${result.errorMessage}');
+        }
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -249,19 +246,14 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     if (!mounted) return;
 
     // Invalidate every provider the completion flow invalidates. Riverpod
-    // batches these within the same frame.
+    // batches these within the same frame. Service already fired
+    // syncWorkoutData + pushSnapshot fire-and-forget per row.
     ref.invalidate(currentPlanProvider);
     ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(allExercisePRsProvider);
-
-    // Fire-and-forget cloud sync so the corrected log reaches Supabase and
-    // the AI coach snapshot catches up. `unawaited()` suppresses the
-    // unhandled-Future lint; either future's error must not surface to UI.
-    unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
 
     // Capture the messenger before pop — context becomes invalid after.
     final messenger = ScaffoldMessenger.of(context);
@@ -279,103 +271,9 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     );
   }
 
-  /// Walks every exlog for a given exercise name chronologically and rewrites
-  /// the `is_pr` flag. PR rule:
-  ///   - `weight_reps` / `weighted_bodyweight`: strict increase in `weight_kg`
-  ///   - `bodyweight_reps`: strict increase in per-set best reps
-  ///     (reads `best_single_set_reps`, falls back to estimated average)
-  ///   - `timed`: strict increase in per-set best duration
-  ///     (reads `best_single_set_duration`, falls back to estimated average)
-  ///   - `cardio` / `distance`: strict increase in `distance_km`
-  /// The earliest log with a baseline value is NOT a PR (needs something to
-  /// beat). This matches `completeWorkout`'s "must beat prior best" rule.
-  void _recomputePrFlagsForExercise(String name) {
-    final box = HiveService.instance.workoutBox;
-    final lower = name.toLowerCase();
-
-    // Collect all logs for this exercise.
-    final entries = <_PrScanEntry>[];
-    for (final key in box.keys) {
-      if (key is! String || !key.startsWith('exlog_')) continue;
-      final raw = box.get(key);
-      if (raw is! Map) continue;
-      final map = Map<String, dynamic>.from(raw);
-      if (map['type'] != 'exercise_log') continue;
-      final exName = (map['exercise_name'] as String?) ?? '';
-      if (exName.toLowerCase() != lower) continue;
-      final dateStr = (map['date'] as String?) ?? '';
-      entries.add(_PrScanEntry(key: key, dateStr: dateStr, map: map));
-    }
-
-    if (entries.isEmpty) return;
-
-    // Sort chronologically. Ties use created_at as a secondary key.
-    entries.sort((a, b) {
-      final d = a.dateStr.compareTo(b.dateStr);
-      if (d != 0) return d;
-      final aC = (a.map['created_at'] as String?) ?? '';
-      final bC = (b.map['created_at'] as String?) ?? '';
-      return aC.compareTo(bC);
-    });
-
-    double runningMaxWeight = 0;
-    int runningMaxReps = 0;
-    int runningMaxDuration = 0;
-    double runningMaxDistance = 0;
-
-    for (final e in entries) {
-      final loggingType = (e.map['logging_type'] as String?) ?? 'weight_reps';
-      final weight = (e.map['weight_kg'] as num?)?.toDouble() ?? 0;
-      final distance = (e.map['distance_km'] as num?)?.toDouble() ?? 0;
-
-      // For reps and duration, use per-set best when available, else estimate
-      final bestReps = (e.map['best_single_set_reps'] as int?) ??
-          (((e.map['reps_completed'] as num?)?.toInt() ?? 0) > 0 &&
-                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
-              ? ((e.map['reps_completed'] as num?)?.toInt() ?? 0) ~/
-                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
-              : 0);
-      final bestDuration = (e.map['best_single_set_duration'] as int?) ??
-          (((e.map['duration_seconds'] as num?)?.toInt() ?? 0) > 0 &&
-                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1) > 0
-              ? ((e.map['duration_seconds'] as num?)?.toInt() ?? 0) ~/
-                  ((e.map['sets_completed'] as num?)?.toInt() ?? 1)
-              : 0);
-
-      bool isPr = false;
-      switch (loggingType) {
-        case 'weight_reps':
-        case 'weighted_bodyweight':
-          if (weight > runningMaxWeight && runningMaxWeight > 0) isPr = true;
-          if (weight > runningMaxWeight) runningMaxWeight = weight;
-          break;
-        case 'bodyweight_reps':
-          if (bestReps > runningMaxReps && runningMaxReps > 0) isPr = true;
-          if (bestReps > runningMaxReps) runningMaxReps = bestReps;
-          break;
-        case 'timed':
-          if (bestDuration > runningMaxDuration && runningMaxDuration > 0) {
-            isPr = true;
-          }
-          if (bestDuration > runningMaxDuration) {
-            runningMaxDuration = bestDuration;
-          }
-          break;
-        case 'cardio':
-        case 'distance':
-          if (distance > runningMaxDistance && runningMaxDistance > 0) {
-            isPr = true;
-          }
-          if (distance > runningMaxDistance) runningMaxDistance = distance;
-          break;
-      }
-
-      if (e.map['is_pr'] != isPr) {
-        e.map['is_pr'] = isPr;
-        box.put(e.key, e.map);
-      }
-    }
-  }
+  // PR rescan now handled by WorkoutWriteService.editLog (via service-internal
+  // _rescanAllPrsFor). Removed local _recomputePrFlagsForExercise + _PrScanEntry
+  // as part of Plan A Task A-14.
 
   // ── UI ────────────────────────────────────────────────────────
   @override
@@ -1029,9 +927,3 @@ class _ExerciseEditRow {
   }
 }
 
-class _PrScanEntry {
-  final String key;
-  final String dateStr;
-  final Map<String, dynamic> map;
-  _PrScanEntry({required this.key, required this.dateStr, required this.map});
-}

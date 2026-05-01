@@ -37,9 +37,13 @@ class WardStatusStrip extends StatelessWidget {
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        // APK Test #6 obs #9 — pass 0 so StreakBadge skips its inline
+        // freeze branch entirely. WardFreezeBadge below is the canonical
+        // surface; auto-hides when freezesAvailable <= 0 so this is a
+        // no-op for users without freezes.
         StreakBadge(
           days: streakDays,
-          freezesAvailable: freezesAvailable,
+          freezesAvailable: 0,
         ),
         WardFreezeBadge(count: freezesAvailable),
         ?rankChip,

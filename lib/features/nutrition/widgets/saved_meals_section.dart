@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -202,11 +203,28 @@ class SavedMealsSection extends ConsumerWidget {
                     entry.$2,
                     style: AppTypography.h3,
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.of(ctx).pop();
-                    ref
-                        .read(savedMealsProvider.notifier)
-                        .relogSavedMeal(meal, mealType: entry.$1);
+                    final id = meal['id'] as String?;
+                    final isTemplate = meal['is_template'] == true ||
+                        (id != null && id.startsWith('meal_'));
+                    if (isTemplate && id != null) {
+                      // Plan C-15: route new `meal_*` keyed templates
+                      // through NutritionWriteService so the cloud
+                      // projection + provider invalidation runs in
+                      // one atomic place.
+                      await NutritionWriteService.instance.relogSavedMeal(
+                        savedMealKey: id,
+                        date: DateTime.now(),
+                        mealType: entry.$1,
+                      );
+                      ref.invalidate(savedMealsProvider);
+                    } else {
+                      await ref
+                          .read(savedMealsProvider.notifier)
+                          .relogSavedMeal(meal, mealType: entry.$1);
+                    }
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(

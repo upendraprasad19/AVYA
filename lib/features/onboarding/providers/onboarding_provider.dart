@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -361,6 +362,52 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // carry over avatar_url / banner_url from a previously logged-in account.
       await _userRepo.saveProfile(profile);
 
+      // APK Test #6 obs #5 — seed weight_logs with onboarding weight so
+      // the home screen's WeightHistoryNotifier shows the user's starting
+      // weight as the first point on the sparkline immediately. Without
+      // this seed, the chart was blank until the user manually logged a
+      // weight from Home → Quick Actions.
+      //
+      // Hive key shape `wlog_<isoTimestamp>` mirrors the convention used
+      // by WeightLogRepository.logWeight (lib/shared/repositories/health_repository.dart).
+      if (currentWeightKg > 0) {
+        try {
+          final now = DateTime.now();
+          final isoTs = now.toIso8601String();
+          // Inline IST date until F-4 creates lib/core/utils/ist_date.dart.
+          final dateStr = now
+              .toUtc()
+              .add(const Duration(hours: 5, minutes: 30))
+              .toIso8601String()
+              .substring(0, 10);
+          final key = 'wlog_$isoTs';
+
+          // Idempotent: skip if a weight_log already exists for today (defensive
+          // — a re-run of completeOnboarding shouldn't double-seed).
+          final existing = _hive.healthBox.values.whereType<Map>().any((row) {
+            return row['type'] == 'weight_log' && row['date'] == dateStr;
+          });
+
+          if (!existing) {
+            await _hive.healthBox.put(key, {
+              'type': 'weight_log',
+              'date': dateStr,
+              'weight_kg': currentWeightKg,
+              'source': 'onboarding', // marker for analytics / debugging
+              'created_at': isoTs,
+            });
+
+            // CLAUDE.md §15 fire-and-forget — push weight_log to Supabase so the
+            // AI coach context (rolling-context Edge Function) sees it on the
+            // first post-onboarding snapshot push.
+            unawaited(SyncService.instance.syncWeightNow());
+          }
+        } catch (e) {
+          // Defensive — Hive write failure must not block onboarding completion.
+          debugPrint('[OnboardingNotifier] weight_log seed failed: $e');
+        }
+      }
+
       // Ensure exercise data is seeded before plan generation.
       // Without exercises, PlanGenerator produces 0-exercise (all-rest) workouts.
       final exerciseBox = _hive.exerciseBox;
@@ -457,6 +504,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // stale-empty. Pushing now overwrites that row with the real profile,
       // progress, and computed targets. Fire-and-forget.
       unawaited(SyncService.instance.pushSnapshot());
+
+      // APK Test #6 / Plan F-9 — capture the baseline starting-stats
+      // snapshot. Idempotent (skips if a `source='onboarding'` row
+      // already exists for this user). Fire-and-forget; failure is
+      // non-fatal — the user proceeds to home regardless. Reports →
+      // Progress Comparison reads this row as the baseline for every
+      // future diff.
+      unawaited(StatSnapshotService.instance.snapshotOnboarding());
 
       // Fire-and-forget: generate AI prediction card in background.
       // Non-blocking — user proceeds to home screen immediately.

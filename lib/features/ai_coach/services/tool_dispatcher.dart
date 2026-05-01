@@ -4,8 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/nutrition_write_service.dart';
+import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
+import '../../../core/services/workout_write_service.dart';
+import '../../../core/services/write_result.dart';
 import '../../home/providers/home_provider.dart'
     show
         calendarWeekProvider,
@@ -83,6 +87,20 @@ class ToolDispatcher {
         'This suggestion is over an hour old — ask the coach again to refresh.',
       );
     }
+
+    // 1a. Idempotency guard (B-4): refuse double-dispatch.
+    // The Hive marker is written AFTER successful execution below; if it's
+    // already there, this intent has been applied. Returning success keeps
+    // the UI calm — no error toast, no second handler run.
+    final markerKey = 'intent_${intent.id}_dispatched_at';
+    try {
+      final existing = HiveService.instance.coachBox.get(markerKey);
+      if (existing != null) {
+        debugPrint(
+            '[tool_dispatcher] intent ${intent.id} already dispatched — skip');
+        return const ToolExecutionResult.success();
+      }
+    } catch (_) {/* never block on telemetry */}
 
     try {
       // 2-3. Route by type
@@ -264,16 +282,37 @@ class ToolDispatcher {
     // Resolve exercise name from local library (Hive exerciseBox or customBox).
     final name = _resolveExerciseName(exerciseId) ?? exerciseId;
 
-    final logId = await WorkoutRepository.instance.logSetWithPrRescan(
-      exerciseId: exerciseId,
-      exerciseName: name,
-      weightKg: weightKg,
-      reps: reps,
-      sets: sets,
-      // logging type and date default per the helper
+    // Plan A A-11: route through WorkoutWriteService.logExercise — ONE call
+    // with sets[length=N] yields ONE deterministic exlog row, replacing the
+    // old per-set logSetWithPrRescan loop that produced N duplicate rows
+    // (observation #16 root cause).
+    final dateRaw = intent.payload['date'] as String?;
+    final date = (dateRaw == null || dateRaw.isEmpty)
+        ? DateTime.now()
+        : (DateTime.tryParse(dateRaw) ?? DateTime.now());
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final exerciseSets = List<ExerciseSet>.generate(
+      sets,
+      (i) => ExerciseSet(
+        weightKg: weightKg,
+        reps: reps,
+        loggedAtMs: nowMs + i, // tiny offset prevents 60s-window self-dedup
+      ),
     );
+
+    final result = await WorkoutWriteService.instance.logExercise(
+      date: date,
+      exerciseName: name,
+      sets: exerciseSets,
+      source: WriteSource.aiCoach,
+      // ref: null — dispatcher's outer flow handles invalidation + sync.
+    );
+    if (!result.success) {
+      return ToolExecutionResult.failure(
+          result.errorMessage ?? 'Could not log set.');
+    }
     return ToolExecutionResult.success(
-        data: {'log_id': logId, 'exercise_name': name});
+        data: {'log_id': result.logKey, 'exercise_name': name});
   }
 
   /// D.2 logPR — wrapper over `logSetWithPrRescan` for PR claims.
@@ -340,7 +379,24 @@ class ToolDispatcher {
           'Invalid mark_workout_complete intent payload.');
     }
 
-    await WorkoutRepository.instance.markWorkoutCompleted(parsed);
+    // Plan A A-12: route through WorkoutWriteService.markCompleted so
+    // schedule_<date>.status='completed' AND wlog_<date> are written
+    // atomically with consistent IST date stamping + source='ai_coach'.
+    final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
+    final durationSec =
+        (intent.payload['duration_seconds'] as num?)?.toInt() ?? 0;
+    final rpe = (intent.payload['rpe'] as num?)?.toInt();
+    final result = await WorkoutWriteService.instance.markCompleted(
+      date: parsed,
+      workoutName: workoutName,
+      durationSec: durationSec,
+      rpe: rpe,
+      // ref: null — outer dispatcher flow handles invalidation + sync.
+    );
+    if (!result.success) {
+      return ToolExecutionResult.failure(
+          result.errorMessage ?? 'Could not mark workout complete.');
+    }
     return ToolExecutionResult.success(data: {'date': date});
   }
 
@@ -520,7 +576,14 @@ class ToolDispatcher {
             updated['day_of_week'] = destDate.weekday - 1; // 0=Mon..6=Sun
             updated['rescheduled_via'] = 'ai_coach';
             updated['rescheduled_at'] = DateTime.now().toIso8601String();
-            await box.put('schedule_${move.toDate}', updated);
+            // Plan A A-12: route through WorkoutWriteService for source +
+            // updated_at_ms stamping. The service uses scheduleKey(date)
+            // which matches the legacy 'schedule_<YYYY-MM-DD>' format.
+            await WorkoutWriteService.instance.upsertScheduled(
+              date: destDate,
+              entry: updated,
+              source: WriteSource.aiCoach,
+            );
             // Only delete the old key if it isn't the same as the new one
             // (defensive — shouldn't happen but a no-op move would dupe).
             if (move.fromDate != move.toDate) {
@@ -586,7 +649,17 @@ class ToolDispatcher {
         if (existing is Map && existing['status'] == 'completed') {
           continue;
         }
-        await box.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
@@ -642,7 +715,17 @@ class ToolDispatcher {
           // Concurrent-edit safety net.
           continue;
         }
-        await box.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
@@ -771,7 +854,17 @@ class ToolDispatcher {
           // Concurrent-edit safety net — completed days stay sacred.
           continue;
         }
-        await wbox.put('schedule_$date', schedule);
+        // Plan A A-12: route through WorkoutWriteService.
+        final parsed = DateTime.tryParse(date);
+        if (parsed == null) {
+          errors.add('$date: invalid date');
+          continue;
+        }
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: parsed,
+          entry: Map<String, dynamic>.from(schedule),
+          source: WriteSource.aiCoach,
+        );
         results.add({
           'date': date,
           'workout': schedule['workout_name'],
@@ -953,6 +1046,13 @@ class ToolDispatcher {
     });
   }
 
+  /// B-10 (APK Test #6 spec §5.5): chat-mode food log MUST decrement the
+  /// same visible counter as the LogFood sheet AI tab. The increment is
+  /// wired centrally by NutritionWriteService.logMeal — passing
+  /// `source: NutritionWriteSource.aiCoachTool` below maps to
+  /// `featureAiTextLogPro`. Server-side cap enforcement still lives in
+  /// migration 024 (food_text_daily_limit_reached trigger). Do NOT
+  /// duplicate the increment here — single source of truth is the writer.
   Future<ToolExecutionResult> _executeLogMealByText(ToolIntent intent) async {
     final p = intent.payload;
     final description = p['original_description'] as String?;
@@ -988,6 +1088,7 @@ class ToolDispatcher {
         carbs: carbs,
         fat: fat,
         servingDescription: servingDesc,
+        source: NutritionWriteSource.aiCoachTool,
       );
       return ToolExecutionResult.success(data: {
         'log_id': logId,
@@ -1047,6 +1148,7 @@ class ToolDispatcher {
                       true
                   ? meal['serving_description'] as String
                   : '1 serving',
+          source: NutritionWriteSource.prelog,
           uniqueSuffix: '$i',
         );
         results.add({
@@ -1121,21 +1223,20 @@ class ToolDispatcher {
     }
   }
 
-  /// Write a meal-by-text log to the nutrition Hive box.
+  /// Write a meal-by-text log via NutritionWriteService.
   ///
-  /// Mirrors the shape produced by `FoodLogNotifier.logFood` so the existing
-  /// dashboard readers (`dailyNutritionProvider`, `recentFoodLogsProvider`,
-  /// `nutritionSummaryProvider`) pick it up unchanged. Differences vs. that
-  /// path:
-  ///   • `source: 'ai_coach_tool'` (vs `'manual'`) for telemetry.
-  ///   • `food_id` is null — there's no underlying food-DB row; the AI parsed
-  ///     a free-text description.
-  ///   • `quantity_g` is null — the meal is logged as totals, not per-100g
-  ///     scaled, so quantity_g is meaningless. Dashboard readers treat
-  ///     `total_*` as the source of truth (verified via FoodLogNotifier:
-  ///     totals are pre-computed before put()).
-  ///   • Adds `serving_description` so the receipt-style read paths can show
-  ///     "2 katori dal + 1 katori chawal" instead of a numeric quantity.
+  /// Plan C-13 — routes through the service so:
+  ///   • Hive write + cloud projection (BOTH nutrition_logs AND
+  ///     nutrition_log_items rows) happen via the canonical writer.
+  ///   • Counter increments per source (aiCoachTool → featureAiTextLogPro;
+  ///     prelog → no counter, since speculative pre-logs shouldn't burn
+  ///     the daily AI text quota until the user confirms).
+  ///   • Provider invalidation + fire-and-forget sync runs uniformly.
+  ///
+  /// `uniqueSuffix` is preserved as a no-op for callers (prelog still
+  /// passes it). The service's content-addressed key (format:
+  /// `nlog_[date]_[mealType]_[itemsHash]`) is naturally collision-resistant
+  /// when the items list differs, which is true across all 21 prelog meals.
   Future<String> _writeFoodLogFromIntent({
     required String date,
     required String foodName,
@@ -1145,35 +1246,37 @@ class ToolDispatcher {
     required int carbs,
     required int fat,
     required String servingDescription,
+    required NutritionWriteSource source,
     String? uniqueSuffix,
   }) async {
-    final box = HiveService.instance.nutritionBox;
-    final now = DateTime.now();
-    final ts = now.millisecondsSinceEpoch;
-    // Optional suffix prevents same-millisecond ID collisions in batch writers
-    // (e.g. C.4 prelog iterates up to 21 meals; on a fast device two iterations
-    // can land in the same ms, and box.put would silently overwrite the first).
-    final id = uniqueSuffix != null ? 'nlog_${ts}_$uniqueSuffix' : 'nlog_$ts';
+    final parsed = DateTime.tryParse(date) ?? DateTime.now();
+    final result = await NutritionWriteService.instance.logMeal(
+      date: parsed,
+      mealType: mealType,
+      items: [
+        FoodItem(
+          name: foodName,
+          // Quantity is unknown — the AI parsed free-text and pre-computed
+          // total macros. Setting 0 here is safe: dashboard readers always
+          // use the precomputed total_* fields, and the items-hash stays
+          // stable per (foodName, 0).
+          quantityG: 0,
+          calories: totalCalories.toDouble(),
+          protein: protein.toDouble(),
+          carbs: carbs.toDouble(),
+          fat: fat.toDouble(),
+          fiber: 0,
+        ),
+      ],
+      overrideTotalCals: totalCalories,
+      overrideTotalProtein: protein,
+      source: source,
+    );
 
-    final logMap = <String, dynamic>{
-      'id': id,
-      'date': date,
-      'meal_type': mealType,
-      'food_id': null,
-      'food_name': foodName,
-      'quantity_g': null,
-      'total_calories': totalCalories,
-      'total_protein': protein,
-      'total_carbs': carbs,
-      'total_fat': fat,
-      'total_fiber': 0,
-      'serving_description': servingDescription,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_coach_tool',
-    };
-
-    await box.put(id, logMap);
-    return id;
+    if (!result.success) {
+      throw StateError(result.errorMessage ?? 'logMeal failed');
+    }
+    return result.logKey ?? 'nlog_unknown_$uniqueSuffix';
   }
 
   String _validateMealType(String? raw) {

@@ -21,7 +21,9 @@ class ProfileIdentity extends StatelessWidget {
   final String? bannerUrl;
   final VoidCallback onReplaceAvatar;
   final VoidCallback onReplaceBanner;
-  final VoidCallback onTapEdit;
+  // Plan D D-7: nullable. When null, the EDIT PROFILE button hides
+  // entirely (Profile screen now hosts Edit Profile inside SETTINGS).
+  final VoidCallback? onTapEdit;
   final bool isPro;
   final VoidCallback onTapPremium;
 
@@ -33,7 +35,7 @@ class ProfileIdentity extends StatelessWidget {
     this.bannerUrl,
     required this.onReplaceAvatar,
     required this.onReplaceBanner,
-    required this.onTapEdit,
+    this.onTapEdit,
     required this.isPro,
     required this.onTapPremium,
   });
@@ -244,25 +246,26 @@ class ProfileIdentity extends StatelessWidget {
                   ],
                 ),
               ),
-              GestureDetector(
-                onTap: onTapEdit,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.line2),
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  ),
-                  child: Text(
-                    'EDIT PROFILE',
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.textPrimary,
-                      letterSpacing: 2.5,
-                      fontWeight: FontWeight.w700,
+              if (onTapEdit != null)
+                GestureDetector(
+                  onTap: onTapEdit,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.line2),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    ),
+                    child: Text(
+                      'EDIT PROFILE',
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textPrimary,
+                        letterSpacing: 2.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

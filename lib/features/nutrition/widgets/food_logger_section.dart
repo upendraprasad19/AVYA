@@ -71,12 +71,10 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
 
     ref.read(aiAnalysingProvider.notifier).set(true);
     await ref.read(aiBreakdownProvider.notifier).analyse(text);
-
-    // Only increment quota if analysis actually succeeded (not on error)
-    final result = ref.read(aiBreakdownProvider);
-    if (result != null && result.error == null) {
-      await usage.increment(AppConstants.featureAiTextLogPro, isPro);
-    }
+    // Plan C-10: counter increment is handled by NutritionWriteService
+    // when saveMeal fires (source: aiText). Removing the manual call here
+    // closes obs #22 — pre-Plan C the manual call could double-fire OR
+    // skip if the analyse path threw mid-save.
 
     ref.read(aiAnalysingProvider.notifier).set(false);
     _controller.clear();

@@ -104,45 +104,82 @@ class MissionBriefScreen extends ConsumerWidget {
                 text: TextSpan(
                   style: AppTypography.bodyL.copyWith(
                     color: AppColors.textPrimary,
-                    height: 1.55,
+                    height: 1.6,
                   ),
                   children: [
+                    const TextSpan(text: 'Welcome aboard.\n\nYou\'re not joining an app. You\'re reporting in.\n\n'),
                     const TextSpan(
-                      text:
-                          '"I built AVYA because every fitness app I tried treated me like a number. The plans you\'ll see in this app ',
+                      text: 'For 14 years I trained men in the Indian Navy. Discipline ',
                     ),
                     TextSpan(
-                      text: 'aren\'t algorithmic guesses',
-                      style: TextStyle(
+                      text: 'isn\'t motivation',
+                      style: AppTypography.bodyL.copyWith(
                         color: AppColors.accent,
                         fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w500,
+                        height: 1.6,
                       ),
                     ),
                     const TextSpan(
-                      text:
-                          ' — they\'re shaped by 14 years of military training and certified coaching practice. The AI executes the playbook. ',
+                      text: ' — it\'s structure. A plan you can follow when you don\'t feel like it.\n\nThat\'s what AVYA is. The discipline of military training. The science of certified coaching. Built for the long haul.\n\nYou do the work. ',
                     ),
                     TextSpan(
-                      text: 'The playbook is mine.',
-                      style: TextStyle(
+                      text: 'AVYA holds the discipline',
+                      style: AppTypography.bodyL.copyWith(
                         color: AppColors.accent,
                         fontStyle: FontStyle.italic,
                         fontWeight: FontWeight.w500,
+                        height: 1.6,
                       ),
                     ),
-                    const TextSpan(text: '\n\nJai Hind!"'),
+                    const TextSpan(
+                      text: '.\n\n',
+                    ),
+                    TextSpan(
+                      text: 'Show up. Earn promotions. Become the man who lasts',
+                      style: AppTypography.bodyL.copyWith(
+                        color: AppColors.accent,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        height: 1.6,
+                      ),
+                    ),
+                    const TextSpan(
+                      text: '.\n\nThe AI runs the drills. ',
+                    ),
+                    TextSpan(
+                      text: 'The playbook is mine',
+                      style: AppTypography.bodyL.copyWith(
+                        color: AppColors.accent,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        height: 1.6,
+                      ),
+                    ),
+                    const TextSpan(
+                      text: '.\n\n',
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
+              Center(
+                child: Text(
+                  'Jai Hind.',
+                  style: AppTypography.titleS.copyWith(
+                    color: AppColors.accent,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
                   '— Upendra',
                   style: AppTypography.mono.copyWith(
-                    fontSize: 11,
-                    color: AppColors.textDim,
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),

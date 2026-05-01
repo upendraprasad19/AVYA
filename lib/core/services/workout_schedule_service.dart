@@ -1,6 +1,9 @@
 import '../services/hive_service.dart';
 import '../services/seed_service.dart';
+import '../services/workout_write_service.dart';
+import '../services/write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
@@ -227,43 +230,58 @@ class WorkoutScheduleService {
 
         if (isWorkoutDay && workoutDayIndex < weekPlan.workoutDays.length) {
           final workoutDay = weekPlan.workoutDays[workoutDayIndex];
-          await workoutBox.put('$_schedulePrefix$dateKey', {
-            'date': dateKey,
-            'week': week + 1,
-            'day_of_week': dayOfWeek, // 0=Mon, 6=Sun
-            'type': 'workout',
-            'workout_day_index': workoutDayIndex,
-            'workout_name': workoutDay.name,
-            'workout_focus': workoutDay.focus,
-            'exercises': workoutDay.exercises.map((e) => e.toMap()).toList(),
-            if (workoutDay.warmup.isNotEmpty)
-              'warmup': workoutDay.warmup.map((e) => e.toMap()).toList(),
-            if (workoutDay.cooldown.isNotEmpty)
-              'cooldown': workoutDay.cooldown.map((e) => e.toMap()).toList(),
-            if (workoutDay.finisher.isNotEmpty)
-              'finisher': workoutDay.finisher.map((e) => e.toMap()).toList(),
-            'week_character': weekPlan.weekCharacter,
-            'status': 'planned', // planned | completed | skipped | shifted
-            'completed_at': null,
-            'is_swapped': false,
-            'original_date': null, // set if swapped from another date
-          });
+          // Plan A Task A-15: route schedule writes through service so
+          // each day fires syncWorkoutData → cloud scheduled_workouts
+          // table actually populates (was 0 rows before, per obs #3).
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: date,
+            entry: {
+              'date': dateKey,
+              'week': week + 1,
+              'day_of_week': dayOfWeek, // 0=Mon, 6=Sun
+              'type': 'workout',
+              'workout_day_index': workoutDayIndex,
+              'workout_name': workoutDay.name,
+              'workout_focus': workoutDay.focus,
+              'exercises':
+                  workoutDay.exercises.map((e) => e.toMap()).toList(),
+              if (workoutDay.warmup.isNotEmpty)
+                'warmup':
+                    workoutDay.warmup.map((e) => e.toMap()).toList(),
+              if (workoutDay.cooldown.isNotEmpty)
+                'cooldown':
+                    workoutDay.cooldown.map((e) => e.toMap()).toList(),
+              if (workoutDay.finisher.isNotEmpty)
+                'finisher':
+                    workoutDay.finisher.map((e) => e.toMap()).toList(),
+              'week_character': weekPlan.weekCharacter,
+              'status': 'planned', // planned | completed | skipped | shifted
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null, // set if swapped from another date
+            },
+            source: WriteSource.planGenerator,
+          );
           workoutDayIndex++;
         } else {
-          await workoutBox.put('$_schedulePrefix$dateKey', {
-            'date': dateKey,
-            'week': week + 1,
-            'day_of_week': dayOfWeek,
-            'type': 'rest',
-            'workout_name': 'Rest Day',
-            'workout_focus': 'Recovery & mobility',
-            'exercises': <Map<String, dynamic>>[],
-            'week_character': weekPlan.weekCharacter,
-            'status': 'rest',
-            'completed_at': null,
-            'is_swapped': false,
-            'original_date': null,
-          });
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: date,
+            entry: {
+              'date': dateKey,
+              'week': week + 1,
+              'day_of_week': dayOfWeek,
+              'type': 'rest',
+              'workout_name': 'Rest Day',
+              'workout_focus': 'Recovery & mobility',
+              'exercises': <Map<String, dynamic>>[],
+              'week_character': weekPlan.weekCharacter,
+              'status': 'rest',
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null,
+            },
+            source: WriteSource.planGenerator,
+          );
         }
       }
     }
@@ -312,8 +330,12 @@ class WorkoutScheduleService {
     );
 
     // 2. Delete future non-completed schedule entries
+    //
+    // APK Test #6 obs #7 + spec §9.4 — `today` is IST midnight, not
+    // device-local midnight. Prevents a Wed-evening UTC user from being
+    // bucketed into Tue's calendar slot.
     final workoutBox = _hive.workoutBox;
-    final today = DateTime(fromDate.year, fromDate.month, fromDate.day);
+    final today = istMidnight(fromDate);
     final planEndStr = _hive.configBox.get(_planEndKey) as String?;
     final planEnd = planEndStr != null ? DateTime.parse(planEndStr) : today.add(const Duration(days: 28));
 
@@ -346,13 +368,63 @@ class WorkoutScheduleService {
     // first-time generation (no existing start date). Overwriting on a
     // days-per-week change resets getCurrentWeekNumber() back to Week 1.
     final existingStart = _hive.configBox.get(_planStartKey) as String?;
-    if (existingStart == null) {
+    final isFirstGeneration = existingStart == null;
+    if (isFirstGeneration) {
       await _hive.configBox.put(_planStartKey, monday.toIso8601String());
       await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
     }
     await workoutBox.put(_planKey, plan.toMap());
     if (preferredDays != null) {
       await _hive.configBox.put('preferred_training_days', preferredDays);
+    }
+
+    // APK Test #6 obs #7 + spec §3.2 — persist phase_started_at on
+    // user_profile so RankService._qualifies and the calendar both have
+    // a single source of truth. phase_started_at = IST midnight of the
+    // onboarding day, NOT Monday-of-week (the old behaviour caused
+    // Wed-joiners to register one phantom week of "missed" Mon/Tue
+    // workouts and bumped weeksSinceSignup forward incorrectly).
+    if (isFirstGeneration) {
+      final profileMap = Map<String, dynamic>.from(
+          _hive.userBox.get('profile') as Map? ?? <String, dynamic>{});
+      profileMap['phase_started_at'] = today.toUtc().toIso8601String();
+      await _hive.userBox.put('profile', profileMap);
+    }
+
+    // APK Test #6 obs #7 — mark pre-onboarding days in the current
+    // calendar week as `pre_onboarding` rest entries (status='rest',
+    // reason='pre_onboarding', workout_name='Joined later'). Distinct
+    // from a normal rest day (reason='planned_rest') so the calendar
+    // can render them with a "Joined later" cue and the pending count
+    // can ignore them. Idempotent — only writes if no schedule exists.
+    if (isFirstGeneration) {
+      for (var d = monday;
+          d.isBefore(today);
+          d = d.add(const Duration(days: 1))) {
+        final dateKey = _dateKey(d);
+        final scheduleKey = '$_schedulePrefix$dateKey';
+        if (workoutBox.get(scheduleKey) == null) {
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: d,
+            entry: {
+              'date': dateKey,
+              'week': 1,
+              'day_of_week': d.weekday - 1,
+              'type': 'rest',
+              'workout_name': 'Joined later',
+              'workout_focus': 'You joined AVYA mid-week',
+              'exercises': <Map<String, dynamic>>[],
+              'week_character': '',
+              'status': 'rest',
+              'reason': 'pre_onboarding',
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null,
+            },
+            source: WriteSource.planGenerator,
+          );
+        }
+      }
     }
 
     // 4. Assign new workouts from today forward, skipping completed dates
@@ -393,41 +465,54 @@ class WorkoutScheduleService {
         final isWorkoutDay = dayPattern.contains(dayOfWeek);
         if (isWorkoutDay && workoutDayIndex < weekPlan.workoutDays.length) {
           final workoutDay = weekPlan.workoutDays[workoutDayIndex];
-          await workoutBox.put(scheduleKey, {
-            'date': dateKey,
-            'week': week + 1,
-            'day_of_week': dayOfWeek,
-            'type': 'workout',
-            'workout_day_index': workoutDayIndex,
-            'workout_name': workoutDay.name,
-            'workout_focus': workoutDay.focus,
-            'exercises': workoutDay.exercises.map((e) => e.toMap()).toList(),
-            if (workoutDay.warmup.isNotEmpty)
-              'warmup': workoutDay.warmup.map((e) => e.toMap()).toList(),
-            if (workoutDay.cooldown.isNotEmpty)
-              'cooldown': workoutDay.cooldown.map((e) => e.toMap()).toList(),
-            'week_character': weekPlan.weekCharacter,
-            'status': 'planned',
-            'completed_at': null,
-            'is_swapped': false,
-            'original_date': null,
-          });
+          // Plan A Task A-15: closes obs #3 — schedule_<date> writes
+          // route through service which fires syncWorkoutData per write.
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: date,
+            entry: {
+              'date': dateKey,
+              'week': week + 1,
+              'day_of_week': dayOfWeek,
+              'type': 'workout',
+              'workout_day_index': workoutDayIndex,
+              'workout_name': workoutDay.name,
+              'workout_focus': workoutDay.focus,
+              'exercises':
+                  workoutDay.exercises.map((e) => e.toMap()).toList(),
+              if (workoutDay.warmup.isNotEmpty)
+                'warmup':
+                    workoutDay.warmup.map((e) => e.toMap()).toList(),
+              if (workoutDay.cooldown.isNotEmpty)
+                'cooldown':
+                    workoutDay.cooldown.map((e) => e.toMap()).toList(),
+              'week_character': weekPlan.weekCharacter,
+              'status': 'planned',
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null,
+            },
+            source: WriteSource.planGenerator,
+          );
           workoutDayIndex++;
         } else {
-          await workoutBox.put(scheduleKey, {
-            'date': dateKey,
-            'week': week + 1,
-            'day_of_week': dayOfWeek,
-            'type': 'rest',
-            'workout_name': 'Rest Day',
-            'workout_focus': 'Recovery & mobility',
-            'exercises': <Map<String, dynamic>>[],
-            'week_character': weekPlan.weekCharacter,
-            'status': 'rest',
-            'completed_at': null,
-            'is_swapped': false,
-            'original_date': null,
-          });
+          await WorkoutWriteService.instance.upsertScheduled(
+            date: date,
+            entry: {
+              'date': dateKey,
+              'week': week + 1,
+              'day_of_week': dayOfWeek,
+              'type': 'rest',
+              'workout_name': 'Rest Day',
+              'workout_focus': 'Recovery & mobility',
+              'exercises': <Map<String, dynamic>>[],
+              'week_character': weekPlan.weekCharacter,
+              'status': 'rest',
+              'completed_at': null,
+              'is_swapped': false,
+              'original_date': null,
+            },
+            source: WriteSource.planGenerator,
+          );
         }
       }
     }
@@ -840,8 +925,20 @@ class WorkoutScheduleService {
     swappedB['is_swapped'] = true;
     swappedB['original_date'] = mapA['date'];
 
-    await _hive.workoutBox.put(keyA, swappedA);
-    await _hive.workoutBox.put(keyB, swappedB);
+    // Plan A Task A-16: route schedule swap writes through service so
+    // each end of the swap fires syncWorkoutData → cloud
+    // scheduled_workouts mirrors the swap. Preserves the rich
+    // is_swapped/original_date metadata that rescheduleDay would erase.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: dateA,
+      entry: swappedA,
+      source: WriteSource.schedSwap,
+    );
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: dateB,
+      entry: swappedB,
+      source: WriteSource.schedSwap,
+    );
 
     // Increment swap counter
     await _incrementSwapCount(mondayA);

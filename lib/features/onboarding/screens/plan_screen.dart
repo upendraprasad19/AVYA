@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -155,12 +156,40 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     );
   }
 
+  /// Returns user_profile['days_per_week'] from Hive userBox if available,
+  /// otherwise null. Used as a fallback when widget.data doesn't carry
+  /// the value (returning users hitting plan_screen via deep link).
+  int? _userProfileDaysPerWeek() {
+    try {
+      final box = HiveService.instance.userBox;
+      final profile = box.get('profile');
+      if (profile is Map) {
+        final v = profile['days_per_week'];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+      }
+    } catch (_) {
+      // Hive may not be open in some test contexts — fall through to null.
+    }
+    return null;
+  }
+
   Widget _phaseBlocks() {
-    const phases = [
+    // Read the user's actual selection from widget.data first (live during
+    // onboarding), then user_profile (returning users hitting this preview),
+    // and finally fall back to 4 only if both are absent. Hardcoded
+    // "4 days/week" and "5 days/week" strings caused the user-visible bug
+    // where someone selecting 6 still saw "4 days/week" on the plan preview
+    // (APK Test #6 obs #4).
+    final selectedDays = (widget.data['days_per_week'] as int?) ??
+        _userProfileDaysPerWeek() ??
+        4;
+
+    final phases = <(String, String, String, String, bool)>[
       ('I', 'FOUNDATION', 'WEEKS 1–4',
-          'Technique, baselines, 4 days/week.', true),
+          'Technique, baselines, $selectedDays days/week.', true),
       ('II', 'CAPACITY', 'WEEKS 5–8',
-          'Volume push, 5 days/week, mid-deload.', false),
+          'Volume push, $selectedDays days/week, mid-deload.', false),
       ('III', 'CONVERGE', 'WEEKS 9–12',
           'Peak strength, lean targets, taper.', false),
     ];

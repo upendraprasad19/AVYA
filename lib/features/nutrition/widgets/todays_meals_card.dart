@@ -27,6 +27,11 @@ class TodaysMealsCard extends StatelessWidget {
   final void Function(Map<String, dynamic> meal)? onEdit;
   final void Function(String logId)? onDelete;
 
+  /// Invoked on long-press of any populated meal item (Plan C-14).
+  /// Receives the full meal map so the parent can show the
+  /// Edit / Delete / Save-as-template action menu.
+  final void Function(Map<String, dynamic> meal)? onLongPressMeal;
+
   /// Invoked when the `+ LOG` CTA on an empty slot is tapped. The string is
   /// the slot key in lowercase (`breakfast` / `lunch` / `dinner` / `snack`),
   /// safe to pass directly as `mealType:` to `showFoodSearchSheet`.
@@ -42,6 +47,7 @@ class TodaysMealsCard extends StatelessWidget {
     required this.meals,
     this.onEdit,
     this.onDelete,
+    this.onLongPressMeal,
     this.onLogSlot,
     this.plannedSlots,
   });
@@ -95,6 +101,7 @@ class TodaysMealsCard extends StatelessWidget {
               items: grouped[slot]!,
               onEdit: onEdit,
               onDelete: onDelete,
+              onLongPressMeal: onLongPressMeal,
             ),
           if (slot != _slotOrder.last) const SizedBox(height: 6),
         ],
@@ -112,6 +119,7 @@ class _PopulatedSlotCard extends StatelessWidget {
     required this.items,
     required this.onEdit,
     required this.onDelete,
+    required this.onLongPressMeal,
   });
 
   final String slot;
@@ -119,6 +127,7 @@ class _PopulatedSlotCard extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final void Function(Map<String, dynamic> meal)? onEdit;
   final void Function(String logId)? onDelete;
+  final void Function(Map<String, dynamic> meal)? onLongPressMeal;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +215,8 @@ class _PopulatedSlotCard extends StatelessWidget {
       Widget row = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onEdit == null ? null : () => onEdit!(item),
+        onLongPress:
+            onLongPressMeal == null ? null : () => onLongPressMeal!(item),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

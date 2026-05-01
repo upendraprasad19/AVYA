@@ -99,6 +99,7 @@ export function zodToGeminiSchema(zodType: z.ZodTypeAny): GeminiSchema {
 export function toolToFunctionDeclaration(tool: {
   name: string;
   description: string;
+  selectionHints?: string;
   schema: z.ZodTypeAny;
 }): GeminiFunctionDeclaration {
   const params = zodToGeminiSchema(tool.schema);
@@ -108,9 +109,12 @@ export function toolToFunctionDeclaration(tool: {
       `Tool '${tool.name}' schema must be a Zod object at the top level (got ${params.type}).`,
     );
   }
+  const fullDescription = tool.selectionHints
+    ? `${tool.description}\n\nWHEN TO USE: ${tool.selectionHints}`
+    : tool.description;
   return {
     name: tool.name,
-    description: tool.description,
+    description: fullDescription,
     parameters: params,
   };
 }

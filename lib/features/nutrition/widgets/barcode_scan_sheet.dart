@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:icanbefitter/core/services/barcode_service.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
-import '../providers/nutrition_provider.dart';
 
 /// Opens the barcode scanner as a full-screen bottom sheet.
 void showBarcodeScanSheet(BuildContext context) {
@@ -177,47 +176,55 @@ class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
     _controller.start();
   }
 
-  void _logFood() {
+  Future<void> _logFood() async {
     final food = _food;
     if (food == null) return;
 
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
-
-    HiveService.instance.nutritionBox.put(id, {
-      'id': id,
-      'date': dateStr,
-      'meal_type': _mealType,
-      'food_name':
-          food.brand != null ? '${food.name} (${food.brand})' : food.name,
-      'quantity_g': _servingG,
-      'total_calories': food.caloriesForServing(_servingG).round(),
-      'total_protein': food.proteinForServing(_servingG).round(),
-      'total_carbs': food.carbsForServing(_servingG).round(),
-      'total_fat': food.fatForServing(_servingG).round(),
-      'total_fiber': food.fiberForServing(_servingG).round(),
-      'created_at': now.toIso8601String(),
-      'source': 'barcode',
-    });
-
-    ref.invalidate(dailyNutritionProvider);
-
-    // Fire-and-forget cloud sync + AI coach context refresh.
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    // Plan C-12: route through NutritionWriteService.logMeal so per-item
+    // rows reach nutrition_log_items + provider invalidation runs.
+    // Barcode source is free + unlimited (no counter increment).
+    final result = await NutritionWriteService.instance.logMeal(
+      date: DateTime.now(),
+      mealType: _mealType,
+      items: [
+        FoodItem(
+          name: food.brand != null
+              ? '${food.name} (${food.brand})'
+              : food.name,
+          quantityG: _servingG,
+          calories: food.caloriesForServing(_servingG),
+          protein: food.proteinForServing(_servingG),
+          carbs: food.carbsForServing(_servingG),
+          fat: food.fatForServing(_servingG),
+          fiber: food.fiberForServing(_servingG),
+        ),
+      ],
+      source: NutritionWriteSource.barcode,
+    );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${food.name} logged ✓',
-            style: AppTypography.body.copyWith(fontSize: 13)),
-        backgroundColor: AppColors.card,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    widget.onLogged();
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${food.name} logged ✓',
+              style: AppTypography.body.copyWith(fontSize: 13)),
+          backgroundColor: AppColors.card,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      widget.onLogged();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not log: ${result.errorMessage ?? "unknown error"}',
+            style: AppTypography.body.copyWith(fontSize: 13),
+          ),
+          backgroundColor: AppColors.card,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override

@@ -48,6 +48,30 @@ class AiCoachScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<AiCoachScreen> createState() => _AiCoachScreenState();
+
+  /// B-4 / B-5: filter the pending-intents list down to those that should
+  /// render in the chat thread. Drops intents whose Hive
+  /// `intent_<id>_dispatched_at` marker is set (the dispatcher already ran)
+  /// and intents that have been dismissed or rejected. Pure / static so
+  /// `dispatched_card_filter_test.dart` can pin the contract without
+  /// spinning up the screen widget tree.
+  static List<ToolIntent> filterVisibleIntents(List<ToolIntent> intents) {
+    final coachBox = HiveService.instance.coachBox;
+    return intents.where((i) {
+      if (i.status == ToolIntentStatus.pending ||
+          i.status == ToolIntentStatus.executing ||
+          i.status == ToolIntentStatus.failed) {
+        // Defensive: drop if Hive marker says we already dispatched.
+        if (coachBox.get('intent_${i.id}_dispatched_at') != null) return false;
+        // Drop dismissals — terminal pill renders elsewhere if needed.
+        if (coachBox.get('intent_${i.id}_dismissed_at') != null) return false;
+        return true;
+      }
+      return i.status == ToolIntentStatus.executed ||
+          i.status == ToolIntentStatus.rejected ||
+          i.status == ToolIntentStatus.expired;
+    }).toList();
+  }
 }
 
 class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
@@ -660,23 +684,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
     // Phase A.11 — typed tool intents (pending + recently-settled, kept by prune)
     // C-6: secondary filter on the Hive `intent_<id>_dispatched_at` marker.
-    // If the in-memory provider state thinks an intent is still pending but the
-    // Hive marker shows it's already been dispatched (hot restart edge case),
-    // hide it from the chat thread so cards never pile up. Primary state of
+    // Routed through static AiCoachScreen.filterVisibleIntents so the contract
+    // is unit-testable (B-5 dispatched_card_filter_test). Primary state of
     // truth remains ToolIntent.status.
-    final coachBox = HiveService.instance.coachBox;
-    final visibleIntents = ref.watch(pendingToolIntentsProvider).where((i) {
-      if (i.status == ToolIntentStatus.pending ||
-          i.status == ToolIntentStatus.executing ||
-          i.status == ToolIntentStatus.failed) {
-        // Defensive: drop if Hive marker says we already dispatched.
-        if (coachBox.get('intent_${i.id}_dispatched_at') != null) return false;
-        return true;
-      }
-      return i.status == ToolIntentStatus.executed ||
-          i.status == ToolIntentStatus.rejected ||
-          i.status == ToolIntentStatus.expired;
-    }).toList();
+    final visibleIntents = AiCoachScreen.filterVisibleIntents(
+      ref.watch(pendingToolIntentsProvider),
+    );
 
     final totalItems = messages.length +
         pendingActions.length +

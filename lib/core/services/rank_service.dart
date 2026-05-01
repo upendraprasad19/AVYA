@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -88,6 +89,17 @@ class RankService {
               toInsert,
               onConflict: 'user_id,rank_code',
             );
+
+        // APK Test #6 / Plan F-10 — capture a promotion snapshot per
+        // newly-inserted rank. Fire-and-forget; idempotent via
+        // (user_id, source='promotion', rank_at_snapshot) check inside
+        // snapshotOnPromotion. UNIQUE (user_id, rank_code) on
+        // rank_promotions ensures we only get here once per rank, so
+        // the snapshot also fires at most once per rank.
+        for (final row in toInsert) {
+          final code = row['rank_code'] as String;
+          unawaited(StatSnapshotService.instance.snapshotOnPromotion(code));
+        }
       }
 
       // Update denormalized current_rank_code only when it actually
@@ -243,7 +255,21 @@ class RankService {
     final totalWorkouts =
         (progress['total_workouts_done'] as int?) ?? 0;
 
+    // APK Test #6 obs #7 + spec §3.2 — prefer phase_started_at on
+    // user_profile (set by generateAndScheduleFromDate to IST midnight
+    // of onboarding day) over auth.users.created_at. Pre-fix, a user
+    // who signed up on a Wed but onboarded the following Mon had
+    // weeksSinceSignup=1 from auth-created-at the moment they finished
+    // onboarding — the gate-relative clock should start when the plan
+    // starts, not when the auth row was minted.
     DateTime? signup = signupAt;
+    if (signup == null) {
+      final profile = UserRepository.instance.getProfile();
+      final phaseStartedAtIso = profile?['phase_started_at'] as String?;
+      if (phaseStartedAtIso != null) {
+        signup = DateTime.tryParse(phaseStartedAtIso);
+      }
+    }
     if (signup == null) {
       final raw = SupabaseService.instance.currentUser?.createdAt;
       if (raw != null) signup = DateTime.tryParse(raw);
@@ -269,6 +295,7 @@ class RankService {
       weeksSinceSignup: weeks,
       deploymentsComplete: deployments,
       longestGapDays: longestGap,
+      workoutRepo: repo,
     );
   }
 
@@ -305,7 +332,40 @@ class RankService {
         s.longestGapDays > gate.maxGapDays!) {
       return false;
     }
+    if (gate.completionRateMinimum != null) {
+      final window = gate.completionRateWindowWeeks ?? 26;
+      final rate = s.completionRate(window);
+      if (rate < gate.completionRateMinimum!) return false;
+    }
     return true;
+  }
+
+  /// Test-only entry point: builds an `_EvalState` from explicit inputs
+  /// (no Hive / Supabase reads) and runs `_qualifies` against the gate
+  /// for [code]. `completionRateOverride` short-circuits the
+  /// `completionRateOverWindow` scan — pass it for officer-rank tests.
+  ///
+  /// Returns `true` iff the rank's gate passes.
+  @visibleForTesting
+  bool testQualify({
+    required String code,
+    int streak = 0,
+    int totalWorkouts = 0,
+    int weeksSinceSignup = 0,
+    int deploymentsComplete = 0,
+    int longestGapDays = 0,
+    double? completionRateOverride,
+  }) {
+    final state = _EvalState(
+      streakDays: streak,
+      totalWorkouts: totalWorkouts,
+      weeksSinceSignup: weeksSinceSignup,
+      deploymentsComplete: deploymentsComplete,
+      longestGapDays: longestGapDays,
+      workoutRepo: WorkoutRepository.instance,
+      completionRateOverride: completionRateOverride,
+    );
+    return _qualifies(code, state);
   }
 }
 
@@ -315,6 +375,8 @@ class _EvalState {
   final int weeksSinceSignup;
   final int deploymentsComplete;
   final int longestGapDays;
+  final WorkoutRepository workoutRepo;
+  final double? completionRateOverride;
 
   const _EvalState({
     required this.streakDays,
@@ -322,5 +384,16 @@ class _EvalState {
     required this.weeksSinceSignup,
     required this.deploymentsComplete,
     required this.longestGapDays,
+    required this.workoutRepo,
+    this.completionRateOverride,
   });
+
+  /// Lazy completion-rate accessor; only invoked when a gate sets
+  /// `completionRateMinimum`. Test code can supply
+  /// `completionRateOverride` to skip the Hive scan.
+  double completionRate(int windowWeeks) {
+    final override = completionRateOverride;
+    if (override != null) return override;
+    return workoutRepo.completionRateOverWindow(windowWeeks);
+  }
 }

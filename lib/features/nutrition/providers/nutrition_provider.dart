@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -722,52 +724,44 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
 
   void clear() => state = null;
 
-  /// Save the analysed meal to nutrition log.
+  /// Save the analysed meal to nutrition log via NutritionWriteService.
+  /// (Plan C-10: routes through service to ensure per-item rows reach
+  /// nutrition_log_items + the aiText counter increments via the
+  /// service's source-based counter wiring.)
   Future<void> saveMeal({String mealType = 'snacks'}) async {
     final data = state;
     if (data == null) return;
 
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final items = data.items.map((item) {
+      final protein =
+          double.tryParse(item.protein.replaceAll('g', '')) ?? 0.0;
+      final carbs = double.tryParse(item.carbs.replaceAll('g', '')) ?? 0.0;
+      final fat = double.tryParse(item.fat.replaceAll('g', '')) ?? 0.0;
+      return FoodItem(
+        name: item.name,
+        quantityG: 0,
+        calories: item.calories.toDouble(),
+        protein: protein,
+        carbs: carbs,
+        fat: fat,
+        fiber: item.fiber.toDouble(),
+      );
+    }).toList();
 
-    int totalProtein = 0;
-    int totalCarbs = 0;
-    int totalFat = 0;
-    int totalFiber = 0;
-    for (final item in data.items) {
-      totalProtein += int.tryParse(item.protein.replaceAll('g', '')) ?? 0;
-      totalCarbs += int.tryParse(item.carbs.replaceAll('g', '')) ?? 0;
-      totalFat += int.tryParse(item.fat.replaceAll('g', '')) ?? 0;
-      totalFiber += item.fiber;
+    if (items.isEmpty) {
+      state = null;
+      return;
     }
 
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
-    final logMap = {
-      'id': id,
-      'date': dateStr,
-      'meal_type': mealType.toLowerCase(),
-      'food_name': data.mealName,
-      'total_calories': data.totalKcal,
-      'total_protein': totalProtein,
-      'total_carbs': totalCarbs,
-      'total_fat': totalFat,
-      'total_fiber': totalFiber,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_text',
-    };
-    await HiveService.instance.nutritionBox.put(id, logMap);
-    NutritionRepository.syncLogToSupabase(data: logMap);
-    // AI coach snapshot refresh — keeps "what did I eat today?" accurate
-    // without waiting for the next app launch.
-    unawaited(SyncService.instance.pushSnapshot());
+    await NutritionWriteService.instance.logMeal(
+      date: DateTime.now(),
+      mealType: mealType.toLowerCase(),
+      items: items,
+      overrideTotalCals: data.totalKcal,
+      source: NutritionWriteSource.aiText,
+    );
 
     state = null;
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
-    BadgeService.instance.checkAll();
   }
 }
 
@@ -894,6 +888,14 @@ class FoodLogNotifier extends Notifier<void> {
     ref.invalidate(recentFoodLogsProvider);
   }
 
+  /// Plan C-16 — Edit Macros sheet's Save button now routes through
+  /// [NutritionWriteService.editLog] instead of rewriting the Hive map
+  /// in place. The service recomputes totals (when items[] are passed),
+  /// fires the canonical provider invalidation batch, and triggers the
+  /// both-tables cloud projection.
+  ///
+  /// This wrapper edits TOTALS only (no items[]) — the service's
+  /// `m.addAll(updates)` path applies the macro overrides verbatim.
   Future<void> updateFoodLog({
     required String logId,
     required double calories,
@@ -902,23 +904,16 @@ class FoodLogNotifier extends Notifier<void> {
     required double fat,
     double fiber = 0,
   }) async {
-    final box = HiveService.instance.nutritionBox;
-    final existing = box.get(logId);
-    if (existing == null) return;
-    final updated = Map<String, dynamic>.from(existing as Map);
-    updated['total_calories'] = calories.round();
-    updated['total_protein'] = protein.round();
-    updated['total_carbs'] = carbs.round();
-    updated['total_fat'] = fat.round();
-    updated['total_fiber'] = fiber.round();
-    await box.put(logId, updated);
-    NutritionRepository.syncLogToSupabase(data: updated);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
+    await NutritionWriteService.instance.editLog(
+      logKey: logId,
+      updates: <String, dynamic>{
+        'total_calories': calories.round(),
+        'total_protein': protein.round(),
+        'total_carbs': carbs.round(),
+        'total_fat': fat.round(),
+        'total_fiber': fiber.round(),
+      },
+    );
   }
 }
 
@@ -933,12 +928,23 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     final nutritionBox = HiveService.instance.nutritionBox;
     final results = <Map<String, dynamic>>[];
 
-    for (final raw in nutritionBox.values) {
+    // Plan C-15: Surface BOTH legacy `is_saved_meal=true` saved meal
+    // presets AND new `meal_*` keyed templates with `is_template=true`
+    // (written by NutritionWriteService.saveMealAsTemplate). Templates
+    // missing the legacy `id` field get one synthesised from the Hive
+    // key so SavedMealsSection's RE-LOG flow still works.
+    for (final entry in nutritionBox.toMap().entries) {
+      final raw = entry.value;
       if (raw is! Map) continue;
       final item = Map<String, dynamic>.from(raw);
-      if (item['is_saved_meal'] == true) {
-        results.add(item);
+      final isLegacy = item['is_saved_meal'] == true;
+      final isTemplate = item['is_template'] == true &&
+          entry.key.toString().startsWith('meal_');
+      if (!isLegacy && !isTemplate) continue;
+      if (isTemplate && item['id'] == null) {
+        item['id'] = entry.key.toString();
       }
+      results.add(item);
     }
 
     results.sort((a, b) {
@@ -1163,11 +1169,11 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           isScanning: false,
           result: data,
         );
-        // Increment quota only on actual success — not on failure/error
-        await UsageCounterService.instance.increment(
-          AppConstants.featureScanMealPro,
-          SubscriptionService.instance.isPro(),
-        );
+        // Plan C-11: counter increment moved to NutritionWriteService
+        // when the user clicks SAVE in _ScanResultEditor (source: scan).
+        // Pre-Plan C the counter incremented on every successful AI return
+        // even if the user backed out without saving — burning quota for
+        // nothing. Single source of truth = NutritionWriteService.
         return;
       }
 
@@ -1411,12 +1417,17 @@ class DeleteNutritionLogNotifier extends Notifier<void> {
   @override
   void build() {}
 
+  /// Delegates to [NutritionWriteService.deleteLog] so legacy direct-Hive
+  /// callers also pick up the per-table cloud delete + undo stash
+  /// (Plan C-14).
   Future<void> delete(String logId) async {
-    await HiveService.instance.nutritionBox.delete(logId);
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    final result = await NutritionWriteService.instance
+        .deleteLog(logKey: logId, allowUndo: true);
+    if (!result.success) {
+      // Fall through to a no-op; provider state stays at AsyncData(null).
+      // Caller (UI) shows the snackbar based on its own context.
+      return;
+    }
   }
 }
 

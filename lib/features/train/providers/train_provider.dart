@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -7,6 +8,8 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -1282,26 +1285,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     final workoutDate = state.workoutDay?.date ?? now;
 
-    // Save workout log via repository.
-    await repo.saveWorkoutLog(
-      workoutName: state.workoutDay?.name ?? 'Workout',
-      setsCompleted: state.completedSets,
-      durationSeconds: state.elapsedSeconds,
-      completedAt: workoutDate,
-    );
-
-    // Compute date key once — used by schedule + streak below.
+    // Compute date key once — used by streak math below.
     final dateStr = formatDateKey(workoutDate);
 
-    // Save individual exercise logs via the shared per-exercise helper
-    // (WorkoutRepository.logSetWithPrRescan). The helper handles:
-    //   - exlog_<ts>_<hash> Hive write (with volume_kg)
-    //   - exercise_log_index_<date> append (per-date O(1) index)
-    //   - chronological is_pr rescan for the exercise across all history
-    // We pass `fireSyncImmediately: false` to suppress per-exercise sync —
-    // completeWorkout fires a single sync after the loop instead of N+1.
-    // The pre-loop `prDescriptions` list above stays as-is and drives the
-    // success-state UI; the helper's rescan is what persists is_pr to Hive.
+    // Plan A Task A-13: route per-exercise saves through WorkoutWriteService.
+    // The service handles exlog_<date>_<hash> Hive write, exercise_log_index_<date>
+    // append, chronological is_pr rescan, and fire-and-forget sync. The
+    // pre-loop `prDescriptions` list above stays — it drives the success-state
+    // UI; the service's internal rescan is what persists is_pr to Hive.
     for (int exIdx = 0; exIdx < state.exercises.length; exIdx++) {
       final exercise = state.exercises[exIdx];
 
@@ -1314,113 +1305,57 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           if (s + 1 > maxSetLog) maxSetLog = s + 1;
         }
       }
-      double totalWeight = 0;
-      int totalReps = 0;
-      int totalDuration = 0;
-      double totalDistance = 0;
-      int completedSets = 0;
-      // Exact per-set volume sum — preserves precision for mixed-weight
-      // sessions (warm-up sets, descending sets, RPE-based progression)
-      // where best-weight × cumulative-reps would over-estimate.
-      double volumeKg = 0;
 
-      // Build per-set detail list for per-set editing + accurate PR detection
-      final setsDetail = <Map<String, dynamic>>[];
-
+      // Build per-set ExerciseSet list. Skip warm-up sets — they're not
+      // counted toward PRs / volume.
+      final exerciseSets = <ExerciseSet>[];
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
       for (int s = 0; s < maxSetLog; s++) {
         final key = '$exIdx-$s';
-        if (state.checkedSets.containsKey(key)) {
-          // Skip warm-up sets in volume calculations
-          final isWarmUp = state.warmUpSets.containsKey(key);
-          if (isWarmUp) continue;
+        if (!state.checkedSets.containsKey(key)) continue;
+        if (state.warmUpSets.containsKey(key)) continue;
+        final vals = state.setInputValues[key];
+        if (vals == null) continue;
 
-          completedSets++;
-          final vals = state.setInputValues[key];
-          if (vals != null) {
-            if (vals.weight != null && vals.weight! > totalWeight) {
-              totalWeight = vals.weight!; // best weight across sets
-            }
-            totalReps += vals.reps ?? 0;
-            totalDuration += vals.durationSeconds ?? 0;
-            totalDistance += vals.distanceKm ?? 0;
-            // Accumulate exact per-set volume
-            volumeKg += (vals.weight ?? 0) * (vals.reps ?? 0);
-
-            // Capture per-set detail
-            setsDetail.add({
-              'set_number': setsDetail.length + 1,
-              if (vals.weight != null) 'weight_kg': vals.weight,
-              if (vals.reps != null) 'reps': vals.reps,
-              if (vals.durationSeconds != null) 'duration_seconds': vals.durationSeconds,
-              if (vals.distanceKm != null) 'distance_km': vals.distanceKm,
-            });
-          }
-        }
+        exerciseSets.add(ExerciseSet(
+          weightKg: vals.weight ?? 0,
+          reps: vals.reps ?? 0,
+          durationSec: vals.durationSeconds,
+          // Stagger loggedAtMs by set index so dedup never collapses
+          // legitimate consecutive sets typed in the same UI tick.
+          loggedAtMs: nowMs + s * 1000,
+        ));
       }
 
-      // Fallback to exercise defaults if no input captured
-      if (totalWeight == 0) {
-        totalWeight = double.tryParse(
-                exercise.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
-            0;
-      }
-      if (totalReps == 0) {
-        totalReps = (int.tryParse(exercise.reps) ?? 10) * completedSets;
-      }
+      // Skip exercises with no completed working sets — service rejects
+      // empty sets[] anyway.
+      if (exerciseSets.isEmpty) continue;
 
-      // Check if any sets for this exercise were warm-up
-      final hasWarmUpSets = List.generate(maxSetLog, (s) => '$exIdx-$s')
-          .any((key) => state.warmUpSets.containsKey(key));
-
-      // Validate loggingType — treat unknown types as 'weight_reps'
-      const validLoggingTypes = {
-        'weight_reps',
-        'bodyweight_reps',
-        'weighted_bodyweight',
-        'timed',
-        'cardio',
-        'distance',
-      };
-      final effectiveLoggingType = validLoggingTypes.contains(exercise.loggingType)
-          ? exercise.loggingType
-          : 'weight_reps';
-
-      // Compute per-set best values for accurate PR detection on future loads
-      final bestSingleSetReps = setsDetail.fold<int>(0, (max, s) =>
-          ((s['reps'] as int?) ?? 0) > max ? ((s['reps'] as int?) ?? 0) : max);
-      final bestSingleSetDuration = setsDetail.fold<int>(0, (max, s) =>
-          ((s['duration_seconds'] as int?) ?? 0) > max
-              ? ((s['duration_seconds'] as int?) ?? 0)
-              : max);
-
-      await repo.logSetWithPrRescan(
-        // ActiveExercise has no library id field — name is the stable
-        // identity used both in Hive (`exercise_name`) and in the cloud
-        // contract (`workout_log_exercises.exercise_id`).
-        exerciseId: exercise.name,
-        exerciseName: exercise.name,
-        weightKg: totalWeight,
-        reps: totalReps,
-        sets: completedSets,
-        loggingType: effectiveLoggingType,
+      final result = await WorkoutWriteService.instance.logExercise(
         date: workoutDate,
-        setsDetail: setsDetail,
-        bestSingleSetReps: bestSingleSetReps,
-        bestSingleSetDuration: bestSingleSetDuration,
-        durationSeconds: totalDuration,
-        distanceKm: totalDistance,
-        hasWarmupSets: hasWarmUpSets,
-        fireSyncImmediately: false, // single sync after the loop, below
-        // Pass exact per-set volume sum — preserves precision for
-        // mixed-weight sessions (warm-up sets, descending sets, RPE-based
-        // progression) where the helper's default weightKg×reps×sets would
-        // over-estimate. Restores byte-identical pre-A.7 behavior.
-        overrideVolumeKg: volumeKg,
+        exerciseName: exercise.name,
+        sets: exerciseSets,
+        source: WriteSource.activeWorkout,
+        // Don't pass ref here — we trigger our own provider invalidations
+        // at the end of completeWorkout (broader than the service default).
       );
+      if (!result.success) {
+        // Non-fatal: log and continue. The user has still seen the success
+        // state via `state.isComplete=true` below; a stuck save would be
+        // recoverable via their next workout.
+        // ignore: avoid_print
+        debugPrint(
+            '[completeWorkout] logExercise failed for ${exercise.name}: ${result.errorMessage}');
+      }
     }
 
-    // Mark the scheduled day as completed in the calendar.
-    await repo.markWorkoutCompleted(workoutDate, durationSeconds: state.elapsedSeconds);
+    // Plan A Task A-13: schedule completion + wlog_<date> via service.
+    // Replaces repo.saveWorkoutLog + repo.markWorkoutCompleted.
+    await WorkoutWriteService.instance.markCompleted(
+      date: workoutDate,
+      workoutName: state.workoutDay?.name ?? 'Workout',
+      durationSec: state.elapsedSeconds,
+    );
 
     // Update user progress + streak.
     final progress = UserRepository.instance.getProgress() ?? {};
@@ -1487,12 +1422,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // Check badge unlocks after workout completion.
     BadgeService.instance.checkAll();
 
-    // Fire-and-forget cloud sync of workout data + progress (non-blocking).
-    // `unawaited()` suppresses the unhandled-Future lint; either call
-    // throwing in the background must never reach the UI.
-    unawaited(SyncService.instance.syncWorkoutData());
+    // Fire-and-forget progress sync. WorkoutWriteService already fired
+    // syncWorkoutData + pushSnapshot during logExercise/markCompleted —
+    // we only need progress (separate row) + rank evaluation here.
     unawaited(SyncService.instance.syncProgressNow());
-    unawaited(SyncService.instance.pushSnapshot());
     // APK Test #3 / Obs 1: re-evaluate rank on every workout. Idempotent —
     // upsert with onConflict on (user_id, rank_code). Catches in-session
     // promotions (e.g. SD1 firing on workout 7) the moment they qualify.

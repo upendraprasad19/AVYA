@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -34,7 +35,6 @@ import '../providers/profile_provider.dart';
 import '../providers/referral_eligibility_provider.dart';
 import '../screens/apply_referral_sheet.dart';
 import '../widgets/profile_identity.dart';
-import '../widgets/service_record_section.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/slim_achievements_card.dart';
@@ -480,7 +480,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     behavior: SnackBarBehavior.floating,
                   ));
                 },
-                onTapEdit: () => context.go('/profile/edit'),
+                // Plan D D-7: edit moved to SETTINGS first row (D-9).
+                // null hides the top EDIT PROFILE button inside ProfileIdentity.
+                onTapEdit: null,
                 isPro: isPro,
                 onTapPremium: () {
                   // Bug #14 — PRO users see subscription detail; free users
@@ -523,15 +525,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   }
                 },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 14),
 
-              // U6 fix (Test #4 hotfix): ServiceRecordSection (RANK card)
-              // moved ABOVE ProfileCompletenessCard per user observation:
-              // "lets use the blank space indicated to mention the rank with
-              // drop down. saves space. and also move the rank to above
-              // profile completion block."
-              // OBS-5: collapsed by default, tap to expand full ladder.
-              const ServiceRecordSection(),
+              // Plan D D-7: rank pill replaces top Edit Profile button.
+              // Tap toggles inline accordion expansion that shows the
+              // Service Record dropdown content (D-6).
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.gutter),
+                child: Builder(builder: (ctx) {
+                  final current = RankService.instance.getCurrentRank();
+                  return WardRankPill(
+                    rankCode: current.entry.code,
+                    shortCapsName:
+                        current.entry.shortName.toUpperCase(),
+                    expandedContentBuilder: (innerCtx) =>
+                        _buildRankServiceRecord(
+                            innerCtx, current.entry.code),
+                  );
+                }),
+              ),
               const SizedBox(height: 8),
 
               // Profile completeness (shows until 100%)
@@ -574,19 +587,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
               const SizedBox(height: 8),
 
-              // Bug #14 — Future Prediction (moved from home dashboard).
-              const SectionHeader('YOUR PREDICTION'),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.screenPadding),
-                child: _buildPredictionCard(),
-              ),
-              const SizedBox(height: 8),
-
               // Reports now hosts BOTH the weekly AI report AND progress
               // photos (moved here from SHARE & GROW per 2026-04-18 user
               // feedback). Progress Photos is still PRO-gated at tap.
+              //
+              // Plan D D-10: Predictions moved into REPORTS as the first
+              // list row (preview + bottom sheet). The standalone YOUR
+              // PREDICTION section header + inline card were removed.
               const SectionHeader('REPORTS'),
+              Builder(builder: (ctx) {
+                final prediction = ref.watch(predictionProvider);
+                return _buildCard([
+                  ProfileRow(
+                    icon: Icons.auto_awesome_outlined,
+                    iconColor: AppColors.accent,
+                    title: 'Predictions',
+                    subtitle: _truncatedPredictionPreview(prediction),
+                    trailing: const ProfileRowChevron(),
+                    showBorder: false,
+                    onTap: () => _showPredictionBottomSheet(ctx),
+                  ),
+                ]);
+              }),
+              const SizedBox(height: 6),
               WeeklyReportCard(
                 isPro: subInfo.isPro,
                 usageWeeks: usageWeeks,
@@ -605,6 +628,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   );
                 },
               ),
+              const SizedBox(height: 6),
+              // APK Test #6 / Plan F-11 \u2014 Progress Comparison row.
+              // Shows starting baseline + promotion + manual snapshots
+              // and renders diffs vs baseline in a bottom sheet. Plan D
+              // Task D-10 will later land a Predictions row above this
+              // one (REPORTS ordering: Predictions \u2192 Progress Comparison
+              // \u2192 Progress Photos).
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.compare_arrows_outlined,
+                  title: 'Progress Comparison',
+                  subtitle: 'Then vs now \u2014 starting stats and milestones',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => context.go('/profile/progress-comparison'),
+                ),
+              ]),
               const SizedBox(height: 6),
               _buildCard([
                 ProfileRow(
@@ -729,6 +769,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // #5 Notifications (consolidated — just a row linking to settings screen)
               const SectionHeader('SETTINGS'),
               _buildCard([
+                // Plan D D-9: Edit Profile moved here from top-of-Profile
+                // (replaced by WardRankPill in D-7).
+                ProfileRow(
+                  icon: Icons.person_outline,
+                  title: 'Edit Profile',
+                  subtitle: 'Goal, stats, preferences',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => context.go('/profile/edit'),
+                ),
                 ProfileRow(
                   icon: Icons.notifications_outlined,
                   title: 'Notifications',
@@ -1205,6 +1254,172 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Plan D D-6: Service Record dropdown (WardRankPill expansion) ──
+  //
+  // Renders inside WardRankPill when expanded. Layout:
+  //   - SERVICE RECORD eyebrow
+  //   - Current rank header (48dp insignia + display name + CURRENT badge)
+  //   - Next 2 rungs (24dp dimmed insignia + shortName + gate copy)
+  //   - "View full roadmap →" button → /train/roadmap
+  // No streak/freeze chips — Plan D removed those from Profile entirely.
+  Widget _buildRankServiceRecord(
+      BuildContext context, String currentRankCode) {
+    final rankService = RankService.instance;
+    final current = rankService.getCurrentRank();
+    final ladder = rankService.getLadder();
+
+    final currentIdx =
+        ladder.indexWhere((e) => e.entry.code == current.entry.code);
+    final upcomingCount = current.entry.isTerminal ? 0 : 2;
+    final upcoming = (currentIdx >= 0 && currentIdx + 1 < ladder.length)
+        ? ladder.skip(currentIdx + 1).take(upcomingCount).toList()
+        : <LadderEntryView>[];
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'SERVICE RECORD',
+            style: AppTypography.mono.copyWith(
+              fontSize: 10,
+              color: AppColors.textDim,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Current rank — large
+          Row(
+            children: [
+              WardRankInsignia(rankCode: current.entry.code, size: 48),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      current.entry.displayName,
+                      style: AppTypography.titleM
+                          .copyWith(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      current.entry.isTerminal ? 'TERMINAL RANK' : 'CURRENT',
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 10,
+                        color: AppColors.accent,
+                        letterSpacing: 1.0,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (upcoming.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(height: 1, color: AppColors.line2),
+            const SizedBox(height: 12),
+            ...upcoming.map((view) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Opacity(
+                        opacity: 0.55,
+                        child: WardRankInsignia(
+                          rankCode: view.entry.code,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              view.entry.shortName,
+                              style: AppTypography.body.copyWith(
+                                color: AppColors.textDim,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (view.gateText != null)
+                              Text(
+                                view.gateText!,
+                                style: AppTypography.bodySm.copyWith(
+                                  color: AppColors.textMute,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => context.go('/train/roadmap'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                foregroundColor: AppColors.accent,
+              ),
+              child: Text(
+                'View full roadmap →',
+                style: AppTypography.body.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Plan D D-10: Predictions list-row helpers ──────────────────
+
+  String _truncatedPredictionPreview(PredictionData? prediction,
+      {int maxChars = 50}) {
+    final p = (prediction?.predictionText ?? '').trim();
+    if (p.isEmpty) return 'Tap to generate your forecast';
+    if (p.length <= maxChars) return p;
+    return '${p.substring(0, maxChars).trimRight()}…';
+  }
+
+  void _showPredictionBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (ctx2, controller) => SingleChildScrollView(
+          controller: controller,
+          padding: const EdgeInsets.all(20),
+          child: _buildPredictionCard(),
+        ),
       ),
     );
   }
