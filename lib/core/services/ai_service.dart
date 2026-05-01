@@ -194,14 +194,11 @@ class AiService {
     throw AiServiceException('Unexpected AI response format');
   }
 
-  /// Build an [AiChatResponse] from a decoded JSON map.
-  AiChatResponse _buildResponse(Map<String, dynamic> data) {
-    final rawActions = data['actions'];
-
-    // Phase A.6+ — typed write intents from the server tool registry.
-    // Defensive: a single malformed intent must not break the whole chat.
-    // ai-media-proxy does NOT emit tool_intents yet, so the field is
-    // routinely absent there; default to empty list rather than null.
+  /// Pure / static parser for `tool_intents` field on an ai-proxy response.
+  /// Defensive: a single malformed intent must not break the whole chat.
+  /// Exposed as static so unit tests can assert multi-intent dispatch and
+  /// snapshot-grounding contracts without spinning Hive/network/Riverpod.
+  static List<ToolIntent> parseToolIntents(Map<String, dynamic> data) {
     final toolIntentsJson = (data['tool_intents'] as List?) ?? const [];
     final parsedIntents = <ToolIntent>[];
     for (final raw in toolIntentsJson) {
@@ -213,6 +210,17 @@ class AiService {
         debugPrint('[AiService] tool_intent parse failed: $e');
       }
     }
+    return parsedIntents;
+  }
+
+  /// Build an [AiChatResponse] from a decoded JSON map.
+  AiChatResponse _buildResponse(Map<String, dynamic> data) {
+    final rawActions = data['actions'];
+
+    // Phase A.6+ — typed write intents from the server tool registry.
+    // ai-media-proxy does NOT emit tool_intents yet, so the field is
+    // routinely absent there; default to empty list rather than null.
+    final parsedIntents = parseToolIntents(data);
 
     // Per-call telemetry — tool name, status, latency, etc. Server-only
     // diagnostics; never surfaced to the user.
