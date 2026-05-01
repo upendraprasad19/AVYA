@@ -18,7 +18,7 @@
 ///                   [WardPhaseDots], [WardPhaseBlock],
 ///                   [WardSessionRow], [WardSessionTable],
 ///                   [WardCategorySidebar], [WardDashedBorder]
-/// * **Badge**     — [WardSealBadge]
+/// * **Badge**     — [WardSealBadge], [WardRankInsignia]
 /// * **Glyph**     — [AnchorGlyph], [CompassRoseGlyph],
 ///                   [TierChevronsGlyph], [SealGlyph], [RankBarGlyph]
 library;
@@ -46,6 +46,7 @@ export 'ward_phase_dots.dart';
 export 'rank_chip.dart';
 export 'rank_insignia.dart';
 export 'ward_radio_row.dart';
+export 'ward_rank_insignia.dart';
 export 'ward_ring.dart';
 export 'ward_rule.dart';
 export 'ward_seal_badge.dart';
