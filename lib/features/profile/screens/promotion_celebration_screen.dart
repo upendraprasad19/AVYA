@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
 /// Plan F F-13 — Promotion Day celebration overlay.
 ///
@@ -14,8 +15,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 /// Ceremonial "By order of the Captain" line. Tap-to-dismiss + 30s auto-
 /// dismiss safety. Share button uses share_plus.
 ///
-/// MVP placeholder insignia (text-bordered ribbon) — Plan D D-1 will swap
-/// to `WardRankInsignia` CustomPaint when that lands.
+/// Insignia is rendered via `WardRankInsignia` CustomPaint (Plan D D-1).
 ///
 /// F-14 image generation is deferred to Test #7 — share currently sends
 /// text-only "I just ranked up to <rank>!" message via share_plus.
@@ -98,7 +98,7 @@ class _PromotionCelebrationScreenState extends State<PromotionCelebrationScreen>
                   animation: _fadeIn,
                   builder: (ctx, _) => Opacity(
                     opacity: _fadeIn.value,
-                    child: _buildPlaceholderInsignia(rank.code),
+                    child: WardRankInsignia(rankCode: rank.code, size: 96),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -146,26 +146,6 @@ class _PromotionCelebrationScreenState extends State<PromotionCelebrationScreen>
     );
   }
 
-  Widget _buildPlaceholderInsignia(String code) {
-    // MVP placeholder. Plan D D-1 will replace with WardRankInsignia CustomPaint.
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.accent, width: 3),
-        borderRadius: BorderRadius.circular(48),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        code,
-        style: AppTypography.mono.copyWith(
-          color: AppColors.accent,
-          fontWeight: FontWeight.w900,
-          fontSize: 18,
-        ),
-      ),
-    );
-  }
 
   Widget _buildStatsRow() {
     final w0 = widget.baseline?.weightKg;
