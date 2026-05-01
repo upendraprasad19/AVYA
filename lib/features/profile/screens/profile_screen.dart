@@ -836,6 +836,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ]),
               const SizedBox(height: 12),
 
+              const SectionHeader('AVYA'),
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.military_tech_outlined,
+                  iconColor: AppColors.accent,
+                  title: "AVYA's Promise",
+                  subtitle: 'Our philosophy — read before you train',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: true,
+                  onTap: () => context.push('/avya/promise'),
+                ),
+                ProfileRow(
+                  icon: Icons.language_outlined,
+                  title: 'icanbefitter.com',
+                  subtitle: 'Visit the website',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: true,
+                  onTap: () => _launchUrl('https://icanbefitter.com'),
+                ),
+                ProfileRow(
+                  icon: Icons.camera_alt_outlined,
+                  title: '@icanbefitter',
+                  subtitle: 'Daily wins on Instagram',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: _openInstagram,
+                ),
+              ]),
+              const SizedBox(height: 12),
+
               // Bug #14 — Subscription moved to the bottom (full upsell banner
               // in the closing-pitch position). Premium pill at the top is the
               // primary discoverability surface; this card is the closer.
@@ -2133,6 +2163,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _launchUrl(String url) {
     launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openInstagram() async {
+    final native = Uri.parse('instagram://user?username=icanbefitter');
+    if (await canLaunchUrl(native)) {
+      await launchUrl(native);
+    } else {
+      await launchUrl(Uri.parse('https://instagram.com/icanbefitter'));
+    }
   }
 
   /// Wraps children in a Wardroom card.
