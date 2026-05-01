@@ -1046,6 +1046,13 @@ class ToolDispatcher {
     });
   }
 
+  /// B-10 (APK Test #6 spec §5.5): chat-mode food log MUST decrement the
+  /// same visible counter as the LogFood sheet AI tab. The increment is
+  /// wired centrally by NutritionWriteService.logMeal — passing
+  /// `source: NutritionWriteSource.aiCoachTool` below maps to
+  /// `featureAiTextLogPro`. Server-side cap enforcement still lives in
+  /// migration 024 (food_text_daily_limit_reached trigger). Do NOT
+  /// duplicate the increment here — single source of truth is the writer.
   Future<ToolExecutionResult> _executeLogMealByText(ToolIntent intent) async {
     final p = intent.payload;
     final description = p['original_description'] as String?;
