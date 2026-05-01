@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../features/home/widgets/streak_badge.dart';
-import 'ward_freeze_badge.dart';
 
 /// WardStatusStrip — composes streak / freeze / optional rank chips into a
 /// single horizontal Wrap.
@@ -13,8 +12,8 @@ import 'ward_freeze_badge.dart';
 /// * [streakDays] — current streak length; passed through to
 ///   [StreakBadge]. Always rendered (StreakBadge handles its own
 ///   zero-state pulse logic).
-/// * [freezesAvailable] — count for the inline ❄ chip. Hidden by
-///   [WardFreezeBadge] when <= 0.
+/// * [freezesAvailable] — passed through to [StreakBadge]'s inline ❄ count.
+///   StreakBadge auto-hides the snowflake section when this is 0.
 /// * [rankChip] — optional caller-supplied widget for a rank pill /
 ///   ribbon. The strip stays agnostic about its shape so different tabs
 ///   can opt in to different visualisations.
@@ -37,15 +36,10 @@ class WardStatusStrip extends StatelessWidget {
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        // APK Test #6 obs #9 — pass 0 so StreakBadge skips its inline
-        // freeze branch entirely. WardFreezeBadge below is the canonical
-        // surface; auto-hides when freezesAvailable <= 0 so this is a
-        // no-op for users without freezes.
         StreakBadge(
           days: streakDays,
-          freezesAvailable: 0,
+          freezesAvailable: freezesAvailable,
         ),
-        WardFreezeBadge(count: freezesAvailable),
         ?rankChip,
       ],
     );
