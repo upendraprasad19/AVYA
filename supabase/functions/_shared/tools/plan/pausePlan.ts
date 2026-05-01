@@ -23,6 +23,8 @@ export const pausePlanTool: ToolDefinition<Args> = {
   tier: "pro",
   description:
     "Pause the user's scheduled workouts for a date range (1-30 days). Use when the user mentions travel, illness, scheduled rest, or any reason they won't be training. Each affected scheduled_workout becomes status='paused' (preserved, not deleted) — the user can resume by manually completing or by regenerating the plan. Already-completed workouts are NOT paused (skipped silently).",
+  selectionHints:
+    "Use when user wants today (or a future day) marked as REST or skipped. Distinct from rescheduleWeek (moves the workout to another day) and logSet (records completed work).",
   schema,
   intentBuilder: (args) => ({
     type: "pause_plan",

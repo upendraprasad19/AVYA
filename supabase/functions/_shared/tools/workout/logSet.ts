@@ -26,6 +26,8 @@ export const logSetTool: ToolDefinition<LogSetArgs> = {
   tier: "free",
   description:
     "Log a completed exercise (sets × reps × weight). Use when the user reports finishing an exercise via chat (e.g. 'log my bench: 80kg 4 sets of 10', 'just did 3x12 squats at 100'). Always parse weight in kg. PR detection happens automatically client-side after logging.",
+  selectionHints:
+    "Use when user describes completed sets (with weight/reps/duration). Don't use when user is asking to reschedule, swap, or pause — those are different tools.",
   schema,
   intentBuilder: (args) => ({
     type: "log_set",

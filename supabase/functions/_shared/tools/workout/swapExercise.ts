@@ -23,6 +23,8 @@ export const swapExerciseTool: ToolDefinition<SwapExerciseArgs> = {
   tier: "pro",
   description:
     "Replace one exercise in today's scheduled workout with a different exercise. Use this when the user asks to swap an exercise (e.g. 'swap squats for goblet squats', 'I don't have a barbell, give me a substitute for bench press'). Always reference real exercise IDs from the user's snapshot — never invent IDs.",
+  selectionHints:
+    "Use when user wants to REPLACE an exercise inside today's workout with a different exercise. Distinct from rescheduleWeek (moves an entire day) and pausePlan (marks a day as rest).",
   schema,
   intentBuilder: (args) => ({
     type: "swap_exercise",

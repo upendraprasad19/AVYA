@@ -60,6 +60,12 @@ export interface ToolDefinition<TArgs = unknown, TResult = unknown> {
   tier: ToolTier;
   /** Plain-text description sent to Gemini in the function declaration. Tell the model when to call this. */
   description: string;
+  /**
+   * Optional natural-language hints that disambiguate this tool from siblings.
+   * Appended to `description` when emitting Gemini function declarations so the
+   * model has explicit guidance for multi-intent messages. Per spec §5.2.
+   */
+  selectionHints?: string;
   /** Zod schema validating the function-call args. */
   schema: z.ZodTypeAny;
   /** Optional max latency for read tools. Default 3000ms. Ignored for write tools. */
