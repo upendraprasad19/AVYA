@@ -6,6 +6,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -270,33 +271,21 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Sign out BEFORE clearing Hive so the router never sees
   /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> signOut() async {
-    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-
-    // Atomic logout (F16): set a marker BEFORE wiping Hive. If the app is
-    // force-killed mid-clear (OS eviction, power loss), `main.dart` will
-    // detect the marker on next launch and re-run `clearAllData` before any
-    // other code reads a half-wiped box.
-    final hive = HiveService.instance;
     try {
-      await hive.configBox.put('logout_in_progress', true);
-    } catch (_) {/* configBox not open yet / unavailable — best effort */}
-
-    // 1. Terminate session (local scope always works offline).
-    try {
-      await _supabase.client.auth.signOut(scope: SignOutScope.global);
-    } catch (_) {
-      try {
-        await _supabase.client.auth.signOut(scope: SignOutScope.local);
-      } catch (_) {}
+      await UserRepository.instance.clearAllData();
+    } catch (e) {
+      debugPrint('[auth/signOut] clearAllData failed: $e');
     }
-    // 2. Clear all user data after session is gone.
-    await UserRepository.instance.clearAllData();
-
-    // 3. Atomic logout complete — clear the marker.
     try {
-      await hive.configBox.delete('logout_in_progress');
-    } catch (_) {/* configBox was just cleared; flag is already gone */}
-
+      await HiveUserSession.deleteAllFilesForCurrentUser();
+    } catch (e) {
+      debugPrint('[auth/signOut] deleteAllFilesForCurrentUser failed: $e');
+    }
+    try {
+      await _supabase.client.auth.signOut();
+    } catch (e) {
+      debugPrint('[auth/signOut] supabase signOut failed: $e');
+    }
     state = const AuthState2(status: AuthStatus.idle);
   }
 
@@ -322,21 +311,39 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// If the user previously completed onboarding (has a profile in Supabase),
   /// restores the onboarding flag so they skip onboarding on re-login.
   Future<void> _ensureLocalUser(User user) async {
+    // Layer 2.3 — open per-user namespaced boxes FIRST, before any code
+    // reads user-scoped Hive. Idempotent — re-running for same user is a no-op.
+    // Different user → previous boxes closed first.
+    await HiveUserSession.openForUser(user.id);
+
     final userBox = _hive.userBox;
     final configBox = _hive.configBox;
     final existing = userBox.get('profile');
 
-    // If Hive has a profile that isn't provably this user's, wipe it.
-    // Covers three cases:
-    //   1. Different user was logged in (existingId != user.id)
-    //   2. Old profile has no 'id' field (set via onboarding without id) —
-    //      we can't confirm it belongs to the new user, so clear it.
-    //   3. Incomplete sign-out left stale data behind.
+    // B1 layer 2/3: Cross-account safety net — checks if existing profile id
+    // mismatches new user.id (leftover from failed/incomplete sign-out).
+    // Test #5 Plan A: removed the second arm via 'last_authenticated_user_id'
+    // because HiveUserSession.openForUser (called above) provides the same
+    // isolation guarantee for per-user namespaced boxes.
+    bool needsClear = false;
+    String? clearReason;
+
     if (existing != null) {
       final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
       if (existingId == null || existingId != user.id) {
-        await UserRepository.instance.clearAllData();
+        needsClear = true;
+        clearReason = 'profile id mismatch (had=$existingId, now=${user.id})';
       }
+    }
+    // Test #5 Plan A note: the second arm of the guard ('last_authenticated_user_id'
+    // mismatch via syncBox) is no longer needed because HiveUserSession.openForUser
+    // (called above on line 317) opens per-user namespaced boxes, providing the
+    // same isolation guarantee. Stamping last_authenticated_user_id is also
+    // unnecessary — HiveUserSession.currentOwnerFullId is now the canonical
+    // ownership marker, set by openForUser itself.
+    if (needsClear) {
+      debugPrint('[auth/_ensureLocalUser] Cross-account guard fired: $clearReason. Clearing Hive.');
+      await UserRepository.instance.clearAllData();
     }
 
     // Ensure user exists in public.users table (Edge Functions need this).
@@ -368,8 +375,18 @@ class AuthNotifier extends Notifier<AuthState2> {
         }).eq('id', user.id);
       }
     } catch (e) {
-      debugPrint('users table upsert failed: $e');
-      // Non-fatal for sign-in, but AI chat may fail if row is missing.
+      debugPrint('[_ensureLocalUser] users table upsert failed: $e');
+      // Bug A defense (2026-04-26): silent-swallow let an orphan public.users
+      // row block sync for 48h. Surface PostgrestException codes 23505 / 23503
+      // to the cloud so future failures are auditable across devices.
+      String errorType = 'users_upsert_failed';
+      final eStr = e.toString();
+      if (eStr.contains('23505')) errorType = 'users_unique_violation_23505';
+      if (eStr.contains('23503')) errorType = 'users_fk_violation_23503';
+      // Posts to the `log-client-error` Edge Function (see _logClientError).
+      unawaited(_logClientError(user.id, errorType, eStr));
+      // Non-fatal for sign-in flow, but AI chat / sync may fail until
+      // resolved. Now visible in client_errors instead of only debugPrint.
     }
 
     // F2/F3 · Always pull the cloud profile on sign-in and merge into Hive.
@@ -437,10 +454,12 @@ class AuthNotifier extends Notifier<AuthState2> {
             await userBox.put('progress', mergedProgress);
           }
 
-          // Hydrate AI trial start from server (preserves trial across devices).
+          // Hydrate AI trial start + terms acceptance from server.
+          // terms_accepted_at is synced so TermsModal never re-fires on a
+          // new device when the user already accepted on another device.
           final userRows = await supabase
               .from('users')
-              .select('ai_chat_started_at')
+              .select('ai_chat_started_at, terms_accepted_at, terms_version')
               .eq('id', user.id)
               .limit(1);
           if (userRows.isNotEmpty) {
@@ -448,6 +467,23 @@ class AuthNotifier extends Notifier<AuthState2> {
                 userRows.first['ai_chat_started_at'] as String?;
             if (serverTrialStart != null) {
               await configBox.put('ai_trial_start', serverTrialStart);
+            }
+            // Restore terms acceptance so TermsModal skips on new devices.
+            final serverTermsAt =
+                userRows.first['terms_accepted_at'] as String?;
+            final serverTermsVersion =
+                userRows.first['terms_version'] as String?;
+            if (serverTermsAt != null && serverTermsAt.isNotEmpty) {
+              // Only write if Hive doesn't already have a stamp — local
+              // timestamp is more precise (it came from this device's user
+              // interaction) and should not be overwritten by a cloud value.
+              final localTermsAt = userBox.get('terms_accepted_at');
+              if (localTermsAt == null) {
+                await userBox.put('terms_accepted_at', serverTermsAt);
+                if (serverTermsVersion != null) {
+                  await userBox.put('terms_version', serverTermsVersion);
+                }
+              }
             }
           }
 
@@ -555,6 +591,30 @@ class AuthNotifier extends Notifier<AuthState2> {
       } catch (_) {
         // Non-critical — push notifications will still work on next launch.
       }
+    }
+  }
+
+  /// Posts a single error event to the `log-client-error` Edge Function.
+  /// Fire-and-forget. Catches its own errors so logging never throws.
+  Future<void> _logClientError(
+    String userId,
+    String errorType,
+    String message,
+  ) async {
+    try {
+      await _supabase.client.functions.invoke(
+        'log-client-error',
+        body: {
+          'user_id': userId,
+          'error_type': errorType,
+          'message': message.length > 1000
+              ? message.substring(0, 1000)
+              : message,
+          'source': 'auth_provider._ensureLocalUser',
+        },
+      );
+    } catch (_) {
+      // Swallow — error logging must never break the host flow.
     }
   }
 

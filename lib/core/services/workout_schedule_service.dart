@@ -962,7 +962,11 @@ class WorkoutScheduleService {
       'exercise_id':
           (newLib['id'] as String?) ?? toExerciseId,
       'exercise_name': (newLib['name'] as String?) ?? toExerciseId,
-      'logging_type': (newLib['logging_type'] as String?) ??
+      'logging_type': LoggingTypeResolver.resolve(
+              exercise: Map<String, dynamic>.from(newLib),
+              exerciseLibrary: HiveService.instance.exerciseBox.toMap(),
+              customLibrary: HiveService.instance.customBox.toMap(),
+            ) ??
           (original['logging_type'] as String?) ??
           'weight_reps',
       // Keep prescribed sets/reps/rest from the original slot.
@@ -1623,4 +1627,40 @@ class _PrioritisedExercise {
     required this.priorityRank,
     required this.entry,
   });
+}
+
+/// Resolves the logging_type for an exercise payload by checking, in order:
+/// 1. explicit `logging_type` field on the payload
+/// 2. customLibrary entry matching by name
+/// 3. exerciseLibrary entry matching by name
+/// Returns null if no source has it. Callers should fall back to
+/// 'weight_reps' as a final default.
+class LoggingTypeResolver {
+  static String? resolve({
+    required Map<String, dynamic> exercise,
+    required Map<dynamic, dynamic> exerciseLibrary,
+    required Map<dynamic, dynamic> customLibrary,
+  }) {
+    final direct = exercise['logging_type'] as String?;
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final name = exercise['name'] as String?;
+    if (name == null || name.isEmpty) return null;
+
+    for (final value in customLibrary.values) {
+      if (value is Map && value['name'] == name) {
+        final t = value['logging_type'] as String?;
+        if (t != null && t.isNotEmpty) return t;
+      }
+    }
+
+    for (final value in exerciseLibrary.values) {
+      if (value is Map && value['name'] == name) {
+        final t = value['logging_type'] as String?;
+        if (t != null && t.isNotEmpty) return t;
+      }
+    }
+
+    return null;
+  }
 }

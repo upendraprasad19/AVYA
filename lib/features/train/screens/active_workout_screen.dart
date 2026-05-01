@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
+import '../services/active_workout_persistence.dart';
 import '../../home/providers/home_provider.dart';
 import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/exercise_swap_sheet.dart';
@@ -39,6 +40,11 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    // A7: clear mid-workout snapshot on any screen exit (back-button, system
+    // nav, or auto-dismiss). Completion/cancellation paths also call this
+    // explicitly so the AI coach sees null state immediately rather than
+    // waiting for the next app lifecycle event.
+    ActiveWorkoutPersistence.clearState();
     super.dispose();
   }
 
@@ -729,11 +735,101 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
             ? () => ref.read(activeWorkoutProvider.notifier).removeExercise(exerciseIndex)
             : null,
         onAdd: (addEx) {
-          // Sentinel value '__ADD_MODE__' means user tapped the "+ Add Exercise"
-          // button — open the full exercise picker sheet for appending.
+          // Sentinel '__ADD_MODE__' means user tapped "+ ADD EXERCISE"
+          // inside the Swap sheet.
+          //
+          // Pre-2026-04-24 this opened a picker sheet to browse
+          // existing exercises, forcing the user to then swap again
+          // manually. Per APK test #1 feedback: "if the path was via
+          // swap, it should have swapped as well." The new flow opens
+          // CreateCustomExerciseSheet directly; on save the new
+          // exercise is auto-swapped into the slot, with an UNDO
+          // snackbar for recoverability.
           if (addEx.name == '__ADD_MODE__') {
-            _showExercisePickerSheet(context, ref);
+            _openCreateAndAutoSwap(context, ref, exerciseIndex);
           }
+        },
+      ),
+    );
+  }
+
+  /// Opens [CreateCustomExerciseSheet] and, on save, swaps the newly
+  /// created exercise into [exerciseIndex], preserving the slot's sets,
+  /// reps, weight, and rest. Shows an UNDO snackbar that restores the
+  /// original exercise if tapped within 5 s.
+  void _openCreateAndAutoSwap(
+    BuildContext context,
+    WidgetRef ref,
+    int exerciseIndex,
+  ) {
+    final data = ref.read(activeWorkoutProvider);
+    if (exerciseIndex < 0 || exerciseIndex >= data.exercises.length) return;
+    final original = data.exercises[exerciseIndex];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => CreateCustomExerciseSheet(
+        onCreated: (newExercise) {
+          final newName = (newExercise['name'] as String?) ?? 'Exercise';
+          final loggingType =
+              (newExercise['logging_type'] as String?) ?? 'weight_reps';
+          final defaultSets = newExercise['default_sets'];
+          final defaultReps = newExercise['default_reps'];
+          final defaultRest = newExercise['default_rest_secs'];
+          final equipment = (newExercise['equipment_needed'] as List?)
+                  ?.cast<String>() ??
+              original.equipmentNeeded;
+
+          // Compose the swap target. Prefer the form's defaults (user
+          // just typed them) and fall back to the original slot's
+          // values so weight and cadence carry over naturally.
+          final replacement = ExerciseData(
+            name: newName,
+            sets: defaultSets != null ? '$defaultSets' : original.sets,
+            reps: defaultReps != null ? '$defaultReps' : original.reps,
+            weight: original.weight,
+            rest: defaultRest != null ? '${defaultRest}s' : original.rest,
+            loggingType: loggingType,
+            category: (newExercise['category'] as String?) ?? original.category,
+            equipmentNeeded: equipment,
+          );
+
+          ref.read(activeWorkoutProvider.notifier).swapExercise(
+                exerciseIndex,
+                replacement,
+              );
+          ref.invalidate(todayWorkoutProvider);
+          ref.invalidate(currentPlanProvider);
+          ref.invalidate(calendarWeekProvider);
+
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: AppColors.card,
+                duration: const Duration(seconds: 5),
+                content: Text(
+                  'Swapped "${original.name}" \u2192 "$newName"',
+                  style: AppTypography.bodySm,
+                ),
+                action: SnackBarAction(
+                  label: 'UNDO',
+                  textColor: AppColors.accent,
+                  onPressed: () {
+                    ref
+                        .read(activeWorkoutProvider.notifier)
+                        .swapExercise(exerciseIndex, original);
+                    ref.invalidate(todayWorkoutProvider);
+                    ref.invalidate(currentPlanProvider);
+                    ref.invalidate(calendarWeekProvider);
+                  },
+                ),
+              ),
+            );
         },
       ),
     );
@@ -893,6 +989,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               ref
                   .read(activeWorkoutProvider.notifier)
                   .setElapsedSeconds(totalSeconds);
+              // A7: clear mid-workout state immediately on completion so
+              // the AI coach snapshot reflects null (session over) right away.
+              ActiveWorkoutPersistence.clearState();
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).completeWorkout();
             },
@@ -946,6 +1045,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           ),
           TextButton(
             onPressed: () {
+              // A7: clear mid-workout state immediately on abandonment.
+              ActiveWorkoutPersistence.clearState();
               Navigator.of(ctx).pop();
               ref.read(activeWorkoutProvider.notifier).cancelWorkout();
               context.go('/train');
@@ -1107,11 +1208,35 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   @override
   void didUpdateWidget(covariant _ExerciseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final newNumSets = int.tryParse(widget.exercise.sets) ?? 3;
-    if (newNumSets != _weightControllers.length ||
-        oldWidget.exercise.name != widget.exercise.name) {
+    final oldCount = int.tryParse(oldWidget.exercise.sets) ?? 3;
+    final newCount = int.tryParse(widget.exercise.sets) ?? 3;
+
+    // Exercise swap: full rebuild needed (different pre-fills, weight, reps).
+    if (oldWidget.exercise.name != widget.exercise.name) {
       _disposeControllers();
       _initControllers();
+      return;
+    }
+
+    // Set count unchanged: nothing to do.
+    if (newCount == oldCount) return;
+
+    if (newCount > oldCount) {
+      // Append: preserve [0..oldCount-1] controllers, add new ones for the rest.
+      for (var i = oldCount; i < newCount; i++) {
+        _weightControllers.add(TextEditingController());
+        _repsControllers.add(TextEditingController());
+        _durationControllers.add(TextEditingController());
+        _distanceControllers.add(TextEditingController());
+      }
+    } else {
+      // Shrink: dispose trailing controllers from [newCount..oldCount-1].
+      for (var i = oldCount - 1; i >= newCount; i--) {
+        _weightControllers.removeAt(i).dispose();
+        _repsControllers.removeAt(i).dispose();
+        _durationControllers.removeAt(i).dispose();
+        _distanceControllers.removeAt(i).dispose();
+      }
     }
   }
 
@@ -1139,6 +1264,45 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         durationSeconds: int.tryParse(_durationControllers[setIdx].text),
         distanceKm: double.tryParse(_distanceControllers[setIdx].text),
       ),
+    );
+  }
+
+  /// A7: Persist current mid-workout state to Hive so the AI coach snapshot
+  /// reflects what the user is actively doing. Called after every set log.
+  /// Uses the values from the set at [setIdx] as the most-recently-touched set.
+  void _persistActiveState(int setIdx) {
+    final numSets = _numSets;
+    // Count completed sets (warm-up sets excluded by the provider's
+    // completedSets getter, but here we capture the raw toggle state for
+    // the snapshot — fine since the coach just needs approximate context).
+    final completedSets = List.generate(numSets, (i) =>
+        widget.data.isSetChecked(widget.exerciseIndex, i)).where((c) => c).length;
+
+    // Weight: from the set being logged; fall back to first weight controller.
+    final weightText = setIdx < _weightControllers.length
+        ? _weightControllers[setIdx].text
+        : _weightControllers.isNotEmpty ? _weightControllers.first.text : '';
+    // Reps: prefer reps controller; fall back to duration (timed/cardio).
+    final repsText = setIdx < _repsControllers.length
+        ? _repsControllers[setIdx].text
+        : '';
+    final repsCompleted = int.tryParse(repsText) ??
+        (setIdx < _durationControllers.length
+            ? int.tryParse(_durationControllers[setIdx].text) ?? 0
+            : 0);
+
+    // current_set = number of sets completed so far (including the one just logged).
+    // total_sets = configured set count for this exercise.
+    ActiveWorkoutPersistence.writeState(
+      exerciseName: widget.exercise.name,
+      currentSet: completedSets.clamp(1, numSets),
+      totalSets: numSets,
+      weight: double.tryParse(weightText),
+      repsTarget: int.tryParse(widget.exercise.reps) ??
+          _parseRepsMidpoint(widget.exercise.reps),
+      repsCompleted: repsCompleted,
+      rpeHistory: const [], // RPE not surfaced per-set in current UI
+      restRemainingSecs: null, // rest timer hidden per user feedback
     );
   }
 
@@ -1503,6 +1667,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                       if (alreadyChecked) {
                                         _captureSetValues(setIdx);
                                         widget.onToggleSet(setIdx);
+                                        // A7: update snapshot on uncheck too —
+                                        // reflects the revised completed-set count.
+                                        _persistActiveState(setIdx);
                                         return;
                                       }
 
@@ -1540,6 +1707,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
                                       _captureSetValues(setIdx);
                                       widget.onToggleSet(setIdx);
+                                      // A7: persist snapshot after every set check-off
+                                      // so the Captain knows current mid-workout state.
+                                      _persistActiveState(setIdx);
                                     },
                                   ),
                                 ),

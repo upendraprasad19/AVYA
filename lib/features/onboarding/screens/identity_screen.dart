@@ -11,7 +11,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// Collects the three "who are you" basics before any body-metric or
 /// goal-specific questions:
 ///   * `full_name`  — text input, required
-///   * `date_of_birth` — date picker, required, min age 13
+///   * `date_of_birth` — date picker, required, min age 10
 ///   * `sex` — Male / Female / Other, required
 ///
 /// Moved here from Stats (sex) and derived-from-age (DOB) so the flow
@@ -35,12 +35,24 @@ class _IdentityScreenState extends State<IdentityScreen> {
   late final TextEditingController _name;
   DateTime? _dob;
   late String _sex;
+  /// Inline validation error for the name field. Cleared when the user
+  /// resumes typing. Shown as bodySm-bad below the field's labelled tile.
+  String? _nameError;
+
+  /// Letters + spaces + `.`-`'` allowed; digits and emoji rejected.
+  /// Matches the validation spec in the APK-test-1-batch plan (D2).
+  static final RegExp _nameAllowed = RegExp(r"^[A-Za-z\u00C0-\u024F .'\-]+$");
 
   @override
   void initState() {
     super.initState();
     final init = widget.initial ?? const <String, dynamic>{};
     _name = TextEditingController(text: init['full_name'] as String? ?? '');
+    _name.addListener(() {
+      if (_nameError != null) {
+        setState(() => _nameError = null);
+      }
+    });
     final initDob = init['date_of_birth'];
     if (initDob is String) {
       _dob = DateTime.tryParse(initDob);
@@ -58,8 +70,12 @@ class _IdentityScreenState extends State<IdentityScreen> {
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    // Min-age 13: max selectable DOB is today-13y.
-    final max = DateTime(now.year - 13, now.month, now.day);
+    // Min-age 10: max selectable DOB is today-10y.
+    // U10 fix (Test #4 hotfix): lowered from 13 → 10 per user observation
+    // ("i tried inserting date of my son as 2019, i was unable").
+    // Trade-off: less COPPA-aligned but simpler. Track for legal review
+    // post-Test #4. Guardian-managed accounts for under-10 remain out of scope.
+    final max = DateTime(now.year - 10, now.month, now.day);
     final seed = _dob ?? DateTime(now.year - 25, 1, 1);
     final picked = await showDatePicker(
       context: context,
@@ -202,24 +218,35 @@ class _IdentityScreenState extends State<IdentityScreen> {
           label: 'NAME',
           child: TextField(
             controller: _name,
+            // Focus on entry so the keyboard pops up immediately — user
+            // lands on the screen and can start typing without reaching
+            // for the field. Placeholder removed: the NAME label above
+            // already tells them what goes here.
+            autofocus: true,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
             style: AppTypography.body.copyWith(
               color: AppColors.textPrimary,
               fontSize: 16,
             ),
             cursorColor: AppColors.accent,
-            decoration: InputDecoration(
-              hintText: 'First name (or what you go by)',
-              hintStyle: AppTypography.body.copyWith(
-                color: AppColors.textMute,
-                fontSize: 16,
-              ),
+            decoration: const InputDecoration(
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
             ),
           ),
         ),
+        if (_nameError != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              _nameError!,
+              style: AppTypography.bodySm.copyWith(color: AppColors.bad),
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         _labeledField(
           label: 'DATE OF BIRTH',
@@ -390,13 +417,31 @@ class _IdentityScreenState extends State<IdentityScreen> {
 
   void _onContinue() {
     final name = _name.text.trim();
-    if (name.isEmpty || _dob == null) {
+
+    // Validate name with actionable inline feedback (D2 spec).
+    String? nameError;
+    if (name.isEmpty) {
+      nameError = 'Tell us your name first.';
+    } else if (name.length < 2) {
+      nameError = 'Name must be at least 2 characters.';
+    } else if (name.length > 40) {
+      nameError = 'Name is too long (max 40 characters).';
+    } else if (!_nameAllowed.hasMatch(name)) {
+      nameError = 'Letters only \u2014 no digits or emoji.';
+    }
+
+    if (nameError != null) {
+      setState(() => _nameError = nameError);
+      return;
+    }
+
+    // DOB still uses a snackbar because it's a separate tile without an
+    // inline surface — the calendar picker is the primary affordance.
+    if (_dob == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            name.isEmpty
-                ? 'Tell us your name first.'
-                : 'Pick your date of birth.',
+            'Pick your date of birth.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.textPrimary,
             ),
@@ -407,6 +452,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
       );
       return;
     }
+    setState(() => _nameError = null);
     context.go(
       '/onboarding/goal',
       extra: {

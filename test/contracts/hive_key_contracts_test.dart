@@ -157,9 +157,23 @@ void main() {
           reason:
               'sync_service._syncSleepLogs must iterate per-day sleep_log_* keys');
 
-      // Must NOT read the stale 'sleep_logs' list key
-      expect(syncSource.contains("healthBox.get('sleep_logs')"), isFalse,
-          reason: 'sync_service must not read stale "sleep_logs" list key');
+      // _syncSleepLogs (the inner helper) must use prefix iteration, not the
+      // stale list key. Extract just the helper body to verify it doesn't use
+      // the old list-key pattern. Note: syncSleepNow() is allowed to read
+      // healthBox.get('sleep_logs') as a SUPPLEMENTAL path for the
+      // conversational AI tool path (chat-logged sleep); that dual-path was
+      // added in APK Test #4 (commit 4afc5e0) and is intentional. The
+      // invariant is that _syncSleepLogs never bypasses prefix iteration.
+      final helperStart = syncSource.indexOf('Future<void> _syncSleepLogs(');
+      expect(helperStart, isNot(-1),
+          reason: '_syncSleepLogs helper must exist');
+      // Take enough chars to cover the helper body (~800 chars) but not the
+      // enclosing syncSleepNow that comes before it.
+      final helperBody = syncSource.substring(helperStart, helperStart + 800);
+      expect(helperBody.contains("healthBox.get('sleep_logs')"), isFalse,
+          reason:
+              '_syncSleepLogs inner helper must not read the stale list key '
+              '— it must iterate per-day sleep_log_* keys via startsWith.');
     });
   });
 

@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/barcode_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
 import '../providers/nutrition_provider.dart';
@@ -30,6 +31,86 @@ class _BarcodeScanSheet extends ConsumerStatefulWidget {
 }
 
 class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.92,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scroll) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Scan Barcode',
+                    style: AppTypography.body.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: AppColors.input,
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: const Icon(Icons.close,
+                          color: AppColors.textSecondary, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: BarcodeBody(
+                onLogged: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reusable Barcode scanner + result-editor body. Used by:
+///   * the legacy `showBarcodeScanSheet` standalone modal entry point
+///     (`_BarcodeScanSheet` host).
+///   * the new `BarcodeModeBody` inside `LogFoodSheet`.
+class BarcodeBody extends ConsumerStatefulWidget {
+  const BarcodeBody({super.key, required this.onLogged});
+
+  /// Fired after the user taps `LOG` and the food row is written.
+  /// Hosts use this to dismiss themselves.
+  final VoidCallback onLogged;
+
+  @override
+  ConsumerState<BarcodeBody> createState() => _BarcodeBodyState();
+}
+
+class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
   final _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
@@ -127,78 +208,21 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
     unawaited(SyncService.instance.syncNutritionData());
     unawaited(SyncService.instance.pushSnapshot());
 
-    if (mounted) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${food.name} logged ✓',
-              style: AppTypography.body.copyWith(fontSize: 13)),
-          backgroundColor: AppColors.card,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${food.name} logged ✓',
+            style: AppTypography.body.copyWith(fontSize: 13)),
+        backgroundColor: AppColors.card,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    widget.onLogged();
   }
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.92,
-      maxChildSize: 0.95,
-      minChildSize: 0.5,
-      builder: (_, scroll) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.bg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: Column(
-          children: [
-            // Handle
-            Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 4),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Scan Barcode',
-                    style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: AppColors.input,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: const Icon(Icons.close,
-                          color: AppColors.textSecondary, size: 16),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: _food != null
-                  ? _buildFoodResult()
-                  : _buildScanner(),
-            ),
-          ],
-        ),
-      ),
-    );
+    return _food != null ? _buildFoodResult() : _buildScanner();
   }
 
   Widget _buildScanner() {
@@ -212,7 +236,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           child: Stack(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 child: MobileScanner(
                   controller: _controller,
                   onDetect: _onDetect,
@@ -252,7 +276,8 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                   children: [
                     Text(
                       _error!,
-                      style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+                      style: AppTypography.body
+                          .copyWith(fontSize: 13, color: AppColors.textDim),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
@@ -263,37 +288,45 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                             horizontal: 24, vertical: 12),
                         decoration: BoxDecoration(
                           color: AppColors.accentTint,
-                          border:
-                              Border.all(color: AppColors.accent.withValues(alpha:0.3)),
+                          border: Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.3)),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
                           'Scan Again',
-                          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+                          style: AppTypography.body.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent),
                         ),
                       ),
                     ),
                     GestureDetector(
                       onTap: () {
-                        Navigator.of(context).pop();
+                        widget.onLogged();
                         showCustomFoodSheet(context);
                       },
                       child: Container(
                         margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.border),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text("Add manually",
-                          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDim)),
+                            style: AppTypography.body.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDim)),
                       ),
                     ),
                   ],
                 )
               : Text(
                   'Point camera at the barcode on the packaging',
-                  style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+                  style: AppTypography.body
+                      .copyWith(fontSize: 13, color: AppColors.textDim),
                   textAlign: TextAlign.center,
                 ),
         ),
@@ -320,18 +353,22 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           const SizedBox(height: 20),
           Text(
             'Barcode scanning requires\nthe mobile app',
-            style: AppTypography.body.copyWith(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
           Text(
             'Download ICANBEFITTER on Android to scan\nproduct barcodes with your camera.',
-            style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+            style: AppTypography.body
+                .copyWith(fontSize: 13, color: AppColors.textDim),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
           GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: widget.onLogged,
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
@@ -341,7 +378,8 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
               ),
               child: Text(
                 'Got it',
-                style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
+                style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w900, color: Colors.black),
               ),
             ),
           ),
@@ -366,12 +404,15 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.green.withValues(alpha:0.1),
+              color: AppColors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
               '✓ Product found',
-              style: AppTypography.bodySm.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ok),
+              style: AppTypography.bodySm.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ok),
             ),
           ),
           const SizedBox(height: 10),
@@ -379,13 +420,17 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           // Product name
           Text(
             food.name,
-            style: AppTypography.body.copyWith(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            style: AppTypography.body.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary),
           ),
           if (food.brand != null) ...[
             const SizedBox(height: 2),
             Text(
               food.brand!,
-              style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+              style: AppTypography.body
+                  .copyWith(fontSize: 13, color: AppColors.textDim),
             ),
           ],
           const SizedBox(height: 16),
@@ -433,7 +478,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                       borderRadius: BorderRadius.circular(100),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.accent.withValues(alpha:0.3),
+                          color: AppColors.accent.withValues(alpha: 0.3),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -442,7 +487,8 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                     alignment: Alignment.center,
                     child: Text(
                       '✓ Log Food',
-                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
+                      style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w900, color: Colors.black),
                     ),
                   ),
                 ),
@@ -459,7 +505,8 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
                   ),
                   child: Text(
                     'Rescan',
-                    style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+                    style: AppTypography.body
+                        .copyWith(fontSize: 13, color: AppColors.textDim),
                   ),
                 ),
               ),
@@ -478,9 +525,15 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Serving size',
-                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
             Text('${_servingG.round()}g',
-                style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.accent)),
+                style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.accent)),
           ],
         ),
         SliderTheme(
@@ -488,7 +541,7 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
             activeTrackColor: AppColors.accent,
             inactiveTrackColor: AppColors.input,
             thumbColor: AppColors.accent,
-            overlayColor: AppColors.accent.withValues(alpha:0.15),
+            overlayColor: AppColors.accent.withValues(alpha: 0.15),
             trackHeight: 4,
           ),
           child: Slider(
@@ -502,7 +555,8 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
         if (food.servingDesc != null)
           Text(
             'Typical serving: ${food.servingDesc}',
-            style: AppTypography.monoXs.copyWith(fontSize: 10, color: AppColors.textDim),
+            style: AppTypography.monoXs
+                .copyWith(fontSize: 10, color: AppColors.textDim),
           ),
       ],
     );
@@ -523,21 +577,22 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: isActive
-                    ? AppColors.accent.withValues(alpha:0.1)
+                    ? AppColors.accent.withValues(alpha: 0.1)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(100),
                 border: Border.all(
                   color: isActive
-                      ? AppColors.accent.withValues(alpha:0.3)
+                      ? AppColors.accent.withValues(alpha: 0.3)
                       : AppColors.border,
                 ),
               ),
               alignment: Alignment.center,
               child: Text(
                 labels[i],
-                style: AppTypography.monoXs.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: isActive
-                        ? AppColors.accent
-                        : AppColors.textDim),
+                style: AppTypography.monoXs.copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? AppColors.accent : AppColors.textDim),
               ),
             ),
           ),
@@ -551,9 +606,11 @@ class _BarcodeScanSheetState extends ConsumerState<_BarcodeScanSheet> {
       child: Column(
         children: [
           Text(value,
-              style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w900, color: color)),
+              style: AppTypography.body.copyWith(
+                  fontSize: 15, fontWeight: FontWeight.w900, color: color)),
           Text(label,
-              style: AppTypography.monoXs.copyWith(color: AppColors.textDim)),
+              style: AppTypography.monoXs
+                  .copyWith(color: AppColors.textDim)),
         ],
       ),
     );

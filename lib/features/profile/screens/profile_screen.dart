@@ -31,14 +31,17 @@ import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
 import '../providers/profile_provider.dart';
+import '../providers/referral_eligibility_provider.dart';
+import '../screens/apply_referral_sheet.dart';
 import '../widgets/profile_identity.dart';
+import '../widgets/service_record_section.dart';
 import '../widgets/profile_row.dart';
 import '../widgets/section_header.dart';
 import '../widgets/slim_achievements_card.dart';
 import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
-import 'package:icanbefitter/shared/widgets/community_review_sheet.dart';
+import '../screens/invite_friends_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -407,14 +410,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              // Wardroom letterhead — mono eyebrow + Fraunces title above identity card
-              const WardLetterhead(
-                eyebrow: 'OFFICER \u00B7 DOSSIER',
-                title: 'Profile',
-                padding: EdgeInsets.fromLTRB(22, 14, 22, 12),
-                divider: true,
-              ),
-              const SizedBox(height: 10),
+              // Plan D D-9 — Profile uses ProfileIdentity (banner + 80dp
+              // avatar overlap + name + EDIT button + gold rule) as its
+              // letterhead. The floating DOSSIER · OFFICER eyebrow is
+              // overlaid on the banner @ ~65% alpha inside ProfileIdentity.
+              // No unified WardTabHeader.
 
               // 1. Profile identity with banner + avatar
               ProfileIdentity(
@@ -525,6 +525,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 8),
 
+              // U6 fix (Test #4 hotfix): ServiceRecordSection (RANK card)
+              // moved ABOVE ProfileCompletenessCard per user observation:
+              // "lets use the blank space indicated to mention the rank with
+              // drop down. saves space. and also move the rank to above
+              // profile completion block."
+              // OBS-5: collapsed by default, tap to expand full ladder.
+              const ServiceRecordSection(),
+              const SizedBox(height: 8),
+
               // Profile completeness (shows until 100%)
               const ProfileCompletenessCard(),
               const SizedBox(height: 8),
@@ -623,32 +632,81 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // removed.
               const SectionHeader('SHARE & GROW'),
               _buildCard([
+                // Q4: Apply Referral Code — visible only within 7-day signup
+                // window AND when the user hasn't redeemed a referral yet.
+                // Tap opens ApplyReferralSheet; on success the provider is
+                // invalidated so the tile disappears automatically.
+                ...ref.watch(referralEligibilityProvider).when(
+                  data: (state) {
+                    if (!state.isEligible) return const <Widget>[];
+                    return <Widget>[
+                      ProfileRow(
+                        icon: Icons.card_giftcard_outlined,
+                        iconBgColor: AppColors.accentSoft,
+                        iconColor: AppColors.accent,
+                        title: 'Apply Referral Code',
+                        subtitle: '7 days of PRO when you apply a code',
+                        titleSuffix: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${state.daysRemaining}D LEFT',
+                            style: AppTypography.monoXs.copyWith(
+                              letterSpacing: 0.8,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        trailing: const ProfileRowChevron(),
+                        onTap: () async {
+                          final ok = await ApplyReferralSheet.show(context);
+                          if (ok == true && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '7 days of PRO unlocked!',
+                                  style: AppTypography.body.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                backgroundColor: AppColors.card,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                            ref.invalidate(referralEligibilityProvider);
+                          }
+                        },
+                      ),
+                    ];
+                  },
+                  loading: () => const <Widget>[],
+                  error: (e, st) => const <Widget>[],
+                ),
                 ProfileRow(
                   icon: Icons.card_giftcard,
                   title: 'Invite Friends',
                   subtitle: 'Both get 7 days PRO free',
                   trailing: const ProfileRowChevron(),
-                  onTap: () => _showInviteFriends(),
+                  onTap: () => InviteFriendsSheet.show(context),
                 ),
-                ProfileRow(
-                  icon: Icons.rate_review_outlined,
-                  title: 'Review Community Items',
-                  subtitle: 'Approve foods & exercises from users',
-                  trailing: const ProfileRowChevron(),
-                  onTap: () => showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const CommunityReviewSheet(),
-                  ),
-                ),
-                // F9 — user-visible status of their own submissions
+                // S1 (2026-04-24) — the pre-APK-1-batch split of
+                // "Review Community Items" (bottom sheet) and
+                // "My Submissions" (screen) confused testers who kept
+                // tapping one expecting the other. Collapsed into a
+                // single Submissions row that opens a tabbed screen
+                // with both views.
                 ProfileRow(
                   icon: Icons.workspace_premium_outlined,
-                  title: 'My Submissions',
-                  subtitle: 'Track approval status of foods & exercises you shared',
+                  title: 'Submissions',
+                  subtitle: 'Your submissions + vote on community items',
                   trailing: const ProfileRowChevron(),
-                  onTap: () => context.go('/profile/my-submissions'),
+                  onTap: () => context.go('/profile/submissions'),
                 ),
                 // AH.7 — Rate App tile completes the SHARE & GROW block
                 // (JSX spec lines 331–338 + user ask for explicit Rate App
@@ -1860,101 +1918,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _launchUrl(String url) {
     launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _showInviteFriends() async {
-    String? referralCode;
-    try {
-      referralCode = await SupabaseService.instance.getOrCreateReferralCode();
-    } catch (e) {
-      debugPrint('[ProfileScreen._showInviteFriends] $e');
-    }
-
-    if (referralCode == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to generate referral code',
-              style: AppTypography.bodySm,
-            ),
-            backgroundColor: AppColors.bad,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'INVITE FRIENDS',
-                style: AppTypography.mono.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 2.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Invite Friends',
-                style: AppTypography.h2,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Share your code with friends. When they sign up, both of you get 7 days of PRO free!',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
-              ),
-              const SizedBox(height: 20),
-              // Code display — Wardroom hero card with Fraunces numeric
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.33)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      referralCode!,
-                      style: AppTypography.h2.copyWith(
-                        color: AppColors.accent,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              WardButton(
-                label: 'Share My Code',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Share.share(
-                    'Join me on AVYA Fit! Use my referral code $referralCode to get 7 days of PRO free. Download: https://icanbefitter.vercel.app',
-                    subject: 'AVYA Fit Referral',
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   /// Wraps children in a Wardroom card.

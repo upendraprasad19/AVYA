@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -74,45 +76,70 @@ class SupabaseService {
     return currentUser != null;
   }
 
-  /// Fetches or generates a referral code for the current user.
-  /// Returns the code string, or null on failure.
-  Future<String?> getOrCreateReferralCode() async {
+  /// Returns the user's current non-expired referral code, or generates a
+  /// new one. Returns null if not authenticated or on failure.
+  Future<({String code, DateTime expiresAt})?> getOrCreateReferralCode() async {
     final userId = currentUser?.id;
     if (userId == null) return null;
 
-    // Check for existing code
-    final rows = await client
-        .from('referral_codes')
-        .select('code')
-        .eq('user_id', userId)
-        .limit(1);
+    // Try to find an existing non-expired code
+    try {
+      final existing = await client
+          .from('referral_codes')
+          .select('code, expires_at')
+          .eq('user_id', userId)
+          .gt('expires_at', DateTime.now().toIso8601String())
+          .maybeSingle();
 
-    if (rows.isNotEmpty) return rows.first['code'] as String?;
+      if (existing != null) {
+        return (
+          code: existing['code'] as String,
+          expiresAt: DateTime.parse(existing['expires_at'] as String),
+        );
+      }
+    } catch (e) {
+      debugPrint('[SupabaseService.getOrCreateReferralCode] read: $e');
+    }
 
-    // Generate new code with retry for collisions
-    final profile = client.auth.currentUser?.userMetadata;
-    final name = (profile?['full_name'] as String?) ?? 'USER';
-    final prefix = name.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
-    final shortPrefix = prefix.length >= 4 ? prefix.substring(0, 4) : prefix.padRight(4, 'X');
+    return _generateNewCode(userId);
+  }
 
-    for (int attempt = 0; attempt < 5; attempt++) {
-      final seed = DateTime.now().microsecondsSinceEpoch + attempt * 1000;
-      final random = (1000 + seed % 9000).toString();
-      final candidate = 'AVYA-$shortPrefix$random';
+  /// Forces generation of a fresh 7-day code (used by REGENERATE button
+  /// after the previous code expired). Returns null if not authenticated.
+  Future<({String code, DateTime expiresAt})?> regenerateReferralCode() async {
+    final userId = currentUser?.id;
+    if (userId == null) return null;
+    return _generateNewCode(userId);
+  }
+
+  Future<({String code, DateTime expiresAt})?> _generateNewCode(
+      String userId) async {
+    for (var i = 0; i < 5; i++) {
+      final code = _buildReferralCode();
+      final expiresAt = DateTime.now().add(const Duration(days: 7));
       try {
-        await client.from('referral_codes').insert({
+        await client.from('referral_codes').upsert({
           'user_id': userId,
-          'code': candidate,
-        });
-        return candidate;
+          'code': code,
+          'expires_at': expiresAt.toIso8601String(),
+        }, onConflict: 'user_id');
+        return (code: code, expiresAt: expiresAt);
       } catch (e) {
-        if (attempt == 4) {
-          debugPrint('[SupabaseService.getOrCreateReferralCode] $e');
+        if (i == 4) {
+          debugPrint('[SupabaseService._generateNewCode] $e');
           return null;
         }
       }
     }
     return null;
+  }
+
+  String _buildReferralCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rand = Random.secure();
+    final body =
+        List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
+    return 'AVYA-$body';
   }
 
   /// Returns a fresh access token, refreshing proactively if the current

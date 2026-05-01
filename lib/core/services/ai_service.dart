@@ -103,43 +103,70 @@ class AiService {
   /// optional fields first. Without this, any historical query that triggers
   /// `enrichContextForQuery` (exercise history, nutrition/weight trends) can
   /// easily blow past 10KB and get rejected with a generic 400.
+  ///
+  /// A9 — Spec §7.3 priority order (APK Test #4):
+  ///   1. step_history_7d      ← pedometer history, cheapest to lose
+  ///   2. water_7d             ← hydration trend, not needed per-turn
+  ///   3. weight_trend         ← 30-day weight series
+  ///   4. nutrition_trend_7d   ← macro trend (keep meals_today — it's load-bearing)
+  ///   5. exercise_history     ← past lift data
+  ///   6. personal_records     ← PRs
+  ///   7. coach_notices        ← in-app notices
+  ///   8. truncate coaching_notes → 1000 chars
+  ///   9. drop fitness_summary (last resort)
+  ///
+  /// Never-drop set (Captain Manual §2/§4/§8):
+  ///   data_window_days, first_workout_date, workout_logs_count,
+  ///   nutrition_logs_count_7d, sleep_logs_count_7d,
+  ///   today_workout, yesterday_workout, week_lookahead,
+  ///   meals_today, current_plan_summary,
+  ///   current_rank, next_rank,
+  ///   subscription,
+  ///   committed_at, committed_to_lt_cdr, days_since_commitment.
   Map<String, dynamic> _compactContext(Map<String, dynamic> context) {
     Map<String, dynamic> working = Map<String, dynamic>.from(context);
     int size() => json.encode(working).length;
     if (size() <= _maxSnapshotBytes) return working;
 
     // Drop order — least load-bearing first.
+    // NOTE: `current_rank` / `next_rank` / `subscription` / `committed_at`
+    // and the anti-fab grounding keys are intentionally absent from this
+    // list — they are identity-bearing and must survive all trim paths.
+    // `meals_today` is also excluded: it is the only per-turn food log the
+    // coach can reason about for protein-gap and calorie advice.
     const trimSteps = [
-      'step_history_7d',
-      'weight_trend',
-      'nutrition_trend',
-      'exercise_history',
-      'personal_records',
-      'coach_notices',
+      'step_history_7d',   // 1 — pedometer history
+      'water_7d',          // 2 — hydration trend series
+      'weight_trend',      // 3 — 30-day weight series
+      'nutrition_trend_7d', // 4 — 7-day macro trend (meals_today kept)
+      'nutrition_trend',   // 4b — legacy key (same domain, remove if present)
+      'exercise_history',  // 5 — past lift data
+      'personal_records',  // 6 — PRs
+      'coach_notices',     // 7 — in-app notices
     ];
     for (final key in trimSteps) {
       if (size() <= _maxSnapshotBytes) return working;
       working.remove(key);
     }
 
-    // Still too big: truncate coaching_notes text, which can grow unbounded.
+    // Step 8: truncate coaching_notes to 1000 chars — it can grow unbounded
+    // across sessions but the most recent 1000 chars carry ~90% of the signal.
     if (size() > _maxSnapshotBytes) {
       final notes = working['coaching_notes'];
-      if (notes is String && notes.length > 1500) {
-        working['coaching_notes'] = '${notes.substring(0, 1500)}…';
+      if (notes is String && notes.length > 1000) {
+        working['coaching_notes'] = '${notes.substring(0, 1000)}…';
       } else if (notes is Map) {
         // Drop everything except the most recent text field if present.
         final text = notes['text'] ?? notes['notes'];
-        working['coaching_notes'] = text is String && text.length > 1500
-            ? '${text.substring(0, 1500)}…'
+        working['coaching_notes'] = text is String && text.length > 1000
+            ? '${text.substring(0, 1000)}…'
             : text;
       }
     }
+    if (size() <= _maxSnapshotBytes) return working;
 
-    // Last-resort: drop fitness_summary too.
-    if (size() > _maxSnapshotBytes) {
-      working.remove('fitness_summary');
-    }
+    // Step 9 (last resort): drop fitness_summary.
+    working.remove('fitness_summary');
     return working;
   }
 

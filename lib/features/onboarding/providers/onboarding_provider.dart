@@ -4,9 +4,11 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
 import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
@@ -460,6 +462,36 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // Non-blocking — user proceeds to home screen immediately.
       _generatePrediction(profile);
 
+      // ── Referral code redemption ───────────────────────────────
+      // Apply any code entered on the Welcome screen. Runs after the
+      // public.users row is guaranteed to exist (written by
+      // _syncOnboardingToSupabase above). Non-fatal — a failed redeem
+      // must never block the user from reaching home.
+      final stashedCode = ref.read(referralCodeStashProvider).trim();
+      if (stashedCode.isNotEmpty) {
+        try {
+          final response = await SupabaseService.instance.client.functions
+              .invoke('redeem-referral', body: {'code': stashedCode});
+          if (response.status == 200) {
+            debugPrint('[referral] redeemed $stashedCode at onboarding');
+            // Refresh subscription cache so any PRO grant reflects immediately.
+            try {
+              await SubscriptionService.instance.verifyFromServer();
+            } catch (_) {
+              // Non-fatal — user will get correct status on next launch.
+            }
+          } else {
+            debugPrint(
+                '[referral] redeem failed at onboarding: ${response.data}');
+          }
+        } catch (e) {
+          debugPrint('[referral] redeem exception at onboarding: $e');
+        } finally {
+          // Clear stash regardless of outcome so it isn't replayed.
+          ref.read(referralCodeStashProvider.notifier).clear();
+        }
+      }
+
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
       return phase;
     } on FormatException catch (e) {
@@ -516,14 +548,24 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         }
       }
 
+      const rulesBlock = '''
+CRITICAL OUTPUT RULES:
+- Reply in plain English sentences or bullet points only.
+- DO NOT use any structured format.
+- DO NOT prefix lines with labels like "outcome:", "weight_kg:", "summary:", "prediction:", or any colon-separated keys.
+- DO NOT return JSON. DO NOT wrap in code fences.
+- Just write 2-4 bullet points of prose. Direct address ("you").
+- 80 words maximum.''';
+
       final predictionPrompt = '''Predict realistic fitness outcomes at 3, 6, and 12 months.
 
 Profile: ${profile['gender']}, age $age, ${profile['height_cm']}cm, ${profile['current_weight_kg']}kg → ${profile['target_weight_kg']}kg goal
 Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
 Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
 BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
+$rulesBlock
 
-Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
+Format (use • not JSON):
 • Weight: 74kg → 71kg (3mo) → 69kg (6mo) → 67kg (12mo)
 • Body fat: ~22% → ~18%
 • Bench: 40kg → 60kg, Squat: 50kg → 80kg
@@ -574,6 +616,10 @@ Reply in bullet points ONLY — no paragraphs. Max 80 words. Format:
         'last_active_at': DateTime.now().toIso8601String(),
       },
       profileData: {
+        // Q1 decision tree: RestoringScreen checks this column to determine
+        // whether onboarding was completed. Must be written atomically with
+        // the rest of the profile so the row is always in a consistent state.
+        'onboarding_completed_at': DateTime.now().toIso8601String(),
         'date_of_birth': profile['date_of_birth'],
         'gender': profile['gender'],
         'height_cm': profile['height_cm'],

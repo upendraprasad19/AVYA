@@ -127,7 +127,6 @@ class SubscriptionService {
   static const Set<String> _highValueFeatures = {
     AppConstants.featurePhases2To12,
     AppConstants.featureAiCoachUnlimited,
-    // featureReasoningTab retired 2026-04-18 — single AI coach endpoint.
     AppConstants.featureProgressPhotos,
   };
 

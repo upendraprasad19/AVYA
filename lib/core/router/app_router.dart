@@ -5,6 +5,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
+import 'package:icanbefitter/features/auth/screens/restoring_screen.dart';
+import 'package:icanbefitter/features/onboarding/screens/mission_brief_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/welcome_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/goal_screen.dart';
@@ -17,12 +19,17 @@ import 'package:icanbefitter/features/train/screens/train_screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
 import 'package:icanbefitter/features/train/screens/graduation_screen.dart';
+import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
+import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
+import 'package:icanbefitter/features/ai_coach/screens/induction_screen.dart';
+import 'package:icanbefitter/features/ai_coach/screens/muster_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
+import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
@@ -30,6 +37,7 @@ import 'package:icanbefitter/features/profile/screens/notifications_screen.dart'
 import 'package:icanbefitter/features/profile/screens/notification_settings_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 
 /// GoRouter configuration with auth redirect logic.
 ///
@@ -80,6 +88,41 @@ class AppRouter {
           transitionDuration: const Duration(milliseconds: 300),
         ),
       ),
+
+      // ── Post-auth gate — Q1 decision tree ─────────────────────
+      // Shown immediately after sign-in success. Parallel: profile lookup
+      // + restoreFromCloud. Branches to /home, resume-onboarding, or
+      // /onboarding/mission-brief depending on user state.
+      GoRoute(
+        path: '/restoring',
+        name: 'restoring',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const RestoringScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+
+      // ── Mission Brief — new-user entry point (no Supabase row yet) ─
+      // Reached when RestoringScreen finds no user_profile row. Must
+      // appear BEFORE any `/onboarding/:step` route so GoRouter matches
+      // this exact path first.
+      GoRoute(
+        path: '/onboarding/mission-brief',
+        name: 'missionBrief',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MissionBriefScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
@@ -216,6 +259,18 @@ class AppRouter {
         },
       ),
 
+      // ── Captain's induction + muster (full-screen, no tab bar) ───────────
+      GoRoute(
+        path: '/coach/induction',
+        name: 'coachInduction',
+        builder: (context, state) => const InductionScreen(),
+      ),
+      GoRoute(
+        path: '/coach/muster',
+        name: 'coachMuster',
+        builder: (context, state) => const MusterScreen(),
+      ),
+
       // ── Main shell with 5 tabs ────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -262,6 +317,31 @@ class AppRouter {
                     name: 'graduation',
                     builder: (context, state) =>
                         const GraduationScreen(),
+                  ),
+                  GoRoute(
+                    path: 'roadmap',
+                    name: 'phaseRoadmap',
+                    builder: (context, state) =>
+                        const PhaseRoadmapScreen(),
+                  ),
+                  GoRoute(
+                    path: 'preview',
+                    name: 'previewWorkout',
+                    builder: (context, state) {
+                      final phase =
+                          state.uri.queryParameters['phase'] ?? 'I';
+                      final week = int.tryParse(
+                              state.uri.queryParameters['week'] ?? '') ??
+                          1;
+                      final day = int.tryParse(
+                              state.uri.queryParameters['day'] ?? '') ??
+                          1;
+                      return PreviewWorkoutScreen(
+                        phaseNumber: phase,
+                        week: week,
+                        day: day,
+                      );
+                    },
                   ),
                 ],
               ),
@@ -322,9 +402,17 @@ class AppRouter {
                     builder: (context, state) => const ProgressPhotosScreen(),
                   ),
                   GoRoute(
+                    // Legacy route kept for deep-links in notifications
+                    // that were filed against the old "My Submissions"
+                    // row. New Profile entry points at `/profile/submissions`.
                     path: 'my-submissions',
                     name: 'mySubmissions',
                     builder: (context, state) => const MySubmissionsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'submissions',
+                    name: 'submissions',
+                    builder: (context, state) => const SubmissionsScreen(),
                   ),
                   GoRoute(
                     path: 'settings',
@@ -366,15 +454,38 @@ class AppRouter {
   static String? _authRedirect(BuildContext context, GoRouterState state) {
     final isOnSplash = state.matchedLocation == '/splash';
     final isOnAuthRoute = state.matchedLocation == '/sign-in';
+    // /restoring is the post-auth gate screen — always passthrough so the
+    // decision tree can run. Authentication check is done inside the screen.
+    final isOnRestoring = state.matchedLocation == '/restoring';
     // Treat every `/onboarding*` sub-route (welcome / goal / stats /
-    // plan / chat) as "on onboarding" so the stepped flow can navigate
-    // between its own screens without the not-onboarded redirect
+    // plan / chat / mission-brief) as "on onboarding" so the stepped flow
+    // can navigate between its own screens without the not-onboarded redirect
     // bouncing the user back to /onboarding every tap.
     final isOnOnboarding = state.matchedLocation.startsWith('/onboarding') ||
         state.matchedLocation.startsWith('/plan-generation');
+    // Induction + muster are post-auth, pre-home full-screen flows.
+    // Let them self-navigate without redirect interference.
+    final isOnCoachInduction =
+        state.matchedLocation.startsWith('/coach/induction') ||
+        state.matchedLocation.startsWith('/coach/muster');
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;
+
+    // Let the post-auth gate handle its own branching.
+    if (isOnRestoring) return null;
+
+    // Idempotency: already-inducted users landing on /coach/induction or
+    // /coach/muster (deep-link, hot reload, back-navigation) get bounced to
+    // /home. Un-inducted users pass through so InductionScreen/MusterScreen
+    // can run their flows.
+    if (isOnCoachInduction) {
+      if (HiveService.instance.isInitialized &&
+          InductionService.instance.inductionCompleted) {
+        return '/home';
+      }
+      return null;
+    }
 
     // Guard against Hive not yet initialized (startup race).
     if (!HiveService.instance.isInitialized) return null;

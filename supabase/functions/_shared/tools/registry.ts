@@ -11,7 +11,9 @@ import {
 } from "./workout/index.ts";
 import {
   getExerciseHistoryTool,
+  getPRTimelineTool,
   getProgressSummaryTool,
+  getPromotionStatusTool,
   logPRTool,
 } from "./progress/index.ts";
 import {
@@ -27,6 +29,7 @@ import {
   scheduleTemplateTool,
   switchGoalTool,
 } from "./plan/index.ts";
+import { getFormCuesTool } from "./exercise/index.ts";
 
 const ALL_TOOLS: ToolDefinition[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
@@ -54,6 +57,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   // Append future D-phase tools below this marker.
   getExerciseHistoryTool, // progress / read / PRO  (D.1)
   logPRTool, // progress / write / trivial / FREE  (D.2)
+  getPromotionStatusTool, // progress / read / FREE  (C5 — rank ladder + ETAs)
+  getPRTimelineTool, // progress / read / FREE  (C7 — dated PR history, optional date range)
   // ── Phase D.3: plan family ────────────────────────────────────────
   // First plan-family tool. Append future plan tools below this marker.
   regeneratePlanBlockTool, // plan / write / destructive / PRO  (D.3)
@@ -61,6 +66,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   switchGoalTool, // plan / write / destructive / PRO  (D.5)
   createCustomTemplateTool, // plan / write / destructive / PRO  (D.6)
   scheduleTemplateTool, // plan / write / destructive / PRO  (D.7)
+  // ── Phase C.6: exercise family ────────────────────────────────────
+  getFormCuesTool, // exercise / read / FREE  (C.6 — coaching cues + common mistakes)
 ];
 
 /**

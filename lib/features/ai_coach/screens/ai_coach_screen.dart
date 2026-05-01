@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -238,8 +239,20 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // ── Compact Header (avatar + title + mode tabs + menu) ──
+                // Plan D D-8 — AI Coach uses _buildCompactHeader as its
+                // letterhead (THE BRIDGE · 24/7 eyebrow + Aye Captain
+                // Fraunces title). No unified WardTabHeader.
                 _buildCompactHeader(isPro, channel, telegramConnected),
+
+                // D-8 status strip — streak + freeze always; no rank chip
+                // on AI Coach (roadmap is source of truth per spec §6.3.3).
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+                  child: WardStatusStrip(
+                    streakDays: ref.watch(streakProvider),
+                    freezesAvailable: ref.watch(streakFreezeProvider),
+                  ),
+                ),
 
                 // ── Message count indicator ──
                 _buildMessageCountIndicator(isPro, messageCount),
@@ -389,7 +402,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'YOUR AI COACH \u00B7 24/7',
+                  'THE BRIDGE \u00B7 24/7',
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
                     letterSpacing: 2.5,
@@ -397,36 +410,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Builder(builder: (_) {
-                  final hour = DateTime.now().hour;
-                  final tod = hour < 12
-                      ? 'morning'
-                      : hour < 17
-                          ? 'afternoon'
-                          : 'evening';
-                  // AH.9 — pull the user's first name from the profile so
-                  // the greeting reads "Good morning, Upendra." rather
-                  // than the generic "Good morning.". Profile stores
-                  // `full_name`; we use the first whitespace-separated
-                  // token. Falls back silently when the name is missing
-                  // or still the bootstrap 'User' placeholder.
-                  final profile = ref.watch(userProfileProvider);
-                  final fullName =
-                      (profile['full_name'] as String? ?? '').trim();
-                  final firstName = fullName.isEmpty || fullName == 'User'
-                      ? null
-                      : fullName.split(RegExp(r'\s+')).first;
-                  final greeting = firstName != null
-                      ? 'Good $tod, $firstName.'
-                      : 'Good $tod.';
-                  return Text(
-                    greeting,
-                    style: AppTypography.h3.copyWith(
-                      height: 1.0,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  );
-                }),
+                // D-8 (Plan D): Title is the recruit's acknowledgement
+                // to the Captain — short, on-brand, no "CAPTAIN" duplicate
+                // with the eyebrow.
+                Text(
+                  'Aye Captain',
+                  style: AppTypography.h3.copyWith(
+                    height: 1.0,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ],
             ),
           ),
@@ -666,11 +659,21 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final hasWorkoutDraft = ref.watch(workoutDraftProvider) != null;
 
     // Phase A.11 — typed tool intents (pending + recently-settled, kept by prune)
+    // C-6: secondary filter on the Hive `intent_<id>_dispatched_at` marker.
+    // If the in-memory provider state thinks an intent is still pending but the
+    // Hive marker shows it's already been dispatched (hot restart edge case),
+    // hide it from the chat thread so cards never pile up. Primary state of
+    // truth remains ToolIntent.status.
+    final coachBox = HiveService.instance.coachBox;
     final visibleIntents = ref.watch(pendingToolIntentsProvider).where((i) {
-      return i.status == ToolIntentStatus.pending ||
+      if (i.status == ToolIntentStatus.pending ||
           i.status == ToolIntentStatus.executing ||
-          i.status == ToolIntentStatus.failed ||
-          i.status == ToolIntentStatus.executed ||
+          i.status == ToolIntentStatus.failed) {
+        // Defensive: drop if Hive marker says we already dispatched.
+        if (coachBox.get('intent_${i.id}_dispatched_at') != null) return false;
+        return true;
+      }
+      return i.status == ToolIntentStatus.executed ||
           i.status == ToolIntentStatus.rejected ||
           i.status == ToolIntentStatus.expired;
     }).toList();
@@ -755,6 +758,36 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildDestructiveIntentTile(BuildContext context, ToolIntent intent) {
+    // C-6: Terminal states collapse to a small pill so the chat thread
+    // doesn't pile up with stale "Review" cards. Mirrors
+    // ToolConfirmCard._buildExecutedState / _buildRejectedState.
+    if (intent.status == ToolIntentStatus.executed) {
+      return _buildIntentTerminalPill(
+        intent: intent,
+        label: 'Applied',
+        color: AppColors.ok,
+        icon: Icons.check_circle,
+      );
+    }
+    if (intent.status == ToolIntentStatus.rejected) {
+      return _buildIntentTerminalPill(
+        intent: intent,
+        label: 'Dismissed',
+        color: AppColors.textDim,
+        icon: Icons.cancel_outlined,
+      );
+    }
+    if (intent.status == ToolIntentStatus.expired) {
+      return _buildIntentTerminalPill(
+        intent: intent,
+        label: 'Expired',
+        color: AppColors.textDim,
+        icon: Icons.schedule,
+      );
+    }
+
+    final isExecuting = intent.status == ToolIntentStatus.executing;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(14),
@@ -762,45 +795,114 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(14),
         border:
-            Border.all(color: AppColors.proGold.withValues(alpha: 0.4), width: 1.5),
+            Border.all(color: AppColors.accent.withValues(alpha: 0.4), width: 1.5),
       ),
-      child: InkWell(
-        onTap: () => _openIntentSheet(context, intent),
-        borderRadius: BorderRadius.circular(14),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: AppColors.proGold, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Review: ${intent.previewSummary}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppColors.accent, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Review: ${intent.previewSummary}',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tap to review changes before applying',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap APPLY to review and confirm changes.',
+                      style: GoogleFonts.getFont(
+                        'DM Sans',
+                        color: AppColors.textDim,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // C-3: Explicit Apply / Dismiss buttons replace the old chevron
+          // tap target — testers were not discovering the row was tappable.
+          Row(
+            children: [
+              Expanded(
+                child: WardButton(
+                  label: 'APPLY',
+                  variant: WardButtonVariant.primary,
+                  size: WardButtonSize.small,
+                  onPressed: isExecuting
+                      ? null
+                      : () => _openIntentSheet(context, intent),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: WardButton(
+                  label: 'DISMISS',
+                  variant: WardButtonVariant.ghost,
+                  size: WardButtonSize.small,
+                  onPressed: isExecuting
+                      ? null
+                      : () {
+                          ref
+                              .read(pendingToolIntentsProvider.notifier)
+                              .reject(intent.id);
+                        },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIntentTerminalPill({
+    required ToolIntent intent,
+    required String label,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$label: ${intent.previewSummary}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.getFont(
+                'DM Sans',
+                color: AppColors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

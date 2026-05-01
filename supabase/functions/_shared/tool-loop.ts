@@ -356,9 +356,15 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   }
 
   // Loop exhausted without a terminal text response.
+  // B3: Replace the raw "ran out of steps" leak with a Captain-voice
+  // degrade-gracefully message. The original copy leaked internal
+  // implementation detail ("steps") to the user — not acceptable.
+  // Root cause is usually a PRESENT/TODAY query that hit tool-calling
+  // instead of reading the snapshot directly (see Manual §8 fix).
   if (!finalText) {
+    console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
     finalText =
-      "I started working on that but ran out of steps — try again with a more specific request.";
+      "Recruit — I had trouble pinning that down. Try asking again with a bit more specificity. If you want today's workout or your current plan, ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll read the manifest directly.";
   }
 
   return {

@@ -6,8 +6,10 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/onboarding_provider.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 
 /// Final step (3/3) of the handoff onboarding flow — plan preview +
 /// commit (`design_handoff_wardroom/src/screens/onboarding.jsx`
@@ -317,6 +319,17 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                   ),
           ),
         ),
+        const SizedBox(height: 12),
+        Center(
+          child: Text(
+            'Plan shaped by 14 years of disciplined coaching.',
+            style: AppTypography.bodyS.copyWith(
+              color: AppColors.textMute,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
         const SizedBox(height: 10),
         GestureDetector(
           onTap: () => context.go(
@@ -491,7 +504,8 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         });
         return;
       }
-      context.go('/home');
+      final alreadyInducted = InductionService.instance.inductionCompleted;
+      context.go(alreadyInducted ? '/home' : '/coach/induction');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -501,21 +515,62 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     }
   }
 
+  /// Preview targets shown on the Plan card. Uses the canonical
+  /// [BmrCalculator.calculateTargets] — the exact same math that
+  /// `OnboardingNotifier.completeOnboarding` runs on submit, so the
+  /// numbers a user sees here are the numbers their profile is saved
+  /// with. Pre-2026-04-24 this method used a reduced goal-only formula
+  /// that ignored body_fat_pct / height / activity_level / pace, so
+  /// "2682 kcal, 152g, 5× lifts, +3kg" was identical for every
+  /// build_muscle user at 76 kg regardless of inputs.
   _Targets _computeTargets() {
     final weight = (widget.data['weight_kg'] as num?)?.toDouble() ?? 75.0;
+    final height = (widget.data['height_cm'] as num?)?.toDouble() ?? 175.0;
+    final gender = (widget.data['sex'] as String?) ?? 'male';
+    final activityLevel =
+        (widget.data['activity_level'] as String?) ?? 'moderate';
+    final pace =
+        (widget.data['pace_preference'] as String?) ?? 'balanced';
     final goal = widget.data['goal'] as String? ?? 'recomp';
-    final calories = switch (goal) {
-      'lose_fat' || 'recomp' => (weight * 30 - 400).round(),
-      'build_muscle' => (weight * 32 + 250).round(),
-      'strength' => (weight * 32).round(),
-      _ => (weight * 30).round(),
-    };
-    final protein = (weight * 2).round();
-    // Read the real days_per_week the user picked on the Details screen.
-    // Fall back to goal-derived defaults only when the field is absent
-    // (legacy chat users, deep-links, corrupted route extras) so the
-    // "4× LIFTS" label on the card always matches what the plan
-    // generator will actually produce.
+    final mappedGoal = _mapGoal(goal);
+    final targetWeight =
+        (widget.data['target_weight_kg'] as num?)?.toDouble();
+    final bodyFatRaw = widget.data['body_fat_pct'];
+    final bodyFat = bodyFatRaw is num ? bodyFatRaw.toDouble() : null;
+
+    // Age derived from DOB on Identity step; legacy chat users may
+    // still have a raw `age` int in widget.data.
+    int age = 30;
+    final dobString = widget.data['date_of_birth'];
+    DateTime? dob;
+    if (dobString is String) dob = DateTime.tryParse(dobString);
+    if (dobString is DateTime) dob = dobString;
+    if (dob != null) {
+      final now = DateTime.now();
+      age = now.year - dob.year;
+      if (now.month < dob.month ||
+          (now.month == dob.month && now.day < dob.day)) {
+        age--;
+      }
+    } else if (widget.data['age'] is int) {
+      age = widget.data['age'] as int;
+    }
+
+    final targets = BmrCalculator.calculateTargets(
+      weightKg: weight,
+      heightCm: height,
+      age: age,
+      gender: gender,
+      activityLevel: activityLevel,
+      goal: mappedGoal,
+      pacePreference: pace,
+      targetWeightKg: targetWeight,
+      bodyFatPercent: bodyFat,
+    );
+
+    // Days per week — trust the Details screen value. Only infer when
+    // missing (legacy chat / deep-link) so the card never contradicts
+    // what the plan generator will actually build.
     final daysPerWeek = (widget.data['days_per_week'] as int?) ??
         switch (goal) {
           'build_muscle' || 'strength' => 5,
@@ -523,19 +578,37 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
           'maintain' => 3,
           _ => 4,
         };
-    // Weight-delta label follows the same 12-week target math used at
-    // submit time. Keep aligned with the `targetDelta` switch above.
-    final delta = switch (goal) {
-      'lose_fat' => '-5kg',
-      'recomp' => '-2kg',
-      'build_muscle' => '+3kg',
-      _ => 'HOLD',
-    };
+
+    // Weight delta — prefer the direct target - current delta the user
+    // entered on Stats. Fall back to goal-based hint when either value
+    // is missing.
+    final String deltaLabel;
+    if (targetWeight != null) {
+      final diffKg = (targetWeight - weight);
+      final rounded = diffKg.abs() < 0.5
+          ? 0
+          : diffKg.round(); // <0.5 kg counts as a hold
+      if (rounded == 0) {
+        deltaLabel = 'HOLD';
+      } else if (rounded > 0) {
+        deltaLabel = '+${rounded}kg';
+      } else {
+        deltaLabel = '${rounded}kg'; // includes leading '-'
+      }
+    } else {
+      deltaLabel = switch (goal) {
+        'lose_fat' => '-5kg',
+        'recomp' => '-2kg',
+        'build_muscle' => '+3kg',
+        _ => 'HOLD',
+      };
+    }
+
     return _Targets(
-      calories: calories,
-      protein: protein,
+      calories: targets.dailyCalories,
+      protein: targets.proteinGrams,
       daysPerWeek: daysPerWeek,
-      weightDelta: delta,
+      weightDelta: deltaLabel,
     );
   }
 

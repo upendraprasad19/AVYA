@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,10 +66,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   bool _isSaving = false;
   late bool _isMetric; // true = KG/CM, false = LBS/IN
 
-  // Track original plan-affecting values for rescheduling detection
+  // Track original plan-affecting values for rescheduling detection.
+  // V4 pipeline plan-driving inputs (per CLAUDE.md §12 + plan_engine/):
+  //   daysPerWeek + goal + equipment + fitness_experience drive the split
+  //   resolver + volume filter + exercise selector. session_duration_minutes
+  //   + physique_focus + injuries drive sequencing + warmup/cooldown +
+  //   exclusion masks. ALL must trigger reschedule on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
+  late String _originalFitnessExperience;
+  late int? _originalSessionDuration;
+  late String _originalPhysiqueFocus;
+  late List<String> _originalInjuries;
 
   // Track original target weight for prediction invalidation (Bug #12)
   late double _originalTargetWeight;
@@ -169,10 +178,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     }
 
-    // Capture original values for rescheduling detection
+    // Capture original values for rescheduling detection.
+    // _injuries is captured as List.of(...) so later edits via the chip
+    // row don't mutate the original snapshot (List references are aliased
+    // in Dart; without List.of we'd compare a list to itself).
     _originalDaysPerWeek = _daysPerWeek;
     _originalGoal = _goal;
     _originalEquipment = _equipment;
+    _originalFitnessExperience = _fitnessExperience;
+    _originalSessionDuration = _sessionDuration;
+    _originalPhysiqueFocus = _physiqueFocus;
+    _originalInjuries = List<String>.of(_injuries);
     _originalTargetWeight = targetKgRaw ?? 0.0;
   }
 
@@ -1523,6 +1539,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await ref.read(userProfileProvider.notifier).updateProfile(updates);
       await ref.read(userProfileProvider.notifier).recalculateTargets();
 
+      // Bug B fix (APK Test #3, 2026-04-26): Edit Profile previously wrote
+      // only to Hive. user_profile in Supabase stayed empty/stale forever,
+      // which broke AI coach context (the snapshot reads from Hive but
+      // server-side helpers like rolling-context need the cloud row).
+      // Fire-and-forget so sync failures don't block the Save UX.
+      final supaUserId = SupabaseService.instance.client.auth.currentUser?.id;
+      if (supaUserId != null) {
+        unawaited(SyncService.instance.syncProfileNow(supaUserId));
+        unawaited(SyncService.instance.pushSnapshot());
+      }
+
       // Refresh downstream views that cache profile-derived targets/state.
       ref.invalidate(userStatsProvider);
       ref.invalidate(nutritionSummaryProvider);
@@ -1539,10 +1566,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(userInitialProvider);
       ref.invalidate(userGreetingProvider);
 
-      // Detect plan-affecting field changes and offer rescheduling
-      final planChanged = _daysPerWeek != _originalDaysPerWeek ||
-          _goal != _originalGoal ||
-          _equipment != _originalEquipment;
+      // Detect plan-affecting field changes and offer rescheduling.
+      // Experience drives VolumeFilter.targetCount → exercise count per day.
+      // Beginner/Inter/Advanced × 3-6 days = 4 to 10 exercises. Without this,
+      // bumping intermediate→advanced wouldn't trigger reschedule and today's
+      // plan would keep showing the old 4-7 exercises forever.
+      //
+      // session_duration_minutes drives split count + cardio finisher length;
+      // physique_focus drives muscle slot weighting (e.g. glutes_legs adds
+      // posterior chain priority); injuries drive exclusion masks in the
+      // exercise selector. ALL must trigger reschedule on change to keep
+      // today's schedule consistent with the saved profile.
+      final planChanged = computePlanChanged(
+        daysPerWeek: _daysPerWeek,
+        originalDaysPerWeek: _originalDaysPerWeek,
+        goal: _goal,
+        originalGoal: _originalGoal,
+        equipment: _equipment,
+        originalEquipment: _originalEquipment,
+        fitnessExperience: _fitnessExperience,
+        originalFitnessExperience: _originalFitnessExperience,
+        sessionDuration: _sessionDuration,
+        originalSessionDuration: _originalSessionDuration,
+        physiqueFocus: _physiqueFocus,
+        originalPhysiqueFocus: _originalPhysiqueFocus,
+        injuries: _injuries,
+        originalInjuries: _originalInjuries,
+      );
 
       if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
         final changes = <String>[];
@@ -1554,6 +1604,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
         if (_equipment != _originalEquipment) {
           changes.add('Equipment: ${_equipmentOptions[_originalEquipment]} → ${_equipmentOptions[_equipment]}');
+        }
+        if (_fitnessExperience != _originalFitnessExperience) {
+          String label(String e) => e[0].toUpperCase() + e.substring(1);
+          changes.add('Experience: ${label(_originalFitnessExperience)} → ${label(_fitnessExperience)}');
+        }
+        if (_sessionDuration != _originalSessionDuration) {
+          String fmt(int? d) => d == null ? '—' : '$d min';
+          changes.add('Session: ${fmt(_originalSessionDuration)} → ${fmt(_sessionDuration)}');
+        }
+        if (_physiqueFocus != _originalPhysiqueFocus) {
+          String label(String f) {
+            switch (f) {
+              case 'glutes_legs':
+                return 'Glutes & Legs';
+              case 'chest_shoulders_arms':
+                return 'Chest, Shoulders & Arms';
+              case 'strength':
+                return 'Strength';
+              case 'balanced':
+              default:
+                return 'Balanced';
+            }
+          }
+          changes.add('Focus: ${label(_originalPhysiqueFocus)} → ${label(_physiqueFocus)}');
+        }
+        if (!listEquals(_injuries, _originalInjuries)) {
+          changes.add('Injuries: ${_originalInjuries.length} → ${_injuries.length} listed');
         }
 
         final shouldReschedule = await showDialog<bool>(
@@ -1618,7 +1695,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
         if (shouldReschedule == true && mounted) {
           final profile = ref.read(userProfileProvider);
-          final experience = (profile['detected_experience_level'] as String?) ?? 'beginner';
+          final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
           final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
 
           final savedDays = HiveService.instance.configBox
@@ -1643,6 +1720,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(currentPlanProvider);
       ref.invalidate(todayWorkoutProvider);
       ref.invalidate(calendarWeekProvider);
+      ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
@@ -1701,4 +1779,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+}
+
+/// Pure helper extracted from `_EditProfileScreenState._save` so the
+/// reschedule trigger can be unit-tested without instantiating the
+/// widget. Mirrors the boolean exactly — keep in sync with B-2.
+@visibleForTesting
+bool computePlanChanged({
+  required int daysPerWeek,
+  required int originalDaysPerWeek,
+  required String goal,
+  required String originalGoal,
+  required String equipment,
+  required String originalEquipment,
+  required String fitnessExperience,
+  required String originalFitnessExperience,
+  required int? sessionDuration,
+  required int? originalSessionDuration,
+  required String physiqueFocus,
+  required String originalPhysiqueFocus,
+  required List<String> injuries,
+  required List<String> originalInjuries,
+}) {
+  return daysPerWeek != originalDaysPerWeek ||
+      goal != originalGoal ||
+      equipment != originalEquipment ||
+      fitnessExperience != originalFitnessExperience ||
+      sessionDuration != originalSessionDuration ||
+      physiqueFocus != originalPhysiqueFocus ||
+      !listEquals(injuries, originalInjuries);
 }

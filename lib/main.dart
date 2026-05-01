@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/ai_coach/repositories/ai_coach_repository.dart';
 import 'app.dart';
 
@@ -82,9 +88,50 @@ Future<void> main() async {
   // Supabase, SeedService, and OneSignal are deferred to SplashScreen
   // so the UI appears immediately instead of after a 30-50s black screen.
 
-  runApp(
-    const ProviderScope(
-      child: ICanBeFitterApp(),
-    ),
+  await runZonedGuarded(
+    () async {
+      runApp(
+        const ProviderScope(
+          child: ICanBeFitterApp(),
+        ),
+      );
+    },
+    (error, stack) async {
+      if (error is HiveOwnershipException) {
+        debugPrint('[main] HiveOwnershipException caught: $error');
+        try {
+          await Hive.box(HiveService.configBoxName).put(
+            'session_expired_flag',
+            DateTime.now().toIso8601String(),
+          );
+        } catch (e) {
+          debugPrint('[main] write session_expired_flag failed: $e');
+        }
+        try {
+          await UserRepository.instance.clearAllData();
+        } catch (e) {
+          debugPrint('[main] clearAllData on ownership-exception failed: $e');
+        }
+        try {
+          await HiveUserSession.deleteAllFilesForCurrentUser();
+        } catch (e) {
+          debugPrint(
+            '[main] deleteAllFilesForCurrentUser on ownership-exception failed: $e',
+          );
+        }
+        try {
+          await Supabase.instance.client.auth.signOut();
+        } catch (e) {
+          debugPrint('[main] signOut on ownership-exception failed: $e');
+        }
+        // Router auth listener will redirect to /sign-in on signOut.
+        // No need to push a route manually.
+        return;
+      }
+      // Re-raise non-ownership errors.
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stack),
+      );
+    },
   );
 }

@@ -1,51 +1,65 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
+/// Coach memory backfill tests.
+///
+/// Plan A (APK Test #5) introduced per-user Hive box namespacing
+/// (`coachBox_<8hex>`) + GuardedBox ownership assertions. These tests
+/// were originally written against pre-namespacing shared boxes; the
+/// setUp below now drives the namespaced path via HiveUserSession +
+/// `GuardedBox.testBypassOwnership` to skip the Supabase session check
+/// (Supabase isn't initialised in unit tests).
+const _testUserId = '5f0a13b2-aaaa-bbbb-cccc-dddddddddddd';
+const _sharedBoxes = [
+  'exerciseBox',
+  'foodBox',
+  'syncBox',
+  'configBox',
+];
+
 void main() {
-  // Boxes touched (directly or transitively) by buildAiContext():
-  // coachBox + userBox (this file), plus workoutBox / nutritionBox /
-  // healthBox / configBox (via UserRepository, WorkoutRepository,
-  // NutritionRepository, HiveService getters that gate on _initialized).
-  const boxes = [
-    'coachBox',
-    'userBox',
-    'workoutBox',
-    'nutritionBox',
-    'healthBox',
-    'exerciseBox',
-    'foodBox',
-    'customBox',
-    'syncBox',
-    'configBox',
-  ];
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory tempDir;
 
   setUp(() async {
-    Hive.init('./.test_hive');
-    for (final name in boxes) {
+    tempDir = await Directory.systemTemp.createTemp('avya_coach_memory_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => tempDir.path,
+    );
+    Hive.init(tempDir.path);
+    for (final name in _sharedBoxes) {
       await Hive.openBox(name);
     }
-    // HiveService gates box getters on _initialized; flip it for tests
-    // that exercise buildAiContext (which reads through HiveService).
+    await HiveUserSession.openForUser(_testUserId);
+    GuardedBox.testBypassOwnership = true;
     HiveService.debugMarkInitializedForTests();
   });
 
   tearDown(() async {
-    for (final name in boxes) {
-      await Hive.deleteBoxFromDisk(name);
-    }
+    GuardedBox.testBypassOwnership = false;
+    await HiveUserSession.closeAll();
+    await Hive.close();
+    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
   test('backfill copies legacy coaching_notes into coach_memory.coach_notes', () async {
-    final box = Hive.box('coachBox');
+    final box = HiveService.instance.coachBox;
     await box.put('coaching_notes', {
       'notes': ['Mentioned shoulder pain', 'Wants to lose weight'],
       'last_extracted': '2026-04-15T22:00:00Z',
     });
-    Hive.box('userBox').put('user_id', 'u1');
+    HiveService.instance.userBox.put('user_id', 'u1');
 
     await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
 
@@ -56,9 +70,9 @@ void main() {
   });
 
   test('backfill is idempotent — second call is a no-op', () async {
-    final box = Hive.box('coachBox');
+    final box = HiveService.instance.coachBox;
     await box.put('coaching_notes', {'notes': ['a']});
-    Hive.box('userBox').put('user_id', 'u1');
+    HiveService.instance.userBox.put('user_id', 'u1');
 
     await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
     final firstUpdated =
@@ -73,7 +87,7 @@ void main() {
   });
 
   test('backfill no-ops when coach_memory already exists', () async {
-    final box = Hive.box('coachBox');
+    final box = HiveService.instance.coachBox;
     await CoachMemory(userId: 'u1', preferredName: 'Upen').writeToBox(box);
     await box.put('coaching_notes', {'notes': ['should be ignored']});
 
@@ -84,13 +98,13 @@ void main() {
   });
 
   test('buildAiContext includes coach_memory when present in Hive', () async {
-    Hive.box('userBox').put('user_id', 'u1');
+    HiveService.instance.userBox.put('user_id', 'u1');
     await CoachMemory(
       userId: 'u1',
       preferredName: 'Upen',
       communicationStyle: 'hinglish',
       dropoutRiskScore: 0.6,
-    ).writeToBox(Hive.box('coachBox'));
+    ).writeToBox(HiveService.instance.coachBox);
 
     final ctx = AiCoachRepository.instance.buildAiContext();
     expect(ctx['coach_memory'], isNotNull);
@@ -99,9 +113,9 @@ void main() {
   });
 
   test('buildAiContext omits coach_memory when private_mode is true', () async {
-    Hive.box('userBox').put('user_id', 'u1');
+    HiveService.instance.userBox.put('user_id', 'u1');
     await CoachMemory(userId: 'u1', preferredName: 'Upen', privateMode: true)
-        .writeToBox(Hive.box('coachBox'));
+        .writeToBox(HiveService.instance.coachBox);
 
     final ctx = AiCoachRepository.instance.buildAiContext();
     expect(ctx['coach_memory'], isNull);

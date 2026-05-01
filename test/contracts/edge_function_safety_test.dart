@@ -58,31 +58,11 @@ void main() {
 
   // ── Compile Safety: No Invalid Dart Syntax ─────────────────────
 
-  group('Compile safety: no invalid Dart syntax patterns', () {
-    test('no ?identifier pattern in map literals (Fix 3)', () {
-      // Bug: 'exercise_logs': ?exerciseLogs was invalid Dart syntax.
-      // The ? prefix on an identifier is only valid in null-aware operations
-      // like ?. or ?? — not as a standalone value in a map literal.
-      final libDir = Directory('lib');
-      expect(libDir.existsSync(), isTrue);
-
-      for (final entity in libDir.listSync(recursive: true)) {
-        if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        final source = entity.readAsStringSync();
-        final lines = source.split('\n');
-
-        for (int i = 0; i < lines.length; i++) {
-          final line = lines[i].trim();
-          // Match pattern: 'key': ?identifier  (invalid Dart)
-          // But NOT: 'key': ?.something  or  'key': ?? something
-          final match = RegExp(r"'[^']+'\s*:\s*\?[a-zA-Z_]\w*\s*[,}]")
-              .hasMatch(line);
-          expect(match, isFalse,
-              reason:
-                  '${entity.path}:${i + 1}: Contains "?identifier" in map literal. '
-                  'This is invalid Dart. Use the variable name directly or null-aware operators.');
-        }
-      }
-    });
-  });
+  // Note: the original "no ?identifier in map literals" check was retired
+  // 2026-04-28. Dart 3.4+ added `use_null_aware_elements` lint making
+  // `?identifier` a VALID nullable-element shorthand for
+  // `if (x != null) 'key': x`. CLAUDE.md §19 documents this. The codebase
+  // actively uses the syntax (`?dobIso`, `?wakeIso`, `?defaultDur`, etc.).
+  // Removing the check keeps the test file as a placeholder for future
+  // Edge Function safety contracts.
 }

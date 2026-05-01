@@ -1,6 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'guarded_box.dart';
+import 'hive_user_session.dart';
+
 /// Singleton service that manages all Hive boxes.
 ///
 /// Registers adapters and opens all 10 boxes on app startup.
@@ -36,49 +39,36 @@ class HiveService with WidgetsBindingObserver {
   static const String configBoxName = 'configBox';
   static const String notificationsBoxName = 'notificationsBox';
 
-  static const List<String> _allBoxNames = [
+  /// Shared boxes — opened by `init()` before runApp. Available to all
+  /// users / no users.
+  static const List<String> _sharedBoxNames = <String>[
+    exerciseBoxName,
+    foodBoxName,
+    syncBoxName,
+    configBoxName,
+  ];
+
+  /// User-scoped boxes — opened by `HiveUserSession.openForUser(id)`
+  /// AFTER auth resolves. Each gets a `_<8hex>` namespace suffix.
+  // ignore: unused_field
+  static const List<String> _userScopedBoxNames = <String>[
     userBoxName,
     workoutBoxName,
     nutritionBoxName,
     healthBoxName,
-    exerciseBoxName,
-    foodBoxName,
     customBoxName,
     coachBoxName,
-    syncBoxName,
-    configBoxName,
     notificationsBoxName,
   ];
 
-  /// Initialize Hive: register adapters and open all boxes.
-  ///
-  /// Must be called once in main() before runApp().
-  /// Safe to call multiple times — skips if already initialized.
   Future<void> init() async {
     if (_initialized) return;
-
     await Hive.initFlutter();
-
-    // Register custom Hive adapters here as models are created.
-    // For now we use Map<dynamic, dynamic> storage (no adapters needed).
-    // Example:
-    //   Hive.registerAdapter(UserProfileAdapter());
-
-    // Open all boxes in parallel for fastest startup.
-    // Uses safe open — if a box is corrupted, it is deleted and recreated
-    // rather than crashing the app in an irrecoverable loop.
-    await Future.wait(
-      _allBoxNames.map((name) => _safeOpenBox(name)),
-    );
-
-    _initialized = true;
-
-    // Register lifecycle observer for periodic compact on pause.
-    try {
-      WidgetsBinding.instance.addObserver(this);
-    } catch (_) {
-      // Not running inside a Flutter binding (e.g. unit tests) — skip.
+    for (final name in _sharedBoxNames) {
+      await _safeOpenBox(name);
     }
+    WidgetsBinding.instance.addObserver(this);
+    _initialized = true;
   }
 
   // ── Lifecycle-driven compaction ──────────────────────────────
@@ -133,7 +123,19 @@ class HiveService with WidgetsBindingObserver {
 
       for (final name in _compactableBoxNames) {
         try {
-          await Hive.box(name).compact();
+          final ownerId = HiveUserSession.currentOwnerFullId;
+          // User-scoped boxes only compact when a user is signed in.
+          // Shared boxes (configBox excluded — see _compactableBoxNames
+          // comment on line ~104) compact regardless.
+          final isUserScoped = HiveUserSession.userScopedBoxRoots.contains(name);
+          if (isUserScoped && ownerId == null) {
+            continue;
+          }
+          final actualBoxName = isUserScoped
+              ? HiveUserSession.namespacedBoxName(name, ownerId!)
+              : name;
+          if (!Hive.isBoxOpen(actualBoxName)) continue;
+          await Hive.box(actualBoxName).compact();
         } catch (e) {
           debugPrint('[HiveService._maybeCompact] $name: $e');
         }
@@ -174,18 +176,41 @@ class HiveService with WidgetsBindingObserver {
   }
 
   // ── Convenience getters for each box ──────────────────────────
-
-  Box get userBox => getBox(userBoxName);
-  Box get workoutBox => getBox(workoutBoxName);
-  Box get nutritionBox => getBox(nutritionBoxName);
-  Box get healthBox => getBox(healthBoxName);
+  //
+  // Shared boxes (read-only seed + app-level config) resolve to a
+  // single global box.
   Box get exerciseBox => getBox(exerciseBoxName);
   Box get foodBox => getBox(foodBoxName);
-  Box get customBox => getBox(customBoxName);
-  Box get coachBox => getBox(coachBoxName);
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
-  Box get notificationsBox => getBox(notificationsBoxName);
+
+  // User-scoped boxes — now wrapped by GuardedBox for ownership
+  // assertion on every operation. The Box getters return the raw
+  // underlying box for backward compatibility with existing call
+  // sites; the GuardedBox getters are preferred for new code.
+
+  Box get userBox => userBoxGuarded.rawBox;
+  Box get workoutBox => workoutBoxGuarded.rawBox;
+  Box get nutritionBox => nutritionBoxGuarded.rawBox;
+  Box get healthBox => healthBoxGuarded.rawBox;
+  Box get customBox => customBoxGuarded.rawBox;
+  Box get coachBox => coachBoxGuarded.rawBox;
+  Box get notificationsBox => notificationsBoxGuarded.rawBox;
+
+  GuardedBox<dynamic> get userBoxGuarded =>
+      wrapUserScopedBox<dynamic>(userBoxName);
+  GuardedBox<dynamic> get workoutBoxGuarded =>
+      wrapUserScopedBox<dynamic>(workoutBoxName);
+  GuardedBox<dynamic> get nutritionBoxGuarded =>
+      wrapUserScopedBox<dynamic>(nutritionBoxName);
+  GuardedBox<dynamic> get healthBoxGuarded =>
+      wrapUserScopedBox<dynamic>(healthBoxName);
+  GuardedBox<dynamic> get customBoxGuarded =>
+      wrapUserScopedBox<dynamic>(customBoxName);
+  GuardedBox<dynamic> get coachBoxGuarded =>
+      wrapUserScopedBox<dynamic>(coachBoxName);
+  GuardedBox<dynamic> get notificationsBoxGuarded =>
+      wrapUserScopedBox<dynamic>(notificationsBoxName);
 
   /// Test-only hook. Marks the singleton as initialized after the test
   /// has opened the boxes itself with raw `Hive.openBox`. Avoids calling

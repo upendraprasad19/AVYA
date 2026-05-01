@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -161,6 +162,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
     unawaited(SyncService.instance.checkAndSync());
+    // APK Test #3 / Obs 1: catch-up promotions for users who passed a
+    // milestone while the app was uninstalled / signed out.
+    unawaited(RankService.instance.evaluateAndPromote());
 
     // F1 · Refresh subscription state on every app launch so PRO survives
     // logout/login and cross-device sessions without requiring a PRO-feature
@@ -256,33 +260,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       return;
     }
 
-    final isOnboarded = HiveService.instance.configBox
-        .get('onboarding_completed', defaultValue: false) as bool;
-
-    // Guard: even if the flag is set, verify the profile has real data.
-    // A stale Hive can have onboarding_completed=true but only a minimal
-    // stub profile ({id, email}) — e.g. after a failed sync or browser
-    // storage surviving across rebuilds. Redirect to onboarding in that case.
-    if (isOnboarded) {
-      final profile = HiveService.instance.userBox.get('profile');
-      if (profile is Map) {
-        final hasRealData =
-            profile['primary_goal'] != null || profile['height_cm'] != null;
-        if (!hasRealData) {
-          // Clear the stale flag so onboarding can proceed.
-          HiveService.instance.configBox.delete('onboarding_completed');
-          context.go('/onboarding');
-          return;
-        }
-      }
-    }
-
-    if (!isOnboarded) {
-      context.go('/onboarding');
-      return;
-    }
-
-    context.go('/home');
+    // Authenticated user — RestoringScreen is the canonical post-auth
+    // gate (introduced in Test #4 / Q1). It owns the cloud profile
+    // lookup, the onboarding-completion check, the Plan A self-heal
+    // reconciliation (relocated from splash during the merge), and
+    // the restore-from-cloud kickoff. Splash just routes there.
+    context.go('/restoring');
   }
 
   @override

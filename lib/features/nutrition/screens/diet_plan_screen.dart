@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -14,6 +13,7 @@ import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../services/diet_plan_generator.dart';
 
 /// Diet plan generator — FREE for everyone.
 /// Generated from food database (zero API cost).
@@ -59,98 +59,48 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final calorieTarget = targets['calories']?.round() ?? 2400;
     final proteinTarget = targets['protein']?.round() ?? 184;
 
-    _mealPlans = [
-      _generateMeal(
-        'Breakfast',
-        (calorieTarget * 0.25).round(),
-        (proteinTarget * 0.25).round(),
-        ['Staples', 'Dairy'],
+    // Read diet_preference from Hive profile so the generator filters
+    // anchor proteins correctly. Fallback to 'veg' (matches onboarding default).
+    final profile = UserRepository.instance.getProfile() ?? const {};
+    final dietPref =
+        (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
+
+    final now = DateTime.now();
+    final seed = DateTime(now.year, now.month, now.day).hashCode;
+
+    final servicePlans = DietPlanGenerator.instance.generate(
+      DietPlanInputs(
+        calorieTarget: calorieTarget,
+        proteinTarget: proteinTarget,
+        dietPreference: dietPref,
+        seed: seed,
       ),
-      _generateMeal(
-        'Mid-Morning Snack',
-        (calorieTarget * 0.10).round(),
-        (proteinTarget * 0.15).round(),
-        ['Nuts & seeds', 'Fruits'],
-      ),
-      _generateMeal(
-        'Lunch',
-        (calorieTarget * 0.30).round(),
-        (proteinTarget * 0.30).round(),
-        ['Pulses', 'Protein', 'Staples'],
-      ),
-      _generateMeal(
-        'Evening Snack',
-        (calorieTarget * 0.10).round(),
-        (proteinTarget * 0.10).round(),
-        ['Nuts & seeds', 'Beverages'],
-      ),
-      _generateMeal(
-        'Dinner',
-        (calorieTarget * 0.25).round(),
-        (proteinTarget * 0.20).round(),
-        ['Protein', 'Staples', 'Pulses'],
-      ),
-    ];
+    );
+
+    _mealPlans = servicePlans.map(_servicePlanToScreenPlan).toList();
     if (mounted) setState(() => _saved = false);
   }
 
-  _MealPlan _generateMeal(
-      String name, int targetCals, int targetProtein, List<String> categories) {
-    final items = <_PlanFoodItem>[];
-    int totalCals = 0;
-
-    // Use date + meal name as seed for daily consistency with variety.
-    final now = DateTime.now();
-    final mealIndex = _mealPlans.length;
-    final seed = DateTime(now.year, now.month, now.day).hashCode + mealIndex;
-
-    for (int catIdx = 0; catIdx < categories.length; catIdx++) {
-      final category = categories[catIdx];
-      final foods =
-          FoodRepository.instance.getByCategory(category).take(20).toList();
-
-      // Shuffle with deterministic seed for this meal + category.
-      foods.shuffle(Random(seed + catIdx));
-      if (foods.isEmpty) continue;
-      final food = foods.first;
-      final cals =
-          (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
-      final protein =
-          (food['protein_per_100g'] as num?)?.toDouble() ?? 0;
-      final carbs =
-          (food['carbs_per_100g'] as num?)?.toDouble() ?? 0;
-      final fat = (food['fat_per_100g'] as num?)?.toDouble() ?? 0;
-      final servingG =
-          (food['standard_serving_g'] as num?)?.toDouble() ?? 100;
-      final servingDesc =
-          food['standard_serving_desc'] as String? ?? '100g';
-
-      final factor = servingG / 100.0;
-      final servingCals = (cals * factor).round();
-
-      items.add(_PlanFoodItem(
-        foodId: food['id'] as String? ?? '',
-        name: food['name'] as String? ?? 'Unknown',
-        servingDesc: servingDesc,
-        servingG: servingG,
-        calories: servingCals,
-        protein: (protein * factor).round(),
-        carbs: (carbs * factor).round(),
-        fat: (fat * factor).round(),
-        category: category,
-      ));
-
-      totalCals += servingCals;
-      if (totalCals >= targetCals) break;
-    }
-
-    return _MealPlan(
-      name: name,
-      items: items,
-      targetCalories: targetCals,
-      targetProtein: targetProtein,
-    );
-  }
+  /// Adapts the public DietMealPlan into the screen's private _MealPlan so
+  /// the rest of the screen (swap UI, save UI, PDF export) keeps working.
+  _MealPlan _servicePlanToScreenPlan(DietMealPlan svc) => _MealPlan(
+        name: svc.name,
+        items: svc.items
+            .map((i) => _PlanFoodItem(
+                  foodId: i.foodId,
+                  name: i.name,
+                  servingDesc: i.servingDesc,
+                  servingG: i.servingG,
+                  calories: i.calories,
+                  protein: i.protein,
+                  carbs: i.carbs,
+                  fat: i.fat,
+                  category: i.category,
+                ))
+            .toList(),
+        targetCalories: svc.targetCalories,
+        targetProtein: svc.targetProtein,
+      );
 
   void _swapItem(int mealIndex, int itemIndex) {
     final item = _mealPlans[mealIndex].items[itemIndex];
