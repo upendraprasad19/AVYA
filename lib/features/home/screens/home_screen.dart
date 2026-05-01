@@ -224,7 +224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               WardLetterhead(
                 eyebrow: eyebrow,
-                title: '$greeting, $firstName.',
+                title: '$greeting.',
                 padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
                 divider: true,
                 leadingAvatar: WardAvatar(

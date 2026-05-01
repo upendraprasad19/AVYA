@@ -108,15 +108,16 @@ void main() {
           reason: 'service_record_section.dart import should be removed');
     });
 
-    test('Predictions row precedes WeeklyReportCard (REPORTS ordering)', () {
-      final predictionsRowIndex = src.indexOf("title: 'Predictions'");
+    test('WeeklyReportCard precedes Predictions row (REPORTS ordering)', () {
       final weeklyReportIndex = src.indexOf('WeeklyReportCard(');
-      expect(predictionsRowIndex, greaterThan(-1));
+      final predictionsRowIndex = src.indexOf("title: 'Predictions'");
       expect(weeklyReportIndex, greaterThan(-1));
-      expect(predictionsRowIndex, lessThan(weeklyReportIndex),
+      expect(predictionsRowIndex, greaterThan(-1));
+      expect(weeklyReportIndex, lessThan(predictionsRowIndex),
           reason:
-              'Predictions row must appear BEFORE WeeklyReportCard inside REPORTS '
-              '(spec §7.5 ordering: Predictions → Weekly Report → Progress Photos)');
+              'WeeklyReportCard must appear BEFORE Predictions row inside REPORTS '
+              '(APK Test #7 ordering: Weekly Report card → 3-row card [Predictions / '
+              'Progress Comparison / Progress Photos])');
     });
   });
 }

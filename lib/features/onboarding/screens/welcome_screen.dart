@@ -192,7 +192,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     return Column(
       children: [
         GestureDetector(
-          onTap: () => context.go('/onboarding/identity'),
+          onTap: () => context.go('/onboarding/mission-brief'),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),

@@ -592,24 +592,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // feedback). Progress Photos is still PRO-gated at tap.
               //
               // Plan D D-10: Predictions moved into REPORTS as the first
-              // list row (preview + bottom sheet). The standalone YOUR
-              // PREDICTION section header + inline card were removed.
+              // REPORTS \u2014 WeeklyReportCard on top, then a single card for
+              // the 3 list rows (Predictions / Progress Comparison / Progress
+              // Photos). Consolidating from 3 separate _buildCard calls
+              // removes the triple gap and matches the SETTINGS / SHARE &
+              // GROW single-card pattern.
               const SectionHeader('REPORTS'),
-              Builder(builder: (ctx) {
-                final prediction = ref.watch(predictionProvider);
-                return _buildCard([
-                  ProfileRow(
-                    icon: Icons.auto_awesome_outlined,
-                    iconColor: AppColors.accent,
-                    title: 'Predictions',
-                    subtitle: _truncatedPredictionPreview(prediction),
-                    trailing: const ProfileRowChevron(),
-                    showBorder: false,
-                    onTap: () => _showPredictionBottomSheet(ctx),
-                  ),
-                ]);
-              }),
-              const SizedBox(height: 6),
               WeeklyReportCard(
                 isPro: subInfo.isPro,
                 usageWeeks: usageWeeks,
@@ -629,40 +617,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 6),
-              // APK Test #6 / Plan F-11 \u2014 Progress Comparison row.
-              // Shows starting baseline + promotion + manual snapshots
-              // and renders diffs vs baseline in a bottom sheet. Plan D
-              // Task D-10 will later land a Predictions row above this
-              // one (REPORTS ordering: Predictions \u2192 Progress Comparison
-              // \u2192 Progress Photos).
-              _buildCard([
-                ProfileRow(
-                  icon: Icons.compare_arrows_outlined,
-                  title: 'Progress Comparison',
-                  subtitle: 'Then vs now \u2014 starting stats and milestones',
-                  trailing: const ProfileRowChevron(),
-                  showBorder: false,
-                  onTap: () => context.go('/profile/progress-comparison'),
-                ),
-              ]),
-              const SizedBox(height: 6),
-              _buildCard([
-                ProfileRow(
-                  icon: Icons.photo_library_outlined,
-                  title: 'Progress Photos',
-                  subtitle: subInfo.isPro
-                      ? 'Track your transformation visually'
-                      : 'PRO \u2014 visual progress timeline',
-                  trailing: const ProfileRowChevron(),
-                  showBorder: false,
-                  onTap: () => SubscriptionService.instance.gate(
-                    AppConstants.featureProgressPhotos,
-                    onPro: () => context.go('/profile/progress-photos'),
-                    onFree: () =>
-                        showPaywallSheet(context, feature: 'Progress Photos'),
+              Builder(builder: (ctx) {
+                final prediction = ref.watch(predictionProvider);
+                return _buildCard([
+                  ProfileRow(
+                    icon: Icons.auto_awesome_outlined,
+                    iconColor: AppColors.accent,
+                    title: 'Predictions',
+                    subtitle: _truncatedPredictionPreview(prediction),
+                    trailing: const ProfileRowChevron(),
+                    showBorder: true,
+                    onTap: () => _showPredictionBottomSheet(ctx),
                   ),
-                ),
-              ]),
+                  ProfileRow(
+                    icon: Icons.compare_arrows_outlined,
+                    title: 'Progress Comparison',
+                    subtitle: 'Then vs now \u2014 starting stats and milestones',
+                    trailing: const ProfileRowChevron(),
+                    showBorder: true,
+                    onTap: () => context.go('/profile/progress-comparison'),
+                  ),
+                  ProfileRow(
+                    icon: Icons.photo_library_outlined,
+                    title: 'Progress Photos',
+                    subtitle: subInfo.isPro
+                        ? 'Track your transformation visually'
+                        : 'PRO \u2014 visual progress timeline',
+                    trailing: const ProfileRowChevron(),
+                    showBorder: false,
+                    onTap: () => SubscriptionService.instance.gate(
+                      AppConstants.featureProgressPhotos,
+                      onPro: () => context.go('/profile/progress-photos'),
+                      onFree: () =>
+                          showPaywallSheet(context, feature: 'Progress Photos'),
+                    ),
+                  ),
+                ]);
+              }),
               const SizedBox(height: 8),
 
               // #4b Invite Friends (referral)
@@ -832,6 +823,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   trailing: const ProfileRowChevron(),
                   showBorder: false,
                   onTap: () => _exportData(),
+                ),
+              ]),
+              const SizedBox(height: 12),
+
+              const SectionHeader('AVYA'),
+              _buildCard([
+                ProfileRow(
+                  icon: Icons.military_tech_outlined,
+                  iconColor: AppColors.accent,
+                  title: "AVYA's Promise",
+                  subtitle: 'Our philosophy — read before you train',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: true,
+                  onTap: () => context.push('/avya/promise'),
+                ),
+                ProfileRow(
+                  icon: Icons.language_outlined,
+                  title: 'icanbefitter.com',
+                  subtitle: 'Visit the website',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: true,
+                  onTap: () => _launchUrl('https://icanbefitter.com'),
+                ),
+                ProfileRow(
+                  icon: Icons.camera_alt_outlined,
+                  title: '@icanbefitter',
+                  subtitle: 'Daily wins on Instagram',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: _openInstagram,
                 ),
               ]),
               const SizedBox(height: 12),
@@ -2133,6 +2154,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _launchUrl(String url) {
     launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openInstagram() async {
+    final native = Uri.parse('instagram://user?username=icanbefitter');
+    if (await canLaunchUrl(native)) {
+      await launchUrl(native);
+    } else {
+      await launchUrl(Uri.parse('https://instagram.com/icanbefitter'));
+    }
   }
 
   /// Wraps children in a Wardroom card.

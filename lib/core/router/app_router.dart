@@ -125,6 +125,19 @@ class AppRouter {
       ),
 
       GoRoute(
+        path: '/avya/promise',
+        name: 'avyaPromise',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MissionBriefScreen(readOnly: true),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+
+      GoRoute(
         path: '/onboarding',
         name: 'onboarding',
         pageBuilder: (context, state) => CustomTransitionPage(
