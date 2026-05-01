@@ -101,6 +101,7 @@ flutter:
 
   assets:
     - assets/data/
+    - assets/founder/
     - assets/avya_logo.png
     - assets/avya_icon.png
 
