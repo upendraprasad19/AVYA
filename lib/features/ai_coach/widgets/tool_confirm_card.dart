@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,32 +26,18 @@ class ToolConfirmCard extends ConsumerStatefulWidget {
 }
 
 class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
-  Timer? _autoConfirmTimer;
-  int _secondsRemaining = 5;
+  // B-4 (APK Test #6): auto-confirm timer removed. Spec §5.3 requires
+  // explicit Apply/Dismiss on every confirmation class — no tap-anywhere,
+  // no countdown auto-fire. Both `trivial` and `reviewable` flows now
+  // demand a deliberate APPLY tap.
   bool _executing = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.intent.confirmationClass == ConfirmationClass.trivial &&
-        widget.intent.status == ToolIntentStatus.pending) {
-      _startCountdown();
-    }
-  }
-
-  void _startCountdown() {
-    _autoConfirmTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return;
-      setState(() => _secondsRemaining--);
-      if (_secondsRemaining <= 0) {
-        t.cancel();
-        _confirm();
-      }
-    });
   }
 
   Future<void> _confirm() async {
-    _autoConfirmTimer?.cancel();
     if (!mounted || _executing) return;
     setState(() => _executing = true);
     final result = await ref
@@ -69,7 +53,14 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
   }
 
   void _skip() {
-    _autoConfirmTimer?.cancel();
+    // Persist Hive marker so a hot restart (or chat thread filter) sees
+    // the dismissal even if PendingToolIntentsNotifier state is lost.
+    try {
+      HiveService.instance.coachBox.put(
+        'intent_${widget.intent.id}_dismissed_at',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (_) {/* never block on telemetry */}
     ref.read(pendingToolIntentsProvider.notifier).reject(widget.intent.id);
   }
 
@@ -86,12 +77,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         SnackBar(content: Text(result.errorMessage ?? 'Failed')),
       );
     }
-  }
-
-  @override
-  void dispose() {
-    _autoConfirmTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -112,7 +97,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
     }
 
     // pending | confirming | executing
-    final isCountdown = intent.confirmationClass == ConfirmationClass.trivial;
+    // B-4: countdown removed; both classes need explicit APPLY.
     final summary = _buildSummary(intent);
 
     return Container(
@@ -142,16 +127,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                 ),
               ),
               const Spacer(),
-              if (isCountdown && !_executing)
-                Text(
-                  '${_secondsRemaining}s',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -185,10 +160,11 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                           ),
                         )
                       : Text(
-                          'Confirm',
+                          'APPLY',
                           style: GoogleFonts.getFont(
                             'DM Sans',
                             fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
                           ),
                         ),
                 ),
@@ -202,11 +178,12 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
-                    'Skip',
+                    'DISMISS',
                     style: GoogleFonts.getFont(
                       'DM Sans',
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ),

@@ -88,6 +88,20 @@ class ToolDispatcher {
       );
     }
 
+    // 1a. Idempotency guard (B-4): refuse double-dispatch.
+    // The Hive marker is written AFTER successful execution below; if it's
+    // already there, this intent has been applied. Returning success keeps
+    // the UI calm — no error toast, no second handler run.
+    final markerKey = 'intent_${intent.id}_dispatched_at';
+    try {
+      final existing = HiveService.instance.coachBox.get(markerKey);
+      if (existing != null) {
+        debugPrint(
+            '[tool_dispatcher] intent ${intent.id} already dispatched — skip');
+        return const ToolExecutionResult.success();
+      }
+    } catch (_) {/* never block on telemetry */}
+
     try {
       // 2-3. Route by type
       final ToolExecutionResult result;
