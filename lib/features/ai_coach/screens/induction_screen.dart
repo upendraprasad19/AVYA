@@ -233,7 +233,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
             ),
             TextSpan(
               text:
-                  'Make Lieutenant Commander rank — 200 workouts on this app — and your life '
+                  'Make Sub Lieutenant rank — 104 workouts on this app — and your life '
                   "will change. Physically, and in every possible way I can measure. "
                   "That's not a slogan. That's a guarantee.\n\n",
               style: TextStyle(
@@ -245,7 +245,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
             ),
             const TextSpan(
               text:
-                  '200 workouts is roughly twelve months of disciplined training. Most don\'t '
+                  '104 workouts is roughly six months of disciplined training. Most don\'t '
                   'make it past month two. The ones who do — they don\'t recognize themselves '
                   'in the mirror, in their work, in their relationships. Compounding return. '
                   "I've seen it happen. I'll show you the way.\n\n",
