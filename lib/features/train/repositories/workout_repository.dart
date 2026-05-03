@@ -459,6 +459,34 @@ class WorkoutRepository {
     return logs;
   }
 
+  /// Sum of `volume_kg` across every `exlog_*` row in Hive — the user's
+  /// lifetime kg lifted across every recorded weight_reps / weighted
+  /// bodyweight set. Used by Test #10 obs 2 lifetime ladder summary tile.
+  ///
+  /// Falls back to `weight_kg × reps_completed` for legacy rows missing
+  /// `volume_kg` (pre-Test #6 logs). Bodyweight / timed / cardio logs
+  /// have no weight component and are skipped by the volume_kg=0 check.
+  double totalLifetimeVolumeKg() {
+    var total = 0.0;
+    final all = _hive.workoutBox.toMap();
+    for (final entry in all.entries) {
+      final key = entry.key;
+      if (key is! String || !key.startsWith('exlog_')) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      final stored = (raw['volume_kg'] as num?)?.toDouble() ?? 0.0;
+      if (stored > 0) {
+        total += stored;
+        continue;
+      }
+      // Legacy fallback — derive from weight × reps.
+      final weight = (raw['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final reps = (raw['reps_completed'] as num?)?.toDouble() ?? 0.0;
+      if (weight > 0 && reps > 0) total += weight * reps;
+    }
+    return total;
+  }
+
   // ── Swap ──────────────────────────────────────────────────────
 
   /// Swap two workout days within the same week.

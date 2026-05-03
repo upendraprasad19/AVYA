@@ -111,16 +111,19 @@ class RankServiceRecordSheet extends ConsumerWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
+                  // Test #10 obs 2 — was VIEW FULL ROADMAP → /train/roadmap.
+                  // Now points at the new full-screen lifetime ladder.
+                  // Train roadmap stays accessible from the Train tab.
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    context.go('/train/roadmap');
+                    context.go('/profile/rank-ladder');
                   },
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     foregroundColor: AppColors.accent,
                   ),
                   child: Text(
-                    'VIEW FULL ROADMAP →',
+                    'VIEW LIFETIME LADDER →',
                     style: AppTypography.mono.copyWith(
                       fontSize: 11,
                       color: AppColors.accent,

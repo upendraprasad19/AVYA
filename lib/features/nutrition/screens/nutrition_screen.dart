@@ -63,9 +63,11 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // F10 · Test #9 — Nutrition header compacted to 3 rows.
-                // DIET PLAN moves to row 1 right (frees title row). KCAL meter
-                // becomes the row 3 anchor with streak pill on the right.
+                // Test #10 obs 3 — Nutrition header compacted to 2 rows.
+                // Linear KCAL `WardBar` removed (the body's 110dp WardRing
+                // already shows consumed + remaining — same data twice was
+                // redundant). Streak pill collapses onto the title row,
+                // saving ~38 dp.
                 Builder(builder: (_) {
                   final now = DateTime.now();
                   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -76,12 +78,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                   final eyebrow =
                       'GALLEY · ${weekdays[now.weekday - 1]} ${now.day} '
                       '${monthShort[now.month - 1]}';
-                  final nutrition = ref.watch(dailyNutritionProvider);
-                  final consumedKcal = nutrition.calories.round();
-                  final targetKcal = nutrition.calorieTarget.round();
-                  final pct = targetKcal > 0
-                      ? (consumedKcal / targetKcal).clamp(0.0, 1.0)
-                      : 0.0;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -110,26 +106,18 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                           ],
                         ),
                       ),
-                      // ROW 2 — title only (32sp h1), full width
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
-                        child: Text(
-                          'Fueling the plan',
-                          style: AppTypography.h1.copyWith(height: 1.05),
-                        ),
-                      ),
-                      // ROW 3 — KCAL bar + streak pill right
+                      // ROW 2 — title + streak pill inline-right
                       Padding(
                         padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
-                              child: WardBar(
-                                pct: pct,
-                                height: 4,
-                                trailingLabel: '$consumedKcal / $targetKcal KCAL',
-                                trailingColor: AppColors.textDim,
+                              child: Text(
+                                'Fueling the plan',
+                                style: AppTypography.h1.copyWith(height: 1.05),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 10),

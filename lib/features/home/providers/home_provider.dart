@@ -145,6 +145,26 @@ class UserGreetingNotifier extends Notifier<String> {
 final userGreetingProvider =
     NotifierProvider<UserGreetingNotifier, String>(UserGreetingNotifier.new);
 
+// ── Time of Day (mono caps, no name) ─────────────────────────────
+//
+// Test #10 obs 1 — header redesign decouples greeting from name. The
+// new layout stacks `GOOD EVENING,` (mono caps eyebrow) above
+// `AVYAANSH 👋` (Fraunces display) inside the avatar height. Existing
+// userGreetingProvider stays intact for any other consumers; this is
+// additive.
+class UserTimeOfDayNotifier extends Notifier<String> {
+  @override
+  String build() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'GOOD MORNING';
+    if (hour < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
+  }
+}
+
+final userTimeOfDayProvider =
+    NotifierProvider<UserTimeOfDayNotifier, String>(UserTimeOfDayNotifier.new);
+
 // ── User First Name ──────────────────────────────────────────────
 
 class UserFirstNameNotifier extends Notifier<String> {

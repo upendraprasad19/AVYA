@@ -57,6 +57,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.invalidate(userFirstNameProvider);
       ref.invalidate(userInitialProvider);
       ref.invalidate(userGreetingProvider);
+      // Test #10 obs 1 — refresh time-of-day too so hour rollover
+      // (e.g. 11:55 → 12:05) updates the eyebrow on the next visit.
+      ref.invalidate(userTimeOfDayProvider);
     }
     _hasInitialized = true;
   }
@@ -198,13 +201,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // F8 · Test #9 — Home header compacted to 3 rows + 1 hairline.
-        // Eyebrow consolidates DAILY + date + WK + PHASE meta. Date hero
-        // dropped (its info is in the eyebrow). Streak pill moved into
-        // row 3 right. Old date helper deleted entirely.
+        // Test #10 obs 1 — Home header compacted to 2 rows + 1 hairline.
+        // Row 1 keeps the dense `DAILY · DATE · WK · PHASE` eyebrow with
+        // anchor glyph. Row 2 collapses the old standalone greeting + the
+        // standalone streak pill into a single horizontal row: avatar |
+        // (`GOOD EVENING,` mono eyebrow over `AVYAANSH 👋` Fraunces name,
+        // stack height = 44dp avatar) | streak pill inline-right.
         Builder(builder: (_) {
           final initial = ref.watch(userInitialProvider);
-          final greeting = ref.watch(userGreetingProvider);
+          final firstName = ref.watch(userFirstNameProvider);
+          final timeOfDay = ref.watch(userTimeOfDayProvider);
           final streak = ref.watch(streakProvider);
           final freezes = ref.watch(streakFreezeProvider);
           final profile = ref.watch(userProfileProvider);
@@ -228,7 +234,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ROW 1 — full-width eyebrow with all meta
+              // ROW 1 — full-width eyebrow with all meta (unchanged)
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 18, 22, 4),
                 child: Row(
@@ -250,7 +256,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
-              // ROW 2 — avatar + greeting title
+              // ROW 2 — avatar + (greeting/name stack) + streak pill inline
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
                 child: Row(
@@ -265,32 +271,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        '$greeting.',
-                        style: AppTypography.h1.copyWith(height: 1.05),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: SizedBox(
+                        height: 44,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$timeOfDay,',
+                              style: AppTypography.mono.copyWith(
+                                fontSize: 10,
+                                color: AppColors.accent,
+                                letterSpacing: 1.6,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(text: firstName),
+                                  const TextSpan(
+                                    text: ' \u{1F44B}',
+                                    style: TextStyle(
+                                      fontFamily: 'DM Sans',
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              style: AppTypography.h1.copyWith(
+                                fontSize: 22,
+                                height: 1.1,
+                                letterSpacing: -0.4,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => StreakExplainerSheet.show(
+                        context,
+                        freezesAvailable: freezes,
+                        isPro: SubscriptionService.instance.isPro(),
+                      ),
+                      child: WardStatusStrip(
+                        streakDays: streak,
+                        freezesAvailable: freezes,
                       ),
                     ),
                   ],
-                ),
-              ),
-              // ROW 3 — streak pill, right-aligned
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: GestureDetector(
-                    onTap: () => StreakExplainerSheet.show(
-                      context,
-                      freezesAvailable: freezes,
-                      isPro: SubscriptionService.instance.isPro(),
-                    ),
-                    child: WardStatusStrip(
-                      streakDays: streak,
-                      freezesAvailable: freezes,
-                    ),
-                  ),
                 ),
               ),
               // Single gold rule closes the header
