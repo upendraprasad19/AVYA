@@ -68,3 +68,14 @@ supabase/.supabase/
 
 # Knowledgebase (reference docs, not source code)
 Knowledgebase/
+
+# Workspace tooling output / regenerable artifacts (Test #8 cleanup)
+analyze_output.txt
+flutter_test_output.txt
+mockups/
+.hermes/
+.superpowers/
+test/plan_generator/v4_diagnostic_output.md
+assets/*.bak
+.claude/scheduled_tasks.lock
+
