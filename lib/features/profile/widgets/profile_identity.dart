@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/pro_pill_button.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
 /// Profile identity section: banner (140px per handoff, tap to view),
 /// avatar overlapping banner, name, subtitle, edit button. Banner has
@@ -27,6 +28,13 @@ class ProfileIdentity extends StatelessWidget {
   final bool isPro;
   final VoidCallback onTapPremium;
 
+  // Theme B · Test #8 — compact rank chip in banner-overlap row.
+  // Three optional fields; chip only renders when ALL three are
+  // non-null (avoids partial state during early profile load).
+  final String? rankCode;
+  final String? rankShortCode;
+  final VoidCallback? onTapRank;
+
   const ProfileIdentity({
     super.key,
     required this.name,
@@ -38,6 +46,9 @@ class ProfileIdentity extends StatelessWidget {
     this.onTapEdit,
     required this.isPro,
     required this.onTapPremium,
+    this.rankCode,
+    this.rankShortCode,
+    this.onTapRank,
   });
 
   void _openFullScreen(BuildContext context, String imageUrl, String heroTag) {
@@ -197,7 +208,8 @@ class ProfileIdentity extends StatelessWidget {
               ),
             ),
 
-            // Banner-overlap row: avatar on the left, PRO pill on the right.
+            // Banner-overlap row: avatar L · compact rank chip CENTER · PRO pill R.
+            // Theme B · Test #8 — chip taps open the Rank Service Record bottom sheet.
             Positioned(
               left: 18,
               right: 18,
@@ -205,7 +217,15 @@ class ProfileIdentity extends StatelessWidget {
               child: Row(
                 children: [
                   _buildAvatar(context),
-                  const Spacer(),
+                  Expanded(
+                    child: Center(
+                      child: (rankCode != null &&
+                              rankShortCode != null &&
+                              onTapRank != null)
+                          ? _buildRankChip()
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.only(top: 40),
                     child: ProPillButton(isPro: isPro, onTap: onTapPremium),
@@ -282,6 +302,52 @@ class ProfileIdentity extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Theme B · Test #8 — compact rank chip rendered in the banner-overlap
+  /// row. Same vertical drop as the PRO pill (top-padding 44) so all three
+  /// elements (avatar / chip / PRO pill) sit on a shared baseline.
+  Widget _buildRankChip() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 44),
+      child: GestureDetector(
+        onTap: onTapRank,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.45),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              WardRankInsignia(rankCode: rankCode!, size: 22),
+              const SizedBox(width: 6),
+              Text(
+                rankShortCode!,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 11,
+                  color: AppColors.accent,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.expand_more,
+                size: 14,
+                color: AppColors.accent,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

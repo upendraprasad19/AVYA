@@ -804,7 +804,16 @@ class AiCoachRepository {
     bool completedToday = false;
     final exerciseNames = <String>[];
 
-    for (final raw in workoutBox.values) {
+    // Drift fix · APK Test #8 / Theme D — WorkoutWriteService.logExercise writes
+    // entries keyed exlog_* WITHOUT a 'type' field. Read Hive entry key directly
+    // so all exlog_* rows are captured regardless of which writer produced them.
+    // wlog_* / schedule_* rows still gate on the legacy 'type' field for now,
+    // since those writers populate it. Surfaced by
+    // test/contracts/workout_write_to_read_contract_test.dart.
+    final entries = workoutBox.toMap();
+    for (final entry in entries.entries) {
+      final keyStr = entry.key.toString();
+      final raw = entry.value;
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
 
@@ -815,7 +824,7 @@ class AiCoachRepository {
           if (date == todayStr) completedToday = true;
         }
       }
-      if (log['type'] == 'exercise_log') {
+      if (keyStr.startsWith('exlog_')) {
         final date = log['date'] as String? ?? '';
         if (date == todayStr) {
           exerciseNames.add(log['exercise_name'] as String? ?? '');
@@ -954,14 +963,18 @@ class AiCoachRepository {
     const slotOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
     final bySlot = <String, List<Map<String, dynamic>>>{};
 
-    for (final raw in nutritionBox.values) {
+    // Drift fix · APK Test #8 / Theme D — NutritionWriteService.logMeal writes
+    // 'log_key', not 'id'. Read Hive entry key directly so all nlog_* rows are
+    // captured regardless of which writer produced them. Surfaced by
+    // test/contracts/nutrition_write_to_read_contract_test.dart.
+    final entries = nutritionBox.toMap();
+    for (final entry in entries.entries) {
+      final keyStr = entry.key.toString();
+      if (!keyStr.startsWith('nlog_')) continue;
+      final raw = entry.value;
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       if (log['date'] != todayStr) continue;
-      // Only group rows with the standard nlog_* shape (skip saved-meal
-      // template rows etc. — they don't carry meal_type at log time).
-      final id = log['id'] as String? ?? '';
-      if (!id.startsWith('nlog_')) continue;
       final mealType = (log['meal_type'] as String?)?.toLowerCase();
       if (mealType == null || mealType.isEmpty) continue;
       // Snap the various aliases the app uses to canonical slot keys.
@@ -1031,13 +1044,18 @@ class AiCoachRepository {
     ];
     final windowSet = windowDates.toSet();
 
-    // Single pass: bucket every nlog_* record by date.
+    // Drift fix · APK Test #8 / Theme D — NutritionWriteService.logMeal writes
+    // 'log_key', not 'id'. Read Hive entry key directly so all nlog_* rows are
+    // captured regardless of which writer produced them. Same fix class as
+    // _getMealsToday (already patched). Surfaced by the contract test.
     final byDate = <String, Map<String, int>>{};
-    for (final raw in nutritionBox.values) {
+    final entries = nutritionBox.toMap();
+    for (final entry in entries.entries) {
+      final keyStr = entry.key.toString();
+      if (!keyStr.startsWith('nlog_')) continue;
+      final raw = entry.value;
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
-      final id = log['id'] as String? ?? '';
-      if (!id.startsWith('nlog_')) continue;
       final dateStr = log['date'] as String?;
       if (dateStr == null || !windowSet.contains(dateStr)) continue;
 
@@ -1108,10 +1126,17 @@ class AiCoachRepository {
     final workoutBox = _hive.workoutBox;
     final prs = <String, double>{};
 
-    for (final raw in workoutBox.values) {
+    // Drift fix · APK Test #8 / Theme D — WorkoutWriteService.logExercise
+    // writes entries keyed exlog_* WITHOUT a 'type' field. Filter by Hive
+    // key prefix so all writer outputs are visible. Same fix class as
+    // _getThisWeekWorkouts (already patched). Surfaced by the contract test.
+    final entries = workoutBox.toMap();
+    for (final entry in entries.entries) {
+      final keyStr = entry.key.toString();
+      if (!keyStr.startsWith('exlog_')) continue;
+      final raw = entry.value;
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
-      if (log['type'] != 'exercise_log') continue;
       final name = log['exercise_name'] as String? ?? '';
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       if (name.isNotEmpty && weight > 0) {

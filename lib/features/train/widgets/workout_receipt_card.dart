@@ -271,7 +271,11 @@ class WorkoutReceiptData {
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
-      final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older logs
+      // use `sets_completed`. Read new key first, fall back to legacy.
+      final sets = (log['set_number'] as num?)?.toInt()
+          ?? (log['sets_completed'] as num?)?.toInt()
+          ?? 0;
       final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
@@ -282,16 +286,24 @@ class WorkoutReceiptData {
       //   2. `volume_kg` stored directly at log time (new logs since v4).
       //   3. Approximation `weight × reps` — only for legacy pre-v4 logs.
       double exerciseVolume;
-      final setsDetail = log['sets_detail'];
+      // Theme A · Test #8 — WorkoutWriteService writes `sets`; older logs use
+      // `sets_detail`. Read new key first, fall back to legacy.
+      final setsDetail = log['sets'] ?? log['sets_detail'];
       final perSetBreakdown = <ReceiptSet>[];
+      int perSetDurationSum = 0;
       if (setsDetail is List && setsDetail.isNotEmpty) {
         double sum = 0;
         for (final s in setsDetail) {
           if (s is! Map) continue;
           final w = (s['weight_kg'] as num?)?.toDouble() ?? 0;
           final r = (s['reps'] as num?)?.toInt() ?? 0;
-          final d = (s['duration_seconds'] as num?)?.toInt() ?? 0;
+          // Theme A · Test #8 — WorkoutWriteService writes per-set
+          // `duration_sec`; legacy entries used `duration_seconds`.
+          final d = (s['duration_sec'] as num?)?.toInt()
+              ?? (s['duration_seconds'] as num?)?.toInt()
+              ?? 0;
           sum += w * r;
+          perSetDurationSum += d;
           perSetBreakdown.add(ReceiptSet(
             weightKg: w > 0 ? w : null,
             reps: r > 0 ? r : null,
@@ -303,6 +315,10 @@ class WorkoutReceiptData {
         final storedVolume = (log['volume_kg'] as num?)?.toDouble();
         exerciseVolume = storedVolume ?? (weightKg * reps);
       }
+      // Theme A · Test #8 — WorkoutWriteService doesn't store a top-level
+      // `duration_seconds` aggregate. Sum from per-set breakdown when the
+      // top-level field is missing/zero.
+      final effectiveDuration = duration > 0 ? duration : perSetDurationSum;
 
       if (isPr) {
         if (weightKg > 0) {
@@ -323,7 +339,7 @@ class WorkoutReceiptData {
         loggingType: loggingType,
         sets: sets,
         totalReps: reps,
-        totalDurationSeconds: duration,
+        totalDurationSeconds: effectiveDuration,
         totalDistanceKm: distance,
         maxWeightKg: weightKg,
         perSetBreakdown: perSetBreakdown,

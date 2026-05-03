@@ -22,6 +22,7 @@ Run the full QA checklist on all files modified since last commit.
 12. Edge Functions validate JWT
 13. Loading, error, empty states on all screens
 14. `@riverpod` annotations where appropriate
+15. If I changed a WriteService output field, did I grep for every consumer of that field name and update them in the same commit? Did I add or update a round-trip test in `test/contracts/`?
 
 ## WARNING Checklist (note but don't block)
 1. Design tokens match UI.txt
