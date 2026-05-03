@@ -457,66 +457,86 @@ class _MacroColumn extends StatelessWidget {
     double safePct(num n, num d) =>
         d > 0 ? (n / d).clamp(0.0, 1.0).toDouble() : 0.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _MacroTile(
-          eyebrow: 'FUEL',
-          currentLabel: '$caloriesCurrent',
-          targetLabel: '/$caloriesTarget',
-          progress: safePct(caloriesCurrent, caloriesTarget),
-        ),
-        const SizedBox(height: 10),
-        _MacroTile(
-          eyebrow: 'PROTEIN',
-          currentLabel: '$proteinCurrent',
-          targetLabel: '/${proteinTarget}g',
-          progress: safePct(proteinCurrent, proteinTarget),
-        ),
-        const SizedBox(height: 10),
-        _MacroTile(
-          eyebrow: 'STEPS',
-          currentLabel: TodayWorkoutCard._abbreviateK(stepsCurrent),
-          targetLabel: '/${TodayWorkoutCard._abbreviateK(stepsTarget)}',
-          progress: safePct(stepsCurrent, stepsTarget),
-        ),
-      ],
+    // Test #10 obs 4 — three-tile right column collapsed into ONE
+    // bordered container. Rows separated by hairline `--line2` dividers
+    // instead of the old 10px gaps. Bullet glyphs (◇ ◆ ▲) carry the
+    // gold accent without per-row borders.
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.cardS),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MacroRow(
+            bullet: '◇', // ◇
+            label: 'FUEL',
+            currentLabel: '$caloriesCurrent',
+            targetLabel: '/$caloriesTarget',
+            progress: safePct(caloriesCurrent, caloriesTarget),
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.line2),
+          _MacroRow(
+            bullet: '◆', // ◆
+            label: 'PROTEIN',
+            currentLabel: '$proteinCurrent',
+            targetLabel: '/${proteinTarget}g',
+            progress: safePct(proteinCurrent, proteinTarget),
+          ),
+          const Divider(height: 1, thickness: 1, color: AppColors.line2),
+          _MacroRow(
+            bullet: '▲', // ▲
+            label: 'STEPS',
+            currentLabel: TodayWorkoutCard._abbreviateK(stepsCurrent),
+            targetLabel: '/${TodayWorkoutCard._abbreviateK(stepsTarget)}',
+            progress: safePct(stepsCurrent, stepsTarget),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _MacroTile extends StatelessWidget {
-  const _MacroTile({
-    required this.eyebrow,
+class _MacroRow extends StatelessWidget {
+  const _MacroRow({
+    required this.bullet,
+    required this.label,
     required this.currentLabel,
     required this.targetLabel,
     required this.progress,
   });
 
-  final String eyebrow;
+  final String bullet;
+  final String label;
   final String currentLabel;
   final String targetLabel;
   final double progress;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(8),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Row 1: eyebrow LEFT + value RIGHT.
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                eyebrow,
+                bullet,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontSize: 12,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
                 style: AppTypography.monoXs.copyWith(
                   fontSize: 10,
                   letterSpacing: 1.2,
@@ -547,13 +567,12 @@ class _MacroTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          // Row 2: full-width bar.
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 4,
-              backgroundColor: AppColors.line2,
+              backgroundColor: AppColors.input,
               valueColor:
                   const AlwaysStoppedAnimation<Color>(AppColors.accent),
             ),

@@ -231,21 +231,82 @@ class RankService {
     }
   }
 
+  /// Test #10 obs 2 — surfaces every active gate half (the previous
+  /// implementation used early-return on a single branch and silently
+  /// dropped `deploymentsCompleteAtLeast` for PO/CPO and the entire
+  /// `completionRateMinimum` half for MCPO + every officer rank).
+  ///
+  /// Output is a compact single line, parts joined by ` · ` middot:
+  ///   `30-workout streak · 12 weeks of service · 2 deployments complete`
+  ///   `52 weeks active · 80% completion · no >14-day gap`
+  ///   `2 years of service · 80% completion (rolling 26 weeks)`
+  ///
+  /// Officer-track calendar weeks (≥104) are rendered in years for
+  /// readability — `104 → 2 years`, `130 → 2.5 years`, etc.
   String _humanGateText(RankLadderEntry entry) {
+    if (entry.code == 'SD2') return 'Earned at induction';
+
     final gate = kRankGates[entry.code]!;
-    if (gate.totalWorkoutsAtLeast != null) {
-      return '${gate.totalWorkoutsAtLeast} workouts to unlock '
-          '${entry.displayName}';
-    }
+    final parts = <String>[];
+
     if (gate.streakAtLeast != null) {
-      return '${gate.streakAtLeast}-workout streak + ${entry.minWeeks} '
-          'weeks to unlock ${entry.displayName}';
+      parts.add('${gate.streakAtLeast}-workout streak');
     }
+
+    final weeks = entry.minWeeks;
+    if (weeks > 0) {
+      parts.add(_weeksLabel(weeks, entry));
+    }
+
+    if (gate.deploymentsCompleteAtLeast != null) {
+      parts.add('${gate.deploymentsCompleteAtLeast} deployments complete');
+    }
+
+    if (gate.completionRateMinimum != null &&
+        gate.completionRateWindowWeeks != null) {
+      final pct = (gate.completionRateMinimum! * 100).round();
+      final win = gate.completionRateWindowWeeks!;
+      final winLabel = win >= 104
+          ? '${(win / 52).toStringAsFixed(0)} years'
+          : '$win weeks';
+      // MCPO is the only rank that pairs completionRate with maxGapDays.
+      // Render its completion compactly without "rolling" qualifier so
+      // the third part (gap rule) reads as a peer.
+      if (gate.maxGapDays != null) {
+        parts.add('$pct% completion');
+      } else {
+        parts.add('$pct% completion (rolling $winLabel)');
+      }
+    }
+
     if (gate.maxGapDays != null) {
-      return '${entry.minWeeks}-week active streak (no >${gate.maxGapDays}-day '
-          'gap) to unlock ${entry.displayName}';
+      parts.add('no >${gate.maxGapDays}-day gap');
     }
-    return '${entry.minWeeks} weeks to unlock ${entry.displayName}';
+
+    if (parts.isEmpty) {
+      // Fallback for any rank whose gates are entirely empty besides
+      // minWeeksSinceSignup. Should not happen for any of the 11 ranks
+      // today; defensive.
+      return '${entry.minWeeks} weeks to unlock ${entry.displayName}';
+    }
+
+    return parts.join(' · ');
+  }
+
+  /// Returns the calendar-weeks half of the gate, rendered in years for
+  /// officer ranks (≥104 weeks) and in weeks otherwise. Sailor ranks
+  /// keep weeks because they're short enough to read directly
+  /// (`1 week`, `4 weeks`, `12 weeks`, `26 weeks`).
+  String _weeksLabel(int weeks, RankLadderEntry entry) {
+    if (entry.category == 'officer' && weeks >= 104) {
+      final years = weeks / 52;
+      final whole = years == years.truncate();
+      final yearText = whole
+          ? '${years.toInt()} years'
+          : years.toStringAsFixed(1);
+      return whole ? '$yearText of service' : '$yearText years of service';
+    }
+    return weeks == 1 ? '1 week of service' : '$weeks weeks of service';
   }
 
   _EvalState _readEvaluationState({DateTime? signupAt}) {

@@ -29,6 +29,7 @@ import 'package:icanbefitter/features/ai_coach/screens/muster_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
+import 'package:icanbefitter/features/profile/screens/rank_ladder_screen.dart';
 import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_comparison_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
@@ -436,6 +437,16 @@ class AppRouter {
                     path: 'submissions',
                     name: 'submissions',
                     builder: (context, state) => const SubmissionsScreen(),
+                  ),
+                  GoRoute(
+                    // Test #10 obs 2 — Lifetime ladder full screen.
+                    // Reachable from RankServiceRecordSheet's footer
+                    // link (which replaced the old VIEW FULL ROADMAP →
+                    // /train/roadmap entry — the train roadmap stays
+                    // accessible from the Train tab).
+                    path: 'rank-ladder',
+                    name: 'rankLadder',
+                    builder: (context, state) => const RankLadderScreen(),
                   ),
                   GoRoute(
                     path: 'settings',

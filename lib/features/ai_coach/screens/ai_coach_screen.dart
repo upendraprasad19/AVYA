@@ -33,6 +33,7 @@ import '../models/tool_intent.dart';
 import '../widgets/tool_confirm_card.dart';
 import '../widgets/tool_confirm_sheet.dart';
 import '../widgets/diff_preview/swap_exercise_diff.dart';
+import '../widgets/compass_tools_sheet.dart';
 import '../widgets/diff_preview/injury_modify_diff.dart';
 import '../widgets/diff_preview/hotel_workout_diff.dart';
 import '../widgets/diff_preview/pause_plan_diff.dart';
@@ -1109,10 +1110,42 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               ),
               borderRadius: BorderRadius.circular(24),
             ),
-            padding: const EdgeInsets.fromLTRB(14, 0, 6, 0),
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // Test #10 obs 5 — compass-rose button left of input.
+                // Tap → segregated bottom sheet with 4 family groups.
+                // Selecting a command prefills the composer; user edits
+                // before sending. Hidden during voice recording so the
+                // bubble doesn't get crowded with 3 controls + slider.
+                if (!_isRecording)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.explore_outlined,
+                      color: AppColors.accent,
+                      size: 20,
+                    ),
+                    tooltip: 'Compass · tools',
+                    onPressed: isSending
+                        ? null
+                        : () => CompassToolsSheet.show(
+                              context,
+                              onSelect: (prefill) {
+                                _messageController.text = prefill;
+                                _messageController.selection =
+                                    TextSelection.collapsed(
+                                  offset: prefill.length,
+                                );
+                                _inputFocusNode.requestFocus();
+                              },
+                            ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
                 Expanded(
                   child: _isRecording
                       ? _buildRecordingBody()
