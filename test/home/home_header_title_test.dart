@@ -19,9 +19,13 @@ void main() {
   });
 
   test('home header title ends with greeting + period only', () {
-    // Source file should contain: title: '$greeting.',
+    // Post F8 (Test #9): title moved out of WardLetterhead into a plain Text
+    // widget in the row 2 Padding. The greeting + period contract is the same;
+    // just the surrounding scaffold changed.
     expect(
-      src.contains("title: '\$greeting.'"),
+      src.contains("Text(\r\n                        '\$greeting.'") ||
+          src.contains("Text(\n                        '\$greeting.'") ||
+          src.contains("'\$greeting.'"),
       isTrue,
       reason: 'title should be the greeting sentence closed with a period',
     );

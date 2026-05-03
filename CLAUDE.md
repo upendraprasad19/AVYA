@@ -533,7 +533,6 @@ progress_photos        → full photo timeline
 scan_meal_pro          → 3 scans/day (free = 3/month)
 cart_auditor_pro       → 3 scans/day (free = 1/month)
 ai_text_log_pro        → 10 text logs/day (free = 3/day)
-voice_notes            → push-to-talk voice input to AI coach
 morning_alert_pro      → AI-personalised morning message (free = generic push)
 prediction_monthly     → fresh prediction card every month (free = once at onboarding)
 adaptive_workouts      → AI workout adjustments from biometrics (Phase 2)
@@ -1015,6 +1014,7 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 - Streak counter + water tracking
 - Steps + sleep sync (Google Fit / Health Connect)
 - AI Coach — 30 days free (15 msg/day, Gemini 2.5 Flash)
+- Voice (mic) input to AI coach — on-device transcription via `speech_to_text`; zero infra cost. Made free 2026-05-03 (Test #9 / F13).
 - Telegram bot — 30 days free
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
@@ -1121,6 +1121,30 @@ Current contracts:
 - **`nlog_*`** (`NutritionWriteService`) — fields: `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (List of Map; per-item keys: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`. Consumers: `TodaysMealsCard`, `NutritionRepository`, `home_provider` daily-completion ring, `AiCoachRepository.buildAiContext` (meals_today / nutrition_trend_7d), `SyncService.syncNutritionData`.
 
 If you rename a field in a WriteService, the corresponding contract test in `test/contracts/<x>_write_to_read_contract_test.dart` must be updated in the same commit. The receipt-rendering bug in APK Test #7 (set_number vs sets_completed) is the canonical failure mode this contract prevents.
+
+### Sync fan-out contract
+
+Two domain entry points are the contract for "everything in the
+{workout, nutrition} domain is now in cloud":
+
+- `SyncService.syncWorkoutData()` MUST fan out to every workoutBox
+  prefix and the workout-domain healthBox keys. Currently:
+  `_syncWorkoutLogs`, `_syncExerciseLogs`, `_syncScheduleCompletions`,
+  `_syncWorkoutTemplates`, `_syncScheduledWorkouts`, `_syncStreaks`.
+- `SyncService.syncNutritionData()` MUST fan out to every nutritionBox
+  prefix. Currently: `_syncNutritionLogs`, `_syncWaterLogs`,
+  `_syncSavedMeals`.
+
+Adding a new Hive prefix in either domain requires updating the matching
+`syncX()` AND the contract test
+(`test/contracts/sync_fanout_contract_test.dart`).
+
+The 2026-05-03 sync gap (templates / schedules / streaks invisible to
+cloud for >24h, **with `scheduled_workouts.template_id` and
+`user_saved_meals.id` silently uuid-rejecting since 2026-04-18**) was the
+canonical multi-failure-mode this contract prevents. `weeklyFullSync()`
+remains the safety net but is no longer the only path for workout-domain
+or nutrition-domain rows reaching cloud.
 
 ---
 

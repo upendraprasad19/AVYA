@@ -1,7 +1,34 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { COACH_REPLIES } from "../_shared/coach_replies.ts";
+
+// F14 · Test #9 — free users get 5 LIFETIME image analyses on the AI coach.
+// Counted via ai_coach_interactions.channel='free_image_analysis'.
+const FREE_IMAGE_ANALYSIS_LIMIT = 5;
+
+/**
+ * F14 · Test #9 — counts the user's lifetime free image analyses.
+ * Returns 0 on any error (fail-open is safer than fail-closed for counts —
+ * the LIMIT comparison still gates correctly because 0 < 5).
+ */
+async function countFreeImageAnalyses(
+  client: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  try {
+    const { count, error } = await client
+      .from("ai_coach_interactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("channel", "free_image_analysis");
+    if (error) return 0;
+    return count ?? 0;
+  } catch (_) {
+    return 0;
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,8 +162,10 @@ serve(async (req: Request) => {
 
     const userId = user.id;
 
-    // Verify PRO subscription
-    const { data: subscription, error: subError } = await supabaseClient
+    // F14 · Test #9 — PRO check is now a TIER FLAG, not an early bail.
+    // Free users still hit this endpoint; they get 5 lifetime image
+    // analyses (counted below) and a paywall for video.
+    const { data: subscription } = await supabaseClient
       .from("subscriptions")
       .select("status, end_date")
       .eq("user_id", userId)
@@ -144,20 +173,8 @@ serve(async (req: Request) => {
       .gt("end_date", new Date().toISOString())
       .order("end_date", { ascending: false })
       .limit(1)
-      .single();
-
-    if (subError || !subscription) {
-      return new Response(
-        JSON.stringify({
-          error: "PRO subscription required",
-          code: "NOT_PRO",
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
+      .maybeSingle();
+    const isPro = !!subscription;
 
     // Parse request body
     const body = await req.json();
@@ -192,6 +209,81 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
+    }
+
+    const isVideo = (media_type ?? "").toLowerCase().startsWith("video");
+
+    // F15 · TODO server-side video duration validation deferred — client cap
+    // (pickVideo maxDuration: Duration(seconds: 30)) is primary enforcement
+    // on this batch. Deno on Supabase Edge Runtime has no clean ffprobe binding;
+    // probing duration would require shipping an ffmpeg WASM build (~10 MB) or
+    // round-tripping to an external service. Revisit if abuse pattern emerges.
+
+    // F14/F15 · Test #9 — Video for free users: paywall reply, NO Gemini call.
+    // (Server-side 30s cap + actual PRO video analysis ship in F15.)
+    if (isVideo && !isPro) {
+      const reply = COACH_REPLIES.videoPaywall;
+      await supabaseClient.from("ai_coach_interactions").insert({
+        user_id: userId,
+        snapshot_id: null,
+        channel: "video_paywall",
+        user_message: `[Video] ${message}`,
+        ai_response: reply,
+        model_used: "paywall",
+        tokens_used: 0,
+        created_at: new Date().toISOString(),
+      });
+      return new Response(
+        JSON.stringify({
+          reply,
+          model_used: "paywall",
+          tokens_used: 0,
+          actions: [],
+          gated: true,
+          gate_reason: "video_pro_only",
+          stored_url: media_url,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // F14 · Test #9 — Free image analysis: 5 LIFETIME cap. After that,
+    // paywall reply with NO Gemini call. PRO users skip this branch.
+    if (!isVideo && !isPro) {
+      const usedSoFar = await countFreeImageAnalyses(supabaseClient, userId);
+      if (usedSoFar >= FREE_IMAGE_ANALYSIS_LIMIT) {
+        const reply = COACH_REPLIES.imagePaywallExhausted;
+        await supabaseClient.from("ai_coach_interactions").insert({
+          user_id: userId,
+          snapshot_id: null,
+          channel: "image_paywall",
+          user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
+          ai_response: reply,
+          model_used: "paywall",
+          tokens_used: 0,
+          created_at: new Date().toISOString(),
+        });
+        return new Response(
+          JSON.stringify({
+            reply,
+            model_used: "paywall",
+            tokens_used: 0,
+            actions: [],
+            gated: true,
+            gate_reason: "free_image_limit_reached",
+            free_image_used: usedSoFar,
+            free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
+            stored_url: media_url,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
     }
 
     // Build system prompt (same as ai-proxy-pro + image analysis instructions)
@@ -275,13 +367,21 @@ serve(async (req: Request) => {
       .eq("user_id", userId)
       .order("snapshot_date", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    // F14 · Test #9 — channel selection drives the lifetime counter.
+    // Free image analyses MUST land on 'free_image_analysis' so
+    // countFreeImageAnalyses() picks them up next request.
+    const isFreeImageAnalysis = !isVideo && !isPro;
+    const interactionChannel = isFreeImageAnalysis
+      ? "free_image_analysis"
+      : "app";
 
     // Log interaction (store clean reply without tags)
     await supabaseClient.from("ai_coach_interactions").insert({
       user_id: userId,
       snapshot_id: snapshotData?.id ?? null,
-      channel: "app",
+      channel: interactionChannel,
       user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
       ai_response: extracted.reply,
       model_used: modelLabel,
@@ -289,12 +389,32 @@ serve(async (req: Request) => {
       created_at: new Date().toISOString(),
     });
 
+    // F14 · Test #9 — Append the "X of 5 free analyses left" counter for
+    // free users. Re-count AFTER insert so the displayed remaining is
+    // accurate (this analysis is included).
+    let finalReply = extracted.reply;
+    let freeImageUsed: number | null = null;
+    let freeImageRemaining: number | null = null;
+    if (isFreeImageAnalysis) {
+      freeImageUsed = await countFreeImageAnalyses(supabaseClient, userId);
+      freeImageRemaining = Math.max(
+        0,
+        FREE_IMAGE_ANALYSIS_LIMIT - freeImageUsed,
+      );
+      finalReply = `${extracted.reply}\n\n${COACH_REPLIES.freeImageCounter(freeImageRemaining)}`;
+    }
+
     return new Response(
       JSON.stringify({
-        reply: extracted.reply,
+        reply: finalReply,
         model_used: modelLabel,
         tokens_used: tokensUsed,
         actions: extracted.actions,
+        free_image_used: freeImageUsed,
+        free_image_remaining: freeImageRemaining,
+        free_image_limit: isFreeImageAnalysis
+          ? FREE_IMAGE_ANALYSIS_LIMIT
+          : null,
       }),
       {
         status: 200,

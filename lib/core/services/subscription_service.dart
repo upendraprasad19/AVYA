@@ -32,7 +32,9 @@ class SubscriptionService {
     AppConstants.featureScanMealPro,
     AppConstants.featureCartAuditorPro,
     AppConstants.featureAiTextLogPro,
-    AppConstants.featureVoiceNotes,
+    // F13 · Test #9 — featureVoiceNotes removed: voice = FREE.
+    // On-device speech_to_text has zero infra cost; gating it discouraged
+    // engagement for no margin gain.
     AppConstants.featureMorningAlertPro,
     AppConstants.featurePredictionMonthly,
     AppConstants.featureAdaptiveWorkouts,

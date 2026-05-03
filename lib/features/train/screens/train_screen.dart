@@ -22,6 +22,8 @@ import '../widgets/create_custom_exercise_sheet.dart';
 import '../widgets/edit_workout_log_sheet.dart';
 import '../widgets/week_selector.dart';
 import '../widgets/stats_grid.dart';
+import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 
 class TrainScreen extends ConsumerStatefulWidget {
@@ -297,9 +299,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
     final progressPercent = (progress * 100).round();
 
-    // Matches handoff `train.jsx` lines 14–29: eyebrow + "Week N of M"
-    // Fraunces title with inline "· X/Y done" dim subtitle, progress
-    // bar with trailing "NN%" gold mono label, single bottom `line2`.
+    // F9 · Test #9 — Train header compacted to 3 rows + 1 hairline.
+    // Eyebrow gains PHASE meta. Title bumped 28sp -> 32sp. Subtitle inlined.
+    final progressPhase = UserRepository.instance.getProgress() ?? {};
+    final currentPhase = (progressPhase['current_phase'] as int?) ?? 1;
+
     return Container(
       color: AppColors.bgDeep,
       padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
@@ -311,54 +315,83 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // ROW 1 — eyebrow with WK + PHASE meta
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               const AnchorGlyph(size: 12),
               const SizedBox(width: 8),
-              Text(
-                'TRAIN \u00B7 WK $selectedWeek OF ${plan.weeks.length}',
-                style: AppTypography.monoXs.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 3,
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                child: Text(
+                  'TRAIN \u00B7 WK $selectedWeek OF ${plan.weeks.length} '
+                  '\u00B7 PHASE $currentPhase',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.accent,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          // D-6 (Plan D): Fraunces title is the phase name; week + done
-          // count moved to a subtitle line below.
-          Text(
-            plan.phaseName,
-            style: AppTypography.h2.copyWith(
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$completedDays of $totalWorkoutDays sessions complete',
-            style: AppTypography.body.copyWith(
-              fontSize: 13,
-              color: AppColors.textDim,
-            ),
+          const SizedBox(height: 6),
+          // ROW 2 — title (32sp standardized) + streak right
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  plan.phaseName,
+                  style: AppTypography.h1.copyWith(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                    height: 1.05,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => StreakExplainerSheet.show(
+                  context,
+                  freezesAvailable: ref.read(streakFreezeProvider),
+                  isPro: SubscriptionService.instance.isPro(),
+                ),
+                child: WardStatusStrip(
+                  streakDays: ref.watch(streakProvider),
+                  freezesAvailable: ref.watch(streakFreezeProvider),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          WardBar(
-            pct: progress,
-            height: 4,
-            trailingLabel: '$progressPercent%',
-            trailingColor: AppColors.accent,
-          ),
-          const SizedBox(height: 10),
-          // D-6 status strip — streak + freeze always; no rank chip on Train
-          // (roadmap is source of truth for rank info per spec).
-          WardStatusStrip(
-            streakDays: ref.watch(streakProvider),
-            freezesAvailable: ref.watch(streakFreezeProvider),
+          // ROW 3 — compact subtitle + progress bar inline
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '$completedDays / $totalWorkoutDays',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textDim,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: WardBar(
+                  pct: progress,
+                  height: 4,
+                  trailingLabel: '$progressPercent%',
+                  trailingColor: AppColors.accent,
+                ),
+              ),
+            ],
           ),
         ],
       ),

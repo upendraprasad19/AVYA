@@ -69,6 +69,10 @@ dependencies:
   # 10-digit validation, auto-strips leading 0, emits full E.164 for Supabase
   # auth.signInWithOtp).
   intl_phone_field: ^3.2.0
+  # flutter_svg — added 2026-05-03 (APK Test #9, F11) for captain-cap coach
+  # avatar SVG. Wardroom glyphs use CustomPaint, but the coach cap is sourced
+  # as a vector asset so it can be swapped without recompiling.
+  flutter_svg: ^2.0.10+1
 
 dev_dependencies:
   flutter_test:
@@ -102,6 +106,7 @@ flutter:
   assets:
     - assets/data/
     - assets/founder/
+    - assets/coach/
     - assets/avya_logo.png
     - assets/avya_icon.png
 
