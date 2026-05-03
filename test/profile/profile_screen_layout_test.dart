@@ -9,7 +9,8 @@
 // structure: order of section headers + presence/absence rules.
 //
 // Invariants:
-//   C13a — WardRankPill renders near top of Profile.
+//   C13a — Profile wires the rank chip into ProfileIdentity (Theme B
+//          Test #8 supersedes the Plan D Test #6 inline WardRankPill).
 //   C13b — No StreakBadge / FreezeBadge / WardStatusStrip on Profile.
 //   C14  — Edit Profile row appears INSIDE the SETTINGS card and
 //          does NOT appear above the SETTINGS section header.
@@ -29,9 +30,24 @@ void main() {
   group('Profile layout — Plan D Test #6 D-11 invariants', () {
     final src = _src(_profilePath);
 
-    test('C13a — WardRankPill renders inside ProfileScreen', () {
-      expect(src, contains('WardRankPill('),
-          reason: 'WardRankPill should be invoked inside the Profile body');
+    test(
+        'C13a — Profile wires the rank chip via ProfileIdentity '
+        '(Theme B Test #8)', () {
+      // Theme B of APK Test #8 moves the rank chip out of the inline
+      // WardRankPill and into ProfileIdentity's banner-overlap row.
+      // Tap opens RankServiceRecordSheet (a bottom sheet, not the
+      // accordion that previously expanded under the pill).
+      expect(src, contains('rankCode: RankService.instance'),
+          reason:
+              'ProfileIdentity must be wired with rankCode from RankService');
+      expect(src, contains('RankServiceRecordSheet.show'),
+          reason:
+              'onTapRank must open RankServiceRecordSheet (bottom sheet, '
+              'not the legacy WardRankPill accordion)');
+      expect(src, isNot(contains('WardRankPill(')),
+          reason:
+              'WardRankPill must no longer be invoked inside profile_screen — '
+              'Theme B Test #8 replaced it with the chip in ProfileIdentity');
     });
 
     test('C13b — No StreakBadge / FreezeBadge / WardStatusStrip on Profile',
@@ -103,7 +119,8 @@ void main() {
       expect(src, isNot(contains('ServiceRecordSection()')),
           reason:
               'ServiceRecordSection was removed from the Profile body in '
-              'Plan D D-7; its content lives inside WardRankPill expansion');
+              'Plan D D-7; its content now lives inside RankServiceRecordSheet '
+              '(Theme B Test #8 — bottom sheet opened via the rank chip)');
       expect(src, isNot(contains("../widgets/service_record_section.dart")),
           reason: 'service_record_section.dart import should be removed');
     });

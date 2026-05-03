@@ -10,8 +10,17 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// Single-row achievements card for the profile screen.
 /// Shows Fraunces count left, label, recent badge emojis, earned/total pill,
 /// chevron. Tapping opens the full BadgesGrid in a bottom sheet.
+///
+/// Theme C · Test #8 — `compact` mode strips the WardCard wrapper so the
+/// inner Row can be re-wrapped by `_buildFlushCard` in `profile_screen.dart`
+/// (single-decoration flush stack, square inner corners).
 class SlimAchievementsCard extends StatelessWidget {
-  const SlimAchievementsCard({super.key});
+  const SlimAchievementsCard({super.key, this.compact = false});
+
+  /// When true, returns the inner Row inline (no WardCard wrapper, no
+  /// padding, no tap target). The caller is responsible for decoration,
+  /// padding, and the tap target.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -31,11 +40,7 @@ class SlimAchievementsCard extends StatelessWidget {
       display.add(locked.removeAt(0));
     }
 
-    return WardCard(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      onTap: () => _openBadgesSheet(context),
-      child: Row(
+    final body = Row(
         children: [
           // Fraunces numeric count + "BADGES" label stack
           Column(
@@ -103,7 +108,24 @@ class SlimAchievementsCard extends StatelessWidget {
             color: AppColors.textMute,
           ),
         ],
-      ),
+      );
+
+    if (compact) {
+      // Caller (the flush stack in profile_screen.dart) provides decoration,
+      // padding (14), and the tap surface. Wrap only in a GestureDetector so
+      // the tap-to-open-badges-sheet still works inside the flush group.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openBadgesSheet(context),
+        child: body,
+      );
+    }
+
+    return WardCard(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      onTap: () => _openBadgesSheet(context),
+      child: body,
     );
   }
 

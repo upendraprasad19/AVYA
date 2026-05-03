@@ -84,6 +84,20 @@ function getYesterdayIST(): string {
 }
 
 /**
+ * Theme E · Test #8 — Floor the current UTC time to the nearest 15-minute
+ * IST quarter. Returns 'HH:MM:SS' so it lines up with `time without time zone`.
+ */
+function floorToQuarterIst(now: Date = new Date()): string {
+  const utcMs = now.getTime();
+  const istMs = utcMs + (5 * 60 + 30) * 60 * 1000;
+  const ist = new Date(istMs);
+  const hh = ist.getUTCHours().toString().padStart(2, "0");
+  const mm = (Math.floor(ist.getUTCMinutes() / 15) * 15)
+    .toString().padStart(2, "0");
+  return `${hh}:${mm}:00`;
+}
+
+/**
  * Generate a FREE template-based morning alert (no AI cost).
  * Enhanced with milestone celebrations, PR shoutouts, and weight progress.
  */
@@ -448,13 +462,27 @@ async function deliverAlerts(
   let offset = 0;
   let hasMore = true;
 
+  // Theme E · Test #8 — Personalize delivery to each user's wake_up_time.
+  // The cron now fires every 15 min; we ask the RPC for users whose
+  // wake_up_time floors to the current IST quarter. The 07:00 quarter is
+  // the fallback bucket for users with NULL wake_up_time.
+  const currentQuarter = floorToQuarterIst(new Date());
+  const isFallbackQuarter = currentQuarter === "07:00:00";
+  console.log(
+    `[morning-alert.deliver] quarter=${currentQuarter} fallback_window=${isFallbackQuarter}`,
+  );
+
   while (hasMore) {
-    const { data: snapshots, error: snapError } = await supabaseClient
-      .from("user_daily_snapshots")
-      .select("user_id, snapshot_json")
-      .eq("snapshot_date", todayIST)
-      .not("snapshot_json->morning_alert", "is", null)
-      .range(offset, offset + PAGE_SIZE - 1);
+    const { data: snapshots, error: snapError } = await supabaseClient.rpc(
+      "morning_alert_pick_quarter",
+      {
+        p_today: todayIST,
+        p_quarter: currentQuarter,
+        p_fallback: isFallbackQuarter,
+        p_offset: offset,
+        p_limit: PAGE_SIZE,
+      },
+    );
 
     if (snapError) {
       console.error(`Delivery fetch error at offset ${offset}:`, snapError);

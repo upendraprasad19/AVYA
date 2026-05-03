@@ -142,9 +142,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
-    _dietPreference = (profile['diet_preference'] as String?) ?? 'non_veg';
+    // Theme C · Test #8 — Indian-first default; matches onboarding's
+    // implicit default which already writes 'veg' for new users.
+    _dietPreference = (profile['diet_preference'] as String?) ?? 'veg';
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
-    _sessionDuration = profile['session_duration_minutes'] as int?;
+    // Theme C · Test #8 — 90 min matches the user's actual saved value
+    // from Supabase ground-truth check; legacy/restored profiles missing
+    // the field land here.
+    _sessionDuration = (profile['session_duration_minutes'] as int?) ?? 90;
     _physiqueFocus = (profile['physique_focus'] as String?) ?? 'balanced';
     _fitnessExperience = (profile['fitness_experience'] as String?) ?? 'intermediate';
     final rawInjuries = profile['injuries'];

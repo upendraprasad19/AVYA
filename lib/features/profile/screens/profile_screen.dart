@@ -41,6 +41,7 @@ import '../widgets/slim_achievements_card.dart';
 import '../widgets/profile_completeness_card.dart';
 import '../widgets/biometric_sync_card.dart';
 import '../widgets/weekly_report_card.dart';
+import '../widgets/rank_service_record_sheet.dart';
 import '../screens/invite_friends_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -484,6 +485,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 // null hides the top EDIT PROFILE button inside ProfileIdentity.
                 onTapEdit: null,
                 isPro: isPro,
+                // Theme B · Test #8 — compact rank chip in banner-overlap row.
+                rankCode: RankService.instance.getCurrentRank().entry.code,
+                rankShortCode: RankService.instance
+                    .getCurrentRank()
+                    .entry
+                    .shortName
+                    .toUpperCase(),
+                onTapRank: () => RankServiceRecordSheet.show(context),
                 onTapPremium: () {
                   // Bug #14 — PRO users see subscription detail; free users
                   // get the paywall sheet. Subscription detail reuses the
@@ -527,63 +536,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Plan D D-7: rank pill replaces top Edit Profile button.
-              // Tap toggles inline accordion expansion that shows the
-              // Service Record dropdown content (D-6).
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.gutter),
-                child: Builder(builder: (ctx) {
-                  final current = RankService.instance.getCurrentRank();
-                  return WardRankPill(
-                    rankCode: current.entry.code,
-                    shortCapsName:
-                        current.entry.shortName.toUpperCase(),
-                    expandedContentBuilder: (innerCtx) =>
-                        _buildRankServiceRecord(
-                            innerCtx, current.entry.code),
-                  );
-                }),
-              ),
-              const SizedBox(height: 8),
+              // Theme B · Test #8 — rank chip moved into ProfileIdentity's
+              // banner-overlap row. Tap opens RankServiceRecordSheet
+              // (replaces the previous WardRankPill inline accordion).
 
-              // Profile completeness (shows until 100%)
+              // Profile completeness (shows until 100%) — stays OUTSIDE the
+              // flush stack below; keeps its own WardCard styling.
               const ProfileCompletenessCard(),
               const SizedBox(height: 8),
 
-              // #2 Daily Completion summary
-              _buildDailyCompletion(stats),
-              const SizedBox(height: 8),
-
-              // Slim single-row achievements card (after Daily Completion)
-              const SlimAchievementsCard(),
-              const SizedBox(height: 8),
-
-              // AT A GLANCE — combined Journey + Body Stats + My Targets.
+              // Theme C · Test #8 — Flush card stack.
               //
-              // Previously rendered as three separate cards with
-              // `SizedBox(height: 8)` gaps between them. User feedback
-              // 2026-04-18 asked to collapse them into a single visual
-              // group (less vertical space). Order: Journey → Body Stats
-              // → My Targets. Each card keeps its own styling; the gaps
-              // between them collapse to zero so the trio reads as one
-              // block in the scroll.
-              _buildJourneyTimeline(
-                stats,
-                currentWeightKg: weightKg,
-                targetWeightKg: targetKg,
-                goal: stats.primaryGoal,
+              // Five cards rendered as a single visual block: outer 6-dp
+              // corners (top of Daily Goals, bottom of My Targets / Body
+              // Stats), square inner corners, no inter-card gaps, shared
+              // 1-px border rail. Order: Daily Goals → SlimAchievements →
+              // Journey → Body Stats → My Targets (My Targets dropped if
+              // nutritionTargets is null, in which case Body Stats holds
+              // the bottom corner).
+              _buildFlushCard(
+                _buildDailyCompletionInner(stats),
+                pos: _FlushPos.first,
               ),
-              _buildBodyStats(weightKg, targetKg, bmi, bodyFatPct),
-              if (nutritionTargets != null)
-                _buildNutritionTargets(
-                  nutritionTargets,
-                  currentKg: weightKg,
-                  targetKg: targetKg,
+              _buildFlushCard(
+                const SlimAchievementsCard(compact: true),
+                pos: _FlushPos.middle,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              _buildFlushCard(
+                _buildJourneyTimelineInner(
+                  stats,
+                  currentWeightKg: weightKg,
+                  targetWeightKg: targetKg,
                   goal: stats.primaryGoal,
-                  pacePreference: profile['pace_preference'] is String
-                      ? profile['pace_preference'] as String
-                      : 'balanced',
+                ),
+                pos: _FlushPos.middle,
+              ),
+              _buildFlushCard(
+                _buildBodyStatsInner(weightKg, targetKg, bmi, bodyFatPct),
+                pos: nutritionTargets == null
+                    ? _FlushPos.last
+                    : _FlushPos.middle,
+              ),
+              if (nutritionTargets != null)
+                _buildFlushCard(
+                  _buildNutritionTargetsInner(
+                    nutritionTargets,
+                    currentKg: weightKg,
+                    targetKg: targetKg,
+                    goal: stats.primaryGoal,
+                    pacePreference: profile['pace_preference'] is String
+                        ? profile['pace_preference'] as String
+                        : 'balanced',
+                  ),
+                  pos: _FlushPos.last,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  onTap: _nutritionTargetsOnTap(
+                    currentKg: weightKg,
+                    targetKg: targetKg,
+                    goal: stats.primaryGoal,
+                    pacePreference: profile['pace_preference'] is String
+                        ? profile['pace_preference'] as String
+                        : 'balanced',
+                  ),
                 ),
               const SizedBox(height: 8),
 
@@ -891,9 +908,66 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  // ── Theme C · Test #8 — Flush card stack ─────────────────────────────
+  //
+  // Five Profile cards (Daily Goals → SlimAchievements → Journey →
+  // Body Stats → My Targets) render as a single visual block: outer
+  // 6-dp corners, square inner corners, no inter-card gaps, shared
+  // 1-px border rail. Each card builder below was unwrapped from its
+  // WardCard so `_buildFlushCard` can supply the conditional border.
+  //
+  // ProfileCompletenessCard (rendered above the stack) is OUTSIDE this
+  // group — it keeps its own WardCard styling and the 8-px gap that
+  // follows it.
+  Widget _buildFlushCard(
+    Widget child, {
+    required _FlushPos pos,
+    EdgeInsets padding = const EdgeInsets.all(14),
+    VoidCallback? onTap,
+  }) {
+    final isFirst = pos == _FlushPos.first || pos == _FlushPos.only;
+    final isLast = pos == _FlushPos.last || pos == _FlushPos.only;
+    final body = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(isFirst ? AppRadius.card : 0),
+          topRight: Radius.circular(isFirst ? AppRadius.card : 0),
+          bottomLeft: Radius.circular(isLast ? AppRadius.card : 0),
+          bottomRight: Radius.circular(isLast ? AppRadius.card : 0),
+        ),
+        // Top border drops on every card except the first so adjacent
+        // cards share a single 1-px rail (no double-line seam).
+        border: Border(
+          top: BorderSide(
+            color: AppColors.line2,
+            width: isFirst ? 1 : 0,
+          ),
+          left: const BorderSide(color: AppColors.line2),
+          right: const BorderSide(color: AppColors.line2),
+          bottom: const BorderSide(color: AppColors.line2),
+        ),
+      ),
+      child: child,
+    );
+
+    final wrapped = onTap == null
+        ? body
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(onTap: onTap, child: body),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: wrapped,
+    );
+  }
+
   // ── #2 Daily Completion ──────────────────────────────────────────
 
-  Widget _buildDailyCompletion(UserStatsData stats) {
+  Widget _buildDailyCompletionInner(UserStatsData stats) {
     // Read completion states from Hive
     final hive = HiveService.instance;
     final today = DateTime.now();
@@ -916,65 +990,62 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final done = [workoutDone, hasMeals, waterDone, weightDone].where((b) => b).length;
 
-    return WardCard(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          // Progress ring
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: done / 4,
-                  strokeWidth: 4,
-                  backgroundColor: AppColors.bgRaise,
-                  valueColor: AlwaysStoppedAnimation(
-                      done == 4 ? AppColors.ok : AppColors.accent),
+    // Theme C · Test #8 — inner-only: caller wraps with `_buildFlushCard`.
+    return Row(
+      children: [
+        // Progress ring
+        SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: done / 4,
+                strokeWidth: 4,
+                backgroundColor: AppColors.bgRaise,
+                valueColor: AlwaysStoppedAnimation(
+                    done == 4 ? AppColors.ok : AppColors.accent),
+              ),
+              Text(
+                '$done/4',
+                style: AppTypography.monoXs.copyWith(
+                  color: done == 4 ? AppColors.ok : AppColors.accent,
+                  letterSpacing: 0.5,
+                  fontWeight: FontWeight.w700,
                 ),
-                Text(
-                  '$done/4',
-                  style: AppTypography.monoXs.copyWith(
-                    color: done == 4 ? AppColors.ok : AppColors.accent,
-                    letterSpacing: 0.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'DAILY GOALS',
-                  style: AppTypography.mono.copyWith(
-                    color: AppColors.textMute,
-                    letterSpacing: 2,
-                  ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'DAILY GOALS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _completionDot('Workout', workoutDone),
-                    const SizedBox(width: 8),
-                    _completionDot('Meals', hasMeals),
-                    const SizedBox(width: 8),
-                    _completionDot('Water', waterDone),
-                    const SizedBox(width: 8),
-                    _completionDot('Weight', weightDone),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _completionDot('Workout', workoutDone),
+                  const SizedBox(width: 8),
+                  _completionDot('Meals', hasMeals),
+                  const SizedBox(width: 8),
+                  _completionDot('Water', waterDone),
+                  const SizedBox(width: 8),
+                  _completionDot('Weight', weightDone),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1008,7 +1079,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   // ── #3 Body Stats Card ──────────────────────────────────────────
 
-  Widget _buildBodyStats(double? weight, double? target, double? bmi, double? bodyFat) {
+  Widget _buildBodyStatsInner(double? weight, double? target, double? bmi, double? bodyFat) {
     // Format weight/target according to the user's units preference.
     String fmtWeight(double? kg) {
       if (kg == null) return '\u2014';
@@ -1017,46 +1088,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return '${lbs.toStringAsFixed(0)} lbs';
     }
 
-    return WardCard(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'BODY STATS',
-                style: AppTypography.mono.copyWith(
-                  color: AppColors.textMute,
-                  letterSpacing: 2,
+    // Theme C \u00b7 Test #8 \u2014 inner-only: caller wraps with `_buildFlushCard`.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'BODY STATS',
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => context.go('/profile/edit'),
+              child: Text(
+                'EDIT',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () => context.go('/profile/edit'),
-                child: Text(
-                  'EDIT',
-                  style: AppTypography.monoXs.copyWith(
-                    color: AppColors.accent,
-                    letterSpacing: 2.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _statCell('Weight', fmtWeight(weight), AppColors.accent),
-              _statCell('Target', fmtWeight(target), AppColors.ok),
-              _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.info),
-              _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.warn),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _statCell('Weight', fmtWeight(weight), AppColors.accent),
+            _statCell('Target', fmtWeight(target), AppColors.ok),
+            _statCell('BMI', bmi != null ? bmi.toStringAsFixed(1) : '\u2014', AppColors.info),
+            _statCell('Body Fat', bodyFat != null ? '${bodyFat.toStringAsFixed(0)}%' : '\u2014', AppColors.warn),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1086,7 +1154,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   // ── #4 Journey Timeline ─────────────────────────────────────────
 
-  Widget _buildJourneyTimeline(
+  Widget _buildJourneyTimelineInner(
     UserStatsData stats, {
     required double? currentWeightKg,
     required double? targetWeightKg,
@@ -1150,17 +1218,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     // (Workout consistency data could be added here in future phases)
 
-    return WardCard(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Text(
-                'YOUR JOURNEY',
+    // Theme C · Test #8 — inner-only: caller wraps with `_buildFlushCard`.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          children: [
+            Text(
+              'YOUR JOURNEY',
                 style: AppTypography.mono.copyWith(
                   color: AppColors.textMute,
                   letterSpacing: 2,
@@ -1253,8 +1319,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               color: AppColors.proGold,
             ),
           ],
-        ],
-      ),
+      ],
     );
   }
 
@@ -1271,140 +1336,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               style: AppTypography.bodySm.copyWith(
                 color: color,
                 fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Plan D D-6: Service Record dropdown (WardRankPill expansion) ──
-  //
-  // Renders inside WardRankPill when expanded. Layout:
-  //   - SERVICE RECORD eyebrow
-  //   - Current rank header (48dp insignia + display name + CURRENT badge)
-  //   - Next 2 rungs (24dp dimmed insignia + shortName + gate copy)
-  //   - "View full roadmap →" button → /train/roadmap
-  // No streak/freeze chips — Plan D removed those from Profile entirely.
-  Widget _buildRankServiceRecord(
-      BuildContext context, String currentRankCode) {
-    final rankService = RankService.instance;
-    final current = rankService.getCurrentRank();
-    final ladder = rankService.getLadder();
-
-    final currentIdx =
-        ladder.indexWhere((e) => e.entry.code == current.entry.code);
-    final upcomingCount = current.entry.isTerminal ? 0 : 2;
-    final upcoming = (currentIdx >= 0 && currentIdx + 1 < ladder.length)
-        ? ladder.skip(currentIdx + 1).take(upcomingCount).toList()
-        : <LadderEntryView>[];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'SERVICE RECORD',
-            style: AppTypography.mono.copyWith(
-              fontSize: 10,
-              color: AppColors.textDim,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Current rank — large
-          Row(
-            children: [
-              WardRankInsignia(rankCode: current.entry.code, size: 48),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      current.entry.displayName,
-                      style: AppTypography.titleM
-                          .copyWith(color: AppColors.textPrimary),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      current.entry.isTerminal ? 'TERMINAL RANK' : 'CURRENT',
-                      style: AppTypography.mono.copyWith(
-                        fontSize: 10,
-                        color: AppColors.accent,
-                        letterSpacing: 1.0,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (upcoming.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Container(height: 1, color: AppColors.line2),
-            const SizedBox(height: 12),
-            ...upcoming.map((view) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Opacity(
-                        opacity: 0.55,
-                        child: WardRankInsignia(
-                          rankCode: view.entry.code,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              view.entry.shortName,
-                              style: AppTypography.body.copyWith(
-                                color: AppColors.textDim,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (view.gateText != null)
-                              Text(
-                                view.gateText!,
-                                style: AppTypography.bodySm.copyWith(
-                                  color: AppColors.textMute,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => context.go('/train/roadmap'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                foregroundColor: AppColors.accent,
-              ),
-              child: Text(
-                'View full roadmap →',
-                style: AppTypography.body.copyWith(
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w700,
-                ),
               ),
             ),
           ),
@@ -1722,7 +1653,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   // ── #8 Nutrition Targets (Bug #24: + projection subtitle) ──────
 
-  Widget _buildNutritionTargets(
+  /// Theme C · Test #8 — paired with `_buildNutritionTargetsInner`. The
+  /// inner builder doesn't expose `onTap`, so this helper computes whether
+  /// a projection sheet exists and returns the matching tap callback (or
+  /// null) for `_buildFlushCard` to wrap. Keeps the inner method pure.
+  VoidCallback? _nutritionTargetsOnTap({
+    double? currentKg,
+    double? targetKg,
+    required String goal,
+    required String pacePreference,
+  }) {
+    if ((goal != 'lose_fat' && goal != 'build_muscle') ||
+        currentKg == null ||
+        targetKg == null ||
+        (currentKg - targetKg).abs() <= 0.1) {
+      return null;
+    }
+    return () => _showPaceDetailSheet(
+          currentKg: currentKg,
+          targetKg: targetKg,
+          pacePreference: pacePreference,
+          goal: goal,
+        );
+  }
+
+  Widget _buildNutritionTargetsInner(
     Map<String, double> targets, {
     double? currentKg,
     double? targetKg,
@@ -1751,58 +1706,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    return WardCard(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      onTap: projectionLine == null
-          ? null
-          : () => _showPaceDetailSheet(
-                currentKg: currentKg!,
-                targetKg: targetKg!,
-                pacePreference: pacePreference,
-                goal: goal,
+    // Theme C · Test #8 — inner-only: caller wraps with `_buildFlushCard`
+    // and threads the projection-tap onTap via `_nutritionTargetsOnTap`.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'MY TARGETS',
+              style: AppTypography.mono.copyWith(
+                color: AppColors.textMute,
+                letterSpacing: 2,
               ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+            ),
+            const SizedBox(width: 12),
+            _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
+            const SizedBox(width: 8),
+            _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
+            const SizedBox(width: 8),
+            _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
+          ],
+        ),
+        if (projectionLine != null) ...[
+          const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                'MY TARGETS',
-                style: AppTypography.mono.copyWith(
-                  color: AppColors.textMute,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(width: 12),
-              _targetChip('${targets['tdee']?.round()} kcal', 'TDEE'),
-              const SizedBox(width: 8),
-              _targetChip('${targets['calories']?.round()} kcal', 'TARGET'),
-              const SizedBox(width: 8),
-              _targetChip('${targets['protein']?.round()}g', 'PROTEIN'),
-            ],
-          ),
-          if (projectionLine != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    projectionLine,
-                    style: AppTypography.bodySm.copyWith(
-                      color: AppColors.textDim,
-                      fontWeight: FontWeight.w500,
-                    ),
+              Expanded(
+                child: Text(
+                  projectionLine,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textDim,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right,
-                    size: 14, color: AppColors.textMute),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right,
+                  size: 14, color: AppColors.textMute),
+            ],
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -2369,4 +2314,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
 }
+
+/// Theme C · Test #8 — Position of a card inside the flush stack.
+/// Drives the corner-radius + top-border decisions in `_buildFlushCard`.
+enum _FlushPos { first, middle, last, only }
+
 

@@ -1105,6 +1105,23 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Subscription status:** `SubscriptionService.isPro()` + `gate()` are the ONLY entry points. Never read `configBox.get('isPro')` directly from a widget. High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) go through `verifyFromServer()`.
 - **Provider invalidation after mutation:** Any write that changes workout state (log, edit, delete, complete) MUST invalidate the full batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`. One missing invalidation = stale UI.
 
+### Hive field-name contract
+
+WriteService output keys are a contract with every consumer. Field renames must:
+
+1. Update the writer.
+2. Update every consumer in the same PR (grep for the old field name).
+3. Update or add a round-trip test in `test/contracts/`.
+
+Current contracts:
+
+- **`exlog_*`** (`WorkoutWriteService`) — fields: `exercise_name`, `date`, `sets[]` (List of Map), `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `logging_type`, `is_pr`, `source`, `updated_at_ms`, optional `notes`.
+  Consumers: `WorkoutReceiptData.fromExerciseLogs`, `WorkoutRepository.getExerciseLogsForDate`, `AiCoachRepository.buildAiContext` (recent_logs section), calendar week provider, `WorkoutWriteService._rescanAllPrsFor` PR detector, `SyncService.syncWorkoutData` cloud projection.
+
+- **`nlog_*`** (`NutritionWriteService`) — fields: `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (List of Map; per-item keys: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`. Consumers: `TodaysMealsCard`, `NutritionRepository`, `home_provider` daily-completion ring, `AiCoachRepository.buildAiContext` (meals_today / nutrition_trend_7d), `SyncService.syncNutritionData`.
+
+If you rename a field in a WriteService, the corresponding contract test in `test/contracts/<x>_write_to_read_contract_test.dart` must be updated in the same commit. The receipt-rendering bug in APK Test #7 (set_number vs sets_completed) is the canonical failure mode this contract prevents.
+
 ---
 
 ## 16. PAYMENT FLOW
