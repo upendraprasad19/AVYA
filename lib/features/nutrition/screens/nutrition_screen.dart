@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -61,10 +63,9 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               children: [
-                // Plan D D-7 letterhead — restored after Phase 2 merge.
-                // GALLEY · <weekday> <day> <month> eyebrow + Fraunces
-                // 'Fueling the plan' title + DIET PLAN trailing pill +
-                // status strip below.
+                // F10 · Test #9 — Nutrition header compacted to 3 rows.
+                // DIET PLAN moves to row 1 right (frees title row). KCAL meter
+                // becomes the row 3 anchor with streak pill on the right.
                 Builder(builder: (_) {
                   final now = DateTime.now();
                   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -73,24 +74,84 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
                     'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
                   ];
                   final eyebrow =
-                      'GALLEY · ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
+                      'GALLEY · ${weekdays[now.weekday - 1]} ${now.day} '
+                      '${monthShort[now.month - 1]}';
+                  final nutrition = ref.watch(dailyNutritionProvider);
+                  final consumedKcal = nutrition.calories.round();
+                  final targetKcal = nutrition.calorieTarget.round();
+                  final pct = targetKcal > 0
+                      ? (consumedKcal / targetKcal).clamp(0.0, 1.0)
+                      : 0.0;
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      WardLetterhead(
-                        eyebrow: eyebrow,
-                        title: 'Fueling the plan',
-                        padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-                        divider: true,
-                        trailing: _buildDietPlanButton(),
-                      ),
+                      // ROW 1 — eyebrow + DIET PLAN chip right
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 8, 22, 4),
-                        child: WardStatusStrip(
-                          streakDays: ref.watch(streakProvider),
-                          freezesAvailable: ref.watch(streakFreezeProvider),
+                        padding: const EdgeInsets.fromLTRB(22, 18, 22, 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const AnchorGlyph(size: 12),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                eyebrow,
+                                style: AppTypography.monoXs.copyWith(
+                                  color: AppColors.accent,
+                                  letterSpacing: 3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            _buildDietPlanButton(),
+                          ],
                         ),
+                      ),
+                      // ROW 2 — title only (32sp h1), full width
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+                        child: Text(
+                          'Fueling the plan',
+                          style: AppTypography.h1.copyWith(height: 1.05),
+                        ),
+                      ),
+                      // ROW 3 — KCAL bar + streak pill right
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: WardBar(
+                                pct: pct,
+                                height: 4,
+                                trailingLabel: '$consumedKcal / $targetKcal KCAL',
+                                trailingColor: AppColors.textDim,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            GestureDetector(
+                              onTap: () => StreakExplainerSheet.show(
+                                context,
+                                freezesAvailable: ref.read(streakFreezeProvider),
+                                isPro: SubscriptionService.instance.isPro(),
+                              ),
+                              child: WardStatusStrip(
+                                streakDays: ref.watch(streakProvider),
+                                freezesAvailable: ref.watch(streakFreezeProvider),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Single gold rule closes the header
+                      Container(
+                        height: 1,
+                        margin: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+                        color: AppColors.accent.withValues(alpha: 0.33),
                       ),
                     ],
                   );

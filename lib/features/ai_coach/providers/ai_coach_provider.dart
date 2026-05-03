@@ -151,7 +151,7 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
     if (messages.isEmpty) {
       messages.add(ChatMessage(
         text:
-            'Hey! I\'m your AI fitness coach. Ask me anything about your workouts, nutrition, or fitness goals!',
+            'Bridge here, Recruit. Standing by for orders. Workouts, nutrition, recovery — fire away.',
         isUser: false,
         timestamp: DateTime.now(),
       ));

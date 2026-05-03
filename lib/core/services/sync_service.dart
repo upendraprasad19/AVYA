@@ -497,6 +497,12 @@ class SyncService {
           _safeRestoreOp('sync_workout_logs', _syncWorkoutLogs(userId)),
           _safeRestoreOp('sync_exercise_logs', _syncExerciseLogs(userId)),
           _safeRestoreOp('sync_schedule_completions', _syncScheduleCompletions(userId)),
+          // F1 · Test #9 — close the templates / schedules / streaks
+          // gap. These used to wait up to 24h for weeklyFullSync(); now
+          // push on the same fire-and-forget cycle as logs.
+          _safeRestoreOp('sync_workout_templates', _syncWorkoutTemplates(userId)),
+          _safeRestoreOp('sync_scheduled_workouts', _syncScheduledWorkouts(userId)),
+          _safeRestoreOp('sync_streaks', _syncStreaks(userId)),
         ],
         eagerError: false,
       );
@@ -524,6 +530,9 @@ class SyncService {
         [
           _safeRestoreOp('sync_nutrition_logs', _syncNutritionLogs(userId)),
           _safeRestoreOp('sync_water_logs', _syncWaterLogs(userId)),
+          // F2 · Test #9 — saved meals join the per-mutation path
+          // so they reach cloud immediately on save instead of next-day batch.
+          _safeRestoreOp('sync_saved_meals', _syncSavedMeals(userId)),
         ],
         eagerError: false,
       );
@@ -3137,9 +3146,20 @@ class SyncService {
 
       try {
         final parsedDate = DateTime.tryParse(date);
+        // F3 · Test #9 — coerce template_id from Hive 'tmpl_<ms>'
+        // string to deterministic v5 UUID matching what _syncWorkoutTemplates
+        // wrote for the parent row. Schema requires uuid; raw Hive strings
+        // throw "invalid input syntax for type uuid" and the catch silently
+        // swallowed it (root cause of scheduled_workouts staying at 0 rows
+        // for weeks).
+        final rawTemplateId = entry['template_id']?.toString();
+        final cloudTemplateId =
+            (rawTemplateId != null && rawTemplateId.isNotEmpty)
+                ? _deterministicId(rawTemplateId)
+                : null;
         await _supabase.client.from('scheduled_workouts').upsert({
           'user_id': userId,
-          'template_id': entry['template_id'],
+          if (cloudTemplateId != null) 'template_id': cloudTemplateId,
           'scheduled_date': date,
           'week_number': entry['week'] ?? entry['week_number'],
           'day_of_week': parsedDate?.weekday ?? entry['day_of_week'],
@@ -3205,8 +3225,13 @@ class SyncService {
       if (meal['is_saved_meal'] != true) continue;
 
       try {
+        // F4 · Test #9 — coerce id from raw Hive key
+        // 'saved_meal_<hash>' to deterministic v5 UUID. Same failure class
+        // as _syncScheduledWorkouts.template_id (F3); same fix pattern as
+        // _syncWorkoutTemplates (since 2026-04-18).
+        final hiveId = (meal['id'] as String?) ?? key.toString();
         await _supabase.client.from('user_saved_meals').upsert({
-          'id': meal['id'] ?? key,
+          'id': _deterministicId(hiveId),
           'user_id': userId,
           'name': meal['name'] ?? 'Unnamed Meal',
           'items': meal['items'],

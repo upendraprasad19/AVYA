@@ -83,10 +83,24 @@ class ProfileIdentity extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Banner with overlapping avatar
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
+        // Banner with overlapping avatar.
+        //
+        // Theme B fix · Test #8 follow-up — the outer Stack used to auto-size
+        // to the 140-px banner, so the Positioned(bottom: -40) overlap row
+        // (avatar / rank chip / GO PRO pill) extended 40 px below the Stack
+        // and FELL OUT of the Stack's hit-test bounds. Avatar still received
+        // taps because its top half stayed inside the 140-px region; the
+        // rank chip and GO PRO pill — both rendered fully below banner.bottom
+        // — became visually present but unclickable.
+        //
+        // Fix: explicit `SizedBox(height: 180)` extends the Stack to cover
+        // the full overlap row. `Positioned(bottom: 0)` keeps the row's
+        // bottom at the same on-screen Y. The trailing `SizedBox(height: 10)`
+        // (was 50) compensates so the name row below doesn't shift.
+        SizedBox(
+          height: 180,
+          child: Stack(
+            children: [
             // Banner - tap to view, edit icon to replace
             GestureDetector(
               onTap: bannerUrl != null && bannerUrl!.isNotEmpty
@@ -210,10 +224,14 @@ class ProfileIdentity extends StatelessWidget {
 
             // Banner-overlap row: avatar L · compact rank chip CENTER · PRO pill R.
             // Theme B · Test #8 — chip taps open the Rank Service Record bottom sheet.
+            // Theme B fix · Test #8 follow-up — bottom: 0 (was -40); the parent
+            // SizedBox(height: 180) is what now provides the +40 offset below
+            // the banner. Without this fix the row's hit-test region was outside
+            // the Stack's render box and the chip + GO PRO pill were unclickable.
             Positioned(
               left: 18,
               right: 18,
-              bottom: -40,
+              bottom: 0,
               child: Row(
                 children: [
                   _buildAvatar(context),
@@ -234,9 +252,13 @@ class ProfileIdentity extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
 
-        const SizedBox(height: 50), // Bug #23: space for larger avatar overlap (40px below banner)
+        // Theme B fix · Test #8 follow-up — was SizedBox(height: 50). The
+        // SizedBox(height: 180) wrapping the Stack above already includes the
+        // 40 px overlap region that this gap used to provide, so trim by 40.
+        const SizedBox(height: 10),
 
         // Name row with edit button — Fraunces name in h2, mono subtitle
         Padding(

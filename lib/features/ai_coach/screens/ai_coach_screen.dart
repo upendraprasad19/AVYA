@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,7 +13,6 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -21,7 +22,6 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/ai_coach_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/prompt_chip.dart';
-import '../widgets/voice_notes_button.dart';
 import '../widgets/log_confirm_card.dart';
 import '../widgets/workout_log_confirm_card.dart';
 import '../widgets/coach_insight_section.dart';
@@ -81,6 +81,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   bool _isRecording = false;
   bool _localSending = false; // Synchronous debounce flag to prevent double-tap
 
+  // F12 · Push-to-talk recording UX state (Test #9 batch)
+  Duration _recordingElapsed = Duration.zero;
+  Timer? _recordingTicker;
+  Offset? _recordingStartOffset;
+  bool _slideToCancel = false;
+
   // Media attachment state
   final _imagePicker = ImagePicker();
   bool _isUploadingMedia = false;
@@ -98,6 +104,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       _speech = SpeechToText();
       _initSpeech();
     }
+    // F12 · rebuild on text change so mic↔send morph fires
+    _messageController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _initSpeech() async {
@@ -175,6 +185,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   @override
   void dispose() {
     _speech?.stop();
+    _recordingTicker?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -268,22 +279,9 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // Fraunces title). No unified WardTabHeader.
                 _buildCompactHeader(isPro, channel, telegramConnected),
 
-                // D-8 status strip — streak + freeze always; no rank chip
-                // on AI Coach (roadmap is source of truth per spec §6.3.3).
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
-                  child: WardStatusStrip(
-                    streakDays: ref.watch(streakProvider),
-                    freezesAvailable: ref.watch(streakFreezeProvider),
-                  ),
-                ),
-
-                // ── Message count indicator ──
-                _buildMessageCountIndicator(isPro, messageCount),
-
-                // ── Trial countdown bar (free users only) ──
-                if (!isPro && trialInfo.isTrialActive)
-                  _buildTrialCountdown(messageCount, trialInfo.daysRemaining),
+                // F11 · Test #9 — status strip + message count + trial
+                // countdown all consolidated INTO _buildCompactHeader. The
+                // header now owns its own meta (counter glued under UPGRADE).
 
                 // ── Chat Area or Telegram View ──
                 Expanded(
@@ -308,68 +306,20 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // TRIAL COUNTDOWN BAR
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildTrialCountdown(int messageCount, int daysRemaining) {
-    final remaining = AppConstants.freeAiMessagesPerDay - messageCount;
-    final isUrgent = daysRemaining <= 3;
-    final textColor = isUrgent ? AppColors.bad : AppColors.textDim;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.gutter, vertical: 8),
-      color: AppColors.bgDeep,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(Icons.timer_outlined, size: 12, color: textColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$remaining msg${remaining == 1 ? "" : "s"} left today',
-                  style: AppTypography.bodySm.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '$daysRemaining day${daysRemaining == 1 ? "" : "s"} remaining in free trial',
-                  style: AppTypography.monoXs.copyWith(
-                    color: textColor.withValues(alpha: 0.71),
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () =>
-                showPaywallSheet(context, feature: 'Unlimited AI Coach'),
-            child: Text(
-              'UPGRADE',
-              style: AppTypography.mono.copyWith(
-                color: AppColors.accent,
-                letterSpacing: 1.6,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
   // COMPACT HEADER — single row replaces old header + channel + reasoning
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildCompactHeader(
       bool isPro, String channel, bool telegramConnected) {
+    // F11 · Test #9 — Coach header restructured to 2 rows + counter
+    // glued under UPGRADE pill. Captain-cap SVG replaces the "AI" text avatar.
+    final messageCount = ref.watch(messageLimitProvider);
+    final trialInfo = ref.watch(trialInfoProvider);
+    final daysRemaining = trialInfo.daysRemaining;
+    final cap = AppConstants.freeAiMessagesPerDay;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(18, 14, 14, 12),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -378,194 +328,228 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           ),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Coach avatar with live dot
-          Stack(
+          // ROW 1 — eyebrow alone, full width
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.accent, width: 1.5),
-                ),
-                child: Center(
-                  child: Text(
-                    'AI',
-                    style: AppTypography.mono.copyWith(
-                      color: AppColors.accent,
-                      letterSpacing: 1.2,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: AppColors.ok,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.header, width: 1.5),
-                  ),
+              const AnchorGlyph(size: 10),
+              const SizedBox(width: 8),
+              Text(
+                'THE BRIDGE · 24/7',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 10),
-
-          // Title — Wardroom mono eyebrow + Fraunces name
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'THE BRIDGE \u00B7 24/7',
-                  style: AppTypography.monoXs.copyWith(
-                    color: AppColors.accent,
-                    letterSpacing: 2.5,
-                    fontWeight: FontWeight.w600,
+          const SizedBox(height: 6),
+          // ROW 2 — avatar + 26sp italic title + UPGRADE column (with counter under)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Captain-cap avatar
+              Stack(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSoft,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.accent, width: 1.5),
+                    ),
+                    child: Center(
+                      child: SvgPicture.asset(
+                        'assets/coach/captain_cap.svg',
+                        width: 22,
+                        height: 22,
+                        colorFilter: const ColorFilter.mode(
+                          AppColors.accent,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                // D-8 (Plan D): Title is the recruit's acknowledgement
-                // to the Captain — short, on-brand, no "CAPTAIN" duplicate
-                // with the eyebrow.
-                Text(
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: AppColors.ok,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.header, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
                   'Aye Captain',
                   style: AppTypography.h3.copyWith(
+                    fontSize: 26,
                     height: 1.0,
                     fontStyle: FontStyle.italic,
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Single status pill — PRO users see informational gold badge;
-          // free users see a tappable "Upgrade to PRO" pill that opens
-          // the paywall sheet. Replaced the old Chat / Reasoning toggle
-          // on 2026-04-18 as part of the UI simplification (one AI coach
-          // experience, free/PRO differentiation handled server-side by
-          // the 15-msg daily cap).
-          _buildStatusPill(isPro),
-          const SizedBox(width: 8),
-
-          // Overflow menu — channel switch, telegram, clear, upgrade
-          PopupMenuButton<String>(
-            icon: const Icon(
-              Icons.more_vert,
-              color: AppColors.textDim,
-              size: 20,
-            ),
-            color: AppColors.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              side: const BorderSide(color: AppColors.line2),
-            ),
-            onSelected: (value) {
-              switch (value) {
-                case 'switch_channel':
-                  final newChannel =
-                      channel == 'in_app' ? 'telegram' : 'in_app';
-                  ref
-                      .read(channelProvider.notifier)
-                      .setChannel(newChannel);
-                  break;
-                case 'telegram':
-                  _openTelegramBot();
-                  break;
-                case 'clear':
-                  ref.invalidate(chatHistoryProvider);
-                  break;
-                case 'upgrade':
-                  showPaywallSheet(context, feature: 'Unlimited AI Coach');
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'switch_channel',
-                child: Row(
-                  children: [
-                    Icon(
-                      channel == 'in_app' ? Icons.send : Icons.chat,
-                      size: 16,
-                      color: AppColors.textDim,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      channel == 'in_app'
-                          ? 'Switch to Telegram'
-                          : 'Switch to In-App Chat',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (!telegramConnected)
-                PopupMenuItem(
-                  value: 'telegram',
-                  child: Row(
+              // Trailing column — UPGRADE pill on top + counter glued below
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.link, size: 16, color: AppColors.info),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Connect @AVYACoachBot',
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.textPrimary,
+                      _buildStatusPill(isPro),
+                      const SizedBox(width: 4),
+                      PopupMenuButton<String>(
+                        icon: const Icon(
+                          Icons.more_vert,
+                          color: AppColors.textDim,
+                          size: 20,
                         ),
+                        color: AppColors.card,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.card),
+                          side: const BorderSide(color: AppColors.line2),
+                        ),
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'switch_channel':
+                              final newChannel =
+                                  channel == 'in_app' ? 'telegram' : 'in_app';
+                              ref
+                                  .read(channelProvider.notifier)
+                                  .setChannel(newChannel);
+                              break;
+                            case 'telegram':
+                              _openTelegramBot();
+                              break;
+                            case 'clear':
+                              ref.invalidate(chatHistoryProvider);
+                              break;
+                            case 'upgrade':
+                              showPaywallSheet(context,
+                                  feature: 'Unlimited AI Coach');
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => _menuItemsForChannel(
+                            channel, telegramConnected, isPro),
                       ),
                     ],
                   ),
-                ),
-              PopupMenuItem(
-                value: 'clear',
-                child: Row(
-                  children: [
-                    const Icon(Icons.delete_outline,
-                        size: 16, color: AppColors.textDim),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Clear conversation',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isPro)
-                PopupMenuItem(
-                  value: 'upgrade',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star,
-                          size: 16, color: AppColors.proGold),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Upgrade to PRO',
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.proGold,
+                  // Counter glued directly under UPGRADE, no spacing
+                  if (!isPro)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 30),
+                      child: Text(
+                        '$messageCount / $cap MSGS · $daysRemaining D TRIAL',
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 9,
+                          color: AppColors.textMute,
+                          letterSpacing: 1.2,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  // F11 · Test #9 — extracted PopupMenu items so the header body
+  // stays readable. Behaviour preserved verbatim from the prior inline list.
+  List<PopupMenuEntry<String>> _menuItemsForChannel(
+      String channel, bool telegramConnected, bool isPro) {
+    return [
+      PopupMenuItem(
+        value: 'switch_channel',
+        child: Row(
+          children: [
+            Icon(
+              channel == 'in_app' ? Icons.send : Icons.chat,
+              size: 16,
+              color: AppColors.textDim,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              channel == 'in_app'
+                  ? 'Switch to Telegram'
+                  : 'Switch to In-App Chat',
+              style: AppTypography.body.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (!telegramConnected)
+        PopupMenuItem(
+          value: 'telegram',
+          child: Row(
+            children: [
+              const Icon(Icons.link, size: 16, color: AppColors.info),
+              const SizedBox(width: 10),
+              Text(
+                'Connect @AVYACoachBot',
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      PopupMenuItem(
+        value: 'clear',
+        child: Row(
+          children: [
+            const Icon(Icons.delete_outline,
+                size: 16, color: AppColors.textDim),
+            const SizedBox(width: 10),
+            Text(
+              'Clear conversation',
+              style: AppTypography.body.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (!isPro)
+        PopupMenuItem(
+          value: 'upgrade',
+          child: Row(
+            children: [
+              const Icon(Icons.star, size: 16, color: AppColors.proGold),
+              const SizedBox(width: 10),
+              Text(
+                'Upgrade to PRO',
+                style: AppTypography.body.copyWith(
+                  color: AppColors.proGold,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -634,32 +618,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────
-  // MESSAGE COUNT INDICATOR — below header
-  // ────────────────────────────────────────────────────────────────
-
-  Widget _buildMessageCountIndicator(bool isPro, int messageCount) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.gutter, vertical: 6),
-      color: AppColors.bg,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            isPro
-                ? 'UNLIMITED'
-                : '$messageCount/${AppConstants.freeAiMessagesPerDay} MESSAGES TODAY',
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 1.4,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1128,119 +1086,122 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final isWarning =
         !isPro && messageCount >= AppConstants.freeAiMessagesPerDay - 3;
 
+    final hasText = _messageController.text.trim().isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.gutter, 10, AppSpacing.gutter, 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       decoration: const BoxDecoration(
-        color: AppColors.header,
+        color: AppColors.bg,
         border: Border(top: BorderSide(color: AppColors.line2)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Main input row
-          Row(
-            children: [
-              // Voice notes button — free for all users
-              VoiceNotesButton(
-                isPro: true,
-                isRecording: _isRecording,
-                onLockedTap: () => _startListening(),
-                onStartRecording: () => _startListening(),
-                onStopRecording: () => _stopListening(),
+          // F12 · Single 48dp rounded bubble — TextField + paperclip + morph button
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: _isRecording
+                  ? AppColors.bad.withValues(alpha: 0.08)
+                  : AppColors.input,
+              border: Border.all(
+                color: _isRecording ? AppColors.bad : AppColors.border,
               ),
-              const SizedBox(width: 6),
-
-              // Photo attachment button (PRO only)
-              _buildAttachButton(isPro, isSending),
-              const SizedBox(width: 6),
-
-              // Text input — sharp 2-px inner border
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  focusNode: _inputFocusNode,
-                  enabled: !isLimitReached && !isSending,
-                  maxLines: 3,
-                  minLines: 1,
-                  style: AppTypography.body.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: _isRecording && _recognizedText.isNotEmpty
-                        ? _recognizedText
-                        : _isRecording
-                            ? 'Listening...'
-                            : isLimitReached
+              borderRadius: BorderRadius.circular(24),
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 0, 6, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _isRecording
+                      ? _buildRecordingBody()
+                      : TextField(
+                          controller: _messageController,
+                          focusNode: _inputFocusNode,
+                          enabled: !isLimitReached && !isSending,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            hintText: isLimitReached
                                 ? 'Daily limit reached \u2014 Go PRO'
-                                : 'Ask your coach...',
-                    hintStyle: AppTypography.body.copyWith(
-                      color: _isRecording
-                          ? AppColors.accent
-                          : isLimitReached
-                              ? AppColors.proGold
-                              : AppColors.textDim,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.bgRaise,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.sharp),
-                      borderSide: const BorderSide(
-                          color: AppColors.line2, width: 2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.sharp),
-                      borderSide: const BorderSide(
-                          color: AppColors.line2, width: 2),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.sharp),
-                      borderSide: const BorderSide(
-                          color: AppColors.accent, width: 2),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.sharp),
-                      borderSide: const BorderSide(
-                          color: AppColors.line2, width: 2),
-                    ),
-                  ),
-                  onSubmitted: (text) => _sendMessage(text),
+                                : 'Ask your coach\u2026',
+                            hintStyle: AppTypography.body.copyWith(
+                              fontSize: 14,
+                              color: isLimitReached
+                                  ? AppColors.proGold
+                                  : AppColors.textDim,
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                            isCollapsed: true,
+                          ),
+                          style: AppTypography.body.copyWith(fontSize: 14),
+                          onSubmitted: (_) => _maybeSendText(isPro),
+                        ),
                 ),
-              ),
-              const SizedBox(width: 8),
-
-              // Send button — sharp 2-px accent slab with glyph
-              GestureDetector(
-                onTap: isSending || isLimitReached
-                    ? null
-                    : () => _sendMessage(_messageController.text),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isSending || isLimitReached
-                        ? AppColors.textDisabled
-                        : AppColors.accent,
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                if (!_isRecording)
+                  IconButton(
+                    icon: const Icon(Icons.attach_file,
+                        color: AppColors.accent, size: 20),
+                    onPressed:
+                        isSending ? null : () => _onTapAttach(isPro),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
                   ),
-                  child: Center(
-                    child: Icon(
-                      isSending
-                          ? Icons.hourglass_top
-                          : Icons.arrow_upward,
-                      color: isSending || isLimitReached
-                          ? AppColors.textDim
-                          : AppColors.bgDeep,
-                      size: 16,
+                GestureDetector(
+                  onTap: () {
+                    if (_isRecording) return;
+                    if (isSending || isLimitReached) return;
+                    if (hasText) {
+                      _maybeSendText(isPro);
+                    } else {
+                      _showHoldToTalkTooltip();
+                    }
+                  },
+                  onLongPressStart: hasText || isSending || isLimitReached
+                      ? null
+                      : (details) {
+                          _startRecordingPushToTalk(details.globalPosition);
+                        },
+                  onLongPressMoveUpdate:
+                      hasText || isSending || isLimitReached
+                          ? null
+                          : (details) {
+                              _updateRecording(details.globalPosition);
+                            },
+                  onLongPressEnd: hasText || isSending || isLimitReached
+                      ? null
+                      : (details) {
+                          _stopRecordingPushToTalk(
+                              send: !_slideToCancel, isPro: isPro);
+                        },
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: Container(
+                      key: ValueKey(_isRecording
+                          ? 'recording'
+                          : (hasText ? 'send' : 'mic')),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color:
+                            _isRecording ? AppColors.bad : AppColors.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isRecording
+                            ? Icons.mic
+                            : (hasText ? Icons.arrow_upward : Icons.mic),
+                        color: AppColors.bg,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
           // Inline message counter — only when top trial banner is NOT shown
@@ -1299,6 +1260,11 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   /// Builds the attach-photo icon button.
   /// PRO users: opens media source picker.
   /// Free users: gold-locked icon -> paywall.
+  ///
+  /// F12 (Test #9 batch): no longer wired into the input bar — the new single
+  /// 48dp bubble uses an inline `IconButton(Icons.attach_file)` instead.
+  /// Preserved here so F14/F15/F17 lock-badge work can reuse the styling.
+  // ignore: unused_element
   Widget _buildAttachButton(bool isPro, bool isSending) {
     if (_isUploadingMedia) {
       // Show upload progress indicator
@@ -1677,5 +1643,158 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F12 · Push-to-talk + morph helpers (Test #9 batch)
+  // ────────────────────────────────────────────────────────────────
+
+  Widget _buildRecordingBody() {
+    final mins = _recordingElapsed.inMinutes;
+    final secs = _recordingElapsed.inSeconds % 60;
+    final timer =
+        '${mins.toString().padLeft(1, '0')}:${secs.toString().padLeft(2, '0')}';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: const BoxDecoration(
+            color: AppColors.bad,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          timer,
+          style: AppTypography.mono.copyWith(
+            fontSize: 13,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
+          ),
+        ),
+        const Spacer(),
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Text(
+            _slideToCancel
+                ? 'Release to cancel'
+                : '← slide to cancel',
+            style: AppTypography.bodySm.copyWith(
+              color: _slideToCancel ? AppColors.bad : AppColors.textMute,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _maybeSendText(bool isPro) {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+    // Reuse existing gated send path (handles trial + daily cap + paywall).
+    _sendMessage(text);
+  }
+
+  void _onTapAttach(bool isPro) {
+    // F12 · paperclip currently routes to existing media picker.
+    // F14/F15/F17 will refine gating + sheet styling separately.
+    if (!isPro) {
+      showPaywallSheet(context, feature: 'Photo Analysis');
+      return;
+    }
+    _showMediaSourceSheet();
+  }
+
+  void _startRecordingPushToTalk(Offset startGlobal) {
+    setState(() {
+      _recordingElapsed = Duration.zero;
+      _recordingStartOffset = startGlobal;
+      _slideToCancel = false;
+    });
+    _recordingTicker?.cancel();
+    _recordingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_isRecording) return;
+      setState(() {
+        _recordingElapsed = _recordingElapsed + const Duration(seconds: 1);
+      });
+    });
+    // Reuse existing speech_to_text wiring per CLAUDE.md §19.
+    // _startListening() flips _isRecording = true via setState.
+    _startListening();
+  }
+
+  void _updateRecording(Offset currentGlobal) {
+    final start = _recordingStartOffset;
+    if (start == null) return;
+    final dx = currentGlobal.dx - start.dx;
+    final shouldCancel = dx < -50;
+    if (shouldCancel != _slideToCancel) {
+      setState(() => _slideToCancel = shouldCancel);
+    }
+  }
+
+  void _stopRecordingPushToTalk({required bool send, required bool isPro}) {
+    _recordingTicker?.cancel();
+    _recordingTicker = null;
+    final cancelled = !send;
+    if (cancelled) {
+      // Slide-to-cancel: stop speech, drop transcript, clear field.
+      _speech?.stop();
+      setState(() {
+        _isRecording = false;
+        _recordingElapsed = Duration.zero;
+        _recordingStartOffset = null;
+        _slideToCancel = false;
+        _recognizedText = '';
+      });
+      _messageController.clear();
+      return;
+    }
+    // Released away from cancel zone — stop listening, populate field, send.
+    // _stopListening() copies _recognizedText into _messageController.
+    _stopListening();
+    setState(() {
+      _recordingElapsed = Duration.zero;
+      _recordingStartOffset = null;
+      _slideToCancel = false;
+    });
+    final text = _messageController.text.trim();
+    if (text.isNotEmpty) {
+      _sendMessage(text);
+    }
+  }
+
+  void _showHoldToTalkTooltip() {
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(builder: (_) {
+      return Positioned(
+        bottom: 90,
+        right: 22,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.cardHi,
+              border: Border.all(color: AppColors.line2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Hold to record voice message',
+              style: AppTypography.bodySm
+                  .copyWith(color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+      );
+    });
+    overlay.insert(entry);
+    Future.delayed(const Duration(seconds: 2), () => entry.remove());
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -1867,5 +1868,27 @@ class AiCoachRepository {
             .substring(0, 10),
       },
     };
+  }
+
+  /// F14 · Test #9 — returns the user's lifetime count of free
+  /// image analyses on the AI coach. Server enforces the 5-cap; this is
+  /// purely for "X of 5 free analyses left" display in the chat UI.
+  ///
+  /// Returns 0 on any error (no auth session, network failure, schema
+  /// drift) so the UI degrades to "no counter shown" rather than
+  /// blocking the chat surface.
+  Future<int> getFreeImageAnalysisCount() async {
+    final user = SupabaseService.instance.client.auth.currentUser;
+    if (user == null) return 0;
+    try {
+      final rows = await SupabaseService.instance.client
+          .from('ai_coach_interactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('channel', 'free_image_analysis');
+      return rows.length;
+    } catch (_) {
+      return 0;
+    }
   }
 }

@@ -198,13 +198,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Plan D D-5 letterhead — restored after Phase 2 merge replaced it
-        // with U7. WardLetterhead with 44dp avatar in leadingAvatar slot +
-        // dynamic DAILY · <weekday> <day> <month> eyebrow + time-of-day
-        // greeting + first-name title + status strip below.
+        // F8 · Test #9 — Home header compacted to 3 rows + 1 hairline.
+        // Eyebrow consolidates DAILY + date + WK + PHASE meta. Date hero
+        // dropped (its info is in the eyebrow). Streak pill moved into
+        // row 3 right. Old date helper deleted entirely.
         Builder(builder: (_) {
           final initial = ref.watch(userInitialProvider);
-          final firstName = ref.watch(userFirstNameProvider);
           final greeting = ref.watch(userGreetingProvider);
           final streak = ref.watch(streakProvider);
           final freezes = ref.watch(streakFreezeProvider);
@@ -216,45 +215,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
             'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
           ];
+          final weekOfYear =
+              WorkoutScheduleService.instance.getCurrentWeekNumber();
+          final progress = UserRepository.instance.getProgress() ?? {};
+          final currentPhase = (progress['current_phase'] as int?) ?? 1;
           final eyebrow =
-              'DAILY · ${weekdays[now.weekday - 1]} ${now.day} ${monthShort[now.month - 1]}';
+              'DAILY · ${weekdays[now.weekday - 1]} ${now.day} '
+              '${monthShort[now.month - 1]} · WK $weekOfYear '
+              '· PHASE $currentPhase';
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              WardLetterhead(
-                eyebrow: eyebrow,
-                title: '$greeting.',
-                padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-                divider: true,
-                leadingAvatar: WardAvatar(
-                  initial: initial,
-                  size: 44,
-                  image: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? NetworkImage(avatarUrl)
-                      : null,
+              // ROW 1 — full-width eyebrow with all meta
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AnchorGlyph(size: 12),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        eyebrow,
+                        style: AppTypography.monoXs.copyWith(
+                          color: AppColors.accent,
+                          letterSpacing: 3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              // ROW 2 — avatar + greeting title
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
-                child: GestureDetector(
-                  onTap: () => StreakExplainerSheet.show(
-                    context,
-                    freezesAvailable: freezes,
-                    isPro: SubscriptionService.instance.isPro(),
-                  ),
-                  child: WardStatusStrip(
-                    streakDays: streak,
-                    freezesAvailable: freezes,
+                padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    WardAvatar(
+                      initial: initial,
+                      size: 44,
+                      image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '$greeting.',
+                        style: AppTypography.h1.copyWith(height: 1.05),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // ROW 3 — streak pill, right-aligned
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => StreakExplainerSheet.show(
+                      context,
+                      freezesAvailable: freezes,
+                      isPro: SubscriptionService.instance.isPro(),
+                    ),
+                    child: WardStatusStrip(
+                      streakDays: streak,
+                      freezesAvailable: freezes,
+                    ),
                   ),
                 ),
+              ),
+              // Single gold rule closes the header
+              Container(
+                height: 1,
+                margin: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+                color: AppColors.accent.withValues(alpha: 0.33),
               ),
             ],
           );
         }),
-        const SizedBox(height: 8),
-        _buildDateDisplay(),
-        const WardRule(margin: EdgeInsets.fromLTRB(22, 4, 22, 12)),
         _buildStreakWarning(ref),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -358,82 +405,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // -- Date Display ---------------------------------------------------
-
-  Widget _buildDateDisplay() {
-    final now = DateTime.now();
-    const dayNames = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    const monthNames = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-    ];
-
-    final dayName = dayNames[now.weekday - 1];
-    final dateNum = now.day.toString();
-    final monthName = monthNames[now.month - 1];
-
-    // Derive WK number + current phase for the letterhead suffix.
-    final weekOfYear =
-        WorkoutScheduleService.instance.getCurrentWeekNumber();
-    final progress = UserRepository.instance.getProgress() ?? {};
-    final currentPhase = (progress['current_phase'] as int?) ?? 1;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.gutter,
-        0,
-        AppSpacing.gutter,
-        6,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            dayName,
-            style: AppTypography.h1.copyWith(
-              fontSize: 32,
-              letterSpacing: 0.4,
-              height: 1,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            dateNum,
-            style: AppTypography.h1.copyWith(
-              fontSize: 32,
-              fontWeight: FontWeight.w300,
-              color: AppColors.textGhost,
-              letterSpacing: 0.4,
-              height: 1,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              monthName,
-              style: AppTypography.mono.copyWith(
-                fontSize: 14,
-                color: AppColors.textDim,
-                letterSpacing: 2,
-              ),
-            ),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              'WK $weekOfYear \u00B7 PHASE $currentPhase',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textMute,
-                letterSpacing: 2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // -- Quick Actions --------------------------------------------------
 
