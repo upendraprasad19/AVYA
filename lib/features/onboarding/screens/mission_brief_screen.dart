@@ -6,7 +6,9 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
 class MissionBriefScreen extends ConsumerWidget {
-  const MissionBriefScreen({super.key});
+  const MissionBriefScreen({super.key, this.readOnly = false});
+
+  final bool readOnly;
 
   Future<void> _openInstagram() async {
     final native = Uri.parse('instagram://user?username=icanbefitter');
@@ -21,6 +23,18 @@ class MissionBriefScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.bg,
+      appBar: readOnly
+          ? AppBar(
+              backgroundColor: AppColors.bg,
+              elevation: 0,
+              surfaceTintColor: Colors.transparent,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new,
+                    color: AppColors.textPrimary, size: 20),
+                onPressed: () => context.pop(),
+              ),
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
@@ -56,6 +70,11 @@ class MissionBriefScreen extends ConsumerWidget {
                       'assets/founder/upendra.jpg',
                       key: const ValueKey('founder-photo'),
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: AppColors.card,
+                        child: const Icon(Icons.person,
+                            color: AppColors.textMute, size: 40),
+                      ),
                     ),
                   ),
                 ),
@@ -208,26 +227,27 @@ class MissionBriefScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: () => context.go('/onboarding/identity'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.bg,
-                    shape: const StadiumBorder(),
-                  ),
-                  child: Text(
-                    'CONTINUE  →',
-                    style: AppTypography.mono.copyWith(
-                      fontSize: 14,
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.w800,
+              if (!readOnly)
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () => context.go('/onboarding/identity'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: AppColors.bg,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(
+                      'CONTINUE  →',
+                      style: AppTypography.mono.copyWith(
+                        fontSize: 14,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
