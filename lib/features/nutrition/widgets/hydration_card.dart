@@ -50,7 +50,7 @@ class _HydrationCardState extends ConsumerState<HydrationCard> {
   @override
   Widget build(BuildContext context) {
     final waterMl = ref.watch(waterIntakeProvider);
-    const waterTarget = 3000;
+    final waterTarget = ref.watch(waterTargetProvider);
     final progress = (waterMl / waterTarget).clamp(0.0, 1.0);
     final selectedUrine = ref.watch(urineColorProvider);
 

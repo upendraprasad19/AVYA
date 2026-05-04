@@ -20,6 +20,7 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/core/services/water_target_service.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -1449,3 +1450,14 @@ class DeleteNutritionLogNotifier extends Notifier<void> {
 final deleteNutritionLogProvider =
     NotifierProvider<DeleteNutritionLogNotifier, void>(
         DeleteNutritionLogNotifier.new);
+
+// ── Water Target Provider ─────────────────────────────────────────
+//
+// Single source of truth for the user's daily water target.
+// Reads the user override (if set) or computes from profile via
+// [WaterTargetService]. All 4 hardcoded 3000-ml sites watch this.
+// Call `ref.invalidate(waterTargetProvider)` after any
+// [WaterTargetService.setUserOverride] call to propagate the change.
+final waterTargetProvider = Provider<int>((ref) {
+  return WaterTargetService.instance.currentTargetMl();
+});

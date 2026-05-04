@@ -13,6 +13,7 @@ import 'package:icanbefitter/features/auth/providers/referral_code_stash_provide
 import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/core/services/water_target_service.dart';
 
 // ── Onboarding Step Definitions ──────────────────────────────────
 
@@ -322,6 +323,17 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       final startDateKey = (a['start_date'] as String?) ?? 'this_monday';
       final city = a['city'] as String?;
 
+      // F17 · Water target — single source of truth via WaterTargetService.
+      // Computed before the profile map so it can be inserted inline.
+      // Applies floor (2500 ml), ceiling (4000 ml), training-day and
+      // lifestyle bonuses so the onboarding seed matches the formula used
+      // at runtime by all 4 UI sites.
+      final waterTargetMl = WaterTargetService.computeFromProfile({
+        'current_weight_kg': currentWeightKg,
+        'lifestyle_activity': lifestyleActivity,
+        'days_per_week': daysPerWeek,
+      });
+
       final profile = {
         'full_name': fullName,
         'date_of_birth': dobString,
@@ -351,9 +363,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'carb_grams': targets.carbGrams,
         'carbs_grams': targets.carbGrams,
         'fat_grams': targets.fatGrams,
-        // F17 · Water target (derived from body weight). Previously never
-        // set anywhere, so the sync always pushed null.
-        'water_target_ml': (currentWeightKg * 35).round(),
+        'water_target_ml': waterTargetMl,
         'updated_at': DateTime.now().toIso8601String(),
       };
 

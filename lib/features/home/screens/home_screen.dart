@@ -466,8 +466,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         : 0.0;
     final mealsDone = proteinProgress >= 1.0 && calorieProgress >= 1.0;
 
-    // Water: progress toward 3L goal
-    const waterGoalMl = 3000;
+    // Water: progress toward user's personal target (WaterTargetService).
+    final waterGoalMl = ref.watch(waterTargetProvider);
     final waterProgress = waterMl / waterGoalMl;
     final waterDone = waterMl >= waterGoalMl;
 
