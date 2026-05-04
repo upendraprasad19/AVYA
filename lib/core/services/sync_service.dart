@@ -790,10 +790,35 @@ class SyncService {
           _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
           _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
           _safeRestoreOp('coach_interactions', _restoreCoachInteractions(userId, since)),
-          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device
+          _safeRestoreOp('coach_memory', _restoreCoachMemory(userId)), // B7 — skip induction on returning device; also pulls coaching_notes (A6)
         ],
         eagerError: false,
       );
+
+      // Step C — restore-completeness surfaces (Theme A pull side).
+      // These are smaller/faster operations run sequentially after bulk
+      // history so a cancellation between steps doesn't leave Hive
+      // in a partially-populated state.
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp('freezes', _restoreFreezes(userId));
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp('notifications_inbox', _restoreNotificationsInbox(userId));
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp('saved_diet_plan', _restoreSavedDietPlan(userId));
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp('rank_promotions', _restoreRankPromotions(userId));
+
+      // A3 — Subscription refresh folded into restore as the atomic last
+      // step so it's never skipped when the post-auth flow changes.
+      // Fire-and-forget posture: failure keeps cached local PRO state
+      // (consistent with existing refreshFromSupabase semantics).
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      try {
+        await SubscriptionService.instance.refreshFromSupabase();
+      } catch (e) {
+        // Non-fatal — keep cached subscription state.
+        debugPrint('[SyncService.restoreFromCloudForUser] subscription refresh error: $e');
+      }
 
       if (_restoreCancelled) return RestoreResult.cancelled();
       return RestoreResult.success();
@@ -3433,7 +3458,8 @@ class SyncService {
           .select(
             'committed_at, committed_to_lt_cdr, induction_completed_at, '
             'why_now, definition_of_winning, known_injuries, '
-            'typical_wake_time, preferred_workout_time, body_part_priorities',
+            'typical_wake_time, preferred_workout_time, body_part_priorities, '
+            'coaching_notes',
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -3454,6 +3480,13 @@ class SyncService {
       for (final key in keys) {
         final v = row[key];
         if (v != null) await coach.put(key, v);
+      }
+
+      // A6 — coaching_notes: restore AI coach memory so it's available
+      // between reinstall and the next 11 PM IST extraction run.
+      final notes = row['coaching_notes'];
+      if (notes != null) {
+        await coach.put('coaching_notes', notes);
       }
     } catch (e) {
       debugPrint('[SyncService._restoreCoachMemory] $e');
@@ -3556,6 +3589,161 @@ class SyncService {
       debugPrint('[SyncService.syncSavedDietPlan] error: $e\n$st');
       try {
         await _reportSyncFailure(opType: 'sync_saved_diet_plan', error: e);
+      } catch (_) {}
+    }
+  }
+
+  // ── Restore completeness — pull side (Theme A) ─────────────
+
+  /// A1 — Restores streak-freeze state from `user_progress` cloud columns
+  /// (migration 048) into the `progress` map in `userBox`.
+  ///
+  /// Freeze fields are stored inside `userBox['progress']` (a Map) to
+  /// match the read pattern in [WorkoutRepository] and [home_provider].
+  /// We merge on top of the existing local map so any IST-rollover data
+  /// written since the last sync is not lost.
+  Future<void> _restoreFreezes(String userId) async {
+    try {
+      final res = await _supabase.client
+          .from('user_progress')
+          .select(
+            'streak_freezes_available, streak_freezes_used_dates, '
+            'streak_freezes_last_refill',
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (res == null) return;
+
+      final box = _hive.userBox;
+      final existing = box.get('progress');
+      final existingMap = existing is Map
+          ? Map<String, dynamic>.from(existing)
+          : <String, dynamic>{};
+
+      existingMap['streak_freezes_available'] =
+          res['streak_freezes_available'] ?? 2;
+
+      final usedRaw = res['streak_freezes_used_dates'];
+      existingMap['streak_freeze_used_dates'] = (usedRaw is List)
+          ? usedRaw.map((e) => e.toString()).toList()
+          : <String>[];
+
+      final lastRefill = res['streak_freezes_last_refill'];
+      if (lastRefill != null) {
+        existingMap['streak_freezes_last_refill'] = lastRefill.toString();
+      }
+
+      await box.put('progress', existingMap);
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreFreezes] error: $e\n$st');
+      try {
+        await _reportSyncFailure(opType: 'restore_freezes', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// A4 — Restores last 200 notifications inbox rows from
+  /// `notifications_inbox` cloud table (migration 048) into
+  /// `notificationsBox`.
+  ///
+  /// Cloud column `notif_type` maps back to the Hive `category` field —
+  /// e.g. `notif_type: 'pr'` → `category: 'pr'`. The mapping is
+  /// symmetric with [syncNotificationsInboxEntry] which writes
+  /// `'notif_type': entry['category']`. We store the row in the same
+  /// shape as [AppNotification.toJson] so [NotificationInboxService.readAll]
+  /// can parse it without any special-casing.
+  ///
+  /// Uses the notification `id` as the Hive key (not `notif_$id`) to
+  /// match what [NotificationInboxService.record] writes.
+  Future<void> _restoreNotificationsInbox(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('notifications_inbox')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(200);
+
+      final box = _hive.notificationsBox;
+      for (final rawRow in rows as List) {
+        final r = Map<String, dynamic>.from(rawRow as Map);
+        final id = r['id'] as String?;
+        if (id == null || id.isEmpty) continue;
+
+        // Map cloud → Hive shape expected by AppNotification.fromJson.
+        // notif_type  → category (same string, e.g. 'coach', 'pr', 'system')
+        // read_at     → read: true/false
+        final payload = r['payload'];
+        final payloadMap = payload is Map
+            ? Map<String, dynamic>.from(payload)
+            : <String, dynamic>{};
+
+        final hiveEntry = <String, dynamic>{
+          'id': id,
+          'category': r['notif_type'] as String? ?? 'system',
+          'title': r['title'] as String? ?? '',
+          'body': r['body'] as String? ?? '',
+          'created_at': r['created_at'] as String? ??
+              DateTime.now().toUtc().toIso8601String(),
+          'priority': payloadMap['priority'] as String? ?? 'normal',
+          'read': r['read_at'] != null || payloadMap['read'] == true,
+        };
+
+        await box.put(id, hiveEntry);
+      }
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreNotificationsInbox] error: $e\n$st');
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_notifications_inbox', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// A5 — Restores the user's saved diet plan from `saved_diet_plans`
+  /// cloud table (migration 048) into `configBox['saved_diet_plan']`.
+  ///
+  /// One row per user (PRIMARY KEY on user_id). On conflict the cloud
+  /// row wins — the user may have saved an updated plan on another device.
+  Future<void> _restoreSavedDietPlan(String userId) async {
+    try {
+      final res = await _supabase.client
+          .from('saved_diet_plans')
+          .select('plan_json')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (res == null) return;
+      final planJson = res['plan_json'];
+      if (planJson == null) return;
+      await _hive.configBox.put('saved_diet_plan', planJson);
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreSavedDietPlan] error: $e\n$st');
+      try {
+        await _reportSyncFailure(opType: 'restore_saved_diet_plan', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// A2 — Restores last 20 rank promotion rows from `rank_promotions`
+  /// cloud table into `userBox['rank_promotions_history']`.
+  ///
+  /// Stored as a raw list of maps so [promotionHistoryProvider] can
+  /// optionally fall back to this cache when offline; no schema
+  /// translation needed (keys already match cloud column names).
+  Future<void> _restoreRankPromotions(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('rank_promotions')
+          .select()
+          .eq('user_id', userId)
+          .order('achieved_at', ascending: false)
+          .limit(20);
+      await _hive.userBox.put('rank_promotions_history', rows);
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreRankPromotions] error: $e\n$st');
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_rank_promotions', error: e);
       } catch (_) {}
     }
   }
