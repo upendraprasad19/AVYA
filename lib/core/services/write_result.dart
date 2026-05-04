@@ -48,6 +48,10 @@ enum WriteSource {
   planGenerator,
   schedSwap,
   restore,
+  /// Calls routed through the legacy WorkoutRepository.logSetWithPrRescan
+  /// delegation shim. Deprecated — will be removed after Test #12 once all
+  /// callers migrate directly to WorkoutWriteService.logExercise.
+  legacyRepository,
 }
 
 extension WriteSourceCode on WriteSource {
@@ -67,6 +71,8 @@ extension WriteSourceCode on WriteSource {
         return 'sched_swap';
       case WriteSource.restore:
         return 'restore';
+      case WriteSource.legacyRepository:
+        return 'legacy_repository';
     }
   }
 }

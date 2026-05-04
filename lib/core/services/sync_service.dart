@@ -2263,8 +2263,11 @@ class SyncService {
           logMap['weight_kg'] = (map['weight_kg'] as num).toDouble();
         }
         if (map['reps'] != null) logMap['reps_completed'] = map['reps'];
+        // D2 (Test #11): write canonical Hive field name `set_number` (total
+        // completed sets) instead of legacy `sets_completed`. Cloud column
+        // `set_number` maps 1:1 — semantics unchanged, only the Hive key fixed.
         if (map['set_number'] != null) {
-          logMap['sets_completed'] = map['set_number'];
+          logMap['set_number'] = map['set_number'];
         }
         if (map['duration_seconds'] != null) {
           logMap['duration_seconds'] = map['duration_seconds'];
@@ -2300,7 +2303,11 @@ class SyncService {
             }
             return out;
           }).toList();
-          logMap['sets_detail'] = setsDetail;
+          // D2 (Test #11): write canonical Hive field name `sets` (per-set
+          // Map list) instead of legacy `sets_detail`. Consumers (receipt
+          // rendering, AI snapshot, PR rescan) all key off `sets` per
+          // CLAUDE.md §15 "Hive field-name contract".
+          logMap['sets'] = setsDetail;
 
           // Recompute exact per-set volume from the detail list (the
           // summary row's weight_kg × reps was a lossy max×cumulative).
