@@ -5,6 +5,7 @@ import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
+import '../../../shared/repositories/submissions_repository.dart';
 import '../../../shared/widgets/error_state.dart';
 
 /// F9 · "My Submissions" — user-visible view of their own community
@@ -41,32 +42,22 @@ class _MySubmissionsScreenState extends ConsumerState<MySubmissionsScreen> {
       return;
     }
     try {
-      final client = SupabaseService.instance.client;
-      final foods = await client
-          .from('user_custom_foods')
-          .select('id, name, submitted_to_db, approved, created_at')
-          .eq('user_id', userId)
-          .eq('submitted_to_db', true)
-          .order('created_at', ascending: false);
-      final exercises = await client
-          .from('user_custom_exercises')
-          .select('id, name, submitted_to_library, approved_for_library, created_at')
-          .eq('user_id', userId)
-          .eq('submitted_to_library', true)
-          .order('created_at', ascending: false);
+      final repo = SubmissionsRepository.instance;
+      final foods = await repo.fetchMyFoodSubmissions(userId);
+      final exercises = await repo.fetchMyExerciseSubmissions(userId);
 
       final rows = <Map<String, dynamic>>[
         for (final f in foods)
           {
-            ...Map<String, dynamic>.from(f as Map),
+            ...f,
             'kind': 'food',
-            '_approved': (f as Map)['approved'] == true,
+            '_approved': f['approved'] == true,
           },
         for (final e in exercises)
           {
-            ...Map<String, dynamic>.from(e as Map),
+            ...e,
             'kind': 'exercise',
-            '_approved': (e as Map)['approved_for_library'] == true,
+            '_approved': e['approved_for_library'] == true,
           },
       ];
       rows.sort((a, b) {

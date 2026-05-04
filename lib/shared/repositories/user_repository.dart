@@ -300,6 +300,72 @@ class UserRepository {
     }, onConflict: 'user_id');
   }
 
+  // ── Account Management ───────────────────────────────────────────────────
+
+  /// Marks the user's account as deleted in Supabase (`users.is_deleted = true`)
+  /// and signs them out globally.
+  ///
+  /// Call order: soft-delete first, then sign out — so the router never
+  /// observes an authenticated + !onboarded state between the two steps.
+  ///
+  /// Throws only from the final signOut; a failed soft-delete write is logged
+  /// and silently skipped so the local sign-out can still proceed.
+  static Future<void> softDeleteAccount(String userId) async {
+    try {
+      await SupabaseService.instance.client.from('users').update({
+        'is_deleted': true,
+        'deleted_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+    } catch (e) {
+      debugPrint('[UserRepository] softDeleteAccount write failed: $e');
+    }
+  }
+
+  // ── AI Assessment (Edge Functions) ───────────────────────────────────────
+
+  /// Invokes the `assess-body-composition` Edge Function with the given photo
+  /// and biometric context.
+  ///
+  /// Returns the raw response data map on HTTP 200, or throws a
+  /// [BodyCompositionAssessmentException] carrying the server's `code` and
+  /// `error` fields on any non-200 status.
+  static Future<Map<String, dynamic>> assessBodyComposition({
+    required String imageBase64,
+    required String mimeType,
+    required double weightKg,
+    required double heightCm,
+    required String gender,
+    required int age,
+  }) async {
+    final response =
+        await SupabaseService.instance.client.functions.invoke(
+      'assess-body-composition',
+      body: {
+        'image_base64': imageBase64,
+        'mime_type': mimeType,
+        'weight_kg': weightKg,
+        'height_cm': heightCm,
+        'gender': gender,
+        'age': age,
+      },
+    );
+    if (response.status != 200) {
+      final data = response.data as Map? ?? {};
+      final code = data['code'] as String?;
+      final error = data['error'] as String? ?? 'Assessment failed';
+      final nextAllowedAt = data['next_allowed_at'] as String?;
+      throw BodyCompositionAssessmentException(
+        code: code,
+        message: error,
+        status: response.status,
+        nextAllowedAt: nextAllowedAt,
+      );
+    }
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  // ── Sanitize ─────────────────────────────────────────────────────────────
+
   /// Strips empty strings and non-finite numbers from a payload map.
   /// Null values are preserved (PostgREST happily stores NULL in nullable
   /// columns) but empty strings on strict-typed columns (date, time, numeric,
@@ -341,4 +407,34 @@ class UserRepository {
     });
     return out;
   }
+}
+
+/// Thrown by [UserRepository.assessBodyComposition] when the Edge Function
+/// returns a non-200 status. Callers can switch on [code] for known error
+/// conditions ('pro_required', 'rate_limited', 'unsuitable_image').
+class BodyCompositionAssessmentException implements Exception {
+  const BodyCompositionAssessmentException({
+    required this.code,
+    required this.message,
+    required this.status,
+    this.nextAllowedAt,
+  });
+
+  /// Server-supplied error code (e.g. 'pro_required', 'rate_limited',
+  /// 'unsuitable_image'). May be null for unexpected failures.
+  final String? code;
+
+  /// Human-readable error message from the server.
+  final String message;
+
+  /// HTTP status code from the Edge Function response.
+  final int status;
+
+  /// ISO-8601 timestamp after which the user may next request an assessment.
+  /// Only present when [code] == 'rate_limited'.
+  final String? nextAllowedAt;
+
+  @override
+  String toString() =>
+      'BodyCompositionAssessmentException(code=$code, status=$status, message=$message)';
 }

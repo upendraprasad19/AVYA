@@ -2236,16 +2236,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 // Sign out and soft-delete BEFORE clearing local data,
                 // otherwise the router sees authenticated + !onboarded → /onboarding.
                 try {
-                  final supabase = SupabaseService.instance.client;
-                  final userId = supabase.auth.currentUser?.id;
+                  final userId = SupabaseService.instance.currentUser?.id;
                   if (userId != null) {
-                    await supabase.from('users').update({
-                      'is_deleted': true,
-                      'deleted_at': DateTime.now().toIso8601String(),
-                    }).eq('id', userId);
+                    // Soft-delete via repository (CLAUDE.md rule #4).
+                    await UserRepository.softDeleteAccount(userId);
                   }
                   // Use global scope to sign out on server too.
-                  await supabase.auth.signOut(scope: SignOutScope.global);
+                  await SupabaseService.instance.client.auth
+                      .signOut(scope: SignOutScope.global);
                 } catch (e) {
                   // Offline or server error — force a local-only sign-out so
                   // the router never sees authenticated + !onboarded → /onboarding.
