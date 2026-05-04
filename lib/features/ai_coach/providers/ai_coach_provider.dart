@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../repositories/ai_coach_repository.dart';
 import 'pending_tool_intents_provider.dart';
 
@@ -250,7 +251,7 @@ class TrialInfoNotifier extends Notifier<TrialInfoData> {
       );
     }
 
-    final daysSinceStart = DateTime.now().difference(trialStart).inDays;
+    final daysSinceStart = istNow().difference(trialStart).inDays;
     final remaining = AppConstants.freeAiTrialDays - daysSinceStart;
 
     if (remaining <= 0) {

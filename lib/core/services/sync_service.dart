@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -374,7 +375,7 @@ class SyncService {
 
   /// Compiles a daily snapshot from Hive data for AI context injection.
   Map<String, dynamic> compileDailySnapshot() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = istDateStr(DateTime.now());
     final aiContext = AiCoachRepository.instance.buildAiContext();
 
     return {

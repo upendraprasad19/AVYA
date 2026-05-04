@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
@@ -582,9 +583,7 @@ class AiCoachRepository {
 
   /// Counts only user messages sent today (not AI responses).
   int getTodayUserMessageCount() {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istDateStr(DateTime.now());
 
     int count = 0;
     for (final raw in _hive.coachBox.values) {
@@ -790,15 +789,12 @@ class AiCoachRepository {
 
   Map<String, dynamic> _getThisWeekWorkouts() {
     final workoutBox = _hive.workoutBox;
-    final now = DateTime.now();
+    final now = istNow();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     final weekEnd = weekStart.add(const Duration(days: 6));
-    final weekStartStr =
-        '${weekStart.year}-${weekStart.month.toString().padLeft(2, '0')}-${weekStart.day.toString().padLeft(2, '0')}';
-    final weekEndStr =
-        '${weekEnd.year}-${weekEnd.month.toString().padLeft(2, '0')}-${weekEnd.day.toString().padLeft(2, '0')}';
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final weekStartStr = istDateStr(weekStart);
+    final weekEndStr = istDateStr(weekEnd);
+    final todayStr = istDateStr(now);
 
     int completed = 0;
     int planned = 0;
@@ -853,9 +849,8 @@ class AiCoachRepository {
     final result = <Map<String, dynamic>>[];
 
     for (int i = 0; i < days; i++) {
-      final d = DateTime.now().subtract(Duration(days: i));
-      final dateStr =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final d = istNow().subtract(Duration(days: i));
+      final dateStr = istDateStr(d);
       final raw = healthBox.get('step_$dateStr');
       if (raw is Map) {
         final log = Map<String, dynamic>.from(raw);
@@ -873,9 +868,7 @@ class AiCoachRepository {
 
   int _getTodaySteps() {
     final healthBox = _hive.healthBox;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istDateStr(DateTime.now());
 
     // Check proper step_log format (written by HealthSyncService)
     for (final raw in healthBox.values) {
@@ -955,10 +948,7 @@ class AiCoachRepository {
   /// actually logged.
   List<Map<String, dynamic>> _getMealsToday() {
     final nutritionBox = _hive.nutritionBox;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, "0")}-'
-        '${now.day.toString().padLeft(2, "0")}';
+    final todayStr = istDateStr(DateTime.now());
 
     // Preserve canonical slot order: breakfast → lunch → dinner → snacks.
     const slotOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
@@ -1185,10 +1175,7 @@ class AiCoachRepository {
 
   /// Marks that the AI has greeted the user today.
   Future<void> markGreetedToday() async {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await _hive.configBox.put('last_ai_greeting_date', todayStr);
+    await _hive.configBox.put('last_ai_greeting_date', istDateStr(DateTime.now()));
   }
 
   /// Returns the top insight for the dashboard card (highest severity).
@@ -1340,7 +1327,7 @@ class AiCoachRepository {
   /// Falls back to `workout_name` when the `type` field is absent (some legacy
   /// schedule entries were written without an explicit `type` key).
   Map<String, dynamic>? _getTodayWorkout() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = istDateStr(DateTime.now());
     final schedule = _hive.workoutBox.get('schedule_$today');
     if (schedule is! Map) return null;
     return {
@@ -1354,10 +1341,7 @@ class AiCoachRepository {
   /// `schedule_<yesterday>` key exists. Omits the exercises list (yesterday's
   /// session contents are less useful than the status — completed/skipped).
   Map<String, dynamic>? _getYesterdayWorkout() {
-    final yesterday = DateTime.now()
-        .subtract(const Duration(days: 1))
-        .toIso8601String()
-        .substring(0, 10);
+    final yesterday = istDateStr(istNow().subtract(const Duration(days: 1)));
     final schedule = _hive.workoutBox.get('schedule_$yesterday');
     if (schedule is! Map) return null;
     return {
@@ -1376,8 +1360,8 @@ class AiCoachRepository {
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final results = <Map<String, dynamic>>[];
     for (int i = 0; i < 7; i++) {
-      final date = DateTime.now().add(Duration(days: i));
-      final dateStr = date.toIso8601String().substring(0, 10);
+      final date = istNow().add(Duration(days: i));
+      final dateStr = istDateStr(date);
       final dayName = dayNames[(date.weekday - 1) % 7];
       final schedule = _hive.workoutBox.get('schedule_$dateStr');
       if (schedule is Map) {
@@ -1438,8 +1422,8 @@ class AiCoachRepository {
     // Iterate today + 6 days, dedup by session name (first occurrence wins).
     final weeklySessionsMap = <String, Map<String, dynamic>>{};
     for (int i = 0; i < 7; i++) {
-      final date = DateTime.now().add(Duration(days: i));
-      final dateStr = date.toIso8601String().substring(0, 10);
+      final date = istNow().add(Duration(days: i));
+      final dateStr = istDateStr(date);
       final schedule = _hive.workoutBox.get('schedule_$dateStr');
       if (schedule is! Map) continue;
 
@@ -1836,7 +1820,7 @@ class AiCoachRepository {
     final remainingWorkouts = remaining['workouts'] ?? 0;
 
     if (remainingWorkouts == 0) {
-      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final today = istDateStr(DateTime.now());
       return {
         'at_current_cadence': {'days': 0, 'date': today},
         'at_plan_cadence': {'days': 0, 'date': today},
@@ -1855,17 +1839,11 @@ class AiCoachRepository {
     return {
       'at_current_cadence': {
         'days': daysAtCurrent,
-        'date': DateTime.now()
-            .add(Duration(days: daysAtCurrent))
-            .toIso8601String()
-            .substring(0, 10),
+        'date': istDateStr(istNow().add(Duration(days: daysAtCurrent))),
       },
       'at_plan_cadence': {
         'days': daysAtPlan,
-        'date': DateTime.now()
-            .add(Duration(days: daysAtPlan))
-            .toIso8601String()
-            .substring(0, 10),
+        'date': istDateStr(istNow().add(Duration(days: daysAtPlan))),
       },
     };
   }
