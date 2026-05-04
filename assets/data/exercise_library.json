@@ -274,6 +274,7 @@
       "warmup"
     ],
     "exercise_type": [
+      "compound",
       "calisthenics"
     ],
     "primary_muscles": [
@@ -600,6 +601,7 @@
       "warmup"
     ],
     "exercise_type": [
+      "compound",
       "calisthenics"
     ],
     "primary_muscles": [
@@ -649,7 +651,8 @@
     "cns_demand": 2,
     "target_focus": [
       "Front Delts",
-      "Upper Chest"
+      "Upper Chest",
+      "Shoulders"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -3155,6 +3158,7 @@
       "Hamstrings"
     ],
     "equipment_tier": [
+      "home_dumbbells",
       "full_gym"
     ],
     "standard_swap": "E050",
@@ -3288,6 +3292,9 @@
       "Calves"
     ],
     "equipment_tier": [
+      "basic_gym",
+      "home_dumbbells",
+      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "Bodyweight Calf Raise",
@@ -3350,6 +3357,7 @@
       "Calves"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4892,6 +4900,7 @@
       "warmup"
     ],
     "exercise_type": [
+      "compound",
       "calisthenics"
     ],
     "primary_muscles": [
@@ -6903,7 +6912,8 @@
       "Hip"
     ],
     "equipment_tier": [
-      "full_gym"
+      "full_gym",
+      "basic_gym"
     ],
     "standard_swap": "",
     "priority_tier": 3,
@@ -7931,6 +7941,7 @@
       "Lats"
     ],
     "equipment_tier": [
+      "bodyweight",
       "home_dumbbells",
       "basic_gym",
       "full_gym"
@@ -14631,14 +14642,15 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": false,
+    "is_foundational": true,
     "injury_contraindications": [
       "hip"
     ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Glutes"
+      "Glutes",
+      "Hip"
     ],
     "equipment_tier": [
       "basic_gym",
@@ -15491,7 +15503,8 @@
     ],
     "exercise_type": [
       "compound",
-      "calisthenics"
+      "calisthenics",
+      "isolation"
     ],
     "primary_muscles": [
       "Triceps"
@@ -15535,7 +15548,7 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "is_foundational": false,
+    "is_foundational": true,
     "injury_contraindications": [
       "shoulder"
     ],
@@ -16463,5 +16476,637 @@
     "priority_tier": 2,
     "rep_range": "30-60",
     "id": "E251"
+  },
+  {
+    "id": "E252",
+    "name": "Wall Sit",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "target_focus": [
+      "Quads"
+    ],
+    "sub_focus": [
+      "Quads (Teardrop)"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 2,
+    "rep_range": "30-60s",
+    "logging_type": "timed",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "Feet shoulder-width apart",
+      "Back flat against wall",
+      "Thighs parallel to floor",
+      "Hold position"
+    ],
+    "common_mistakes": [
+      "Leaning forward",
+      "Knees caving inward",
+      "Feet too close to wall"
+    ],
+    "breathing_cue": "Breathe normally throughout the hold",
+    "pro_tip": "Drive heels into floor to maintain position",
+    "met_value": 4.0,
+    "muscle_primary": [
+      "quadriceps"
+    ],
+    "muscle_secondary": [
+      "glutes"
+    ],
+    "is_compound": false,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "isometric",
+      "legs"
+    ],
+    "warmup_protocol": "Light leg swings and bodyweight squats",
+    "regression": "Partial wall sit",
+    "progression": "Single leg wall sit",
+    "is_custom": false
+  },
+  {
+    "id": "E253",
+    "name": "Bodyweight Good Morning",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "target_focus": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "sub_focus": [
+      "Hamstrings (Bicep Femoris)",
+      "Glutes (Lower)"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 1,
+    "rep_range": "12-15",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "Hands behind head or on hips",
+      "Soft bend in knees",
+      "Hinge at hips, not waist",
+      "Feel stretch in hamstrings"
+    ],
+    "common_mistakes": [
+      "Rounding the back",
+      "Bending too deep at knees",
+      "Moving too fast"
+    ],
+    "breathing_cue": "Inhale as you hinge forward, exhale as you return",
+    "pro_tip": "Focus on the hip hinge movement pattern to protect your lower back",
+    "met_value": 4.5,
+    "muscle_primary": [
+      "hamstrings",
+      "glutes"
+    ],
+    "muscle_secondary": [
+      "lower_back"
+    ],
+    "is_compound": true,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "hip_hinge",
+      "legs"
+    ],
+    "warmup_protocol": "Hip circles and dynamic leg swings",
+    "regression": "Seated hamstring stretch",
+    "progression": "Good morning with resistance band",
+    "is_custom": false
+  },
+  {
+    "id": "E254",
+    "name": "Doorframe Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "target_focus": [
+      "Biceps",
+      "Biceps (Short Head)"
+    ],
+    "sub_focus": [
+      "Biceps (Long Head)"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 2,
+    "rep_range": "8-12",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "Stand in doorframe",
+      "Grip frame at hip height",
+      "Lean back at 45 degrees",
+      "Curl body up using biceps"
+    ],
+    "common_mistakes": [
+      "Using momentum",
+      "Not leaning back enough",
+      "Gripping too high"
+    ],
+    "breathing_cue": "Exhale as you curl up, inhale as you lower",
+    "pro_tip": "Lean further back to increase difficulty",
+    "met_value": 3.5,
+    "muscle_primary": [
+      "biceps"
+    ],
+    "muscle_secondary": [
+      "forearms",
+      "brachialis"
+    ],
+    "is_compound": false,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "biceps",
+      "home"
+    ],
+    "warmup_protocol": "Arm circles and wrist rotations",
+    "regression": "Incline doorframe curl (less lean)",
+    "progression": "Towel curl with more bodyweight",
+    "is_custom": false
+  },
+  {
+    "id": "E255",
+    "name": "Towel Row",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "target_focus": [
+      "Lats",
+      "Mid Back"
+    ],
+    "sub_focus": [
+      "Rear Delts",
+      "Biceps"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "intermediate",
+    "is_foundational": false,
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 90,
+    "coaching_cues": [
+      "Loop towel around a sturdy door handle",
+      "Lean back keeping body straight",
+      "Pull chest toward door",
+      "Squeeze shoulder blades at top"
+    ],
+    "common_mistakes": [
+      "Hips sagging",
+      "Using only arms",
+      "Leaning too far from door"
+    ],
+    "breathing_cue": "Exhale as you pull, inhale as you lower",
+    "pro_tip": "The further your feet are from the door, the harder the row",
+    "met_value": 5.0,
+    "muscle_primary": [
+      "lats",
+      "mid_back"
+    ],
+    "muscle_secondary": [
+      "biceps",
+      "rear_delts"
+    ],
+    "is_compound": true,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "back",
+      "home"
+    ],
+    "warmup_protocol": "Cat-cow stretches and shoulder rolls",
+    "regression": "Stand closer to door for easier angle",
+    "progression": "Elevate feet on chair",
+    "is_custom": false
+  },
+  {
+    "id": "E256",
+    "name": "Negative Pull Up",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "target_focus": [
+      "Lats",
+      "Lats (Width)"
+    ],
+    "sub_focus": [
+      "Biceps",
+      "Mid Back"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 1,
+    "rep_range": "5-8",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 90,
+    "coaching_cues": [
+      "Jump or step to top position",
+      "Start with chin above bar",
+      "Lower yourself as slowly as possible",
+      "5-10 seconds down"
+    ],
+    "common_mistakes": [
+      "Dropping too fast",
+      "Not using full range",
+      "Not engaging lats"
+    ],
+    "breathing_cue": "Inhale as you lower slowly",
+    "pro_tip": "Control the eccentric to build pulling strength for full pull-ups",
+    "met_value": 6.0,
+    "muscle_primary": [
+      "lats",
+      "biceps"
+    ],
+    "muscle_secondary": [
+      "mid_back",
+      "rear_delts"
+    ],
+    "is_compound": true,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "pull_up",
+      "back",
+      "beginner_friendly"
+    ],
+    "warmup_protocol": "Dead hangs and scapular pulls",
+    "regression": "Band-assisted negative",
+    "progression": "Full pull up",
+    "is_custom": false
+  },
+  {
+    "id": "E257",
+    "name": "Glute Kickback",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_isolation"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "target_focus": [
+      "Glutes",
+      "Hip"
+    ],
+    "sub_focus": [
+      "Glutes (Lower)",
+      "Hamstrings"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 2,
+    "rep_range": "12-15",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "On hands and knees",
+      "Keep core tight",
+      "Kick leg back and up",
+      "Squeeze glute at top"
+    ],
+    "common_mistakes": [
+      "Rotating the hips",
+      "Arching lower back",
+      "Not squeezing at peak"
+    ],
+    "breathing_cue": "Exhale as you kick back, inhale as you return",
+    "pro_tip": "Add ankle weight or resistance band to increase difficulty",
+    "met_value": 3.5,
+    "muscle_primary": [
+      "glutes"
+    ],
+    "muscle_secondary": [
+      "hamstrings",
+      "lower_back"
+    ],
+    "is_compound": false,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "glutes",
+      "home"
+    ],
+    "warmup_protocol": "Hip circles and glute bridges",
+    "regression": "Floor glute squeeze",
+    "progression": "Donkey kick with resistance band",
+    "is_custom": false
+  },
+  {
+    "id": "E258",
+    "name": "Dumbbell Calf Raise",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "target_focus": [
+      "Calves"
+    ],
+    "sub_focus": [
+      "Calves (Gastrocnemius)"
+    ],
+    "equipment_needed": "Dumbbells",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 2,
+    "rep_range": "15-20",
+    "logging_type": "weight_reps",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "Hold dumbbells at sides",
+      "Rise on balls of feet",
+      "Full range at top and bottom",
+      "Control the descent"
+    ],
+    "common_mistakes": [
+      "Bouncing at bottom",
+      "Partial range of motion",
+      "Leaning forward"
+    ],
+    "breathing_cue": "Exhale as you rise, inhale as you lower",
+    "pro_tip": "Stand on a step edge for greater range of motion",
+    "met_value": 3.5,
+    "muscle_primary": [
+      "calves"
+    ],
+    "muscle_secondary": [
+      "soleus"
+    ],
+    "is_compound": false,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "dumbbells",
+      "calves",
+      "legs"
+    ],
+    "warmup_protocol": "Ankle rotations and light calf stretches",
+    "regression": "Bodyweight calf raise",
+    "progression": "Single-leg dumbbell calf raise",
+    "is_custom": false
+  },
+  {
+    "id": "E259",
+    "name": "Split Squat",
+    "category": "legs",
+    "movement_pattern": [
+      "knee_dominant"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "target_focus": [
+      "Quads",
+      "Glutes"
+    ],
+    "sub_focus": [
+      "Hamstrings"
+    ],
+    "equipment_needed": "Bodyweight",
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 2,
+    "rep_range": "10-12",
+    "logging_type": "bodyweight_reps",
+    "sets_default": 3,
+    "rest_seconds": 60,
+    "coaching_cues": [
+      "Staggered stance, rear foot elevated or flat",
+      "Lower back knee toward floor",
+      "Keep front shin vertical",
+      "Drive through front heel to rise"
+    ],
+    "common_mistakes": [
+      "Front knee caving",
+      "Leaning too far forward",
+      "Rising on toes of front foot"
+    ],
+    "breathing_cue": "Inhale as you lower, exhale as you rise",
+    "pro_tip": "Elevate rear foot on a bench to increase range (Bulgarian split squat)",
+    "met_value": 5.0,
+    "muscle_primary": [
+      "quadriceps",
+      "glutes"
+    ],
+    "muscle_secondary": [
+      "hamstrings",
+      "calves"
+    ],
+    "is_compound": false,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "bodyweight",
+      "legs",
+      "unilateral"
+    ],
+    "warmup_protocol": "Hip flexor stretches and leg swings",
+    "regression": "Reverse lunge",
+    "progression": "Bulgarian split squat with dumbbells",
+    "is_custom": false
+  },
+  {
+    "id": "E260",
+    "name": "Incline Dumbbell Press",
+    "category": "push",
+    "movement_pattern": [
+      "horizontal_push"
+    ],
+    "exercise_type": [
+      "compound"
+    ],
+    "target_focus": [
+      "Upper Chest",
+      "Front Delts"
+    ],
+    "sub_focus": [
+      "Triceps"
+    ],
+    "equipment_needed": "Dumbbells",
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "difficulty": "beginner",
+    "is_foundational": true,
+    "priority_tier": 1,
+    "rep_range": "8-12",
+    "logging_type": "weight_reps",
+    "sets_default": 3,
+    "rest_seconds": 90,
+    "coaching_cues": [
+      "Set bench to 30-45 degree incline",
+      "Press dumbbells up and slightly together",
+      "Control the descent",
+      "Full range of motion at bottom"
+    ],
+    "common_mistakes": [
+      "Flaring elbows too wide",
+      "Bouncing off chest",
+      "Uneven press"
+    ],
+    "breathing_cue": "Exhale as you press up, inhale as you lower",
+    "pro_tip": "Keep a slight arch in lower back for shoulder safety",
+    "met_value": 5.0,
+    "muscle_primary": [
+      "upper_chest",
+      "front_delts"
+    ],
+    "muscle_secondary": [
+      "triceps"
+    ],
+    "is_compound": true,
+    "image_url": "",
+    "video_url": "",
+    "tags": [
+      "dumbbells",
+      "chest",
+      "push",
+      "upper_chest"
+    ],
+    "warmup_protocol": "Arm circles and light dumbbell presses",
+    "regression": "Incline Push Up",
+    "progression": "Incline Barbell Bench Press",
+    "is_custom": false
   }
 ]

@@ -1,5 +1,5 @@
 # Sample Workout Plans — All Experience × Day Splits
-Generated: 2026-04-17
+Generated: 2026-05-04
 
 ---
 ## BEGINNER / 3 days / build_muscle / full_gym
@@ -27,10 +27,10 @@ Generated: 2026-04-17
 ### Day 3: Full Body C (Legs-focused)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Mid Chest/horizontal_push/compound/P1 | **Machine Chest Press** | attempt1Exact |
+| 1 | Mid Chest/horizontal_push/compound/P1 | **Push Up** | attempt1Exact |
 | 2 | Lats/horizontal_pull/compound/P1 | **Chest Supported Row** | attempt1Exact |
 | 3 | Quads/knee_dominant/compound/P1 | **Walking Lunge** | attempt1Exact |
-| 4 | Hamstrings/hip_dominant/compound/P1 | **Trap Bar Deadlift** | attempt2DropSubFocus |
+| 4 | Hamstrings/hip_dominant/compound/P1 | **Bodyweight Good Morning** | attempt1Exact |
 | 5 | Core/core/isolation/P2 | **Reverse Crunch** | attempt1Exact |
 | 6 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 
@@ -60,10 +60,10 @@ Generated: 2026-04-17
 ### Day 3: Full Body C (Legs-focused)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Mid Chest/horizontal_push/compound/P1 | **Machine Chest Press** | attempt1Exact |
+| 1 | Mid Chest/horizontal_push/compound/P1 | **Push Up** | attempt1Exact |
 | 2 | Lats/horizontal_pull/compound/P1 | **Chest Supported Row** | attempt1Exact |
 | 3 | Quads/knee_dominant/compound/P1 | **Walking Lunge** | attempt1Exact |
-| 4 | Hamstrings/hip_dominant/compound/P1 | **Trap Bar Deadlift** | attempt2DropSubFocus |
+| 4 | Hamstrings/hip_dominant/compound/P1 | **Bodyweight Good Morning** | attempt1Exact |
 | 5 | Core/core/isolation/P2 | **Reverse Crunch** | attempt1Exact |
 
 ### Day 4: Full Body D (Balanced — core & conditioning)
@@ -108,7 +108,7 @@ Generated: 2026-04-17
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Quads/knee_dominant/compound/P1 | **Goblet Squat** | attempt1Exact |
-| 2 | Hamstrings/hip_dominant/compound/P1 | **Trap Bar Deadlift** | attempt2DropSubFocus |
+| 2 | Hamstrings/hip_dominant/compound/P1 | **Bodyweight Good Morning** | attempt1Exact |
 | 3 | Quads/knee_dominant/isolation/P2 | **Leg Extension** | attempt2DropSubFocus |
 | 4 | Glutes/hip_isolation/isolation/P2 | **Glute Bridge** | attempt1Exact |
 
@@ -145,7 +145,7 @@ Generated: 2026-04-17
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Quads/knee_dominant/compound/P1 | **Goblet Squat** | attempt1Exact |
-| 2 | Hamstrings/hip_dominant/compound/P1 | **Trap Bar Deadlift** | attempt2DropSubFocus |
+| 2 | Hamstrings/hip_dominant/compound/P1 | **Bodyweight Good Morning** | attempt1Exact |
 | 3 | Quads/knee_dominant/isolation/P2 | **Leg Extension** | attempt2DropSubFocus |
 | 4 | Glutes/hip_isolation/isolation/P2 | **Glute Bridge** | attempt1Exact |
 
@@ -160,7 +160,7 @@ Generated: 2026-04-17
 ### Day 5: Pull B (Volume back + biceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Lats/vertical_pull/compound/P1 | **Machine High Row** | attempt2DropSubFocus |
+| 1 | Lats/vertical_pull/compound/P1 | **Negative Pull Up** | attempt1Exact |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Seated Cable Row** | attempt1Exact |
 | 3 | Rear Delts/shoulder_isolation/isolation/P2 | **Band Pull Apart** | attempt1Exact |
 | 4 | Biceps/elbow_flexion/isolation/P2 | **Barbell Curl** | attempt1Exact |
@@ -168,9 +168,9 @@ Generated: 2026-04-17
 ### Day 6: Legs B (Hamstring + glute focus)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Hamstrings/hip_dominant/compound/P1 | **Cable Pull-Through** | attempt2DropSubFocus |
+| 1 | Hamstrings/hip_dominant/compound/P1 | **Trap Bar Deadlift** | attempt2DropSubFocus |
 | 2 | Glutes/hip_dominant/compound/P1 | **Banded Hip Thrust** | attempt2DropSubFocus |
-| 3 | Glutes/hip_isolation/isolation/P2 | **Kas Glute Bridge** | attempt2DropSubFocus |
+| 3 | Glutes/hip_isolation/isolation/P2 | **Hip Abductor Machine** | attempt1Exact |
 | 4 | Hamstrings/knee_dominant/isolation/P2 | **Leg Curl (Lying)** | attempt1Exact |
 
 **Total exercises: 24** across 6 days
@@ -212,7 +212,7 @@ Generated: 2026-04-17
 | 5 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 | 6 | Hamstrings/knee_dominant/isolation/P3 | **Leg Curl (Lying)** | attempt1Exact |
 | 7 | Glutes/hip_dominant/compound/P4 | **Romanian Deadlift** | attempt1Exact |
-| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
+| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abductor Machine** | attempt1Exact |
 
 **Total exercises: 24** across 3 days
 
@@ -366,19 +366,19 @@ Generated: 2026-04-17
 ### Day 5: Pull B (Volume back + biceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Lats/vertical_pull/compound/P1 | **Dumbbell Pullover** | attempt2DropSubFocus |
+| 1 | Lats/vertical_pull/compound/P1 | **Negative Pull Up** | attempt1Exact |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Barbell Bent Over Row** | attempt1Exact |
 | 3 | Rear Delts/shoulder_isolation/isolation/P2 | **Band Pull Apart** | attempt1Exact |
 | 4 | Biceps/elbow_flexion/isolation/P2 | **Hammer Curl** | attempt1Exact |
 | 5 | Biceps/elbow_flexion/isolation/P3 | **Concentration Curl** | attempt2DropSubFocus |
-| 6 | Lats/vertical_pull/compound/P3 | **Machine High Row** | attempt2DropSubFocus |
+| 6 | Lats/vertical_pull/compound/P3 | **Dumbbell Pullover** | attempt2DropSubFocus |
 
 ### Day 6: Legs B (Hamstring + glute focus)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
 | 1 | Hamstrings/hip_dominant/compound/P1 | **Romanian Deadlift** | attempt1Exact |
 | 2 | Glutes/hip_dominant/compound/P1 | **Hip Thrust** | attempt1Exact |
-| 3 | Glutes/hip_isolation/isolation/P2 | **Kas Glute Bridge** | attempt2DropSubFocus |
+| 3 | Glutes/hip_isolation/isolation/P2 | **Hip Abductor Machine** | attempt1Exact |
 | 4 | Hamstrings/knee_dominant/isolation/P2 | **Leg Curl (Lying)** | attempt1Exact |
 | 5 | Core/core/isolation/P3 | **Cable Crunch** | attempt1Exact |
 | 6 | Calves/knee_dominant/isolation/P3 | **Seated Calf Raise** | attempt1Exact |
@@ -426,7 +426,7 @@ Generated: 2026-04-17
 | 5 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 | 6 | Hamstrings/knee_dominant/isolation/P3 | **Leg Curl (Lying)** | attempt1Exact |
 | 7 | Glutes/hip_dominant/compound/P4 | **Romanian Deadlift** | attempt1Exact |
-| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
+| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abductor Machine** | attempt1Exact |
 | 9 | Core/core/isolation/P5 | **Pallof Press** | attempt1Exact |
 | 10 | Calves/knee_dominant/isolation/P5 | **Seated Calf Raise** | attempt2DropSubFocus |
 
@@ -471,7 +471,7 @@ Generated: 2026-04-17
 | 5 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 | 6 | Core/core/isolation/P3 | **Hanging Leg Raise** | attempt1Exact |
 | 7 | Hamstrings/knee_dominant/isolation/P4 | **Leg Curl (Lying)** | attempt1Exact |
-| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
+| 8 | Hip/hip_isolation/isolation/P4 | **Hip Abductor Machine** | attempt1Exact |
 | 9 | Calves/knee_dominant/isolation/P5 | **Seated Calf Raise** | attempt2DropSubFocus |
 
 ### Day 4: Upper (Shoulders, back, arms)
@@ -537,7 +537,7 @@ Generated: 2026-04-17
 | 4 | Glutes/hip_isolation/isolation/P2 | **Glute Bridge** | attempt1Exact |
 | 5 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 | 6 | Hamstrings/knee_dominant/isolation/P3 | **Leg Curl (Lying)** | attempt1Exact |
-| 7 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
+| 7 | Hip/hip_isolation/isolation/P4 | **Hip Abductor Machine** | attempt1Exact |
 | 8 | Core/core/isolation/P4 | **Hanging Leg Raise** | attempt1Exact |
 
 ### Day 5: Upper + Core (Shoulders, arms, core)
@@ -550,7 +550,7 @@ Generated: 2026-04-17
 | 5 | Mid Chest/horizontal_push/compound/P3 | **Dumbbell Bench Press** | attempt1Exact |
 | 6 | Biceps/elbow_flexion/isolation/P3 | **Cable Curl** | attempt1Exact |
 | 7 | Triceps/elbow_extension/isolation/P4 | **Overhead Cable Extension** | attempt2DropSubFocus |
-| 8 | Lats/vertical_pull/compound/P4 | **Dumbbell Pullover** | attempt2DropSubFocus |
+| 8 | Lats/vertical_pull/compound/P4 | **Negative Pull Up** | attempt1Exact |
 
 **Total exercises: 40** across 5 days
 
@@ -590,7 +590,7 @@ Generated: 2026-04-17
 | 4 | Glutes/hip_isolation/isolation/P2 | **Glute Bridge** | attempt1Exact |
 | 5 | Calves/knee_dominant/isolation/P3 | **Standing Calf Raise** | attempt1Exact |
 | 6 | Core/core/isolation/P3 | **Cable Crunch** | attempt1Exact |
-| 7 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
+| 7 | Hip/hip_isolation/isolation/P4 | **Hip Abductor Machine** | attempt1Exact |
 | 8 | Calves/knee_dominant/isolation/P4 | **Seated Calf Raise** | attempt2DropSubFocus |
 
 ### Day 4: Push B (Volume shoulders + triceps)
@@ -608,12 +608,12 @@ Generated: 2026-04-17
 ### Day 5: Pull B (Volume back + biceps)
 | # | Slot | Exercise Picked | Source |
 |---|------|----------------|--------|
-| 1 | Lats/vertical_pull/compound/P1 | **Dumbbell Pullover** | attempt2DropSubFocus |
+| 1 | Lats/vertical_pull/compound/P1 | **Negative Pull Up** | attempt1Exact |
 | 2 | Mid Back/horizontal_pull/compound/P1 | **Seated Cable Row** | attempt1Exact |
 | 3 | Rear Delts/shoulder_isolation/isolation/P2 | **Band Pull Apart** | attempt1Exact |
 | 4 | Biceps/elbow_flexion/isolation/P2 | **Hammer Curl** | attempt1Exact |
 | 5 | Biceps/elbow_flexion/isolation/P3 | **Concentration Curl** | attempt2DropSubFocus |
-| 6 | Lats/vertical_pull/compound/P3 | **Machine High Row** | attempt2DropSubFocus |
+| 6 | Lats/vertical_pull/compound/P3 | **Dumbbell Pullover** | attempt2DropSubFocus |
 | 7 | Biceps/elbow_flexion/isolation/P4 | **Cable Curl** | attempt2DropSubFocus |
 | 8 | Mid Back/horizontal_pull/compound/P4 | **Chest Supported Row** | attempt1Exact |
 
@@ -622,11 +622,11 @@ Generated: 2026-04-17
 |---|------|----------------|--------|
 | 1 | Hamstrings/hip_dominant/compound/P1 | **Romanian Deadlift** | attempt1Exact |
 | 2 | Glutes/hip_dominant/compound/P1 | **Hip Thrust** | attempt1Exact |
-| 3 | Glutes/hip_isolation/isolation/P2 | **Kas Glute Bridge** | attempt2DropSubFocus |
+| 3 | Glutes/hip_isolation/isolation/P2 | **Glute Kickback** | attempt1Exact |
 | 4 | Hamstrings/knee_dominant/isolation/P2 | **Leg Curl (Lying)** | attempt1Exact |
 | 5 | Core/core/isolation/P3 | **Russian Twist** | attempt1Exact |
-| 6 | Calves/knee_dominant/isolation/P3 | **Donkey Calf Raise** | attempt2DropSubFocus |
-| 7 | Hip/hip_isolation/isolation/P4 | **Hip Adduction Machine** | attempt2DropSubFocus |
+| 6 | Calves/knee_dominant/isolation/P3 | **Dumbbell Calf Raise** | attempt1Exact |
+| 7 | Hip/hip_isolation/isolation/P4 | **Hip Abduction Machine** | attempt2DropSubFocus |
 | 8 | Core/core/isolation/P4 | **Reverse Crunch** | attempt2DropSubFocus |
 
 **Total exercises: 48** across 6 days
