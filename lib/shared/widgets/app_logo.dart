@@ -14,7 +14,12 @@ class AppLogo extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Image.asset('assets/avya_logo.png', height: height),
+        Image.asset(
+          'assets/avya_logo.png',
+          height: height,
+          cacheWidth: (height * 2).round(),
+          cacheHeight: (height * 2).round(),
+        ),
         if (kIsDevFlavor)
           Positioned(
             top: -5,
