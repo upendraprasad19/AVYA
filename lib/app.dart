@@ -63,7 +63,7 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
                     Text(
                       kDebugMode
                           ? details.exceptionAsString()
-                          : 'Please restart the app. If this persists, contact support.',
+                          : 'Something went wrong here. The rest of the app still works — use the back button.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textSecondary,
                           ),

@@ -146,7 +146,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             width: 320,
             child: Text(
               'Personalised coaching, disciplined programming, and an AI that '
-              'remembers every lift. No streaks, no gimmicks \u2014 just the log.',
+              'remembers every lift. Built around streaks, fuelled by data \u2014 your discipline, our scaffolding.',
               style: AppTypography.body.copyWith(
                 color: AppColors.textDim,
                 height: 1.5,
