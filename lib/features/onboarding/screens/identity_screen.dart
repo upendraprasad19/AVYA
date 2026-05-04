@@ -34,10 +34,13 @@ class IdentityScreen extends StatefulWidget {
 class _IdentityScreenState extends State<IdentityScreen> {
   late final TextEditingController _name;
   DateTime? _dob;
-  late String _sex;
+  String? _sex;
   /// Inline validation error for the name field. Cleared when the user
   /// resumes typing. Shown as bodySm-bad below the field's labelled tile.
   String? _nameError;
+  /// Inline validation error for the sex selector. Set when the user taps
+  /// CONTINUE without picking a pill. Cleared on the next pill tap.
+  String? _sexError;
 
   /// Letters + spaces + `.`-`'` allowed; digits and emoji rejected.
   /// Matches the validation spec in the APK-test-1-batch plan (D2).
@@ -59,7 +62,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
     } else if (initDob is DateTime) {
       _dob = initDob;
     }
-    _sex = (init['sex'] as String?) ?? 'male';
+    _sex = init['sex'] as String?;
   }
 
   @override
@@ -168,7 +171,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'QUESTION 0',
+          '01 · 05',
           style: AppTypography.monoXs.copyWith(
             color: AppColors.textMute,
             letterSpacing: 2.5,
@@ -330,6 +333,16 @@ class _IdentityScreenState extends State<IdentityScreen> {
             _pill('OTHER', 'other'),
           ],
         ),
+        if (_sexError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _sexError!,
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.bad,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -340,7 +353,10 @@ class _IdentityScreenState extends State<IdentityScreen> {
       child: Padding(
         padding: const EdgeInsets.only(right: 4),
         child: GestureDetector(
-          onTap: () => setState(() => _sex = value),
+          onTap: () => setState(() {
+            _sex = value;
+            _sexError = null;
+          }),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
@@ -452,13 +468,22 @@ class _IdentityScreenState extends State<IdentityScreen> {
       );
       return;
     }
+
+    // Sex is required — every BMR formula branches on it. An unset value
+    // silently defaults downstream; block here with an inline error instead.
+    if (_sex == null) {
+      setState(() =>
+          _sexError = 'Please pick one to calibrate your plan accurately.');
+      return;
+    }
+
     setState(() => _nameError = null);
     context.go(
       '/onboarding/goal',
       extra: {
         'full_name': name,
         'date_of_birth': _dob!.toIso8601String(),
-        'sex': _sex,
+        'sex': _sex!,
       },
     );
   }
