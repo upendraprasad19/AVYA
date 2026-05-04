@@ -41,10 +41,79 @@ async function verifySignature(
 }
 
 /**
+ * Derive the plan type from a Razorpay payment amount.
+ *
+ * 1. Exact match against full prices.
+ * 2. If a promo code is present, compute discounted prices and match.
+ * 3. Returns { plan, promoApplied, promoCode, originalPaise, discountPct }
+ *    or null if no match.
+ *
+ * Mirrored from verify-payment/index.ts — keep in sync.
+ */
+async function derivePlanFromAmount(
+  amountPaise: number,
+  promoCode: string | undefined,
+  supabaseClient: ReturnType<typeof createClient>,
+): Promise<{
+  plan: "monthly" | "yearly";
+  promoApplied: boolean;
+  promoCode: string | null;
+  originalPaise: number;
+  discountPct: number;
+} | null> {
+  // 1. Exact full-price match
+  if (amountPaise === MONTHLY_PAISE) {
+    return { plan: "monthly", promoApplied: false, promoCode: null, originalPaise: MONTHLY_PAISE, discountPct: 0 };
+  }
+  if (amountPaise === YEARLY_PAISE) {
+    return { plan: "yearly", promoApplied: false, promoCode: null, originalPaise: YEARLY_PAISE, discountPct: 0 };
+  }
+
+  // 2. Promo-discounted price
+  if (promoCode) {
+    const { data: promo } = await supabaseClient
+      .from("promo_codes")
+      .select("discount_pct, is_active, valid_until, max_uses, used_count")
+      .eq("code", promoCode)
+      .maybeSingle();
+
+    if (promo) {
+      // Tolerant: honour the discounted amount even if the promo has since
+      // expired or exhausted — it was valid when checkout opened.
+      const now = new Date();
+      const isExpired = new Date(promo.valid_until) < now;
+      const isExhausted = promo.max_uses !== null && (promo.used_count as number) >= (promo.max_uses as number);
+      const isInactive = !promo.is_active;
+
+      if (isExpired || isExhausted || isInactive) {
+        console.warn(
+          `[razorpay-webhook] Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `— honoring anyway (was valid at checkout time)`
+        );
+      }
+
+      const pct = promo.discount_pct as number;
+      const discountedMonthly = Math.round(MONTHLY_PAISE * (100 - pct) / 100);
+      const discountedYearly = Math.round(YEARLY_PAISE * (100 - pct) / 100);
+
+      if (amountPaise === discountedMonthly) {
+        return { plan: "monthly", promoApplied: true, promoCode, originalPaise: MONTHLY_PAISE, discountPct: pct };
+      }
+      if (amountPaise === discountedYearly) {
+        return { plan: "yearly", promoApplied: true, promoCode, originalPaise: YEARLY_PAISE, discountPct: pct };
+      }
+    }
+  }
+
+  return null; // No match
+}
+
+/**
  * Compute the expected payment amount in paise for a given plan,
  * optionally adjusted by a valid promo code.
  *
  * Returns { expectedPaise, promoApplied, discountPct } or null if promo invalid.
+ * Used as a cross-check AFTER derivePlanFromAmount determines the plan.
  * Identical logic in verify-payment/index.ts.
  */
 async function computeExpectedAmount(
@@ -296,16 +365,19 @@ serve(async (req: Request) => {
       }
     }
 
-    // Extract user_id and plan from notes (set during checkout creation)
+    // Extract user_id and promo from notes (set during checkout creation).
+    // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
+    // derived server-side from the on-wire amount via derivePlanFromAmount
+    // per CLAUDE.md §16 rule 1. A client that spoofs notes.plan cannot
+    // claim a different plan than what the amount actually paid for.
     const notes = paymentEntity.notes ?? {};
     const userId = notes.user_id;
-    const plan = notes.plan; // 'monthly' or 'yearly'
     const promoCode = notes.promo_code as string | undefined;
 
-    if (!userId || !plan) {
-      console.error("Missing user_id or plan in payment notes:", notes);
+    if (!userId) {
+      console.error("[razorpay-webhook] Missing user_id in payment notes:", notes);
       return new Response(
-        JSON.stringify({ error: "Missing user_id or plan in payment notes" }),
+        JSON.stringify({ error: "Missing user_id in payment notes" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -317,7 +389,7 @@ serve(async (req: Request) => {
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
-      console.error("Invalid user_id format in payment notes:", userId);
+      console.error("[razorpay-webhook] Invalid user_id format in payment notes:", userId);
       return new Response(
         JSON.stringify({ error: "Invalid user_id format" }),
         {
@@ -327,33 +399,55 @@ serve(async (req: Request) => {
       );
     }
 
-    if (plan !== "monthly" && plan !== "yearly") {
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ── Derive plan from amount (primary — CLAUDE.md §16 rule 1) ───────────
+    // Plan is determined from the actual payment amount, NOT from
+    // client-supplied notes.plan. This prevents a ₹349 monthly payment
+    // from claiming yearly entitlement by spoofing notes.plan = 'yearly'.
+    const actualPaise = paymentEntity.amount as number;
+    const derived = await derivePlanFromAmount(actualPaise, promoCode, supabaseClient);
+    if (!derived) {
+      console.error(
+        `[razorpay-webhook] amount ${actualPaise} paise does not match any plan` +
+          (promoCode ? ` (promo: ${promoCode})` : ""),
+      );
       return new Response(
-        JSON.stringify({ error: "Invalid plan. Must be 'monthly' or 'yearly'" }),
+        JSON.stringify({ error: "amount_does_not_match_any_plan" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
     }
+    const plan = derived.plan;
 
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Log if client-claimed plan disagrees with the derived plan (diagnostic only —
+    // the derived plan is the source of truth, notes.plan is discarded).
+    const clientClaimedPlan = notes.plan as string | undefined;
+    if (clientClaimedPlan && clientClaimedPlan !== plan) {
+      console.warn(
+        `[razorpay-webhook] notes.plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise} — using derived`,
+      );
+    }
 
-    // Validate payment amount matches expected plan price (promo-aware).
-    // HMAC signature proves payload authenticity; this guards against
-    // Razorpay-side bugs, test-mode exploits, or illegitimate discounts.
-    const { expectedPaise, promoApplied, discountPct } =
+    // ── Belt-and-suspenders cross-check (computeExpectedAmount) ────────────
+    // derivePlanFromAmount already confirmed the amount matches the plan, but
+    // computeExpectedAmount re-derives the expected amount from the plan and
+    // promo and checks they agree. If both pass, we have a fully internally
+    // consistent amount ↔ plan ↔ promo triple.
+    const { expectedPaise } =
       await computeExpectedAmount(plan, promoCode, supabaseClient);
-    const actualPaise = paymentEntity.amount;
 
-    if (typeof actualPaise === "number" && actualPaise !== expectedPaise) {
+    if (actualPaise !== expectedPaise) {
+      // This should be unreachable if derivePlanFromAmount is correct, but
+      // guard defensively in case of rounding/DB-lookup differences.
       console.error(
-        `Amount mismatch: expected ${expectedPaise} paise for ${plan}` +
-          (promoCode ? ` (promo: ${promoCode}, ${discountPct}% off)` : "") +
-          `, got ${actualPaise}`,
+        `[razorpay-webhook] cross-check failed: derivePlanFromAmount returned '${plan}' ` +
+          `but computeExpectedAmount gives ${expectedPaise} paise, got ${actualPaise}`,
       );
       return new Response(
-        JSON.stringify({ error: "Payment amount does not match plan price" }),
+        JSON.stringify({ error: "amount_mismatch" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -445,15 +539,16 @@ serve(async (req: Request) => {
     // Skip on idempotent replay — increment_promo_used_count is NOT
     // idempotent and would double-count the redemption against
     // promo_codes.used_count.
-    if (!alreadyProcessed && promoApplied && promoCode) {
-      const fullPrice = plan === "monthly" ? MONTHLY_PAISE : YEARLY_PAISE;
+    // Use derived.originalPaise (from primary derivation) as the full price —
+    // this is the canonical source, not a re-derived value.
+    if (!alreadyProcessed && derived.promoApplied && derived.promoCode) {
       await redeemPromo(
         supabaseClient,
-        promoCode,
+        derived.promoCode,
         userId,
         plan,
-        fullPrice,
-        discountPct,
+        derived.originalPaise,
+        derived.discountPct,
         actualPaise,
       );
     }

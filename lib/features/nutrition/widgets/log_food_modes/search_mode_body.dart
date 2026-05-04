@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -284,8 +285,7 @@ class _RecentLogs extends ConsumerWidget {
 Future<void> _relogFromHistory(
     WidgetRef ref, Map<String, dynamic> source) async {
   final now = DateTime.now();
-  final dateStr =
-      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final dateStr = istDateStr(now);
   final id = 'nlog_${now.millisecondsSinceEpoch}';
   final logMap = <String, dynamic>{
     'id': id,

@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Tracks daily and monthly usage counters for gated features.
 ///
@@ -105,7 +106,7 @@ class UsageCounterService {
   Future<void> checkAndResetCounters() async {
     final configBox = _hive.configBox;
     final now = DateTime.now();
-    final todayStr = _isoDate(now);
+    final todayStr = istDateStr(now);
 
     // ── Daily reset (all counters are now daily) ─────────────────
     final lastDaily = configBox.get(_lastDailyReset) as String?;
@@ -117,10 +118,4 @@ class UsageCounterService {
     }
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────
-
-  /// Format date as 'yyyy-MM-dd'.
-  String _isoDate(DateTime d) {
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
 }

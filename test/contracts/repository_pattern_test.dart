@@ -1,0 +1,91 @@
+// ignore_for_file: avoid_print
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+/// Source-scan contract test: CLAUDE.md rule #4 — repository pattern for all
+/// data access. No widget may call Supabase.instance.client.from() or invoke
+/// Edge Functions directly.
+///
+/// These tests scan the migrated profile widget files and assert that all
+/// direct Supabase table queries and Edge Function invocations have been
+/// replaced by repository calls.
+void main() {
+  group('Repository pattern — profile widgets (CLAUDE.md rule #4)', () {
+    test(
+        'submissions_screen.dart does not call Supabase.instance.client.from() directly',
+        () async {
+      final source = await File(
+              'lib/features/profile/screens/submissions_screen.dart')
+          .readAsString();
+      expect(
+        source,
+        isNot(contains("Supabase.instance.client.from(")),
+        reason:
+            'submissions_screen.dart must use SubmissionsRepository (CLAUDE.md rule #4)',
+      );
+    });
+
+    test(
+        'my_submissions_screen.dart does not call Supabase.instance.client.from() directly',
+        () async {
+      final source = await File(
+              'lib/features/profile/screens/my_submissions_screen.dart')
+          .readAsString();
+      expect(
+        source,
+        isNot(contains("Supabase.instance.client.from(")),
+        reason:
+            'my_submissions_screen.dart must use SubmissionsRepository (CLAUDE.md rule #4)',
+      );
+    });
+
+    test(
+        'profile_screen.dart does not query user_custom_exercises or users table directly',
+        () async {
+      final source =
+          await File('lib/features/profile/screens/profile_screen.dart')
+              .readAsString();
+      expect(
+        source,
+        isNot(contains(".from('user_custom_exercises")),
+        reason:
+            'profile_screen.dart must not query user_custom_exercises directly — use SubmissionsRepository (CLAUDE.md rule #4)',
+      );
+      // The soft-delete write on the users table should go through UserRepository.
+      expect(
+        source,
+        isNot(contains(".from('users').update({")),
+        reason:
+            "profile_screen.dart must use UserRepository.softDeleteAccount() instead of directly calling .from('users').update (CLAUDE.md rule #4)",
+      );
+    });
+
+    test(
+        'edit_profile_screen.dart does not invoke assess-body-composition Edge Function directly',
+        () async {
+      final source = await File(
+              'lib/features/profile/screens/edit_profile_screen.dart')
+          .readAsString();
+      expect(
+        source,
+        isNot(contains("functions.invoke(\n        'assess-body-composition'")),
+        reason:
+            'edit_profile_screen.dart must use UserRepository.assessBodyComposition() (CLAUDE.md rule #4)',
+      );
+      // Belt-and-suspenders: check for the exact literal that was present before migration.
+      expect(
+        source,
+        isNot(contains("functions.invoke(\n          'assess-body-composition'")),
+        reason:
+            'edit_profile_screen.dart must use UserRepository.assessBodyComposition() (CLAUDE.md rule #4)',
+      );
+      expect(
+        source,
+        isNot(contains("'assess-body-composition'")),
+        reason:
+            "edit_profile_screen.dart must not reference 'assess-body-composition' Edge Function directly — use UserRepository (CLAUDE.md rule #4)",
+      );
+    });
+  });
+}

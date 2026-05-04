@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -223,6 +225,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     };
 
     UserRepository.instance.saveDietPlan(planData);
+
+    // Push plan to cloud so it survives reinstall (migration 048).
+    unawaited(SyncService.instance.syncSavedDietPlan(planData));
 
     // AH.5 — refresh the nutrition screen's "From Your Diet Plan" hints
     // so a freshly-saved plan shows up on empty meal slots immediately.

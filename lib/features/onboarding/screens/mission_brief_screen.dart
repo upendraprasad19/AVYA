@@ -70,6 +70,8 @@ class MissionBriefScreen extends ConsumerWidget {
                       'assets/founder/upendra.jpg',
                       key: const ValueKey('founder-photo'),
                       fit: BoxFit.cover,
+                      cacheWidth: 192,
+                      cacheHeight: 192,
                       errorBuilder: (context, error, stackTrace) => Container(
                         color: AppColors.card,
                         child: const Icon(Icons.person,

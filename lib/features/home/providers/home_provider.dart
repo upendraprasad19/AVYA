@@ -240,6 +240,8 @@ class StreakFreezeNotifier extends Notifier<int> {
       'streak_freeze_used_dates': <String>[], // Reset weekly used dates
       'streak_freezes_last_refill': thisMondayStr,
     });
+    // Push refilled freeze state to cloud so it survives reinstall.
+    unawaited(SyncService.instance.syncFreezes());
   }
 }
 

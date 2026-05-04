@@ -577,11 +577,16 @@ class AuthNotifier extends Notifier<AuthState2> {
     // Hive now. Rare — the F3 branch above already handled the main case.
     _pushProfileToSupabaseIfMissing(user.id);
 
-    // F1 · Refresh subscription state from server after every sign-in.
-    // Without this, a user who bought PRO on a previous session and then
-    // logs out/in sees themselves as free until they tap a PRO feature
-    // that happens to call `verifyFromServer()`. Fire-and-forget — UI
-    // reads Hive cache until the refresh lands.
+    // F1 · Early-stage subscription refresh — fires immediately on sign-in
+    // so the UI gets PRO state before RestoringScreen starts the full
+    // restore. The canonical subscription refresh is now ALSO folded into
+    // SyncService.restoreFromCloudForUser (Theme A3, APK Test #11) as the
+    // last restore step, making it atomic with freeze/inbox/rank pulls.
+    // This call is kept as a fast-path fallback for any sign-in flow that
+    // does not go through RestoringScreen (e.g. silent re-auth on token
+    // refresh). Both calls are idempotent — refreshFromSupabase has its
+    // own grace-period guard so a double-call within the same session is
+    // cheap.
     unawaited(SubscriptionService.instance.refreshFromSupabase());
 
     // Bind OneSignal external_id to Supabase user UUID for push targeting.

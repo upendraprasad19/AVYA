@@ -379,3 +379,30 @@ For PAST dates (yesterday, last week, "what did I eat on Tuesday"), use
 the \`getNutritionHistory\` tool — that data is NOT in your snapshot.
 
 `;
+
+export type CoachChannel = "chat" | "morning" | "weekly" | "proactive";
+
+/**
+ * Returns the CAPTAIN_MANUAL system prompt with a channel-specific suffix.
+ *
+ * - chat: no suffix (full persona, conversational)
+ * - morning: 80-word morning briefing with one concrete data point
+ * - weekly: Sunday debrief structure (3 wins / 1 friction / 1 next-step)
+ * - proactive: single push notification, ≤60 words, no greetings/signoffs/emoji
+ */
+export function captainPrompt(channel: CoachChannel): string {
+  const suffix: Record<CoachChannel, string> = {
+    chat: "",
+    morning:
+      "\n\nThis is a morning briefing. Keep it under 80 words. Reference at least one " +
+      "concrete data point from the user state. Lead with their name + the data.",
+    weekly:
+      "\n\nThis is a weekly recap. Use the briefing-report structure: 3 wins, 1 friction, " +
+      "1 next-step. Reference specific numbers from the past 7 days.",
+    proactive:
+      "\n\nThis is a proactive nudge — a single push notification. Stay under 60 words. " +
+      "Lead with the observation, follow with one specific next action. No greetings, " +
+      "no signoffs, no emoji.",
+  };
+  return CAPTAIN_MANUAL + suffix[channel];
+}

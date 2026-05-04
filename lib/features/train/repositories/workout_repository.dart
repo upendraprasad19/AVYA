@@ -4,6 +4,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -236,6 +238,8 @@ class WorkoutRepository {
         'streak_freeze_just_used': true,
         'streak_freeze_remaining_after_use': freezesAvailable,
       });
+      // Push freeze state to cloud so it survives reinstall.
+      unawaited(SyncService.instance.syncFreezes());
     }
 
     return streak;
@@ -1137,6 +1141,74 @@ class WorkoutRepository {
     }
 
     return logId;
+  }
+
+  // ── Deprecated delegation shims (Theme D1 — Test #11) ───────────
+  //
+  // These methods previously wrote exlog_* entries directly to Hive using
+  // the LEGACY field schema (sets_completed / sets_detail). They now delegate
+  // to WorkoutWriteService.logExercise (the single source of truth per
+  // CLAUDE.md §15) which writes the CANONICAL schema (set_number / sets).
+  //
+  // Marked @Deprecated so callers are flagged for migration to
+  // WorkoutWriteService directly. Will be removed in Test #12.
+
+  /// Logs a single exercise's completed sets.
+  ///
+  /// **Deprecated:** Use [WorkoutWriteService.logExercise] directly.
+  /// This shim translates the legacy (exerciseId, weightKg, reps, sets)
+  /// parameter shape into a single [ExerciseSet] and delegates to the
+  /// canonical writer.
+  @Deprecated(
+    'Use WorkoutWriteService.logExercise directly. '
+    'This method delegates for now; will be removed after Test #12 '
+    'once all callers migrated.',
+  )
+  Future<WriteResult> logExercise({
+    required String exerciseId,
+    required String exerciseName,
+    required double weightKg,
+    required int reps,
+    required int sets,
+    String? loggingType,
+    DateTime? date,
+    bool fireSyncImmediately = true,
+  }) async {
+    final effectiveDate = date ?? DateTime.now();
+    final setsList = List.generate(
+      sets,
+      (_) => ExerciseSet(
+        weightKg: weightKg,
+        reps: reps,
+        durationSec: (loggingType == 'timed') ? reps : null,
+      ),
+    );
+    return WorkoutWriteService.instance.logExercise(
+      date: effectiveDate,
+      exerciseName: exerciseName,
+      sets: setsList,
+      source: WriteSource.legacyRepository,
+    );
+  }
+
+  /// Updates an existing exercise log entry identified by [logKey].
+  ///
+  /// **Deprecated:** Use [WorkoutWriteService.editLog] directly.
+  /// This shim delegates to the canonical edit path.
+  @Deprecated(
+    'Use WorkoutWriteService.editLog directly. '
+    'This method delegates for now; will be removed after Test #12 '
+    'once all callers migrated.',
+  )
+  Future<WriteResult> updateExerciseLog({
+    required String logKey,
+    required Map<String, dynamic> updates,
+  }) async {
+    return WorkoutWriteService.instance.editLog(
+      logKey: logKey,
+      updates: updates,
+      source: WriteSource.legacyRepository,
+    );
   }
 
   /// Walks every exlog for [exerciseName] chronologically and rewrites

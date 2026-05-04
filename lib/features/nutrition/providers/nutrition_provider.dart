@@ -7,11 +7,13 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -19,6 +21,7 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/core/services/water_target_service.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -728,9 +731,16 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   /// (Plan C-10: routes through service to ensure per-item rows reach
   /// nutrition_log_items + the aiText counter increments via the
   /// service's source-based counter wiring.)
-  Future<void> saveMeal({String mealType = 'snacks'}) async {
+  ///
+  /// Returns a [WriteResult] so the UI layer can show a snackbar on success
+  /// or failure. A `success: false, errorMessage: 'no_state'` result is
+  /// returned on double-tap (state already cleared by a prior successful
+  /// save) rather than failing silently.
+  Future<WriteResult> saveMeal({String mealType = 'snacks'}) async {
     final data = state;
-    if (data == null) return;
+    if (data == null) {
+      return WriteResult.noState();
+    }
 
     final items = data.items.map((item) {
       final protein =
@@ -739,7 +749,11 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final fat = double.tryParse(item.fat.replaceAll('g', '')) ?? 0.0;
       return FoodItem(
         name: item.name,
-        quantityG: 0,
+        // Test #11 M4: AI text breakdown doesn't carry per-item grams —
+        // the AI parses free text and pre-computes macros directly.
+        // Use 100.0 (canonical "per 100g" sentinel) instead of 0 so
+        // cloud nutrition_log_items.quantity_g is meaningful for analytics.
+        quantityG: 100.0,
         calories: item.calories.toDouble(),
         protein: protein,
         carbs: carbs,
@@ -750,18 +764,25 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
 
     if (items.isEmpty) {
       state = null;
-      return;
+      return WriteResult.noState();
     }
 
-    await NutritionWriteService.instance.logMeal(
-      date: DateTime.now(),
-      mealType: mealType.toLowerCase(),
-      items: items,
-      overrideTotalCals: data.totalKcal,
-      source: NutritionWriteSource.aiText,
-    );
-
-    state = null;
+    try {
+      final result = await NutritionWriteService.instance.logMeal(
+        date: DateTime.now(),
+        mealType: mealType.toLowerCase(),
+        items: items,
+        overrideTotalCals: data.totalKcal,
+        source: NutritionWriteSource.aiText,
+      );
+      if (result.success) {
+        state = null;
+      }
+      return result;
+    } catch (e, st) {
+      debugPrint('[AiBreakdownNotifier.saveMeal] error: $e\n$st');
+      return WriteResult.fail(e.toString());
+    }
   }
 }
 
@@ -787,51 +808,71 @@ class FoodLogNotifier extends Notifier<void> {
   @override
   void build() {}
 
-  Future<void> logFood({
+  Future<({bool success, String? error, String? logKey})> logFood({
     required Map<String, dynamic> food,
     required String mealType,
     required double quantityG,
   }) async {
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
+    final foodName = (food['name'] ?? 'Food').toString();
 
-    final caloriesPer100 =
-        (food['calories_per_100g'] as num?)?.toDouble() ?? 0;
-    final proteinPer100 =
-        (food['protein_per_100g'] as num?)?.toDouble() ?? 0;
-    final carbsPer100 = (food['carbs_per_100g'] as num?)?.toDouble() ?? 0;
-    final fatPer100 = (food['fat_per_100g'] as num?)?.toDouble() ?? 0;
-    final fiberPer100 = (food['fiber_per_100g'] as num?)?.toDouble() ?? 0;
+    // Food map may carry per-100g keys (from the bundled food database) OR
+    // plain absolute keys (from AI-estimated fallback maps). Scale per-100g
+    // values by quantityG/100 to get absolute macros for this serving.
+    final ratio = quantityG / 100.0;
+    final cal = (food['calories_per_100g'] as num? ??
+            food['calories'] as num? ??
+            0)
+        .toDouble() *
+        ratio;
+    final pro = (food['protein_per_100g'] as num? ??
+            food['protein'] as num? ??
+            0)
+        .toDouble() *
+        ratio;
+    final carb = (food['carbs_per_100g'] as num? ??
+            food['carbs'] as num? ??
+            0)
+        .toDouble() *
+        ratio;
+    final fat = (food['fat_per_100g'] as num? ?? food['fat'] as num? ?? 0)
+            .toDouble() *
+        ratio;
+    final fiber = (food['fiber_per_100g'] as num? ??
+            food['fiber'] as num? ??
+            0)
+        .toDouble() *
+        ratio;
 
-    final factor = quantityG / 100.0;
+    final result = await NutritionWriteService.instance.logMeal(
+      date: istNow(),
+      mealType: mealType.toLowerCase(),
+      items: [
+        FoodItem(
+          name: foodName,
+          quantityG: quantityG,
+          calories: cal,
+          protein: pro,
+          carbs: carb,
+          fat: fat,
+          fiber: fiber,
+        ),
+      ],
+      source: NutritionWriteSource.manualSearch,
+    );
 
-    final logMap = {
-      'id': id,
-      'date': dateStr,
-      'meal_type': mealType.toLowerCase(),
-      'food_id': food['id'],
-      'food_name': food['name'] ?? 'Unknown',
-      'quantity_g': quantityG,
-      'total_calories': (caloriesPer100 * factor).round(),
-      'total_protein': (proteinPer100 * factor).round(),
-      'total_carbs': (carbsPer100 * factor).round(),
-      'total_fat': (fatPer100 * factor).round(),
-      'total_fiber': (fiberPer100 * factor).round(),
-      'created_at': now.toIso8601String(),
-      'source': 'manual',
-    };
-    await HiveService.instance.nutritionBox.put(id, logMap);
-    NutritionRepository.syncLogToSupabase(data: logMap);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    // NutritionWriteService invalidates the core provider batch and fires
+    // sync internally. Invalidate the weekly provider + run badge checks
+    // that the service doesn't own.
+    if (result.success) {
+      ref.invalidate(weeklyNutritionProvider);
+      BadgeService.instance.checkAll();
+    }
 
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
-    BadgeService.instance.checkAll();
+    return (
+      success: result.success,
+      error: result.errorMessage,
+      logKey: result.logKey,
+    );
   }
 
   Future<void> deleteFoodLog(String logId) async {
@@ -990,8 +1031,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
   Future<void> relogSavedMeal(Map<String, dynamic> savedMeal,
       {String mealType = 'snacks'}) async {
     final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(now);
     final id = 'nlog_${now.millisecondsSinceEpoch}';
 
     final logMap = {
@@ -1169,11 +1209,15 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           isScanning: false,
           result: data,
         );
-        // Plan C-11: counter increment moved to NutritionWriteService
-        // when the user clicks SAVE in _ScanResultEditor (source: scan).
-        // Pre-Plan C the counter incremented on every successful AI return
-        // even if the user backed out without saving — burning quota for
-        // nothing. Single source of truth = NutritionWriteService.
+        // Test #11 M1: increment counter HERE — at the API-call site.
+        // The Edge Function call already fired and consumed server quota;
+        // the user may dismiss without saving but quota was spent. Client
+        // counter must stay in sync with the server's abuse cap so the
+        // "X remaining" UI is accurate regardless of save behaviour.
+        unawaited(UsageCounterService.instance.increment(
+          AppConstants.featureScanMealPro,
+          SubscriptionService.instance.isPro(),
+        ));
         return;
       }
 
@@ -1434,3 +1478,14 @@ class DeleteNutritionLogNotifier extends Notifier<void> {
 final deleteNutritionLogProvider =
     NotifierProvider<DeleteNutritionLogNotifier, void>(
         DeleteNutritionLogNotifier.new);
+
+// ── Water Target Provider ─────────────────────────────────────────
+//
+// Single source of truth for the user's daily water target.
+// Reads the user override (if set) or computes from profile via
+// [WaterTargetService]. All 4 hardcoded 3000-ml sites watch this.
+// Call `ref.invalidate(waterTargetProvider)` after any
+// [WaterTargetService.setUserOverride] call to propagate the change.
+final waterTargetProvider = Provider<int>((ref) {
+  return WaterTargetService.instance.currentTargetMl();
+});

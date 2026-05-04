@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -71,10 +73,19 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
 
     ref.read(aiAnalysingProvider.notifier).set(true);
     await ref.read(aiBreakdownProvider.notifier).analyse(text);
-    // Plan C-10: counter increment is handled by NutritionWriteService
-    // when saveMeal fires (source: aiText). Removing the manual call here
-    // closes obs #22 — pre-Plan C the manual call could double-fire OR
-    // skip if the analyse path threw mid-save.
+
+    // Test #11 M1: increment counter HERE — at the API-call site — not at
+    // NutritionWriteService.logMeal (the save site). The Edge Function call
+    // fires inside analyse(); whether the user taps SAVE MEAL or dismisses
+    // is irrelevant — the server already counted the quota. Client counter
+    // must agree so the UI "X remaining" display stays in sync.
+    // Reuse `isPro` already resolved at top of _analyse (line ~48).
+    unawaited(
+      UsageCounterService.instance.increment(
+        AppConstants.featureAiTextLogPro,
+        isPro,
+      ),
+    );
 
     ref.read(aiAnalysingProvider.notifier).set(false);
     _controller.clear();

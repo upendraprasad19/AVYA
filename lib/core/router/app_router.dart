@@ -37,6 +37,7 @@ import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
 import 'package:icanbefitter/features/profile/screens/notifications_screen.dart';
 import 'package:icanbefitter/features/profile/screens/notification_settings_screen.dart';
+import 'package:icanbefitter/features/profile/screens/delete_account_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
@@ -471,6 +472,15 @@ class AppRouter {
                             (_) {},
                       );
                     },
+                  ),
+                  GoRoute(
+                    // DPDP hard-delete flow — 2-step confirm screen.
+                    // Replaces the legacy soft-delete AlertDialog.
+                    // Spec: docs/superpowers/plans/2026-05-04-apk-test-11-plan.md § Task 8.2
+                    path: 'delete-account',
+                    name: 'deleteAccount',
+                    builder: (context, state) =>
+                        const DeleteAccountScreen(),
                   ),
                 ],
               ),

@@ -4,6 +4,7 @@ import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
+import '../../../shared/repositories/submissions_repository.dart';
 import '../../../shared/widgets/error_state.dart';
 
 /// S1 — unified Submissions screen with two tabs.
@@ -152,32 +153,22 @@ class _MySubmissionsBodyState extends State<_MySubmissionsBody> {
       return;
     }
     try {
-      final client = SupabaseService.instance.client;
-      final foods = await client
-          .from('user_custom_foods')
-          .select('id, name, submitted_to_db, approved, created_at')
-          .eq('user_id', userId)
-          .eq('submitted_to_db', true)
-          .order('created_at', ascending: false);
-      final exercises = await client
-          .from('user_custom_exercises')
-          .select('id, name, submitted_to_library, approved_for_library, created_at')
-          .eq('user_id', userId)
-          .eq('submitted_to_library', true)
-          .order('created_at', ascending: false);
+      final repo = SubmissionsRepository.instance;
+      final foods = await repo.fetchMyFoodSubmissions(userId);
+      final exercises = await repo.fetchMyExerciseSubmissions(userId);
 
       final rows = <Map<String, dynamic>>[
         for (final f in foods)
           {
-            ...Map<String, dynamic>.from(f as Map),
+            ...f,
             'kind': 'food',
-            '_approved': (f as Map)['approved'] == true,
+            '_approved': f['approved'] == true,
           },
         for (final e in exercises)
           {
-            ...Map<String, dynamic>.from(e as Map),
+            ...e,
             'kind': 'exercise',
-            '_approved': (e as Map)['approved_for_library'] == true,
+            '_approved': e['approved_for_library'] == true,
           },
       ];
       rows.sort((a, b) {
@@ -324,8 +315,7 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
 
   Future<void> _load() async {
     try {
-      final supabase = SupabaseService.instance.client;
-      final userId = supabase.auth.currentUser?.id;
+      final userId = SupabaseService.instance.currentUser?.id;
       if (userId == null) {
         setState(() {
           _loading = false;
@@ -334,44 +324,24 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
         return;
       }
 
-      final foods = await supabase
-          .from('user_custom_foods')
-          .select(
-              'id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, user_id')
-          .eq('submitted_to_db', true)
-          .eq('approved', false)
-          .neq('user_id', userId)
-          .limit(20);
-
-      final exercises = await supabase
-          .from('user_custom_exercises')
-          .select('id, name, category, logging_type, user_id')
-          .eq('submitted_to_library', true)
-          .eq('approved_for_library', false)
-          .neq('user_id', userId)
-          .limit(20);
+      final repo = SubmissionsRepository.instance;
+      final foods = await repo.fetchPendingFoodReviews(userId);
+      final exercises = await repo.fetchPendingExerciseReviews(userId);
 
       // Filter out items the user already voted on.
-      final alreadyReviewed = await supabase
-          .from('community_reviews')
-          .select('item_type, item_id')
-          .eq('reviewer_id', userId);
-      final reviewedKeys = <String>{
-        for (final r in alreadyReviewed)
-          '${(r as Map)['item_type']}:${r['item_id']}',
-      };
+      final reviewedKeys = await repo.fetchAlreadyReviewedKeys(userId);
 
       final items = <Map<String, dynamic>>[
         for (final f in foods)
-          if (!reviewedKeys.contains('food:${(f as Map)['id']}'))
+          if (!reviewedKeys.contains('food:${f['id']}'))
             {
-              ...Map<String, dynamic>.from(f as Map),
+              ...f,
               'kind': 'food',
             },
         for (final e in exercises)
-          if (!reviewedKeys.contains('exercise:${(e as Map)['id']}'))
+          if (!reviewedKeys.contains('exercise:${e['id']}'))
             {
-              ...Map<String, dynamic>.from(e as Map),
+              ...e,
               'kind': 'exercise',
             },
       ];
@@ -395,15 +365,14 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
     // Optimistic removal.
     setState(() => _pendingItems.remove(item));
     try {
-      final supabase = SupabaseService.instance.client;
-      final userId = supabase.auth.currentUser?.id;
+      final userId = SupabaseService.instance.currentUser?.id;
       if (userId == null) return;
-      await supabase.from('community_reviews').insert({
-        'reviewer_id': userId,
-        'item_type': item['kind'],
-        'item_id': item['id'],
-        'vote': approve ? 'approve' : 'reject',
-      });
+      await SubmissionsRepository.instance.castCommunityVote(
+        reviewerId: userId,
+        itemKind: item['kind'] as String,
+        itemId: item['id'] as String,
+        approve: approve,
+      );
     } catch (_) {
       if (mounted) {
         setState(() => _pendingItems.add(item));

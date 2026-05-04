@@ -423,7 +423,10 @@ class _ScanResultEditorState extends ConsumerState<_ScanResultEditor> {
     final items = liveItems
         .map((i) => FoodItem(
               name: i.nameCtrl.text.trim(),
-              quantityG: 0,
+              // Test #11 M4: scan editor has no per-item gram field.
+              // Use 100.0 (canonical "per 100g" sentinel) so cloud
+              // nutrition_log_items.quantity_g is non-zero and meaningful.
+              quantityG: 100.0,
               calories: i.effectiveKcal(),
               protein: i.protein,
               carbs: i.carbs,

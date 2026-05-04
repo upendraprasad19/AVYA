@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../repositories/ai_coach_repository.dart';
 import 'pending_tool_intents_provider.dart';
 
@@ -188,14 +190,77 @@ final chatHistoryProvider =
 
 // ── Message Limit ────────────────────────────────────────────────
 
+/// Tracks how many user messages have been sent today (IST-keyed).
+///
+/// The old implementation called [AiCoachRepository.getTodayUserMessageCount]
+/// on every build — an O(N) scan over the full coachBox. At 500+ lifetime
+/// messages this is measurable on the UI thread (scrolls, keystrokes, etc.).
+///
+/// New approach:
+///   • Persists a counter at `userBox['msg_count_<istDateStr>']`.
+///   • [build] returns the cached value in O(1). On a cache miss (first read
+///     of a new IST day) it falls back to the repository scan once to seed the
+///     counter, then writes it so subsequent reads skip the scan.
+///   • [incrementToday] is called by the chat-send path after a successful AI
+///     response — writes the new value to Hive and updates Riverpod state.
+///   • [pruneOld] deletes `msg_count_*` keys older than 7 days. Fire-and-forget
+///     on app launch (wired in splash_screen._runDeferredInit).
 class MessageLimitNotifier extends Notifier<int> {
+  static const _keyPrefix = 'msg_count_';
+
   @override
   int build() {
-    // Use repository to count only USER messages (not AI responses)
-    return AiCoachRepository.instance.getTodayUserMessageCount();
+    final today = istDateStr(DateTime.now());
+    final box = HiveService.instance.userBox;
+    final cached = box.get('$_keyPrefix$today') as int?;
+    if (cached != null) return cached;
+    // Cache miss (new IST day or first ever run) — fall back to full scan once.
+    final scanned = AiCoachRepository.instance.getTodayUserMessageCount();
+    // Seed synchronously; subsequent reads will hit the O(1) path.
+    box.put('$_keyPrefix$today', scanned);
+    return scanned;
   }
 
-  void increment() => state = state + 1;
+  /// Increments the today counter in Hive and updates Riverpod state.
+  /// Must be called exactly once per successful user-sent message.
+  Future<void> incrementToday() async {
+    final today = istDateStr(DateTime.now());
+    final box = HiveService.instance.userBox;
+    final current = box.get('$_keyPrefix$today') as int? ?? 0;
+    final next = current + 1;
+    await box.put('$_keyPrefix$today', next);
+    state = next;
+  }
+
+  /// Removes `msg_count_*` keys older than 7 IST days. Call fire-and-forget
+  /// on app launch — non-blocking, safe to fail silently.
+  static Future<void> pruneOld() async {
+    final box = HiveService.instance.userBox;
+    final today = DateTime.parse(istDateStr(DateTime.now()));
+    final cutoff = today.subtract(const Duration(days: 7));
+    final toDelete = <dynamic>[];
+    for (final key in box.keys) {
+      if (key is String && key.startsWith(_keyPrefix)) {
+        final dateStr = key.substring(_keyPrefix.length);
+        try {
+          final keyDate = DateTime.parse(dateStr);
+          if (keyDate.isBefore(cutoff)) toDelete.add(key);
+        } catch (_) {
+          // Malformed key — skip silently.
+        }
+      }
+    }
+    if (toDelete.isNotEmpty) {
+      await box.deleteAll(toDelete);
+    }
+  }
+
+  // Legacy no-arg increment kept for any existing call-site that hasn't
+  // been migrated to [incrementToday]. Schedules the async write in the
+  // background so it doesn't change existing call signatures.
+  void increment() {
+    unawaited(incrementToday());
+  }
 }
 
 final messageLimitProvider =
@@ -250,7 +315,7 @@ class TrialInfoNotifier extends Notifier<TrialInfoData> {
       );
     }
 
-    final daysSinceStart = DateTime.now().difference(trialStart).inDays;
+    final daysSinceStart = istNow().difference(trialStart).inDays;
     final remaining = AppConstants.freeAiTrialDays - daysSinceStart;
 
     if (remaining <= 0) {

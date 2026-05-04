@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8080", "--directory", "build/web"],
       "port": 8080
+    },
+    {
+      "name": "u7-mockup",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8181", "--directory", ".preview"],
+      "port": 8181
     }
   ]
 }

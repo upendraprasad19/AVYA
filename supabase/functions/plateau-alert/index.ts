@@ -33,6 +33,8 @@ import {
   markProactiveSent,
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
+import { captainPrompt } from "../_shared/captain_manual.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,14 +137,36 @@ Deno.serve(async (req: Request) => {
       const firstName = preferredName ? preferredName.split(" ")[0] : null;
       const greeting = firstName ? `${firstName} — ` : "";
 
-      // Single line, single diagnostic question. Brainstorm copy:
-      //   "Weight hasn't moved in 11 days. Before we change anything —
-      //    are you consistently hitting 140g protein daily?"
-      // We don't know the exact day count or protein target here without
-      // an extra round-trip; the question form is what matters and the
-      // detail is delegated to the AI coach when the user taps in.
-      const message =
+      // Fallback: existing hardcoded English copy preserved as safety net.
+      const fallbackMessage =
         `${greeting}weight hasn't moved in a while. Before we change anything — are you consistently hitting your daily protein target?`;
+
+      // Generate Captain-voiced copy via Gemini; fall back to English on error.
+      let message = fallbackMessage;
+      try {
+        const userState = {
+          first_name: firstName,
+          plateau_risk_score: (memory as Record<string, unknown>)
+            .plateau_risk_score,
+        };
+        const { content } = await geminiChat({
+          model: MODEL_FLASH,
+          systemPrompt: captainPrompt("proactive"),
+          userPrompt:
+            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `Generate a plateau diagnostic nudge — user's weight has not moved in ` +
+            `a while. Ask a single diagnostic question before changing anything.`,
+          maxTokens: 120,
+          temperature: 0.7,
+        });
+        if (content && content.trim().length > 0) {
+          message = content.trim();
+        }
+      } catch (e) {
+        console.warn(
+          `[plateau-alert] Gemini failed for ${userId}, using fallback copy: ${e}`,
+        );
+      }
 
       try {
         const ok = await sendPushNotification({

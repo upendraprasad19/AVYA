@@ -362,7 +362,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     final progress =
         nutrition.calorieTarget > 0 ? consumed / nutrition.calorieTarget : 0.0;
     final waterMl = ref.watch(waterIntakeProvider);
-    const waterTarget = 3000;
+    final waterTarget = ref.watch(waterTargetProvider);
 
     final projectionLine = _projectionLine(profile);
 

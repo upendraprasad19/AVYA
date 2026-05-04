@@ -1,0 +1,133 @@
+// test/features/ai_coach/message_limit_cache_test.dart
+//
+// Verifies the O(1) Hive-cached MessageLimitNotifier (APK Test #11 M5).
+//
+// Covers:
+//   1. incrementToday writes the counter to Hive with today's IST key.
+//   2. build() returns the cached value without a coachBox scan when a
+//      cache entry already exists for today.
+//   3. build() seeds the cache on a miss (new day / first run).
+//   4. pruneOld() removes keys older than 7 days and preserves recent ones.
+
+import 'dart:io';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
+
+import '../../helpers/hive_test_setup.dart';
+
+void main() {
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await setUpHiveForTests();
+  });
+
+  tearDown(() async {
+    await tearDownHiveForTests(tempDir);
+  });
+
+  // ── helpers ──────────────────────────────────────────────────────
+
+  String todayKey() => 'msg_count_${istDateStr(DateTime.now())}';
+
+  // ── tests ────────────────────────────────────────────────────────
+
+  test('incrementToday persists correct count for today IST date', () async {
+    final box = HiveService.instance.userBox;
+    await box.delete(todayKey()); // Start fresh.
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    // Initialise the provider (reads 0 from scan on cache miss).
+    expect(container.read(messageLimitProvider), 0);
+
+    // Increment twice.
+    await container.read(messageLimitProvider.notifier).incrementToday();
+    await container.read(messageLimitProvider.notifier).incrementToday();
+
+    expect(box.get(todayKey()), 2,
+        reason: 'Hive should persist the incremented count under today\'s IST key');
+    expect(container.read(messageLimitProvider), 2,
+        reason: 'Riverpod state should reflect the incremented count');
+  });
+
+  test('build() returns cached value O(1) when entry already exists', () async {
+    final box = HiveService.instance.userBox;
+    await box.put(todayKey(), 7); // Pre-seed the cache.
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(container.read(messageLimitProvider), 7,
+        reason: 'build() must return the pre-seeded Hive value without scanning coachBox');
+  });
+
+  test('build() seeds cache from scan when no entry for today', () async {
+    final box = HiveService.instance.userBox;
+    await box.delete(todayKey()); // Simulate a new IST day.
+    // coachBox is empty in this test — repository scan returns 0.
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final value = container.read(messageLimitProvider);
+    expect(value, 0,
+        reason: 'Cache miss should fall back to repository scan (0 for empty coachBox)');
+    // After read, the cache should be seeded.
+    expect(box.get(todayKey()), 0,
+        reason: 'build() should write the scan result back to Hive to seed the cache');
+  });
+
+  test('incrementToday after pre-seeded build() produces correct running total',
+      () async {
+    final box = HiveService.instance.userBox;
+    await box.put(todayKey(), 5); // Simulate 5 messages already sent today.
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    container.read(messageLimitProvider); // Reads 5 from cache.
+
+    await container.read(messageLimitProvider.notifier).incrementToday(); // → 6
+    await container.read(messageLimitProvider.notifier).incrementToday(); // → 7
+
+    expect(container.read(messageLimitProvider), 7);
+    expect(box.get(todayKey()), 7);
+  });
+
+  test('pruneOld removes keys older than 7 days', () async {
+    final box = HiveService.instance.userBox;
+    await box.put('msg_count_2026-01-01', 99); // Old key.
+    await box.put(todayKey(), 5);              // Today — must survive.
+
+    await MessageLimitNotifier.pruneOld();
+
+    expect(box.get('msg_count_2026-01-01'), null,
+        reason: 'Key older than 7 days should be deleted');
+    expect(box.get(todayKey()), 5,
+        reason: 'Today\'s key must be preserved');
+  });
+
+  test('pruneOld keeps keys within the last 7 days', () async {
+    final box = HiveService.instance.userBox;
+    final recent = istDateStr(DateTime.now().subtract(const Duration(days: 3)));
+    await box.put('msg_count_$recent', 3);
+
+    await MessageLimitNotifier.pruneOld();
+
+    expect(box.get('msg_count_$recent'), 3,
+        reason: 'Key only 3 days old should not be pruned');
+  });
+
+  test('pruneOld silently skips malformed msg_count_* keys', () async {
+    final box = HiveService.instance.userBox;
+    await box.put('msg_count_not-a-date', 1);
+
+    await expectLater(MessageLimitNotifier.pruneOld(), completes);
+  });
+}

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb, listEquals, visibleForTesting;
+import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1365,41 +1365,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final dob = DateTime.tryParse(dobStr);
       final age = dob != null ? DateTime.now().year - dob.year : 25;
 
-      final response = await SupabaseService.instance.client.functions.invoke(
-        'assess-body-composition',
-        body: {
-          'image_base64': base64Image,
-          'mime_type': kIsWeb ? 'image/jpeg' : 'image/jpeg',
-          'weight_kg': weightKg,
-          'height_cm': heightCm,
-          'gender': gender,
-          'age': age,
-        },
-      );
-
-      if (!mounted) return;
-      if (response.status != 200) {
-        final code = response.data?['code'] as String?;
-        final err = response.data?['error'] as String? ?? 'Assessment failed';
-        if (code == 'pro_required') {
+      late final Map<String, dynamic> data;
+      try {
+        data = await UserRepository.assessBodyComposition(
+          imageBase64: base64Image,
+          mimeType: 'image/jpeg',
+          weightKg: weightKg,
+          heightCm: heightCm,
+          gender: gender,
+          age: age,
+        );
+      } on BodyCompositionAssessmentException catch (ex) {
+        if (!mounted) return;
+        if (ex.code == 'pro_required') {
           showPaywallSheet(context, feature: 'AI Body Composition Assessment');
-        } else if (code == 'rate_limited') {
-          final next = response.data?['next_allowed_at'] as String?;
-          _showError(next != null
-              ? 'Next assessment available: ${_formatDate(next)}'
+        } else if (ex.code == 'rate_limited') {
+          _showError(ex.nextAllowedAt != null
+              ? 'Next assessment available: ${_formatDate(ex.nextAllowedAt!)}'
               : 'Already assessed this month. Try again in 30 days.');
-        } else if (code == 'unsuitable_image') {
-          _showError(err);
+        } else if (ex.code == 'unsuitable_image') {
+          _showError(ex.message);
         } else {
-          _showError(err);
+          _showError(ex.message);
         }
         return;
       }
 
-      final bfLow = (response.data!['bf_low'] as num).toDouble();
-      final bfHigh = (response.data!['bf_high'] as num).toDouble();
+      if (!mounted) return;
+      final bfLow = (data['bf_low'] as num).toDouble();
+      final bfHigh = (data['bf_high'] as num).toDouble();
       final bfMid = ((bfLow + bfHigh) / 2).roundToDouble();
-      final assessedAt = response.data!['assessed_at'] as String;
+      final assessedAt = data['assessed_at'] as String;
 
       setState(() {
         _bodyFatController.text = bfMid.toStringAsFixed(1);

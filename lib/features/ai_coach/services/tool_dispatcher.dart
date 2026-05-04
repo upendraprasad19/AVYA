@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
+import '../../../core/services/subscription_service.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../core/services/usage_counter_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
 import '../../../core/services/workout_write_service.dart';
 import '../../../core/services/write_result.dart';
@@ -1090,6 +1093,14 @@ class ToolDispatcher {
         servingDescription: servingDesc,
         source: NutritionWriteSource.aiCoachTool,
       );
+      // Test #11 M1: increment AI text counter at the API-call site.
+      // The Gemini function-calling turn already fired (server counted it
+      // in ai_coach_interactions). Increment client counter so the
+      // food_logger_section "X remaining" display stays in sync.
+      unawaited(UsageCounterService.instance.increment(
+        AppConstants.featureAiTextLogPro,
+        SubscriptionService.instance.isPro(),
+      ));
       return ToolExecutionResult.success(data: {
         'log_id': logId,
         'food_name': foodName,
@@ -1256,11 +1267,12 @@ class ToolDispatcher {
       items: [
         FoodItem(
           name: foodName,
-          // Quantity is unknown — the AI parsed free-text and pre-computed
-          // total macros. Setting 0 here is safe: dashboard readers always
-          // use the precomputed total_* fields, and the items-hash stays
-          // stable per (foodName, 0).
-          quantityG: 0,
+          // Test #11 M4: the AI coach tool parses free-text and returns
+          // pre-computed total macros — no per-item gram value is in the
+          // intent payload. Use 100.0 (canonical "per 100g" sentinel) so
+          // cloud nutrition_log_items.quantity_g is non-zero and useful
+          // for future server-side analytics joins.
+          quantityG: 100.0,
           calories: totalCalories.toDouble(),
           protein: protein.toDouble(),
           carbs: carbs.toDouble(),

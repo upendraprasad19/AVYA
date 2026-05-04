@@ -25,6 +25,15 @@ class WriteResult {
   factory WriteResult.fail(String message) =>
       WriteResult(success: false, errorMessage: message);
 
+  /// Sentinel result used when [saveMeal] is called after state was already
+  /// cleared (e.g. double-tap on the SAVE MEAL button). The UI should show
+  /// "Already saved." rather than a generic error.
+  factory WriteResult.noState() => WriteResult.fail('no_state');
+
+  /// True when this result represents a no-state / already-saved condition.
+  /// Use instead of comparing `errorMessage == 'no_state'` directly.
+  bool get isNoState => !success && errorMessage == 'no_state';
+
   @override
   String toString() =>
       'WriteResult(success=$success, logKey=$logKey, error=$errorMessage)';
@@ -39,6 +48,10 @@ enum WriteSource {
   planGenerator,
   schedSwap,
   restore,
+  /// Calls routed through the legacy WorkoutRepository.logSetWithPrRescan
+  /// delegation shim. Deprecated — will be removed after Test #12 once all
+  /// callers migrate directly to WorkoutWriteService.logExercise.
+  legacyRepository,
 }
 
 extension WriteSourceCode on WriteSource {
@@ -58,6 +71,8 @@ extension WriteSourceCode on WriteSource {
         return 'sched_swap';
       case WriteSource.restore:
         return 'restore';
+      case WriteSource.legacyRepository:
+        return 'legacy_repository';
     }
   }
 }
