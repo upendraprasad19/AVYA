@@ -3464,6 +3464,102 @@ class SyncService {
     }
   }
 
+  // ── Restore-completeness push (Theme A push side) ─────────
+
+  /// Pushes the user's streak-freeze state to the three new columns on
+  /// `user_progress` (migration 048). One upsert per call — cheap and
+  /// idempotent. Called fire-and-forget from every Hive mutation site
+  /// in WorkoutRepository + home_provider per CLAUDE.md §15.
+  Future<void> syncFreezes() async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      final progress = _hive.userBox.get('progress');
+      if (progress == null) return;
+      final p = Map<String, dynamic>.from(progress as Map);
+      final available = (p['streak_freezes_available'] as int?) ?? 2;
+      final usedRaw = p['streak_freeze_used_dates'];
+      final used = (usedRaw is List)
+          ? usedRaw.map((e) => e.toString()).toList()
+          : <String>[];
+      final lastRefill = p['streak_freezes_last_refill'] as String?;
+      await _supabase.client.from('user_progress').upsert({
+        'user_id': userId,
+        'streak_freezes_available': available,
+        'streak_freezes_used_dates': used,
+        if (lastRefill != null) 'streak_freezes_last_refill': lastRefill,
+      }, onConflict: 'user_id');
+    } catch (e, st) {
+      debugPrint('[SyncService.syncFreezes] error: $e\n$st');
+      try {
+        await _reportSyncFailure(opType: 'sync_freezes', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Inserts (or upserts by [entry]'s id) a single notification inbox entry
+  /// to the `notifications_inbox` cloud table (migration 048).
+  /// Called fire-and-forget from [NotificationInboxService.record] per
+  /// CLAUDE.md §15.
+  ///
+  /// [entry] is the `AppNotification.toJson()` map — keys: id, category,
+  /// title, body, created_at, priority, read. The cloud column is
+  /// `notif_type` (matches AppNotification.category.name).
+  Future<void> syncNotificationsInboxEntry(Map<String, dynamic> entry) async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      final id = entry['id'] as String?;
+      if (id == null || id.isEmpty) return;
+      final row = <String, dynamic>{
+        'id': id,
+        'user_id': userId,
+        'notif_type': entry['category'] as String? ?? 'system',
+        'title': entry['title'] as String? ?? '',
+        'body': entry['body'] as String? ?? '',
+        'payload': <String, dynamic>{
+          'priority': entry['priority'],
+          'read': entry['read'],
+        },
+        'created_at': entry['created_at'] as String? ??
+            DateTime.now().toUtc().toIso8601String(),
+        if (entry['read'] == true)
+          'read_at': entry['created_at'] as String? ??
+              DateTime.now().toUtc().toIso8601String(),
+      };
+      await _supabase.client
+          .from('notifications_inbox')
+          .upsert(row, onConflict: 'id');
+    } catch (e, st) {
+      debugPrint('[SyncService.syncNotificationsInboxEntry] error: $e\n$st');
+      try {
+        await _reportSyncFailure(
+            opType: 'sync_notifications_inbox_entry', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// Pushes the user's saved diet plan to the `saved_diet_plans` cloud
+  /// table (migration 048). One row per user — upserts on conflict.
+  /// Called fire-and-forget from [DietPlanScreen._savePlan] per
+  /// CLAUDE.md §15.
+  Future<void> syncSavedDietPlan(Map<String, dynamic> planJson) async {
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _supabase.client.from('saved_diet_plans').upsert({
+        'user_id': userId,
+        'plan_json': planJson,
+        'saved_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (e, st) {
+      debugPrint('[SyncService.syncSavedDietPlan] error: $e\n$st');
+      try {
+        await _reportSyncFailure(opType: 'sync_saved_diet_plan', error: e);
+      } catch (_) {}
+    }
+  }
+
   // ── Timestamp helpers ───────────────────────────────────────
 
   DateTime? _getTimestamp(String key) {

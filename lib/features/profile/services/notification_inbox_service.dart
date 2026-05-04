@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import '../models/app_notification.dart';
 
 /// Captures OneSignal push events into `HiveService.instance.notificationsBox`
@@ -67,6 +70,8 @@ class NotificationInboxService {
     final box = HiveService.instance.notificationsBox;
     await box.put(notification.id, notification.toJson());
     await _pruneIfOverCap();
+    // Push to cloud so inbox survives reinstall (migration 048).
+    unawaited(SyncService.instance.syncNotificationsInboxEntry(notification.toJson()));
   }
 
   /// Pull all rows, newest first. Returns empty list if box hasn't

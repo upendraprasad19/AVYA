@@ -238,6 +238,8 @@ class WorkoutRepository {
         'streak_freeze_just_used': true,
         'streak_freeze_remaining_after_use': freezesAvailable,
       });
+      // Push freeze state to cloud so it survives reinstall.
+      unawaited(SyncService.instance.syncFreezes());
     }
 
     return streak;
