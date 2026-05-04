@@ -108,7 +108,9 @@ async function promoteFoods(
       .update({ approved: true })
       .eq("id", source.id);
 
-    await notifySubmitter(source.user_id, source.name, "food");
+    if (source.user_id) {
+      await notifySubmitter(source.user_id, source.name, "food");
+    }
     promoted++;
   }
   return promoted;
@@ -164,7 +166,9 @@ async function promoteExercises(
       .update({ approved_for_library: true })
       .eq("id", source.id);
 
-    await notifySubmitter(source.user_id, source.name, "exercise");
+    if (source.user_id) {
+      await notifySubmitter(source.user_id, source.name, "exercise");
+    }
     promoted++;
   }
   return promoted;

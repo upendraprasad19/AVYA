@@ -1031,8 +1031,7 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
   Future<void> relogSavedMeal(Map<String, dynamic> savedMeal,
       {String mealType = 'snacks'}) async {
     final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(now);
     final id = 'nlog_${now.millisecondsSinceEpoch}';
 
     final logMap = {

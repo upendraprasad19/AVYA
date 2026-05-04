@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -99,8 +100,7 @@ class ConversationalLogHandler {
     if (hrs == null || hrs <= 0 || hrs > 24) return false;
 
     final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(now);
     final id = 'sleep_${now.millisecondsSinceEpoch}';
 
     final healthBox = HiveService.instance.healthBox;
@@ -132,8 +132,7 @@ class ConversationalLogHandler {
 
     final healthBox = HiveService.instance.healthBox;
     final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(now);
     final key = 'measurement_$dateStr';
 
     // Read-update-write: merge single field into today's measurement record
@@ -193,8 +192,7 @@ class ConversationalLogHandler {
 /// screens (Home, Train, Reports) read the data identically.
 Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   final now = DateTime.now();
-  final dateStr =
-      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  final dateStr = istDateStr(now);
   final workoutBox = HiveService.instance.workoutBox;
 
   // Save main workout log entry
