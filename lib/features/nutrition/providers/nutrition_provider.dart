@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -728,9 +729,16 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   /// (Plan C-10: routes through service to ensure per-item rows reach
   /// nutrition_log_items + the aiText counter increments via the
   /// service's source-based counter wiring.)
-  Future<void> saveMeal({String mealType = 'snacks'}) async {
+  ///
+  /// Returns a [WriteResult] so the UI layer can show a snackbar on success
+  /// or failure. A `success: false, errorMessage: 'no_state'` result is
+  /// returned on double-tap (state already cleared by a prior successful
+  /// save) rather than failing silently.
+  Future<WriteResult> saveMeal({String mealType = 'snacks'}) async {
     final data = state;
-    if (data == null) return;
+    if (data == null) {
+      return WriteResult.noState();
+    }
 
     final items = data.items.map((item) {
       final protein =
@@ -750,18 +758,25 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
 
     if (items.isEmpty) {
       state = null;
-      return;
+      return WriteResult.noState();
     }
 
-    await NutritionWriteService.instance.logMeal(
-      date: DateTime.now(),
-      mealType: mealType.toLowerCase(),
-      items: items,
-      overrideTotalCals: data.totalKcal,
-      source: NutritionWriteSource.aiText,
-    );
-
-    state = null;
+    try {
+      final result = await NutritionWriteService.instance.logMeal(
+        date: DateTime.now(),
+        mealType: mealType.toLowerCase(),
+        items: items,
+        overrideTotalCals: data.totalKcal,
+        source: NutritionWriteSource.aiText,
+      );
+      if (result.success) {
+        state = null;
+      }
+      return result;
+    } catch (e, st) {
+      debugPrint('[AiBreakdownNotifier.saveMeal] error: $e\n$st');
+      return WriteResult.fail(e.toString());
+    }
   }
 }
 

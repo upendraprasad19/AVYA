@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -8,11 +9,23 @@ import '../providers/nutrition_provider.dart';
 import '../services/meal_slot_inference.dart';
 
 /// Shows the AI-analysed food breakdown card with items, macros, and save/cancel.
-class AiBreakdownCard extends ConsumerWidget {
+class AiBreakdownCard extends ConsumerStatefulWidget {
   const AiBreakdownCard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AiBreakdownCard> createState() => _AiBreakdownCardState();
+}
+
+class _AiBreakdownCardState extends ConsumerState<AiBreakdownCard> {
+  /// Guards against double-tap while the first [saveMeal] await is in flight.
+  /// On success the card vanishes (state cleared), so the second tap would
+  /// fall through harmlessly — but on failure the card stays visible (correct:
+  /// user can retry), and without this flag a second tap fires a second
+  /// [NutritionWriteService.logMeal] call. Pattern mirrors scan_meal_section.dart.
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
     final breakdown = ref.watch(aiBreakdownProvider);
     if (breakdown == null) return const SizedBox.shrink();
 
@@ -107,21 +120,62 @@ class AiBreakdownCard extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => ref
-                          .read(aiBreakdownProvider.notifier)
-                          .saveMeal(mealType: slot),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(AppRadius.sharp),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'SAVE MEAL',
-                          style: AppTypography.mono.copyWith(
-                            color: AppColors.bgDeep,
-                            letterSpacing: 2,
+                      onTap: _saving
+                          ? null
+                          : () async {
+                              setState(() => _saving = true);
+                              final messenger = ScaffoldMessenger.of(context);
+                              final result = await ref
+                                  .read(aiBreakdownProvider.notifier)
+                                  .saveMeal(mealType: slot);
+                              if (!context.mounted) return;
+                              if (result.success) {
+                                HapticFeedback.lightImpact();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Meal saved ✓',
+                                      style: AppTypography.body,
+                                    ),
+                                    backgroundColor: AppColors.ok,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                                // State cleared by notifier on success; widget
+                                // will unmount — no need to reset _saving.
+                              } else {
+                                setState(() => _saving = false);
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      result.isNoState
+                                          ? 'Already saved.'
+                                          : 'Could not save — try again.',
+                                      style: AppTypography.body,
+                                    ),
+                                    backgroundColor: AppColors.bad,
+                                    duration: const Duration(seconds: 3),
+                                  ),
+                                );
+                              }
+                            },
+                      child: AnimatedOpacity(
+                        opacity: _saving ? 0.45 : 1.0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.sharp),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'SAVE MEAL',
+                            style: AppTypography.mono.copyWith(
+                              color: AppColors.bgDeep,
+                              letterSpacing: 2,
+                            ),
                           ),
                         ),
                       ),
