@@ -93,14 +93,41 @@ class HiveUserSession {
     debugPrint('[HiveUserSession] opened 7 boxes for user $hash');
   }
 
+  /// Test #10.1 — `migrationBox` flag key for the one-shot legacy
+  /// box migration. Stored in `migrationBox` (NEVER cleared) so the
+  /// migration can't re-run and re-leak data from a stale legacy
+  /// shared `userBox`/`workoutBox`/etc. into a fresh user's
+  /// namespaced box.
+  static const String _legacyMigrationFlagKey =
+      'legacy_shared_box_migration_v1_done';
+
   /// One-shot migration: if a pre-namespacing shared box exists for any
   /// user-scoped root AND the per-user namespaced box for [userId]
   /// doesn't already have data, copy contents over and delete the
-  /// shared box. Idempotent — second invocation finds no shared box
-  /// to migrate, returns immediately.
+  /// shared box.
+  ///
+  /// Test #10.1 — Now gated by a `migrationBox` flag so it runs at most
+  /// ONCE per device lifetime. Previously ran on every `openForUser`
+  /// call; if the legacy box ever survived (silent delete failure),
+  /// every subsequent fresh-user signup would re-copy that legacy data
+  /// into the new user's namespaced box → cross-account leak.
   ///
   /// Skipped silently if the shared box is empty or fails to open.
   static Future<void> _migrateLegacySharedBoxes(String userId) async {
+    // Gate on migrationBox so the flag survives clearAllData()
+    // (which clears configBox but NOT migrationBox).
+    try {
+      final migBox = HiveService.instance.migrationBox;
+      if (migBox.get(_legacyMigrationFlagKey) == true) {
+        return;
+      }
+    } catch (e) {
+      // migrationBox not yet initialised (very early cold start).
+      // Fall through and let the migration run; it'll set the flag
+      // at the end if migrationBox is available by then.
+      debugPrint('[HiveUserSession] migrationBox unavailable: $e');
+    }
+
     for (final root in userScopedBoxRoots) {
       final namespaced = namespacedBoxName(root, userId);
       try {
@@ -137,6 +164,20 @@ class HiveUserSession {
         debugPrint('[HiveUserSession] migration $root failed: $e');
         // Non-fatal — fresh start, cloud has the data anyway.
       }
+    }
+
+    // Test #10.1 — set the run-once flag so this never runs again on
+    // this device, even after sign-out / cross-account guard / etc.
+    // Stored in `migrationBox` which is NEVER cleared by clearAllData.
+    try {
+      await HiveService.instance.migrationBox
+          .put(_legacyMigrationFlagKey, true);
+    } catch (e) {
+      debugPrint('[HiveUserSession] failed to set legacy migration flag: $e');
+      // If we can't set the flag, the migration may re-run next time.
+      // The migration body itself is idempotent for already-migrated
+      // users (the `if (legacy.keys.isEmpty) … delete + continue` arm
+      // handles the no-op path), so re-running is safe — just wasteful.
     }
   }
 

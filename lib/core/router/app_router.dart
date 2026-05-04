@@ -31,6 +31,7 @@ import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/rank_ladder_screen.dart';
 import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/features/profile/screens/progress_comparison_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
@@ -542,8 +543,14 @@ class AppRouter {
     }
 
     // Signed in but not onboarded -> go to onboarding.
-    final isOnboarded = HiveService.instance.configBox
-        .get('onboarding_completed', defaultValue: false) as bool;
+    //
+    // Test #10.1 — Read via MigratedKey so the value comes from the
+    // per-user `userBox` post-migration. Pre-fix this read from the
+    // SHARED `configBox` and was THE leak vector that routed Sumit
+    // straight past `/onboarding/mission-brief` into `/home` with
+    // Upendra's data when `clearAllData()` partial-failed during signOut.
+    final isOnboarded =
+        MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
     if (!isOnboarded) {
       return isOnOnboarding ? null : '/onboarding';

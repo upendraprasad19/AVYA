@@ -1,8 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
+
+/// Result of [UserRepository.clearAllData]. Test #10.1 — surfaces
+/// per-box failures so callers (signOut, cross-account guard) can detect
+/// silent partial-clear and escalate (force-signOut + sign-in screen).
+class ClearResult {
+  final Map<String, Object> failures;
+  const ClearResult(this.failures);
+
+  bool get isClean => failures.isEmpty;
+  bool get hasFailures => failures.isNotEmpty;
+  bool failedFor(String box) => failures.containsKey(box);
+
+  @override
+  String toString() => isClean
+      ? 'ClearResult(clean)'
+      : 'ClearResult(failures=${failures.keys.join(", ")})';
+}
 
 /// User CRUD operations via Hive userBox (offline-first).
 ///
@@ -79,14 +97,18 @@ class UserRepository {
   // ── Onboarding ──────────────────────────────────────────────
 
   /// Whether the user has completed onboarding.
+  ///
+  /// Test #10.1 — Reads via [MigratedKey] so the value sources from the
+  /// per-user `userBox` post-migration (preventing cross-account leak),
+  /// with `configBox` fallback for installs that haven't yet run the
+  /// one-shot migration.
   bool get isOnboarded {
-    return _hive.configBox.get('onboarding_completed', defaultValue: false)
-        as bool;
+    return MigratedKey.readWithDefault<bool>('onboarding_completed', false);
   }
 
   /// Marks onboarding as complete.
   Future<void> setOnboarded() async {
-    await _hive.configBox.put('onboarding_completed', true);
+    await MigratedKey.write('onboarding_completed', true);
   }
 
   // ── Detected Experience ─────────────────────────────────────
@@ -193,21 +215,50 @@ class UserRepository {
 
   // ── Clear All Data (Logout) ───────────────────────────────────
 
-  /// Clears all user-specific Hive boxes (keeps exerciseBox and foodBox).
+  /// Clears all user-specific Hive boxes (keeps exerciseBox, foodBox,
+  /// and migrationBox).
   ///
-  /// Used during sign-out to wipe local user data while preserving
-  /// seeded reference data that doesn't need to be re-downloaded.
-  Future<void> clearAllData() async {
-    await _hive.userBox.clear();
-    await _hive.workoutBox.clear();
-    await _hive.nutritionBox.clear();
-    await _hive.healthBox.clear();
-    await _hive.coachBox.clear();
-    await _hive.syncBox.clear();
-    await _hive.configBox.clear();
-    await _hive.customBox.clear();
-    await _hive.notificationsBox.clear();
-    // Keep exerciseBox and foodBox (seeded data, no need to re-downloaded)
+  /// Test #10.1 — Each box is wrapped in its own try/catch so one
+  /// failure (e.g., GuardedBox ownership exception during a
+  /// session-state race) does NOT abort subsequent box clears. The
+  /// caller can inspect [ClearResult.failures] to detect partial
+  /// failure and react (e.g., the cross-account guard force-signs-out
+  /// the user instead of letting them into a poisoned home screen).
+  ///
+  /// Used during sign-out and cross-account guard recovery to wipe
+  /// local user data while preserving seeded reference data +
+  /// one-shot migration flags.
+  Future<ClearResult> clearAllData() async {
+    final failures = <String, Object>{};
+
+    Future<void> tryClear(String label, Future<void> Function() op) async {
+      try {
+        await op();
+      } catch (e) {
+        failures[label] = e;
+        debugPrint('[clearAllData] $label failed: $e');
+      }
+    }
+
+    // User-scoped boxes — wrapped by GuardedBox; can throw if session
+    // state desyncs. Each independent so a throw doesn't abort the chain.
+    await tryClear('userBox',          () async => _hive.userBox.clear());
+    await tryClear('workoutBox',       () async => _hive.workoutBox.clear());
+    await tryClear('nutritionBox',     () async => _hive.nutritionBox.clear());
+    await tryClear('healthBox',        () async => _hive.healthBox.clear());
+    await tryClear('coachBox',         () async => _hive.coachBox.clear());
+    await tryClear('customBox',        () async => _hive.customBox.clear());
+    await tryClear('notificationsBox', () async => _hive.notificationsBox.clear());
+    // Shared mutable boxes — must clear so next user doesn't inherit
+    // state (until UserConfigMigrator finishes the configBox→userBox move).
+    await tryClear('syncBox',          () async => _hive.syncBox.clear());
+    await tryClear('configBox',        () async => _hive.configBox.clear());
+    // NEVER cleared:
+    //   exerciseBox / foodBox — seeded read-only reference data
+    //   migrationBox — one-shot device-lifetime flags that MUST survive
+    //     sign-out, otherwise migrations re-run and re-leak data.
+
+    return ClearResult(failures);
   }
 
   // ── Supabase Sync (background, fire-and-forget) ──────────────────

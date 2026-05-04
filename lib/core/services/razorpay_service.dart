@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -218,7 +218,10 @@ class RazorpayService {
         expiresAt: optimisticEndDate,
         plan: fallbackPlan,
       );
-      await HiveService.instance.configBox.put(
+      // Test #10.1 — write via MigratedKey so localActivationAt lives in
+      // the per-user userBox (post-migration). Pre-fix this leaked PRO
+      // activation timestamp to the next user across signOut → signUp.
+      await MigratedKey.write(
         'localActivationAt',
         DateTime.now().toIso8601String(),
       );
@@ -509,7 +512,7 @@ class RazorpayService {
             if (data['verified'] == true) {
               debugPrint('RazorpayService: verify-payment retry confirmed after ${delay.inSeconds}s');
               await SubscriptionService.instance.refreshFromSupabase();
-              await HiveService.instance.configBox.delete('localActivationAt');
+              await MigratedKey.delete('localActivationAt');
               return; // Payment verified server-side — stop retrying
             }
             debugPrint('RazorpayService: verify-payment returned 200 but verified=${data['verified']} — continuing retries');

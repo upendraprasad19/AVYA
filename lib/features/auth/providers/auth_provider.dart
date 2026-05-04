@@ -7,8 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -170,8 +172,19 @@ class AuthNotifier extends Notifier<AuthState2> {
       // Session present → signed in immediately (email confirmation off).
       try {
         await _ensureLocalUser(response.user!);
+      } on StateError catch (e) {
+        // Test #10.1 — cross-account guard's verify-after-clear failed
+        // (poisoned local state would leak into this session). The
+        // guard already force-signed-out; surface the failure to UI.
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage:
+              'Couldn’t clean up the previous session. Please sign in again.',
+        );
+        debugPrint('[signUpWithEmail] poisoned-clear escalation: $e');
+        return;
       } catch (_) {
-        // Local setup failure is non-fatal — auth succeeded.
+        // Other local setup failures are non-fatal — auth succeeded.
       }
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
@@ -343,7 +356,48 @@ class AuthNotifier extends Notifier<AuthState2> {
     // ownership marker, set by openForUser itself.
     if (needsClear) {
       debugPrint('[auth/_ensureLocalUser] Cross-account guard fired: $clearReason. Clearing Hive.');
-      await UserRepository.instance.clearAllData();
+      final clearResult = await UserRepository.instance.clearAllData();
+
+      // Test #10.1 — verify-after-clear. Pre-fix, `clearAllData()` could
+      // silently partial-fail (one GuardedBox throw aborted the chain),
+      // leaving stale `userBox['profile']` and configBox flags behind →
+      // the next user inherited the previous user's data.
+      // Now: re-read the keys that define the leak and force-signOut
+      // if either survived.
+      final reCheckProfile = userBox.get('profile');
+      final reCheckOnboarded = userBox.get('onboarding_completed');
+      final reCheckConfigOnboarded =
+          MigratedKey.read<bool>('onboarding_completed') == true;
+      if (reCheckProfile != null ||
+          reCheckOnboarded == true ||
+          reCheckConfigOnboarded ||
+          clearResult.hasFailures) {
+        debugPrint(
+            '[auth/_ensureLocalUser] CRITICAL: clearAllData partial-failed. '
+            'profile=$reCheckProfile, onboarded=$reCheckOnboarded, '
+            'configOnboarded=$reCheckConfigOnboarded, '
+            'clearFailures=${clearResult.failures}');
+        // Force-signOut so user lands on /sign-in instead of a poisoned
+        // home screen. Throws so signUpWithEmail/signInWithEmail can
+        // surface the failure.
+        try {
+          await _supabase.client.auth.signOut();
+        } catch (_) {}
+        throw StateError(
+            'Cross-account clear partial-failed; signed out for safety.');
+      }
+    }
+
+    // Test #10.1 — Move user-specific keys from shared `configBox` into
+    // per-user `userBox` (one-shot per device, gated by migrationBox).
+    // MUST run AFTER the cross-account guard so we don't migrate stale
+    // keys from a previous session into the new user's box.
+    try {
+      await UserConfigMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
+      // Non-fatal — readers will see legacy configBox values until next
+      // launch. Cross-account guard would still clear them if needed.
     }
 
     // Ensure user exists in public.users table (Edge Functions need this).
@@ -429,7 +483,7 @@ class AuthNotifier extends Notifier<AuthState2> {
         merged['id'] = user.id;
         merged['email'] = user.email;
         await userBox.put('profile', merged);
-        await configBox.put('onboarding_completed', true);
+        await MigratedKey.write('onboarding_completed', true);
 
         // Also pull progress (same merge semantics — rare to have local
         // progress before login anyway).
@@ -489,7 +543,7 @@ class AuthNotifier extends Notifier<AuthState2> {
 
           // Regenerate workout schedule locally if plan is missing.
           if (!WorkoutScheduleService.instance.hasPlan() &&
-              configBox.get('onboarding_completed') == true) {
+              MigratedKey.read<bool>('onboarding_completed') == true) {
             final goal = merged['primary_goal'] as String? ?? 'general_fitness';
             final equipment =
                 merged['equipment_access'] as String? ?? 'basic_gym';
@@ -531,7 +585,7 @@ class AuthNotifier extends Notifier<AuthState2> {
         // F3 · Hive is the source of truth; cloud is stale or empty. Push
         // Hive → cloud to repair the row instead of falsely routing the user
         // to onboarding. Treat as onboarded since Hive has real data.
-        await configBox.put('onboarding_completed', true);
+        await MigratedKey.write('onboarding_completed', true);
         unawaited(SyncService.instance.syncProfileNow(user.id));
       } else {
         // Neither Hive nor cloud has real data → genuine new user.
@@ -554,7 +608,7 @@ class AuthNotifier extends Notifier<AuthState2> {
             .limit(1);
         if (userRows.isNotEmpty &&
             (userRows.first['onboarding_completed'] as bool?) == true) {
-          await configBox.put('onboarding_completed', true);
+          await MigratedKey.write('onboarding_completed', true);
         }
       }
     } catch (e) {

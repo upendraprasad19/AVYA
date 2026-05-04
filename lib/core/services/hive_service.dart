@@ -39,6 +39,12 @@ class HiveService with WidgetsBindingObserver {
   static const String configBoxName = 'configBox';
   static const String notificationsBoxName = 'notificationsBox';
 
+  /// Test #10.1 hotfix — shared box for one-shot migration flags that
+  /// MUST survive `clearAllData()` (sign-out / cross-account guard).
+  /// Holds `legacy_migration_v1_done`, `config_to_user_migration_v1_done`,
+  /// and any future device-lifetime gates. NEVER cleared.
+  static const String migrationBoxName = 'migrationBox';
+
   /// Shared boxes — opened by `init()` before runApp. Available to all
   /// users / no users.
   static const List<String> _sharedBoxNames = <String>[
@@ -46,6 +52,7 @@ class HiveService with WidgetsBindingObserver {
     foodBoxName,
     syncBoxName,
     configBoxName,
+    migrationBoxName,
   ];
 
   /// User-scoped boxes — opened by `HiveUserSession.openForUser(id)`
@@ -183,6 +190,11 @@ class HiveService with WidgetsBindingObserver {
   Box get foodBox => getBox(foodBoxName);
   Box get syncBox => getBox(syncBoxName);
   Box get configBox => getBox(configBoxName);
+
+  /// Test #10.1 — one-shot migration flag store. Shared, never cleared.
+  /// Use ONLY for device-lifetime gates (legacy box migration,
+  /// config→user migration, etc.). NEVER store user data here.
+  Box get migrationBox => getBox(migrationBoxName);
 
   // User-scoped boxes — now wrapped by GuardedBox for ownership
   // assertion on every operation. The Box getters return the raw
