@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Manages PRO subscription state.
@@ -61,11 +62,10 @@ class SubscriptionService {
     required String expiresAt,
     required String plan,
   }) async {
-    await _hive.configBox.putAll(<String, dynamic>{
-      _isProKey: isPro,
-      _expiresAtKey: expiresAt,
-      _planKey: plan,
-    });
+    // Test #10.1 — write via MigratedKey (per-user userBox post-migration).
+    await MigratedKey.write(_isProKey, isPro);
+    await MigratedKey.write(_expiresAtKey, expiresAt);
+    await MigratedKey.write(_planKey, plan);
   }
 
   // ── Core API ────────────────────────────────────────────────
@@ -82,8 +82,7 @@ class SubscriptionService {
   /// tamper). Force-downgrade and return free. This is the defensive
   /// layer that catches leaks the startup id-mismatch guard misses.
   bool isPro() {
-    final configBox = _hive.configBox;
-    final pro = configBox.get(_isProKey, defaultValue: false) as bool;
+    final pro = MigratedKey.readWithDefault<bool>(_isProKey, false);
     if (!pro) return false;
 
     // Defense-in-depth: PRO + Hive-profile.id ≠ session.id means the
@@ -102,7 +101,7 @@ class SubscriptionService {
       // the not-yet-initialized case.
     }
 
-    final expiresAtRaw = configBox.get(_expiresAtKey);
+    final expiresAtRaw = MigratedKey.read<dynamic>(_expiresAtKey);
     if (expiresAtRaw == null) {
       // isPro flag is set but no expiry — only treat as PRO in debug builds.
       // In release builds, this is a tampered state (rooted device attack).
@@ -182,17 +181,17 @@ class SubscriptionService {
 
       // Grace period: if local activation just happened (Phase 3 fallback),
       // don't query Supabase yet — give the direct write time to propagate.
-      final localActivation = _hive.configBox.get('localActivationAt');
+      final localActivation = MigratedKey.read<dynamic>('localActivationAt');
       if (localActivation != null && isPro()) {
         final activatedAt = DateTime.tryParse(localActivation.toString());
         if (activatedAt == null) {
           // Malformed timestamp — clear and continue with server check.
-          await _hive.configBox.delete('localActivationAt');
+          await MigratedKey.delete('localActivationAt');
         } else if (DateTime.now().difference(activatedAt).inMinutes < 10) {
           return; // Grace period — don't override local activation yet
         } else {
           // Past grace period — clear the flag
-          await _hive.configBox.delete('localActivationAt');
+          await MigratedKey.delete('localActivationAt');
         }
       }
 
@@ -237,11 +236,11 @@ class SubscriptionService {
       // Don't let network errors perpetuate phantom PRO indefinitely.
       // If local activation grace period (10 min) has passed, clear the flag
       // so the NEXT launch will do a proper server check.
-      final localAct = _hive.configBox.get('localActivationAt');
+      final localAct = MigratedKey.read<dynamic>('localActivationAt');
       if (localAct != null) {
         final actAt = DateTime.tryParse(localAct.toString());
         if (actAt != null && DateTime.now().difference(actAt).inMinutes >= 10) {
-          await _hive.configBox.delete('localActivationAt');
+          await MigratedKey.delete('localActivationAt');
         }
       }
     }
@@ -262,7 +261,7 @@ class SubscriptionService {
       if (!supabase.isInitialized || !supabase.isAuthenticated) return isPro();
 
       // Check cache — skip server call if verified recently
-      final lastVerifiedRaw = _hive.configBox.get(_lastVerifiedKey);
+      final lastVerifiedRaw = MigratedKey.read<dynamic>(_lastVerifiedKey);
       if (lastVerifiedRaw != null) {
         final lastVerified = DateTime.tryParse(lastVerifiedRaw.toString());
         if (lastVerified != null &&
@@ -305,7 +304,7 @@ class SubscriptionService {
       }
 
       // Update verification timestamp
-      await _hive.configBox.put(_lastVerifiedKey, DateTime.now().toIso8601String());
+      await MigratedKey.write(_lastVerifiedKey, DateTime.now().toIso8601String());
 
       return serverIsPro;
     } on Exception catch (e) {
@@ -317,12 +316,12 @@ class SubscriptionService {
 
   /// Returns the current plan name (e.g., "monthly", "yearly"), or null.
   String? get currentPlan {
-    return _hive.configBox.get(_planKey) as String?;
+    return MigratedKey.read<String>(_planKey);
   }
 
   /// Returns the subscription expiry date, or null.
   DateTime? get expiresAt {
-    final raw = _hive.configBox.get(_expiresAtKey);
+    final raw = MigratedKey.read<dynamic>(_expiresAtKey);
     if (raw == null) return null;
     return DateTime.tryParse(raw.toString());
   }
@@ -359,11 +358,10 @@ class SubscriptionService {
   /// Auto-Backup-leaked icanbefitter@gmail.com PRO state showing up on
   /// a fresh upendra.prasad@thinkingcode.com account as "renews 18 May".
   Future<void> _downgradeLocally() async {
-    final configBox = _hive.configBox;
-    await configBox.put(_isProKey, false);
-    await configBox.delete(_expiresAtKey);
-    await configBox.delete(_planKey);
-    await configBox.delete('localActivationAt');
-    await configBox.delete(_lastVerifiedKey);
+    await MigratedKey.write(_isProKey, false);
+    await MigratedKey.delete(_expiresAtKey);
+    await MigratedKey.delete(_planKey);
+    await MigratedKey.delete('localActivationAt');
+    await MigratedKey.delete(_lastVerifiedKey);
   }
 }

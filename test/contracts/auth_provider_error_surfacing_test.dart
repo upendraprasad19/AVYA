@@ -17,9 +17,13 @@ void main() {
     expect(ensureStart, isNot(-1),
         reason: '_ensureLocalUser must exist on AuthNotifier');
 
-    // The method should run from declaration to next top-level method.
-    // Take a generous slice (4000 chars covers the whole method).
-    final body = source.substring(ensureStart, ensureStart + 4000);
+    // The method runs from declaration to the next top-level method
+    // declaration. Test #10.1 — bumped to 8000 chars because the
+    // verify-after-clear + UserConfigMigrator block added ~50 lines.
+    final body = source.substring(
+      ensureStart,
+      (ensureStart + 8000).clamp(0, source.length),
+    );
 
     // Must call log-client-error Edge Function on catch path
     expect(

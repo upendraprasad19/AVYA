@@ -23,7 +23,11 @@ void main() {
     expect(allBoxes.length, greaterThanOrEqualTo(8),
         reason: 'Should find at least 8 box constants in HiveService');
 
-    final seedBoxes = {'exercise', 'food'};
+    // Seed boxes hold read-only reference data (never cleared).
+    // migrationBox holds device-lifetime one-shot flags (never cleared
+    // — Test #10.1 hotfix; clearing it would re-leak via legacy migration
+    // and config→user migration re-running on every signup).
+    final seedBoxes = {'exercise', 'food', 'migration'};
     final mustBeCleared = allBoxes.difference(seedBoxes);
 
     for (final boxRoot in mustBeCleared) {
