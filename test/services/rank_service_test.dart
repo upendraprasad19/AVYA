@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 
 /// Unit-level coverage of the eligibility table.
 ///
@@ -21,29 +22,58 @@ void main() {
                      deploymentsComplete: 0, longestGapDays: 0), isTrue);
   });
 
-  test('LS needs streak 16 + 4 weeks', () {
-    expect(_qualifies('LS', streak: 15, totalWorkouts: 15, weeks: 4,
+  // LS: streakAtLeast=14, minWeeksSinceSignup=4 (kRankGates['LS']).
+  // Previous test mistakenly used streak=16 (old gate value before Test #6
+  // hybrid-model rebalance). The actual threshold is 14.
+  test('LS needs streak 14 + 4 weeks (kRankGates LS: streakAtLeast=14, minWeeks=4)', () {
+    // streak one short — fails
+    expect(_qualifies('LS', streak: 13, totalWorkouts: 13, weeks: 4,
                      deploymentsComplete: 0, longestGapDays: 0), isFalse);
-    expect(_qualifies('LS', streak: 16, totalWorkouts: 16, weeks: 3,
+    // weeks one short — fails
+    expect(_qualifies('LS', streak: 14, totalWorkouts: 14, weeks: 3,
                      deploymentsComplete: 0, longestGapDays: 0), isFalse);
-    expect(_qualifies('LS', streak: 16, totalWorkouts: 16, weeks: 4,
+    // exactly at threshold — passes
+    expect(_qualifies('LS', streak: 14, totalWorkouts: 14, weeks: 4,
                      deploymentsComplete: 0, longestGapDays: 0), isTrue);
   });
 
-  test('PO needs streak 60 + 12 weeks + deployment 1', () {
-    expect(_qualifies('PO', streak: 60, totalWorkouts: 60, weeks: 12,
-                     deploymentsComplete: 0, longestGapDays: 0), isFalse);
-    expect(_qualifies('PO', streak: 60, totalWorkouts: 60, weeks: 12,
-                     deploymentsComplete: 1, longestGapDays: 0), isTrue);
+  // PO: streakAtLeast=30, minWeeksSinceSignup=12, deploymentsCompleteAtLeast=2
+  // (kRankGates['PO']). Previous test used deploymentsCompleteAtLeast=1
+  // which is wrong — the actual gate requires 2 completed deployments.
+  test('PO needs streak 30 + 12 weeks + 2 deployments (kRankGates PO: deploymentsCompleteAtLeast=2)', () {
+    // missing one deployment — fails
+    expect(_qualifies('PO', streak: 30, totalWorkouts: 30, weeks: 12,
+                     deploymentsComplete: 1, longestGapDays: 0), isFalse);
+    // all gates met — passes
+    expect(_qualifies('PO', streak: 30, totalWorkouts: 30, weeks: 12,
+                     deploymentsComplete: 2, longestGapDays: 0), isTrue);
   });
 
-  test('SubLt needs 100 total workouts AND 104 weeks', () {
-    expect(_qualifies('SubLt', streak: 0, totalWorkouts: 99, weeks: 104,
-                     deploymentsComplete: 0, longestGapDays: 0), isFalse);
-    expect(_qualifies('SubLt', streak: 0, totalWorkouts: 100, weeks: 103,
-                     deploymentsComplete: 0, longestGapDays: 0), isFalse);
-    expect(_qualifies('SubLt', streak: 0, totalWorkouts: 100, weeks: 104,
-                     deploymentsComplete: 0, longestGapDays: 0), isTrue);
+  // SubLt: minWeeksSinceSignup=104, completionRateMinimum=0.80 over 26 weeks.
+  // No totalWorkoutsAtLeast gate (that field is null on SubLt).
+  // The mirror _qualifies function does not evaluate completionRateMinimum
+  // (no I/O available in a unit test), so it only enforces minWeeks=104.
+  // Use RankService.instance.testQualify (the @visibleForTesting entry point)
+  // with completionRateOverride to exercise the completion-rate half.
+  test('SubLt needs 104 weeks + 80% completion rate (kRankGates SubLt: minWeeks=104, completionRate=0.80)', () {
+    // Below minWeeks — fails even with good completion
+    expect(RankService.instance.testQualify(
+      code: 'SubLt',
+      weeksSinceSignup: 103,
+      completionRateOverride: 0.90,
+    ), isFalse);
+    // Meets weeks but completion rate too low — fails
+    expect(RankService.instance.testQualify(
+      code: 'SubLt',
+      weeksSinceSignup: 104,
+      completionRateOverride: 0.79,
+    ), isFalse);
+    // Both gates met — passes
+    expect(RankService.instance.testQualify(
+      code: 'SubLt',
+      weeksSinceSignup: 104,
+      completionRateOverride: 0.80,
+    ), isTrue);
   });
 
   test('Capt is terminal — last lookup', () {

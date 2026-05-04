@@ -70,21 +70,36 @@ void main() {
     });
   });
 
-  group('sync gap — nutrition_provider DeleteNutritionLogNotifier.delete', () {
-    test('fires syncNutritionData + pushSnapshot after invalidations', () {
-      final src = _src(
-          'lib/features/nutrition/providers/nutrition_provider.dart');
-      // Find the delete method context
-      final deleteIdx = src.indexOf('class DeleteNutritionLogNotifier');
-      final syncIdx = src.indexOf(
-          'unawaited(SyncService.instance.syncNutritionData())', deleteIdx);
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', syncIdx);
-      expect(deleteIdx, isNot(-1));
-      expect(syncIdx, isNot(-1));
-      expect(pushIdx, isNot(-1));
-      expect(pushIdx > syncIdx, isTrue);
-    });
+  group('sync gap — NutritionWriteService.deleteLog', () {
+    // Architectural shift since Test #6: the SyncService.syncNutritionData
+    // call moved from inline-in-DeleteNutritionLogNotifier into
+    // NutritionWriteService.deleteLog (which is what the notifier now
+    // delegates to). Sync IS fired; only the owning file changed.
+    // CLAUDE.md §15 sync fan-out contract: syncNutritionData() must be
+    // called on every nutrition delete path.
+    test(
+      'fires syncNutritionData + pushSnapshot inside NutritionWriteService.deleteLog '
+      '(architectural shift since Test #6 — sync moved from DeleteNutritionLogNotifier '
+      'into the WriteService)',
+      () {
+        final src = _src(
+            'lib/core/services/nutrition_write_service.dart');
+        final deleteLogIdx = src.indexOf('Future<WriteResult> deleteLog(');
+        expect(deleteLogIdx, greaterThan(0),
+            reason: 'deleteLog method must exist on NutritionWriteService');
+        // Bound the method body: find the next top-level method after deleteLog.
+        final tail = src.substring(deleteLogIdx);
+        final nextMethodIdx =
+            tail.indexOf(RegExp(r'\n  Future<', multiLine: true), 1);
+        final bodyEnd = nextMethodIdx > 0 ? nextMethodIdx : tail.length;
+        final body = tail.substring(0, bodyEnd);
+        expect(body, contains('syncNutritionData'),
+            reason: 'deleteLog must fan out to syncNutritionData per '
+                'CLAUDE.md §15 sync fan-out contract');
+        expect(body, contains('pushSnapshot'),
+            reason: 'deleteLog must also push AI snapshot per sync pattern');
+      },
+    );
   });
 
   group('sync gap — nutrition_provider SavedMealsNotifier.saveMealPreset', () {
