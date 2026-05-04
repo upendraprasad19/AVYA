@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { captainPrompt } from "../_shared/captain_manual.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { istDayOfWeek } from "../_shared/ist_date.ts";
@@ -227,18 +228,15 @@ async function generateProAlert(
   tone: MotivationTone | null,
 ): Promise<string | null> {
   const toneGuidance = tone === "tough_love"
-    ? "Tone: tough_love — be direct, no soft padding, challenge them."
+    ? "Register: MIRROR — be direct, no soft padding, challenge them."
     : tone === "data_driven"
-    ? "Tone: data_driven — lead with a specific number from the snapshot, then the suggestion."
-    : "Tone: gentle — warm and validating before suggesting.";
+    ? "Register: TACTICAL — lead with a specific number from the snapshot, then the action."
+    : "Register: BRIEFING — standard Captain morning briefing tone.";
 
   const systemPrompt =
-    "You are ICANBEFITTER's morning coach. Generate a short, personalised morning alert " +
-    "(2-3 sentences, under 100 tokens) for the user. Reference specific numbers from their data: " +
-    "workout name, weight lifted, streak count, yesterday's calories, or recent PRs. " +
-    "Be encouraging, specific, and actionable. Use the user's first name. " +
-    `${toneGuidance} ` +
-    "Output ONLY the alert message, no preamble or formatting.";
+    captainPrompt("morning") +
+    `\n\n${toneGuidance} ` +
+    "Output ONLY the alert message — no preamble, no formatting, no signoff.";
 
   const userPrompt =
     `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;

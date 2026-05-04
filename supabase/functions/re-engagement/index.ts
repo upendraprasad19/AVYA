@@ -42,6 +42,8 @@ import {
   markProactiveSent,
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
+import { captainPrompt } from "../_shared/captain_manual.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -215,8 +217,35 @@ Deno.serve(async (req: Request) => {
       }
 
       const greeting = firstName ? `${firstName} — ` : "";
-      const message =
+      // Fallback: existing hardcoded English copy preserved as safety net.
+      const fallbackMessage =
         `${greeting}haven't heard from you in a few days. Everything okay? No judgment — just tell me what happened and we reset.`;
+
+      // Generate Captain-voiced copy via Gemini; fall back to English on error.
+      let message = fallbackMessage;
+      try {
+        const userState = {
+          first_name: firstName,
+          silence_days_min: SILENCE_DAYS_FALLBACK,
+        };
+        const { content } = await geminiChat({
+          model: MODEL_FLASH,
+          systemPrompt: captainPrompt("proactive"),
+          userPrompt:
+            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `Generate a re-engagement nudge for a user who has been silent for ` +
+            `${SILENCE_DAYS_FALLBACK}+ days. No judgment — the Captain asks, never tells.`,
+          maxTokens: 120,
+          temperature: 0.7,
+        });
+        if (content && content.trim().length > 0) {
+          message = content.trim();
+        }
+      } catch (e) {
+        console.warn(
+          `[re-engagement] Gemini failed for ${userId}, using fallback copy: ${e}`,
+        );
+      }
 
       try {
         const ok = await sendPushNotification({

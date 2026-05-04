@@ -12,6 +12,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
+import { captainPrompt } from "../_shared/captain_manual.ts";
+import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,43 +137,72 @@ serve(async (req: Request) => {
       const weight = snap?.current_weight_kg as number | null;
       const targetWeight = snap?.target_weight_kg as number | null;
 
+      // Fallback: hardcoded English messages preserved as safety net.
       let title = "Don't break your streak!";
-      let message = `You haven't logged today. ${streakWeeks}-week streak on the line!`;
+      let fallbackMessage = `You haven't logged today. ${streakWeeks}-week streak on the line!`;
 
-      // Milestone-based messages
       if (streakDays === 7) {
         title = "1 week strong!";
-        message = "You've hit 7 days straight — that's the hardest week done. Don't stop now!";
+        fallbackMessage = "You've hit 7 days straight — that's the hardest week done. Don't stop now!";
       } else if (streakDays === 14) {
         title = "2 weeks! You're building a habit.";
-        message = "14 days of consistency. Most people quit by now — you didn't. Keep going!";
+        fallbackMessage = "14 days of consistency. Most people quit by now — you didn't. Keep going!";
       } else if (streakDays === 30) {
         title = "30-day warrior!";
-        message = "A full month of training. You're in the top 5% of users. Log today to keep it alive!";
+        fallbackMessage = "A full month of training. You're in the top 5% of users. Log today to keep it alive!";
       } else if (streakDays === 50) {
         title = "50 days. Legendary.";
-        message = "Half a century of consistency. This streak is worth protecting — don't miss today!";
+        fallbackMessage = "Half a century of consistency. This streak is worth protecting — don't miss today!";
       } else if (streakDays === 100) {
         title = "100-DAY STREAK!";
-        message = "Triple digits. You're officially unstoppable. One workout away from 101!";
+        fallbackMessage = "Triple digits. You're officially unstoppable. One workout away from 101!";
       } else if (streakDays % 10 === 0 && streakDays > 10) {
         title = `${streakDays}-day milestone!`;
-        message = `${streakDays} days of showing up. That's elite. Don't let today be the one you miss.`;
+        fallbackMessage = `${streakDays} days of showing up. That's elite. Don't let today be the one you miss.`;
       } else if (recentPR) {
         title = "You hit a PR recently!";
-        message = `New best on ${recentPR} this week. Momentum is real — keep your ${streakWeeks}-week streak alive!`;
+        fallbackMessage = `New best on ${recentPR} this week. Momentum is real — keep your ${streakWeeks}-week streak alive!`;
       } else if (weight && targetWeight && Math.abs(weight - targetWeight) < 2) {
         title = "Almost at your goal weight!";
-        message = `You're within 2kg of your target. Don't miss today — every session counts now.`;
+        fallbackMessage = `You're within 2kg of your target. Don't miss today — every session counts now.`;
       } else {
-        // Varied generic messages
         const variants = [
           `It's getting late. Your ${streakWeeks}-week streak is waiting for today's workout.`,
           `${streakDays} days of consistency so far. One workout keeps it alive.`,
           `You didn't come this far to only come this far. ${streakWeeks} weeks and counting!`,
           `Your future self will thank you. Log a workout before midnight to keep your streak.`,
         ];
-        message = variants[streakDays % variants.length];
+        fallbackMessage = variants[streakDays % variants.length];
+      }
+
+      // Generate Captain-voiced copy via Gemini; fall back to English on error.
+      let message = fallbackMessage;
+      try {
+        const userState = {
+          streak_days: streakDays,
+          streak_weeks: streakWeeks,
+          recent_pr_exercise: recentPR,
+          current_weight_kg: weight,
+          target_weight_kg: targetWeight,
+          workout_logged_today: false,
+        };
+        const { content } = await geminiChat({
+          model: MODEL_FLASH,
+          systemPrompt: captainPrompt("proactive"),
+          userPrompt:
+            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `Generate a streak protection nudge — user has not logged today and their ` +
+            `${streakDays}-day streak is at risk.`,
+          maxTokens: 120,
+          temperature: 0.7,
+        });
+        if (content && content.trim().length > 0) {
+          message = content.trim();
+        }
+      } catch (e) {
+        console.warn(
+          `[streak-guardian] Gemini failed for ${userId}, using fallback copy: ${e}`,
+        );
       }
 
       const ok = await sendPushNotification({
