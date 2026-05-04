@@ -748,7 +748,11 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       final fat = double.tryParse(item.fat.replaceAll('g', '')) ?? 0.0;
       return FoodItem(
         name: item.name,
-        quantityG: 0,
+        // Test #11 M4: AI text breakdown doesn't carry per-item grams —
+        // the AI parses free text and pre-computes macros directly.
+        // Use 100.0 (canonical "per 100g" sentinel) instead of 0 so
+        // cloud nutrition_log_items.quantity_g is meaningful for analytics.
+        quantityG: 100.0,
         calories: item.calories.toDouble(),
         protein: protein,
         carbs: carbs,
@@ -1185,11 +1189,15 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           isScanning: false,
           result: data,
         );
-        // Plan C-11: counter increment moved to NutritionWriteService
-        // when the user clicks SAVE in _ScanResultEditor (source: scan).
-        // Pre-Plan C the counter incremented on every successful AI return
-        // even if the user backed out without saving — burning quota for
-        // nothing. Single source of truth = NutritionWriteService.
+        // Test #11 M1: increment counter HERE — at the API-call site.
+        // The Edge Function call already fired and consumed server quota;
+        // the user may dismiss without saving but quota was spent. Client
+        // counter must stay in sync with the server's abuse cap so the
+        // "X remaining" UI is accurate regardless of save behaviour.
+        unawaited(UsageCounterService.instance.increment(
+          AppConstants.featureScanMealPro,
+          SubscriptionService.instance.isPro(),
+        ));
         return;
       }
 

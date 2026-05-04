@@ -10,9 +10,7 @@ import '../../features/nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, macroTargetsProvider;
 import 'hive_service.dart';
 import 'nutrition_write_source.dart';
-import 'subscription_service.dart';
 import 'sync_service.dart';
-import 'usage_counter_service.dart';
 import 'write_result.dart';
 
 /// Single canonical writer for `nutrition_logs` + `nutrition_log_items`.
@@ -25,7 +23,9 @@ import 'write_result.dart';
 ///   1. Validate input (rejects empty items / bad mealType / etc.)
 ///   2. Compute deterministic Hive key
 ///   3. Hive write (single put)
-///   4. Increment per-source counter (if applicable)
+///   4. [Counter increment REMOVED — Test #11 M1. Counters now fire at the
+///      API-call site so client UI agrees with server quota. See
+///      _counterFeatureForSource for the feature→key mapping.]
 ///   5. Invalidate canonical Riverpod provider batch
 ///   6. Fire-and-forget cloud sync (writes BOTH nutrition_logs AND
 ///      nutrition_log_items rows in same transaction)
@@ -108,20 +108,15 @@ class NutritionWriteService {
       return WriteResult.fail('Hive write failed: $e');
     }
 
-    // 5. Counter increment per source
-    final counterFeature = _counterFeatureForSource(source);
-    if (counterFeature != null) {
-      // Use try/catch — if SubscriptionService isn't initialized in tests
-      // we still want the write to succeed.
-      try {
-        final isPro = SubscriptionService.instance.isPro();
-        unawaited(
-            UsageCounterService.instance.increment(counterFeature, isPro));
-      } catch (e) {
-        debugPrint(
-            '[NutritionWriteService] counter increment skipped (non-fatal): $e');
-      }
-    }
+    // 5. Counter increment — REMOVED from this site (Test #11 M1).
+    //    Counters now increment at the API-call site so the client UI
+    //    agrees with the server quota regardless of whether the user saves.
+    //    • AI text  → food_logger_section.dart _analyse() success path
+    //    • Scan meal → nutrition_provider.dart ScanMealNotifier.scanImage() success path
+    //    • Cart auditor → nutrition_provider.dart CartAuditorNotifier.analyseCart() success path
+    //    • AI coach tool → tool_dispatcher.dart _executeLogMealByText() success path
+    //    The dead `_counterFeatureForSource` switch is kept for documentation
+    //    and future reference (see counterFeatureForSource @visibleForTesting export).
 
     // 6. Provider invalidation batch (if container attached)
     _invalidateNutritionProviders();
