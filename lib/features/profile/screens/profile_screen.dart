@@ -1895,7 +1895,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         collapsedIconColor: AppColors.textMute,
         children: [
           GestureDetector(
-            onTap: () => _showDeleteAccountDialog(),
+            // Task H1 (APK Test #11): Navigate to the 2-step hard-delete
+            // screen instead of the old soft-delete AlertDialog.
+            onTap: () => context.push('/profile/delete-account'),
             child: Text(
               'Delete Account',
               style: AppTypography.bodySm.copyWith(
@@ -2197,101 +2199,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  void _showDeleteAccountDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(color: AppColors.bad.withValues(alpha: 0.3)),
-        ),
-        title: Text(
-          'DELETE ACCOUNT',
-          style: AppTypography.mono.copyWith(
-            color: AppColors.bad,
-            letterSpacing: 2,
-          ),
-        ),
-        content: Text(
-          'This will permanently delete your account and all data. This action cannot be undone.',
-          style: AppTypography.body.copyWith(color: AppColors.textDim),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'CANCEL',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textMute,
-                letterSpacing: 2.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                // Sign out and soft-delete BEFORE clearing local data,
-                // otherwise the router sees authenticated + !onboarded → /onboarding.
-                try {
-                  final userId = SupabaseService.instance.currentUser?.id;
-                  if (userId != null) {
-                    // Soft-delete via repository (CLAUDE.md rule #4).
-                    await UserRepository.softDeleteAccount(userId);
-                  }
-                  // Use global scope to sign out on server too.
-                  await SupabaseService.instance.client.auth
-                      .signOut(scope: SignOutScope.global);
-                } catch (e) {
-                  // Offline or server error — force a local-only sign-out so
-                  // the router never sees authenticated + !onboarded → /onboarding.
-                  debugPrint('[ProfileScreen._deleteAccount] global signOut: $e');
-                  try {
-                    await SupabaseService.instance.client.auth
-                        .signOut(scope: SignOutScope.local);
-                  } catch (e) {
-                    debugPrint('[ProfileScreen._deleteAccount] local signOut: $e');
-                  }
-                }
-                // Clear all local Hive data after sign-out
-                await UserRepository.instance.clearAllData();
-                if (mounted) context.go('/sign-in');
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Failed to delete account. Please try again.',
-                        style: GoogleFonts.getFont('DM Sans', fontSize: 13),
-                      ),
-                      backgroundColor: AppColors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.bad,
-              foregroundColor: AppColors.textPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.sharp),
-              ),
-            ),
-            child: Text(
-              'DELETE',
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textPrimary,
-                letterSpacing: 2.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+// _showDeleteAccountDialog removed — Task H1 (APK Test #11).
+// Hard-delete replaced with 2-step confirm screen at /profile/delete-account.
+// The old soft-flag helper in UserRepository is now @Deprecated (no callers here).
 
   String _formatGoal(String goal) {
     switch (goal) {

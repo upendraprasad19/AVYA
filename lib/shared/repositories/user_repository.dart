@@ -302,14 +302,19 @@ class UserRepository {
 
   // ── Account Management ───────────────────────────────────────────────────
 
-  /// Marks the user's account as deleted in Supabase (`users.is_deleted = true`)
-  /// and signs them out globally.
+  /// Marks the user's account as deleted in Supabase (`users.is_deleted = true`).
   ///
-  /// Call order: soft-delete first, then sign out — so the router never
-  /// observes an authenticated + !onboarded state between the two steps.
+  /// @Deprecated — APK Test #11 Task H1 replaced the soft-delete flow with the
+  /// 2-step hard-delete screen ([DeleteAccountScreen]) which invokes the
+  /// `delete-account` Edge Function and performs a full data erasure.
   ///
-  /// Throws only from the final signOut; a failed soft-delete write is logged
-  /// and silently skipped so the local sign-out can still proceed.
+  /// This method has no callers since the old [_showDeleteAccountDialog] was
+  /// removed from [ProfileScreen]. It is retained only so call-sites in existing
+  /// worktrees / stale branches still compile. Remove on the next major cleanup.
+  @Deprecated(
+    'Use the delete-account Edge Function via DeleteAccountScreen. '
+    'Will be removed in a future cleanup.',
+  )
   static Future<void> softDeleteAccount(String userId) async {
     try {
       await SupabaseService.instance.client.from('users').update({
