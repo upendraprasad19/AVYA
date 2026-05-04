@@ -4,6 +4,7 @@ import { sendPushNotification } from "../_shared/send_notification.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
+import { istDayOfWeek } from "../_shared/ist_date.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -175,7 +176,7 @@ function generateFreeAlert(
     message += ` ${streakWeeks} week streak going strong!`;
   }
 
-  const dayOfWeek = new Date().getDay();
+  const dayOfWeek = istDayOfWeek();
   const motivationalLines = [
     "Make today count!",
     "Consistency beats perfection.",
