@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/services/notification_inbox_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
@@ -187,6 +188,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // (app killed while offline, JWT expired mid-flight, etc.). No-op when
     // sync_reliability_v1 feature flag is off — the queue is empty then.
     unawaited(SyncQueue.instance.drain());
+
+    // Prune stale msg_count_* keys from userBox (older than 7 IST days).
+    // Fire-and-forget — keeps userBox tidy without blocking navigation.
+    unawaited(MessageLimitNotifier.pruneOld());
 
     // OneSignal — fire and forget; don't block navigation on OS permission dialog.
     if (!kIsWeb) {
