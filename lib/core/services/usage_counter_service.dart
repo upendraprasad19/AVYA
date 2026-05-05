@@ -1,17 +1,17 @@
 import 'package:icanbefitter/core/constants/app_constants.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Tracks daily and monthly usage counters for gated features.
 ///
-/// All counters are stored in Hive configBox (offline-first).
-/// Call [checkAndResetCounters] on app launch to reset stale counters.
+/// All counters are user-scoped and stored in the per-user `userBox`
+/// via [MigratedKey] — sign-out → sign-up cannot reset another user's
+/// counters. Call [checkAndResetCounters] on app launch to reset stale
+/// counters by IST date.
 class UsageCounterService {
   UsageCounterService._();
   static final UsageCounterService _instance = UsageCounterService._();
   static UsageCounterService get instance => _instance;
-
-  final HiveService _hive = HiveService.instance;
 
   // ── Hive Keys ───────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ class UsageCounterService {
     final key = _counterKey(feature, isPro);
     if (key == null) return false;
 
-    final used = _hive.configBox.get(key, defaultValue: 0) as int;
+    final used = MigratedKey.readWithDefault<int>(key, 0);
     return used < _limit(feature, isPro);
   }
 
@@ -75,8 +75,8 @@ class UsageCounterService {
     final key = _counterKey(feature, isPro);
     if (key == null) return;
 
-    final current = _hive.configBox.get(key, defaultValue: 0) as int;
-    await _hive.configBox.put(key, current + 1);
+    final current = MigratedKey.readWithDefault<int>(key, 0);
+    await MigratedKey.write(key, current + 1);
   }
 
   /// Returns how many uses remain for [feature].
@@ -84,7 +84,7 @@ class UsageCounterService {
     final key = _counterKey(feature, isPro);
     if (key == null) return 0;
 
-    final used = _hive.configBox.get(key, defaultValue: 0) as int;
+    final used = MigratedKey.readWithDefault<int>(key, 0);
     final max = _limit(feature, isPro);
     return (max - used).clamp(0, max);
   }
@@ -93,7 +93,7 @@ class UsageCounterService {
   int used(String feature, bool isPro) {
     final key = _counterKey(feature, isPro);
     if (key == null) return 0;
-    return _hive.configBox.get(key, defaultValue: 0) as int;
+    return MigratedKey.readWithDefault<int>(key, 0);
   }
 
   // ── Reset Logic ─────────────────────────────────────────────────
@@ -101,20 +101,18 @@ class UsageCounterService {
   /// Check if counters need resetting and reset them.
   ///
   /// Must be called on app launch (in main.dart after Hive init).
-  /// Resets daily counters if the date has changed, and monthly
-  /// counters if the month has changed.
+  /// Resets daily counters if the IST date has changed.
   Future<void> checkAndResetCounters() async {
-    final configBox = _hive.configBox;
     final now = DateTime.now();
     final todayStr = istDateStr(now);
 
     // ── Daily reset (all counters are now daily) ─────────────────
-    final lastDaily = configBox.get(_lastDailyReset) as String?;
+    final lastDaily = MigratedKey.read<String>(_lastDailyReset);
     if (lastDaily != todayStr) {
-      await configBox.put(_aiTextLogCountToday, 0);
-      await configBox.put(_scanMealCountToday, 0);
-      await configBox.put(_cartAuditorCountToday, 0);
-      await configBox.put(_lastDailyReset, todayStr);
+      await MigratedKey.write(_aiTextLogCountToday, 0);
+      await MigratedKey.write(_scanMealCountToday, 0);
+      await MigratedKey.write(_cartAuditorCountToday, 0);
+      await MigratedKey.write(_lastDailyReset, todayStr);
     }
   }
 

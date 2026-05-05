@@ -1,4 +1,5 @@
 import '../services/hive_service.dart';
+import '../services/migrated_key.dart';
 import '../services/seed_service.dart';
 import '../services/workout_write_service.dart';
 import '../services/write_result.dart';
@@ -200,18 +201,17 @@ class WorkoutScheduleService {
 
     // 3. Map to calendar dates (4 weeks × 7 days = 28 days)
     final workoutBox = _hive.workoutBox;
-    final configBox = _hive.configBox;
 
     // Normalize startDate to Monday
     final monday = _normalizeToMonday(startDate);
     final endDate = monday.add(const Duration(days: 27)); // 4 weeks
 
     // Save plan metadata
-    await configBox.put(_planStartKey, monday.toIso8601String());
-    await configBox.put(_planEndKey, endDate.toIso8601String());
+    await MigratedKey.write(_planStartKey, monday.toIso8601String());
+    await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     await workoutBox.put(_planKey, plan.toMap());
     if (preferredDays != null) {
-      await configBox.put('preferred_training_days', preferredDays);
+      await MigratedKey.write('preferred_training_days', preferredDays);
     }
 
     // 4. For each of the 4 weeks, assign workouts to the pattern days.
@@ -336,7 +336,7 @@ class WorkoutScheduleService {
     // bucketed into Tue's calendar slot.
     final workoutBox = _hive.workoutBox;
     final today = istMidnight(fromDate);
-    final planEndStr = _hive.configBox.get(_planEndKey) as String?;
+    final planEndStr = MigratedKey.read<String>(_planEndKey);
     final planEnd = planEndStr != null ? DateTime.parse(planEndStr) : today.add(const Duration(days: 28));
 
     for (var d = today; !d.isAfter(planEnd); d = d.add(const Duration(days: 1))) {
@@ -367,15 +367,15 @@ class WorkoutScheduleService {
     // Preserve plan_start_date on reschedule — only write if this is the
     // first-time generation (no existing start date). Overwriting on a
     // days-per-week change resets getCurrentWeekNumber() back to Week 1.
-    final existingStart = _hive.configBox.get(_planStartKey) as String?;
+    final existingStart = MigratedKey.read<String>(_planStartKey);
     final isFirstGeneration = existingStart == null;
     if (isFirstGeneration) {
-      await _hive.configBox.put(_planStartKey, monday.toIso8601String());
-      await _hive.configBox.put(_planEndKey, endDate.toIso8601String());
+      await MigratedKey.write(_planStartKey, monday.toIso8601String());
+      await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     }
     await workoutBox.put(_planKey, plan.toMap());
     if (preferredDays != null) {
-      await _hive.configBox.put('preferred_training_days', preferredDays);
+      await MigratedKey.write('preferred_training_days', preferredDays);
     }
 
     // APK Test #6 obs #7 + spec §3.2 — persist phase_started_at on
@@ -558,7 +558,7 @@ class WorkoutScheduleService {
 
   /// Get all scheduled days for a given week number (1-4).
   List<Map<String, dynamic>> getWeek(int weekNumber) {
-    final startStr = _hive.configBox.get(_planStartKey) as String?;
+    final startStr = MigratedKey.read<String>(_planStartKey);
     if (startStr == null) return [];
 
     final planStart = DateTime.parse(startStr);
@@ -577,7 +577,7 @@ class WorkoutScheduleService {
 
   /// Get the current week number based on today's date.
   int getCurrentWeekNumber() {
-    final startStr = _hive.configBox.get(_planStartKey) as String?;
+    final startStr = MigratedKey.read<String>(_planStartKey);
     if (startStr == null) return 1;
 
     final planStart = DateTime.parse(startStr);
@@ -629,7 +629,6 @@ class WorkoutScheduleService {
     if (planEnd == null) return;
 
     final workoutBox = _hive.workoutBox;
-    final configBox = _hive.configBox;
 
     // Week 4 spans plan_end_date back 7 days (inclusive).
     final week4Start = planEnd.subtract(const Duration(days: 6));
@@ -664,7 +663,7 @@ class WorkoutScheduleService {
 
     // Extend the plan end by 7 days so downstream clamping stays valid.
     final newEnd = rollStart.add(const Duration(days: 6));
-    await configBox.put(_planEndKey, newEnd.toIso8601String());
+    await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
   }
 
   /// PRO-only: if the current Phase has expired, generate the next
@@ -708,7 +707,7 @@ class WorkoutScheduleService {
 
   /// Get the plan start date.
   DateTime? getPlanStartDate() {
-    final startStr = _hive.configBox.get(_planStartKey) as String?;
+    final startStr = MigratedKey.read<String>(_planStartKey);
     if (startStr == null) return null;
     return DateTime.parse(startStr);
   }
@@ -720,7 +719,7 @@ class WorkoutScheduleService {
   /// user mid-Phase cannot schedule a template past the Phase boundary
   /// (which would produce orphan entries once the next Phase generates).
   DateTime? getPlanEndDate() {
-    final endStr = _hive.configBox.get(_planEndKey) as String?;
+    final endStr = MigratedKey.read<String>(_planEndKey);
     if (endStr == null) return null;
     return DateTime.tryParse(endStr);
   }
@@ -1301,23 +1300,23 @@ class WorkoutScheduleService {
   }
 
   int _getSwapsUsedThisWeek(DateTime monday) {
-    final weekStart = _hive.configBox.get(_swapWeekStartKey) as String?;
+    final weekStart = MigratedKey.read<String>(_swapWeekStartKey);
     if (weekStart == null || weekStart != _dateKey(monday)) {
       return 0;
     }
-    return _hive.configBox.get(_swapsThisWeekKey, defaultValue: 0) as int;
+    return MigratedKey.readWithDefault<int>(_swapsThisWeekKey, 0);
   }
 
   Future<void> _incrementSwapCount(DateTime monday) async {
-    final currentWeekStart = _hive.configBox.get(_swapWeekStartKey) as String?;
+    final currentWeekStart = MigratedKey.read<String>(_swapWeekStartKey);
     final mondayKey = _dateKey(monday);
 
     if (currentWeekStart != mondayKey) {
-      await _hive.configBox.put(_swapWeekStartKey, mondayKey);
-      await _hive.configBox.put(_swapsThisWeekKey, 1);
+      await MigratedKey.write(_swapWeekStartKey, mondayKey);
+      await MigratedKey.write(_swapsThisWeekKey, 1);
     } else {
-      final current = _hive.configBox.get(_swapsThisWeekKey, defaultValue: 0) as int;
-      await _hive.configBox.put(_swapsThisWeekKey, current + 1);
+      final current = MigratedKey.readWithDefault<int>(_swapsThisWeekKey, 0);
+      await MigratedKey.write(_swapsThisWeekKey, current + 1);
     }
   }
 
@@ -1361,8 +1360,8 @@ class WorkoutScheduleService {
     if (days > 7) return 'Travel mode is limited to 7 days';
     if (days < 1) return 'Invalid date range';
 
-    await _hive.configBox.put(_travelStartKey, _dateKey(start));
-    await _hive.configBox.put(_travelEndKey, _dateKey(end));
+    await MigratedKey.write(_travelStartKey, _dateKey(start));
+    await MigratedKey.write(_travelEndKey, _dateKey(end));
 
     // Mark all workout days in range as travel
     for (int i = 0; i < days; i++) {
@@ -1446,7 +1445,7 @@ class WorkoutScheduleService {
     }
 
     // Calculate the correct week number for this date relative to plan start.
-    final planStartStr = _hive.configBox.get(_planStartKey) as String?;
+    final planStartStr = MigratedKey.read<String>(_planStartKey);
     int weekNum = 1;
     if (planStartStr != null) {
       final planStart = DateTime.tryParse(planStartStr);

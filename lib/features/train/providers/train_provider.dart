@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
@@ -469,8 +470,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
         }
 
         // Read saved preferred training days (user-selected day picker).
-        final savedDays = HiveService.instance.configBox
-            .get('preferred_training_days');
+        final savedDays = MigratedKey.read<List>('preferred_training_days');
         final preferredDays = savedDays is List
             ? savedDays.cast<int>()
             : null;
@@ -671,10 +671,10 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     if (sourceWeek < 1 || sourceWeek > 4) return;
     if (targetWeek < 1 || targetWeek > 4) return;
 
-    final hive = HiveService.instance;
-    final startStr = hive.configBox.get('plan_start_date') as String?;
+    final startStr = MigratedKey.read<String>('plan_start_date');
     if (startStr == null) return;
 
+    final hive = HiveService.instance;
     final planStart = DateTime.tryParse(startStr) ?? DateTime.now();
     final sourceWeekStart =
         planStart.add(Duration(days: (sourceWeek - 1) * 7));

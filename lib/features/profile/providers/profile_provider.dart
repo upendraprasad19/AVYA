@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -469,9 +470,8 @@ class ProgressPhotosData {
 class ProgressPhotosNotifier extends Notifier<ProgressPhotosData> {
   @override
   ProgressPhotosData build() {
-    final configBox = HiveService.instance.configBox;
     final count =
-        configBox.get('progress_photo_count', defaultValue: 0) as int;
+        MigratedKey.readWithDefault<int>('progress_photo_count', 0);
     return ProgressPhotosData(photoCount: count);
   }
 }
@@ -504,12 +504,11 @@ final usageWeeksProvider =
 class FirstReportViewedNotifier extends Notifier<bool> {
   @override
   bool build() {
-    return HiveService.instance.configBox
-            .get('first_report_viewed', defaultValue: false) as bool;
+    return MigratedKey.readWithDefault<bool>('first_report_viewed', false);
   }
 
   Future<void> markViewed() async {
-    await HiveService.instance.configBox.put('first_report_viewed', true);
+    await MigratedKey.write('first_report_viewed', true);
     state = true;
   }
 }

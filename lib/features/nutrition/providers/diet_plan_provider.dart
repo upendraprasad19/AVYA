@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// One planned meal slot derived from the saved diet plan
-/// (`configBox['saved_diet_plan']`, written by `DietPlanScreen._savePlan`).
+/// (`userBox['saved_diet_plan']`, written by `DietPlanScreen._savePlan` —
+/// migrated from configBox in Test #11.1).
 ///
 /// Used by [TodaysMealsCard] to render a "From Your Diet Plan" hint on
 /// any empty slot — BREAKFAST / LUNCH / DINNER / SNACK — so the user can
