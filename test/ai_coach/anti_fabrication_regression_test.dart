@@ -18,6 +18,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -48,14 +49,17 @@ void main() {
       HiveService.instance.workoutBox.put(
         'wlog_${d.millisecondsSinceEpoch}',
         {
-          'date': d.toIso8601String().substring(0, 10),
+          // Test #11.1 — IST-throughout: production code reads via
+          // istDateStr; tests must seed the same way or run-near-midnight
+          // intermittently fails (UTC-and-IST disagree).
+          'date': istDateStr(d),
           'workout_name': 'PUSH A',
           'duration_seconds': 1800,
         },
       );
     }
     // Today's schedule
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final today = istDateStr(DateTime.now());
     HiveService.instance.workoutBox.put('schedule_$today', {
       'type': 'PUSH A',
       'workout_name': 'PUSH A',
@@ -70,7 +74,7 @@ void main() {
       HiveService.instance.nutritionBox.put(
         'nlog_${d.millisecondsSinceEpoch}',
         {
-          'date': d.toIso8601String().substring(0, 10),
+          'date': istDateStr(d),
           'total_calories': 2200,
           'total_protein': 138,
         },
@@ -245,7 +249,7 @@ void main() {
       HiveService.instance.workoutBox.put(
         'wlog_${d.millisecondsSinceEpoch}',
         {
-          'date': d.toIso8601String().substring(0, 10),
+          'date': istDateStr(d),
           'workout_name': 'LEGS A',
           'duration_seconds': 2400,
         },

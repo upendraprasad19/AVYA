@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
@@ -86,11 +87,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   /// Polls Hive every 3 seconds (up to 30s) until a prediction is found.
   /// Once found, invalidates [predictionProvider] so the card renders.
   void _startPredictionPollIfNeeded() {
-    final existing = HiveService.instance.configBox.get('prediction_text');
+    final existing = MigratedKey.read<String>('prediction_text');
     if (existing != null) return;
     _predictionPollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       _predictionPollCount++;
-      final found = HiveService.instance.configBox.get('prediction_text');
+      final found = MigratedKey.read<String>('prediction_text');
       if (found != null) {
         if (mounted) ref.invalidate(predictionProvider);
         timer.cancel();
@@ -1558,8 +1559,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
     final cartLimit = AppConstants.freeCartAuditorPerDay;
 
-    final configBox = HiveService.instance.configBox;
-    final trialStartRaw = configBox.get('ai_trial_start') as String?;
+    final trialStartRaw = MigratedKey.read<String>('ai_trial_start');
     int? trialDaysLeft;
     if (trialStartRaw != null) {
       final trialStart = DateTime.tryParse(trialStartRaw);

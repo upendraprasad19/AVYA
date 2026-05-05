@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 
 /// Severity level for a coaching insight.
 enum InsightSeverity { high, medium, low }
@@ -51,12 +51,12 @@ class PatternDetector {
   final WorkoutRepository _workouts = WorkoutRepository.instance;
   final NutritionRepository _nutrition = NutritionRepository.instance;
   final UserRepository _user = UserRepository.instance;
-  final HiveService _hive = HiveService.instance;
 
   /// Run all 12 patterns and return detected insights.
   ///
   /// Each pattern catches its own errors silently — partial data is OK.
-  /// Results are cached in configBox['pattern_insights'] with today's date.
+  /// Results are cached in userBox['pattern_insights'] with today's date
+  /// (migrated from configBox in Test #11.1).
   List<CoachingInsight> analyze() {
     final insights = <CoachingInsight>[];
 
@@ -77,7 +77,7 @@ class PatternDetector {
     insights.sort((a, b) => a.severity.index.compareTo(b.severity.index));
 
     // Cache results.
-    _hive.configBox.put('pattern_insights', {
+    MigratedKey.write('pattern_insights', {
       'date': DateTime.now().toIso8601String().substring(0, 10),
       'count': insights.length,
       'top_pattern': insights.isNotEmpty ? insights.first.patternId : null,

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/features/profile/providers/profile_completeness_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
@@ -22,7 +22,7 @@ class ProfileNudgeCard extends ConsumerWidget {
     if (completeness.isComplete) return const SizedBox.shrink();
 
     // Don't show if dismissed < 3 days ago
-    final dismissedAt = HiveService.instance.configBox.get(_dismissKey) as String?;
+    final dismissedAt = MigratedKey.read<String>(_dismissKey);
     if (dismissedAt != null) {
       final dismissed = DateTime.tryParse(dismissedAt);
       if (dismissed != null && DateTime.now().difference(dismissed).inDays < 3) {
@@ -57,8 +57,7 @@ class ProfileNudgeCard extends ConsumerWidget {
             ),
             GestureDetector(
               onTap: () {
-                HiveService.instance.configBox
-                    .put(_dismissKey, DateTime.now().toIso8601String());
+                MigratedKey.write(_dismissKey, DateTime.now().toIso8601String());
                 ref.invalidate(profileCompletenessProvider);
               },
               child: const Padding(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -462,18 +463,19 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
       // Sync onboarding flag + profile to Supabase.
       //
-      // Set a persistent `pending_onboarding_sync` flag in configBox BEFORE
-      // the first attempt. Any bootstrap on the next app launch can read
-      // this and replay the sync if it didn't land (fixes the "user_profile
-      // stays all-NULL" bug observed 2026-04-17 on icanbefitter@gmail.com).
+      // Set a persistent `pending_onboarding_sync` flag in userBox BEFORE
+      // the first attempt (migrated from configBox in Test #11.1). Any
+      // bootstrap on the next app launch can read this and replay the
+      // sync if it didn't land (fixes the "user_profile stays all-NULL"
+      // bug observed 2026-04-17 on icanbefitter@gmail.com).
       //
       // We clear the flag only after a confirmed successful upsert. The
       // 10 s inline retry stays — it catches the common "JWT warm-up"
       // miss right after sign-up — but the flag is the real safety net.
-      await _hive.configBox.put('pending_onboarding_sync', true);
+      await MigratedKey.write('pending_onboarding_sync', true);
       try {
         await _syncOnboardingToSupabase(profile);
-        await _hive.configBox.delete('pending_onboarding_sync');
+        await MigratedKey.delete('pending_onboarding_sync');
       } catch (syncErr) {
         // Visible in debug console for testing; not shown to the user.
         debugPrint('[Onboarding] Supabase sync failed: $syncErr — scheduling retry');
@@ -487,7 +489,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
           try {
             await SupabaseService.instance.client.auth.refreshSession();
             await _syncOnboardingToSupabase(profile);
-            await _hive.configBox.delete('pending_onboarding_sync');
+            await MigratedKey.delete('pending_onboarding_sync');
             debugPrint('[Onboarding] Retry succeeded');
           } catch (e) {
             debugPrint('[Onboarding] Retry also failed: $e — '
@@ -647,10 +649,10 @@ Format (use • not JSON):
       final reply = response.reply;
 
       if (reply.isNotEmpty) {
-        final configBox = HiveService.instance.configBox;
-        await configBox.put('prediction_text', reply);
-        await configBox.put('prediction_date', DateTime.now().toIso8601String());
-        await configBox.put(
+        await MigratedKey.write('prediction_text', reply);
+        await MigratedKey.write(
+            'prediction_date', DateTime.now().toIso8601String());
+        await MigratedKey.write(
             'prediction_generated_at', DateTime.now().toIso8601String());
         debugPrint('[Onboarding] Prediction card generated successfully');
       }

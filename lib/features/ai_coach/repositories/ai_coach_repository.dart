@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -1168,14 +1169,14 @@ class AiCoachRepository {
     final now = DateTime.now();
     final todayStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final lastGreeting =
-        _hive.configBox.get('last_ai_greeting_date') as String?;
+    final lastGreeting = MigratedKey.read<String>('last_ai_greeting_date');
     return lastGreeting != todayStr;
   }
 
   /// Marks that the AI has greeted the user today.
   Future<void> markGreetedToday() async {
-    await _hive.configBox.put('last_ai_greeting_date', istDateStr(DateTime.now()));
+    await MigratedKey.write(
+        'last_ai_greeting_date', istDateStr(DateTime.now()));
   }
 
   /// Returns the top insight for the dashboard card (highest severity).
@@ -1341,7 +1342,11 @@ class AiCoachRepository {
   /// `schedule_<yesterday>` key exists. Omits the exercises list (yesterday's
   /// session contents are less useful than the status — completed/skipped).
   Map<String, dynamic>? _getYesterdayWorkout() {
-    final yesterday = istDateStr(istNow().subtract(const Duration(days: 1)));
+    // Test #11.1 — use raw DateTime.now() with istDateStr (which handles
+    // the +5:30 IST conversion internally). istDateStr(istNow()) would
+    // double-shift because istNow() already returns the shifted instant.
+    final yesterday =
+        istDateStr(DateTime.now().subtract(const Duration(days: 1)));
     final schedule = _hive.workoutBox.get('schedule_$yesterday');
     if (schedule is! Map) return null;
     return {
@@ -1359,21 +1364,23 @@ class AiCoachRepository {
   List<Map<String, dynamic>> _getWeekLookahead() {
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final results = <Map<String, dynamic>>[];
+    // Test #11.1 — use DateTime.now() (not istNow()) when feeding into
+    // istDateStr, otherwise the +5:30 shift is applied twice.
     for (int i = 0; i < 7; i++) {
-      final date = istNow().add(Duration(days: i));
+      final date = DateTime.now().add(Duration(days: i));
       final dateStr = istDateStr(date);
-      final dayName = dayNames[(date.weekday - 1) % 7];
+      final dayLabel = dayNames[(istDateOf(date).weekday - 1) % 7];
       final schedule = _hive.workoutBox.get('schedule_$dateStr');
       if (schedule is Map) {
         results.add({
-          'day': dayName,
+          'day': dayLabel,
           'date': dateStr,
           'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
           'status': (schedule['status'] ?? 'pending') as String,
         });
       } else {
         results.add({
-          'day': dayName,
+          'day': dayLabel,
           'date': dateStr,
           'type': 'REST',
           'status': 'rest',

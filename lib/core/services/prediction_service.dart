@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Shared utility for AI prediction generation.
@@ -54,12 +54,12 @@ Format (use • not JSON):
 
       final response = await AiService.instance.predict(prompt, aiContext);
       if (response.reply.isNotEmpty) {
-        final configBox = HiveService.instance.configBox;
-        await configBox.put('prediction_text', response.reply);
-        await configBox.put('prediction_date', DateTime.now().toIso8601String());
-        await configBox.put(
+        await MigratedKey.write('prediction_text', response.reply);
+        await MigratedKey.write(
+            'prediction_date', DateTime.now().toIso8601String());
+        await MigratedKey.write(
             'prediction_generated_at', DateTime.now().toIso8601String());
-        await configBox.delete('prediction_stale');
+        await MigratedKey.delete('prediction_stale');
         debugPrint('[PredictionService] Prediction regenerated successfully');
         return true;
       }
@@ -72,11 +72,11 @@ Format (use • not JSON):
 
   /// Mark the current cached prediction as stale (goal changed, free user).
   void markStale() {
-    HiveService.instance.configBox.put('prediction_stale', true);
+    MigratedKey.write('prediction_stale', true);
   }
 
   /// Clear the stale flag (after successful regeneration).
   void clearStale() {
-    HiveService.instance.configBox.delete('prediction_stale');
+    MigratedKey.delete('prediction_stale');
   }
 }

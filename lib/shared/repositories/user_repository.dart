@@ -201,16 +201,17 @@ class UserRepository {
 
   // ── Diet Plan ─────────────────────────────────────────────────
 
-  /// Saves a generated diet plan to configBox.
+  /// Saves a generated diet plan to the per-user `userBox`
+  /// (migrated from configBox in Test #11.1).
   Future<void> saveDietPlan(Map<String, dynamic> planData) async {
-    await _hive.configBox.put('saved_diet_plan', planData);
+    await MigratedKey.write('saved_diet_plan', planData);
   }
 
   /// Returns the saved diet plan, or null if none exists.
   Map<String, dynamic>? getSavedDietPlan() {
-    final raw = _hive.configBox.get('saved_diet_plan');
+    final raw = MigratedKey.read<Map>('saved_diet_plan');
     if (raw == null) return null;
-    return Map<String, dynamic>.from(raw as Map);
+    return Map<String, dynamic>.from(raw);
   }
 
   // ── Clear All Data (Logout) ───────────────────────────────────

@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -1699,8 +1699,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
           final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
 
-          final savedDays = HiveService.instance.configBox
-              .get('preferred_training_days');
+          final savedDays = MigratedKey.read<List>('preferred_training_days');
           final preferredDays = savedDays is List
               ? savedDays.cast<int>()
               : null;

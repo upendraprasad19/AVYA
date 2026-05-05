@@ -330,7 +330,6 @@ class AuthNotifier extends Notifier<AuthState2> {
     await HiveUserSession.openForUser(user.id);
 
     final userBox = _hive.userBox;
-    final configBox = _hive.configBox;
     final existing = userBox.get('profile');
 
     // B1 layer 2/3: Cross-account safety net — checks if existing profile id
@@ -520,7 +519,7 @@ class AuthNotifier extends Notifier<AuthState2> {
             final serverTrialStart =
                 userRows.first['ai_chat_started_at'] as String?;
             if (serverTrialStart != null) {
-              await configBox.put('ai_trial_start', serverTrialStart);
+              await MigratedKey.write('ai_trial_start', serverTrialStart);
             }
             // Restore terms acceptance so TermsModal skips on new devices.
             final serverTermsAt =
@@ -644,12 +643,35 @@ class AuthNotifier extends Notifier<AuthState2> {
     unawaited(SubscriptionService.instance.refreshFromSupabase());
 
     // Bind OneSignal external_id to Supabase user UUID for push targeting.
+    // Test #11.1: also persist the OneSignal player_id (subscription id)
+    // to `user_progress.onesignal_player_id` so the `delete-account` Edge
+    // Function can unsubscribe pushes when the user erases their account.
+    // Without this, deleted accounts may keep receiving push notifications
+    // until the OS uninstalls the app (migration 049 added the column but
+    // no client-side write existed).
     if (!kIsWeb) {
       try {
         await OneSignal.login(user.id);
+        unawaited(_syncOneSignalPlayerId(user.id));
       } catch (_) {
         // Non-critical — push notifications will still work on next launch.
       }
+    }
+  }
+
+  /// Reads OneSignal's current push subscription id and upserts it onto
+  /// `user_progress.onesignal_player_id`. Fire-and-forget — failure here
+  /// must never block auth. Idempotent: same id → upsert is a no-op.
+  Future<void> _syncOneSignalPlayerId(String userId) async {
+    try {
+      final playerId = OneSignal.User.pushSubscription.id;
+      if (playerId == null || playerId.isEmpty) return;
+      await _supabase.client.from('user_progress').upsert({
+        'user_id': userId,
+        'onesignal_player_id': playerId,
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('[auth_provider._syncOneSignalPlayerId] $e');
     }
   }
 

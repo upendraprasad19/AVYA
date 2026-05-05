@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -561,7 +562,7 @@ class SyncService {
   /// through to the Home screen before the retry fires.
   Future<void> _replayPendingOnboardingSync(String userId) async {
     try {
-      final pending = _hive.configBox.get('pending_onboarding_sync');
+      final pending = MigratedKey.read<bool>('pending_onboarding_sync');
       if (pending != true) return;
 
       final profile = _hive.userBox.get('profile');
@@ -569,7 +570,7 @@ class SyncService {
       if (profile == null) {
         debugPrint('[SyncService._replayPendingOnboardingSync] '
             'flag set but Hive profile missing — clearing flag');
-        await _hive.configBox.delete('pending_onboarding_sync');
+        await MigratedKey.delete('pending_onboarding_sync');
         return;
       }
 
@@ -630,7 +631,7 @@ class SyncService {
         },
       );
 
-      await _hive.configBox.delete('pending_onboarding_sync');
+      await MigratedKey.delete('pending_onboarding_sync');
       debugPrint('[SyncService._replayPendingOnboardingSync] success — flag cleared');
     } catch (e) {
       debugPrint('[SyncService._replayPendingOnboardingSync] failed: $e '
@@ -2831,13 +2832,12 @@ class SyncService {
   Future<void> _syncWorkoutPlan(String userId) async {
     try {
       final workoutBox = _hive.workoutBox;
-      final configBox = _hive.configBox;
 
       final plan = workoutBox.get('current_plan');
       if (plan == null) return;
 
-      final planStart = configBox.get('plan_start_date');
-      final planEnd = configBox.get('plan_end_date');
+      final planStart = MigratedKey.read<String>('plan_start_date');
+      final planEnd = MigratedKey.read<String>('plan_end_date');
 
       // Collect schedule entries (schedule_YYYY-MM-DD)
       final schedules = <String, dynamic>{};
@@ -2925,10 +2925,10 @@ class SyncService {
         await _hive.workoutBox.put('current_plan', plan is Map ? Map<String, dynamic>.from(plan) : plan);
       }
       if (planStart != null) {
-        await _hive.configBox.put('plan_start_date', planStart);
+        await MigratedKey.write('plan_start_date', planStart);
       }
       if (planEnd != null) {
-        await _hive.configBox.put('plan_end_date', planEnd);
+        await MigratedKey.write('plan_end_date', planEnd);
       }
       if (schedules != null && schedules is Map) {
         for (final entry in schedules.entries) {
@@ -3701,7 +3701,8 @@ class SyncService {
   }
 
   /// A5 — Restores the user's saved diet plan from `saved_diet_plans`
-  /// cloud table (migration 048) into `configBox['saved_diet_plan']`.
+  /// cloud table (migration 048) into `userBox['saved_diet_plan']`
+  /// (migrated from configBox in Test #11.1).
   ///
   /// One row per user (PRIMARY KEY on user_id). On conflict the cloud
   /// row wins — the user may have saved an updated plan on another device.
@@ -3715,7 +3716,7 @@ class SyncService {
       if (res == null) return;
       final planJson = res['plan_json'];
       if (planJson == null) return;
-      await _hive.configBox.put('saved_diet_plan', planJson);
+      await MigratedKey.write('saved_diet_plan', planJson);
     } catch (e, st) {
       debugPrint('[SyncService._restoreSavedDietPlan] error: $e\n$st');
       try {

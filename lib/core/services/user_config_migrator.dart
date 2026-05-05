@@ -24,50 +24,82 @@ class UserConfigMigrator {
   UserConfigMigrator._();
 
   /// `migrationBox` flag key. Survives `clearAllData()`.
-  static const String _flagKey = 'config_to_user_migration_v1_done';
+  ///
+  /// v1 (Test #10.1) migrated 6 critical keys.
+  /// v2 (Test #11.1) sweeps the remaining 25 user-scoped keys.
+  /// A device that already ran v1 will have the v1 flag set; running v2
+  /// uses a NEW flag so the additional 25 keys still migrate. (The 6
+  /// v1 keys are no-ops on a v2 run because they're already gone from
+  /// configBox.)
+  static const String _flagKey = 'config_to_user_migration_v2_done';
 
-  /// Keys migrated in this hotfix (Test #10.1 scope).
+  /// All user-scoped keys migrated to `userBox`.
   ///
-  /// Focus: the leak reproducer + revenue impact. Other user-specific
-  /// keys (prediction text, pattern insights, rate counters, plan dates,
-  /// etc.) are still in `configBox` and will be migrated in Test #11.1.
+  /// Test #10.1 (2026-05-04): seed 6 critical keys (onboarding gate +
+  /// subscription state) — the leak reproducer + revenue impact.
   ///
-  /// Audit reference: docs/superpowers/plans/2026-05-04-cross-account-leak-hotfix-plan.md
+  /// Test #11.1 (2026-05-04 same day): full sweep — every remaining
+  /// user-specific key in `configBox` migrated, closing the
+  /// cross-account leak class entirely.
+  ///
+  /// Two keys deliberately stay in `configBox` (see `_intentionallyShared`
+  /// below) — they cross sessions by design.
+  ///
+  /// Audit references:
+  ///   docs/superpowers/plans/2026-05-04-cross-account-leak-hotfix-plan.md
+  ///   docs/superpowers/plans/2026-05-04-test-11-1-full-config-migration.md
   static const List<String> userScopedKeys = [
+    // ----- Test #10.1 seed (6 keys) -----
     // Onboarding gate — THE leak vector. Once leaked it routes new
     // users straight past `/onboarding/mission-brief` into `/home`,
     // surfacing the previous user's data.
     'onboarding_completed',
-    // Subscription state — PRO entitlement. Leaked across signOut →
-    // signUp until `isPro()`'s defense-in-depth profile-id check fires.
-    // Move to `userBox` so it's physically isolated per user.
-    // Note: 'lastVerifiedAt' (NOT 'lastVerified') matches the constant
-    // in `SubscriptionService._lastVerifiedKey`.
+    // Subscription state — PRO entitlement.
     'isPro', 'expiresAt', 'plan', 'lastVerifiedAt', 'localActivationAt',
-  ];
 
-  /// Keys deferred to Test #11.1 — still leak vectors but lower impact.
-  /// Documented here so the next batch knows the full scope.
-  // ignore: unused_field
-  static const List<String> _deferredKeys = [
-    // AI prediction
+    // ----- Test #11.1 sweep (25 keys) -----
+    // AI prediction card (per-user AI-generated text)
     'prediction_text', 'prediction_date', 'prediction_stale',
     'prediction_generated_at',
-    // AI behavior + chat
+    // AI behavior + chat (per-user trial window, telegram link, channel)
     'pattern_insights', 'last_ai_greeting_date', 'ai_trial_start',
     'telegram_connected', 'coach_channel',
-    // Rate limit counters
+    // Rate limit counters (per-user free-tier window — leaking these
+    // lets a sign-out → sign-up cycle reset 50/day caps).
     'ai_text_log_count_today', 'scan_meal_count_today',
     'cart_auditor_count_today', 'last_daily_reset',
-    // Workout plan + travel + swap
+    // Workout plan + travel + swap state (per-user plan window, swap
+    // budget, travel suspension)
     'plan_start_date', 'plan_end_date', 'preferred_training_days',
     'swap_week_start', 'swaps_this_week', 'travel_start', 'travel_end',
-    // Diet plan
+    // Diet plan (per-user saved plan)
     'saved_diet_plan',
-    // Misc per-user
-    'pending_referral_code', 'pending_onboarding_sync',
+    // Onboarding replay flag — set during authenticated onboarding,
+    // read by sync replay on next launch. Same user across both sides.
+    'pending_onboarding_sync',
+    // Profile state
     'progress_photo_count', 'first_report_viewed',
-    'profile_nudge_dismissed_at', 'logout_in_progress',
+    'profile_nudge_dismissed_at',
+  ];
+
+  /// Keys that intentionally stay in shared `configBox`.
+  ///
+  /// These are NOT user-scoped — they cross sessions or pre-date the
+  /// authenticated session. Migrating them would break their use case.
+  ///
+  ///   - `pending_referral_code`: written BEFORE auth (sign-in screen
+  ///     captures referral code from URL/clipboard), read AFTER auth in
+  ///     `_ensureLocalUser`. The whole point is to survive across the
+  ///     "no user → user" boundary.
+  ///   - `logout_in_progress`: set during `signOut` (session being torn
+  ///     down), read on next cold launch in `main.dart` BEFORE any auth
+  ///     check. Single-device cold-launch flag, not user-scoped.
+  ///
+  /// Documented here so future audits don't try to migrate them.
+  // ignore: unused_field
+  static const List<String> _intentionallyShared = [
+    'pending_referral_code',
+    'logout_in_progress',
   ];
 
   /// Runs the migration once per device. Idempotent.

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -292,13 +293,12 @@ class TrialInfoNotifier extends Notifier<TrialInfoData> {
       );
     }
 
-    final configBox = HiveService.instance.configBox;
-    final trialStartRaw = configBox.get('ai_trial_start') as String?;
+    final trialStartRaw = MigratedKey.read<String>('ai_trial_start');
 
     if (trialStartRaw == null) {
       // First time — start trial now
       final now = DateTime.now();
-      configBox.put('ai_trial_start', now.toIso8601String());
+      MigratedKey.write('ai_trial_start', now.toIso8601String());
       return TrialInfoData(
         daysRemaining: AppConstants.freeAiTrialDays,
         isTrialActive: true,
@@ -695,8 +695,7 @@ final sendMessageProvider =
 class TelegramConnectionNotifier extends Notifier<bool> {
   @override
   bool build() {
-    final configBox = HiveService.instance.configBox;
-    return configBox.get('telegram_connected', defaultValue: false) as bool;
+    return MigratedKey.readWithDefault<bool>('telegram_connected', false);
   }
 }
 
@@ -709,12 +708,11 @@ final telegramConnectionProvider =
 class ChannelNotifier extends Notifier<String> {
   @override
   String build() {
-    return HiveService.instance.configBox
-        .get('coach_channel', defaultValue: 'in_app') as String;
+    return MigratedKey.readWithDefault<String>('coach_channel', 'in_app');
   }
 
   void setChannel(String channel) {
-    HiveService.instance.configBox.put('coach_channel', channel);
+    MigratedKey.write('coach_channel', channel);
     state = channel;
   }
 }
@@ -887,7 +885,7 @@ class PredictionNotifier extends Notifier<PredictionData> {
   /// cleaned string even if the write fails.
   static void _writeBackToHive(String cleaned) {
     try {
-      HiveService.instance.configBox.put('prediction_text', cleaned);
+      MigratedKey.write('prediction_text', cleaned);
     } catch (_) {
       // Non-fatal — caller still gets the cleaned string.
     }
@@ -895,20 +893,19 @@ class PredictionNotifier extends Notifier<PredictionData> {
 
   @override
   PredictionData build() {
-    final configBox = HiveService.instance.configBox;
-    final rawText = configBox.get('prediction_text') as String?;
+    final rawText = MigratedKey.read<String>('prediction_text');
     final predText = _sanitisePredictionText(rawText);
     // _sanitisePredictionText calls _writeBackToHive internally when it
     // transforms the value, so we only need a fallback put here for the
     // case where predText != rawText but no write was done (shouldn't
     // happen, but kept for safety).
     if (predText != null && predText != rawText) {
-      configBox.put('prediction_text', predText);
+      MigratedKey.write('prediction_text', predText);
     }
-    final predDateRaw = configBox.get('prediction_date') as String?;
+    final predDateRaw = MigratedKey.read<String>('prediction_date');
     final predDate =
         predDateRaw != null ? DateTime.tryParse(predDateRaw) : null;
-    final isStale = configBox.get('prediction_stale') == true;
+    final isStale = MigratedKey.read<bool>('prediction_stale') == true;
 
     final isPro = SubscriptionService.instance.isPro();
 
@@ -920,7 +917,7 @@ class PredictionNotifier extends Notifier<PredictionData> {
 
     // Monthly auto-refresh for PRO: if prediction is >30 days old, trigger
     // regeneration in a post-frame callback so the UI renders first.
-    final genAtRaw = configBox.get('prediction_generated_at') as String?;
+    final genAtRaw = MigratedKey.read<String>('prediction_generated_at');
     final genAt = genAtRaw != null ? DateTime.tryParse(genAtRaw) : predDate;
     if (isPro && genAt != null) {
       final daysSinceGen = DateTime.now().difference(genAt).inDays;

@@ -22,6 +22,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 
@@ -38,11 +39,13 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
-  String todayIso() => DateTime.now().toIso8601String().substring(0, 10);
-  String yesterdayIso() => DateTime.now()
-      .subtract(const Duration(days: 1))
-      .toIso8601String()
-      .substring(0, 10);
+  // Test #11.1 — Use IST helpers so test date keys match what production
+  // code writes/reads. Without this, UTC-and-IST disagree near midnight
+  // (e.g. UTC May 4 19:30 = IST May 5 01:00) and tests intermittently
+  // fail depending on the wall-clock hour they're run at.
+  String todayIso() => istDateStr(DateTime.now());
+  String yesterdayIso() =>
+      istDateStr(DateTime.now().subtract(const Duration(days: 1)));
 
   group('today_workout', () {
     test('returns null when no schedule for today', () {
@@ -120,10 +123,8 @@ void main() {
         'status': 'pending',
         'workout_name': 'PUSH A',
       });
-      final tomorrow = DateTime.now()
-          .add(const Duration(days: 1))
-          .toIso8601String()
-          .substring(0, 10);
+      final tomorrow =
+          istDateStr(DateTime.now().add(const Duration(days: 1)));
       await HiveService.instance.workoutBox.put('schedule_$tomorrow', {
         'type': 'PULL A',
         'status': 'pending',
