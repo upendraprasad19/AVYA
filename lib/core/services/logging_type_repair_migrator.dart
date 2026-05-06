@@ -54,19 +54,23 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 class LoggingTypeRepairMigrator {
   LoggingTypeRepairMigrator._();
 
-  // APK Test #12.4 — bump flag from v1 to v2.
+  // APK Test #12.5 — bump flag from v2 to v3.
   //
-  // v1 (Test #12.2) had a regression: when library said `timed` but the
-  // data shape had `reps>0` and no duration (Jump Rope: reps=1080,
-  // duration=NULL), the library-consistency check returned false, and
-  // the data-driven fallback flipped the type to `bodyweight_reps`.
-  // Receipt then rendered "× 540 reps" per set.
+  // v2 (Test #12.4) was library-strict for top-level fields but the
+  // `bodyweight_reps` branch did NOT walk per-set arrays (`sets[]` /
+  // `sets_detail[]`). Founder install of APK 12.4 surfaced the gap:
+  // top-level `logging_type` was correctly flipped to `bodyweight_reps`
+  // for Push Up + Hanging Leg Raise, but per-set entries still carried
+  // `duration_sec` values from the original corrupt write. WardSetChips
+  // continued rendering "18 secs" because the chip pulled per-set
+  // `duration_sec` directly.
   //
-  // v2 (this batch) is library-strict for known exercises. Library type
-  // wins; data is migrated to match (move reps→duration for timed
-  // exercises with stuffed reps, etc.). Bumping the flag forces re-run
-  // on devices that already corrupted their data with v1.
-  static const String _flagKey = 'logging_type_repair_v2_done';
+  // v3 mirrors the `timed` branch's per-set migration into the
+  // `bodyweight_reps` branch: walk `sets[]` + `sets_detail[]`, move
+  // any `duration_sec`>0 (with `reps==0`) into `reps`, drop bogus
+  // weight, drop residual `duration_sec`. Bumping the flag forces
+  // re-run on every device.
+  static const String _flagKey = 'logging_type_repair_v3_done';
 
   /// True once the migration has run on this device.
   static bool hasRun() {
@@ -311,6 +315,82 @@ class LoggingTypeRepairMigrator {
           // Have both — strip duration as it doesn't apply to bodyweight.
           row.remove('duration_seconds');
           changed = true;
+        }
+        // APK Test #12.5 / v3 — per-set migration. v2 only did
+        // top-level. Receipt + WardSetChips read per-set
+        // `duration_sec` directly; without this loop, "18 secs"
+        // chips persist after the type flip.
+        final sets = row['sets'];
+        if (sets is List) {
+          final out = <Map<String, dynamic>>[];
+          var perSetChanged = false;
+          for (final s in sets) {
+            if (s is! Map) {
+              out.add(<String, dynamic>{});
+              continue;
+            }
+            final m = Map<String, dynamic>.from(s);
+            final r = (m['reps'] as num?)?.toInt() ?? 0;
+            final d = (m['duration_sec'] as num?)?.toInt() ??
+                (m['duration_seconds'] as num?)?.toInt() ??
+                0;
+            if (d > 0 && r == 0) {
+              m['reps'] = d;
+              m.remove('duration_sec');
+              m.remove('duration_seconds');
+              perSetChanged = true;
+            } else if (d > 0) {
+              m.remove('duration_sec');
+              m.remove('duration_seconds');
+              perSetChanged = true;
+            }
+            final w = (m['weight_kg'] as num?)?.toDouble() ?? 0.0;
+            if (w > 0) {
+              m['weight_kg'] = 0.0;
+              perSetChanged = true;
+            }
+            out.add(m);
+          }
+          if (perSetChanged) {
+            row['sets'] = out;
+            changed = true;
+          }
+        }
+        final setsDetail = row['sets_detail'];
+        if (setsDetail is List) {
+          final out = <Map<String, dynamic>>[];
+          var perSetChanged = false;
+          for (final s in setsDetail) {
+            if (s is! Map) {
+              out.add(<String, dynamic>{});
+              continue;
+            }
+            final m = Map<String, dynamic>.from(s);
+            final r = (m['reps'] as num?)?.toInt() ?? 0;
+            final d = (m['duration_sec'] as num?)?.toInt() ??
+                (m['duration_seconds'] as num?)?.toInt() ??
+                0;
+            if (d > 0 && r == 0) {
+              m['reps'] = d;
+              m.remove('duration_sec');
+              m.remove('duration_seconds');
+              perSetChanged = true;
+            } else if (d > 0) {
+              m.remove('duration_sec');
+              m.remove('duration_seconds');
+              perSetChanged = true;
+            }
+            final w = (m['weight_kg'] as num?)?.toDouble() ?? 0.0;
+            if (w > 0) {
+              m['weight_kg'] = 0.0;
+              perSetChanged = true;
+            }
+            out.add(m);
+          }
+          if (perSetChanged) {
+            row['sets_detail'] = out;
+            changed = true;
+          }
         }
         break;
 

@@ -315,6 +315,13 @@ class SubscriptionService {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
 
+      // APK Test #12.5 / Class 3 — surface silent failures to
+      // server-side telemetry so we can see when sync breaks for a
+      // user (was previously ONLY a debugPrint — invisible in prod).
+      // Fire-and-forget; never let logging fail block recovery.
+      // ignore: discarded_futures
+      _logRefreshFailure(e);
+
       // Don't let network errors perpetuate phantom PRO indefinitely.
       // If local activation grace period (10 min) has passed, clear the flag
       // so the NEXT launch will do a proper server check.
@@ -325,6 +332,28 @@ class SubscriptionService {
           await MigratedKey.delete('localActivationAt');
         }
       }
+    }
+  }
+
+  /// APK Test #12.5 / Class 3 — fire-and-forget telemetry hook for
+  /// `refreshFromSupabase` failures. Posts to `log-client-error`
+  /// Edge Function with a short type tag so we can audit sync gaps
+  /// without needing the user's debug log.
+  Future<void> _logRefreshFailure(Object err) async {
+    try {
+      final supabase = SupabaseService.instance;
+      // Skip if we don't even have a session — the failure is
+      // probably "user logged out", not interesting.
+      if (supabase.currentUser == null) return;
+      await supabase.callFunction(
+        'log-client-error',
+        body: {
+          'type': 'subscription_refresh_failure',
+          'message': err.toString(),
+        },
+      );
+    } catch (_) {
+      // Swallow — don't escalate logging-of-logging-failures.
     }
   }
 

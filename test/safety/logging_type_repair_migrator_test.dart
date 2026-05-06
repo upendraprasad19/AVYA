@@ -192,6 +192,68 @@ void main() {
     expect((sets[1] as Map)['duration_sec'], 540);
   });
 
+  test('library-strict v3 — bodyweight_reps per-set duration_sec stripped',
+      () async {
+    // APK Test #12.5 / Class 5 — pin v3 fix. Founder install of APK
+    // 12.4 surfaced: top-level `logging_type` was correctly flipped to
+    // `bodyweight_reps` for Push Up + Hanging Leg Raise, but per-set
+    // entries still carried `duration_sec` values from the original
+    // corrupt write. WardSetChips continued rendering "18 secs"
+    // because the chip pulls per-set `duration_sec` directly.
+    //
+    // v3 must walk per-set arrays (`sets[]` + `sets_detail[]`) and
+    // migrate `duration_sec` → `reps` (when reps==0) or simply strip
+    // it (when reps already present).
+    final wb = HiveService.instance.workoutBox;
+    const dateStr = '2026-05-06';
+    await wb.put('exlog_${dateStr}_pu', {
+      'exercise_name': 'Push Up',
+      'date': dateStr,
+      'logging_type': 'timed', // wrong type stamped at write time
+      'reps_completed': 0, // already corrupted top-level
+      'weight_kg': 0.0,
+      'duration_seconds': 18,
+      'sets': [
+        // Per-set entries the v2 migrator would have left alone.
+        {'duration_sec': 18, 'weight_kg': 0, 'reps': 0},
+        {'duration_sec': 18, 'weight_kg': 0, 'reps': 0},
+      ],
+      'sets_detail': [
+        {'duration_sec': 18, 'weight_kg': 0, 'reps': 0},
+        {'duration_sec': 18, 'weight_kg': 0, 'reps': 0},
+      ],
+    });
+
+    final corrected = await LoggingTypeRepairMigrator.runIfNeeded();
+    expect(corrected, 1);
+
+    final updated = wb.get('exlog_${dateStr}_pu') as Map;
+    expect(updated['logging_type'], 'bodyweight_reps',
+        reason: 'top-level type flipped to library value');
+    expect(updated['reps_completed'], 18,
+        reason: 'top-level duration → reps migration (v2 worked here)');
+
+    // Per-set entries are the v3 contribution.
+    final sets = updated['sets'] as List;
+    expect(sets, hasLength(2));
+    for (final s in sets) {
+      final m = s as Map;
+      expect(m.containsKey('duration_sec'), isFalse,
+          reason: 'per-set duration_sec must be removed');
+      expect(m.containsKey('duration_seconds'), isFalse);
+      expect(m['reps'], 18,
+          reason: 'per-set duration_sec → reps when reps was 0');
+    }
+
+    final setsDetail = updated['sets_detail'] as List;
+    expect(setsDetail, hasLength(2));
+    for (final s in setsDetail) {
+      final m = s as Map;
+      expect(m.containsKey('duration_sec'), isFalse);
+      expect(m['reps'], 18);
+    }
+  });
+
   test('library-strict v2 — Handstand Hold weight=0 cleared', () async {
     // Founder's data had Handstand Hold tagged weight_reps with weight=1
     // (bogus). Library says timed. Migration must flip type AND clear
