@@ -1427,10 +1427,18 @@ class AiCoachRepository {
     final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
 
     // Iterate today + 6 days, dedup by session name (first occurrence wins).
+    //
+    // APK Test #12.5 — IST double-shift fix. `istNow()` returns a
+    // DateTime already shifted to IST wall clock (isUtc=true flag);
+    // passing it BACK into `istDateStr` triggers a second +5:30 shift.
+    // Pre-fix: after 18:30 IST the reader looked for tomorrow's
+    // schedule key while writers (active workout completion, plan
+    // generator) had stamped today's. Result: weekly_sessions came
+    // back empty, AI coach lost visibility into the user's plan.
+    // Same class as Test #12 formatDateKey fix.
     final weeklySessionsMap = <String, Map<String, dynamic>>{};
     for (int i = 0; i < 7; i++) {
-      final date = istNow().add(Duration(days: i));
-      final dateStr = istDateStr(date);
+      final dateStr = istDateStr(DateTime.now().add(Duration(days: i)));
       final schedule = _hive.workoutBox.get('schedule_$dateStr');
       if (schedule is! Map) continue;
 
@@ -1843,14 +1851,17 @@ class AiCoachRepository {
         : 999; // sentinel for zero-cadence users
     final daysAtPlan = (remainingWorkouts * 7 / planCadence).ceil();
 
+    // APK Test #12.5 — IST double-shift fix. Same class as the
+    // weekly_sessions fix above. Use raw DateTime.now() so istDateStr
+    // does the IST shift exactly once.
     return {
       'at_current_cadence': {
         'days': daysAtCurrent,
-        'date': istDateStr(istNow().add(Duration(days: daysAtCurrent))),
+        'date': istDateStr(DateTime.now().add(Duration(days: daysAtCurrent))),
       },
       'at_plan_cadence': {
         'days': daysAtPlan,
-        'date': istDateStr(istNow().add(Duration(days: daysAtPlan))),
+        'date': istDateStr(DateTime.now().add(Duration(days: daysAtPlan))),
       },
     };
   }
