@@ -1192,9 +1192,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                           final name = log['exercise_name'] as String? ?? 'Exercise';
                           // Theme A · Test #8 — WriteService writes
                           // `set_number`; legacy entries used `sets_completed`.
-                          final sets = (log['set_number'] as num?)?.toInt() ??
-                              (log['sets_completed'] as num?)?.toInt() ??
-                              0;
+                          // APK Test #12.1 — read MAX of both rather than
+                          // first-non-null. EditWorkoutLogSheet wrote
+                          // `sets_completed` only, leaving `set_number=0`
+                          // from the original active-workout completion.
+                          // Founder observation 2026-05-06: "0 sets · 26 reps".
+                          final setNumberCanonical =
+                              (log['set_number'] as num?)?.toInt() ?? 0;
+                          final setsCompletedLegacy =
+                              (log['sets_completed'] as num?)?.toInt() ?? 0;
+                          final sets = setNumberCanonical > setsCompletedLegacy
+                              ? setNumberCanonical
+                              : setsCompletedLegacy;
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
                           final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;

@@ -214,15 +214,38 @@ class SubscriptionService {
       final userId = supabase.currentUser?.id;
       if (userId == null) return;
 
+      // APK Test #12.1 / hotfix — check payment grace window FIRST,
+      // before any state evaluation. This is the second downgrade path
+      // (alongside `verifyFromServer`); without this gate, a cold start
+      // within minutes of payment success would query Supabase, find no
+      // row (test mode webhook lag, or production webhook delay), and
+      // call `_downgradeLocally()` even though the user just paid.
+      //
+      // The pre-existing `localActivationAt` grace check below was
+      // conditional on `isPro()` being true — fragile during a cold
+      // start session-restore race where MigratedKey reads can fall
+      // back to an empty configBox. The new `isPaymentInFlight` check
+      // is unconditional and time-based.
+      if (isPaymentInFlight) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] payment in '
+            'flight — skipping server query, trusting local state');
+        return;
+      }
+
       // Grace period: if local activation just happened (Phase 3 fallback),
       // don't query Supabase yet — give the direct write time to propagate.
+      // APK Test #12.1 — dropped the `&& isPro()` conditional. localActivationAt
+      // alone is enough; the cold-start session race could make isPro() return
+      // false transiently and skip the grace window.
       final localActivation = MigratedKey.read<dynamic>('localActivationAt');
-      if (localActivation != null && isPro()) {
+      if (localActivation != null) {
         final activatedAt = DateTime.tryParse(localActivation.toString());
         if (activatedAt == null) {
           // Malformed timestamp — clear and continue with server check.
           await MigratedKey.delete('localActivationAt');
         } else if (DateTime.now().difference(activatedAt).inMinutes < 10) {
+          debugPrint('[SubscriptionService.refreshFromSupabase] within '
+              'localActivationAt grace — skipping server query');
           return; // Grace period — don't override local activation yet
         } else {
           // Past grace period — clear the flag
@@ -240,6 +263,8 @@ class SubscriptionService {
           .maybeSingle();
 
       if (response == null) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] no active '
+            'subscription row — downgrading locally');
         _downgradeLocally();
         return;
       }

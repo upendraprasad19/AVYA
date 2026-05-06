@@ -478,12 +478,46 @@ class WorkoutWriteService {
     final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
     final c = await _acquireLock(lockKey);
     try {
+      // APK Test #12.1 — legacy field-name normalization for callers
+      // that still write the pre-Test-#6 names. EditWorkoutLogSheet
+      // writes `sets_completed` + `sets_detail` (legacy names); the
+      // canonical readers (receipt, Train expanded view, AI snapshot)
+      // prefer `set_number` + `sets`. Without this normalization, a
+      // user who completed a workout with set_number=0 (no checked
+      // sets) and then edited via the sheet to add weight+reps would
+      // see `set_number=0, sets_completed=N` — readers report 0 sets.
+      // Promote legacy fields to canonical names BEFORE merging so
+      // the receipt and Train view see consistent data. Founder
+      // observation 2026-05-06: "0 sets · 26 reps · 85 kg".
+      final normalizedUpdates = Map<String, dynamic>.from(updates);
+      if (normalizedUpdates.containsKey('sets_completed') &&
+          !normalizedUpdates.containsKey('set_number')) {
+        normalizedUpdates['set_number'] = normalizedUpdates['sets_completed'];
+      }
+      if (normalizedUpdates.containsKey('sets_detail') &&
+          !normalizedUpdates.containsKey('sets')) {
+        // sets_detail uses `duration_seconds`; sets[] uses `duration_sec`.
+        // Translate field-by-field so ExerciseSet.fromMap works.
+        final raw = normalizedUpdates['sets_detail'];
+        if (raw is List) {
+          normalizedUpdates['sets'] = raw.map((entry) {
+            if (entry is! Map) return <String, dynamic>{};
+            final m = Map<String, dynamic>.from(entry);
+            if (m.containsKey('duration_seconds') &&
+                !m.containsKey('duration_sec')) {
+              m['duration_sec'] = m['duration_seconds'];
+            }
+            return m;
+          }).toList();
+        }
+      }
+
       // Apply updates
-      final updated = <String, dynamic>{...m, ...updates};
+      final updated = <String, dynamic>{...m, ...normalizedUpdates};
 
       // If sets[] was updated, recompute aggregates
-      if (updates.containsKey('sets')) {
-        final newSets = (updates['sets'] as List).cast<Map>().map((e) {
+      if (normalizedUpdates.containsKey('sets')) {
+        final newSets = (normalizedUpdates['sets'] as List).cast<Map>().map((e) {
           return ExerciseSet.fromMap(e);
         }).toList();
         updated['sets'] = newSets.map((s) => s.toMap()).toList();

@@ -460,8 +460,15 @@ class _MacroColumn extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.cardS),
       ),
       child: Column(
+        // APK Test #12.1 — macro rows distribute evenly through the
+        // available height. Pre-fix `mainAxisSize: MainAxisSize.min`
+        // kept rows top-stacked, so when B-2's `IntrinsicHeight` +
+        // `crossAxisAlignment.stretch` made this card match the hero
+        // card's height, the lower half rendered as empty space below
+        // the third row. `MainAxisAlignment.spaceEvenly` spreads the
+        // 3 rows + 2 dividers across the full vertical extent.
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _MacroRow(
             bullet: '◇', // ◇

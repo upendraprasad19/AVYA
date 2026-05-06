@@ -304,11 +304,18 @@ class WorkoutReceiptData {
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
-      // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older logs
-      // use `sets_completed`. Read new key first, fall back to legacy.
-      final sets = (log['set_number'] as num?)?.toInt()
-          ?? (log['sets_completed'] as num?)?.toInt()
-          ?? 0;
+      // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older
+      // logs use `sets_completed`. Read new key first, fall back to legacy.
+      // APK Test #12.1 — take the MAX of both rather than first-non-null.
+      // EditWorkoutLogSheet wrote `sets_completed` only, leaving
+      // `set_number=0` from the original active-workout completion (when
+      // the user pressed DONE without checking any sets). Without max(),
+      // edited logs render "0 sets · N reps".
+      final _setNumCanonical = (log['set_number'] as num?)?.toInt() ?? 0;
+      final _setsLegacy = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      final sets = _setNumCanonical > _setsLegacy
+          ? _setNumCanonical
+          : _setsLegacy;
       final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
