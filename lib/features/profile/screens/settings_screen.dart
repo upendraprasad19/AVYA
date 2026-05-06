@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Settings screen — matches the handoff
 /// (`design_handoff_wardroom/src/screens/utility.jsx` SettingsScreen).
@@ -26,7 +26,9 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isPro = SubscriptionService.instance.isPro();
+    // APK Test #12 / Task C-2 — watch subscriptionInfoProvider for
+    // reactive PRO/free dossier rendering after payment success.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
 
     return Scaffold(
       backgroundColor: AppColors.bg,

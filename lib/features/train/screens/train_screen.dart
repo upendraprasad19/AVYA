@@ -1190,60 +1190,119 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                   children: hasActualLogs
                       ? actualLogs.map((log) {
                           final name = log['exercise_name'] as String? ?? 'Exercise';
-                          final sets = log['sets_completed'] as int? ?? 0;
-                          final reps = log['reps_completed'] as int? ?? 0;
+                          // Theme A · Test #8 — WriteService writes
+                          // `set_number`; legacy entries used `sets_completed`.
+                          final sets = (log['set_number'] as num?)?.toInt() ??
+                              (log['sets_completed'] as num?)?.toInt() ??
+                              0;
+                          final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-                          final duration = log['duration_seconds'] as int? ?? 0;
-                          final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+                          final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+                          final loggingType =
+                              log['logging_type'] as String? ?? 'weight_reps';
 
-                          String detail;
+                          // APK Test #12 / Theme E-2 — Train expanded view
+                          // adopts per-set chip rendering (the same widget
+                          // the receipt uses). Pre-fix this screen showed a
+                          // single summary line ("4 sets · 33 reps · 110 kg")
+                          // hiding actual progression. WardSetChips renders
+                          // every set's weight/reps/duration as its own chip.
+                          final perSet = <WardSetChip>[];
+                          // WriteService writes `sets`; legacy is `sets_detail`.
+                          final rawSets = log['sets'] ?? log['sets_detail'];
+                          if (rawSets is List) {
+                            for (final s in rawSets) {
+                              if (s is! Map) continue;
+                              final w =
+                                  (s['weight_kg'] as num?)?.toDouble();
+                              final r = (s['reps'] as num?)?.toInt();
+                              final d =
+                                  (s['duration_sec'] as num?)?.toInt() ??
+                                      (s['duration_seconds'] as num?)?.toInt();
+                              final dist =
+                                  (s['distance_km'] as num?)?.toDouble();
+                              perSet.add(WardSetChip(
+                                weightKg: w,
+                                reps: r,
+                                durationSeconds: d,
+                                distanceKm: dist,
+                              ));
+                            }
+                          }
+
+                          // Cumulative fallback when per-set absent (legacy).
+                          String fallbackLabel;
                           if (loggingType == 'timed') {
                             final mins = duration ~/ 60;
                             final secs = duration % 60;
-                            detail = sets > 1
+                            fallbackLabel = sets > 1
                                 ? '$sets sets · ${mins > 0 ? '${mins}m ' : ''}${secs}s'
                                 : '${mins > 0 ? '${mins}m ' : ''}${secs}s';
                           } else if (loggingType == 'cardio') {
                             final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-                            detail = '${duration ~/ 60} min · ${dist.toStringAsFixed(1)} km';
+                            fallbackLabel =
+                                '${duration ~/ 60} min · ${dist.toStringAsFixed(1)} km';
                           } else if (weight > 0) {
-                            detail = '$sets sets · $reps reps · ${weight.toStringAsFixed(1)} kg';
+                            fallbackLabel =
+                                '$sets sets · $reps reps · ${weight.toStringAsFixed(1)} kg';
                           } else {
-                            detail = '$sets sets · $reps reps';
+                            fallbackLabel = '$sets sets · $reps reps';
                           }
 
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.only(bottom: 12),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.check_circle,
-                                    color: AppColors.ok, size: 18),
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 1),
+                                  child: Icon(Icons.check_circle,
+                                      color: AppColors.ok, size: 18),
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        name,
-                                        style: AppTypography.h3
-                                            .copyWith(fontSize: 13),
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              name,
+                                              style: AppTypography.h3
+                                                  .copyWith(fontSize: 13),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            sets > 0
+                                                ? '$sets ${sets == 1 ? "set" : "sets"}'
+                                                : '',
+                                            style: AppTypography.monoXs.copyWith(
+                                              color: AppColors.textMute,
+                                              letterSpacing: 1.0,
+                                              fontSize: 9,
+                                            ),
+                                          ),
+                                          if (log['is_pr'] == true) ...[
+                                            const SizedBox(width: 6),
+                                            const WardChip(
+                                                label: 'PR',
+                                                tone: WardChipTone.gold),
+                                          ],
+                                        ],
                                       ),
-                                      const SizedBox(height: 1),
-                                      Text(
-                                        detail,
-                                        style: AppTypography.monoXs.copyWith(
-                                          color: AppColors.textDim,
-                                          letterSpacing: 1.2,
-                                        ),
+                                      const SizedBox(height: 4),
+                                      WardSetChips(
+                                        loggingType: loggingType,
+                                        perSetBreakdown: perSet,
+                                        fallbackLabel: fallbackLabel,
                                       ),
                                     ],
                                   ),
                                 ),
-                                if (log['is_pr'] == true)
-                                  const WardChip(
-                                      label: 'PR', tone: WardChipTone.gold),
                               ],
                             ),
                           );

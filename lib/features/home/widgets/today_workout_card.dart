@@ -58,9 +58,18 @@ class TodayWorkoutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // APK Test #12 / Task B-2 — height equalization.
+    // Pre-fix the Row had `crossAxisAlignment: CrossAxisAlignment.start`
+    // which only top-aligns the children but DOES NOT force them to
+    // share the Row's intrinsic height. Combined with `_MacroColumn`'s
+    // `mainAxisSize: MainAxisSize.min`, the macro card collapsed to the
+    // sum of its 3 rows while the hero card pushed the START CTA via
+    // `mainAxisAlignment: spaceBetween` to the row's tallest extent —
+    // producing a visible height mismatch (founder feedback 2026-05-06).
+    // `CrossAxisAlignment.stretch` makes both children fill the IntrinsicHeight.
     return IntrinsicHeight(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Left column (60%).
           Expanded(
@@ -198,32 +207,20 @@ class _HeroCard extends StatelessWidget {
               // When [workoutMode] is set (e.g. "Relaxed"), it follows the
               // workout name on the same line separated by a mid-dot with
               // italic-gold emphasis.
-              RichText(
+              // APK Test #12 / Task B-1 \u2014 workoutMode label removed from
+              // this title row. Pre-fix the mode word ("Relaxed") rendered
+              // twice: once in the top mono row alongside PHASE chip,
+              // again here as italic-gold. Mono row top-right is the
+              // single source of truth now.
+              Text(
+                workoutName,
                 maxLines: 2,
-                text: TextSpan(
-                  style: AppTypography.titleL.copyWith(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.3,
-                  ),
-                  children: [
-                    TextSpan(text: workoutName),
-                    if (workoutMode != null && !isRestDay) ...[
-                      const TextSpan(
-                        text: ' \u00B7 ',
-                        style: TextStyle(color: AppColors.textGhost),
-                      ),
-                      TextSpan(
-                        text: _titleCase(workoutMode!),
-                        style: const TextStyle(
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.w500,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ],
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleL.copyWith(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.3,
                 ),
               ),
               if (!isRestDay && exerciseCount > 0) ...[
@@ -273,11 +270,6 @@ class _HeroCard extends StatelessWidget {
     );
   }
 
-  static String _titleCase(String input) {
-    if (input.isEmpty) return input;
-    final lower = input.toLowerCase();
-    return lower[0].toUpperCase() + lower.substring(1);
-  }
 }
 
 class _HeroCta extends StatelessWidget {

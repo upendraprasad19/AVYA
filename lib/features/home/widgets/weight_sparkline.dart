@@ -82,6 +82,15 @@ class _WeightSparklineState extends State<WeightSparkline> {
 
     final minW = weights.reduce(min);
     final maxW = weights.reduce(max);
+    // APK Test #12 / Task W-1 — dynamic decimal precision on Y-axis ticks.
+    // Pre-fix: tick formatter used `.toStringAsFixed(0)` unconditionally, so
+    // a 77.0 / 77.5 / 78.0 series rendered ticks "78 / 78 / 77" — two ticks
+    // collapsed to identical labels. Range-based decimals fix that:
+    //   range < 0.5  → 2 decimals (77.00 / 77.25 / 77.50)
+    //   range < 2.0  → 1 decimal  (78.0 / 77.5 / 77.0)
+    //   range >= 2.0 → integer    (85 / 80 / 75)
+    final yRange = (maxW - minW).abs();
+    final yTickDecimals = yRange < 0.5 ? 2 : (yRange < 2.0 ? 1 : 0);
 
     return WardCard(
       variant: WardCardVariant.standard,
@@ -174,18 +183,18 @@ class _WeightSparklineState extends State<WeightSparkline> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      maxW.toStringAsFixed(0),
+                      maxW.toStringAsFixed(yTickDecimals),
                       style: AppTypography.monoXs
                           .copyWith(color: AppColors.textMute),
                     ),
                     if (maxW != minW)
                       Text(
-                        ((maxW + minW) / 2).toStringAsFixed(0),
+                        ((maxW + minW) / 2).toStringAsFixed(yTickDecimals),
                         style: AppTypography.monoXs
                             .copyWith(color: AppColors.textMute),
                       ),
                     Text(
-                      minW.toStringAsFixed(0),
+                      minW.toStringAsFixed(yTickDecimals),
                       style: AppTypography.monoXs
                           .copyWith(color: AppColors.textMute),
                     ),

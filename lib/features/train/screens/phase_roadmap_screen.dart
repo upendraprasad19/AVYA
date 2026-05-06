@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/rank_insignia.dart';
 
@@ -38,7 +38,9 @@ class PhaseRoadmapScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isPro = SubscriptionService.instance.isPro();
+    // APK Test #12 / Task C-2 — watch subscriptionInfoProvider for
+    // reactive lock-glyph updates after PRO upgrade.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final currentWeek = WorkoutScheduleService.instance.getCurrentWeekNumber();
     final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
 
