@@ -36,14 +36,24 @@ import {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const VALID_ERROR_CODES = new Set([
-  "NetworkError",
-  "AuthError",
-  "ValidationError",
-  "SchemaError",
-  "RateLimitError",
-  "UnknownError",
-]);
+// APK Test #12.2 / Task #3 — error_code validation widened.
+//
+// Pre-Test-#12.2 the validator required error_code ∈ a fixed whitelist
+// (NetworkError / AuthError / ValidationError / SchemaError /
+// RateLimitError / UnknownError). The Flutter client (sync_service.dart
+// line 1727) sends `error.runtimeType.toString()` — Dart class names
+// like `PostgrestException`, `FormatException`, `TimeoutException`,
+// `SocketException`. ZERO overlap with the whitelist → every call
+// returned 400 → `client_errors` table had 0 rows total → we were blind
+// to all client-side sync failures for the entire app's lifetime.
+//
+// New rule: accept any non-empty string ≤ MAX_ERROR_CODE_CHARS chars.
+// Truncate at the boundary (don't reject) so analytics gets data even
+// when clients send slightly oversized strings. This trades type
+// safety for visibility — once we have a corpus of real codes from
+// production, we can add a normalization step on the client OR a
+// canonicalization step here. Visibility now > taxonomy later.
+const MAX_ERROR_CODE_CHARS = 64;
 
 const VALID_PLATFORMS = new Set(["android", "ios", "web"]);
 
@@ -77,20 +87,33 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const errorCode = String(body?.error_code ?? "");
-    const errorMessage = body?.error_message == null
+    // APK Test #12.2 / Task #3 — truncate (don't reject) oversized
+    // strings so we never lose telemetry on a noisy boundary case.
+    const rawErrorCode = String(body?.error_code ?? "");
+    const errorCode = rawErrorCode.length > MAX_ERROR_CODE_CHARS
+      ? rawErrorCode.slice(0, MAX_ERROR_CODE_CHARS)
+      : rawErrorCode;
+    let errorMessage = body?.error_message == null
       ? null
       : String(body.error_message);
-    const opType = body?.op_type == null ? null : String(body.op_type);
+    if (errorMessage != null && errorMessage.length > MAX_MESSAGE_CHARS) {
+      errorMessage = errorMessage.slice(0, MAX_MESSAGE_CHARS);
+    }
+    let opType = body?.op_type == null ? null : String(body.op_type);
+    if (opType != null && opType.length > MAX_OP_TYPE_CHARS) {
+      opType = opType.slice(0, MAX_OP_TYPE_CHARS);
+    }
     const retryCount = Number.isFinite(body?.retry_count)
       ? Number(body.retry_count)
       : 0;
     const clientVersion = String(body?.client_version ?? "");
     const platform = String(body?.platform ?? "");
 
-    // Validation — reject malformed input with specific reasons (user-safe).
-    if (!VALID_ERROR_CODES.has(errorCode)) {
-      return clientError("Invalid error_code", 400);
+    // Validation — only reject what's truly unrecoverable. A 400 here
+    // means we lose telemetry forever for that error event, which is
+    // strictly worse than storing a noisy row.
+    if (errorCode.length === 0) {
+      return clientError("Missing error_code", 400);
     }
     if (!VALID_PLATFORMS.has(platform)) {
       return clientError("Invalid platform", 400);
@@ -98,18 +121,7 @@ serve(async (req: Request) => {
     if (!clientVersion || clientVersion.length > MAX_CLIENT_VERSION_CHARS) {
       return clientError("Invalid client_version", 400);
     }
-    if (errorMessage != null && errorMessage.length > MAX_MESSAGE_CHARS) {
-      return clientError(
-        `error_message too long (max ${MAX_MESSAGE_CHARS} chars)`,
-        400,
-      );
-    }
-    if (opType != null && opType.length > MAX_OP_TYPE_CHARS) {
-      return clientError(
-        `op_type too long (max ${MAX_OP_TYPE_CHARS} chars)`,
-        400,
-      );
-    }
+    // error_message and op_type are now truncated above; never reject.
     if (retryCount < 0 || retryCount > 1000) {
       return clientError("Invalid retry_count", 400);
     }

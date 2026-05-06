@@ -81,6 +81,43 @@ serve(async (req: Request) => {
     if (authError || !user) return err(401, "Invalid or expired token");
     const userId = user.id;
 
+    // ── APK Test #12.2 / Task #6 — server-side double-payment guard ──
+    //
+    // Last-resort defense against creating duplicate active subscriptions.
+    // If the user already has a non-expired active subscription, reject
+    // with 409 + existing entitlement so the client can show
+    // "you're already PRO until DDD" instead of opening Razorpay checkout.
+    //
+    // Why server-side guard exists: the Flutter UI guards via
+    // `subscriptionInfoProvider.isPro` reading local Hive — but that read
+    // can be a false negative in known PRO-unlock bug paths. Founder
+    // discovered this by paying 4 times in 24h on 2026-05-06 (each
+    // payment created a new active subscription row) — the UI never
+    // showed "already PRO" because local isPro was reading false.
+    {
+      const { data: existing } = await supabase
+        .from("subscriptions")
+        .select("id, plan, end_date")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("end_date", new Date().toISOString())
+        .order("end_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing && existing.end_date) {
+        return err(
+          409,
+          "You're already a PRO member.",
+          {
+            error_code: "already_pro",
+            current_plan: existing.plan,
+            current_expires_at: existing.end_date,
+          },
+        );
+      }
+    }
+
     // ── Body ──
     const body = await req.json();
     const plan = String(body?.plan ?? "");

@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
+import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -397,6 +398,16 @@ class AuthNotifier extends Notifier<AuthState2> {
       debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
       // Non-fatal — readers will see legacy configBox values until next
       // launch. Cross-account guard would still clear them if needed.
+    }
+
+    // APK Test #12.2 / Task #2b — one-shot self-repair migration that
+    // walks every `exlog_*` row and corrects `logging_type` drift left
+    // by pre-Test-#12 swap state retention. Idempotent (gated by
+    // migrationBox flag). Non-fatal on failure — next launch retries.
+    try {
+      await LoggingTypeRepairMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] logging_type repair failed: $e');
     }
 
     // Ensure user exists in public.users table (Edge Functions need this).
