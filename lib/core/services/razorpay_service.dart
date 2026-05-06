@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -97,35 +98,20 @@ class RazorpayService {
 
       // APK Test #12.2 / Task #6 — handle 409 already_pro from the
       // server-side double-payment guard. Server returns 409 when user
-      // already has a non-expired active subscription. Show a helpful
-      // toast instead of the generic "could not create order" failure
-      // — and trigger a verifyFromServer refresh so the local PRO state
-      // catches up (this also unlocks the PRO pills the user was trying
-      // to access by paying again).
+      // already has a non-expired active subscription.
+      //
+      // APK Test #12.5 / Class 2a — defense-in-depth path. In
+      // supabase_flutter ^2.12.0, `client.functions.invoke()` THROWS
+      // `FunctionException` for non-2xx responses by default — control
+      // jumps to the catch block, never reaching this branch. Kept here
+      // for forward-compat in case the package adopts response-style
+      // semantics later.
       if (resp.status == 409) {
         final data = resp.data is Map
             ? resp.data as Map<String, dynamic>
             : <String, dynamic>{};
         if (data['error_code'] == 'already_pro') {
-          final endIso = data['current_expires_at'] as String?;
-          final endDate = endIso != null ? DateTime.tryParse(endIso) : null;
-          final endLabel = endDate != null
-              ? '${endDate.day}/${endDate.month}/${endDate.year}'
-              : 'now';
-          // Force-trust the server's truth: write the active state
-          // locally so subsequent reads are correct.
-          if (endIso != null) {
-            try {
-              await SubscriptionService.instance.writeSubscriptionState(
-                isPro: true,
-                expiresAt: endIso,
-                plan: (data['current_plan'] as String?) ?? 'monthly',
-              );
-              await SubscriptionService.instance.clearPaymentInFlight();
-              _invalidateSubscriptionProviders();
-            } catch (_) {}
-          }
-          _showAlreadyProFeedback(endLabel);
+          await _handleAlreadyProResponse(data);
           onSuccess?.call(); // treat as success — user IS PRO
           return;
         }
@@ -133,7 +119,7 @@ class RazorpayService {
       if (resp.status != 200 || resp.data == null) {
         debugPrint('RazorpayService: create-razorpay-order failed '
             'status=${resp.status} data=${resp.data}');
-        _showOrderCreationFailure();
+        _showOrderCreationFailure(serverError: _extractServerError(resp.data));
         onFailure?.call();
         return;
       }
@@ -151,6 +137,32 @@ class RazorpayService {
         return;
       }
     } catch (e) {
+      // APK Test #12.5 / Class 2a — handle FunctionException from
+      // supabase_flutter ^2.12.0. invoke() throws on non-2xx; the
+      // 409 branch above is dead code in this version. Parse
+      // `e.details` here.
+      if (e is FunctionException) {
+        final status = e.status;
+        final details = e.details;
+        if (status == 409 && details is Map) {
+          final m = Map<String, dynamic>.from(details);
+          if (m['error_code'] == 'already_pro') {
+            try {
+              await _handleAlreadyProResponse(m);
+              onSuccess?.call();
+              return;
+            } catch (inner) {
+              debugPrint('RazorpayService: 409 handler threw: $inner');
+            }
+          }
+        }
+        debugPrint(
+            'RazorpayService: create-razorpay-order FunctionException '
+            'status=$status details=$details');
+        _showOrderCreationFailure(serverError: _extractServerError(details));
+        onFailure?.call();
+        return;
+      }
       debugPrint('RazorpayService: create-razorpay-order threw: $e');
       _showOrderCreationFailure();
       onFailure?.call();
@@ -227,20 +239,70 @@ class RazorpayService {
   /// Shows a non-blocking snackbar when server-side order creation fails
   /// before Razorpay checkout even opens. The user hasn't paid yet, so
   /// this is a recoverable "try again" state.
-  void _showOrderCreationFailure() {
+  ///
+  /// APK Test #12.5 / Class 2b — when the server returns an actionable
+  /// error message, surface it instead of the generic copy. Helps
+  /// debug payment-flow regressions in the field (e.g. promo expired,
+  /// validation failed, etc.) without needing edge-function logs.
+  void _showOrderCreationFailure({String? serverError}) {
     final ctx = navigatorKey?.currentContext;
     if (ctx == null) return;
+    final msg = (serverError != null && serverError.isNotEmpty)
+        ? serverError
+        : 'Couldn\'t start payment. Check your connection and try again.';
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
         content: Text(
-          'Couldn\'t start payment. Check your connection and try again.',
+          msg,
           style: AppTypography.bodySm.copyWith(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF2a1a1a),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 5),
       ),
     );
+  }
+
+  /// APK Test #12.5 / Class 2a — extracted handler so the 409 path
+  /// is identical whether `resp.status == 409` or the call threw a
+  /// `FunctionException` carrying the same payload.
+  ///
+  /// Force-trusts the server's truth: writes active subscription
+  /// state locally so subsequent reads (subscriptionInfoProvider,
+  /// gate(), profile dossier) are correct.
+  Future<void> _handleAlreadyProResponse(Map<String, dynamic> data) async {
+    final endIso = data['current_expires_at'] as String?;
+    final endDate = endIso != null ? DateTime.tryParse(endIso) : null;
+    final endLabel = endDate != null
+        ? '${endDate.day}/${endDate.month}/${endDate.year}'
+        : 'now';
+    if (endIso != null) {
+      try {
+        await SubscriptionService.instance.writeSubscriptionState(
+          isPro: true,
+          expiresAt: endIso,
+          plan: (data['current_plan'] as String?) ?? 'monthly',
+        );
+        await SubscriptionService.instance.clearPaymentInFlight();
+        _invalidateSubscriptionProviders();
+      } catch (_) {}
+    }
+    _showAlreadyProFeedback(endLabel);
+  }
+
+  /// APK Test #12.5 / Class 2b — pulls a user-readable error message
+  /// out of an Edge Function response body. Edge Functions follow the
+  /// CLAUDE.md §11 "Edge Function Error Sanitization" contract:
+  /// validation errors return `{error: "..."}` while internal errors
+  /// return generic `{error: "Internal server error", request_id}`.
+  /// Both shapes are handled — internal errors fall through to the
+  /// generic toast (the request_id is in debug logs).
+  String? _extractServerError(dynamic body) {
+    if (body is! Map) return null;
+    final err = body['error'];
+    if (err is! String) return null;
+    if (err == 'Internal server error') return null;
+    return err;
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {

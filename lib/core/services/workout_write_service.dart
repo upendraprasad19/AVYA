@@ -135,6 +135,25 @@ class WorkoutWriteService {
       final volume = mergedSets.fold<double>(
           0.0, (a, s) => a + (s.weightKg * s.reps));
 
+      // APK Test #12.5 / Class 1a-1b — library-aware logging_type +
+      // phantom-durationSec stripping.
+      //
+      // Pre-fix `_inferLoggingType` was data-shape-only: it returned
+      // `'timed'` whenever any set had durationSec>0 AND no weight.
+      // The active workout UI's `_durationControllers` could be hot
+      // even for bodyweight slots (post-swap state retention or input
+      // bleed), stuffing durationSec onto Push Up / Hanging Leg Raise
+      // sets and wrongly stamping them as timed. Receipt then rendered
+      // "× 540 reps" / "0s" depending on the renderer.
+      //
+      // Fix: consult exerciseBox first. Library type wins for known
+      // exercises; data-shape fallback only for custom exercises.
+      // When resolved type ≠ 'timed', strip durationSec from per-set
+      // entries so downstream renderers and the cloud projection don't
+      // carry phantom values.
+      final resolvedType = _resolveLoggingType(exerciseName, mergedSets);
+      final cleanedSets = _stripPhantomFields(mergedSets, resolvedType);
+
       // APK Test #12 / Task A-2 — workout session id. Defaults to
       // `wlog_<date>` (one workout per IST date). Multi-session days
       // can pass an explicit id to keep receipts scoped per session.
@@ -146,12 +165,12 @@ class WorkoutWriteService {
         'exercise_name': exerciseName,
         'date': dateStr,
         'workout_log_id': wid,
-        'sets': mergedSets.map((s) => s.toMap()).toList(),
-        'set_number': mergedSets.length,
+        'sets': cleanedSets.map((s) => s.toMap()).toList(),
+        'set_number': cleanedSets.length,
         'reps_completed': totalReps,
         'weight_kg': maxWeight,
         'volume_kg': volume,
-        'logging_type': _inferLoggingType(mergedSets),
+        'logging_type': resolvedType,
         'source': source.code,
         'notes': ?notes,
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
@@ -189,12 +208,85 @@ class WorkoutWriteService {
     }
   }
 
-  String _inferLoggingType(List<ExerciseSet> sets) {
+  /// APK Test #12.5 / Class 1a — library-aware logging_type resolver.
+  ///
+  /// Consults the bundled exercise library first. For known exercises
+  /// (Push Up, Hanging Leg Raise, Jump Rope, …) the library type wins
+  /// regardless of what the data shape suggests — the data may be
+  /// corrupt (swap-state retention, controller bleed) and the library
+  /// is the canonical truth.
+  ///
+  /// Custom exercises (not in the library) fall back to data-shape
+  /// inference — same logic the old `_inferLoggingType` used.
+  String _resolveLoggingType(String exerciseName, List<ExerciseSet> sets) {
+    // Library lookup. Tolerate missing/uninitialized exerciseBox —
+    // fall back to data inference rather than throw.
+    try {
+      final exb = HiveService.instance.exerciseBox;
+      final trimmed = exerciseName.trim();
+      for (final v in exb.values) {
+        if (v is! Map) continue;
+        final name = v['name'] as String?;
+        if (name == null) continue;
+        if (name.trim().toLowerCase() == trimmed.toLowerCase()) {
+          final lt = v['logging_type'] as String?;
+          if (lt != null && lt.isNotEmpty) return lt;
+          break;
+        }
+      }
+    } catch (_) {
+      // Box not open / not seeded — data-driven fallback.
+    }
+
+    // Data-shape inference (custom exercise path).
     final hasDur = sets.any((s) => s.durationSec != null && s.durationSec! > 0);
     final hasWeight = sets.any((s) => s.weightKg > 0);
     if (hasDur && !hasWeight) return 'timed';
     if (hasWeight) return 'weight_reps';
     return 'bodyweight_reps';
+  }
+
+  /// APK Test #12.5 / Class 1b — strip phantom fields when the
+  /// resolved logging_type doesn't accommodate them.
+  ///
+  /// Examples of phantoms we've observed in production:
+  /// - Push Up (`bodyweight_reps`) with `durationSec=18` from a stale
+  ///   `_durationControllers` text after a swap.
+  /// - Handstand Hold (`timed`) with `weightKg=1.0` (bogus 1kg).
+  ///
+  /// Per-set entries that would surface as "18 secs" for a bodyweight
+  /// chip get cleaned here before persistence so every reader (receipt,
+  /// train calendar, cloud projection) sees consistent data.
+  List<ExerciseSet> _stripPhantomFields(
+    List<ExerciseSet> sets,
+    String resolvedType,
+  ) {
+    switch (resolvedType) {
+      case 'bodyweight_reps':
+      case 'weight_reps':
+      case 'weighted_bodyweight':
+        // Duration doesn't apply.
+        return sets
+            .map((s) => ExerciseSet(
+                  weightKg: s.weightKg,
+                  reps: s.reps,
+                  durationSec: null,
+                  loggedAtMs: s.loggedAtMs,
+                ))
+            .toList();
+      case 'timed':
+        // Weight + reps don't apply for pure-timed.
+        return sets
+            .map((s) => ExerciseSet(
+                  weightKg: 0.0,
+                  reps: 0,
+                  durationSec: s.durationSec,
+                  loggedAtMs: s.loggedAtMs,
+                ))
+            .toList();
+      default:
+        return sets;
+    }
   }
 
   bool _rescanPrFor(

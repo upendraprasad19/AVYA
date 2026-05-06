@@ -1378,6 +1378,24 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         final vals = state.setInputValues[key];
         if (vals == null) continue;
 
+        // APK Test #12.5 / Class 4 — diagnostic. WorkoutWriteService
+        // strips phantom durationSec post-resolve, but we want to know
+        // WHEN this happens at the source so we can find + fix the
+        // controller-leak path. Logged in debug builds only — pure
+        // observation, no behavior change.
+        final slotType = exercise.loggingType;
+        if (kDebugMode &&
+            vals.durationSeconds != null &&
+            vals.durationSeconds! > 0 &&
+            slotType != 'timed' &&
+            slotType != 'cardio') {
+          debugPrint(
+              '[durationCtl-leak] exercise="${exercise.name}" '
+              'slotType="$slotType" setIdx=$s '
+              'duration=${vals.durationSeconds} reps=${vals.reps} '
+              'weight=${vals.weight}');
+        }
+
         exerciseSets.add(ExerciseSet(
           weightKg: vals.weight ?? 0,
           reps: vals.reps ?? 0,
