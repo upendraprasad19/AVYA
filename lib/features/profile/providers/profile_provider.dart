@@ -304,10 +304,19 @@ class SubscriptionInfoData {
   final String? plan;
   final DateTime? expiresAt;
 
+  /// APK Test #12 / Task C-4 — true when a Razorpay payment succeeded
+  /// locally but the server-side webhook hasn't yet confirmed the
+  /// subscription row. Pills/badges that watch this provider can
+  /// render a "verifying" hint (e.g. ⟳ glyph) instead of a regular
+  /// PRO badge during this window. Cleared once the webhook fires
+  /// or the 10-min grace window expires.
+  final bool isVerifying;
+
   const SubscriptionInfoData({
     this.isPro = false,
     this.plan,
     this.expiresAt,
+    this.isVerifying = false,
   });
 }
 
@@ -319,6 +328,7 @@ class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
       isPro: sub.isPro(),
       plan: sub.currentPlan,
       expiresAt: sub.expiresAt,
+      isVerifying: sub.isPaymentInFlight,
     );
   }
 }

@@ -1381,7 +1381,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildPredictionCard() {
     final prediction = ref.watch(predictionProvider);
-    final isPro = SubscriptionService.instance.isPro();
+    // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
+    // prediction-card refresh affordance updates reactively after PRO upgrade.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     return PredictionCard(
       predictionText: prediction.predictionText,
       generatedAt: prediction.generatedAt,
@@ -1474,6 +1476,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              if (subInfo.isVerifying) ...[
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.sync,
+                                  size: 11,
+                                  color: AppColors.accent.withValues(alpha: 0.75),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'CONFIRMING',
+                                  style: AppTypography.monoXs.copyWith(
+                                    fontSize: 9,
+                                    color: AppColors.accent.withValues(alpha: 0.75),
+                                    letterSpacing: 1.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -1488,7 +1508,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'RENEWS $expiryStr'.toUpperCase(),
+                            subInfo.isVerifying
+                                ? 'AWAITING WEBHOOK CONFIRMATION'
+                                : 'RENEWS $expiryStr'.toUpperCase(),
                             style: AppTypography.mono.copyWith(
                               fontSize: 10,
                               color: AppColors.textDim,

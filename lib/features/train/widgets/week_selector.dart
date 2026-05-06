@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Horizontal scrollable week tab bar — extended to 12 weeks (3 phases).
 ///
@@ -15,7 +16,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 /// compile without change. When `totalWeeks < 12` the widget still renders
 /// 12 chips so the full roadmap is always visible; weeks beyond
 /// `totalWeeks` are treated as "future / not yet generated".
-class WeekSelector extends StatefulWidget {
+class WeekSelector extends ConsumerStatefulWidget {
   final int totalWeeks;
   final int selectedWeek; // 1-indexed
   final ValueChanged<int> onSelect;
@@ -28,13 +29,15 @@ class WeekSelector extends StatefulWidget {
   });
 
   @override
-  State<WeekSelector> createState() => _WeekSelectorState();
+  ConsumerState<WeekSelector> createState() => _WeekSelectorState();
 }
 
-class _WeekSelectorState extends State<WeekSelector> {
+class _WeekSelectorState extends ConsumerState<WeekSelector> {
   @override
   Widget build(BuildContext context) {
-    final isPro = SubscriptionService.instance.isPro();
+    // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
+    // PHASE II / III lock chips re-render the moment payment confirms.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final planStart = WorkoutScheduleService.instance.getPlanStartDate();
 
     return SingleChildScrollView(

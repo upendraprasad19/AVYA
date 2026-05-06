@@ -57,6 +57,14 @@ class WorkoutWriteService {
     String? notes,
     required WriteSource source,
     WidgetRef? ref,
+    /// APK Test #12 / Task A-2 — receipt scoping. Stamps the parent
+    /// workout session id on this exercise log row. Receipt query for
+    /// a date can then filter by `workout_log_id` to show only that
+    /// session's exercises (not all exercises logged on that IST date).
+    /// Defaults to `wlogKey(date)` (one workout per IST date) — for
+    /// users with multiple sessions per day, the caller should pass an
+    /// explicit id (e.g. `'wlog_<date>_<sequence>'`).
+    String? workoutLogId,
   }) async {
     // 1. Validate
     if (exerciseName.trim().isEmpty) {
@@ -127,9 +135,17 @@ class WorkoutWriteService {
       final volume = mergedSets.fold<double>(
           0.0, (a, s) => a + (s.weightKg * s.reps));
 
+      // APK Test #12 / Task A-2 — workout session id. Defaults to
+      // `wlog_<date>` (one workout per IST date). Multi-session days
+      // can pass an explicit id to keep receipts scoped per session.
+      // Pre-existing rows without this field still load via the
+      // legacy "all exercises on date" fallback in receipt code.
+      final wid = workoutLogId ?? wlogKey(date);
+
       final entry = <String, dynamic>{
         'exercise_name': exerciseName,
         'date': dateStr,
+        'workout_log_id': wid,
         'sets': mergedSets.map((s) => s.toMap()).toList(),
         'set_number': mergedSets.length,
         'reps_completed': totalReps,

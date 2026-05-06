@@ -225,6 +225,11 @@ class RazorpayService {
         'localActivationAt',
         DateTime.now().toIso8601String(),
       );
+      // APK Test #12 / Task C-1 — open the payment grace window so any
+      // verifyFromServer call that runs before the webhook fires (splash
+      // checkAndSync, gate() on a high-value feature, app foreground)
+      // doesn't downgrade the optimistic state.
+      await SubscriptionService.instance.markPaymentInFlight();
     } catch (e) {
       debugPrint('RazorpayService: optimistic activation write failed: $e');
     }
@@ -297,12 +302,7 @@ class RazorpayService {
     // Trial + message-limit providers cache free-tier counters; PRO
     // users shouldn't see those at all, so invalidate them too to
     // avoid a stale "15 msgs left today" sliver on the AI coach screen.
-    try {
-      final container = ProviderScope.containerOf(context, listen: false);
-      container.invalidate(subscriptionInfoProvider);
-      container.invalidate(trialInfoProvider);
-      container.invalidate(messageLimitProvider);
-    } catch (_) {}
+    _invalidateSubscriptionProviders();
 
     // Show success snackbar
     ScaffoldMessenger.of(context).showSnackBar(
@@ -325,6 +325,25 @@ class RazorpayService {
         duration: const Duration(seconds: 4),
       ),
     );
+  }
+
+  /// Invalidates the 3 subscription-related Riverpod providers.
+  /// Called from:
+  ///   - _showProActivatedFeedback (immediately on payment success)
+  ///   - _pollAndActivate Phase 1 (when webhook confirms)
+  ///   - _pollAndActivate Phase 2 (when verify-payment confirms)
+  /// Each call triggers a UI rebuild for any widget watching these
+  /// providers, so the user's pills + trial banner reflect the latest
+  /// PRO state without manual refresh.
+  void _invalidateSubscriptionProviders() {
+    final context = navigatorKey?.currentContext;
+    if (context == null) return;
+    try {
+      final container = ProviderScope.containerOf(context, listen: false);
+      container.invalidate(subscriptionInfoProvider);
+      container.invalidate(trialInfoProvider);
+      container.invalidate(messageLimitProvider);
+    } catch (_) {}
   }
 
   /// Computes a valid end date for a plan, used when webhook row has
@@ -400,6 +419,12 @@ class RazorpayService {
             expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
             plan: plan,
           );
+          // APK Test #12 / Task C-1 — webhook confirmed, close grace window
+          // so verifyFromServer behaves normally on subsequent calls.
+          await SubscriptionService.instance.clearPaymentInFlight();
+          // Trigger another provider invalidation now that we have the
+          // server-confirmed end date (different from optimistic).
+          _invalidateSubscriptionProviders();
           debugPrint('RazorpayService: webhook confirmed at attempt $attempt (exact=${attempt < 12})');
           return;
         }
@@ -432,6 +457,8 @@ class RazorpayService {
               expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
               plan: plan,
             );
+            await SubscriptionService.instance.clearPaymentInFlight();
+            _invalidateSubscriptionProviders();
             debugPrint('RazorpayService: verified via Edge Function');
             return;
           }

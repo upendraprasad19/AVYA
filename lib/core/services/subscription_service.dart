@@ -48,8 +48,43 @@ class SubscriptionService {
   static const String _planKey = 'plan';
   static const String _lastVerifiedKey = 'lastVerifiedAt';
 
+  /// APK Test #12 / Task C-1 — payment grace window key. While this
+  /// timestamp is in the future, [verifyFromServer] will NOT downgrade
+  /// the user even if the server reports `is_pro: false` (the webhook
+  /// hasn't fired yet). Set by [RazorpayService] on payment success +
+  /// during polling; cleared after server confirmation.
+  static const String _paymentInFlightUntilKey = 'paymentInFlightUntil';
+
+  /// Default grace window after payment success — webhook usually fires
+  /// within 30s but we allow up to 10 min to absorb retry storms.
+  static const Duration _paymentGraceWindow = Duration(minutes: 10);
+
   /// Server-side verification cache TTL (5 minutes).
   static const Duration _verifyCacheTtl = Duration(minutes: 5);
+
+  /// Returns true if a payment is currently mid-confirmation. While
+  /// true, downgrade decisions in [verifyFromServer] are suppressed.
+  bool get isPaymentInFlight {
+    final raw = MigratedKey.read<dynamic>(_paymentInFlightUntilKey);
+    if (raw == null) return false;
+    final until = DateTime.tryParse(raw.toString());
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  /// Marks a payment as in-flight for [_paymentGraceWindow]. Public so
+  /// [RazorpayService] can call it on payment success and during poll
+  /// retries.
+  Future<void> markPaymentInFlight() async {
+    final until = DateTime.now().add(_paymentGraceWindow).toIso8601String();
+    await MigratedKey.write(_paymentInFlightUntilKey, until);
+  }
+
+  /// Clears the payment grace window. Called after successful server
+  /// confirmation so subsequent [verifyFromServer] calls behave normally.
+  Future<void> clearPaymentInFlight() async {
+    await MigratedKey.delete(_paymentInFlightUntilKey);
+  }
 
   /// Atomically writes all subscription keys in a single Hive batch.
   ///
@@ -255,18 +290,26 @@ class SubscriptionService {
   /// this immediately downgrades. Prevents Hive-spoofing attacks.
   ///
   /// Returns `true` if verified PRO, `false` if free/expired/offline.
-  Future<bool> verifyFromServer() async {
+  Future<bool> verifyFromServer({bool force = false}) async {
     try {
       final supabase = SupabaseService.instance;
-      if (!supabase.isInitialized || !supabase.isAuthenticated) return isPro();
+      if (!supabase.isInitialized || !supabase.isAuthenticated) {
+        debugPrint('[SubscriptionService.verifyFromServer] supabase not ready '
+            '— returning local isPro=${isPro()}');
+        return isPro();
+      }
 
-      // Check cache — skip server call if verified recently
-      final lastVerifiedRaw = MigratedKey.read<dynamic>(_lastVerifiedKey);
-      if (lastVerifiedRaw != null) {
-        final lastVerified = DateTime.tryParse(lastVerifiedRaw.toString());
-        if (lastVerified != null &&
-            DateTime.now().difference(lastVerified) < _verifyCacheTtl) {
-          return isPro(); // Cache is fresh — trust local state
+      // Check cache — skip server call if verified recently (unless forced)
+      if (!force) {
+        final lastVerifiedRaw = MigratedKey.read<dynamic>(_lastVerifiedKey);
+        if (lastVerifiedRaw != null) {
+          final lastVerified = DateTime.tryParse(lastVerifiedRaw.toString());
+          if (lastVerified != null &&
+              DateTime.now().difference(lastVerified) < _verifyCacheTtl) {
+            debugPrint('[SubscriptionService.verifyFromServer] cache fresh '
+                '(last=${lastVerified.toIso8601String()}) — local isPro=${isPro()}');
+            return isPro(); // Cache is fresh — trust local state
+          }
         }
       }
 
@@ -280,16 +323,23 @@ class SubscriptionService {
         // This is intentional — a non-200 (network error, 401, 5xx) should
         // not immediately downgrade the user. The cache has a TTL
         // (_verifyCacheTtl) and will re-verify on next app launch.
-        debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status}');
+        debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status} '
+            '— trust local isPro=${isPro()}');
         return isPro();
       }
 
       final data = response.data as Map<String, dynamic>?;
-      if (data == null) return isPro();
+      if (data == null) {
+        debugPrint('[SubscriptionService.verifyFromServer] empty body '
+            '— trust local isPro=${isPro()}');
+        return isPro();
+      }
 
       final serverIsPro = data['is_pro'] as bool? ?? false;
       final serverPlan = data['plan'] as String?;
       final serverExpiresAt = data['expires_at'] as String?;
+      debugPrint('[SubscriptionService.verifyFromServer] server returned '
+          'is_pro=$serverIsPro plan=$serverPlan expires_at=$serverExpiresAt');
 
       if (serverIsPro && serverExpiresAt != null) {
         // Server confirms PRO — update local cache (atomic write)
@@ -298,8 +348,27 @@ class SubscriptionService {
           expiresAt: serverExpiresAt,
           plan: serverPlan ?? 'monthly',
         );
+        // Webhook has fired — clear the grace window so subsequent
+        // verifies behave normally (no false-positive grace).
+        await clearPaymentInFlight();
+        debugPrint('[SubscriptionService.verifyFromServer] confirmed PRO '
+            '— local cache updated, payment_in_flight cleared');
       } else {
-        // Server says NOT PRO — downgrade immediately (anti-spoof)
+        // APK Test #12 / Task C-1 — payment grace window. If a payment
+        // is mid-confirmation (toast fired, webhook hasn't yet), DO NOT
+        // downgrade. The optimistic local state must survive until the
+        // grace window expires or the webhook arrives.
+        if (isPaymentInFlight) {
+          debugPrint('[SubscriptionService.verifyFromServer] server says '
+              'NOT pro BUT payment in flight — suppressing downgrade, '
+              'returning local isPro=${isPro()}');
+          // Don't update _lastVerifiedKey — we want the next verify to
+          // re-check after a short interval, not trust this stale "no" for 5min.
+          return isPro();
+        }
+        // Server says NOT PRO + no grace window — downgrade (anti-spoof).
+        debugPrint('[SubscriptionService.verifyFromServer] server says '
+            'NOT pro, no grace window — downgrading locally');
         await _downgradeLocally();
       }
 
@@ -309,7 +378,8 @@ class SubscriptionService {
       return serverIsPro;
     } on Exception catch (e) {
       // Network errors, timeouts, platform exceptions — trust cached state.
-      debugPrint('[SubscriptionService.verifyFromServer] $e');
+      debugPrint('[SubscriptionService.verifyFromServer] threw: $e '
+          '— trust local isPro=${isPro()}');
       return isPro();
     }
   }

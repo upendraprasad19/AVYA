@@ -53,6 +53,7 @@ export 'ward_ring.dart';
 export 'ward_rule.dart';
 export 'ward_seal_badge.dart';
 export 'ward_session_row.dart';
+export 'ward_set_chips.dart';
 export 'ward_spark.dart';
 export 'ward_stat_tile.dart';
 export 'ward_status_strip.dart';

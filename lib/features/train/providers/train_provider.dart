@@ -977,10 +977,71 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     state = state.copyWith(setInputValues: newValues);
   }
 
+  /// Replace the exercise at [exerciseIndex] with [newExercise].
+  ///
+  /// APK Test #12 / Theme A-4 — checked sets, warm-up flags, and typed
+  /// input values for the OLD exercise are wiped. Otherwise: a user who
+  /// checks set 1 of "Bench Press" (5 reps × 60kg), then swaps to
+  /// "Push Up" (bodyweight), would see the new "Push Up" slot pre-loaded
+  /// with the old weight/reps and treated as already-done — eventually
+  /// logging Push Up @ 60kg × 5 reps. The clean-on-swap rule keeps the
+  /// new exercise pristine.
+  ///
+  /// APK Test #12 / Theme D-1 — runs the new exercise's `loggingType`
+  /// through [LoggingTypeResolver] so swap-from-timed → weight_reps (and
+  /// vice versa) actually flips the slot UI. The picker sometimes returns
+  /// an exercise without a `logging_type` field; the resolver looks it up
+  /// in `exerciseBox` / `customBox` by name before falling back to
+  /// `weight_reps`.
   void swapExercise(int exerciseIndex, ExerciseData newExercise) {
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+
+    // Resolve correct logging_type for the incoming exercise.
+    final hive = HiveService.instance;
+    final resolvedLoggingType = LoggingTypeResolver.resolve(
+          exercise: <String, dynamic>{
+            'name': newExercise.name,
+            'logging_type': newExercise.loggingType,
+          },
+          exerciseLibrary: hive.exerciseBox.toMap(),
+          customLibrary: hive.customBox.toMap(),
+        ) ??
+        'weight_reps';
+    final resolved = newExercise.loggingType == resolvedLoggingType
+        ? newExercise
+        : ExerciseData(
+            name: newExercise.name,
+            sets: newExercise.sets,
+            reps: newExercise.reps,
+            weight: newExercise.weight,
+            rest: newExercise.rest,
+            loggingType: resolvedLoggingType,
+            category: newExercise.category,
+            equipmentNeeded: newExercise.equipmentNeeded,
+          );
+
     final newExercises = List<ExerciseData>.from(state.exercises);
-    newExercises[exerciseIndex] = newExercise;
-    state = state.copyWith(exercises: newExercises);
+    newExercises[exerciseIndex] = resolved;
+
+    // APK Test #12 / Theme A-4 — wipe per-slot ephemeral state so the
+    // new exercise starts clean.
+    final prefix = '$exerciseIndex-';
+    final newChecked = Map<String, bool>.fromEntries(
+      state.checkedSets.entries.where((e) => !e.key.startsWith(prefix)),
+    );
+    final newWarmUps = Map<String, bool>.fromEntries(
+      state.warmUpSets.entries.where((e) => !e.key.startsWith(prefix)),
+    );
+    final newInputValues = Map<String, SetInputValues>.fromEntries(
+      state.setInputValues.entries.where((e) => !e.key.startsWith(prefix)),
+    );
+
+    state = state.copyWith(
+      exercises: newExercises,
+      checkedSets: newChecked,
+      warmUpSets: newWarmUps,
+      setInputValues: newInputValues,
+    );
   }
 
   void addExercise(ExerciseData exercise) {

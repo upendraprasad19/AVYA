@@ -137,6 +137,19 @@ class WorkoutReceiptData {
   final int streakWeeks;
   final String tagline; // deterministic — same workout always renders same line
 
+  /// APK Test #12 / Task A-5 — session sequence label.
+  ///
+  /// `null` for single-session days (the common case) — header renders
+  /// `workoutName` clean. When > 1 distinct `workout_log_id`s exist for
+  /// the IST date, this is "SESSION N" (1-indexed by chronological order
+  /// of the session's first exercise log) and the header renders
+  /// `workoutName · SESSION N`.
+  ///
+  /// Computed by [fromExerciseLogs] when a `workoutLogId` is supplied;
+  /// pure-Hive [fromActiveWorkout] doesn't compute this (in-memory builds
+  /// are always single-session).
+  final String? sessionLabel;
+
   const WorkoutReceiptData({
     required this.date,
     required this.workoutName,
@@ -147,6 +160,7 @@ class WorkoutReceiptData {
     this.prs = const [],
     this.streakWeeks = 0,
     required this.tagline,
+    this.sessionLabel,
   });
 
   int get totalExercises => exercises.length;
@@ -250,7 +264,17 @@ class WorkoutReceiptData {
   /// Returns null if no exercise logs are found for that date.
   ///
   /// THIS IS THE CANONICAL SOURCE OF TRUTH. All receipt views read from here.
-  static WorkoutReceiptData? fromExerciseLogs(DateTime date) {
+  /// Build receipt data from exercise logs.
+  ///
+  /// If [workoutLogId] is provided (APK Test #12 / Task A-3), filters
+  /// the date's index to logs whose `workout_log_id` matches — so a day
+  /// with multiple workout sessions yields a per-session receipt.
+  /// When absent, legacy behavior: aggregates ALL exercises logged that
+  /// IST date (matches pre-Test-#12 receipts).
+  static WorkoutReceiptData? fromExerciseLogs(
+    DateTime date, {
+    String? workoutLogId,
+  }) {
     final Box wb = HiveService.instance.workoutBox;
     final dateKey = formatDateKey(date);
 
@@ -266,6 +290,15 @@ class WorkoutReceiptData {
     for (final logId in logIds) {
       final log = wb.get(logId);
       if (log == null || log is! Map) continue;
+
+      // APK Test #12 / Task A-3 — workout_log_id scoping. If caller
+      // supplied a workoutLogId AND this row has one, skip rows that
+      // belong to a different session. Rows without workout_log_id
+      // (legacy data) always pass through (best-effort backward compat).
+      if (workoutLogId != null) {
+        final rowWid = log['workout_log_id'] as String?;
+        if (rowWid != null && rowWid != workoutLogId) continue;
+      }
 
       final name = log['exercise_name'] as String? ?? 'Unknown';
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
@@ -363,6 +396,34 @@ class WorkoutReceiptData {
       }
     }
 
+    // APK Test #12 / Task A-5 — session sequence. Compute only when
+    // caller supplied a workoutLogId AND the date has >1 distinct
+    // workout_log_ids (i.e. multi-session day).
+    String? sessionLabel;
+    if (workoutLogId != null) {
+      final distinctIds = <String>{};
+      final earliestByWid = <String, int>{};
+      for (final id in logIds) {
+        final row = wb.get(id);
+        if (row is! Map) continue;
+        final wid = row['workout_log_id'] as String?;
+        if (wid == null) continue;
+        distinctIds.add(wid);
+        final ts = (row['updated_at_ms'] as num?)?.toInt() ??
+            (row['logged_at_ms'] as num?)?.toInt() ??
+            0;
+        final cur = earliestByWid[wid];
+        if (cur == null || ts < cur) earliestByWid[wid] = ts;
+      }
+      if (distinctIds.length > 1) {
+        final ordered = distinctIds.toList()
+          ..sort((a, b) =>
+              (earliestByWid[a] ?? 0).compareTo(earliestByWid[b] ?? 0));
+        final idx = ordered.indexOf(workoutLogId);
+        if (idx >= 0) sessionLabel = 'SESSION ${idx + 1}';
+      }
+    }
+
     final exerciseList = seen.values.toList();
     return WorkoutReceiptData(
       date: date,
@@ -371,6 +432,7 @@ class WorkoutReceiptData {
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
       prs: prs,
+      sessionLabel: sessionLabel,
       tagline: _pickTagline(
         workoutName,
         _taglineSeed(date, workoutName, totalVolume, totalSets),
@@ -540,6 +602,11 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   Widget _buildTitle() {
     // Fraunces display for the workout name, Mono meta for the phase code.
+    // APK Test #12 / Task A-5 — multi-session days append "· SESSION N"
+    // to the meta line so receipts from the same date are distinguishable.
+    final phaseLine = data.sessionLabel != null
+        ? 'PHASE ${data.phase} · ${data.sessionLabel}'
+        : 'PHASE ${data.phase}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -549,7 +616,7 @@ class WorkoutReceiptCard extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          'PHASE ${data.phase}',
+          phaseLine,
           style: AppTypography.monoXs.copyWith(
             color: AppColors.textMute,
             letterSpacing: 2.0,
@@ -561,7 +628,6 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   List<Widget> _buildExerciseRows() {
     return data.exercises.map((ex) {
-      final chips = _buildSetChips(ex);
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(
@@ -592,12 +658,8 @@ class WorkoutReceiptCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            // Per-set chips wrapped
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: chips,
-            ),
+            // Per-set chips — shared WardSetChips primitive (Theme E-3).
+            _buildSetChips(ex),
           ],
         ),
       );
@@ -606,17 +668,23 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   /// Build set chips for one exercise. Uses per-set breakdown when available;
   /// gracefully degrades to a single cumulative chip for legacy logs.
-  List<Widget> _buildSetChips(ReceiptExercise ex) {
-    if (ex.perSetBreakdown.isNotEmpty) {
-      return ex.perSetBreakdown
-          .map((s) => _SetChip(loggingType: ex.loggingType, set: s))
-          .toList();
-    }
-    // Graceful degradation: one chip showing cumulative summary.
-    final label = _exerciseDetail(ex);
-    return [
-      _SetChip.fromLabel(label),
-    ];
+  ///
+  /// APK Test #12 / Theme E-3 — delegates to the shared [WardSetChips]
+  /// primitive (also used by Train screen expanded view) so receipt and
+  /// train surfaces render set chips identically.
+  Widget _buildSetChips(ReceiptExercise ex) {
+    final ward = ex.perSetBreakdown
+        .map((s) => WardSetChip(
+              weightKg: s.weightKg,
+              reps: s.reps,
+              durationSeconds: s.durationSeconds,
+            ))
+        .toList();
+    return WardSetChips(
+      loggingType: ex.loggingType,
+      perSetBreakdown: ward,
+      fallbackLabel: ward.isEmpty ? _exerciseDetail(ex) : null,
+    );
   }
 
   /// Format a duration in seconds as e.g. "3s", "45s", "2m 0s", "10m".
@@ -769,79 +837,8 @@ class WorkoutReceiptCard extends StatelessWidget {
   }
 }
 
-/// A single bracketed set chip used in the receipt exercise breakdown.
-///
-/// 1px parchment border, transparent fill, logging-type-aware label.
-/// Falls back to [fromLabel] for legacy logs without per-set data.
-class _SetChip extends StatelessWidget {
-  const _SetChip({required this.loggingType, required this.set});
-
-  final String loggingType;
-  final ReceiptSet set;
-
-  factory _SetChip.fromLabel(String label) =>
-      _SetChip(loggingType: '_raw', set: _RawLabelSet(label));
-
-  String _formatLabel() {
-    final weight = set.weightKg;
-    final reps = set.reps;
-    final dur = set.durationSeconds;
-
-    switch (loggingType) {
-      case 'weight_reps':
-        final w = weight != null && weight > 0
-            ? '${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg'
-            : '0 kg';
-        return '$w × ${reps ?? 0} reps';
-      case 'bodyweight_reps':
-        return '× ${reps ?? 0} reps';
-      case 'weighted_bodyweight':
-        final w = weight != null && weight > 0
-            ? '+${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg'
-            : '+0 kg';
-        return '$w × ${reps ?? 0} reps';
-      case 'timed':
-        return '${dur ?? 0} secs';
-      case 'cardio':
-        final parts = <String>[];
-        if (dur != null && dur > 0) parts.add('${dur}s');
-        return parts.isNotEmpty ? parts.join(' · ') : '—';
-      case 'distance':
-        return reps != null && reps > 0 ? '$reps reps' : '—';
-      case '_raw':
-        // fromLabel path — label stored on set directly.
-        if (set is _RawLabelSet) return (set as _RawLabelSet).label;
-        return '—';
-      default:
-        return reps != null && reps > 0 ? '$reps reps' : '—';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.line2, width: 1),
-        color: Colors.transparent,
-      ),
-      child: Text(
-        _formatLabel(),
-        style: AppTypography.bodyS.copyWith(
-          color: AppColors.textPrimary,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-/// Internal sentinel used by [_SetChip.fromLabel] to carry a pre-formatted
-/// label through the [ReceiptSet] interface without adding public API.
-class _RawLabelSet extends ReceiptSet {
-  final String label;
-  const _RawLabelSet(this.label)
-      : super(weightKg: null, reps: null, durationSeconds: null);
-}
+// APK Test #12 / Theme E-3 — `_SetChip` + `_RawLabelSet` removed.
+// Per-set chip rendering lives in `lib/shared/widgets/wardroom/
+// ward_set_chips.dart` (WardSetChips) — shared between receipt and
+// Train expanded view. The receipt's `_buildSetChips(ex)` now wraps
+// that primitive directly.
