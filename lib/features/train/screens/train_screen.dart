@@ -822,10 +822,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     // Build exercise log rows
     final logRows = logs.map((log) {
       final name = log['exercise_name'] as String? ?? 'Exercise';
-      final sets = log['sets_completed'] as int? ?? 0;
-      final reps = log['reps_completed'] as int? ?? 0;
+      // APK Test #12.4 / Task #2 — sibling renderer caught up to the
+      // 4-source MAX policy. Pre-fix this widget read only
+      // `sets_completed` (returns 0 since WriteService writes
+      // `set_number`); Test #12.2 patched the bottom sheet but missed
+      // this inline calendar-row expansion. Same drift class as the
+      // founder's "0 sets · 26 reps · 85kg" screenshot 2026-05-06.
+      final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
+      final setsCompleted = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      final setsArr = log['sets'];
+      final setsArrLen = setsArr is List ? setsArr.length : 0;
+      final setsDetail = log['sets_detail'];
+      final setsDetailLen = setsDetail is List ? setsDetail.length : 0;
+      final sets = [setNum, setsCompleted, setsArrLen, setsDetailLen]
+          .reduce((a, b) => a > b ? a : b);
+      final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      final duration = log['duration_seconds'] as int? ?? 0;
+      final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final isPr = log['is_pr'] == true;
 
@@ -1212,31 +1225,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
                           final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
-                          final storedLoggingType =
+                          // APK Test #12.4 / Task #1b — reverted defensive
+                          // re-inference. Migrator v2 fixes the type+data
+                          // pair correctly at splash; reader trusts stored
+                          // logging_type now.
+                          final loggingType =
                               log['logging_type'] as String? ?? 'weight_reps';
-                          // APK Test #12.2 / Task #2a — defensive logging_type
-                          // correction. Pre-Test-#12 swap drift left some
-                          // bodyweight exercises (Push Up, Hanging Leg Raise)
-                          // tagged `timed` because slot retained
-                          // setInputValues.durationSeconds from a previous
-                          // timed slot. Cloud audit confirmed.
-                          // Re-infer from actual stored data:
-                          //   timed + no duration + reps>0 → bodyweight_reps
-                          //   weight_reps + no weight + duration>0 → timed
-                          // Existing rows render correctly without waiting
-                          // for the self-repair migration (Task #2b).
-                          String loggingType = storedLoggingType;
-                          if (storedLoggingType == 'timed' &&
-                              duration <= 0 &&
-                              reps > 0) {
-                            loggingType =
-                                weight > 0 ? 'weight_reps' : 'bodyweight_reps';
-                          } else if (storedLoggingType == 'weight_reps' &&
-                              weight <= 0 &&
-                              duration > 0 &&
-                              reps == 0) {
-                            loggingType = 'timed';
-                          }
 
                           // APK Test #12 / Theme E-2 — Train expanded view
                           // adopts per-set chip rendering (the same widget

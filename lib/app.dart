@@ -5,11 +5,14 @@ import 'core/theme/colors.dart';
 import 'core/router/app_router.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
+import 'core/services/nutrition_write_service.dart';
 import 'core/services/razorpay_service.dart';
 import 'core/services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
 import 'core/services/sync_service.dart';
 import 'features/ai_coach/providers/ai_coach_provider.dart';
+import 'features/home/providers/home_provider.dart';
+import 'features/nutrition/providers/nutrition_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
 
 /// Root widget. Uses ConsumerStatefulWidget so it can attach the
@@ -43,6 +46,24 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
         // ProviderScope may be disposing — invalidation is best-effort.
       }
     };
+    // APK Test #12.4 / Task #3 — NutritionWriteService.onStateChanged
+    // hook. Pre-fix the service's `_invalidateNutritionProviders`
+    // early-returned because `attachContainer` was never called
+    // anywhere. Every nutrition write since Test #6 silently no-op'd
+    // its UI invalidation. Founder observation 2026-05-06: "I logged
+    // breakfast, it showed meal saved, but nothing got updated in UI".
+    NutritionWriteService.onStateChanged = () {
+      try {
+        ref.invalidate(dailyNutritionProvider);
+        ref.invalidate(nutritionSummaryProvider);
+        ref.invalidate(recentFoodLogsProvider);
+        ref.invalidate(macroTargetsProvider);
+        ref.invalidate(aiInsightProvider);
+        ref.invalidate(foodLogProvider);
+      } catch (_) {
+        // ProviderScope may be disposing — invalidation is best-effort.
+      }
+    };
   }
 
   @override
@@ -51,6 +72,7 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     SyncService.instance.unsubscribeRealtime();
     AiService.instance.dispose();
     SubscriptionService.onStateChanged = null;
+    NutritionWriteService.onStateChanged = null;
     super.dispose();
   }
 

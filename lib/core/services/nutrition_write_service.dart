@@ -7,7 +7,7 @@ import '../constants/app_constants.dart';
 import '../../features/home/providers/home_provider.dart'
     show aiInsightProvider, nutritionSummaryProvider, recentFoodLogsProvider;
 import '../../features/nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, macroTargetsProvider;
+    show dailyNutritionProvider, foodLogProvider, macroTargetsProvider;
 import 'hive_service.dart';
 import 'nutrition_write_source.dart';
 import 'sync_service.dart';
@@ -458,18 +458,44 @@ class NutritionWriteService {
     }
   }
 
+  /// APK Test #12.4 / Task #3 — reactivity hook (same pattern as
+  /// `SubscriptionService.onStateChanged`).
+  ///
+  /// Pre-fix: the service invalidated providers via `_container`
+  /// captured by `attachContainer`, but **`attachContainer` was NEVER
+  /// CALLED** anywhere in the codebase. So `_container` stayed null
+  /// for the entire app's lifetime, and `_invalidateNutritionProviders`
+  /// always early-returned. Every nutrition write since Test #6 has
+  /// silently failed to refresh the UI.
+  ///
+  /// New approach: wire from `app.dart` initState as a callback hook.
+  /// Inside the callback, invalidate the canonical provider batch
+  /// using the parent ConsumerState's `ref`. Symmetric with
+  /// `SubscriptionService.onStateChanged`.
+  static void Function()? onStateChanged;
+
   void _invalidateNutritionProviders() {
+    // Legacy container path — kept for back-compat in tests that wire
+    // _container directly via attachContainer. Production code goes
+    // through onStateChanged.
     final c = _container;
-    if (c == null) return;
-    try {
-      c.invalidate(dailyNutritionProvider);
-      c.invalidate(nutritionSummaryProvider);
-      c.invalidate(recentFoodLogsProvider);
-      c.invalidate(macroTargetsProvider);
-      c.invalidate(aiInsightProvider);
-    } catch (e) {
-      debugPrint('[NutritionWriteService] provider invalidate skipped: $e');
+    if (c != null) {
+      try {
+        c.invalidate(dailyNutritionProvider);
+        c.invalidate(nutritionSummaryProvider);
+        c.invalidate(recentFoodLogsProvider);
+        c.invalidate(macroTargetsProvider);
+        c.invalidate(aiInsightProvider);
+        c.invalidate(foodLogProvider);
+      } catch (e) {
+        debugPrint('[NutritionWriteService] provider invalidate skipped: $e');
+      }
     }
+    // APK Test #12.4 / Task #3 — also fire the static hook. This is
+    // the production path (wired from app.dart initState).
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
   }
 
   // ---- private helpers exposed for testing ----
