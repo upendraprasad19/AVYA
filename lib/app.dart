@@ -6,8 +6,11 @@ import 'core/router/app_router.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
 import 'core/services/razorpay_service.dart';
+import 'core/services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
 import 'core/services/sync_service.dart';
+import 'features/ai_coach/providers/ai_coach_provider.dart';
+import 'features/profile/providers/profile_provider.dart';
 
 /// Root widget. Uses ConsumerStatefulWidget so it can attach the
 /// [DayRolloverObserver] which needs a [WidgetRef] to invalidate providers.
@@ -24,6 +27,22 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     super.initState();
     DayRolloverObserver.instance.init(ref);
     RazorpayService.navigatorKey = AppRouter.navigatorKey;
+    // APK Test #12.2 — invalidate subscription-related providers
+    // whenever SubscriptionService writes new state to Hive. Without
+    // this, `refreshFromSupabase` (fire-and-forget on splash) would
+    // write `isPro=true` to Hive but the Riverpod cache stayed at
+    // `isPro=false` from the initial build → profile dossier showed
+    // FREE despite local Hive being correct. Founder observation
+    // 2026-05-06.
+    SubscriptionService.onStateChanged = () {
+      try {
+        ref.invalidate(subscriptionInfoProvider);
+        ref.invalidate(trialInfoProvider);
+        ref.invalidate(messageLimitProvider);
+      } catch (_) {
+        // ProviderScope may be disposing — invalidation is best-effort.
+      }
+    };
   }
 
   @override
@@ -31,6 +50,7 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     DayRolloverObserver.instance.dispose();
     SyncService.instance.unsubscribeRealtime();
     AiService.instance.dispose();
+    SubscriptionService.onStateChanged = null;
     super.dispose();
   }
 

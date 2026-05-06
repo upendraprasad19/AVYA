@@ -86,6 +86,23 @@ class SubscriptionService {
     await MigratedKey.delete(_paymentInFlightUntilKey);
   }
 
+  /// APK Test #12.2 / cold-start reactivity hook.
+  ///
+  /// Wired from `app.dart` initState — invokes a Riverpod invalidation
+  /// of `subscriptionInfoProvider` (+ `trialInfoProvider`,
+  /// `messageLimitProvider`) so widgets watching these providers
+  /// rebuild after `writeSubscriptionState` / `_downgradeLocally`
+  /// changes Hive.
+  ///
+  /// Pre-fix: `refreshFromSupabase` is unawaited on splash. It
+  /// successfully wrote `isPro=true` to local Hive, but no provider
+  /// invalidation fired. The UI kept showing the stale `isPro=false`
+  /// from when subscriptionInfoProvider was first built. Founder
+  /// observation 2026-05-06: "I don't see PRO pill on profile, may be
+  /// reading from local phone data." Yes — local phone data was
+  /// correct (post-refresh) but Riverpod cached the stale snapshot.
+  static void Function()? onStateChanged;
+
   /// Atomically writes all subscription keys in a single Hive batch.
   ///
   /// Hive's [Box.putAll] writes all entries in one I/O operation,
@@ -101,6 +118,11 @@ class SubscriptionService {
     await MigratedKey.write(_isProKey, isPro);
     await MigratedKey.write(_expiresAtKey, expiresAt);
     await MigratedKey.write(_planKey, plan);
+    // APK Test #12.2 — fire reactivity hook so any widgets watching
+    // subscriptionInfoProvider rebuild with the new state.
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
   }
 
   // ── Core API ────────────────────────────────────────────────
@@ -458,5 +480,10 @@ class SubscriptionService {
     await MigratedKey.delete(_planKey);
     await MigratedKey.delete('localActivationAt');
     await MigratedKey.delete(_lastVerifiedKey);
+    // APK Test #12.2 — fire reactivity hook so widgets re-render
+    // with the downgraded state.
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
   }
 }
