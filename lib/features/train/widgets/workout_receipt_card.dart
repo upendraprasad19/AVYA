@@ -301,21 +301,42 @@ class WorkoutReceiptData {
       }
 
       final name = log['exercise_name'] as String? ?? 'Unknown';
-      final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+      final storedLoggingType = log['logging_type'] as String? ?? 'weight_reps';
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
+      final durationTopLevel = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+      // APK Test #12.2 / Task #2a — defensive logging_type re-inference.
+      // Pre-Test-#12 swap drift left bodyweight exercises tagged `timed`
+      // (cloud audit confirmed Push Up / Hanging Leg Raise / Chin Up).
+      // Re-infer from stored aggregate data so receipt renders the right
+      // chip format without waiting for the splash-time self-repair
+      // migration to land on every device.
+      String loggingType = storedLoggingType;
+      if (storedLoggingType == 'timed' && durationTopLevel <= 0 && reps > 0) {
+        loggingType = weightKg > 0 ? 'weight_reps' : 'bodyweight_reps';
+      } else if (storedLoggingType == 'weight_reps' &&
+          weightKg <= 0 &&
+          durationTopLevel > 0 &&
+          reps == 0) {
+        loggingType = 'timed';
+      }
       // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older
       // logs use `sets_completed`. Read new key first, fall back to legacy.
       // APK Test #12.1 — take the MAX of both rather than first-non-null.
-      // EditWorkoutLogSheet wrote `sets_completed` only, leaving
-      // `set_number=0` from the original active-workout completion (when
-      // the user pressed DONE without checking any sets). Without max(),
-      // edited logs render "0 sets · N reps".
-      final _setNumCanonical = (log['set_number'] as num?)?.toInt() ?? 0;
-      final _setsLegacy = (log['sets_completed'] as num?)?.toInt() ?? 0;
-      final sets = _setNumCanonical > _setsLegacy
-          ? _setNumCanonical
-          : _setsLegacy;
+      // APK Test #12.2 — extend MAX with the array length too (sets[]
+      // OR sets_detail[]). Cloud audit revealed local rows where ALL of
+      // (set_number=0, sets_completed=0) but the per-set arrays are
+      // populated. Cloud projection prefers array length, so cloud
+      // shipped set_number=4 to the server while the receipt still
+      // rendered "0 sets". Founder observation 2026-05-06.
+      final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
+      final setsCompletedField = (log['sets_completed'] as num?)?.toInt() ?? 0;
+      final setsArrRaw = log['sets'];
+      final setsArrLen = setsArrRaw is List ? setsArrRaw.length : 0;
+      final setsDetailRaw = log['sets_detail'];
+      final setsDetailLen = setsDetailRaw is List ? setsDetailRaw.length : 0;
+      final sets = [setNum, setsCompletedField, setsArrLen, setsDetailLen]
+          .reduce((a, b) => a > b ? a : b);
       final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;

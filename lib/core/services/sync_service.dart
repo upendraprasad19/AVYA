@@ -1169,12 +1169,25 @@ class SyncService {
   /// `duration_sec`, `distance_km`. Empty list → no per-set data
   /// available (fall back to summary-only).
   List<Map<String, dynamic>> _resolvePerSetList(Map<String, dynamic> log) {
-    // Prefer legacy `sets_detail` (already has set_number).
+    // Prefer legacy `sets_detail` (often has explicit set_number).
+    // APK Test #12.2 / Task #7 — defensively stamp set_number from
+    // index+1 if the entry lacks it. Cloud audit revealed users with
+    // 33 workout_log_exercises rows but 0 workout_log_sets rows: the
+    // per-set projection downstream filters entries with null
+    // set_number, and pre-Test-#6 sets_detail entries may not carry
+    // an explicit set_number. Stamping here unblocks per-set sync.
     final detail = log['sets_detail'];
     if (detail is List && detail.isNotEmpty) {
       final out = <Map<String, dynamic>>[];
+      var idx = 0;
       for (final s in detail) {
-        if (s is Map) out.add(Map<String, dynamic>.from(s));
+        if (s is! Map) continue;
+        final m = Map<String, dynamic>.from(s);
+        if (m['set_number'] == null) {
+          m['set_number'] = idx + 1;
+        }
+        out.add(m);
+        idx += 1;
       }
       if (out.isNotEmpty) return out;
     }

@@ -1193,22 +1193,50 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                           // Theme A · Test #8 — WriteService writes
                           // `set_number`; legacy entries used `sets_completed`.
                           // APK Test #12.1 — read MAX of both rather than
-                          // first-non-null. EditWorkoutLogSheet wrote
-                          // `sets_completed` only, leaving `set_number=0`
-                          // from the original active-workout completion.
-                          // Founder observation 2026-05-06: "0 sets · 26 reps".
-                          final setNumberCanonical =
-                              (log['set_number'] as num?)?.toInt() ?? 0;
-                          final setsCompletedLegacy =
-                              (log['sets_completed'] as num?)?.toInt() ?? 0;
-                          final sets = setNumberCanonical > setsCompletedLegacy
-                              ? setNumberCanonical
-                              : setsCompletedLegacy;
+                          // first-non-null. APK Test #12.2 — extend with
+                          // 3rd + 4th fallback to the array length itself.
+                          // Cloud audit 2026-05-06 revealed many local rows
+                          // have ALL of (set_number=0, sets_completed=0)
+                          // but a populated `sets[]` or `sets_detail[]`
+                          // array. The cloud projection prefers the array
+                          // length, so cloud is correct (set_number=4)
+                          // while local readers showed "0 sets · 26 reps".
+                          final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
+                          final setsCompleted = (log['sets_completed'] as num?)?.toInt() ?? 0;
+                          final setsArr = log['sets'];
+                          final setsArrLen = setsArr is List ? setsArr.length : 0;
+                          final setsDetail = log['sets_detail'];
+                          final setsDetailLen = setsDetail is List ? setsDetail.length : 0;
+                          final sets = [setNum, setsCompleted, setsArrLen, setsDetailLen]
+                              .reduce((a, b) => a > b ? a : b);
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
                           final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
-                          final loggingType =
+                          final storedLoggingType =
                               log['logging_type'] as String? ?? 'weight_reps';
+                          // APK Test #12.2 / Task #2a — defensive logging_type
+                          // correction. Pre-Test-#12 swap drift left some
+                          // bodyweight exercises (Push Up, Hanging Leg Raise)
+                          // tagged `timed` because slot retained
+                          // setInputValues.durationSeconds from a previous
+                          // timed slot. Cloud audit confirmed.
+                          // Re-infer from actual stored data:
+                          //   timed + no duration + reps>0 → bodyweight_reps
+                          //   weight_reps + no weight + duration>0 → timed
+                          // Existing rows render correctly without waiting
+                          // for the self-repair migration (Task #2b).
+                          String loggingType = storedLoggingType;
+                          if (storedLoggingType == 'timed' &&
+                              duration <= 0 &&
+                              reps > 0) {
+                            loggingType =
+                                weight > 0 ? 'weight_reps' : 'bodyweight_reps';
+                          } else if (storedLoggingType == 'weight_reps' &&
+                              weight <= 0 &&
+                              duration > 0 &&
+                              reps == 0) {
+                            loggingType = 'timed';
+                          }
 
                           // APK Test #12 / Theme E-2 — Train expanded view
                           // adopts per-set chip rendering (the same widget

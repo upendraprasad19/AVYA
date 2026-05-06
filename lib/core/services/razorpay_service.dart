@@ -95,6 +95,41 @@ class RazorpayService {
         },
       );
 
+      // APK Test #12.2 / Task #6 — handle 409 already_pro from the
+      // server-side double-payment guard. Server returns 409 when user
+      // already has a non-expired active subscription. Show a helpful
+      // toast instead of the generic "could not create order" failure
+      // — and trigger a verifyFromServer refresh so the local PRO state
+      // catches up (this also unlocks the PRO pills the user was trying
+      // to access by paying again).
+      if (resp.status == 409) {
+        final data = resp.data is Map
+            ? resp.data as Map<String, dynamic>
+            : <String, dynamic>{};
+        if (data['error_code'] == 'already_pro') {
+          final endIso = data['current_expires_at'] as String?;
+          final endDate = endIso != null ? DateTime.tryParse(endIso) : null;
+          final endLabel = endDate != null
+              ? '${endDate.day}/${endDate.month}/${endDate.year}'
+              : 'now';
+          // Force-trust the server's truth: write the active state
+          // locally so subsequent reads are correct.
+          if (endIso != null) {
+            try {
+              await SubscriptionService.instance.writeSubscriptionState(
+                isPro: true,
+                expiresAt: endIso,
+                plan: (data['current_plan'] as String?) ?? 'monthly',
+              );
+              await SubscriptionService.instance.clearPaymentInFlight();
+              _invalidateSubscriptionProviders();
+            } catch (_) {}
+          }
+          _showAlreadyProFeedback(endLabel);
+          onSuccess?.call(); // treat as success — user IS PRO
+          return;
+        }
+      }
       if (resp.status != 200 || resp.data == null) {
         debugPrint('RazorpayService: create-razorpay-order failed '
             'status=${resp.status} data=${resp.data}');
@@ -157,6 +192,38 @@ class RazorpayService {
     _razorpay?.open(options);
   }
 
+  /// APK Test #12.2 / Task #6 — shown when the server-side double-pay
+  /// guard rejects the order create with 409 + already_pro. The user
+  /// thought they were free; truth is they're PRO until [endLabel]. This
+  /// fires both a toast AND triggers the cascade of provider invalidations
+  /// that was supposed to happen on the original payment.
+  void _showAlreadyProFeedback(String endLabel) {
+    final ctx = navigatorKey?.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'You\'re already PRO — active until $endLabel',
+                style: AppTypography.bodySm.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1a2a1a),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
   /// Shows a non-blocking snackbar when server-side order creation fails
   /// before Razorpay checkout even opens. The user hasn't paid yet, so
   /// this is a recoverable "try again" state.
@@ -212,26 +279,40 @@ class RazorpayService {
     // confirms it afterwards.
     final fallbackPlan = _pendingPlan ?? 'monthly';
     final optimisticEndDate = _computeEndDate(fallbackPlan);
+    // APK Test #12.2 / Task #5 — independent try/catch per write so a
+    // single failure can't block the others. Pre-fix one shared try
+    // around 3 awaited writes meant a throw in writeSubscriptionState
+    // skipped both localActivationAt AND markPaymentInFlight — leaving
+    // refreshFromSupabase with no grace window, which downgrades on
+    // first server-query miss (webhook lag in test mode → no row →
+    // downgrade). Founder's PRO-doesn't-stick bug.
+    //
+    // Write order: markPaymentInFlight FIRST so the grace window opens
+    // even if the more complex writes fail. Then writeSubscriptionState
+    // (3 keys) and localActivationAt independently. Each failure
+    // surfaces via _reportSyncFailure → log-client-error (now widened
+    // in Task #3 to actually accept these payloads).
+    try {
+      await SubscriptionService.instance.markPaymentInFlight();
+    } catch (e) {
+      debugPrint('RazorpayService: markPaymentInFlight failed: $e');
+    }
     try {
       await SubscriptionService.instance.writeSubscriptionState(
         isPro: true,
         expiresAt: optimisticEndDate,
         plan: fallbackPlan,
       );
-      // Test #10.1 — write via MigratedKey so localActivationAt lives in
-      // the per-user userBox (post-migration). Pre-fix this leaked PRO
-      // activation timestamp to the next user across signOut → signUp.
+    } catch (e) {
+      debugPrint('RazorpayService: writeSubscriptionState failed: $e');
+    }
+    try {
       await MigratedKey.write(
         'localActivationAt',
         DateTime.now().toIso8601String(),
       );
-      // APK Test #12 / Task C-1 — open the payment grace window so any
-      // verifyFromServer call that runs before the webhook fires (splash
-      // checkAndSync, gate() on a high-value feature, app foreground)
-      // doesn't downgrade the optimistic state.
-      await SubscriptionService.instance.markPaymentInFlight();
     } catch (e) {
-      debugPrint('RazorpayService: optimistic activation write failed: $e');
+      debugPrint('RazorpayService: localActivationAt write failed: $e');
     }
 
     // Announce PRO to the user right away — no more 45s "Verifying..." wait.
