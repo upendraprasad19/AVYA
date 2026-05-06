@@ -301,25 +301,15 @@ class WorkoutReceiptData {
       }
 
       final name = log['exercise_name'] as String? ?? 'Unknown';
-      final storedLoggingType = log['logging_type'] as String? ?? 'weight_reps';
+      // APK Test #12.4 / Task #1b — reverted the Test #12.2 defensive
+      // logging_type re-inference. The migrator (v2) now fixes the
+      // data + type pair correctly at splash time; the reader's job
+      // is just to render what's stored. The defensive correction
+      // mis-flipped library-known timed exercises (e.g. Jump Rope)
+      // when their data had been corrupted by pre-Test-#12 swap drift.
+      final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
-      final durationTopLevel = (log['duration_seconds'] as num?)?.toInt() ?? 0;
-      // APK Test #12.2 / Task #2a — defensive logging_type re-inference.
-      // Pre-Test-#12 swap drift left bodyweight exercises tagged `timed`
-      // (cloud audit confirmed Push Up / Hanging Leg Raise / Chin Up).
-      // Re-infer from stored aggregate data so receipt renders the right
-      // chip format without waiting for the splash-time self-repair
-      // migration to land on every device.
-      String loggingType = storedLoggingType;
-      if (storedLoggingType == 'timed' && durationTopLevel <= 0 && reps > 0) {
-        loggingType = weightKg > 0 ? 'weight_reps' : 'bodyweight_reps';
-      } else if (storedLoggingType == 'weight_reps' &&
-          weightKg <= 0 &&
-          durationTopLevel > 0 &&
-          reps == 0) {
-        loggingType = 'timed';
-      }
       // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older
       // logs use `sets_completed`. Read new key first, fall back to legacy.
       // APK Test #12.1 — take the MAX of both rather than first-non-null.

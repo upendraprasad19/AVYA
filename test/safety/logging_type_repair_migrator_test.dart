@@ -70,6 +70,10 @@ void main() {
       'name': 'Handstand Hold',
       'logging_type': 'timed',
     });
+    await exb.put('jump_rope', {
+      'name': 'Jump Rope',
+      'logging_type': 'timed',
+    });
   });
 
   tearDown(() async {
@@ -148,6 +152,71 @@ void main() {
     final updated = wb.get('exlog_${dateStr}_-3') as Map;
     expect(updated['logging_type'], 'bodyweight_reps');
     expect(updated.containsKey('logging_type_repaired_at_ms'), isFalse);
+  });
+
+  test('library-strict v2 — Jump Rope reps→duration migration', () async {
+    // APK Test #12.4 — pins the regression fix. v1 (Test #12.2) flipped
+    // Jump Rope from `timed` to `bodyweight_reps` because data had reps
+    // but no duration (corrupt swap-state retention). v2 must trust the
+    // library and MIGRATE the data: move reps→duration, keep type=timed.
+    final wb = HiveService.instance.workoutBox;
+    const dateStr = '2026-05-06';
+    await wb.put('exlog_${dateStr}_jr', {
+      'exercise_name': 'Jump Rope',
+      'date': dateStr,
+      'logging_type': 'timed', // already correctly typed
+      'reps_completed': 1080, // bug — should be in duration
+      'weight_kg': 0.0,
+      'duration_seconds': null,
+      'sets': [
+        {'reps': 540, 'weight_kg': 0},
+        {'reps': 540, 'weight_kg': 0},
+      ],
+    });
+
+    final corrected = await LoggingTypeRepairMigrator.runIfNeeded();
+    expect(corrected, 1);
+
+    final updated = wb.get('exlog_${dateStr}_jr') as Map;
+    expect(updated['logging_type'], 'timed',
+        reason: 'library says timed; type stays timed');
+    expect(updated['duration_seconds'], 1080,
+        reason: 'top-level reps must move to duration_seconds');
+    expect(updated['reps_completed'], 0,
+        reason: 'reps cleared after move');
+
+    // Per-set entries also migrated.
+    final sets = updated['sets'] as List;
+    expect((sets[0] as Map)['duration_sec'], 540);
+    expect((sets[0] as Map)['reps'], 0);
+    expect((sets[1] as Map)['duration_sec'], 540);
+  });
+
+  test('library-strict v2 — Handstand Hold weight=0 cleared', () async {
+    // Founder's data had Handstand Hold tagged weight_reps with weight=1
+    // (bogus). Library says timed. Migration must flip type AND clear
+    // the bogus weight.
+    final wb = HiveService.instance.workoutBox;
+    const dateStr = '2026-05-06';
+    await wb.put('exlog_${dateStr}_hh', {
+      'exercise_name': 'Handstand Hold',
+      'date': dateStr,
+      'logging_type': 'weight_reps',
+      'reps_completed': 3,
+      'weight_kg': 1.0, // bogus
+      'duration_seconds': null,
+    });
+
+    final corrected = await LoggingTypeRepairMigrator.runIfNeeded();
+    expect(corrected, 1);
+
+    final updated = wb.get('exlog_${dateStr}_hh') as Map;
+    expect(updated['logging_type'], 'timed');
+    expect(updated['weight_kg'], 0.0,
+        reason: 'bogus weight must be cleared');
+    // The 3 reps should have moved to duration since library says timed.
+    expect(updated['duration_seconds'], 3);
+    expect(updated['reps_completed'], 0);
   });
 
   test('idempotent — second run is a no-op', () async {

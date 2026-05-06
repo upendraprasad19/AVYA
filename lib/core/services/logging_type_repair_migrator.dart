@@ -54,7 +54,19 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 class LoggingTypeRepairMigrator {
   LoggingTypeRepairMigrator._();
 
-  static const String _flagKey = 'logging_type_repair_v1_done';
+  // APK Test #12.4 — bump flag from v1 to v2.
+  //
+  // v1 (Test #12.2) had a regression: when library said `timed` but the
+  // data shape had `reps>0` and no duration (Jump Rope: reps=1080,
+  // duration=NULL), the library-consistency check returned false, and
+  // the data-driven fallback flipped the type to `bodyweight_reps`.
+  // Receipt then rendered "× 540 reps" per set.
+  //
+  // v2 (this batch) is library-strict for known exercises. Library type
+  // wins; data is migrated to match (move reps→duration for timed
+  // exercises with stuffed reps, etc.). Bumping the flag forces re-run
+  // on devices that already corrupted their data with v1.
+  static const String _flagKey = 'logging_type_repair_v2_done';
 
   /// True once the migration has run on this device.
   static bool hasRun() {
@@ -111,25 +123,15 @@ class LoggingTypeRepairMigrator {
         final m = Map<String, dynamic>.from(raw);
 
         final stored = m['logging_type'] as String? ?? 'weight_reps';
-        final corrected_lt = _correctLoggingType(m, libByName);
-        if (corrected_lt == null || corrected_lt == stored) continue;
+        final repaired = _repairRow(m, libByName);
+        if (!repaired) continue;
 
-        // Apply correction.
-        m['logging_type'] = corrected_lt;
-        // If we corrected timed → bodyweight/weight, strip a stale
-        // top-level duration_seconds so renderers don't mix signals.
-        if (stored == 'timed' && corrected_lt != 'timed') {
-          m.remove('duration_seconds');
-        }
-        if (stored != 'timed' && corrected_lt == 'timed') {
-          // Inverse: clear weight if it was bogusly populated.
-          m['weight_kg'] = 0.0;
-        }
         m['logging_type_repaired_at_ms'] =
             DateTime.now().millisecondsSinceEpoch;
-
         await wb.put(k, m);
         corrected += 1;
+        debugPrint('[LoggingTypeRepairMigrator] repaired $k stored=$stored '
+            '→ ${m['logging_type']}');
       }
 
       await migrationBox.put(_flagKey, true);
@@ -152,24 +154,186 @@ class LoggingTypeRepairMigrator {
     return corrected;
   }
 
-  /// Returns the corrected `logging_type` for a row, or null if the
-  /// stored value already looks right.
+  /// APK Test #12.4 — library-strict repair. Returns true if the row
+  /// was MUTATED in any way (logging_type or data shape).
   ///
-  /// Library-first: if the bundled exercise library has this exercise
-  /// AND its library type makes sense given the stored aggregates,
-  /// the library type wins. Else fall back to data-driven inference.
-  static String? _correctLoggingType(
+  /// Policy:
+  ///   1. If library has the exercise, LIBRARY TYPE WINS. Migrate the
+  ///      data shape to match the library's type. (Move reps→duration
+  ///      when library says timed but row has stuffed reps; clear
+  ///      weight when library says bodyweight_reps but row has bogus
+  ///      weight; etc.)
+  ///   2. If exercise is custom (not in library), fall back to
+  ///      data-driven inference.
+  ///
+  /// Why library wins: Test #12.2 v1 used data-driven fallback when
+  /// library was inconsistent with data shape. For Jump Rope (library
+  /// timed, data had reps=1080 from corrupt swap-state retention),
+  /// data-driven flipped to bodyweight_reps — making the corrupt data
+  /// "permanent" in the wrong type. The right move is the OPPOSITE:
+  /// trust library, fix the data.
+  static bool _repairRow(
     Map<String, dynamic> row,
     Map<String, String> libByName,
   ) {
     final name = (row['exercise_name'] as String?)?.trim();
     final stored = row['logging_type'] as String? ?? 'weight_reps';
+
+    // Library lookup.
+    final libType = (name != null) ? libByName[name] : null;
+
+    if (libType != null) {
+      return _libraryStrictRepair(row, libType, stored);
+    }
+    return _dataDrivenRepair(row, stored);
+  }
+
+  /// Library-strict path: the stored type AND the data shape must
+  /// match what the library says. Mutates `row` to match.
+  static bool _libraryStrictRepair(
+    Map<String, dynamic> row,
+    String libType,
+    String stored,
+  ) {
+    var changed = false;
+
+    // 1. Set logging_type to library value.
+    if (stored != libType) {
+      row['logging_type'] = libType;
+      changed = true;
+    }
+
+    // 2. Migrate data shape to match.
+    switch (libType) {
+      case 'timed':
+        // Library says timed. If row has reps but no duration, the
+        // user's typed value got stuffed into the reps field by the
+        // pre-Test-#12 swap drift. Move it to duration_seconds.
+        final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
+        final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;
+        if (reps > 0 && dur == 0) {
+          row['duration_seconds'] = reps;
+          row['reps_completed'] = 0;
+          changed = true;
+        }
+        // Clear bogus weight (timed = bodyweight, no external load).
+        final weight = (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
+        if (weight > 0) {
+          row['weight_kg'] = 0.0;
+          changed = true;
+        }
+        // Per-set entries: same migration. Build a fresh
+        // List<Map<String, dynamic>> rather than mutating the existing
+        // list — Hive may deserialize per-set entries as
+        // List<Map<String, int>> (narrow type), which rejects
+        // assignment of Map<String, dynamic> back into the list slot.
+        final sets = row['sets'];
+        if (sets is List) {
+          final out = <Map<String, dynamic>>[];
+          var perSetChanged = false;
+          for (final s in sets) {
+            if (s is! Map) {
+              out.add(<String, dynamic>{});
+              continue;
+            }
+            final m = Map<String, dynamic>.from(s);
+            final r = (m['reps'] as num?)?.toInt() ?? 0;
+            final d = (m['duration_sec'] as num?)?.toInt() ??
+                (m['duration_seconds'] as num?)?.toInt() ??
+                0;
+            if (r > 0 && d == 0) {
+              m['duration_sec'] = r;
+              m['reps'] = 0;
+              perSetChanged = true;
+            }
+            final w = (m['weight_kg'] as num?)?.toDouble() ?? 0.0;
+            if (w > 0) {
+              m['weight_kg'] = 0.0;
+              perSetChanged = true;
+            }
+            out.add(m);
+          }
+          if (perSetChanged) {
+            row['sets'] = out;
+            changed = true;
+          }
+        }
+        final setsDetail = row['sets_detail'];
+        if (setsDetail is List) {
+          final out = <Map<String, dynamic>>[];
+          var perSetChanged = false;
+          for (final s in setsDetail) {
+            if (s is! Map) {
+              out.add(<String, dynamic>{});
+              continue;
+            }
+            final m = Map<String, dynamic>.from(s);
+            final r = (m['reps'] as num?)?.toInt() ?? 0;
+            final d = (m['duration_sec'] as num?)?.toInt() ??
+                (m['duration_seconds'] as num?)?.toInt() ??
+                0;
+            if (r > 0 && d == 0) {
+              m['duration_seconds'] = r;
+              m['reps'] = 0;
+              perSetChanged = true;
+            }
+            final w = (m['weight_kg'] as num?)?.toDouble() ?? 0.0;
+            if (w > 0) {
+              m['weight_kg'] = 0.0;
+              perSetChanged = true;
+            }
+            out.add(m);
+          }
+          if (perSetChanged) {
+            row['sets_detail'] = out;
+            changed = true;
+          }
+        }
+        break;
+
+      case 'bodyweight_reps':
+        // Library says bodyweight_reps. Clear bogus weight (was 1kg
+        // for Handstand Hold etc. via swap drift in reverse).
+        final weight = (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
+        if (weight > 0) {
+          row['weight_kg'] = 0.0;
+          changed = true;
+        }
+        // If row has duration but no reps (timed-as-bodyweight inverse
+        // drift), move duration → reps.
+        final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
+        final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;
+        if (dur > 0 && reps == 0) {
+          row['reps_completed'] = dur;
+          row.remove('duration_seconds');
+          changed = true;
+        } else if (dur > 0) {
+          // Have both — strip duration as it doesn't apply to bodyweight.
+          row.remove('duration_seconds');
+          changed = true;
+        }
+        break;
+
+      case 'weight_reps':
+      case 'weighted_bodyweight':
+        // Trust the data shape; just enforce the type label.
+        // (Most weight-based drift is type-only; reps and weight
+        // fields are usually correct.)
+        break;
+    }
+    return changed;
+  }
+
+  /// Custom-exercise path (not in library). Fall back to data-driven
+  /// inference — same rule WorkoutWriteService._inferLoggingType uses.
+  static bool _dataDrivenRepair(
+    Map<String, dynamic> row,
+    String stored,
+  ) {
     final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
     final weight = (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
     final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;
 
-    // Per-set aggregate — sometimes top-level fields are 0 but per-set
-    // arrays carry the truth.
     bool perSetHasDur = false;
     bool perSetHasWeight = false;
     bool perSetHasReps = false;
@@ -191,72 +355,19 @@ class LoggingTypeRepairMigrator {
     final hasWeight = weight > 0 || perSetHasWeight;
     final hasReps = reps > 0 || perSetHasReps;
 
-    // Library lookup.
-    String? libType;
-    if (name != null) {
-      libType = libByName[name];
-    }
-
-    // Decision tree:
-    //
-    // Case A — library says X, stored agrees → no-op (return null).
-    if (libType != null && libType == stored) return null;
-    //
-    // Case B — library says X, stored disagrees AND data is consistent
-    // with library → trust library. (Push Up library=bodyweight_reps,
-    // stored=timed, data has reps>0 → correct to bodyweight_reps.)
-    if (libType != null) {
-      final libConsistent = _isConsistent(libType, hasDur, hasWeight, hasReps);
-      if (libConsistent) return libType;
-    }
-    //
-    // Case C — no library entry OR library inconsistent. Re-infer from
-    // data using the same rule WriteService applies. NOTE: the
-    // canonical rule prioritizes weight (`if hasWeight return
-    // weight_reps`) — but for repair we prefer reps when reps AND
-    // weight are both 0 except a tiny bogus value. Practical heuristic:
-    //   hasDur && !hasWeight && !hasReps  → timed
-    //   hasWeight && hasReps              → weight_reps
-    //   hasReps && !hasWeight             → bodyweight_reps
-    //   hasWeight && !hasReps             → weight_reps
-    //   else                              → fall back to stored
+    String inferred;
     if (hasDur && !hasWeight && !hasReps) {
-      if (stored != 'timed') return 'timed';
-      return null;
+      inferred = 'timed';
+    } else if (hasWeight) {
+      inferred = 'weight_reps';
+    } else if (hasReps) {
+      inferred = 'bodyweight_reps';
+    } else {
+      return false; // No signal — leave alone.
     }
-    if (hasReps && !hasWeight) {
-      if (stored != 'bodyweight_reps') return 'bodyweight_reps';
-      return null;
-    }
-    if (hasWeight) {
-      if (stored != 'weight_reps') return 'weight_reps';
-      return null;
-    }
-    return null;
-  }
 
-  /// True if [type] is consistent with the observed aggregates.
-  static bool _isConsistent(
-    String type,
-    bool hasDur,
-    bool hasWeight,
-    bool hasReps,
-  ) {
-    switch (type) {
-      case 'timed':
-        // Timed should have duration. Tolerate hasDur || (no other signal).
-        return hasDur || (!hasWeight && !hasReps);
-      case 'bodyweight_reps':
-        return hasReps && !hasWeight;
-      case 'weight_reps':
-        return hasWeight; // reps optional (some systems log just weight)
-      case 'weighted_bodyweight':
-        return hasReps && hasWeight;
-      case 'cardio':
-      case 'distance':
-        return true; // not enough signal in aggregates to disprove
-      default:
-        return false;
-    }
+    if (inferred == stored) return false;
+    row['logging_type'] = inferred;
+    return true;
   }
 }
