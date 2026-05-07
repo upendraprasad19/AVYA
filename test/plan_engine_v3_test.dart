@@ -1747,22 +1747,15 @@ void main() {
     test('cycle multiplier affects sets in later phases', () {
       final populated = [_populatedDay(intensity: 'hypertrophy')];
 
-      final phase1Weeks = PeriodizationEngine.apply(
-        populated: populated,
-        phase: 1,
-        is6Day: false,
-      );
-
-      final phase5Weeks = PeriodizationEngine.apply(
-        populated: populated,
-        phase: 5,
-        is6Day: false,
-      );
-
-      // Phase 5 has 1.1x multiplier, phase 1 has 1.0x
-      // Hypertrophy base sets = 3, so phase 1 baseline = 3, phase 5 baseline = round(3*1.1) = 3
-      // With 4-set minimum for intermediate, both become 4
-      // But let's check for beginner where minimum doesn't apply
+      // APK Test #12.6 — removed unused phase1Weeks / phase5Weeks
+      // assignments (intermediate path; the assertions below use the
+      // beginner-effectiveExp variants).
+      //
+      // Phase 5 has 1.1x multiplier, phase 1 has 1.0x.
+      // Hypertrophy base sets = 3, so phase 1 baseline = 3, phase 5
+      // baseline = round(3*1.1) = 3. With 4-set minimum for intermediate,
+      // both become 4 — that's why we use beginner here where the floor
+      // doesn't apply.
       final phase1BeginnerWeeks = PeriodizationEngine.apply(
         populated: populated,
         phase: 1,

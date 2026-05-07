@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -351,7 +352,7 @@ class SyncService {
 
       // PRO users: subscribe to realtime for instant Telegram sync.
       if (SubscriptionService.instance.isPro()) {
-        subscribeToRealtimeSync();
+        unawaited(subscribeToRealtimeSync());
       }
 
       // F5 · Broadcast restore-complete so screens can invalidate cached
@@ -756,6 +757,28 @@ class SyncService {
       return RestoreResult.failed('No authenticated user');
     }
 
+    // Test #12.6 — defensive HiveUserSession bootstrap. Cold-start path
+    // (splash → /restoring) does NOT call _ensureLocalUser, so the
+    // user-scoped namespaced boxes (workoutBox / nutritionBox / etc.)
+    // are not yet open when this method runs. Every restore op then
+    // throws `HiveUserSession not opened — cannot wrap user-scoped box
+    // "<name>"` from GuardedBox, surfacing as 30+ client_errors per cold
+    // start.
+    //
+    // openForUser is documented as idempotent for the same id (line 67-94
+    // of hive_user_session.dart returns immediately when
+    // _currentOwnerFullId == userId), so it is safe to call here even if
+    // _ensureLocalUser already ran. This closes the race regardless of
+    // upstream caller ordering.
+    try {
+      await HiveUserSession.openForUser(userId);
+    } catch (e) {
+      debugPrint(
+        '[SyncService.restoreFromCloudForUser] openForUser failed: $e',
+      );
+      return RestoreResult.failed(e);
+    }
+
     try {
       const since = '2020-01-01T00:00:00Z';
 
@@ -975,14 +998,31 @@ class SyncService {
   /// Subscribes to Supabase realtime channels for instant cross-device
   /// sync. PRO only — enables Telegram-logged data to appear in the
   /// app immediately without waiting for the 24h batch pull.
-  void subscribeToRealtimeSync() {
+  Future<void> subscribeToRealtimeSync() async {
     if (_realtimeSubscription != null) return; // Already subscribed
 
     final userId = _supabase.currentUser?.id;
     if (userId == null) return;
 
-    // Subscribe to weight_logs inserts for this user.
-    // Store the subscription so it can be cancelled on logout.
+    // Test #12.6 — refresh JWT before opening the realtime channel.
+    // Realtime subscribes carry the access token in the WebSocket
+    // upgrade; if the token expired while the app was backgrounded
+    // we get `RealtimeSubscribeException: Token has expired N seconds
+    // ago` on the first message and the stream errors permanently.
+    // refreshSession is idempotent and cheap when token is fresh.
+    try {
+      await _supabase.client.auth.refreshSession();
+    } catch (e) {
+      debugPrint('[realtime] refreshSession failed before subscribe: $e');
+      // Non-fatal — subscription may still succeed if token is valid.
+    }
+
+    _attachRealtimeStream(userId, attempt: 1);
+  }
+
+  /// Internal: opens the weight_logs stream. On token-expired errors
+  /// from the channel, refreshes JWT and re-subscribes once.
+  void _attachRealtimeStream(String userId, {required int attempt}) {
     _realtimeSubscription = _supabase.client
         .from('weight_logs')
         .stream(primaryKey: ['id'])
@@ -1021,8 +1061,38 @@ class SyncService {
             // ignore: discarded_futures
             _reportSyncFailure(opType: 'realtime_stream_weight_logs', error: e)
                 .catchError((_) {});
+
+            // Test #12.6 — Token-expired reconnect (one-shot). If the
+            // channel errored with "Token has expired", refresh the JWT
+            // and re-subscribe once. Subsequent failures fall through
+            // (no infinite retry loop).
+            final msg = e.toString().toLowerCase();
+            final isTokenExpired = msg.contains('token has expired') ||
+                msg.contains('jwt expired') ||
+                msg.contains('expired_token');
+            if (isTokenExpired && attempt < 2) {
+              // ignore: discarded_futures
+              _reconnectRealtimeWithRefreshedJwt(userId, attempt + 1);
+            }
           },
         );
+  }
+
+  Future<void> _reconnectRealtimeWithRefreshedJwt(
+    String userId,
+    int attempt,
+  ) async {
+    try {
+      await _realtimeSubscription?.cancel();
+    } catch (_) {}
+    _realtimeSubscription = null;
+    try {
+      await _supabase.client.auth.refreshSession();
+    } catch (e) {
+      debugPrint('[realtime] refreshSession on reconnect failed: $e');
+      return; // can't recover without a fresh token
+    }
+    _attachRealtimeStream(userId, attempt: attempt);
   }
 
   /// Cancels realtime subscriptions (call on app background or logout).
@@ -2283,9 +2353,10 @@ class SyncService {
 
         if (_hive.workoutBox.get(logId) != null) continue;
 
+        // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
         final dateStr = completedAt.length >= 10
             ? completedAt.substring(0, 10)
-            : DateTime.now().toIso8601String().substring(0, 10);
+            : istDateStr(DateTime.now());
 
         final logMap = <String, dynamic>{
           'id': logId,
@@ -3472,7 +3543,7 @@ class SyncService {
             'committed_at, committed_to_lt_cdr, induction_completed_at, '
             'why_now, definition_of_winning, known_injuries, '
             'typical_wake_time, preferred_workout_time, body_part_priorities, '
-            'coaching_notes',
+            'coach_notes',
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -3495,9 +3566,12 @@ class SyncService {
         if (v != null) await coach.put(key, v);
       }
 
-      // A6 — coaching_notes: restore AI coach memory so it's available
+      // A6 — coach_notes: restore AI coach memory so it's available
       // between reinstall and the next 11 PM IST extraction run.
-      final notes = row['coaching_notes'];
+      // Cloud column is `coach_notes` (singular table, see migration set);
+      // Hive field-name contract preserves `coaching_notes` so consumers
+      // (`coachBox.get('coaching_notes')`) keep working unchanged.
+      final notes = row['coach_notes'];
       if (notes != null) {
         await coach.put('coaching_notes', notes);
       }

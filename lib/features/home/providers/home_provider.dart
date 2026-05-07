@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -220,14 +221,16 @@ class StreakFreezeNotifier extends Notifier<int> {
   /// Refills streak freezes weekly. Runs on any app launch — checks if the
   /// most recent Monday has passed since last refill. FREE=1, PRO=3.
   void _refillIfNewWeek() {
-    final now = DateTime.now();
+    // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
+    // mondayOfIst returns naive-IST DateTime; format components directly
+    // to avoid double-shift through istDateStr.
+    final thisMonday = mondayOfIst(DateTime.now());
     final progress = UserRepository.instance.getProgress() ?? {};
     final lastRefill = progress['streak_freezes_last_refill'] as String?;
-
-    // Calculate this week's Monday (00:00)
-    final daysSinceMonday = (now.weekday - DateTime.monday) % 7;
-    final thisMonday = DateTime(now.year, now.month, now.day - daysSinceMonday);
-    final thisMondayStr = thisMonday.toIso8601String().substring(0, 10);
+    final y = thisMonday.year.toString().padLeft(4, '0');
+    final m = thisMonday.month.toString().padLeft(2, '0');
+    final d = thisMonday.day.toString().padLeft(2, '0');
+    final thisMondayStr = '$y-$m-$d';
 
     // Already refilled for this week's Monday
     if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) return;

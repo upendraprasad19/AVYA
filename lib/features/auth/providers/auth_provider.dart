@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -451,6 +452,20 @@ class AuthNotifier extends Notifier<AuthState2> {
       unawaited(_logClientError(user.id, errorType, eStr));
       // Non-fatal for sign-in flow, but AI chat / sync may fail until
       // resolved. Now visible in client_errors instead of only debugPrint.
+    }
+
+    // APK Test #12.6 — Crashlytics user identifier (first 8 chars of UUID
+    // for privacy; enough to correlate crashes back to a user without
+    // logging the full PII-bearing UUID). Fire-and-forget; failure must
+    // never block the auth flow.
+    if (!kDebugMode) {
+      try {
+        FirebaseCrashlytics.instance.setUserIdentifier(
+          user.id.length >= 8 ? user.id.substring(0, 8) : user.id,
+        );
+      } catch (e) {
+        debugPrint('[auth/_ensureLocalUser] Crashlytics setUserIdentifier failed: $e');
+      }
     }
 
     // F2/F3 · Always pull the cloud profile on sign-in and merge into Hive.

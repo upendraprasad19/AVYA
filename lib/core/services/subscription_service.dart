@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -206,6 +207,31 @@ class SubscriptionService {
     required VoidCallback onFree,
   }) {
     if (!isPro()) {
+      // APK Test #12.6 telemetry — paywall fires after isPro() returned
+      // false BUT a recent localActivationAt or in-flight payment grace
+      // suggests the user might actually be PRO. Catches "free user
+      // saw paywall after paying" cases that the new grace window was
+      // designed to prevent. Fire-and-forget.
+      try {
+        final localAct = MigratedKey.read<dynamic>('localActivationAt');
+        final mightBePro = isPaymentInFlight ||
+            (localAct != null &&
+                DateTime.tryParse(localAct.toString()) != null &&
+                DateTime.now()
+                        .difference(DateTime.parse(localAct.toString()))
+                        .inMinutes <
+                    15);
+        if (mightBePro) {
+          // ignore: discarded_futures
+          ErrorTelemetry.logEvent(
+            'paywall_hit_when_pro',
+            message: 'feature=$feature paymentInFlight=$isPaymentInFlight '
+                'localActivationAt=$localAct',
+          );
+        }
+      } catch (_) {
+        // Never let telemetry break the gate path.
+      }
       onFree();
       return;
     }

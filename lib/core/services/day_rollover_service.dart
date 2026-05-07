@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -55,7 +57,7 @@ class DayRolloverObserver with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _checkAndRollover();
       // Re-subscribe to realtime sync if PRO (was paused on background).
-      SyncService.instance.subscribeToRealtimeSync();
+      unawaited(SyncService.instance.subscribeToRealtimeSync());
     } else if (state == AppLifecycleState.paused) {
       // Cancel realtime subscription on background to save battery/data.
       SyncService.instance.unsubscribeRealtime();

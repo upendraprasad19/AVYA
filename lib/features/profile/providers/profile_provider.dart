@@ -324,6 +324,16 @@ class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
   @override
   SubscriptionInfoData build() {
     final sub = SubscriptionService.instance;
+    // TODO(APK Test #12.6): wire `pro_pill_state_mismatch` event here.
+    // Implementation requires storing the last server-known PRO state
+    // (e.g. from verifyFromServer cache) and comparing against the
+    // local sub.isPro() value. If they disagree, fire
+    // `ErrorTelemetry.logEvent('pro_pill_state_mismatch', ...)` so we
+    // can detect cases where the pill renders FREE while the server
+    // still has an active subscription (or vice versa). Deferred to a
+    // follow-up batch — needs a dedicated last-server-state cache key
+    // on SubscriptionService (e.g. `_lastServerVerifiedIsPro`) that's
+    // not currently stored.
     return SubscriptionInfoData(
       isPro: sub.isPro(),
       plan: sub.currentPlan,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -209,8 +210,29 @@ class _PopulatedSlotCard extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
-      final name = item['food_name'] as String? ?? 'Unknown';
-      final logId = item['id'] as String?;
+      // APK Test #12.6 / Obs 7 — derive display name from canonical sources.
+      // Pre-fix: read `food_name` (a field that doesn't exist on top-level
+      // nlog rows) → always fell back to "Unknown". Per CLAUDE.md §15
+      // nutrition contract, top-level has `meal_type` + `items[]`; per-item
+      // has `name`. Build label from joined items[] names, fallback to
+      // meal_type, fallback to "Logged meal".
+      final name = _deriveMealDisplayName(item, slot);
+      // APK Test #12.6 / Obs 7 — accept `id` (additive in 12.6) AND
+      // `log_key` (canonical Hive contract field). Pre-fix readers only
+      // checked `id`, which was null for any meal written via
+      // NutritionWriteService → edit silently no-op, dismissible had no key.
+      final logId = (item['id'] as String?) ??
+          (item['log_key'] as String?);
+      // APK Test #12.6 telemetry — only fire when neither items[] names nor
+      // meal_type yielded a usable label (genuine "we don't know what this
+      // meal is" case). Fire-and-forget; no PII.
+      if (name == _kFallbackMealName) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent(
+          'food_log_unknown_name',
+          message: 'log_key=${logId ?? 'null'} meal_type=$slot',
+        );
+      }
 
       Widget row = GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -289,7 +311,45 @@ class _PopulatedSlotCard extends StatelessWidget {
     final period = hour >= 12 ? 'PM' : 'AM';
     return '$h12:$minute $period';
   }
+
+  /// APK Test #12.6 / Obs 7 — derive a meal display name from the
+  /// canonical nutrition contract (CLAUDE.md §15). Top-level nlog rows
+  /// have NO `food_name` / `name` field — only `meal_type` and
+  /// `items[]` (where each item has its own `name`).
+  ///
+  /// Resolution order:
+  ///   1. `items[].name` joined by ` · ` (most informative)
+  ///   2. Capitalized `meal_type` (e.g. "Breakfast")
+  ///   3. Slot label (passed in)
+  ///   4. [_kFallbackMealName] sentinel — triggers food_log_unknown_name
+  ///      telemetry so we can detect new shape regressions.
+  static String _deriveMealDisplayName(
+      Map<String, dynamic> meal, String slot) {
+    final itemsArr = meal['items'];
+    if (itemsArr is List && itemsArr.isNotEmpty) {
+      final names = itemsArr
+          .whereType<Map>()
+          .map((m) => (m['name'] as String?)?.trim())
+          .whereType<String>()
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (names.isNotEmpty) return names.join(' · ');
+    }
+    final mealType = (meal['meal_type'] as String?)?.trim();
+    if (mealType != null && mealType.isNotEmpty) {
+      return '${mealType[0].toUpperCase()}${mealType.substring(1)}';
+    }
+    if (slot.isNotEmpty) {
+      return '${slot[0].toUpperCase()}${slot.substring(1)}';
+    }
+    return _kFallbackMealName;
+  }
 }
+
+/// Sentinel for the absolute-last-resort meal name. Distinct from
+/// 'Unknown' (which was the silent-failure tell pre-12.6) so telemetry
+/// can detect new shape regressions cleanly.
+const String _kFallbackMealName = 'Logged meal';
 
 // ── Empty slot ──────────────────────────────────────────────────────
 

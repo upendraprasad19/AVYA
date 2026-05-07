@@ -1274,7 +1274,8 @@ class AiCoachRepository {
     final daysSince = DateTime.now().difference(earliestDate).inDays;
     return {
       'data_window_days': daysSince,
-      'first_workout_date': earliestDate.toIso8601String().substring(0, 10),
+      // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
+      'first_workout_date': istDateStr(earliestDate),
       'workout_logs_count': wlogKeys.length,
     };
   }

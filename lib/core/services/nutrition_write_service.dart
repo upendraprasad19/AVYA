@@ -86,6 +86,12 @@ class NutritionWriteService {
         '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
     final payload = <String, dynamic>{
+      // APK Test #12.6 / Obs 7 — `id` field is what `_showEditMacrosSheet`
+      // and `TodaysMealsCard` dismissible reads (alongside `log_key`).
+      // Pre-fix only `log_key` was set → readers' `meal['id']` returned null
+      // → edit silently no-op'd, dismissible had no key. Stamp both for
+      // forward + legacy compat. Same value for both.
+      'id': key,
       'log_key': key,
       'date': dateStr,
       'meal_type': mealType,

@@ -1,0 +1,473 @@
+# Source-of-Truth Registry
+# =========================
+# Machine-readable index of every "single reader / single writer" concept
+# in the AVYA codebase. Each entry names the canonical writer(s) and
+# reader(s) by file:line and the regression test that pins them.
+#
+# Bootstrapped 2026-05-06 (APK Test #12.6 batch) from CLAUDE.md sections:
+#   - "Source of Truth Rules (NON-NEGOTIABLE)"
+#   - "Hive field-name contract"
+#   - "Sync fan-out contract"
+#   - "Restore-completeness sync"
+#   - "Single-source-of-truth files" bullet list
+#
+# Process rule (CLAUDE.md §6 + feedback_source_of_truth_audit.md):
+# Every bugfix involving a render/state mismatch must NAME the writer(s)
+# AND reader(s) by file:line BEFORE proposing a fix. Patching only the
+# reader is the recurring anti-pattern (Tests #8 → #12, same class).
+#
+# Updating this file:
+#   1. New SoT-bearing concept added → append entry here in same PR.
+#   2. Writer or reader file/line moved → update entry.
+#   3. Field rename in a WriteService → update class_constraints AND the
+#      regression test in test/contracts/.
+
+concepts:
+
+  - concept: workout_receipt_rendering
+    domain: workout
+    description: |
+      Per-set chip Wrap rendered after a completed workout.
+      Reads from Hive exlog_* keys via the indexed lookup; deduplicates
+      exercises by name, sums sets, takes max weight. Optional
+      workout_log_id filter scopes a multi-session day.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-260
+        method: logExercise
+        notes: stamps workout_log_id on every exlog row (Test #12 / Task A-3)
+    readers:
+      - file: lib/features/train/widgets/workout_receipt_card.dart
+        line_range: 274-360
+        method: WorkoutReceiptData.fromExerciseLogs
+    regression_test: test/contracts/receipt_scoping_test.dart
+    class_constraints: |
+      Dedup by exercise_name. Legacy rows (no workout_log_id) always
+      pass through. workoutLogId filter only excludes rows whose own
+      workout_log_id field disagrees.
+
+  - concept: workout_log_edit_surface
+    domain: workout
+    description: |
+      Single edit surface for completed-workout logs. 4 entry points
+      route through it: receipt sheet Edit button, Home View Card,
+      calendar day detail, Train expanded view.
+    writers:
+      - file: lib/features/train/widgets/edit_workout_log_sheet.dart
+        line_range: 1-9999
+        method: EditWorkoutLogSheet.save
+        notes: |
+          Save responsibilities:
+            1. Rewrite Hive log map in place
+            2. Recompute volume_kg = weight_kg × reps_completed
+            3. Chronologically rescan is_pr flags
+            4. Invalidate full provider batch (currentPlan, workoutStats,
+               calendarWeek, streak, todayWorkout, allExercisePRs)
+            5. Fire syncWorkoutData() + pushSnapshot() (fire-and-forget)
+    readers:
+      - file: lib/features/train/widgets/workout_receipt_card.dart
+        line_range: 274-360
+        method: WorkoutReceiptData.fromExerciseLogs
+    regression_test: test/contracts/edit_log_field_normalization_test.dart
+    class_constraints: |
+      Field names written MUST match WorkoutWriteService contract:
+      set_number, sets[], reps_completed, weight_kg, volume_kg.
+      Pre-Test-#12 bug: edit sheet wrote sets_completed → receipt
+      rendered "0 sets · N reps".
+
+  - concept: exercise_logs_read_path
+    domain: workout
+    description: |
+      Indexed O(1) read of all exlog_* rows for a given IST date.
+      Falls back to a once-built date-keyed map for legacy rows.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-260
+        method: logExercise
+        notes: appends to exercise_log_index_YYYY-MM-DD on every write
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 433-490
+        method: getExerciseLogsForDate
+    regression_test: test/contracts/format_date_key_ist_test.dart
+    class_constraints: |
+      Date keys are IST-anchored via formatDateKey → istDateStr.
+      Never iterate workoutBox.keys manually to find logs for a date.
+
+  - concept: scheduled_workouts_mutations
+    domain: workout
+    description: |
+      All schedule mutations (generate, clean-sync on template edit,
+      reschedule on days/week change). Owns schedule_YYYY-MM-DD keys.
+    writers:
+      - file: lib/core/services/workout_schedule_service.dart
+        line_range: 137-9999
+        method: WorkoutScheduleService (whole class)
+    readers:
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 1-9999
+        method: todayWorkoutProvider
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1-9999
+        method: currentPlanProvider
+    regression_test: test/workout_write_service/upsert_scheduled_test.dart
+    class_constraints: |
+      Never write schedule_YYYY-MM-DD keys directly from a widget or
+      repository. Every reschedule on days/week change MUST preserve
+      completed entries and regenerate from today.
+
+  - concept: nutrition_total_calories
+    domain: nutrition
+    description: |
+      Totals on every nlog_* row are computed from items[] with
+      per-item Atwater fallback (raw > 0 ? raw : 4P+4C+9F). Never
+      read result['total_calories'] at top level of an AI response.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 53-140
+        method: logMeal
+        notes: |
+          Computes totalCals/Protein/Carbs/Fat/Fiber from items[].
+          Atwater fallback applied per FoodItem.kcalWithFallback.
+    readers:
+      - file: lib/features/nutrition/widgets/todays_meals_card.dart
+        line_range: 1-9999
+        method: TodaysMealsCard
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 1-9999
+        method: _getMealsToday + _getNutritionTrend7d
+    regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
+    class_constraints: |
+      Hive nlog_* contract: total_calories computed from items[];
+      per-item shape {name, quantity_g, calories, protein, carbs, fat, fiber}.
+
+  - concept: food_log_delete_with_undo
+    domain: nutrition
+    description: |
+      Single delete surface for food logs. Stashes log before delete;
+      restoreFoodLog writes back at deterministic key
+      flog_<loggedAt>_<foodNameHash>. Never call deleteFoodLog
+      directly from a widget.
+    writers:
+      - file: lib/features/nutrition/screens/nutrition_screen.dart
+        line_range: 845-895
+        method: _confirmAndDeleteFoodLog
+    readers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 878-920
+        method: FoodLogNotifier.deleteFoodLog
+    regression_test: test/contracts/food_log_notifier_to_nutrition_log_items_test.dart
+    class_constraints: |
+      Delete must surface a snackbar with UNDO. UNDO calls
+      restoreFoodLog with the original payload at the original key.
+
+  - concept: ai_snapshot_building
+    domain: ai_coach
+    description: |
+      buildAiContext is the ONE builder. _compactContext is the ONE
+      trimmer. Never construct ad-hoc snapshots in provider code.
+      Trim order: step_history_7d → weight_trend → nutrition_trend
+      → exercise_history → personal_records → coach_notices →
+      truncate coaching_notes (1500 chars) → drop fitness_summary.
+    writers:
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 23-200
+        method: buildAiContext
+    readers:
+      - file: lib/core/services/ai_service.dart
+        line_range: 126-180
+        method: _compactContext
+    regression_test: test/ai_coach/meals_today_snapshot_test.dart
+    class_constraints: |
+      Target <9500 bytes for JSON overhead buffer (server limit 10K).
+      Every nutrition + workout mutation must call pushSnapshot()
+      fire-and-forget so the next AI turn sees fresh context.
+
+  - concept: subscription_state
+    domain: subscription
+    description: |
+      isPro() + gate() are the ONLY entry points. Never read
+      configBox.get('isPro') directly from a widget. High-value
+      features go through verifyFromServer() with 5-min cache TTL.
+      Build-method callsites must use ref.watch(subscriptionInfoProvider).isPro
+      so they rebuild on Razorpay success.
+    writers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 11-470
+        method: SubscriptionService (markPaymentInFlight + verifyFromServer + _downgradeLocally)
+    readers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 141-220
+        method: isPro + gate
+      - file: lib/features/profile/providers/subscription_info_provider.dart
+        line_range: 1-9999
+        method: subscriptionInfoProvider
+    regression_test: test/subscription/payment_grace_window_test.dart
+    class_constraints: |
+      High-value set: phases_2_to_12, ai_coach_unlimited,
+      progress_photos. Payment grace window (paymentInFlightUntil)
+      suppresses downgrade for 10 min after Razorpay success.
+
+  - concept: water_target
+    domain: water
+    description: |
+      Daily water goal. Read precedence: user override
+      (userBox['water_target_override_ml']) → computed (weight × 35
+      + 500 if 4+ training days + 300 if active lifestyle, clamped
+      2500–4000 ml) → 2500 floor. Widgets must
+      ref.watch(waterTargetProvider) so manual override changes
+      trigger rebuilds.
+    writers:
+      - file: lib/core/services/water_target_service.dart
+        line_range: 32-130
+        method: currentTargetMl + computeFromProfile
+    readers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 1488-1495
+        method: waterTargetProvider
+      - file: lib/features/home/widgets/water_quick_sheet.dart
+        line_range: 40-50
+        method: WaterQuickSheet
+    regression_test: test/nutrition/water_target_service_test.dart
+    class_constraints: |
+      Never hardcode 3000. Floor 2500 ml per founder direction
+      2026-05-04. Onboarding seed must route through
+      WaterTargetService.computeFromProfile(profile).
+
+  - concept: diet_plan_saved_loaded
+    domain: nutrition
+    description: |
+      Saved diet plan (one row per user). One reader of
+      configBox['saved_diet_plan']. Returns Map<String, PlannedSlot>
+      keyed by slot (breakfast/lunch/dinner/snack). Consumed only by
+      TodaysMealsCard for "FROM YOUR DIET PLAN" hints on empty slots.
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 206-260
+        method: saveDietPlan
+        notes: invalidates dietPlanProvider after write
+    readers:
+      - file: lib/features/nutrition/providers/diet_plan_provider.dart
+        line_range: 105-160
+        method: dietPlanProvider
+    regression_test: test/contracts/restore_completeness_writes_test.dart
+    class_constraints: |
+      diet_plan_screen._savePlan MUST call ref.invalidate(dietPlanProvider)
+      after saveDietPlan. Tap-to-log pre-fill depends on
+      showFoodSearchSheet(initialQuery: planned.firstFoodName).
+
+  - concept: weekly_report_data
+    domain: ai_coach
+    description: |
+      ONE source for Weekly Report 4-up sparklines. Reads last-7-days
+      series from healthBox (weight, forward-filled), nutritionBox
+      (calories + protein, zero-filled), workoutBox (0/1 per day).
+      Consumed only by WeeklyReportCard.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-260
+        method: logExercise (workout series)
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 53-140
+        method: logMeal (calorie + protein series)
+    readers:
+      - file: lib/features/profile/providers/weekly_report_data_provider.dart
+        line_range: 119-200
+        method: weeklyReportDataProvider
+    regression_test: test/profile/weekly_report_data_provider_test.dart
+    class_constraints: |
+      Weight series is forward-filled from last known weigh-in.
+      Calories/protein/workouts are zero-filled (genuinely no activity
+      = 0). Provider is not watched elsewhere — invalidate manually
+      after mutation if real-time refresh is needed.
+
+  - concept: day_rollover_provider_invalidation
+    domain: rollover
+    description: |
+      Canonical "today" provider invalidation list. Run on splash
+      cold launch + once daily at IST midnight. Single source of
+      truth for which providers must rebuild when the date flips.
+    writers:
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 103-200
+        method: runRolloverNow
+    readers:
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 103-200
+        method: runRolloverNow (self-contained)
+    regression_test: test/safety/day_rollover_service_test.dart
+    class_constraints: |
+      All "today"-derived providers (todayWorkoutProvider,
+      dailyNutritionProvider, streakProvider, aiInsightProvider,
+      etc.) must be in this invalidation set. Adding a new
+      "today"-bearing provider requires updating the list AND the
+      regression test.
+
+  - concept: hive_field_name_exlog
+    domain: workout
+    description: |
+      WriteService output keys are a contract with every consumer.
+      Field renames must update writer + every consumer in same PR
+      + add/update round-trip test.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-260
+        method: logExercise
+    readers:
+      - file: lib/features/train/widgets/workout_receipt_card.dart
+        line_range: 274-360
+        method: WorkoutReceiptData.fromExerciseLogs
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 433-490
+        method: getExerciseLogsForDate
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 1-9999
+        method: buildAiContext (recent_logs section)
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _syncExerciseLogs
+    regression_test: test/contracts/workout_write_to_read_contract_test.dart
+    class_constraints: |
+      exlog_* row fields: exercise_name, date, sets[], set_number,
+      reps_completed, weight_kg, volume_kg, logging_type, is_pr,
+      source, updated_at_ms, optional notes, optional workout_log_id.
+
+  - concept: hive_field_name_nlog
+    domain: nutrition
+    description: |
+      WriteService output keys are a contract with every consumer.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 53-140
+        method: logMeal
+    readers:
+      - file: lib/features/nutrition/widgets/todays_meals_card.dart
+        line_range: 1-9999
+        method: TodaysMealsCard
+      - file: lib/features/nutrition/repositories/nutrition_repository.dart
+        line_range: 1-9999
+        method: NutritionRepository
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 1-9999
+        method: nutritionSummaryProvider
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 1-9999
+        method: _getMealsToday + _getNutritionTrend7d
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _syncNutritionLogs
+    regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
+    class_constraints: |
+      nlog_* fields: log_key, date, meal_type, total_calories,
+      total_protein, total_carbs, total_fat, total_fiber, items[]
+      (per-item: name, quantity_g, calories, protein, carbs, fat,
+      fiber), source, logged_at, created_at.
+
+  - concept: sync_fanout_workout_domain
+    domain: workout
+    description: |
+      Domain entry point: "everything in workout domain is now in
+      cloud". Adding a new Hive prefix requires updating this method
+      AND the contract test.
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: syncWorkoutData
+        notes: |
+          Fans out to: _syncWorkoutLogs, _syncExerciseLogs,
+          _syncScheduleCompletions, _syncWorkoutTemplates,
+          _syncScheduledWorkouts, _syncStreaks.
+    readers: []
+    regression_test: test/contracts/sync_fanout_contract_test.dart
+    class_constraints: |
+      weeklyFullSync() is the safety net but no longer the only path
+      for workout-domain rows reaching cloud.
+
+  - concept: sync_fanout_nutrition_domain
+    domain: nutrition
+    description: |
+      Domain entry point: "everything in nutrition domain is now in
+      cloud".
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: syncNutritionData
+        notes: |
+          Fans out to: _syncNutritionLogs, _syncWaterLogs,
+          _syncSavedMeals.
+    readers: []
+    regression_test: test/contracts/sync_fanout_contract_test.dart
+    class_constraints: |
+      Per-item nutrition_log_items rows written in same projection
+      as parent nutrition_logs row.
+
+  - concept: restore_completeness
+    domain: cross_domain
+    description: |
+      Three ad-hoc sync surfaces outside workout/nutrition domain
+      fan-outs. These cover surfaces that were Hive-only before
+      Test #11 and silently lost on reinstall (paying users would
+      lose freezes, inbox, diet plan).
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: syncFreezes + syncNotificationsInboxEntry + syncSavedDietPlan
+    readers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: restoreFromCloudForUser
+        notes: |
+          Pulls 3 surfaces + rank_promotions (last 20) +
+          coaching_notes from coach_memory + folds
+          SubscriptionService.verifyFromServer(force: true).
+    regression_test: test/contracts/restore_completeness_writes_test.dart
+    class_constraints: |
+      Adding a new Hive-only surface that paying users would lose
+      on reinstall requires (1) cloud column/table, (2) syncX()
+      method on SyncService, (3) _restoreX() called from
+      restoreFromCloudForUser, AND (4) contract test.
+
+  - concept: user_scoped_hive_keys
+    domain: cross_domain
+    description: |
+      Anything user-specific that previously lived in shared
+      configBox now reads/writes through MigratedKey. The 31-key
+      migrated set is enumerated in UserConfigMigrator.userScopedKeys.
+      Two keys deliberately stay shared: pending_referral_code
+      (pre-auth → post-auth) + logout_in_progress (cold-launch
+      bootstrap before any session opens).
+    writers:
+      - file: lib/core/services/migrated_key.dart
+        line_range: 1-9999
+        method: MigratedKey.read + write + delete
+    readers:
+      - file: lib/core/services/migrated_key.dart
+        line_range: 1-9999
+        method: MigratedKey.read
+    regression_test: test/safety/config_to_user_migration_test.dart
+    class_constraints: |
+      Default to MigratedKey.write/read for any user-specific Hive
+      key. Bumping UserConfigMigrator._flagKey re-triggers migration.
+
+  - concept: subscription_payment_grace_window
+    domain: subscription
+    description: |
+      10-min grace window after Razorpay success during which
+      verifyFromServer is suppressed from downgrading the
+      optimistic isPro=true. Closes the race where webhook fires
+      seconds after a splash-time verify.
+    writers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 50-110
+        method: markPaymentInFlight
+    readers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 369-470
+        method: verifyFromServer (isPaymentInFlight gate)
+      - file: lib/features/profile/providers/subscription_info_provider.dart
+        line_range: 1-9999
+        method: subscriptionInfoProvider (isVerifying field)
+    regression_test: test/subscription/payment_grace_window_test.dart
+    class_constraints: |
+      Grace window is 10 minutes. Cleared on webhook confirmation
+      OR grace expiry, whichever is first.

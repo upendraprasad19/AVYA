@@ -104,6 +104,9 @@ class CascadeTracer {
       injuryExclusions: injuries.isEmpty ? null : injuries,
     );
     attempts.add(_attempt(1, a1Sig, a1Results));
+    // pick is always null on attempt 1 (declared at top of method); the
+    // null-check is kept symmetric with attempts 2-4 below for readability.
+    // ignore: unnecessary_null_comparison
     if (a1Results.isNotEmpty && pick == null) {
       pick = CascadePick(
         a1Results.first['name'] as String,

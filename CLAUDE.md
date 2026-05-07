@@ -73,6 +73,21 @@ Unit tests live in `test/`. Integration tests (require Hive + real device) live 
 flutter analyze
 ```
 
+### Pre-commit hook
+A bash hook at `scripts/pre-commit.sh` blocks any commit while
+`flutter analyze --no-fatal-infos` or `flutter test` are failing. It is
+NOT version-controlled into `.git/hooks/` automatically — every fresh
+clone must install it once:
+```bash
+# macOS / Linux: any shell
+# Windows: run from Git Bash (bundled with Git for Windows)
+sh scripts/setup-hooks.sh
+```
+The setup script copies `scripts/pre-commit.sh` to
+`.git/hooks/pre-commit` and chmods it executable. Bypass for a
+single commit: `git commit --no-verify` (use sparingly — CI runs the
+same gate). See CODING RULE 20 for the no-deferred-failures policy.
+
 ### Riverpod Code Generation
 The project has `riverpod_generator` installed but providers are currently written manually using `flutter_riverpod` directly (no `.g.dart` files). If you add `@riverpod` annotations, run:
 ```bash
@@ -249,6 +264,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 ## 5. DIRECTORY STRUCTURE
 
 > Full annotated tree → `docs/reference/directory-structure.md`. Quick orientation only here.
+> See `docs/naming_conventions.md` for naming rules + reserved domain glossary. **Read this before introducing new feature names.**
 
 ```
 lib/
@@ -327,6 +343,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 - `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
 - `lib/features/nutrition/providers/diet_plan_provider.dart` — ONE reader of `configBox['saved_diet_plan']`. Returns `Map<String, PlannedSlot>` keyed by slot (breakfast/lunch/dinner/snack). Consumed by `TodaysMealsCard` to render "FROM YOUR DIET PLAN" hints on empty slots. `diet_plan_screen._savePlan` invalidates this provider after writing the plan (PR AH.5).
 - `lib/features/profile/providers/weekly_report_data_provider.dart` — ONE source for Weekly Report 4-up sparklines. Reads last-7-days series from `healthBox` (weight, forward-filled), `nutritionBox` (calories + protein, zero-filled), `workoutBox` (0/1 per day). Consumed only by `WeeklyReportCard` (PR AH.8). Invalidate after any mutation if you want real-time refresh; the card is not watched elsewhere.
+- `docs/sot_registry.yaml` — canonical machine-readable registry of every single-source-of-truth concept (writers + readers + regression tests + class constraints). Cross-referenced by every fix involving a writer/reader contract. Keep in sync when this bullet list, the Source-of-Truth Rules, the Hive field-name contract, the Sync fan-out contract, or the Restore-completeness sync sub-section change.
 
 ---
 
@@ -351,6 +368,8 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 17. **Release error handling:** Use `kDebugMode` guard — show detailed errors only in debug, generic message in release.
 18. **Edge Function input limits:** Enforce message (5K chars) and snapshot (10K chars) limits server-side on ALL AI endpoints.
 19. **Server-side subscription verification:** High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) must call `verifyFromServer()` in `gate()`. Local-only check is insufficient.
+20. **No deferred test failures.** Failing tests on `main` are P0 blockers for the next batch. The label "pre-existing failure" is banned. If a test fails on `main`, investigate and either fix it FIRST in its own commit on `main` OR document why it cannot be fixed (filed as a tracked bug in `MEMORY.md` with explicit rationale + owner + ETA). The pre-commit hook (`scripts/pre-commit.sh`) blocks any commit while `flutter test` reports failures; do not bypass with `--no-verify` to "ship something else first".
+21. **Regression test required for every fix.** Every bug fix MUST ship with a test that FAILS on `main` without the fix and PASSES with it. PR review is blocked otherwise. Source-grep tests (e.g. tests that scan a file for a forbidden string pattern) count. The acceptable forms: contract test under `test/contracts/`, write-to-read round-trip under `test/<service>/`, or a targeted unit test alongside the fixed file. Cite the test path in the commit message.
 
 ---
 
