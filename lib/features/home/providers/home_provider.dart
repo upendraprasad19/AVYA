@@ -199,9 +199,20 @@ final userInitialProvider =
 class StreakNotifier extends Notifier<int> {
   @override
   int build() {
-    final progress = UserRepository.instance.getProgress();
-    // Show daily streak (consecutive workout days) — more intuitive for users
-    return (progress?['current_streak_days'] as int?) ?? 0;
+    // APK Test #12.7 — single source of truth for streak count.
+    // Previously read cached `current_streak_days` from `user_progress`,
+    // which was only refreshed inside `completeWorkout`. The rank-chip
+    // bottom sheet (`rank_service_record_sheet`) and rank evaluator
+    // (`RankService`) both call `WorkoutRepository.calculateCurrentStreak()`
+    // directly — a live walk-back through `schedule_<date>` keys. The two
+    // surfaces drifted (home showed 0, rank chip showed 5) whenever the
+    // cached field was stale (cold start without a fresh
+    // `completeWorkout`, restore-from-cloud not yet finished, etc.).
+    //
+    // Calling the canonical helper here aligns home with rank-chip and
+    // makes the displayed value match the user's mental model
+    // (consecutive completed-or-rest days walking back from today).
+    return WorkoutRepository.instance.calculateCurrentStreak();
   }
 }
 

@@ -134,9 +134,56 @@ class GuardedBox<T> {
 /// Helper used by HiveService getters to construct a guarded wrapper
 /// for a user-scoped box. Throws StateError if no session is active
 /// (caller bug — same surface as Task A-6's `_userScopedBox`).
+///
+/// APK Test #12.7 — class fix for the "HiveUserSession not opened"
+/// silent-sync regression. Previously this method was strictly assertive:
+/// any caller that hit a user-scoped box before `openForUser` had run
+/// would throw, and most callers (sync, snapshot, backfill, gate) wrap
+/// their work in `unawaited(...)` so the StateError was swallowed and
+/// the operation silently no-op'd.
+///
+/// The new behaviour: if the session is closed BUT a Supabase session
+/// is active AND the namespaced box file has previously been opened in
+/// this process lifetime (so it's already in Hive's open-box registry),
+/// wrap it with the current auth uid as owner. This handles the race
+/// where `_ensureLocalUser` opened the boxes but a subsequent
+/// `closeAll`/`signOut` handshake briefly nulled `_currentOwnerFullId`
+/// while a fire-and-forget sync was inflight.
+///
+/// For the cold-start case (boxes never opened), the SyncService entry
+/// points (`syncWorkoutData`, `syncNutritionData`, `pushSnapshot`,
+/// `checkAndSync`, `backfillCustomEntityIds`) call
+/// `HiveUserSession.openForUser` defensively before any box read. That
+/// async ensure is the canonical bootstrap; this synchronous fallback
+/// covers only the close-race window.
 GuardedBox<T> wrapUserScopedBox<T>(String root) {
-  final fullId = HiveUserSession.currentOwnerFullId;
-  final hash = HiveUserSession.currentOwnerHash;
+  var fullId = HiveUserSession.currentOwnerFullId;
+  var hash = HiveUserSession.currentOwnerHash;
+
+  if (fullId == null || hash == null) {
+    String? authUid;
+    try {
+      authUid = Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      // Supabase singleton not initialised (very early cold start /
+      // pure-VM unit test). Fall through to the StateError surface.
+    }
+
+    if (authUid != null) {
+      final boxName = HiveUserSession.namespacedBoxName(root, authUid);
+      if (Hive.isBoxOpen(boxName)) {
+        // Box still open from a prior session — wrap it with the
+        // current auth uid as owner so the ownership assertion in
+        // subsequent ops uses the live session. This closes the
+        // close-race window without forcing every caller to await an
+        // async openForUser.
+        final box = Hive.box(boxName);
+        final localHash = authUid.replaceAll('-', '').substring(0, 8);
+        return GuardedBox<T>(box, localHash, authUid);
+      }
+    }
+  }
+
   if (fullId == null || hash == null) {
     throw StateError(
       'HiveUserSession not opened — cannot wrap user-scoped box "$root". '

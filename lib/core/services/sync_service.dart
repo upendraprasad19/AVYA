@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -52,6 +53,34 @@ class SyncService {
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
 
+  /// APK Test #12.7 — class fix for the "HiveUserSession not opened"
+  /// silent-sync regression. Call this at the top of every public sync
+  /// entry point that touches user-scoped boxes. Idempotent
+  /// (`HiveUserSession.openForUser` returns immediately when the same
+  /// id is already open). Returns the auth uid on success, or null when
+  /// no Supabase session is live (caller should short-circuit).
+  ///
+  /// This closes the cold-start race where `pushSnapshot()` /
+  /// `syncWorkoutData()` fire from `WorkoutWriteService` before
+  /// `_ensureLocalUser` has run on the auth side — every box read used
+  /// to throw `HiveUserSession not opened`, the `unawaited` swallowed
+  /// the StateError, and the cloud silently received nothing.
+  Future<String?> _ensureSessionOpen() async {
+    final userId = _supabase.currentUser?.id;
+    if (userId == null) return null;
+    if (HiveUserSession.currentOwnerFullId == userId) return userId;
+    try {
+      await HiveUserSession.openForUser(userId);
+    } catch (e, st) {
+      debugPrint('[SyncService._ensureSessionOpen] openForUser failed: $e');
+      ErrorTelemetry.recordNonFatal(e, st, reason: 'ensure_session_open');
+      // Fall through — let the caller's own catch surface the next
+      // failure with full context. Returning null would short-circuit
+      // sync paths whose only blocker was the session bootstrap.
+    }
+    return userId;
+  }
+
   // ── Restore cancellation flag ───────────────────────────────
 
   /// Set to true by [cancelInflightRestore] to abort a running
@@ -83,6 +112,25 @@ class SyncService {
     return _uuidGen.v5(_syncNamespace, localKey);
   }
 
+  /// APK Test #12.7 — true when [s] structurally looks like a v4/v5 UUID.
+  /// 36 chars, hyphens at 8/13/18/23, hex elsewhere. Used by the coach
+  /// sync path so server-already-UUID ids skip the v5 hashing detour.
+  static bool _looksLikeUuid(String s) {
+    if (s.length != 36) return false;
+    if (s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-') {
+      return false;
+    }
+    for (var i = 0; i < s.length; i++) {
+      if (i == 8 || i == 13 || i == 18 || i == 23) continue;
+      final c = s.codeUnitAt(i);
+      final isDigit = c >= 0x30 && c <= 0x39;
+      final isLowerHex = c >= 0x61 && c <= 0x66;
+      final isUpperHex = c >= 0x41 && c <= 0x46;
+      if (!isDigit && !isLowerHex && !isUpperHex) return false;
+    }
+    return true;
+  }
+
   /// Namespace for custom-entity stable IDs (F8/F22).
   /// Must match the namespace used in `CreateCustomExerciseSheet` and
   /// `NutritionNotifier.addCustomFood`.
@@ -103,7 +151,8 @@ class SyncService {
   /// forget from `checkAndSync()`.
   Future<void> _backfillCustomEntityIds() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      // APK Test #12.7 — open the session before iterating customBox.
+      final userId = await _ensureSessionOpen();
       if (userId == null) return;
       final box = _hive.customBox;
       var idRepaired = 0;
@@ -280,7 +329,13 @@ class SyncService {
     try {
       if (!_supabase.isAuthenticated) return;
 
-      final userId = _supabase.currentUser?.id;
+      // APK Test #12.7 — defensive HiveUserSession bootstrap. Cold-start
+      // path can land here before `_ensureLocalUser` ran (e.g. the
+      // restoring screen kicks off other syncs in parallel). Without
+      // this every user-scoped box read below throws
+      // `HiveUserSession not opened` and the unawaited swallow nukes
+      // the cloud upload silently.
+      final userId = await _ensureSessionOpen();
       if (userId == null) return;
 
       // ── Health sync FIRST — steps/weight are fast local reads from
@@ -392,7 +447,11 @@ class SyncService {
   /// we mirror into Hive `coachBox['coach_memory']` for local readers.
   Future<void> pushSnapshot() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      // APK Test #12.7 — open HiveUserSession before compiling the
+      // snapshot. compileDailySnapshot() → AiCoachRepository.buildAiContext
+      // touches every user-scoped box; without the bootstrap the call
+      // throws StateError and the catch below swallows it.
+      final userId = await _ensureSessionOpen();
       if (userId == null) return;
 
       final snapshot = compileDailySnapshot();
@@ -492,7 +551,10 @@ class SyncService {
   /// Call this after a workout is completed for near-realtime backup.
   Future<void> syncWorkoutData() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      // APK Test #12.7 — every WorkoutWriteService.logExercise fires
+      // this fire-and-forget. If we land before _ensureLocalUser, every
+      // workoutBox read throws StateError → cloud silently empty.
+      final userId = await _ensureSessionOpen();
       if (userId == null) return;
 
       await Future.wait(
@@ -526,7 +588,9 @@ class SyncService {
   /// full sync. Never throws to the caller.
   Future<void> syncNutritionData() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      // APK Test #12.7 — fire-and-forget call from
+      // NutritionWriteService.logMeal. Same race as syncWorkoutData.
+      final userId = await _ensureSessionOpen();
       if (userId == null) return;
 
       await Future.wait(
@@ -1113,16 +1177,32 @@ class SyncService {
       final log = Map<String, dynamic>.from(raw);
 
       try {
+        // APK Test #12.7 — preserve original timestamp. Read from any of
+        // {created_at, completed_at, *_ms} or fall back to the IST date
+        // parsed from the Hive key. Empty-string `completed_at` (which
+        // older restores wrote into Hive) is filtered by the helper —
+        // this stops the cloud rejecting with `invalid input syntax for
+        // type timestamp with time zone: ""`.
+        final resolved = _resolveCompletedAt(
+          log,
+          dateKeyPrefix: log['date'] as String? ?? _dateFromKey(key),
+          hiveKey: key,
+        );
+        // `logged_at` and `created_at` are timestamptz columns. Send
+        // null when the source was an empty string AND we have no
+        // alternate authoring time (helper's last-resort path); the
+        // null branch is friendlier to PostgREST than a fabricated
+        // wall-clock that misrepresents history.
         await _supabase.client.from('workout_logs').upsert({
           'id': _deterministicId(key),
           'user_id': userId,
           'exercise_name': log['workout_name'],
           'date': log['date'],
-          'logged_at': log['completed_at'],
+          'logged_at': resolved,
           'sets_completed': log['sets_completed'],
           'duration_seconds': log['duration_seconds'],
           'notes': log['id'], // store local ID for reference
-          'created_at': log['completed_at'] ?? DateTime.now().toIso8601String(),
+          'created_at': resolved,
         }, onConflict: 'id');
       } catch (e) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
@@ -1165,8 +1245,18 @@ class SyncService {
             : (log['sets_completed'] as num?)?.toInt() ??
                 (log['set_number'] as num?)?.toInt() ??
                 1;
-        final String completedAt = log['created_at'] as String? ??
-            DateTime.now().toIso8601String();
+        // APK Test #12.7 — preserve the row's authoring time instead of
+        // re-stamping every backlog entry to NOW. The helper checks
+        // created_at → completed_at → updated_at_ms → completed_at_ms →
+        // IST date prefix from the Hive key. Without this, the founder's
+        // 2026-05-05 / 2026-05-06 workouts (sat in Hive ~24h waiting for
+        // the silent-sync fix) would have uploaded with completed_at =
+        // NOW, breaking the AI coach's date filters.
+        final String completedAt = _resolveCompletedAt(
+          log,
+          dateKeyPrefix: date.isNotEmpty ? date : _dateFromKey(key),
+          hiveKey: key,
+        );
 
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
@@ -1228,6 +1318,86 @@ class SyncService {
         } catch (_) {}
       }
     }
+  }
+
+  /// APK Test #12.7 — Preserve original Hive timestamp when projecting
+  /// to a cloud row. Returns an ISO-8601 UTC string that prefers the
+  /// real authoring time over `DateTime.now()` so backlog flushes don't
+  /// re-stamp every old workout to today's date.
+  ///
+  /// Resolution order (most authoritative first):
+  /// 1. `created_at` (string ISO) — already-canonical timestamp
+  /// 2. `completed_at` (string ISO) — older paths used this name
+  /// 3. `updated_at_ms` (int millisecondsSinceEpoch) — WorkoutWriteService
+  /// 4. `completed_at_ms` (int millisecondsSinceEpoch) — markCompleted /
+  ///    NutritionWriteService
+  /// 5. `logged_at` (string ISO) — alternate naming in some legacy paths
+  /// 6. `dateKeyPrefix` argument — IST date parsed from the Hive key
+  ///    (`exlog_2026-05-05_<hash>` → `2026-05-05`); rendered as the
+  ///    start of that IST day in UTC (-05:30 offset → 18:30Z prev day)
+  ///    so the cloud `date::date` extraction still lands on the right
+  ///    IST date for downstream filters.
+  /// 7. Fallback: `DateTime.now().toUtc().toIso8601String()` and emit a
+  ///    debug log + telemetry event so we know we hit the dead branch.
+  String _resolveCompletedAt(
+    Map<String, dynamic> row, {
+    String? dateKeyPrefix,
+    String? hiveKey,
+  }) {
+    // 1 / 2 / 5 — string ISO timestamps. Reject empty strings (a stale
+    // restore loop wrote `''` into Hive at one point).
+    for (final field in const ['created_at', 'completed_at', 'logged_at']) {
+      final v = row[field];
+      if (v is String && v.isNotEmpty) return v;
+    }
+    // 3 / 4 — millisecondsSinceEpoch ints written by the WriteServices.
+    for (final field in const ['updated_at_ms', 'completed_at_ms']) {
+      final v = row[field];
+      if (v is num && v > 0) {
+        return DateTime.fromMillisecondsSinceEpoch(v.toInt(), isUtc: false)
+            .toUtc()
+            .toIso8601String();
+      }
+    }
+    // 6 — IST date prefix from the Hive key. Returns the IST midnight
+    // for that date, expressed in UTC. `2026-05-05` → `2026-05-04T18:30:00Z`
+    // which falls back to `2026-05-05` after IST shift on the cloud.
+    if (dateKeyPrefix != null && dateKeyPrefix.length >= 10) {
+      try {
+        final iso = '${dateKeyPrefix.substring(0, 10)}T00:00:00+05:30';
+        final parsed = DateTime.tryParse(iso);
+        if (parsed != null) {
+          return parsed.toUtc().toIso8601String();
+        }
+      } catch (_) {/* fall through */}
+    }
+    // 7 — true last-resort. Telemetry + debug log so we can spot the
+    // dead branch in production.
+    debugPrint(
+      '[SyncService._resolveCompletedAt] fallback to NOW for key=$hiveKey '
+      '(no created_at / completed_at / *_ms / dateKeyPrefix found)',
+    );
+    ErrorTelemetry.logEvent(
+      'sync_completed_at_fallback',
+      message: 'hiveKey=${hiveKey ?? '<unknown>'}',
+    );
+    return DateTime.now().toUtc().toIso8601String();
+  }
+
+  /// Extract the `YYYY-MM-DD` prefix from a Hive key shaped like
+  /// `exlog_2026-05-05_<hash>` or `wlog_2026-05-05`. Returns null if the
+  /// key is too short or doesn't match (legacy timestamp-suffixed keys
+  /// like `wlog_1775500200000` will fail this and fall through to other
+  /// fields in `_resolveCompletedAt`).
+  String? _dateFromKey(String? key) {
+    if (key == null) return null;
+    // Skip the prefix (`exlog_` / `wlog_`).
+    final firstUnderscore = key.indexOf('_');
+    if (firstUnderscore < 0 || firstUnderscore + 11 > key.length) return null;
+    final candidate = key.substring(firstUnderscore + 1, firstUnderscore + 11);
+    if (candidate.length != 10) return null;
+    if (candidate[4] != '-' || candidate[7] != '-') return null;
+    return candidate;
   }
 
   /// Plan A A-5: normalize the per-set list across legacy `sets_detail`
@@ -1671,14 +1841,31 @@ class SyncService {
     for (final log in items) {
       final data = Map<String, dynamic>.from(log);
       final weekStart = data['week_start']?.toString() ?? '';
-      // Remove local-only fields before sending to Supabase.
-      data.remove('local_id');
+      if (weekStart.isEmpty) continue;
+      // APK Test #12.7 — explicit projection instead of `...data` spread.
+      // Cloud `streaks` schema has: id, user_id, week_start,
+      // workouts_planned, workouts_completed, is_streak_maintained,
+      // created_at. The Hive row carries extras (`local_id` from the
+      // train_provider write, `source: 'cloud_restore'` from
+      // `_restoreStreaks`) that DON'T exist on the cloud table —
+      // sending them returned `Could not find the 'source' column of
+      // 'streaks'` (PGRST204) on every sync.
       try {
-        await _supabase.client.from('streaks').upsert({
+        final payload = <String, dynamic>{
           'id': _deterministicId('streak_${userId}_$weekStart'),
-          ...data,
           'user_id': userId,
-        }, onConflict: 'user_id,week_start');
+          'week_start': weekStart,
+          if (data['workouts_planned'] != null)
+            'workouts_planned': data['workouts_planned'],
+          if (data['workouts_completed'] != null)
+            'workouts_completed': data['workouts_completed'],
+          if (data['is_streak_maintained'] != null)
+            'is_streak_maintained': data['is_streak_maintained'],
+          if (data['created_at'] != null) 'created_at': data['created_at'],
+        };
+        await _supabase.client
+            .from('streaks')
+            .upsert(payload, onConflict: 'user_id,week_start');
       } catch (e) {
         debugPrint('[SyncService._syncStreaks] $e');
         try {
@@ -1801,11 +1988,24 @@ class SyncService {
   /// Fire-and-forget telemetry for a sync failure. Sends one row to
   /// `client_errors` via the `log-client-error` Edge Function so we stop
   /// being blind to payload-rejection failures in prod.
+  ///
+  /// APK Test #12.7 — also forwards to ErrorTelemetry.recordNonFatal so
+  /// every sync failure gets a Crashlytics non-fatal record in addition
+  /// to the `client_errors` row. This is the single funnel — every
+  /// `catch (e) { _reportSyncFailure(...) }` in this file inherits the
+  /// Crashlytics leg without per-callsite edits.
   Future<void> _reportSyncFailure({
     required String opType,
     required Object error,
     int retryCount = 0,
   }) async {
+    // Crashlytics + secondary log-client-error path (idempotent dual
+    // posting; the legacy path below stays as the canonical
+    // client_errors writer for retry-queue continuity).
+    // Stack is unavailable here (this function takes Object only); pass
+    // null and let Crashlytics auto-capture.
+    ErrorTelemetry.recordNonFatal(error, null, reason: opType);
+
     try {
       final code = error.runtimeType.toString();
       // Truncate to keep the Edge Function request body reasonable — some
@@ -3113,15 +3313,26 @@ class SyncService {
         // skip exercise_id entirely unless it's already a valid uuid
         // (it's nullable, and the string library ids aren't meaningful
         // cross-device). exercise_name carries the real identity.
-        final hiveId = tmpl['id']?.toString() ?? key;
-        final cloudTmplId = _deterministicId(hiveId);
+        // APK Test #12.7 — derive cloud UUID from (user_id, name) NOT
+        // from `tmpl_<ms>` Hive key. Founder had 8 dup template rows
+        // because each fresh creation of "Leg Day A" produced a new
+        // `tmpl_<ms>` key → new deterministic UUID → new cloud row.
+        // Migration 050 added UNIQUE (user_id, name) — without this
+        // change, every sync of duped local Hive templates would 23505
+        // on the new constraint. Now the cloud UUID is stable across
+        // local re-creation; UNIQUE constraint dedupes naturally.
+        // Pre-migration ids stay valid (UNIQUE id constraint still
+        // holds; same row updates).
+        final tmplName = (tmpl['name'] as String?)?.trim() ?? 'Untitled';
+        final cloudTmplId =
+            _deterministicId('tmpl|$userId|${tmplName.toLowerCase()}');
         final exercises = tmpl['exercises'] as List? ?? [];
 
         // Upsert template header
         await _supabase.client.from('workout_templates').upsert({
           'id': cloudTmplId,
           'user_id': userId,
-          'name': tmpl['name'] ?? 'Untitled',
+          'name': tmplName,
           if (tmpl['description'] != null) 'description': tmpl['description'],
           'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'] ?? 'custom',
           if (tmpl['estimated_duration_mins'] != null)
@@ -3132,7 +3343,7 @@ class SyncService {
               tmpl['created_at'] ?? DateTime.now().toIso8601String(),
           if (tmpl['last_used_at'] != null)
             'last_used_at': tmpl['last_used_at'],
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,name');
 
         // Upsert child exercises
         for (int i = 0; i < exercises.length; i++) {
@@ -3144,8 +3355,12 @@ class SyncService {
               RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
                   .hasMatch(rawExerciseId);
           try {
+            // APK Test #12.7 — child UUID derived from cloudTmplId (stable
+            // across local re-creations) instead of hiveId (per-creation).
+            // Otherwise dup local templates with same name would accumulate
+            // N×K children all pointing at the same cloud parent.
             await _supabase.client.from('template_exercises').upsert({
-              'id': _deterministicId('${hiveId}_ex_$i'),
+              'id': _deterministicId('${cloudTmplId}_ex_$i'),
               'template_id': cloudTmplId,
               if (isUuid) 'exercise_id': rawExerciseId,
               'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
@@ -3274,6 +3489,15 @@ class SyncService {
             (rawTemplateId != null && rawTemplateId.isNotEmpty)
                 ? _deterministicId(rawTemplateId)
                 : null;
+        // APK Test #12.7 — sanitize completed_at. An empty string in
+        // Hive (legacy code path) reaches PostgREST as `""` and Postgres
+        // 22007s with `invalid input syntax for type timestamp with time
+        // zone: ""`. Send null when empty/missing; pass through real
+        // ISO strings unchanged.
+        final rawCompletedAt = entry['completed_at'];
+        final completedAt = (rawCompletedAt is String && rawCompletedAt.isNotEmpty)
+            ? rawCompletedAt
+            : null;
         await _supabase.client.from('scheduled_workouts').upsert({
           'user_id': userId,
           if (cloudTemplateId != null) 'template_id': cloudTemplateId,
@@ -3281,7 +3505,7 @@ class SyncService {
           'week_number': entry['week'] ?? entry['week_number'],
           'day_of_week': parsedDate?.weekday ?? entry['day_of_week'],
           'status': entry['status'] ?? 'planned',
-          'completed_at': entry['completed_at'],
+          'completed_at': completedAt,
         }, onConflict: 'user_id,scheduled_date');
       } catch (e) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
@@ -3474,8 +3698,21 @@ class SyncService {
       final entry = Map<String, dynamic>.from(raw);
 
       try {
+        // APK Test #12.7 — convert Hive `coach_<timestamp>` key to a
+        // deterministic v5 UUID. Cloud `ai_coach_interactions.id` is a
+        // UUID column; passing the raw Hive key triggered Postgres
+        // 22P02 (`invalid input syntax for type uuid: "coach_999852984"`)
+        // for every legacy entry. Use the same uuid generator + sync
+        // namespace as the rest of this file (workout/nutrition logs).
+        // `entry['id']` may already be a valid UUID set by `ai-proxy`
+        // server-side — accept it as-is when it looks UUID-shaped;
+        // otherwise hash through.
+        final rawId = entry['id'];
+        final cloudId = (rawId is String && _looksLikeUuid(rawId))
+            ? rawId
+            : _deterministicId('coach|$userId|$key');
         await _supabase.client.from('ai_coach_interactions').upsert({
-          'id': entry['id'] ?? key,
+          'id': cloudId,
           'user_id': userId,
           'channel': 'in_app',
           'user_message': entry['user_message'] ?? '',
