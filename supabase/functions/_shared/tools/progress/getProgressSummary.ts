@@ -54,8 +54,14 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
     if (r.completed_at) workoutDates.add(toDateOnly(r.completed_at));
     const w = r.weight_kg ?? 0;
     const reps = r.reps ?? 0;
-    const sets = r.set_number ?? 1;
-    totalVolume += w * reps * sets;
+    // APK Test #12.6 / Obs 8 — drop the (* sets) term that triple-counted
+    // volume. Per CLAUDE.md §11 cloud contract, `reps` already holds
+    // CUMULATIVE reps across all sets (e.g. 3×10 = `reps: 30`); multiplying
+    // again by `set_number` 3-4×'d every weighted exercise. Founder
+    // reported 79,713 kg total volume for ~$23k of actual work. Fix:
+    // volume = weight × cumulative_reps. set_number stays available on
+    // the row for renderers / receipts but is NOT a volume multiplier.
+    totalVolume += w * reps;
   }
   const workoutsCompleted = workoutDates.size;
 
@@ -66,9 +72,21 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
     .eq("user_id", userId)
     .gte("scheduled_date", sinceDate);
 
+  // APK Test #12.6 / Obs 8 — exclude `rest` days from planned count.
+  // Pre-fix the filter only excluded `paused` and `skipped`, so REST DAYS
+  // were counted as "planned workouts." Founder over 30 days had 28
+  // scheduled dates, 4 of which were rest → "2 of 28 planned = 7%
+  // adherence" was actually "2 of 24 = 8%". Tiny correction in this case
+  // but the formula was structurally wrong: rest is a NON-WORKOUT day by
+  // design. Also exclude null status defensively.
   const plannedDates = new Set(
     ((scheduled ?? []) as Array<{ scheduled_date: string; status: string | null }>)
-      .filter((s) => s.status !== "paused" && s.status !== "skipped")
+      .filter((s) =>
+        s.status !== null &&
+        s.status !== "paused" &&
+        s.status !== "skipped" &&
+        s.status !== "rest"
+      )
       .map((s) => s.scheduled_date),
   );
   const workoutsPlanned = plannedDates.size;

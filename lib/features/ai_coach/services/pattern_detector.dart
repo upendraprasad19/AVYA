@@ -3,6 +3,7 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Severity level for a coaching insight.
 enum InsightSeverity { high, medium, low }
@@ -77,8 +78,9 @@ class PatternDetector {
     insights.sort((a, b) => a.severity.index.compareTo(b.severity.index));
 
     // Cache results.
+    // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
     MigratedKey.write('pattern_insights', {
-      'date': DateTime.now().toIso8601String().substring(0, 10),
+      'date': istDateStr(DateTime.now()),
       'count': insights.length,
       'top_pattern': insights.isNotEmpty ? insights.first.patternId : null,
       'pattern_ids': insights.map((i) => i.patternId).toList(),

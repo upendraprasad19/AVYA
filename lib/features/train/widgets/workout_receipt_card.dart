@@ -199,6 +199,14 @@ class WorkoutReceiptData {
       int totalDuration = 0;
       double totalDistance = 0;
       int completedSets = 0;
+      // APK Test #12.6 — capture per-set breakdown so the post-completion
+      // receipt renders one chip per set (matching the Train expanded view
+      // and the home/calendar "View Card" path which read via
+      // [fromExerciseLogs]). Without this, [WardSetChips] saw an empty
+      // perSetBreakdown and fell back to a single summary chip — founder
+      // observation 2026-05-07 ("[3 sets · 30 reps · 80 kg]" rendered
+      // instead of three "[80 kg × 10 reps]" chips).
+      final perSetBreakdown = <ReceiptSet>[];
 
       // Scan for dynamically added sets beyond the template's prescribed count.
       int maxSet = int.tryParse(ex.sets) ?? 3;
@@ -224,6 +232,11 @@ class WorkoutReceiptData {
         totalDistance += dist;
         if (weight > bestWeight) bestWeight = weight;
         totalVolume += reps * weight;
+        perSetBreakdown.add(ReceiptSet(
+          weightKg: weight > 0 ? weight : null,
+          reps: reps > 0 ? reps : null,
+          durationSeconds: dur > 0 ? dur : null,
+        ));
       }
 
       if (completedSets == 0) continue;
@@ -237,6 +250,7 @@ class WorkoutReceiptData {
         totalDurationSeconds: totalDuration,
         totalDistanceKm: totalDistance,
         maxWeightKg: bestWeight,
+        perSetBreakdown: perSetBreakdown,
       );
 
       final key = ex.name.toLowerCase().trim();

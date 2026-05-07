@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -912,15 +913,32 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
   // ── Edit Macros Sheet ────────────────────────────────────────
 
   void _showEditMacrosSheet(BuildContext context, Map<String, dynamic> meal) {
-    final logId = meal['id'] as String?;
-    if (logId == null) return;
+    // APK Test #12.6 / Obs 7 — accept either `id` (additive in 12.6) or
+    // `log_key` (canonical Hive contract). Pre-fix the early-return on
+    // null `id` was silently no-op'ing edit for every meal written via
+    // NutritionWriteService.
+    final logId = (meal['id'] as String?) ?? (meal['log_key'] as String?);
+    if (logId == null) {
+      // Telemetry: a meal without ANY identifier reached the edit sheet —
+      // shouldn't happen post-12.6 fix; surface if it does.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent(
+        'edit_meal_missing_id',
+        message: 'meal_type=${meal['meal_type'] ?? 'null'} '
+            'date=${meal['date'] ?? 'null'}',
+      );
+      return;
+    }
 
     final calCtrl = TextEditingController(text: '${(meal['total_calories'] as num?)?.toInt() ?? 0}');
     final proteinCtrl = TextEditingController(text: '${(meal['total_protein'] as num?)?.toInt() ?? 0}');
     final carbsCtrl = TextEditingController(text: '${(meal['total_carbs'] as num?)?.toInt() ?? 0}');
     final fatCtrl = TextEditingController(text: '${(meal['total_fat'] as num?)?.toInt() ?? 0}');
     final fiberCtrl = TextEditingController(text: '${(meal['total_fiber'] as num?)?.toInt() ?? 0}');
-    final foodName = meal['food_name'] as String? ?? 'Unknown';
+    // APK Test #12.6 / Obs 7 — derive title from canonical sources.
+    // `food_name` doesn't exist on top-level nlog rows; use joined
+    // items[] names → meal_type label → "Logged meal".
+    final foodName = _deriveMealTitle(meal);
 
     showModalBottomSheet(
       context: context,
@@ -1201,5 +1219,27 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         ],
       ),
     );
+  }
+
+  /// APK Test #12.6 / Obs 7 — derive a meal display title from the
+  /// canonical nutrition contract. Mirrors
+  /// `TodaysMealsCard._deriveMealDisplayName` so the edit sheet header
+  /// reads the same way as the inline meal row.
+  String _deriveMealTitle(Map<String, dynamic> meal) {
+    final itemsArr = meal['items'];
+    if (itemsArr is List && itemsArr.isNotEmpty) {
+      final names = itemsArr
+          .whereType<Map>()
+          .map((m) => (m['name'] as String?)?.trim())
+          .whereType<String>()
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (names.isNotEmpty) return names.join(' · ');
+    }
+    final mealType = (meal['meal_type'] as String?)?.trim();
+    if (mealType != null && mealType.isNotEmpty) {
+      return '${mealType[0].toUpperCase()}${mealType.substring(1)}';
+    }
+    return 'Logged meal';
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
@@ -1010,7 +1011,18 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   }
 
   void _showWorkoutReceipt(BuildContext context, ActiveWorkoutData data) {
-    final receiptData = WorkoutReceiptData.fromActiveWorkout(data);
+    // APK Test #12.6 — prefer the Hive-backed receipt builder when
+    // [completeWorkout] has already persisted the logs. It populates
+    // perSetBreakdown (giving WardSetChips real per-set chips) and
+    // computes volume from the exact per-set sum the cloud projection
+    // ships. Falls back to the in-memory builder when Hive somehow
+    // lacks the logs (e.g. write-failure or no workoutDay date).
+    final workoutDate = data.workoutDay?.date;
+    WorkoutReceiptData? receiptData;
+    if (workoutDate != null) {
+      receiptData = WorkoutReceiptData.fromExerciseLogs(workoutDate);
+    }
+    receiptData ??= WorkoutReceiptData.fromActiveWorkout(data);
     WorkoutReceiptSheet.show(context, receiptData);
   }
 
@@ -2186,7 +2198,8 @@ class _WarmupCooldownSectionState extends State<_WarmupCooldownSection> {
   /// keyboard, parent rebuild). F10 · without this, scrolling the workout
   /// screen clears every warmup check.
   String get _hiveKey {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
+    final today = istDateStr(DateTime.now());
     final slug = widget.title.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
     return 'warmup_checks_${today}_$slug';
   }

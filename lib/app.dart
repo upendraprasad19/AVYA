@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
@@ -5,6 +8,7 @@ import 'core/theme/colors.dart';
 import 'core/router/app_router.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
+import 'core/services/error_telemetry.dart';
 import 'core/services/nutrition_write_service.dart';
 import 'core/services/razorpay_service.dart';
 import 'core/services/subscription_service.dart';
@@ -85,6 +89,28 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
       routerConfig: AppRouter.router,
       builder: (context, child) {
         ErrorWidget.builder = (FlutterErrorDetails details) {
+          // APK Test #12.6 — record widget errors as Crashlytics
+          // non-fatal + log-client-error event so we can see in-prod
+          // ErrorWidget fallbacks. Both legs are best-effort.
+          if (!kDebugMode) {
+            try {
+              FirebaseCrashlytics.instance.recordError(
+                details.exception,
+                details.stack,
+                fatal: false,
+                reason: 'widget_error_fallback',
+              );
+            } catch (_) {
+              // Crashlytics must never break the fallback UI.
+            }
+          }
+          // Fire-and-forget event post; cap message to 200 chars.
+          final raw = details.exception.toString();
+          final capped = raw.length > 200 ? raw.substring(0, 200) : raw;
+          unawaited(ErrorTelemetry.logEvent(
+            'widget_error_fallback',
+            message: capped,
+          ));
           return Scaffold(
             backgroundColor: AppColors.bg,
             body: Center(

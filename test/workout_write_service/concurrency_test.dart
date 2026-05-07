@@ -31,8 +31,8 @@ void main() {
     );
 
     final results = await Future.wait([r1Future, r2Future]);
-    final r1 = results[0] as WriteResult;
-    final r2 = results[1] as WriteResult;
+    final r1 = results[0];
+    final r2 = results[1];
     expect(r1.success, isTrue);
     expect(r2.success, isTrue);
 
@@ -74,8 +74,8 @@ void main() {
     );
 
     final results = await Future.wait([r1Future, r2Future]);
-    final r1 = results[0] as WriteResult;
-    final r2 = results[1] as WriteResult;
+    final r1 = results[0];
+    final r2 = results[1];
     expect(r1.success, isTrue);
     expect(r2.success, isTrue);
 
