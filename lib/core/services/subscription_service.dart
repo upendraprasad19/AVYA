@@ -116,9 +116,30 @@ class SubscriptionService {
     required String plan,
   }) async {
     // Test #10.1 — write via MigratedKey (per-user userBox post-migration).
-    await MigratedKey.write(_isProKey, isPro);
-    await MigratedKey.write(_expiresAtKey, expiresAt);
-    await MigratedKey.write(_planKey, plan);
+    try {
+      await MigratedKey.write(_isProKey, isPro);
+      await MigratedKey.write(_expiresAtKey, expiresAt);
+      await MigratedKey.write(_planKey, plan);
+      // APK Test #12.8 — fire success event so we can correlate UI
+      // mismatch reports with the actual write timestamp.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent(
+        'subscription_state_written',
+        message: 'isPro=$isPro plan=$plan',
+      );
+    } catch (e, st) {
+      // APK Test #12.8 — surface MigratedKey write failures. These were
+      // previously invisible: a failed write left the UI/UI-state desync
+      // and produced "PRO pill stuck on GO PRO after payment" symptoms.
+      // ignore: discarded_futures
+      ErrorTelemetry.recordNonFatal(
+        e,
+        st,
+        reason: 'subscription_write_failure',
+        extra: {'isPro': isPro.toString(), 'plan': plan},
+      );
+      rethrow;
+    }
     // APK Test #12.2 — fire reactivity hook so any widgets watching
     // subscriptionInfoProvider rebuild with the new state.
     try {
@@ -150,6 +171,17 @@ class SubscriptionService {
       final localId = (profile is Map) ? profile['id'] as String? : null;
       final sessionId = SupabaseService.instance.currentUser?.id;
       if (localId != null && sessionId != null && localId != sessionId) {
+        // APK Test #12.8 — surface cross-account guard fires. These
+        // indicate Hive state from a different account (Auto Backup
+        // restore, dev-build Hive copy, manual tamper) and force-
+        // downgrade. Previously invisible.
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent(
+          'pro_state_force_downgrade_cross_account',
+          message:
+              'localId=${localId.length >= 8 ? localId.substring(0, 8) : localId} '
+              'sessionId=${sessionId.length >= 8 ? sessionId.substring(0, 8) : sessionId}',
+        );
         _downgradeLocally();
         return false;
       }
@@ -277,6 +309,11 @@ class SubscriptionService {
       if (isPaymentInFlight) {
         debugPrint('[SubscriptionService.refreshFromSupabase] payment in '
             'flight — skipping server query, trusting local state');
+        // APK Test #12.8 — explicit grace-skip event so we can tell apart
+        // "skipped because grace" from "skipped because no session".
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_refresh_grace_skip',
+            message: 'reason=payment_in_flight');
         return;
       }
 
@@ -294,6 +331,9 @@ class SubscriptionService {
         } else if (DateTime.now().difference(activatedAt).inMinutes < 10) {
           debugPrint('[SubscriptionService.refreshFromSupabase] within '
               'localActivationAt grace — skipping server query');
+          // ignore: discarded_futures
+          ErrorTelemetry.logEvent('subscription_refresh_grace_skip',
+              message: 'reason=local_activation');
           return; // Grace period — don't override local activation yet
         } else {
           // Past grace period — clear the flag
@@ -313,6 +353,10 @@ class SubscriptionService {
       if (response == null) {
         debugPrint('[SubscriptionService.refreshFromSupabase] no active '
             'subscription row — downgrading locally');
+        // APK Test #12.8 — distinct event so we can tell apart
+        // "downgraded because no row" from "downgraded because expired".
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_refresh_query_returned_null');
         _downgradeLocally();
         return;
       }
@@ -321,12 +365,18 @@ class SubscriptionService {
       final plan = response['plan'] as String?;
 
       if (endDate == null) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_refresh_expired_state',
+            message: 'reason=null_end_date');
         _downgradeLocally();
         return;
       }
 
       final expiresAt = DateTime.tryParse(endDate);
       if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_refresh_expired_state',
+            message: 'reason=past_end_date end_date=$endDate');
         _downgradeLocally();
         return;
       }
@@ -337,6 +387,11 @@ class SubscriptionService {
         expiresAt: expiresAt.toIso8601String(),
         plan: plan ?? 'monthly',
       );
+      // APK Test #12.8 — success ping so dashboard can correlate "I paid
+      // but pill is stuck" reports against actual server-confirmed state.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('subscription_refresh_success',
+          message: 'plan=${plan ?? 'monthly'}');
     } catch (e) {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
@@ -427,6 +482,12 @@ class SubscriptionService {
         // (_verifyCacheTtl) and will re-verify on next app launch.
         debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status} '
             '— trust local isPro=${isPro()}');
+        // APK Test #12.8 — surface non-200 from verify-subscription so
+        // we can correlate "PRO pill stuck" with server-side verify
+        // failures (auth gateway, edge function down, etc.).
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_verify_non_200',
+            message: 'status=${response.status} localIsPro=${isPro()}');
         return isPro();
       }
 

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 
 /// Owns the per-user Hive box lifecycle. Opens namespaced boxes
@@ -66,6 +69,13 @@ class HiveUserSession {
   /// surface this as a fatal error and force the user to reinstall.
   static Future<void> openForUser(String userId) async {
     if (_currentOwnerFullId == userId) {
+      // APK Test #12.8 — surface the no-op so we can see how often
+      // SyncService.restoreFromCloudForUser's defensive ensure (Test
+      // #12.6) actually saves us. High no-op rate = boxes already open
+      // (good). Low or zero = the defensive call is the only path
+      // opening boxes (bug elsewhere).
+      unawaited(ErrorTelemetry.logEvent('hive_session_reopen_noop',
+          message: 'userId=${userId.substring(0, 8)}'));
       return;
     }
     if (_currentOwnerFullId != null) {
@@ -91,6 +101,11 @@ class HiveUserSession {
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;
     debugPrint('[HiveUserSession] opened 7 boxes for user $hash');
+    // APK Test #12.8 — successful open event so we can verify the
+    // bootstrap order: every cold start should produce auth_user_ensured
+    // → hive_session_opened → restore_started.
+    unawaited(ErrorTelemetry.logEvent('hive_session_opened',
+        message: 'userId=$hash boxes=${userScopedBoxRoots.length}'));
   }
 
   /// Test #10.1 — `migrationBox` flag key for the one-shot legacy
@@ -192,9 +207,15 @@ class HiveUserSession {
         await Hive.box(boxName).close();
       }
     }
+    final closedHash = _currentOwnerHash;
     _currentOwnerHash = null;
     _currentOwnerFullId = null;
     debugPrint('[HiveUserSession] closed all user-scoped boxes');
+    // APK Test #12.8 — close event so we can detect close-races
+    // (close fires while a sync is inflight → GuardedBox auto-open
+    // fallback fires; we want to see the close timing).
+    unawaited(ErrorTelemetry.logEvent('hive_session_closed',
+        message: 'userId=${closedHash ?? "?"}'));
   }
 
   /// Delete every user-scoped box file for the **current** user.

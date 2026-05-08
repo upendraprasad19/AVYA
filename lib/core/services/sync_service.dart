@@ -131,6 +131,35 @@ class SyncService {
     return true;
   }
 
+  /// APK Test #12.8 / Bug #1 — mirror of
+  /// [NutritionWriteService.computeLogKey] used by [_restoreNutritionLogs]
+  /// so cloud→local round-trip collapses to the same Hive key as the
+  /// original local write. Cannot reuse `computeLogKey` directly because
+  /// it takes a typed `List<FoodItem>` and we restore from raw cloud
+  /// maps.
+  static String _nlogKeyForRestore({
+    required String dateStr,
+    required String mealType,
+    required List<dynamic> items,
+  }) {
+    // Sort by name (case-insensitive trim) for stable hash regardless
+    // of cloud row ordering.
+    final pairs = <String>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw);
+      final name = (m['name'] ?? m['food_name'] ?? '').toString();
+      final qtyRaw = m['quantity_g'] ?? m['serving_g'];
+      final qty = (qtyRaw is num) ? qtyRaw.toDouble() : 0.0;
+      pairs.add('${name.toLowerCase().trim()}|${qty.toStringAsFixed(1)}');
+    }
+    pairs.sort();
+    final joined = pairs.join(';');
+    final hash =
+        joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    return 'nlog_${dateStr}_${mealType}_$hash';
+  }
+
   /// Namespace for custom-entity stable IDs (F8/F22).
   /// Must match the namespace used in `CreateCustomExerciseSheet` and
   /// `NutritionNotifier.addCustomFood`.
@@ -843,6 +872,14 @@ class SyncService {
       return RestoreResult.failed(e);
     }
 
+    // APK Test #12.8 — restore lifecycle event so we can correlate
+    // post-restore symptoms (PRO pill stuck, profile blank) with
+    // whether restore even ran. Pre-12.8 we had per-op
+    // _reportSyncFailure but no "started/completed" bookend to detect
+    // "restore never ran" cases.
+    unawaited(ErrorTelemetry.logEvent('restore_started',
+        message: 'userId=${userId.substring(0, 8)}'));
+
     try {
       const since = '2020-01-01T00:00:00Z';
 
@@ -909,12 +946,20 @@ class SyncService {
       }
 
       if (_restoreCancelled) return RestoreResult.cancelled();
+      // APK Test #12.8 — restore completion event. Counts every full
+      // success path. If client_errors shows restore_started without a
+      // matching restore_completed, the user had a silent abort
+      // somewhere in steps A-C.
+      unawaited(ErrorTelemetry.logEvent('restore_completed',
+          message: 'userId=${userId.substring(0, 8)} status=success'));
       return RestoreResult.success();
     } catch (e) {
       debugPrint('[SyncService.restoreFromCloudForUser] $e');
       try {
         await _reportSyncFailure(opType: 'restore_from_cloud_for_user', error: e);
       } catch (_) {}
+      unawaited(ErrorTelemetry.logEvent('restore_completed',
+          message: 'userId=${userId.substring(0, 8)} status=failed'));
       return RestoreResult.failed(e);
     }
   }
@@ -2485,21 +2530,26 @@ class SyncService {
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final loggedAt = map['logged_at'] as String? ?? '';
-        final ts = DateTime.tryParse(loggedAt)?.millisecondsSinceEpoch ??
-            DateTime.now().millisecondsSinceEpoch;
-        final logId = 'wlog_$ts';
-
-        // Skip if already exists
-        if (_hive.workoutBox.get(logId) != null) continue;
+        // APK Test #12.8 / Bug #1 — Hive key MUST mirror what
+        // [WorkoutWriteService.wlogKey] produces (`wlog_<istDateStr>`)
+        // so a re-restore replaces the same row instead of creating a
+        // sibling keyed by raw millisecond timestamp.
+        final dateStr =
+            (map['date'] as String?) ??
+                (loggedAt.length >= 10
+                    ? loggedAt.substring(0, 10)
+                    : istDateStr(DateTime.now()));
+        final logId = 'wlog_$dateStr';
 
         await _hive.workoutBox.put(logId, {
           'id': logId,
           'type': 'workout_log',
           'workout_name': map['exercise_name'] ?? 'Workout',
-          'date': map['date'],
+          'date': dateStr,
           'completed_at': loggedAt,
           'sets_completed': map['sets_completed'],
           'duration_seconds': map['duration_seconds'],
+          'source': 'cloud_restore',
         });
       }
     } catch (e) {
@@ -2547,16 +2597,19 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final completedAt = map['completed_at'] as String? ?? '';
         final name = map['exercise_name'] as String? ?? '';
-        final ts = DateTime.tryParse(completedAt)?.millisecondsSinceEpoch ??
-            DateTime.now().millisecondsSinceEpoch;
-        final logId = 'exlog_${ts}_${name.hashCode}';
-
-        if (_hive.workoutBox.get(logId) != null) continue;
-
         // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
         final dateStr = completedAt.length >= 10
             ? completedAt.substring(0, 10)
             : istDateStr(DateTime.now());
+        // APK Test #12.8 / Bug #1 — Hive key MUST mirror what
+        // [WorkoutWriteService.exlogKey] produces. Pre-fix used
+        // `exlog_<rawMs>_<name.hashCode>` which (a) drifts off the
+        // IST date contract and (b) skipped lowercase+trim normalization,
+        // so a re-restore created a sibling row alongside the local
+        // exlog written by the WriteService — founder ended up with
+        // 30+ exlog entries for one workout day on May 4.
+        final nameNormalized = name.toLowerCase().trim();
+        final logId = 'exlog_${dateStr}_${nameNormalized.hashCode}';
 
         final logMap = <String, dynamic>{
           'id': logId,
@@ -2818,8 +2871,8 @@ class SyncService {
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
-        final id = map['id'] as String? ?? '';
-        if (_hive.nutritionBox.get(id) != null) continue;
+        final cloudId = map['id'] as String? ?? '';
+        if (cloudId.isEmpty) continue;
 
         // Extract items from joined nutrition_log_items
         final itemRows = map['nutrition_log_items'] as List? ?? [];
@@ -2845,7 +2898,26 @@ class SyncService {
         map.remove('nutrition_log_items');
         map['source'] = 'cloud_restore';
 
-        await _hive.nutritionBox.put(id, map);
+        // APK Test #12.8 / Bug #1 — derive deterministic local Hive key
+        // from row data, NOT from the cloud UUID. Pre-fix the cloud
+        // UUID was used directly as the Hive key — every restore wrote
+        // a sibling row alongside the existing `nlog_<istDate>_<meal>_<hash>`
+        // local row. NutritionWriteService.computeLogKey is the canonical
+        // shape: `nlog_<istDate>_<mealType>_<itemsHash>`. We mirror its
+        // 32-bit `Object.hashCode` of `name.toLowerCase().trim()|qty.toFixed(1)`
+        // so the same row collapses on cloud→local round-trip.
+        final mealType = (map['meal_type'] as String?) ?? 'meal';
+        final dateForKey = (map['date'] as String?) ??
+            ((map['created_at'] as String?)?.substring(0, 10) ??
+                istDateStr(DateTime.now()));
+        final localKey = _nlogKeyForRestore(
+          dateStr: dateForKey,
+          mealType: mealType,
+          items: (map['items'] as List?) ?? const [],
+        );
+        map['id'] = localKey;
+        map['log_key'] = localKey;
+        await _hive.nutritionBox.put(localKey, map);
       }
     } catch (e) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
@@ -2888,8 +2960,31 @@ class SyncService {
           .eq('user_id', userId)
           .limit(1);
 
-      if (rows.isEmpty) return;
-      final cloud = Map<String, dynamic>.from(rows.first as Map);
+      // APK Test #12.8 / Bug #2 — `full_name` + `email` live on
+      // `public.users`, NOT on `user_profile`. Pre-fix the restore only
+      // queried `user_profile`, so post-reinstall `userBox['profile']
+      // ['full_name']` stayed null and home greeting rendered "USER".
+      // Merge `users` columns into the same profile map.
+      Map<String, dynamic> usersRow = const {};
+      try {
+        final u = await _supabase.client
+            .from('users')
+            .select('full_name, email')
+            .eq('id', userId)
+            .maybeSingle();
+        if (u != null) {
+          usersRow = Map<String, dynamic>.from(u);
+        }
+      } catch (e) {
+        // Non-fatal — profile restore still proceeds with whatever the
+        // user_profile row carries.
+        debugPrint('[SyncService._restoreUserProfile] users select: $e');
+      }
+
+      if (rows.isEmpty && usersRow.isEmpty) return;
+      final cloud = rows.isEmpty
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id'); // Don't store user_id inside the profile map
 
       // F2 · Merge semantics — cloud non-null fields overwrite Hive; cloud
@@ -2905,6 +3000,14 @@ class SyncService {
         ...existingMap,
         for (final e in cloud.entries)
           if (e.value != null) e.key: e.value,
+        // APK Test #12.8 / Bug #2 — `users` columns layered last so
+        // canonical `full_name` + `email` always win when present.
+        for (final e in usersRow.entries)
+          if (e.value != null) e.key: e.value,
+        // Stamp the canonical user id so cross-account isolation checks
+        // (splash_screen profile-id-vs-session) keep working when only
+        // the `users` row was found.
+        'id': userId,
       };
       await _hive.userBox.put('profile', merged);
     } catch (e) {
@@ -3313,24 +3416,27 @@ class SyncService {
         // skip exercise_id entirely unless it's already a valid uuid
         // (it's nullable, and the string library ids aren't meaningful
         // cross-device). exercise_name carries the real identity.
-        // APK Test #12.7 — derive cloud UUID from (user_id, name) NOT
-        // from `tmpl_<ms>` Hive key. Founder had 8 dup template rows
-        // because each fresh creation of "Leg Day A" produced a new
-        // `tmpl_<ms>` key → new deterministic UUID → new cloud row.
-        // Migration 050 added UNIQUE (user_id, name) — without this
-        // change, every sync of duped local Hive templates would 23505
-        // on the new constraint. Now the cloud UUID is stable across
-        // local re-creation; UNIQUE constraint dedupes naturally.
-        // Pre-migration ids stay valid (UNIQUE id constraint still
-        // holds; same row updates).
+        // APK Test #12.8 / Bug #4 — drop `id` from the upsert payload
+        // entirely. Pre-fix Test #12.7 derived `id` from (user_id, name)
+        // and passed it to the upsert with `onConflict: 'user_id,name'`.
+        // Cloud's pre-migration-050 rows have DIFFERENT id values (the
+        // `keepers` from the migration 050 dedup). On conflict Postgres
+        // tried to UPDATE the existing row's id to the new derived
+        // value → blocked by `template_exercises_template_id_fkey`
+        // (and the same on `scheduled_workouts.template_id`,
+        // `workout_logs.template_id`) → 23503 fatal. Founder log
+        // showed 8 such errors in 10s.
+        //
+        // Fix: omit `id` so PostgREST's upsert keeps the existing id on
+        // conflict (UPDATE) and uses the column default `gen_random_uuid()`
+        // on first INSERT. Then SELECT the real cloud id by (user_id,
+        // name) BEFORE inserting child template_exercises rows so they
+        // FK to the correct parent.
         final tmplName = (tmpl['name'] as String?)?.trim() ?? 'Untitled';
-        final cloudTmplId =
-            _deterministicId('tmpl|$userId|${tmplName.toLowerCase()}');
         final exercises = tmpl['exercises'] as List? ?? [];
 
-        // Upsert template header
+        // Upsert template header — `id` deliberately omitted.
         await _supabase.client.from('workout_templates').upsert({
-          'id': cloudTmplId,
           'user_id': userId,
           'name': tmplName,
           if (tmpl['description'] != null) 'description': tmpl['description'],
@@ -3345,7 +3451,50 @@ class SyncService {
             'last_used_at': tmpl['last_used_at'],
         }, onConflict: 'user_id,name');
 
-        // Upsert child exercises
+        // SELECT the real cloud id post-upsert so child rows FK
+        // correctly. Pre-fix used `_deterministicId('tmpl|user|name')`
+        // which only matched on greenfield first-insert; pre-existing
+        // rows kept their migration-050 keeper id and the FK lookup
+        // mismatched → 23503.
+        String? cloudTmplId;
+        try {
+          final parentRow = await _supabase.client
+              .from('workout_templates')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('name', tmplName)
+              .maybeSingle();
+          cloudTmplId = parentRow?['id'] as String?;
+        } catch (idErr) {
+          debugPrint(
+              '[SyncService._syncWorkoutTemplates] parent id lookup: $idErr');
+        }
+        if (cloudTmplId == null || cloudTmplId.isEmpty) {
+          // Without a valid parent id we can't push children safely.
+          // Skip silently — next sync will retry.
+          continue;
+        }
+
+        // Delete-then-insert child rows. There's no UNIQUE constraint
+        // on (template_id, order_index) we can target with onConflict
+        // (migration 051 would add one but we can't touch migrations
+        // in this batch). DELETE removes any stale child rows from
+        // the migration-050 keeper so re-sync replaces them cleanly
+        // instead of accumulating duplicates.
+        try {
+          await _supabase.client
+              .from('template_exercises')
+              .delete()
+              .eq('template_id', cloudTmplId);
+        } catch (delErr) {
+          debugPrint(
+              '[SyncService._syncWorkoutTemplates] child delete: $delErr');
+          // Non-fatal — INSERT below may still create duplicates but
+          // the FK relationship stays intact.
+        }
+
+        // Insert child exercises — `id` omitted so cloud generates UUID
+        // on insert.
         for (int i = 0; i < exercises.length; i++) {
           final ex = exercises[i] is Map
               ? Map<String, dynamic>.from(exercises[i] as Map)
@@ -3355,12 +3504,12 @@ class SyncService {
               RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
                   .hasMatch(rawExerciseId);
           try {
-            // APK Test #12.7 — child UUID derived from cloudTmplId (stable
-            // across local re-creations) instead of hiveId (per-creation).
-            // Otherwise dup local templates with same name would accumulate
-            // N×K children all pointing at the same cloud parent.
-            await _supabase.client.from('template_exercises').upsert({
-              'id': _deterministicId('${cloudTmplId}_ex_$i'),
+            await _supabase.client.from('template_exercises').insert({
+              // APK Test #12.8 / Bug #4 — `id` omitted; child UUID
+              // generated by cloud default. INSERT (not upsert) because
+              // we deleted stale children above; no UNIQUE constraint
+              // exists on (template_id, order_index) for an upsert
+              // conflict target.
               'template_id': cloudTmplId,
               if (isUuid) 'exercise_id': rawExerciseId,
               'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
@@ -3381,7 +3530,7 @@ class SyncService {
               if (ex['rest_seconds'] != null || ex['rest_secs'] != null)
                 'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
               if (ex['notes'] != null) 'notes': ex['notes'],
-            }, onConflict: 'id');
+            });
           } catch (exErr) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
             try {
@@ -3412,7 +3561,18 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
         if (id.isEmpty) continue;
-        final hiveKey = id.startsWith('tmpl_') ? id : 'tmpl_${id.hashCode}';
+        // APK Test #12.8 / Bug #1 — derive deterministic Hive key from
+        // (lower(name)) NOT from the cloud UUID hash. Pre-fix
+        // `'tmpl_${id.hashCode}'` produced a Hive key that didn't
+        // collide with the locally-saved `tmpl_<ms>` key on the same
+        // template, doubling the templates list on every cold restore.
+        // (user_id, name) is the canonical identity per migration 050;
+        // we omit user_id from the key since the userBox is already
+        // user-scoped and the migrator handles cross-user isolation.
+        final tmplName = (map['name'] as String? ?? '').toLowerCase().trim();
+        final hiveKey = tmplName.isEmpty
+            ? 'tmpl_${id.hashCode.toUnsigned(32).toRadixString(16)}'
+            : 'tmpl_${tmplName.hashCode.toUnsigned(32).toRadixString(16)}';
         // F6 · Always refresh template content from cloud — covers the case
         // where the user edited a template on another device. Previous
         // `if (workoutBox.get(hiveKey) != null) continue;` kept the stale
@@ -3530,20 +3690,42 @@ class SyncService {
         final date = map['scheduled_date'] as String? ?? '';
         if (date.isEmpty) continue;
         final key = 'schedule_$date';
-        // Skip if plan restore already populated this
-        if (_hive.workoutBox.get(key) != null) continue;
-
-        await _hive.workoutBox.put(key, {
+        // APK Test #12.8 / Bug #3 — pre-fix this returned early when a
+        // schedule entry already existed locally (typically because the
+        // _restoreWorkoutPlan path populated it first with status='planned').
+        // Result: cloud-side `status='completed'` + `completed_at` for May
+        // 5/6/7 never reached Hive, so the calendar showed DONE only for
+        // May 4 even though all four days were complete in the cloud.
+        // Now we MERGE: existing local fields (workout_name, exercises[],
+        // type) survive while cloud-authoritative fields (status,
+        // completed_at, week_number, day_of_week) are overlaid.
+        final existing = _hive.workoutBox.get(key);
+        final existingMap = existing is Map
+            ? Map<String, dynamic>.from(existing)
+            : <String, dynamic>{};
+        final cloudStatus = map['status'] as String?;
+        final cloudCompletedAt = map['completed_at'] as String?;
+        final merged = <String, dynamic>{
+          ...existingMap,
           'date': date,
-          'type': map['template_id'] != null ? 'custom_template' : 'workout',
-          'template_id': map['template_id'],
-          'status': map['status'] ?? 'planned',
-          'completed_at': map['completed_at'],
-          'week': map['week_number'],
-          'week_number': map['week_number'],
-          'day_of_week': map['day_of_week'],
+          // Preserve existing type if present (plan-generator-derived
+          // type is richer than cloud's binary template_id check); only
+          // fall back when local has none.
+          'type': existingMap['type'] ??
+              (map['template_id'] != null ? 'custom_template' : 'workout'),
+          if (map['template_id'] != null) 'template_id': map['template_id'],
+          // Cloud is authoritative for status/completed_at — don't let
+          // a stale local 'planned' override the cloud's 'completed'.
+          if (cloudStatus != null && cloudStatus.isNotEmpty)
+            'status': cloudStatus,
+          if (cloudCompletedAt != null && cloudCompletedAt.isNotEmpty)
+            'completed_at': cloudCompletedAt,
+          if (map['week_number'] != null) 'week': map['week_number'],
+          if (map['week_number'] != null) 'week_number': map['week_number'],
+          if (map['day_of_week'] != null) 'day_of_week': map['day_of_week'],
           'source': 'cloud_restore',
-        });
+        };
+        await _hive.workoutBox.put(key, merged);
       }
     } catch (e) {
       debugPrint('[SyncService._restoreScheduledWorkouts] $e');
@@ -3603,8 +3785,17 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
         if (id.isEmpty) continue;
-        final hiveKey = id.startsWith('saved_meal_') ? id : 'saved_meal_${id.hashCode}';
-        if (_hive.nutritionBox.get(hiveKey) != null) continue;
+        // APK Test #12.8 / Bug #1 — derive deterministic Hive key from
+        // (user_id, lower(name)) instead of the cloud UUID. Pre-fix
+        // `'saved_meal_${id.hashCode}'` produced a per-cloud-uuid Hive
+        // row that did not collide with the locally-written
+        // `saved_meal_<nameHash>` key, doubling the saved-meals list
+        // on every restore. Identity = (user, name) — match the rule
+        // used by NutritionRepository for local saves.
+        final name = (map['name'] as String? ?? '').toLowerCase().trim();
+        final hiveKey = name.isEmpty
+            ? 'saved_meal_${id.hashCode.toUnsigned(32).toRadixString(16)}'
+            : 'saved_meal_${name.hashCode.toUnsigned(32).toRadixString(16)}';
 
         await _hive.nutritionBox.put(hiveKey, {
           'id': hiveKey,
@@ -3744,8 +3935,19 @@ class SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
         if (id.isEmpty) continue;
-        final hiveKey = id.startsWith('coach_') ? id : 'coach_${id.hashCode}';
-        if (_hive.coachBox.get(hiveKey) != null) continue;
+        // APK Test #12.8 / Bug #1 — derive deterministic Hive key from
+        // (user_id, created_at). Pre-fix `'coach_${id.hashCode}'` keyed
+        // by the cloud UUID's hash, which never matches the local-write
+        // key `coach_<created_at_ms>` produced by `ai_coach_repository`
+        // — every cold restore appended a sibling row. The cloud
+        // `created_at` ISO string is stable and globally unique per
+        // user-message turn so it collapses cloud→local on round-trip.
+        final createdAt = map['created_at'] as String? ?? '';
+        final ts =
+            DateTime.tryParse(createdAt)?.millisecondsSinceEpoch ?? 0;
+        final hiveKey = ts > 0
+            ? 'coach_$ts'
+            : 'coach_${id.hashCode.toUnsigned(32).toRadixString(16)}';
 
         await _hive.coachBox.put(hiveKey, {
           'id': hiveKey,

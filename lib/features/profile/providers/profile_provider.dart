@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -324,21 +325,44 @@ class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
   @override
   SubscriptionInfoData build() {
     final sub = SubscriptionService.instance;
-    // TODO(APK Test #12.6): wire `pro_pill_state_mismatch` event here.
-    // Implementation requires storing the last server-known PRO state
-    // (e.g. from verifyFromServer cache) and comparing against the
-    // local sub.isPro() value. If they disagree, fire
-    // `ErrorTelemetry.logEvent('pro_pill_state_mismatch', ...)` so we
-    // can detect cases where the pill renders FREE while the server
-    // still has an active subscription (or vice versa). Deferred to a
-    // follow-up batch — needs a dedicated last-server-state cache key
-    // on SubscriptionService (e.g. `_lastServerVerifiedIsPro`) that's
-    // not currently stored.
+    final localIsPro = sub.isPro();
+    final inFlight = sub.isPaymentInFlight;
+
+    // APK Test #12.8 — pro_pill_state_mismatch_observed probe.
+    // Fires when build() returns isPro=false but a strong "should be
+    // PRO" signal exists locally:
+    //   (a) payment grace window is active (Razorpay just succeeded), or
+    //   (b) localActivationAt within 15 min (Phase 3 fallback path).
+    // Either case means: pill will render GO PRO while a subscription
+    // creation is mid-flight. Catches the founder's "PRO pill stuck"
+    // observation class. Fire-and-forget; never blocks the build path.
+    if (!localIsPro) {
+      try {
+        final localAct = MigratedKey.read<dynamic>('localActivationAt');
+        DateTime? activatedAt;
+        if (localAct != null) {
+          activatedAt = DateTime.tryParse(localAct.toString());
+        }
+        final activationFresh = activatedAt != null &&
+            DateTime.now().difference(activatedAt).inMinutes < 15;
+        if (inFlight || activationFresh) {
+          unawaited(ErrorTelemetry.logEvent(
+            'pro_pill_state_mismatch_observed',
+            message: 'paymentInFlight=$inFlight '
+                'localActivationAtFresh=$activationFresh '
+                'localActivationAt=$localAct',
+          ));
+        }
+      } catch (_) {
+        // Probe must never break the provider build.
+      }
+    }
+
     return SubscriptionInfoData(
-      isPro: sub.isPro(),
+      isPro: localIsPro,
       plan: sub.currentPlan,
       expiresAt: sub.expiresAt,
-      isVerifying: sub.isPaymentInFlight,
+      isVerifying: inFlight,
     );
   }
 }

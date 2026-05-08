@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -103,8 +104,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _isMetric = UserRepository.instance.getUnitsMetric();
     final profile = ref.read(userProfileProvider);
 
+    final fullNameAtRead = profile['full_name'] as String?;
+    // APK Test #12.8 — probe for "edit profile shows blank name even
+    // though user definitely entered one". Surfaces same class as
+    // founder's home greeting "USER" observation but at the edit
+    // surface (a different code path / Hive read).
+    if (fullNameAtRead == null ||
+        fullNameAtRead.trim().isEmpty ||
+        fullNameAtRead == 'User') {
+      unawaited(ErrorTelemetry.logEvent(
+        'profile_full_name_empty_at_read',
+        message: 'reader=edit_profile rawName=${fullNameAtRead ?? "<null>"}',
+      ));
+    }
     _nameController =
-        TextEditingController(text: profile['full_name'] as String? ?? '');
+        TextEditingController(text: fullNameAtRead ?? '');
 
     // Convert height/weight values to the user's preferred units for display.
     // Storage is always metric (cm, kg); we convert on the way in and out.
