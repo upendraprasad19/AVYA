@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -113,6 +114,13 @@ class AuthNotifier extends Notifier<AuthState2> {
       }
 
       await _ensureLocalUser(response.user!);
+      // APK Test #12.8 — auth lifecycle event so we can correlate
+      // post-auth bug reports (PRO pill stuck, profile name "USER")
+      // with the exact sign-in instant.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('auth_signed_in',
+          message:
+              'method=email userId=${response.user!.id.substring(0, 8)}');
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -188,6 +196,11 @@ class AuthNotifier extends Notifier<AuthState2> {
       } catch (_) {
         // Other local setup failures are non-fatal — auth succeeded.
       }
+      // APK Test #12.8 — distinct sign-up event vs sign-in.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('auth_signed_up',
+          message:
+              'method=email userId=${response.user!.id.substring(0, 8)}');
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -267,6 +280,11 @@ class AuthNotifier extends Notifier<AuthState2> {
       }
 
       await _ensureLocalUser(response.user!);
+      // APK Test #12.8 — phone OTP success event.
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('auth_signed_in',
+          message:
+              'method=phone_otp userId=${response.user!.id.substring(0, 8)}');
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -286,6 +304,14 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Sign out BEFORE clearing Hive so the router never sees
   /// authenticated + !onboarded which would redirect to /onboarding.
   Future<void> signOut() async {
+    // APK Test #12.8 — capture sign-out before any Hive clear so the
+    // event makes it to cloud even if a subsequent step throws.
+    final signedOutId = _supabase.currentUser?.id;
+    if (signedOutId != null) {
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('auth_signed_out',
+          message: 'userId=${signedOutId.substring(0, 8)}');
+    }
     try {
       await UserRepository.instance.clearAllData();
     } catch (e) {
@@ -326,6 +352,14 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// If the user previously completed onboarding (has a profile in Supabase),
   /// restores the onboarding flag so they skip onboarding on re-login.
   Future<void> _ensureLocalUser(User user) async {
+    // APK Test #12.8 — entry-point trace. Most lifecycle bugs (PRO pill
+    // stuck, profile name "USER") manifest after this method runs;
+    // having a per-call event lets us correlate downstream failures with
+    // the exact ensureLocalUser invocation.
+    // ignore: discarded_futures
+    ErrorTelemetry.logEvent('auth_user_ensured',
+        message: 'userId=${user.id.substring(0, 8)}');
+
     // Layer 2.3 — open per-user namespaced boxes FIRST, before any code
     // reads user-scoped Hive. Idempotent — re-running for same user is a no-op.
     // Different user → previous boxes closed first.

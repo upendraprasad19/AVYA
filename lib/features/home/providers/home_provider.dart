@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -172,7 +173,21 @@ class UserFirstNameNotifier extends Notifier<String> {
   @override
   String build() {
     final profile = UserRepository.instance.getProfile();
-    final name = profile?['full_name'] as String? ?? 'User';
+    final rawName = profile?['full_name'] as String?;
+    // APK Test #12.8 — probe for the founder's "Profile name USER"
+    // observation. Fires when the canonical home-greeting reader sees
+    // a null/empty/placeholder full_name despite an authenticated
+    // session existing. Surfaces sites where Hive profile didn't
+    // populate from cloud restore (or wasn't synced from onboarding).
+    if (rawName == null || rawName.trim().isEmpty || rawName == 'User') {
+      unawaited(ErrorTelemetry.logEvent(
+        'profile_full_name_empty_at_read',
+        message: 'reader=user_first_name '
+            'rawName=${rawName ?? "<null>"} '
+            'hasProfile=${profile != null}',
+      ));
+    }
+    final name = rawName ?? 'User';
     return name.split(' ').first.toUpperCase();
   }
 }

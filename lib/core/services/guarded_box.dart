@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'error_telemetry.dart';
 import 'hive_user_session.dart';
 
 /// Thrown when a user-scoped Hive box is accessed with a session that
@@ -177,6 +180,12 @@ GuardedBox<T> wrapUserScopedBox<T>(String root) {
         // subsequent ops uses the live session. This closes the
         // close-race window without forcing every caller to await an
         // async openForUser.
+        // APK Test #12.8 — surface every fallback fire so we can
+        // measure how often the close-race actually hits in production.
+        // High count = upstream caller ordering bug; near-zero =
+        // defensive guard rarely needed (good).
+        unawaited(ErrorTelemetry.logEvent('guarded_box_auto_open_fallback',
+            message: 'box=$root userId=${authUid.substring(0, 8)}'));
         final box = Hive.box(boxName);
         final localHash = authUid.replaceAll('-', '').substring(0, 8);
         return GuardedBox<T>(box, localHash, authUid);
