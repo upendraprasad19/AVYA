@@ -799,6 +799,12 @@ class SyncService {
       // and storage per user is negligible (~1-2MB/year).
       const since = '2020-01-01T00:00:00Z';
 
+      // APK Test #12.9 — _restoreWorkoutPlan must complete BEFORE
+      // _restoreScheduledWorkouts so cloud-authoritative status='completed'
+      // is the LAST writer to schedule_<date> keys. See
+      // restoreFromCloudForUser for the full rationale.
+      await _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId));
+
       await Future.wait(
         [
           _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
@@ -812,7 +818,6 @@ class SyncService {
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
           _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
-          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
           _safeRestoreOp('streaks', _restoreStreaks(userId)),
@@ -893,6 +898,16 @@ class SyncService {
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
           _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+          // APK Test #12.9 — moved from step B. _restoreWorkoutPlan
+          // writes `schedule_*` keys from a frozen `plan_json.schedules`
+          // snapshot (status='planned' for all days). _restoreScheduledWorkouts
+          // (step B) overlays cloud-authoritative status='completed' from
+          // the live `scheduled_workouts` table. Pre-12.9 both ran in
+          // parallel via Future.wait; if `_restoreWorkoutPlan` won the
+          // race it clobbered the completed status with stale 'planned'.
+          // Sequential ordering (A before B) guarantees the live table
+          // is the LAST writer and therefore wins.
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
         ],
         eagerError: false,
       );
@@ -908,7 +923,6 @@ class SyncService {
           _safeRestoreOp('steps_logs', _restoreStepsLogs(userId, since)),
           _safeRestoreOp('nutrition_logs', _restoreNutritionLogs(userId, since)),
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
-          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
           _safeRestoreOp('streaks', _restoreStreaks(userId)),
@@ -3320,9 +3334,33 @@ class SyncService {
       if (schedules != null && schedules is Map) {
         for (final entry in schedules.entries) {
           final key = entry.key.toString();
-          if (key.startsWith('schedule_')) {
-            await _hive.workoutBox.put(key, entry.value is Map ? Map<String, dynamic>.from(entry.value as Map) : entry.value);
+          if (!key.startsWith('schedule_')) continue;
+          // APK Test #12.9 — defensive merge: never clobber a local
+          // `status:'completed'` with a stale `status:'planned'` from
+          // the plan_json snapshot. Cloud-authoritative state (already
+          // applied by `_restoreScheduledWorkouts` upstream OR persisted
+          // by an earlier completion that hasn't been synced back into
+          // plan_json) must survive a re-run of this method.
+          final existing = _hive.workoutBox.get(key);
+          final incoming = entry.value is Map
+              ? Map<String, dynamic>.from(entry.value as Map)
+              : entry.value;
+          if (existing is Map && incoming is Map) {
+            final existingMap = Map<String, dynamic>.from(existing);
+            if (existingMap['status'] == 'completed') {
+              // Preserve completed status + completed_at from local;
+              // overlay other plan-snapshot fields (workout_name,
+              // exercises[], type) which are still useful.
+              final merged = Map<String, dynamic>.from(incoming);
+              merged['status'] = 'completed';
+              if (existingMap['completed_at'] != null) {
+                merged['completed_at'] = existingMap['completed_at'];
+              }
+              await _hive.workoutBox.put(key, merged);
+              continue;
+            }
           }
+          await _hive.workoutBox.put(key, incoming);
         }
       }
     } catch (e) {
@@ -3557,6 +3595,18 @@ class SyncService {
           .eq('is_active', true)
           .limit(500);
 
+      // APK Test #12.9 — collect canonical Hive keys we're about to
+      // write so we can sweep stragglers afterward. Pre-12.9 the user's
+      // workoutBox accumulated stale `tmpl_<ms>` and `tmpl_<id.hash>`
+      // keys from earlier APK builds with broken restore-key formulas
+      // (or local saves never pushed to cloud). Logout-login DOES wipe
+      // the namespaced box on disk, but in-place APK upgrades over a
+      // populated box don't, and any other future writer that puts a
+      // template-shaped Hive entry would also accumulate. Sweep
+      // ensures the templates list always matches the cloud set
+      // exactly after restore.
+      final canonicalKeys = <String>{};
+
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
@@ -3573,6 +3623,7 @@ class SyncService {
         final hiveKey = tmplName.isEmpty
             ? 'tmpl_${id.hashCode.toUnsigned(32).toRadixString(16)}'
             : 'tmpl_${tmplName.hashCode.toUnsigned(32).toRadixString(16)}';
+        canonicalKeys.add(hiveKey);
         // F6 · Always refresh template content from cloud — covers the case
         // where the user edited a template on another device. Previous
         // `if (workoutBox.get(hiveKey) != null) continue;` kept the stale
@@ -3613,6 +3664,31 @@ class SyncService {
           'last_used_at': map['last_used_at'],
           'source': 'cloud_restore',
         });
+      }
+
+      // APK Test #12.9 — sweep stale `tmpl_*` keys not in canonical
+      // cloud set. Skipped when cloud returned zero rows (defensive:
+      // a transient query failure could otherwise wipe local-only
+      // unsynced templates). The skip is safe because if cloud truly
+      // has zero templates, the user has nothing to lose by keeping
+      // local stragglers visible until next successful sync.
+      if (canonicalKeys.isNotEmpty) {
+        final stale = <String>[];
+        for (final k in _hive.workoutBox.keys) {
+          if (k is String &&
+              k.startsWith('tmpl_') &&
+              !canonicalKeys.contains(k)) {
+            stale.add(k);
+          }
+        }
+        if (stale.isNotEmpty) {
+          await _hive.workoutBox.deleteAll(stale);
+          unawaited(ErrorTelemetry.logEvent(
+            'templates_stale_keys_swept',
+            message:
+                'count=${stale.length} canonical=${canonicalKeys.length}',
+          ));
+        }
       }
     } catch (e) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -57,12 +58,16 @@ class ErrorTelemetry {
     try {
       final raw = error.toString();
       final message = raw.length > 500 ? raw.substring(0, 500) : raw;
+      final code = error.runtimeType.toString();
       await SupabaseService.instance.callFunction(
         'log-client-error',
         body: {
-          'error_type': reason,
-          'message': message,
-          'source': 'error_telemetry.recordNonFatal',
+          'error_code': code.isEmpty ? 'UnknownError' : code,
+          'error_message': message,
+          'op_type': reason,
+          'retry_count': 0,
+          'client_version': _currentClientVersion(),
+          'platform': _currentPlatform(),
         },
       );
     } catch (_) {
@@ -86,13 +91,29 @@ class ErrorTelemetry {
       await SupabaseService.instance.callFunction(
         'log-client-error',
         body: {
-          'error_type': opType,
-          'message': capped,
-          'source': 'error_telemetry.logEvent',
+          'error_code': 'event',
+          'error_message': capped,
+          'op_type': opType,
+          'retry_count': 0,
+          'client_version': _currentClientVersion(),
+          'platform': _currentPlatform(),
         },
       );
     } catch (_) {
       // Swallow — events must never break the host flow.
     }
+  }
+
+  static String _currentPlatform() {
+    if (kIsWeb) return 'web';
+    try {
+      if (Platform.isAndroid) return 'android';
+      if (Platform.isIOS) return 'ios';
+    } catch (_) {/* Platform unavailable on web */}
+    return 'web';
+  }
+
+  static String _currentClientVersion() {
+    return kDebugMode ? '0.0.0+dev' : '0.0.0+release';
   }
 }
