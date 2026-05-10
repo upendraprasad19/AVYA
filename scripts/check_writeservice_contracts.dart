@@ -5,18 +5,14 @@
 // For every concept in docs/sot_registry.yaml that has a hive.key_prefix,
 // asserts that test/contracts/<concept>_writer_to_reader_test.dart exists.
 //
-// Pragmatic: warn-don't-fail (exit 0 with warnings) if more than
-// WARN_THRESHOLD contracts are missing — those tests are added by T3.1.
+// Exit 0 = pass (all contract tests present).
+// Exit 1 = fail (any missing — hard-fail, no warn-only mode).
 //
-// Exit 0 = pass (or warn-only).
-// Exit 1 = fail (hard-fail when few enough missing to be a regression).
+// T3.1 contract-test work completed 2026-05-10 — threshold removed.
 //
 // Usage: dart run scripts/check_writeservice_contracts.dart
 
 import 'dart:io';
-
-// Above this many missing contracts → warn-don't-fail (T3.1 still running).
-const int _warnThreshold = 5;
 
 void main(List<String> args) async {
   final projectRoot = Directory.current.path;
@@ -70,22 +66,11 @@ void main(List<String> args) async {
     exit(0);
   }
 
-  if (missing.length > _warnThreshold) {
-    stderr.writeln(
-        '\n[Gate 9] WARN — ${missing.length} contract tests missing'
-        ' (> $_warnThreshold threshold → warn-only; T3.1 will add them):');
-    for (final m in missing) {
-      stderr.writeln('  MISSING: $m');
-    }
-    stdout.writeln('[Gate 9] PASS (warn-only) — see stderr for missing contracts.');
-    exit(0);
-  } else {
-    stderr.writeln(
-        '\n[Gate 9] FAIL — ${missing.length} contract tests missing'
-        ' (regression — these should have been added with the WriteService):');
-    for (final m in missing) {
-      stderr.writeln('  MISSING: $m');
-    }
-    exit(1);
+  stderr.writeln(
+      '\n[Gate 9] FAIL — ${missing.length} contract tests missing'
+      ' (add test/contracts/<concept>_writer_to_reader_test.dart for each):');
+  for (final m in missing) {
+    stderr.writeln('  MISSING: $m');
   }
+  exit(1);
 }

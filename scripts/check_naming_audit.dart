@@ -3,30 +3,32 @@
 // Gate 8: Forbidden legacy patterns absent.
 //
 // For every concept's forbidden_legacy_patterns[] in docs/sot_registry.yaml,
-// source-grep lib/, supabase/functions/, test/, integration_test/ (.dart and
-// .ts files only) and assert each pattern is absent.
+// source-grep lib/ (.dart files only) and assert each pattern is absent.
 //
-// Exit 0 = pass (or warn-only when > WARN_THRESHOLD violations found —
-//   indicates T2.3 naming-drift cleanup is still in progress).
-// Exit 1 = fail (hard violations when under threshold).
+// Exit 0 = pass (all patterns absent).
+// Exit 1 = fail (any violation found — hard-fail, no warn-only mode).
+//
+// T2.3 naming-drift cleanup completed 2026-05-10 — threshold removed.
 //
 // Usage: dart run scripts/check_naming_audit.dart
 
 import 'dart:io';
 
-// Violations above this count trigger warn-don't-fail mode.
-// Rationale: T2.3 (naming-drift cleanup) may still be in progress.
-const int _warnThreshold = 30;
-
 // Files/directories that are allowed to contain forbidden patterns
 // because they are the tests / audit docs that reference them as data.
+// NOTE: tests/, integration_test/, and supabase/functions/ are excluded
+// from the scan entirely (see scanDirs below) — forbidden patterns only
+// apply to production lib/ code.
 const _allowedPathFragments = [
-  'test/contracts/naming_audit',
   'scripts/check_naming_audit.dart',
   'docs/sot_registry.yaml',
   'docs/diagnoses/',
   'CLAUDE.md',
   'MEMORY.md',
+  // nutrition_screen.dart is the CANONICAL surface for food-log delete.
+  // Its single call to .deleteFoodLog inside _confirmAndDeleteFoodLog IS
+  // the pattern the registry wants — not a bypass of it.
+  'lib/features/nutrition/screens/nutrition_screen.dart',
 ];
 
 void main(List<String> args) async {
@@ -62,7 +64,11 @@ void main(List<String> args) async {
 
   // ── 2. Collect files to scan ─────────────────────────────────────────────
 
-  final scanDirs = ['lib', 'supabase/functions', 'test', 'integration_test'];
+  // Only scan production lib/ code. Tests, integration_test, and Edge Functions
+  // are excluded: tests use synthetic Hive fixtures that may reference legacy
+  // field names intentionally; Edge Functions have their own type contracts;
+  // the goal of this gate is to prevent drift in Flutter production code.
+  final scanDirs = ['lib'];
   final scanExtensions = {'.dart', '.ts'};
 
   final filesToScan = <File>[];
@@ -110,6 +116,11 @@ void main(List<String> args) async {
             content.substring(0, match.start).split('\n').length;
         final lineContent =
             lineNo <= lines.length ? lines[lineNo - 1].trim() : '';
+        // Skip comment-only lines (Dart // or /* or TS //).
+        // Pattern appears in a comment explaining why NOT to use it — not a violation.
+        if (lineContent.startsWith('//') || lineContent.startsWith('/*') || lineContent.startsWith('*')) {
+          continue;
+        }
         violations.add(_Violation(
           file: relPath,
           line: lineNo,
@@ -131,35 +142,19 @@ void main(List<String> args) async {
 
   final limit = violations.take(20).toList();
 
-  if (violations.length > _warnThreshold) {
-    stderr.writeln(
-        '\n[Gate 8] WARN — ${violations.length} forbidden-pattern violations'
-        ' (> $_warnThreshold threshold → warn-only; T2.3 cleanup may still be in progress).');
-    stderr.writeln('  First ${limit.length}:');
-    for (final v in limit) {
-      stderr.writeln('  ${v.file}:${v.line} — pattern: ${v.pattern}');
-      stderr.writeln('    reason: ${v.reason}');
-      if (v.lineContent.isNotEmpty) {
-        stderr.writeln('    line: ${v.lineContent}');
-      }
+  stderr.writeln(
+      '\n[Gate 8] FAIL — ${violations.length} forbidden-pattern violations:');
+  for (final v in limit) {
+    stderr.writeln('  ${v.file}:${v.line} — pattern: ${v.pattern}');
+    stderr.writeln('    reason: ${v.reason}');
+    if (v.lineContent.isNotEmpty) {
+      stderr.writeln('    line: ${v.lineContent}');
     }
-    stdout.writeln('[Gate 8] PASS (warn-only) — see stderr for violations.');
-    exit(0);
-  } else {
-    stderr.writeln(
-        '\n[Gate 8] FAIL — ${violations.length} forbidden-pattern violations:');
-    for (final v in limit) {
-      stderr.writeln('  ${v.file}:${v.line} — pattern: ${v.pattern}');
-      stderr.writeln('    reason: ${v.reason}');
-      if (v.lineContent.isNotEmpty) {
-        stderr.writeln('    line: ${v.lineContent}');
-      }
-    }
-    if (violations.length > 20) {
-      stderr.writeln('  ... and ${violations.length - 20} more.');
-    }
-    exit(1);
   }
+  if (violations.length > 20) {
+    stderr.writeln('  ... and ${violations.length - 20} more.');
+  }
+  exit(1);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

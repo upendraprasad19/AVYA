@@ -664,8 +664,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
   /// Copy one week's scheduled workouts to another week in Hive workoutBox.
   ///
-  /// Duplicates workout entries from [sourceWeek] to [targetWeek],
-  /// preserving exercise data but resetting status to 'planned'.
+  /// Delegates to [WorkoutScheduleService.copyWeek] so that WorkoutScheduleService
+  /// remains the sole schedule writer (T2.3 naming-drift fix 2026-05-10).
   Future<void> copyWeek(int sourceWeek, int targetWeek) async {
     if (sourceWeek == targetWeek) return;
     if (sourceWeek < 1 || sourceWeek > 4) return;
@@ -674,39 +674,11 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final startStr = MigratedKey.read<String>('plan_start_date');
     if (startStr == null) return;
 
-    final hive = HiveService.instance;
-    final planStart = DateTime.tryParse(startStr) ?? DateTime.now();
-    final sourceWeekStart =
-        planStart.add(Duration(days: (sourceWeek - 1) * 7));
-    final targetWeekStart =
-        planStart.add(Duration(days: (targetWeek - 1) * 7));
-
-    for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
-      final sourceDate = sourceWeekStart.add(Duration(days: dayOfWeek));
-      final targetDate = targetWeekStart.add(Duration(days: dayOfWeek));
-
-      final sourceDateKey =
-          '${sourceDate.year}-${sourceDate.month.toString().padLeft(2, '0')}-${sourceDate.day.toString().padLeft(2, '0')}';
-      final targetDateKey =
-          '${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')}';
-
-      final sourceEntry = hive.workoutBox.get('schedule_$sourceDateKey');
-      if (sourceEntry == null) continue;
-
-      final sourceMap = Map<String, dynamic>.from(sourceEntry as Map);
-
-      // Duplicate with updated date, week, and reset status
-      final newEntry = Map<String, dynamic>.from(sourceMap);
-      newEntry['date'] = targetDateKey;
-      newEntry['week'] = targetWeek;
-      newEntry['status'] =
-          sourceMap['type'] == 'rest' ? 'rest' : 'planned';
-      newEntry['completed_at'] = null;
-      newEntry['is_swapped'] = false;
-      newEntry['original_date'] = null;
-
-      await hive.workoutBox.put('schedule_$targetDateKey', newEntry);
-    }
+    await WorkoutScheduleService.instance.copyWeek(
+      sourceWeek: sourceWeek,
+      targetWeek: targetWeek,
+      planStartDateIso: startStr,
+    );
 
     // Refresh the plan so the UI reflects the copied week
     ref.invalidateSelf();

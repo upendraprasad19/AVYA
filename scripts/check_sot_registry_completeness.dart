@@ -9,16 +9,14 @@
 //   3. Every 'box.put(<key_prefix>' callsite prefix appears in some concept's
 //      hive.key_prefix.
 //
-// Exit 0 = pass (or warn-only when > WARN_THRESHOLD unmatched methods found).
-// Exit 1 = fail.
+// Exit 0 = pass (all registered, all line ranges in-bounds).
+// Exit 1 = fail (any violation — hard-fail, no warn-only mode).
+//
+// T2.1/T2.3 registry work completed 2026-05-10 — thresholds removed.
 //
 // Usage: dart run scripts/check_sot_registry_completeness.dart
 
 import 'dart:io';
-
-// Number of unmatched methods that triggers warn-don't-fail mode.
-// Rationale: if the registry is still being built, don't hard-fail the build.
-const int _warnThreshold = 50;
 
 void main(List<String> args) async {
   final projectRoot = Directory.current.path;
@@ -140,61 +138,30 @@ void main(List<String> args) async {
   }
 
   // ── 4. Print results ─────────────────────────────────────────────────────
-  //
-  // Design note: file:line errors are warn-only because the registry was
-  // recently enriched with grepped-but-not-re-verified line numbers. As the
-  // registry matures these will be tightened. Hard-fail threshold: > 50 errors
-  // (would indicate systematic registry corruption, not normal drift).
-  //
-  // Unmatched methods: same logic — 23 unregistered out of ~80 is normal for a
-  // freshly-bootstrapped registry. Hard-fail only when > _warnThreshold.
 
   var hasFailures = false;
 
   if (fileLineErrors.isNotEmpty) {
-    if (fileLineErrors.length > _warnThreshold) {
-      stderr.writeln('\n[Gate 7] FAIL — too many file:line errors (${fileLineErrors.length}):');
-      for (final e in fileLineErrors.take(20)) {
-        stderr.writeln('  $e');
-      }
-      hasFailures = true;
-    } else {
-      // Warn-only: normal for a registry that was recently bulk-enriched.
-      stderr.writeln('\n[Gate 7] WARN — ${fileLineErrors.length} file:line stale in registry'
-          ' (warn-only until registry settles; < $_warnThreshold threshold):');
-      for (final e in fileLineErrors) {
-        stderr.writeln('  $e');
-      }
+    stderr.writeln('\n[Gate 7] FAIL — ${fileLineErrors.length} file:line stale in registry:');
+    for (final e in fileLineErrors) {
+      stderr.writeln('  $e');
     }
+    hasFailures = true;
   }
 
   if (unmatched.isNotEmpty) {
-    if (unmatched.length > _warnThreshold) {
-      // Too many missing — likely registry is still being built. Warn, don't fail.
-      stderr.writeln('\n[Gate 7] WARN — ${unmatched.length} methods not in registry'
-          ' (> $_warnThreshold threshold → warn-only mode).');
-      stderr.writeln('  First 20:');
-      for (final u in unmatched.take(20)) {
-        stderr.writeln('  $u');
-      }
-      stderr.writeln(
-          '  (Tune threshold in scripts/check_sot_registry_completeness.dart'
-          ' once registry is complete.)');
-    } else {
-      // Under threshold: warn-only while registry is still being built.
-      // To make this a hard-fail once T2.1 registry work is complete, change
-      // the condition to: hasFailures = true;
-      stderr.writeln('\n[Gate 7] WARN — ${unmatched.length} methods not in registry'
-          ' (< $_warnThreshold → warn-only while registry is being completed):');
-      for (final u in unmatched) {
-        stderr.writeln('  $u');
-      }
+    stderr.writeln('\n[Gate 7] FAIL — ${unmatched.length} methods not in registry:');
+    for (final u in unmatched.take(20)) {
+      stderr.writeln('  $u');
     }
+    if (unmatched.length > 20) {
+      stderr.writeln('  ... and ${unmatched.length - 20} more.');
+    }
+    hasFailures = true;
   }
 
   if (!hasFailures) {
-    stdout.writeln('[Gate 7] PASS (with warnings) — SoT registry check complete.'
-        ' See stderr for any stale line numbers or unregistered methods.');
+    stdout.writeln('[Gate 7] PASS — SoT registry check complete.');
   }
 
   if (hasFailures) {

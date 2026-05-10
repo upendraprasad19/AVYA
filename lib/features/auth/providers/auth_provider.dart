@@ -747,11 +747,11 @@ class AuthNotifier extends Notifier<AuthState2> {
         'log-client-error',
         body: {
           'user_id': userId,
-          'error_type': errorType,
-          'message': message.length > 1000
+          'op_type': errorType,
+          'error_message': message.length > 1000
               ? message.substring(0, 1000)
               : message,
-          'source': 'auth_provider._ensureLocalUser',
+          'platform': 'android',
         },
       );
     } catch (_) {

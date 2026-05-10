@@ -1718,6 +1718,45 @@ class WorkoutScheduleService {
 
   /// Format date as 'yyyy-MM-dd' string key.
   String _dateKey(DateTime date) => formatDateKey(date);
+
+  // ── Week-Copy ────────────────────────────────────────────────────────────
+
+  /// Copy all schedule entries from [sourceWeek] to [targetWeek].
+  ///
+  /// Clones each day's entry, resets status to 'planned', and writes via the
+  /// canonical workoutBox path so this service remains the sole schedule
+  /// writer (T2.3 naming-drift fix 2026-05-10).
+  Future<void> copyWeek({
+    required int sourceWeek,
+    required int targetWeek,
+    required String planStartDateIso,
+  }) async {
+    if (sourceWeek == targetWeek) return;
+    final planStart = DateTime.tryParse(planStartDateIso) ?? DateTime.now();
+    final sourceWeekStart = planStart.add(Duration(days: (sourceWeek - 1) * 7));
+    final targetWeekStart = planStart.add(Duration(days: (targetWeek - 1) * 7));
+    final workoutBox = _hive.workoutBox;
+
+    for (int day = 0; day < 7; day++) {
+      final sourceDate = sourceWeekStart.add(Duration(days: day));
+      final targetDate = targetWeekStart.add(Duration(days: day));
+      final sourceDateKey = _dateKey(sourceDate);
+      final targetDateKey = _dateKey(targetDate);
+
+      final sourceEntry = workoutBox.get('$_schedulePrefix$sourceDateKey');
+      if (sourceEntry == null) continue;
+
+      final newEntry = Map<String, dynamic>.from(sourceEntry as Map)
+        ..['date'] = targetDateKey
+        ..['week'] = targetWeek
+        ..['status'] = (sourceEntry['type'] == 'rest') ? 'rest' : 'planned'
+        ..['completed_at'] = null
+        ..['is_swapped'] = false
+        ..['original_date'] = null;
+
+      await workoutBox.put('$_schedulePrefix$targetDateKey', newEntry);
+    }
+  }
 }
 
 /// Private helper for [WorkoutScheduleService.shortenDay] — pairs an

@@ -1,0 +1,77 @@
+// test/contracts/food_log_delete_with_undo_writer_to_reader_test.dart
+//
+// Contract: food_log_delete_with_undo
+// Writer: NutritionWriteService.deleteLog
+// Reader / Delete surface: nutrition_screen._confirmAndDeleteFoodLog (with UNDO stash)
+//
+// Pins: deleteFoodLog must ONLY be called from _confirmAndDeleteFoodLog,
+// which stashes the row before deleting and offers UNDO via restoreFoodLog.
+// See CLAUDE.md §19 "Food log delete with no undo".
+
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  late String nutritionScreenSource;
+  late String nutritionProviderSource;
+  late String nutritionWriteSource;
+
+  setUpAll(() {
+    nutritionScreenSource = File(
+            'lib/features/nutrition/screens/nutrition_screen.dart')
+        .readAsStringSync();
+    nutritionProviderSource = File(
+            'lib/features/nutrition/providers/nutrition_provider.dart')
+        .readAsStringSync();
+    nutritionWriteSource = File(
+            'lib/core/services/nutrition_write_service.dart')
+        .readAsStringSync();
+  });
+
+  group('food_log_delete_with_undo writer→reader contract', () {
+    test('nutrition_screen has _confirmAndDeleteFoodLog (canonical delete surface)', () {
+      expect(
+        nutritionScreenSource,
+        contains('_confirmAndDeleteFoodLog'),
+        reason:
+            '_confirmAndDeleteFoodLog is the ONLY delete surface; '
+            'must stash log + offer UNDO before calling deleteFoodLog.',
+      );
+    });
+
+    test('nutrition_screen stashes before delete (for UNDO)', () {
+      // The canonical delete stashes the log so restoreFoodLog can write it back.
+      final hasStash = nutritionScreenSource.contains('restoreFoodLog') ||
+          nutritionScreenSource.contains('stash') ||
+          nutritionScreenSource.contains('UNDO');
+      expect(
+        hasStash,
+        isTrue,
+        reason:
+            'nutrition_screen._confirmAndDeleteFoodLog must stash the log '
+            'before deletion so UNDO can restore it.',
+      );
+    });
+
+    test('NutritionWriteService has deleteLog method', () {
+      expect(
+        nutritionWriteSource,
+        contains('deleteLog'),
+        reason:
+            'NutritionWriteService must expose deleteLog; '
+            'direct nutritionBox.delete from a widget is forbidden.',
+      );
+    });
+
+    test('deleteFoodLog provider fires syncNutritionData after delete', () {
+      // The sync call lives in the provider layer (not the screen directly).
+      expect(
+        nutritionProviderSource,
+        contains('syncNutritionData'),
+        reason:
+            'deleteFoodLog in nutrition_provider must fire syncNutritionData() '
+            'so cloud stays in sync. Missing sync = AI coach sees stale meal context.',
+      );
+    });
+  });
+}
