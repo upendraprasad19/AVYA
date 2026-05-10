@@ -233,15 +233,26 @@ void main() {
       );
     });
 
-    test('child template_exercises insert omits id', () {
+    test('child template_exercises upsert omits id', () {
+      // APK Test #15 closeout / Backlog #2 — switched from
+      // .from('template_exercises').insert({}) to .upsert({},
+      // onConflict: 'template_id,order_index') after migration 051 added
+      // the UNIQUE constraint. Pre-Test-#15 this test pinned `.insert(`;
+      // updated to `.upsert(` so the contract continues to enforce the
+      // Bug #4 invariant ("no 'id':" in payload) under the new write
+      // shape. The id-omission rule is the load-bearing assertion;
+      // insert vs upsert is the implementation detail.
       final start = src.indexOf('Future<void> _syncWorkoutTemplates(');
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next);
 
       final childStart = body.indexOf(
-          ".from('template_exercises').insert({");
+          ".from('template_exercises').upsert({");
       expect(childStart, greaterThan(0),
-          reason: 'template_exercises must insert (not upsert) without id');
+          reason:
+              'template_exercises must upsert (post-migration-051) '
+              "without 'id'. closes-diagnose: "
+              '2026-05-10-template-exercises-upsert-a8b2c7');
       final childEnd = body.indexOf('}', childStart);
       final childBlock = body.substring(childStart, childEnd);
 
@@ -249,8 +260,10 @@ void main() {
         childBlock.contains("'id':"),
         isFalse,
         reason:
-            "Bug #4 — child insert must NOT pass 'id'; column default "
-            'gen_random_uuid() handles it',
+            "Bug #4 — child upsert must NOT pass 'id'; column default "
+            'gen_random_uuid() handles it. The onConflict target is '
+            "(template_id, order_index), so 'id' is preserved on UPDATE "
+            'and generated on INSERT.',
       );
     });
 
