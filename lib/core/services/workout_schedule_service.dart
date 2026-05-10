@@ -546,14 +546,23 @@ class WorkoutScheduleService {
           // "2026-05-09T15:30:00+00:00"), DateTime.tryParse produces a UTC
           // DateTime. Calling .toLocal() converts to IST-local wall-clock, but
           // then _dateKey → istDateStr → istDateOf calls .toUtc().add(+5:30)
-          // AGAIN, double-shifting the date to the next day. The stale-guard
-          // then fires for every cloud-restored completion, downgrading
-          // status='completed' to 'planned' and hiding the calendar checkmark.
+          // AGAIN, double-shifting the date to the next day.
           //
           // Fix: pass completedDate directly. istDateStr handles both UTC and
           // local DateTimes correctly via a single .toUtc().add(+5:30) shift.
           final completedDateStr = _dateKey(completedDate);
-          if (requestedDateStr != completedDateStr) {
+          // APK Test #14 / Bug A — relax stale-completion guard. Fire ONLY
+          // when completed_at < schedule_date (impossible-past completion =
+          // real corruption). Retroactive completions (user logs Tuesday's
+          // workout on Sunday night) and late-night IST-midnight crossings
+          // (cloud completed_at lands on next IST date) are both legitimate
+          // — Hive's status='completed' is correct. Pre-fix this fired on
+          // every row whose completion-date != schedule-date, downgrading
+          // bulk retroactive completions and hiding their calendar checkmarks
+          // (founder's May 5/6/7 ticks vanished on 2026-05-10).
+          //
+          // closes-diagnose: 2026-05-10-stale-guard-overeager
+          if (completedDateStr.compareTo(requestedDateStr) < 0) {
             // Stale — return as planned without writing back to Hive
             final safe = Map<String, dynamic>.from(map);
             safe['status'] = 'planned';

@@ -116,7 +116,23 @@ void main() {
     });
   });
 
-  group('T3 — _restoreScheduledWorkouts writes cloud status unconditionally', () {
+  group('T3 — _restoreScheduledWorkouts has timestamp-aware merge', () {
+    // APK Test #14 / Bug B.2 supersedes the pre-existing "cloud authoritative
+    // unconditionally" contract. The merge is now timestamp-aware:
+    //   - local completed + cloud planned + local has completed_at → keep local
+    //     (cloud is stale because the push failed; preserve the Hive truth so
+    //     the calendar checkmark survives a force-restart).
+    //   - both completed → take whichever has the LATER completed_at (newest
+    //     wins via String.compareTo on the ISO timestamp).
+    //   - otherwise → cloud authoritative (existing rule).
+    //
+    // The pre-Test-#14 contract (status: cloudStatus unconditionally) caused
+    // the founder's Saturday completion to vanish on logout-login because the
+    // FK violation in _syncScheduledWorkouts left cloud at status='planned'.
+    // Restore then overwrote local 'completed' with cloud 'planned'.
+    //
+    // closes-diagnose: 2026-05-10-restore-overwrite-d9b2c5
+
     late String source;
 
     setUpAll(() {
@@ -124,26 +140,49 @@ void main() {
       source = f.readAsStringSync();
     });
 
-    test('_restoreScheduledWorkouts has conditional status overlay from cloud', () {
-      // The merge block: if (cloudStatus != null && cloudStatus.isNotEmpty) 'status': cloudStatus
+    test('_restoreScheduledWorkouts reads localStatus before merging', () {
+      // Bug B.2 introduced `localStatus = existingMap['status']` so the merge
+      // can compare local vs cloud and decide which is fresher.
       expect(
-        source.contains("'status': cloudStatus"),
+        source.contains('localStatus'),
         isTrue,
         reason:
-            '_restoreScheduledWorkouts must write status from the cloud row '
-            'when cloudStatus is non-null/non-empty. If this field is missing '
-            'the cloud-authoritative completed status never reaches Hive.',
+            '_restoreScheduledWorkouts must read existingMap[\'status\'] into '
+            'a local variable so the timestamp-aware merge can compare local '
+            'vs cloud values. Pre-Test-#14 the merge wrote cloud unconditionally.',
       );
     });
 
-    test('_restoreScheduledWorkouts has conditional completed_at overlay from cloud', () {
+    test('_restoreScheduledWorkouts has timestamp comparison via compareTo', () {
+      // The "both completed → newest wins" branch uses String.compareTo on
+      // ISO timestamps. compareTo on two ISO 8601 strings is correct because
+      // ISO is sortable as text.
       expect(
-        source.contains("'completed_at': cloudCompletedAt"),
+        source.contains('compareTo'),
         isTrue,
         reason:
-            '_restoreScheduledWorkouts must write completed_at from the cloud row '
-            'when non-null/non-empty so the stale-completion guard has the timestamp '
-            'it needs to validate.',
+            '_restoreScheduledWorkouts must use String.compareTo on '
+            'completed_at to pick the newer of two completions. closes-diagnose: '
+            '2026-05-10-restore-overwrite-d9b2c5',
+      );
+    });
+
+    test('_restoreScheduledWorkouts protects local completed from stale cloud planned', () {
+      // The keep-local branch: when localStatus=='completed' && cloudStatus==
+      // 'planned' && localCompletedAt != null, preserve local. Source-grep
+      // for the conditional shape (with some flexibility in formatting).
+      final hasGuard =
+          source.contains("localStatus == 'completed' &&") &&
+              source.contains("cloudStatus == 'planned'");
+      expect(
+        hasGuard,
+        isTrue,
+        reason:
+            '_restoreScheduledWorkouts must keep local completion when cloud '
+            'is stale (push failed). The guard pattern is `if (localStatus == '
+            "'completed' && cloudStatus == 'planned' ...`. Without this, cloud "
+            'planned overwrites a fresh local completed and the calendar tick '
+            'vanishes after force-restart or logout-login.',
       );
     });
 

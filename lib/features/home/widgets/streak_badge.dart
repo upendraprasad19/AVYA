@@ -7,19 +7,27 @@ import 'package:icanbefitter/core/theme/typography.dart';
 ///
 /// Single pill with `cardHi` bg and a 27% gold border; shows a small
 /// gold dot, the streak number in gold, "DAYS" caps, a 1-px neutral
-/// divider, a snowflake glyph, and the freeze count in `info`. Sharp
-/// `radPill` corners. No 🔥 emoji — gold dot instead.
+/// divider, a snowflake glyph, and the freeze count as `available/max`
+/// in `info`. Sharp `radPill` corners.
 ///
 /// Pulses once on mount when `days > 0` and re-pulses when the streak
 /// increases via `didUpdateWidget`.
+///
+/// APK Test #14 / Bug D.3 — freeze display switched from `❄ <available>`
+/// (single digit) to `❄ <available>/<max>` so users see capacity, not
+/// just remaining count. A free user sees `❄ 1/1`; a PRO user with two
+/// burnt mid-week sees `❄ 1/3`. `freezesMax` defaults to 1 (free max)
+/// for back-compat with callsites that haven't been updated yet.
 class StreakBadge extends StatefulWidget {
   final int days;
   final int freezesAvailable;
+  final int freezesMax;
 
   const StreakBadge({
     super.key,
     required this.days,
     this.freezesAvailable = 0,
+    this.freezesMax = 1,
   });
 
   @override
@@ -134,7 +142,7 @@ class _StreakBadgeState extends State<StreakBadge>
             ),
             const SizedBox(width: 3),
             Text(
-              '${widget.freezesAvailable}',
+              '${widget.freezesAvailable}/${widget.freezesMax}',
               style: AppTypography.mono.copyWith(
                 fontSize: 11,
                 color: freezeColor,
