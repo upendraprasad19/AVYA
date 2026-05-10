@@ -325,6 +325,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: WardStatusStrip(
                         streakDays: streak,
                         freezesAvailable: freezes,
+                        freezesMax: ref.watch(streakFreezeMaxProvider),
                       ),
                     ),
                   ],

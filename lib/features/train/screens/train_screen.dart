@@ -365,6 +365,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                 child: WardStatusStrip(
                   streakDays: ref.watch(streakProvider),
                   freezesAvailable: ref.watch(streakFreezeProvider),
+                  freezesMax: ref.watch(streakFreezeMaxProvider),
                 ),
               ),
             ],

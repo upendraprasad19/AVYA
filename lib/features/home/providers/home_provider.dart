@@ -297,6 +297,13 @@ class StreakFreezeNotifier extends Notifier<int> {
 final streakFreezeProvider =
     NotifierProvider<StreakFreezeNotifier, int>(StreakFreezeNotifier.new);
 
+/// Max streak freezes the user is entitled to: 1 for free, 3 for PRO.
+/// Read by [StreakBadge] (and [WardStatusStrip] passthrough) to render
+/// the `available/max` ladder format. APK Test #14 / Bug D.3.
+final streakFreezeMaxProvider = Provider<int>((ref) {
+  return SubscriptionService.instance.isPro() ? 3 : 1;
+});
+
 // ── Streak Warning Eligibility (Bug #12) ─────────────────────────
 
 /// Bug #12 — Derived inputs for the smart streak warning banner.

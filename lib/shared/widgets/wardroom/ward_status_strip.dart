@@ -13,7 +13,8 @@ import '../../../features/home/widgets/streak_badge.dart';
 ///   [StreakBadge]. Always rendered (StreakBadge handles its own
 ///   zero-state pulse logic).
 /// * [freezesAvailable] — passed through to [StreakBadge]'s inline ❄ count.
-///   StreakBadge auto-hides the snowflake section when this is 0.
+/// * [freezesMax] — passed through to [StreakBadge] for the `x/y` ladder
+///   display (APK Test #14 / Bug D.3). Defaults to 1 (free baseline).
 /// * [rankChip] — optional caller-supplied widget for a rank pill /
 ///   ribbon. The strip stays agnostic about its shape so different tabs
 ///   can opt in to different visualisations.
@@ -22,11 +23,13 @@ class WardStatusStrip extends StatelessWidget {
     super.key,
     required this.streakDays,
     this.freezesAvailable = 0,
+    this.freezesMax = 1,
     this.rankChip,
   });
 
   final int streakDays;
   final int freezesAvailable;
+  final int freezesMax;
   final Widget? rankChip;
 
   @override
@@ -39,6 +42,7 @@ class WardStatusStrip extends StatelessWidget {
         StreakBadge(
           days: streakDays,
           freezesAvailable: freezesAvailable,
+          freezesMax: freezesMax,
         ),
         ?rankChip,
       ],
