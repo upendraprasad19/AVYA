@@ -35,7 +35,7 @@
 -- already exists, but the IF NOT EXISTS clause via DO block handles
 -- re-runs.
 --
--- closes-diagnose: 2026-05-10-template-exercises-upsert-g7h8i9
+-- closes-diagnose: 2026-05-10-template-exercises-upsert-a8b2c7
 
 DO $$
 BEGIN

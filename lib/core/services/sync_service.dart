@@ -3536,7 +3536,7 @@ class SyncService {
         // upserts, not inserts, so they update unchanged rows). Next
         // sync retries row N alone. No "torn" template state.
         //
-        // closes-diagnose: 2026-05-10-template-exercises-upsert-g7h8i9
+        // closes-diagnose: 2026-05-10-template-exercises-upsert-a8b2c7
         // (migration 051 header has the full rationale).
         for (int i = 0; i < exercises.length; i++) {
           final ex = exercises[i] is Map
