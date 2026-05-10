@@ -102,14 +102,38 @@ class DayRolloverObserver with WidgetsBindingObserver {
   ///
   /// Pass the splash's [WidgetRef] explicitly so we don't depend on
   /// [init] having been called yet (cold launch hasn't reached home).
+  ///
+  /// IMPORTANT: uses `_ref ??= ref` (not `_ref = ref`) so that
+  /// [init]'s long-lived app-root ref (set from app.dart.initState before
+  /// any screen mounts) is NEVER overwritten by the short-lived splash ref.
+  /// If runRolloverNow used `_ref = ref`, the splash ref would replace the
+  /// durable app ref; after splash disposes its ref becomes stale; and all
+  /// subsequent resume-time [_doRollover] calls would silently no-op on
+  /// `ref.invalidate(...)`, leaving today-providers stale across midnight.
+  /// (Bug b7e3f1 — APK Test #13, 2026-05-12)
   Future<void> runRolloverNow(WidgetRef ref) async {
-    _ref = ref; // store for any subsequent resume-time invalidations
+    // Only store if init() hasn't already provided a long-lived app-root ref.
+    _ref ??= ref;
     final today = _todayStr();
     debugPrint('[DayRollover] runRolloverNow (splash cold launch)');
-    await _doRollover(today);
+    // Use the passed ref directly for the immediate cold-start invalidation,
+    // in case _ref was already set to a durable ref that might not include
+    // the splash context. This ensures cold-start invalidations always fire.
+    await _doRolloverWithRef(ref, today);
   }
 
+  /// Resume-time rollover — uses the stored [_ref] (set by [init]).
   Future<void> _doRollover(String today) async {
+    final ref = _ref;
+    if (ref == null) return;
+    await _doRolloverWithRef(ref, today);
+  }
+
+  /// Core rollover logic. Accepts an explicit [ref] so both the resume
+  /// path ([_doRollover] via [_ref]) and the cold-start path
+  /// ([runRolloverNow] passing the splash ref directly) share one
+  /// implementation without coupling to the stored [_ref].
+  Future<void> _doRolloverWithRef(WidgetRef ref, String today) async {
     // 1. Reset usage counters (AI text logs, scan meal, etc.)
     await UsageCounterService.instance.checkAndResetCounters();
 
@@ -117,9 +141,6 @@ class DayRolloverObserver with WidgetsBindingObserver {
     await HiveService.instance.configBox.put(_hiveKey, today);
 
     // 3. Invalidate all daily-scoped providers
-    final ref = _ref;
-    if (ref == null) return;
-
     // ── Workout providers ──
     ref.invalidate(currentPlanProvider);
     ref.invalidate(todayWorkoutProvider);

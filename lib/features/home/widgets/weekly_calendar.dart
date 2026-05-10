@@ -193,6 +193,14 @@ class WeeklyCalendar extends ConsumerWidget {
     if (isSwapped) {
       return const Text('\u{1F504}', style: TextStyle(fontSize: 8));
     }
+    // Bug a9f3d2 (APK Test #13): when both isToday and isCompleted are true,
+    // the full-gold today-border makes a gold checkmark invisible. Use
+    // AppColors.ok (green) so the two signals are visually independent:
+    //   gold border = "this is today"
+    //   green check = "workout completed"
+    if (isCompleted && isToday) {
+      return const Icon(Icons.check, size: 10, color: AppColors.ok);
+    }
     if (isCompleted) {
       return const Icon(Icons.check, size: 10, color: AppColors.accent);
     }
