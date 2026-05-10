@@ -723,7 +723,12 @@ concepts:
       Workout templates stored as tmpl_<ms> or tmpl_<nameHash> Hive keys.
       Multi-day AI templates split into N rows with group_id/group_day_index.
       Cloud: workout_templates parent + template_exercises children.
-      UNIQUE(user_id, name) on cloud prevents duplicate names (migration 050).
+      UNIQUE(user_id, name) on workout_templates prevents duplicate names
+      (migration 050). UNIQUE(template_id, order_index) on
+      template_exercises (migration 051) enables upsert with onConflict
+      so partial-failure recovery is row-level instead of template-level
+      (replaced fragile DELETE-then-INSERT pattern in
+      _syncWorkoutTemplates).
     writers:
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 1415-1560
@@ -752,7 +757,7 @@ concepts:
     cloud:
       table: workout_templates
       columns: [id, user_id, name, exercises, type, assigned_days, group_id, group_day_index, group_total_days, created_at]
-      unique_constraint: "(user_id, name)"
+      unique_constraint: "(user_id, name) on workout_templates; (template_id, order_index) on template_exercises (migration 051)"
     sync_methods: [_syncWorkoutTemplates]
     restore_methods: [_restoreWorkoutTemplates]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
