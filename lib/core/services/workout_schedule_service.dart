@@ -541,7 +541,18 @@ class WorkoutScheduleService {
         final completedDate = DateTime.tryParse(completedAt);
         if (completedDate != null) {
           final requestedDateStr = _dateKey(date);
-          final completedDateStr = _dateKey(completedDate.toLocal());
+          // APK Test #13 / Bug 5.3 — do NOT call .toLocal() before _dateKey.
+          // When completedAt is a UTC-offset string from Postgres (e.g.
+          // "2026-05-09T15:30:00+00:00"), DateTime.tryParse produces a UTC
+          // DateTime. Calling .toLocal() converts to IST-local wall-clock, but
+          // then _dateKey → istDateStr → istDateOf calls .toUtc().add(+5:30)
+          // AGAIN, double-shifting the date to the next day. The stale-guard
+          // then fires for every cloud-restored completion, downgrading
+          // status='completed' to 'planned' and hiding the calendar checkmark.
+          //
+          // Fix: pass completedDate directly. istDateStr handles both UTC and
+          // local DateTimes correctly via a single .toUtc().add(+5:30) shift.
+          final completedDateStr = _dateKey(completedDate);
           if (requestedDateStr != completedDateStr) {
             // Stale — return as planned without writing back to Hive
             final safe = Map<String, dynamic>.from(map);
