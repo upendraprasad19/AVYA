@@ -274,9 +274,10 @@ concepts:
       - file: lib/core/services/subscription_service.dart
         line_range: 141-220
         method: isPro + gate
-      - file: lib/features/profile/providers/subscription_info_provider.dart
+      - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
         method: subscriptionInfoProvider
+        notes: "subscriptionInfoProvider lives in profile_provider.dart (not a separate subscription_info_provider.dart)"
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
       box: configBox
@@ -397,6 +398,7 @@ concepts:
       - file: lib/core/services/day_rollover_service.dart
         line_range: 103-200
         method: runRolloverNow
+        notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     readers:
       - file: lib/core/services/day_rollover_service.dart
         line_range: 103-200
@@ -631,9 +633,10 @@ concepts:
       - file: lib/core/services/subscription_service.dart
         line_range: 369-470
         method: verifyFromServer (isPaymentInFlight gate)
-      - file: lib/features/profile/providers/subscription_info_provider.dart
+      - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
         method: subscriptionInfoProvider (isVerifying field)
+        notes: "subscriptionInfoProvider lives in profile_provider.dart (not a separate file)"
     regression_test: test/subscription/payment_grace_window_test.dart
     telemetry:
       success_op_types: [subscription_refresh_grace_skip, subscription_refresh_success]
@@ -825,11 +828,11 @@ concepts:
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1010-1060
-        method: SavedMealNotifier.saveMealPreset
+        method: SavedMealsNotifier.saveMealPreset
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1-9999
-        method: SavedMealNotifier (full class)
+        method: SavedMealsNotifier (full class)
       - file: lib/core/services/sync_service.dart
         line_range: 3817-3895
         method: _syncSavedMeals
@@ -1014,7 +1017,7 @@ concepts:
           full_name + email in addition to user_profile columns.
       - file: lib/features/home/providers/home_provider.dart
         line_range: 1-9999
-        method: greetingProvider
+        method: userGreetingProvider
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
         method: buildAiContext (user.name field)
@@ -1129,7 +1132,7 @@ concepts:
     writers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 686-735
-        method: extractAndSaveCoachingNotes
+        method: extractCoachingNotes
         notes: appends to existing notes; runs nightly 11PM IST
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
