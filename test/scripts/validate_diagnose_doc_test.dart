@@ -6,7 +6,7 @@
 // `dart test` and `flutter test` without PATH or process-spawning issues.
 
 import 'dart:io';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 // Import directly from the scripts/ directory.
 import '../../scripts/validate_diagnose_doc_lib.dart';
