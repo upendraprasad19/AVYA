@@ -129,10 +129,11 @@ Per concept in registry, audit 5 surfaces:
 
 `docs/regression-test-debt.md` populated by P2.2. Every entry: `<diagnose-doc-id> · <concept> · <missing test type> · <commit-sha>`. Feeds Phase 3 prioritization.
 
-**Pre-cleanup snapshot rails (REQUIRES FOUNDER ACTION — gating start of P2.3):**
-- Main thread runs `pg_dump` of prod Postgres → `backups/cloud_pre_discipline_<timestamp>.sql` (committed to a separate `feat/backups` branch, not pushed to origin). Main thread can do this autonomously via Supabase MCP / direct connection.
-- **Founder action**: founder runs `adb pull /data/data/com.icanbefitter/app_flutter/ <local-path>/founder_hive_pre_discipline_<timestamp>/` from their device-attached terminal. This is the ONLY step in P2 that requires founder cooperation — all other P2 work is autonomous. Without this snapshot, P2.3 (cleanup with Hive migrators) cannot start; main thread blocks and asks founder.
-- Snapshot rail completeness is verified by `scripts/check_snapshot_rails.dart` (gate added to P2.3 entry): asserts both `backups/cloud_pre_discipline_*.sql` AND `backups/founder_hive_pre_discipline_*/` exist before any cleanup commit.
+**Pre-cleanup snapshot rail (CLAUDE-AUTONOMOUS — no founder action required):**
+- Main thread runs `pg_dump` of prod Postgres → `backups/cloud_pre_discipline_<timestamp>.json` (table-by-table dump via Supabase MCP `execute_sql`, committed to a separate `feat/backups` branch, not pushed to origin).
+- **No Hive ADB snapshot.** ADB pull from `/data/data/com.icanbefitter/app_flutter/` requires either a rooted device (founder's isn't) or a `debuggable=true` build (we ship `--release`). Cannot be run by Claude OR by founder without changing device state. Dropped from design.
+- **Rollback path if a migrator misbehaves:** (1) cloud has all the data (pg_dump confirms it); (2) every Hive migrator carries an in-flight shadow-box backup (per Tasks 2.4 / 2.5 — `<box>_pre_<flagKey>_backup`); (3) if both fail, founder logs out + logs back in → restore-from-cloud rebuilds Hive from canonical cloud state. Three layers of defense, no ADB needed.
+- Snapshot rail completeness is verified by `scripts/check_snapshot_rails.dart` (gate added to P2.3 entry): asserts `backups/cloud_pre_discipline_*.json` exists before any cleanup commit.
 
 **P2 acceptance:** registry ≥30 concepts complete; ≥50 retroactive diagnose-docs validated; regression-test-debt populated; all naming-drift cleanup commits land; HiveFieldRenameMigrator + HiveKeyMigrator tested on synthetic boxes; snapshot rails captured.
 

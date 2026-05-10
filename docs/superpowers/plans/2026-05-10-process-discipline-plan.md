@@ -942,40 +942,33 @@ git commit -m "feat(discipline): backfill ~50 retroactive diagnose-docs (#12 onw
 
 ### Task 2.3: Naming-drift audit + cleanup
 
-**Pre-requisite gate:** `scripts/check_snapshot_rails.dart` must exit 0 (i.e., snapshots captured). This task BLOCKS until founder cooperates with ADB pull.
+**Pre-requisite gate:** `scripts/check_snapshot_rails.dart` must exit 0 (cloud snapshot captured). Claude-autonomous; no user action required.
 
-- [ ] **Step 1: Capture cloud snapshot** (main thread can do this)
+- [ ] **Step 1: Capture cloud snapshot via Supabase MCP**
 
 ```bash
 mkdir -p backups
-# Use Supabase MCP to dump or pg_dump if direct connection available.
-# For this plan: use Supabase MCP execute_sql to dump every public.* table to JSON
-# and save to backups/cloud_pre_discipline_<timestamp>.json
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-# Detailed JSON dump approach: query each table, save schema + rows.
-# (Implementation detail — full pg_dump preferred if available.)
+# Use mcp__ba7b5e8e-...__execute_sql to dump every public.* table.
+# Per-table dump: SELECT * FROM <table>; save to backups/cloud_pre_discipline_<TS>.json
+# as { "<table>": [<rows>], ... }. Tables: users, user_profile, user_progress,
+# workout_logs, workout_log_exercises, scheduled_workouts, workout_templates,
+# template_exercises, nutrition_logs, nutrition_log_items, water_logs, weight_logs,
+# subscriptions, ai_coach_interactions, coach_memory, coaching_notes,
+# user_custom_exercises, user_custom_foods, user_saved_meals, streaks, sleep_logs,
+# referral_codes, referral_redemptions, daily_steps, body_measurements,
+# notifications_inbox, saved_diet_plans, rank_promotions, food_corrections,
+# community_reviews, account_deletion_log, client_errors.
 ```
 
-- [ ] **Step 2: Request founder ADB pull** — OUTPUT TO USER
-
-(Plan executor: PAUSE here. Send message to user: "Phase 2.3 is blocked on a snapshot of your Hive state. From a terminal with your device attached, run:")
+- [ ] **Step 2: Run snapshot rails gate** (writes Task 4.7's `check_snapshot_rails.dart` first if not yet done — for now, manual check)
 
 ```bash
-adb pull /data/data/com.icanbefitter/app_flutter/ \
-  ./backups/founder_hive_pre_discipline_$(date -u +%Y%m%dT%H%M%SZ)/
+ls backups/cloud_pre_discipline_*.json 2>/dev/null
+# Must exist; if multiple TS, latest is the rollback target.
 ```
 
-(Wait for founder confirmation that the directory exists.)
-
-- [ ] **Step 3: Run snapshot rails gate** (need Task 4.X to write `check_snapshot_rails.dart` — for now, manual:)
-
-```bash
-ls backups/cloud_pre_discipline_*.sql backups/cloud_pre_discipline_*.json 2>/dev/null
-ls -d backups/founder_hive_pre_discipline_*/ 2>/dev/null
-# Both must exist
-```
-
-- [ ] **Step 4: For each registry concept, audit 5 drift surfaces** — main thread orchestrates per-concept
+- [ ] **Step 3: For each registry concept, audit 5 drift surfaces** — main thread orchestrates per-concept
 
 For each concept in `docs/sot_registry.yaml`:
 
