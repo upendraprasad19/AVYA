@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
+import 'package:icanbefitter/core/services/scheduled_workouts_resync_migrator.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -159,6 +160,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // today's state (covers Bug #6 — "no workout planned today" hallucination
     // when snapshot was last pushed yesterday).
     unawaited(SyncService.instance.pushSnapshot());
+
+    // APK Test #14 / Bug B.3 — one-shot resync of any local
+    // 'completed' schedule rows that diverged from cloud during the
+    // pre-fix FK-violation window. Idempotent (gated by per-user flag
+    // in userBox); subsequent launches short-circuit. Fires before
+    // checkAndSync so the migrator's syncWorkoutData() call uses the
+    // hardened lookup-by-name path. See
+    // docs/diagnoses/2026-05-10-resync-migrator-e3f7a8.md.
+    unawaited(ScheduledWorkoutsResyncMigrator.runIfNeeded());
 
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
