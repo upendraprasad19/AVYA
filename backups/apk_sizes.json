@@ -1,6 +1,29 @@
 {
-  "1.0.0+15": { "md5": "14cbdfdb71a1f64e251a2d3c5436267e", "size_bytes": 119737793, "shipped_at": "2026-05-08T19:30:00Z" },
-  "1.0.0+16": { "md5": "fcc80237e6c6279c0e5b9dfed50aec6e", "size_bytes": 119737793, "shipped_at": "2026-05-08T22:48:00Z" },
-  "1.0.0+17": { "md5": "7c362327e3de9847f4929b2dc8893799", "size_bytes": 119737797, "shipped_at": "2026-05-10T14:37:00Z", "superseded": true, "superseded_reason": "deferred T2.3+T3.1+T4 folded into +18 per feedback_no_deferrals_recurrence.md" },
-  "1.0.0+18": { "md5": "d6a2ed331d2ccb0bcea4d2f02bd903be", "size_bytes": 119737797, "shipped_at": "2026-05-10T17:56:00Z" }
+  "1.0.0+15": {
+    "md5": "14cbdfdb71a1f64e251a2d3c5436267e",
+    "size_bytes": 119737793,
+    "shipped_at": "2026-05-08T19:30:00Z"
+  },
+  "1.0.0+16": {
+    "md5": "fcc80237e6c6279c0e5b9dfed50aec6e",
+    "size_bytes": 119737793,
+    "shipped_at": "2026-05-08T22:48:00Z"
+  },
+  "1.0.0+17": {
+    "md5": "7c362327e3de9847f4929b2dc8893799",
+    "size_bytes": 119737797,
+    "shipped_at": "2026-05-10T14:37:00Z",
+    "superseded": true,
+    "superseded_reason": "deferred T2.3+T3.1+T4 folded into +18 per feedback_no_deferrals_recurrence.md"
+  },
+  "1.0.0+18": {
+    "md5": "d6a2ed331d2ccb0bcea4d2f02bd903be",
+    "size_bytes": 119737797,
+    "shipped_at": "2026-05-10T17:56:00Z"
+  },
+  "1.0.0+19": {
+    "md5": "17a9e063346121428cff50b6e859e9a2",
+    "size_bytes": 119803333,
+    "shipped_at": "2026-05-10T15:02:12.153662Z"
+  }
 }
