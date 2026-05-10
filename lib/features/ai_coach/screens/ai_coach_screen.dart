@@ -98,6 +98,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   bool _speechAvailable = false;
   String _recognizedText = '';
 
+  // APK Test #15 / Bug E — gates the one-time initial-scroll-to-bottom on
+  // first paint of the AI coach screen. Without this gate, opening the
+  // screen leaves the scroll position at 0 (top), forcing the user to
+  // scroll down through history just to see the latest exchange and the
+  // input row. Set true after the first non-empty message frame triggers
+  // a `jumpTo(maxScrollExtent)` so subsequent rebuilds (which already
+  // call `_scrollToBottom` via ref.listen) don't re-fire it on every
+  // build.
+  bool _initialScrollDone = false;
+
   @override
   void initState() {
     super.initState();
@@ -205,6 +215,21 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     });
   }
 
+  /// APK Test #15 / Bug E — instant (no animation) jump used ONLY by the
+  /// first-paint initial scroll. `_scrollToBottom`'s 300 ms animation is
+  /// fine for "new message arrived, ease into view" but for the initial
+  /// landing there's nothing to ease from — the user just opened the
+  /// screen and expects the latest exchange + input row already in view.
+  /// `jumpTo` removes the visible scroll-from-top animation that would
+  /// otherwise flash on every open.
+  void _jumpToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
   void _sendMessage(String text) {
     if (text.trim().isEmpty) return;
 
@@ -266,6 +291,18 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     ref.listen(workoutDraftProvider, (_, next) {
       if (next != null) _scrollToBottom();
     });
+
+    // APK Test #15 / Bug E — first-paint scroll-to-bottom. Fires once,
+    // when chatHistoryProvider has loaded its first non-empty value. The
+    // ref.listen calls above only fire on VALUE CHANGES, never on the
+    // initial mount — so without this guard a user opening the AI coach
+    // screen lands at scroll position 0 (oldest message at top) and has
+    // to manually scroll down past history to see the latest reply and
+    // reach the input row. closes-diagnose: 2026-05-10-coach-scroll-init
+    if (!_initialScrollDone && messages.isNotEmpty) {
+      _initialScrollDone = true;
+      _jumpToBottom();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.bg,
