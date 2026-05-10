@@ -39,9 +39,12 @@ ValidationResult validateDiagnoseDoc(
 }) {
   final root = projectRoot ?? Directory.current.path;
 
+  // Normalize line endings (CRLF → LF) so the regex works on Windows.
+  final normalised = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
   // Extract YAML frontmatter block between the first pair of `---` delimiters.
   final fmMatch =
-      RegExp(r'^---\n(.*?)\n---', dotAll: true).firstMatch(content);
+      RegExp(r'^---\n(.*?)\n---', dotAll: true).firstMatch(normalised);
   if (fmMatch == null) {
     return const ValidationResult.fail('No YAML frontmatter found');
   }

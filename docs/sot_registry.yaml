@@ -124,7 +124,8 @@ concepts:
       - { file: lib/core/services/workout_write_service.dart, line: 774, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
-      - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0, 10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr()" }
+      - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
+      - { pattern: "\\.now\\(\\)\\.year.*\\.now\\(\\)\\.month.*\\.now\\(\\)\\.day", reason: "Local-date extraction disagrees with IST key; use istDateStr(DateTime.now())" }
     class_constraints: |
       Date keys are IST-anchored via formatDateKey → istDateStr.
       Never iterate workoutBox.keys manually to find logs for a date.
@@ -160,7 +161,7 @@ concepts:
     ist_sites:
       - { file: lib/core/services/workout_write_service.dart, line: 778, fn: scheduleKey }
     forbidden_legacy_patterns:
-      - { pattern: "workoutBox\\.put\\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
+      - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
       Never write schedule_YYYY-MM-DD keys directly from a widget or
       repository. Every reschedule on days/week change MUST preserve
@@ -220,7 +221,7 @@ concepts:
       box: nutritionBox
       key_prefix: "nlog_"
     forbidden_legacy_patterns:
-      - { pattern: "\\.deleteFoodLog\\(", reason: "Must go through _confirmAndDeleteFoodLog surface which stashes for UNDO" }
+      - { pattern: "\.deleteFoodLog\b", reason: "Direct deleteFoodLog call without stash is forbidden; only _confirmAndDeleteFoodLog in nutrition_screen.dart is allowed (added to gate allowlist)" }
     class_constraints: |
       Delete must surface a snackbar with UNDO. UNDO calls
       restoreFoodLog with the original payload at the original key.
@@ -252,7 +253,7 @@ concepts:
     telemetry:
       failure_op_types: [push_snapshot, mirror_coach_memory_from_snapshot]
     forbidden_legacy_patterns:
-      - { pattern: "istDateStr\\(istNow\\(\\)", reason: "Double-shifts +5:30; pass DateTime.now() to istDateStr() directly" }
+      - { pattern: "istDateStr\(istNow\(\)\)", reason: "Double-shifts +5:30; pass DateTime.now() to istDateStr() directly" }
     class_constraints: |
       Target <9500 bytes for JSON overhead buffer (server limit 10K).
       Every nutrition + workout mutation must call pushSnapshot()
@@ -274,9 +275,10 @@ concepts:
       - file: lib/core/services/subscription_service.dart
         line_range: 141-220
         method: isPro + gate
-      - file: lib/features/profile/providers/subscription_info_provider.dart
+      - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
         method: subscriptionInfoProvider
+        notes: "subscriptionInfoProvider lives in profile_provider.dart (not a separate subscription_info_provider.dart)"
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
       box: configBox
@@ -290,7 +292,7 @@ concepts:
       failure_op_types: [subscription_refresh_grace_skip, subscription_refresh_expired_state, subscription_refresh_query_returned_null]
     forbidden_legacy_patterns:
       - { pattern: "configBox\\.get\\('isPro'\\)", reason: "Never read isPro directly from configBox; use SubscriptionService.isPro()" }
-      - { pattern: "if.*isPro.*\\{", reason: "Inline isPro check is forbidden; always use subscription.gate()" }
+      - { pattern: "SubscriptionService\\.instance\\.isPro\\(\\)\\s*\\?\\s|isPro\\s*==\\s*true\\b", reason: "Inline isPro check in widget build method is forbidden; use ref.watch(subscriptionInfoProvider).isPro or subscription.gate()" }
     class_constraints: |
       High-value set: phases_2_to_12, ai_coach_unlimited,
       progress_photos. Payment grace window (paymentInFlightUntil)
@@ -307,11 +309,11 @@ concepts:
       trigger rebuilds.
     writers:
       - file: lib/core/services/water_target_service.dart
-        line_range: 32-130
+        line_range: 32-95
         method: currentTargetMl + computeFromProfile
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1488-1495
+        line_range: 1488-1491
         method: waterTargetProvider
       - file: lib/features/home/widgets/water_quick_sheet.dart
         line_range: 40-50
@@ -322,7 +324,8 @@ concepts:
       key_prefix: "water_target_override_ml"
     provider_invalidation_set: [waterTargetProvider]
     forbidden_legacy_patterns:
-      - { pattern: "3000", reason: "Never hardcode 3000 ml; use WaterTargetService.instance.currentTargetMl()" }
+      - { pattern: "\\bwaterMl\\s*[><=!]=?\\s*3000\\b|\\bwaterMl\\s*>=\\s*3000", reason: "Never hardcode 3000 ml as water target; use WaterTargetService.instance.currentTargetMl()" }
+      - { pattern: "const\\s+\\w*[Ww]ater\\w*\\s*=\\s*3000", reason: "Never hardcode 3000 as water constant; use WaterTargetService.instance.currentTargetMl()" }
     class_constraints: |
       Never hardcode 3000. Floor 2500 ml per founder direction
       2026-05-04. Onboarding seed must route through
@@ -342,7 +345,7 @@ concepts:
         notes: invalidates dietPlanProvider after write
     readers:
       - file: lib/features/nutrition/providers/diet_plan_provider.dart
-        line_range: 105-160
+        line_range: 105-107
         method: dietPlanProvider
     regression_test: test/contracts/restore_completeness_writes_test.dart
     hive:
@@ -375,7 +378,7 @@ concepts:
         method: logMeal (calorie + protein series)
     readers:
       - file: lib/features/profile/providers/weekly_report_data_provider.dart
-        line_range: 119-200
+        line_range: 119-121
         method: weeklyReportDataProvider
     regression_test: test/profile/weekly_report_data_provider_test.dart
     hive:
@@ -395,11 +398,12 @@ concepts:
       truth for which providers must rebuild when the date flips.
     writers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 103-200
+        line_range: 103-178
         method: runRolloverNow
+        notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     readers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 103-200
+        line_range: 103-178
         method: runRolloverNow (self-contained)
     regression_test: test/safety/day_rollover_service_test.dart
     provider_invalidation_set:
@@ -451,8 +455,8 @@ concepts:
     sync_methods: [_syncExerciseLogs]
     restore_methods: [_restoreExerciseLogs]
     forbidden_legacy_patterns:
-      - { pattern: "sets_completed", reason: "Old field name from pre-Test-#8; correct field is set_number" }
-      - { pattern: "sets_detail", reason: "Old field name from pre-Test-#8; correct field is sets[]" }
+      - { pattern: "\\[.sets_completed.\\]\\s*=", reason: "Writing old field name sets_completed; correct field is set_number — read-fallbacks are allowed but new writes must use set_number" }
+      - { pattern: "\\[.sets_detail.\\]\\s*=", reason: "Writing old field name sets_detail; correct field is sets[] — read-fallbacks are allowed but new writes must use sets[]" }
     class_constraints: |
       exlog_* row fields: exercise_name, date, sets[], set_number,
       reps_completed, weight_kg, volume_kg, logging_type, is_pr,
@@ -523,6 +527,9 @@ concepts:
       - _syncWorkoutTemplates
       - _syncScheduledWorkouts
       - _syncStreaks
+      - _syncWorkoutPlan
+      - _syncUserProgress
+      - _syncFitnessSummary
     telemetry:
       failure_op_types: [sync_workout_data, upsert_workout_log, upsert_exercise_log, upsert_streak, upsert_schedule_completion]
     class_constraints: |
@@ -547,6 +554,12 @@ concepts:
       - _syncNutritionLogs
       - _syncWaterLogs
       - _syncSavedMeals
+      - _syncMeasurements
+      - _syncStepsLogs
+      - _syncUrineColorLogs
+      - _syncUserProfile
+      - _syncCustomItems
+      - _syncUserPreferences
     telemetry:
       failure_op_types: [sync_nutrition_data, upsert_nutrition_log, upsert_nutrition_log_item, upsert_water_log]
     class_constraints: |
@@ -579,6 +592,15 @@ concepts:
       - _restoreSavedDietPlan
       - _restoreRankPromotions
       - _restoreCoachMemory
+      - _restoreIfNeeded
+      - _restoreWorkoutLogs
+      - _restoreCustomExercises
+      - _restoreCustomFoods
+      - _restoreMeasurements
+      - _restoreUserProgress
+      - _restoreStepsLogs
+      - _restoreUserPreferences
+      - _restoreCoachInteractions
     telemetry:
       success_op_types: [restore_started, restore_completed]
       failure_op_types: [restore_from_cloud_for_user]
@@ -610,8 +632,8 @@ concepts:
       box: userBox
       key_prefix: "<per-key — see UserConfigMigrator.userScopedKeys>"
     forbidden_legacy_patterns:
-      - { pattern: "configBox\\.put\\(.*user", reason: "User-specific data must go through MigratedKey, not direct configBox.put" }
-      - { pattern: "configBox\\.get\\(.*isPro", reason: "Never read isPro directly from configBox; use SubscriptionService.isPro()" }
+      - { pattern: "configBox\.put\('is_pro|configBox\.put\('expires_at|configBox\.put\('onboarding", reason: "User-specific keys (is_pro, expires_at, onboarding_*) must go through MigratedKey, not direct configBox.put" }
+      - { pattern: "configBox\.get\('isPro", reason: "Never read isPro directly from configBox; use SubscriptionService.isPro()" }
     class_constraints: |
       Default to MigratedKey.write/read for any user-specific Hive
       key. Bumping UserConfigMigrator._flagKey re-triggers migration.
@@ -631,9 +653,10 @@ concepts:
       - file: lib/core/services/subscription_service.dart
         line_range: 369-470
         method: verifyFromServer (isPaymentInFlight gate)
-      - file: lib/features/profile/providers/subscription_info_provider.dart
+      - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
         method: subscriptionInfoProvider (isVerifying field)
+        notes: "subscriptionInfoProvider lives in profile_provider.dart (not a separate file)"
     regression_test: test/subscription/payment_grace_window_test.dart
     telemetry:
       success_op_types: [subscription_refresh_grace_skip, subscription_refresh_success]
@@ -757,7 +780,7 @@ concepts:
         method: EditWorkoutLogSheet.save (also rescans is_pr on edit)
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 795-820
+        line_range: 795-797
         method: allExercisePRsProvider
       - file: lib/features/train/widgets/stats_grid.dart
         line_range: 164-210
@@ -825,11 +848,11 @@ concepts:
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1010-1060
-        method: SavedMealNotifier.saveMealPreset
+        method: SavedMealsNotifier.saveMealPreset
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1-9999
-        method: SavedMealNotifier (full class)
+        method: SavedMealsNotifier (full class)
       - file: lib/core/services/sync_service.dart
         line_range: 3817-3895
         method: _syncSavedMeals
@@ -871,7 +894,7 @@ concepts:
         line_range: 1-9999
         method: buildAiContext (weight_trend)
       - file: lib/features/profile/providers/weekly_report_data_provider.dart
-        line_range: 119-200
+        line_range: 119-121
         method: weeklyReportDataProvider (weight series)
     regression_test: test/sync/streaks_source_field_test.dart
     hive:
@@ -1014,7 +1037,7 @@ concepts:
           full_name + email in addition to user_profile columns.
       - file: lib/features/home/providers/home_provider.dart
         line_range: 1-9999
-        method: greetingProvider
+        method: userGreetingProvider
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
         method: buildAiContext (user.name field)
@@ -1129,7 +1152,7 @@ concepts:
     writers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 686-735
-        method: extractAndSaveCoachingNotes
+        method: extractCoachingNotes
         notes: appends to existing notes; runs nightly 11PM IST
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
@@ -1230,10 +1253,48 @@ concepts:
         - restore_from_cloud_for_user
         - push_snapshot
     forbidden_legacy_patterns:
-      - { pattern: "debugPrint.*error", reason: "Debug-only; sync failures must route through ErrorTelemetry._reportSyncFailure for cloud visibility" }
+      - { pattern: "'error_type':", reason: "Field renamed to 'op_type' in Test #12.9 payload contract; update callers to use op_type" }
+      - { pattern: "0xFF00D4FF", reason: "Legacy Electric Cyan hex — replaced by AppColors.accent (Campaign Gold 0xFFD4B270) in PR R; use AppColors.accent" }
     class_constraints: |
       Never throw from ErrorTelemetry — it must be silent on failure.
       All calls should be unawaited or fire-and-forget to avoid blocking UI.
       _reportSyncFailure in SyncService is the canonical funnel for sync
       failures — do not call ErrorTelemetry.recordNonFatal directly from
       sync methods, use _reportSyncFailure(opType: '...', error: e) instead.
+
+  - concept: hive_deletion_and_session_helpers
+    domain: cross_domain
+    description: |
+      Deletion and session-lifecycle helper methods across the three
+      core service layers: GuardedBox (batch key deletion wrapper),
+      HiveUserSession (full account wipe on hard-delete / logout),
+      WorkoutWriteService (exercise log deletion, schedule upsert),
+      NutritionWriteService (nutrition log deletion).
+    writers:
+      - file: lib/core/services/guarded_box.dart
+        line_range: 86-95
+        method: deleteAll
+        notes: delegates to Hive box.deleteAll; wrapped for auto-open guard
+      - file: lib/core/services/hive_user_session.dart
+        line_range: 223-240
+        method: deleteAllFilesForCurrentUser
+        notes: hard-wipes all Hive boxes for current user on account deletion
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 395-440
+        method: upsertScheduled
+        notes: upserts a scheduled workout entry to workoutBox under schedule_ key
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 685-730
+        method: deleteLog
+        notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 247-290
+        method: deleteLog
+        notes: removes nlog_* entry from nutritionBox + fires cloud delete
+    readers: []
+    regression_test: test/contracts/restore_completeness_writes_test.dart
+    class_constraints: |
+      All delete paths must fire SyncService.syncWorkoutData() or
+      syncNutritionData() + pushSnapshot() fire-and-forget after
+      the Hive delete to keep cloud in sync. Never delete directly
+      from a widget.

@@ -957,6 +957,8 @@ class SyncService {
       } catch (e) {
         // Non-fatal — keep cached subscription state.
         debugPrint('[SyncService.restoreFromCloudForUser] subscription refresh error: $e');
+        unawaited(_reportSyncFailure(
+            opType: 'subscription_refresh_on_restore', error: e));
       }
 
       if (_restoreCancelled) return RestoreResult.cancelled();

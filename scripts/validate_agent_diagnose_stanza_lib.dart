@@ -53,6 +53,9 @@ class ValidationResult {
 /// Looks for a `diagnose_stanza:` block at column 0, then validates that all
 /// 18 required fields are present and no placeholder values appear.
 ValidationResult validateAgentDiagnoseStanza(String content) {
+  // Normalize line endings (CRLF → LF) so the regex works on Windows.
+  content = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
   // Find the stanza: `diagnose_stanza:` at column 0, then capture all lines
   // that are indented (start with at least one space/tab) until the next
   // non-indented line or EOF.
