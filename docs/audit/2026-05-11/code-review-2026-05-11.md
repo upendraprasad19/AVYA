@@ -6,6 +6,86 @@
 
 ---
 
+## Execution log (live, append-only)
+
+| Date | Branch | Findings closed | Commit |
+|---|---|---|---|
+| 2026-05-11 | `fix/audit-2026-05-11` | (kickoff) audit doc landed | `657ec20` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-1** subscriptions RLS lockdown + Razorpay NOT NULL · migration 052 · diagnose `7ad0c1` | `7be6344` (amended) |
+| 2026-05-11 | `fix/audit-2026-05-11` | Hook split: `scripts/commit-msg.sh` new + `scripts/pre-commit.sh` trimmed to analyze+test only — discipline gate now runs at correct lifecycle stage | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-35 + H-36 + H-37** SECURITY DEFINER hardening · migration 053 · diagnose `7ad035` | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-30 + H-40** RLS policy cleanup · migration 054 · diagnose `7ad054` | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-29** RLS WITH CHECK on 35 policies · migration 055 · diagnose `7ad029` | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-5** promote-community-item admin gate (v8 deployed) · diagnose `7ad0c5` | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Hermes-R2 #9** delete-account rate limit (v2 deployed) · diagnose `7ad009` | (committing) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-4** CRON_SECRET / service-role gate on 8 cron Edge Functions · diagnose `7ad0c4` | (subagent running) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-13** verified false alarm | (recorded §10) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-32** verified — retired functions already serve 410 stubs | (recorded §10) |
+
+### Discipline-gate hex-ID convention (learned 2026-05-11 the hard way)
+
+The pre-commit hook regex `closes-diagnose:[[:space:]]*[a-f0-9]{6,}` requires **6+ hex chars** after `closes-diagnose:`. Date-prefixed slugs like `2026-05-11-audit-c1-subscriptions` FAIL the regex (the date `2026-05-11` has hyphens that break the hex-only run).
+
+**Convention used in this audit:**
+- File names: `docs/diagnoses/<date>-<slug>-<6char-hex>.md`
+- Closes-diagnose body line: `closes-diagnose: <6char-hex>` (just the hex, not the full path/slug)
+- IDs picked: `7ad0c1` (audit C-1), `7ad035` (audit H-35 family), `7ad054` (audit H-30+H-40), etc. All 6 chars, all hex (a-f, 0-9).
+
+The pre-commit hook globs `docs/diagnoses/*-<id>.md` to find the file, so the hex must appear immediately before `.md` in the filename.
+
+### The `-m` / `-F` / amend hook bug (BLOCKER for fresh session)
+
+`scripts/pre-commit.sh` is installed as a `pre-commit` hook (no `$1`), so it falls back to reading `.git/COMMIT_EDITMSG`. **NONE of git's normal mechanisms update `COMMIT_EDITMSG` reliably before the `pre-commit` hook fires:**
+
+- `git commit -m "<msg>"` → does not update COMMIT_EDITMSG before hooks
+- `git commit -F <file>` → does not update COMMIT_EDITMSG before hooks
+- `git commit --amend -F <file>` → git rewrites COMMIT_EDITMSG back to HEAD's body before pre-commit (verified 2026-05-11 via 3 failed attempts)
+- Manual `cp /tmp/msg.txt .git/COMMIT_EDITMSG` followed by `git commit --amend -F .git/COMMIT_EDITMSG` → the amend flow clobbers COMMIT_EDITMSG to HEAD's body before pre-commit, ignoring the `cp`
+
+The hook is FUNDAMENTALLY in the wrong lifecycle stage. It must be moved to `commit-msg` (which receives the message file path as `$1`).
+
+**MANDATORY first step for a fresh session resuming Phase 1:**
+
+```bash
+# Reinstall the discipline gate at the correct lifecycle stage
+mv .git/hooks/pre-commit .git/hooks/pre-commit.full
+# Split scripts/pre-commit.sh: keep flutter analyze + test as pre-commit,
+# move the bug-fix discipline block (lines 27-82) into a separate
+# .git/hooks/commit-msg that runs ONLY the gate. The script already
+# supports both invocation modes via `${1:-.git/COMMIT_EDITMSG}`.
+```
+
+After splitting, every `fix:`/`bug:`/`regression:` commit goes through normally with `-m` or `-F`. This is a one-line install change + ~50-line script refactor.
+
+**Status of cd28834 (commit 052) on this branch:**
+The body has the legacy `closes-diagnose: 2026-05-11-audit-c1-subscriptions` (non-hex slug). Three amend attempts in this session all failed at the gate. **A fresh session must fix the hook FIRST**, then re-amend 052 with `closes-diagnose: 7ad0c1`. Otherwise Gate 10 (build-time check, scripts/check_bugfix_commits_have_diagnose.dart) will fail when an APK build is attempted.
+
+**Migrations 053 + 054 are applied to prod but uncommitted on disk.** Working-tree state at session end:
+- `supabase/migrations/053_security_definer_hardening.sql` — staged-untouched, not yet `git add`ed
+- `supabase/migrations/054_rls_policy_cleanup.sql` — staged-untouched
+- `docs/diagnoses/2026-05-11-secdef-hardening-7ad035.md` — written
+- `docs/diagnoses/2026-05-11-rls-cleanup-7ad054.md` — written
+- `backups/applied_migrations.json` — updated to include "053", "054"
+- `docs/skipped-discipline.md` — has two pending `<sha-tbd>` placeholders
+
+Once the hook is split, the fresh session can:
+1. Amend 052 → fix closes-diagnose ID
+2. Stage all uncommitted files + commit as one `fix(security): SQL hardening (H-30/35/36/37/40)` with `closes-diagnose: 7ad035`
+3. Replace the two `<sha-tbd>` lines in skipped-discipline.md with the actual new SHAs (next commit after that)
+
+### Migrations applied to prod (verified via MCP) but commit pending
+- 053 + 054 are applied; commits in progress.
+
+Next session pickup: see §9 Phase 1 — remaining tasks 3, 4, 5, 6, 10, 13a + user-action gates U-1..U-5.
+
+Edge Function tasks (4, 5, 13a) require code changes + redeploy via `node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> <payload> <verify_jwt>` per CLAUDE.md §0. Each Edge Function takes ~30-60s to deploy + verify.
+
+Task 6 (H-29 RLS WITH CHECK) is a single migration touching 12 tables — defer to a fresh session for clean implementation.
+
+Task 3 (`.claude/settings.local.json` removal) depends on user-action U-2 (anon JWT rotation) being done first — otherwise removing the file from main breaks the running APK (anon key in memory is the rotated one's predecessor).
+
+---
+
 ## 0. Executive summary
 
 **Branch:** `main` · **HEAD at review time:** `5d2f50e` (Test #12.6 ship + Agent 4 prep state)
@@ -701,6 +781,8 @@ The MCP-verified pass and the Hermes cross-check corrected three claims:
 - **(False alarm)** "Migration 028 references nonexistent column `is_deleted`" (Agent 5) — **The column exists on prod.** `active_users_for_signals()` executes successfully and returns rows. `coach_memory` updates fresh < 24h. (However a sibling concern surfaced: `plateau_risk_score` and `dropout_risk_score` populated values are 0 — `compute_coach_signals_for_user` may not be materializing scores. **Treated as a separate medium finding** — investigate.)
 - **(False alarm)** "Missing `(user_id, status, end_date)` index on `subscriptions`" (Agent 5) — **`idx_subscriptions_active` exists** as a partial index `(user_id, end_date) WHERE status='active'`, which is more efficient for the `is_pro` server check than the suggested composite. Already optimal.
 - **(False alarm)** "AuthProvider `_ensureLocalUser` race via `// ignore: discarded_futures`" (Hermes #7) — Verified at `lib/features/auth/providers/auth_provider.dart:121, 201, 285`. The `discarded_futures` ignore is on `ErrorTelemetry.logEvent` calls that fire AFTER `await _ensureLocalUser` completes (sequence: 116→121, 184→201, 282→285). The await ordering is correct; no race possible. Hermes himself hedged ("could cause") and was wrong here.
+- **(False alarm — verified 2026-05-11 via curl)** **C-13** "ai-proxy bearer-token rejection unverified" — Live test confirmed all 3 verify_jwt:false payment-critical functions (ai-proxy, create-razorpay-order, verify-payment) return `401 {"error":"Missing authorization header"}` on missing bearer. The manual auth check is properly wired with early rejection at handler entry. CLAUDE.md §11 documented behavior is correct; no exploit. C-13 demoted from CRITICAL to false alarm.
+- **(Resolved without code change — verified 2026-05-11 via curl)** **H-32** "ai-proxy-pro and video-status still active per Agent 9" — Both functions return proper 410 Gone responses with deprecation messages. They ARE 410 stubs as CLAUDE.md §11 claimed; the Agent 9 note flagged them as "still ACTIVE" because they're still deployed (not deleted), which is correct — keep them as 410 redirects so any orphan client gets a meaningful error rather than 404. No code change needed.
 
 ---
 
