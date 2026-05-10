@@ -21,6 +21,33 @@
 | 2026-05-11 | `fix/audit-2026-05-11` | **C-4** CRON_SECRET / service-role gate on 8 cron Edge Functions · diagnose `7ad0c4` | (subagent running) |
 | 2026-05-11 | `fix/audit-2026-05-11` | **C-13** verified false alarm | (recorded §10) |
 | 2026-05-11 | `fix/audit-2026-05-11` | **H-32** verified — retired functions already serve 410 stubs | (recorded §10) |
+| 2026-05-11 | `fix/audit-2026-05-11` | Phase 1 hardening bundled commit (hook split + 053 + 054 + 055 + 8 cron Edge Functions + promote-community-item v8 + delete-account v2 + 6 diagnose docs) | `ba91b18` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-3** (file-removal half) — `.claude/settings.local.json` removed from tracking + gitignored. Anon-JWT rotation still pending user-action U-2. | (committing C-3) |
+
+### Phase 1 close-out summary
+
+| Status | Findings | Notes |
+|---|---|---|
+| ✅ Fixed by Claude | C-1, C-4, C-5, H-29, H-30, H-35, H-36, H-37, H-40, Hermes-R2 #9 | 9 findings closed across 4 migrations + 10 Edge Function deploys + 6 diagnose docs |
+| ✅ Verified false-alarm or no-action | C-13, H-32 | curl tests confirmed — no code change needed |
+| ⏳ Awaiting user-action | C-2 (U-1 keystore), C-3 (U-2 anon JWT rotation), C-4 (U-3 CRON_SECRET env var, optional), H-38 (U-4 leaked-password toggle) | Claude can't perform these — Dashboard / local keystore |
+| 🟡 Deferred with documented rationale | H-38 bucket lockdown — UX trade-off (public buckets allow embedded `<img src>` without auth; flipping to private breaks avatar display). Needs founder decision. | See §"Phase 1 task 10 — H-38 deferral rationale" below. |
+| ✅ Infrastructure fix | Hook split (pre-commit + commit-msg) | Required to unblock the discipline gate for `-m`/`-F`/`--amend` commits. |
+
+**Phase 1 done.** Phases 2-8 remain for fresh sessions per audit doc §9.
+
+### Phase 1 task 10 — H-38 deferral rationale
+
+`avatars` and `banners` buckets have `public=true` AND have 3 duplicate SELECT policies each (`Allow public read avatars`, `Anyone can view avatars`, `Avatars are publicly accessible`). Supabase advisor flags `public_bucket_allows_listing`.
+
+**Trade-off:** flipping `public=false` blocks anonymous `GET /storage/v1/object/public/avatars/<file>` URLs. Every `<img src>` rendering an avatar in the app's UI breaks. Public avatars are common UX optimization (Discord, Slack, GitHub all do this).
+
+**Mitigations that don't break UX:**
+1. Dedupe the 3 SELECT policies → 1 SELECT policy (cosmetic cleanup, advisor still flags)
+2. Add a denial RLS policy for LIST role specifically (some Supabase versions support this)
+3. Move avatars to a CDN (Cloudflare R2, Bunny) and drop the bucket entirely
+
+**Action required:** founder decision. None of the three is a Claude-can-decide call. Document this finding as "ACCEPTED — public avatars are intentional, advisor flag is known" OR pick a mitigation path.
 
 ### Discipline-gate hex-ID convention (learned 2026-05-11 the hard way)
 

@@ -79,3 +79,7 @@ test/plan_generator/v4_diagnostic_output.md
 assets/*.bak
 .claude/scheduled_tasks.lock
 
+
+# Local Claude Code agent permissions — must never be committed.
+# Audit C-3 (2026-05-11): this file held a Supabase anon JWT.
+.claude/settings.local.json
