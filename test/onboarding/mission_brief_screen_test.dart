@@ -5,12 +5,17 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/features/onboarding/screens/mission_brief_screen.dart';
 
 void main() {
-  // Deferred to follow-up — AssetImage('assets/founder/upendra.jpg') fails to
-  // load in widget tests because Flutter's AssetBundle is not wired up for
-  // this asset path under flutter_test. Not a Hive-namespacing issue.
-  // Re-enable once a custom AssetBundle / DefaultAssetBundle override is set
-  // up (or use NetworkImageHttpClient mock).
-  group('MissionBriefScreen', skip: true, () {
+  // Backlog #3 (post-Test-#15) — un-skipped 2026-05-10. The original
+  // skip note said AssetImage('assets/founder/upendra.jpg') fails to
+  // load in widget tests. Verified that mission_brief_screen.dart:75
+  // wraps Image.asset with an errorBuilder that falls back to a person
+  // icon, so asset-load failure does NOT crash the widget tree. The
+  // founder-photo Image widget is still findable by ValueKey regardless
+  // of whether its underlying provider succeeded.
+  //
+  // The renders-founder-photo-as-AssetImage test still asserts the
+  // image's provider type to lock the production AssetImage choice.
+  group('MissionBriefScreen', () {
     Widget buildScreen() {
       final router = GoRouter(routes: [
         GoRoute(path: '/', builder: (_, __) => const MissionBriefScreen()),
@@ -56,8 +61,19 @@ void main() {
       final imageFinder = find.byKey(const ValueKey('founder-photo'));
       expect(imageFinder, findsOneWidget);
       final image = tester.widget<Image>(imageFinder);
-      expect(image.image, isA<AssetImage>());
-      expect((image.image as AssetImage).assetName, 'assets/founder/upendra.jpg');
+      // Production wraps AssetImage in ResizeImage via cacheWidth /
+      // cacheHeight (mission_brief_screen.dart:73-74) — the provider is a
+      // ResizeImage whose inner imageProvider is the AssetImage. Pin
+      // both: the wrapper type AND the underlying asset name.
+      expect(image.image, isA<ResizeImage>(),
+          reason:
+              'Image.asset with cacheWidth/cacheHeight produces a '
+              'ResizeImage wrapping AssetImage. If the wrapper is '
+              'absent, cacheWidth/cacheHeight were dropped — re-add '
+              'them to keep the founder photo memory-bounded.');
+      final inner = (image.image as ResizeImage).imageProvider;
+      expect(inner, isA<AssetImage>());
+      expect((inner as AssetImage).assetName, 'assets/founder/upendra.jpg');
     });
   });
 }
