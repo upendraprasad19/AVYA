@@ -244,8 +244,21 @@ class StreakFreezeNotifier extends Notifier<int> {
     return (progress?['streak_freezes_available'] as int?) ?? 1;
   }
 
-  /// Refills streak freezes weekly. Runs on any app launch — checks if the
-  /// most recent Monday has passed since last refill. FREE=1, PRO=3.
+  /// Refills streak freezes weekly with LADDER semantics. Runs on any app
+  /// launch — checks if the most recent Monday has passed since last refill.
+  ///
+  /// Ladder rules (APK Test #14 / Bug D.1):
+  ///   - free user max = 1; PRO user max = 3
+  ///   - on each Monday: `available = min(available + 1, max)`
+  ///   - never over-fills past max; never decreases here (use elsewhere)
+  ///   - idempotent: same Monday twice = no-op (gated by lastRefill compare)
+  ///
+  /// Pre-Test-#14 behavior was reset-to-max every Monday: a PRO user who
+  /// burned all 3 freezes in week 1 got back to 3 next Monday with no
+  /// memory of usage. Founder direction (2026-05-10) flipped this to a
+  /// ladder so freezes feel earned and saved rather than guaranteed.
+  ///
+  /// closes-diagnose: 2026-05-10-freeze-ladder
   void _refillIfNewWeek() {
     // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
     // mondayOfIst returns naive-IST DateTime; format components directly
@@ -258,14 +271,21 @@ class StreakFreezeNotifier extends Notifier<int> {
     final d = thisMonday.day.toString().padLeft(2, '0');
     final thisMondayStr = '$y-$m-$d';
 
-    // Already refilled for this week's Monday
+    // Already refilled for this week's Monday — idempotent guard.
     if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) return;
 
     final isPro = SubscriptionService.instance.isPro();
     final maxFreezes = isPro ? 3 : 1;
 
+    // Ladder: +1 per week capped at max. New users (no prior progress row)
+    // start with whatever default UserRepository returned, fall back to 0
+    // so the first refill bumps them to 1.
+    final currentAvailable =
+        (progress['streak_freezes_available'] as int?) ?? 0;
+    final newAvailable = (currentAvailable + 1).clamp(0, maxFreezes);
+
     UserRepository.instance.updateProgress({
-      'streak_freezes_available': maxFreezes,
+      'streak_freezes_available': newAvailable,
       'streak_freeze_used_dates': <String>[], // Reset weekly used dates
       'streak_freezes_last_refill': thisMondayStr,
     });
