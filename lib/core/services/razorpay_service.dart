@@ -355,7 +355,12 @@ class RazorpayService {
     // surfaces via _reportSyncFailure → log-client-error (now widened
     // in Task #3 to actually accept these payloads).
     try {
-      await SubscriptionService.instance.markPaymentInFlight();
+      // H-41 (audit-2026-05-11) — record the Razorpay order_id so
+      // the webhook + verify-payment confirmation paths have an
+      // event-based handle to clear by. The 10-min time ceiling is
+      // a fallback only now.
+      await SubscriptionService.instance
+          .markPaymentInFlight(orderId: response.orderId);
     } catch (e) {
       debugPrint('RazorpayService: markPaymentInFlight failed: $e');
     }

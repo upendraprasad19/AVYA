@@ -63,35 +63,70 @@ void main() {
       expect(SubscriptionService.instance.isPaymentInFlight, isFalse);
     });
 
-    test('markPaymentInFlight sets a future-ish timestamp', () async {
-      await SubscriptionService.instance.markPaymentInFlight();
+    test('markPaymentInFlight records event-based order_id + started_at',
+        () async {
+      // H-41 (audit-2026-05-11) — event-based shape replaces the
+      // pure ISO `until` timestamp. Stored under
+      // `paymentInFlightOrder` as { order_id, started_at }.
+      await SubscriptionService.instance
+          .markPaymentInFlight(orderId: 'order_test_h41');
       expect(SubscriptionService.instance.isPaymentInFlight, isTrue);
+      expect(
+        SubscriptionService.instance.paymentInFlightOrderId,
+        'order_test_h41',
+      );
 
-      // The stored value should be a parseable ISO string at least
-      // 9 minutes in the future (allow slop for test scheduling).
-      final raw = MigratedKey.read<dynamic>('paymentInFlightUntil');
-      expect(raw, isNotNull);
-      final until = DateTime.parse(raw.toString());
-      final delta = until.difference(DateTime.now()).inMinutes;
-      expect(delta, inInclusiveRange(9, 10),
-          reason: 'grace window should be ~10 minutes');
+      // The stored map must carry order_id + a parseable started_at.
+      final raw = MigratedKey.read<dynamic>('paymentInFlightOrder');
+      expect(raw, isA<Map>(),
+          reason: 'event-based key holds a {order_id, started_at} map');
+      final m = raw as Map;
+      expect(m['order_id'], 'order_test_h41');
+      final startedAt = DateTime.parse(m['started_at'].toString());
+      // started_at must be very recent (< 5s slop for test scheduling).
+      final delta = DateTime.now().difference(startedAt).inSeconds;
+      expect(delta, inInclusiveRange(0, 5),
+          reason: 'started_at should be ~now');
+
+      // Legacy key must be cleared so the two shapes don't co-exist.
+      expect(MigratedKey.read<dynamic>('paymentInFlightUntil'), isNull);
     });
 
-    test('clearPaymentInFlight removes the marker', () async {
-      await SubscriptionService.instance.markPaymentInFlight();
+    test('clearPaymentInFlight removes the event-based marker', () async {
+      await SubscriptionService.instance
+          .markPaymentInFlight(orderId: 'order_test_clear');
       expect(SubscriptionService.instance.isPaymentInFlight, isTrue);
 
       await SubscriptionService.instance.clearPaymentInFlight();
       expect(SubscriptionService.instance.isPaymentInFlight, isFalse);
+      expect(SubscriptionService.instance.paymentInFlightOrderId, isNull);
+      expect(MigratedKey.read<dynamic>('paymentInFlightOrder'), isNull);
       expect(MigratedKey.read<dynamic>('paymentInFlightUntil'), isNull);
     });
 
-    test('expired grace window reads as not-in-flight', () async {
-      // Manually write a past timestamp.
-      final pastIso =
-          DateTime.now().subtract(const Duration(minutes: 1)).toIso8601String();
-      await MigratedKey.write('paymentInFlightUntil', pastIso);
-      expect(SubscriptionService.instance.isPaymentInFlight, isFalse);
+    test('expired event-based marker reads as not-in-flight', () async {
+      // Manually write an event-based map with started_at well past
+      // the 10-min ceiling.
+      final past = DateTime.now()
+          .subtract(const Duration(minutes: 11))
+          .toIso8601String();
+      await MigratedKey.write('paymentInFlightOrder', <String, dynamic>{
+        'order_id': 'order_expired',
+        'started_at': past,
+      });
+      expect(SubscriptionService.instance.isPaymentInFlight, isFalse,
+          reason: '11-min-old started_at exceeds the 10-min fallback ceiling');
+    });
+
+    test('legacy paymentInFlightUntil key is honoured for back-compat',
+        () async {
+      // Devices that upgrade across the H-41 refactor may still have
+      // the legacy ISO key in Hive. isPaymentInFlight must respect it
+      // until the next event-based write supersedes it.
+      final future =
+          DateTime.now().add(const Duration(minutes: 5)).toIso8601String();
+      await MigratedKey.write('paymentInFlightUntil', future);
+      expect(SubscriptionService.instance.isPaymentInFlight, isTrue);
     });
   });
 }
