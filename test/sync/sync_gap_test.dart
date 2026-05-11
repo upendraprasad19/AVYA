@@ -37,10 +37,50 @@ void main() {
   group('sync gap — conversational_log_handler submitWorkoutDraft', () {
     test('fires syncWorkoutData + pushSnapshot at end of submitWorkoutDraft',
         () {
-      final src = _src(
+      // C-8 (audit-2026-05-11) — submitWorkoutDraft now delegates to
+      // WorkoutWriteService.logExercise + markCompleted. Each of those
+      // fires `unawaited(SyncService.instance.syncWorkoutData())` +
+      // `unawaited(SyncService.instance.pushSnapshot())` internally.
+      // The handler keeps an additional defensive `pushSnapshot()`
+      // call so the chat → confirmation → home transition has fresh
+      // AI snapshot even when the WriteService onInvalidate hook
+      // isn't wired.
+      final handlerSrc = _src(
           'lib/features/ai_coach/services/conversational_log_handler.dart');
-      expect(src, contains('unawaited(SyncService.instance.syncWorkoutData())'));
-      expect(src, contains('unawaited(SyncService.instance.pushSnapshot())'));
+      expect(
+        handlerSrc,
+        contains('WorkoutWriteService.instance.logExercise('),
+        reason:
+            'submitWorkoutDraft must route per-exercise writes through '
+            'WorkoutWriteService.logExercise so they inherit '
+            'syncWorkoutData + pushSnapshot fan-out.',
+      );
+      expect(
+        handlerSrc,
+        contains('WorkoutWriteService.instance.markCompleted('),
+        reason:
+            'submitWorkoutDraft must route schedule-completion through '
+            'WorkoutWriteService.markCompleted which fires '
+            'syncWorkoutData + pushSnapshot.',
+      );
+      expect(handlerSrc,
+          contains('unawaited(SyncService.instance.pushSnapshot())'),
+          reason: 'Defensive pushSnapshot at end of submitWorkoutDraft.');
+
+      // Verify the WriteService still funnels through syncWorkoutData +
+      // pushSnapshot so the delegation actually preserves the contract.
+      final writeSvc =
+          _src('lib/core/services/workout_write_service.dart');
+      expect(writeSvc,
+          contains('unawaited(SyncService.instance.syncWorkoutData())'),
+          reason:
+              'WorkoutWriteService must call syncWorkoutData so chat-confirmed '
+              'workouts reach cloud.');
+      expect(writeSvc,
+          contains('unawaited(SyncService.instance.pushSnapshot())'),
+          reason:
+              'WorkoutWriteService must call pushSnapshot so AI coach gets '
+              'fresh workout context.');
     });
 
     test('fires pushSnapshot at end of _logSleep', () {

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
@@ -187,85 +189,82 @@ class ConversationalLogHandler {
 
 /// Submit a confirmed workout draft to Hive workoutBox.
 ///
-/// Called by [WorkoutLogConfirmCard] on user confirmation. Writes in the
-/// same format as [ActiveWorkoutNotifier.completeWorkout] so all other
-/// screens (Home, Train, Reports) read the data identically.
+/// Called by [WorkoutLogConfirmCard] on user confirmation.
+///
+/// C-8 (audit-2026-05-11) — routed through [WorkoutWriteService] so
+/// chat-confirmed workouts match the canonical field shape used by
+/// [ActiveWorkoutNotifier.completeWorkout]: `sets[]` per-set array,
+/// `set_number`, IST date stamping, deterministic key, per-exercise
+/// PR rescan, and 3-tier cloud sync (workout_logs +
+/// workout_log_exercises + workout_log_sets). Pre-fix this function
+/// wrote `exlog_<ts>_<hash>` rows with the *legacy* shape
+/// (`sets_completed`, no `sets[]`, no `set_number`) — invisible to the
+/// receipt, AI snapshot `_getThisWeekWorkouts`/`_getPersonalRecords`
+/// readers, and the per-set cloud sync. AI coach silently dropped every
+/// "I did 3x10 squats" message.
 Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   final now = DateTime.now();
-  final dateStr = istDateStr(now);
-  final workoutBox = HiveService.instance.workoutBox;
-
-  // Save main workout log entry
-  final logId = 'wlog_${now.millisecondsSinceEpoch}';
-  final totalSets =
-      draft.exercises.fold<int>(0, (sum, e) => sum + e.sets.length);
-  await workoutBox.put(logId, {
-    'id': logId,
-    'type': 'workout_log',
-    'workout_name': 'Chat Workout',
-    'date': dateStr,
-    'completed_at': now.toIso8601String(),
-    'sets_completed': totalSets,
-    'source': 'chat',
+  final totalDurationSec = draft.exercises.fold<int>(0, (sum, e) {
+    if (e.loggingType == 'cardio') {
+      return sum + ((e.durationMins ?? 0) * 60);
+    }
+    if (e.loggingType == 'timed') {
+      return sum +
+          e.sets.fold<int>(0, (s, set) => s + (set.durationSecs ?? 0));
+    }
+    return sum;
   });
 
-  // Save per-exercise logs (same format as ActiveWorkoutNotifier)
   for (final exercise in draft.exercises) {
-    final exId =
-        'exlog_${now.millisecondsSinceEpoch}_${exercise.name.hashCode}';
-    final Map<String, dynamic> logMap = {
-      'id': exId,
-      'type': 'exercise_log',
-      'exercise_name': exercise.name,
-      'date': dateStr,
-      'logging_type': exercise.loggingType,
-      'sets_completed': exercise.sets.length,
-      'created_at': now.toIso8601String(),
-      'source': 'chat',
-    };
-
-    // Add type-specific fields from the first set (summary)
-    if (exercise.sets.isNotEmpty) {
-      final first = exercise.sets.first;
-      if (exercise.loggingType == 'weight_reps' ||
-          exercise.loggingType == 'weighted_bodyweight') {
-        logMap['weight_kg'] = first.weightKg;
-        logMap['reps_completed'] = first.reps;
-      } else if (exercise.loggingType == 'bodyweight_reps') {
-        logMap['reps_completed'] = first.reps;
-      } else if (exercise.loggingType == 'timed') {
-        logMap['duration_seconds'] = first.durationSecs;
+    final sets = <ExerciseSet>[];
+    if (exercise.loggingType == 'cardio') {
+      // Cardio: single synthetic set carrying total duration + distance.
+      sets.add(ExerciseSet(
+        weightKg: 0,
+        reps: 0,
+        durationSec: (exercise.durationMins ?? 0) * 60,
+      ));
+    } else {
+      for (final s in exercise.sets) {
+        sets.add(ExerciseSet(
+          weightKg: s.weightKg ?? 0,
+          reps: s.reps ?? 0,
+          durationSec: s.durationSecs,
+        ));
       }
     }
-    if (exercise.loggingType == 'cardio') {
-      logMap['duration_seconds'] = (exercise.durationMins ?? 0) * 60;
-      logMap['distance_km'] = exercise.distanceKm;
-    }
+    if (sets.isEmpty) continue;
 
-    await workoutBox.put(exId, logMap);
+    await WorkoutWriteService.instance.logExercise(
+      date: now,
+      exerciseName: exercise.name,
+      sets: sets,
+      source: WriteSource.aiCoach,
+      ref: ref,
+    );
   }
 
-  // Mark today's scheduled workout as completed (if one exists)
-  for (final raw in workoutBox.values) {
-    if (raw is! Map) continue;
-    final entry = Map<String, dynamic>.from(raw);
-    if (entry['type'] == 'workout' &&
-        entry['date'] == dateStr &&
-        entry['status'] != 'completed') {
-      entry['status'] = 'completed';
-      entry['completed_at'] = now.toIso8601String();
-      await workoutBox.put(entry['id'], entry);
-      break;
-    }
-  }
+  // Mark the day's workout as completed — synthesizes a wlog_<date>
+  // and flips today's schedule status if present.
+  await WorkoutWriteService.instance.markCompleted(
+    date: now,
+    workoutName: 'Chat Workout',
+    durationSec: totalDurationSec,
+    ref: ref,
+  );
 
-  // Cross-screen invalidation
+  // Cross-screen invalidation. WorkoutWriteService.onInvalidate handles
+  // the full batch when wired (currentPlan / workoutStats / calendar /
+  // streak / today / PRs); we still invalidate the immediate Home
+  // surface here so the chat → confirmation → home transition shows
+  // fresh state even when the optional `onInvalidate` hook isn't set.
   ref.invalidate(calendarWeekProvider);
   ref.invalidate(streakProvider);
   ref.invalidate(todayWorkoutProvider);
 
-  // Fire-and-forget cloud sync so AI coach gets fresh workout context.
-  unawaited(SyncService.instance.syncWorkoutData());
+  // Defensive: pushSnapshot may have been triggered already by
+  // WorkoutWriteService; calling it again is cheap (snapshot compile is
+  // idempotent + rate-limited inside SyncService).
   unawaited(SyncService.instance.pushSnapshot());
 
   // Clear the draft
