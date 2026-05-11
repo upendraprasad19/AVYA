@@ -286,7 +286,7 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
     final imageBytes = await image.readAsBytes();
     // Quota increment moved to ScanMealNotifier.scanImage() success path
     // so failures don't consume a daily attempt.
-    ref.read(scanMealProvider.notifier).scanImage(imageBytes);
+    unawaited(ref.read(scanMealProvider.notifier).scanImage(imageBytes));
   }
 
   Widget _buildError(String error) {

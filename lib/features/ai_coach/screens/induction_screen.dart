@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,7 +64,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
     setState(() => _stage = 2); // msg1
     await Future.delayed(_readPause1);
     if (!mounted) return;
-    _showMsg2();
+    unawaited(_showMsg2());
   }
 
   Future<void> _showMsg2() async {
@@ -73,7 +75,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
     setState(() => _stage = 4); // msg2
     await Future.delayed(_readPause2);
     if (!mounted) return;
-    _showMsg3();
+    unawaited(_showMsg3());
   }
 
   Future<void> _showMsg3() async {

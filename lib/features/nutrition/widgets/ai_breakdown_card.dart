@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,7 +132,7 @@ class _AiBreakdownCardState extends ConsumerState<AiBreakdownCard> {
                                   .saveMeal(mealType: slot);
                               if (!context.mounted) return;
                               if (result.success) {
-                                HapticFeedback.lightImpact();
+                                unawaited(HapticFeedback.lightImpact());
                                 messenger.showSnackBar(
                                   SnackBar(
                                     content: Text(

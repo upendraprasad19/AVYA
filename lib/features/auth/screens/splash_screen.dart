@@ -193,8 +193,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // OneSignal — fire and forget; don't block navigation on OS permission dialog.
     if (!kIsWeb) {
-      OneSignal.initialize(AppConstants.oneSignalAppId);
-      OneSignal.Notifications.requestPermission(true);
+      unawaited(OneSignal.initialize(AppConstants.oneSignalAppId));
+      unawaited(OneSignal.Notifications.requestPermission(true));
       // Wire the in-app inbox — foreground/click listeners mirror every
       // push into the Hive notificationsBox so the Notifications screen
       // has data to render. Also seeds the welcome entry on first run.

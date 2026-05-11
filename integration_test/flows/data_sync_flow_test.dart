@@ -110,7 +110,7 @@ void main() {
 
     // Inject an AI interaction into coachBox.
     final now = DateTime.now();
-    HiveService.instance.coachBox.put('test_interaction_001', {
+    await HiveService.instance.coachBox.put('test_interaction_001', {
       'user_message': 'How many calories should I eat?',
       'ai_response': 'Based on your profile, aim for around 2200 calories.',
       'created_at': now.toIso8601String(),

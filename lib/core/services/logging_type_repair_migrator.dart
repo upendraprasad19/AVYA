@@ -153,8 +153,7 @@ class LoggingTypeRepairMigrator {
       if (corrected > 0) {
         // Non-blocking; failure is non-fatal — we'll re-sync on next
         // mutation.
-        // ignore: discarded_futures
-        SyncService.instance.syncWorkoutData();
+        unawaited(SyncService.instance.syncWorkoutData());
       }
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.

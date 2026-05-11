@@ -1739,7 +1739,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
       if (userId != null) {
-        SyncService.instance.syncProfileNow(userId);
+        unawaited(SyncService.instance.syncProfileNow(userId));
       }
       unawaited(SyncService.instance.pushSnapshot());
 
@@ -1751,11 +1751,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (isPro) {
           // PRO: auto-regenerate prediction with new goal in background.
           // Don't await — let user proceed while prediction generates.
-          PredictionService.instance.regeneratePrediction().then((success) {
+          unawaited(PredictionService.instance.regeneratePrediction().then((success) {
             if (success && mounted) {
               ref.invalidate(predictionProvider);
             }
-          });
+          }));
         } else {
           // FREE: mark cached prediction as stale so UI shows badge.
           PredictionService.instance.markStale();

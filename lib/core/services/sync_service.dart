@@ -2190,7 +2190,7 @@ class SyncService {
     // client_errors writer for retry-queue continuity).
     // Stack is unavailable here (this function takes Object only); pass
     // null and let Crashlytics auto-capture.
-    ErrorTelemetry.recordNonFatal(error, null, reason: opType);
+    unawaited(ErrorTelemetry.recordNonFatal(error, null, reason: opType));
 
     try {
       final code = error.runtimeType.toString();
@@ -3640,7 +3640,7 @@ class SyncService {
           final id = map['id']?.toString();
           if (id != null && id.isNotEmpty && foodBox.get(id) == null) {
             map['source'] = 'community';
-            foodBox.put(id, map);
+            await foodBox.put(id, map);
           }
         }
         if (foods.length < pageSize) break;
@@ -3664,7 +3664,7 @@ class SyncService {
           final id = map['id']?.toString();
           if (id != null && id.isNotEmpty && exerciseBox.get(id) == null) {
             map['source'] = 'community';
-            exerciseBox.put(id, map);
+            await exerciseBox.put(id, map);
           }
         }
         if (exercises.length < pageSize) break;

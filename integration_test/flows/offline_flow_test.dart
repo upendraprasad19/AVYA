@@ -123,7 +123,7 @@ void main() {
 
   testWidgets('T4: AI Coach chat history is viewable from Hive alone', (tester) async {
     // Inject a previous conversation.
-    HiveService.instance.coachBox.put('offline_test_msg', {
+    await HiveService.instance.coachBox.put('offline_test_msg', {
       'user_message': 'How do I improve my bench press?',
       'ai_response': 'Focus on scapular retraction and progressive overload.',
       'created_at': DateTime.now()

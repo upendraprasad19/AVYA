@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -79,7 +81,7 @@ class _PlanGenerationScreenState extends State<PlanGenerationScreen>
     await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     setState(() => _showReveal = true);
-    _revealController.forward();
+    unawaited(_revealController.forward());
   }
 
   @override

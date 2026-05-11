@@ -1134,7 +1134,7 @@ class CustomFoodNotifier extends Notifier<void> {
 
     // Sync (Plan D Task 1): single-item upsert + full custom-items
     // projection (mirror of Train) + AI snapshot.
-    NutritionRepository.syncCustomFoodToSupabase(data: food);
+    unawaited(NutritionRepository.syncCustomFoodToSupabase(data: food));
     unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
   }

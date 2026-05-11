@@ -1792,7 +1792,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       pacePreference: pacePreference,
     );
     if (!mounted) return;
-    showModalBottomSheet(
+    unawaited(showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
@@ -1859,7 +1859,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   static String _paceRateLabel(String pace) {
@@ -1973,7 +1973,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             isSyncEnabled: b.isSyncEnabled,
             onToggleSync: () async {
               final newValue = !b.isSyncEnabled;
-              ref.read(biometricProvider.notifier).toggleSync(newValue);
+              unawaited(ref.read(biometricProvider.notifier).toggleSync(newValue));
               if (newValue && mounted) {
                 ref.invalidate(todayStepsProvider);
               }

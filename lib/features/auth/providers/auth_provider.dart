@@ -117,10 +117,9 @@ class AuthNotifier extends Notifier<AuthState2> {
       // APK Test #12.8 — auth lifecycle event so we can correlate
       // post-auth bug reports (PRO pill stuck, profile name "USER")
       // with the exact sign-in instant.
-      // ignore: discarded_futures
-      ErrorTelemetry.logEvent('auth_signed_in',
+      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
           message:
-              'method=email userId=${response.user!.id.substring(0, 8)}');
+              'method=email userId=${response.user!.id.substring(0, 8)}'));
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -197,10 +196,9 @@ class AuthNotifier extends Notifier<AuthState2> {
         // Other local setup failures are non-fatal — auth succeeded.
       }
       // APK Test #12.8 — distinct sign-up event vs sign-in.
-      // ignore: discarded_futures
-      ErrorTelemetry.logEvent('auth_signed_up',
+      unawaited(ErrorTelemetry.logEvent('auth_signed_up',
           message:
-              'method=email userId=${response.user!.id.substring(0, 8)}');
+              'method=email userId=${response.user!.id.substring(0, 8)}'));
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -281,10 +279,9 @@ class AuthNotifier extends Notifier<AuthState2> {
 
       await _ensureLocalUser(response.user!);
       // APK Test #12.8 — phone OTP success event.
-      // ignore: discarded_futures
-      ErrorTelemetry.logEvent('auth_signed_in',
+      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
           message:
-              'method=phone_otp userId=${response.user!.id.substring(0, 8)}');
+              'method=phone_otp userId=${response.user!.id.substring(0, 8)}'));
       state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
@@ -308,9 +305,8 @@ class AuthNotifier extends Notifier<AuthState2> {
     // event makes it to cloud even if a subsequent step throws.
     final signedOutId = _supabase.currentUser?.id;
     if (signedOutId != null) {
-      // ignore: discarded_futures
-      ErrorTelemetry.logEvent('auth_signed_out',
-          message: 'userId=${signedOutId.substring(0, 8)}');
+      unawaited(ErrorTelemetry.logEvent('auth_signed_out',
+          message: 'userId=${signedOutId.substring(0, 8)}'));
     }
     try {
       await UserRepository.instance.clearAllData();
@@ -356,9 +352,8 @@ class AuthNotifier extends Notifier<AuthState2> {
     // stuck, profile name "USER") manifest after this method runs;
     // having a per-call event lets us correlate downstream failures with
     // the exact ensureLocalUser invocation.
-    // ignore: discarded_futures
-    ErrorTelemetry.logEvent('auth_user_ensured',
-        message: 'userId=${user.id.substring(0, 8)}');
+    unawaited(ErrorTelemetry.logEvent('auth_user_ensured',
+        message: 'userId=${user.id.substring(0, 8)}'));
 
     // Layer 2.3 — open per-user namespaced boxes FIRST, before any code
     // reads user-scoped Hive. Idempotent — re-running for same user is a no-op.
@@ -526,9 +521,9 @@ class AuthNotifier extends Notifier<AuthState2> {
     // never block the auth flow.
     if (!kDebugMode) {
       try {
-        FirebaseCrashlytics.instance.setUserIdentifier(
+        unawaited(FirebaseCrashlytics.instance.setUserIdentifier(
           user.id.length >= 8 ? user.id.substring(0, 8) : user.id,
-        );
+        ));
       } catch (e) {
         debugPrint('[auth/_ensureLocalUser] Crashlytics setUserIdentifier failed: $e');
       }

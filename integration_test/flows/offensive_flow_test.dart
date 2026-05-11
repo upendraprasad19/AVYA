@@ -179,7 +179,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Inject a meal with negative calories (edge case / corruption).
-    HiveService.instance.nutritionBox.put('bad_meal_01', {
+    await HiveService.instance.nutritionBox.put('bad_meal_01', {
       'date': _todayKey(),
       'meal_type': 'lunch',
       'food_name': 'Negative Calorie Food',
@@ -205,7 +205,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Write an absurd weight to healthBox.
-    HiveService.instance.healthBox.put('weight_extreme', {
+    await HiveService.instance.healthBox.put('weight_extreme', {
       'date': _todayKey(),
       'weight_kg': 999.0,
       'notes': 'Extreme test',

@@ -474,7 +474,7 @@ void main() {
     final dateStr = formatDateKey(today);
 
     // Simulate a custom template workout that was completed.
-    HiveService.instance.workoutBox.put('schedule_$dateStr', {
+    await HiveService.instance.workoutBox.put('schedule_$dateStr', {
       'date': dateStr,
       'type': 'custom_template',
       'template_id': 'tmpl_test_001',
@@ -501,7 +501,7 @@ void main() {
     final today = DateTime.now();
     final dateStr = formatDateKey(today);
 
-    HiveService.instance.workoutBox.put('schedule_$dateStr', {
+    await HiveService.instance.workoutBox.put('schedule_$dateStr', {
       'date': dateStr,
       'type': 'custom_template',
       'template_id': 'tmpl_test_002',
@@ -531,12 +531,12 @@ void main() {
 
   test('R17: clearAllData wipes coachBox (AI chat history)', () async {
     // Seed some chat history.
-    HiveService.instance.coachBox.put('chat_msg_001', {
+    await HiveService.instance.coachBox.put('chat_msg_001', {
       'role': 'user',
       'content': 'Hello coach',
       'created_at': DateTime.now().toIso8601String(),
     });
-    HiveService.instance.coachBox.put('chat_msg_002', {
+    await HiveService.instance.coachBox.put('chat_msg_002', {
       'role': 'assistant',
       'content': 'Hi there!',
       'created_at': DateTime.now().toIso8601String(),
@@ -564,7 +564,7 @@ void main() {
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     // Seed two nutrition logs with fiber.
-    HiveService.instance.nutritionBox.put('nlog_test_001', {
+    await HiveService.instance.nutritionBox.put('nlog_test_001', {
       'id': 'nlog_test_001',
       'date': dateStr,
       'meal_type': 'breakfast',
@@ -577,7 +577,7 @@ void main() {
       'created_at': now.toIso8601String(),
       'source': 'manual',
     });
-    HiveService.instance.nutritionBox.put('nlog_test_002', {
+    await HiveService.instance.nutritionBox.put('nlog_test_002', {
       'id': 'nlog_test_002',
       'date': dateStr,
       'meal_type': 'lunch',
@@ -604,7 +604,7 @@ void main() {
         reason: 'Fiber should sum to 8 + 12 = 20g across both logs');
 
     // Also verify a log WITHOUT total_fiber doesn't crash the sum.
-    HiveService.instance.nutritionBox.put('nlog_test_003', {
+    await HiveService.instance.nutritionBox.put('nlog_test_003', {
       'id': 'nlog_test_003',
       'date': dateStr,
       'meal_type': 'snacks',
@@ -791,7 +791,7 @@ void main() {
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final id = 'nlog_ts_${now.millisecondsSinceEpoch}';
 
-    HiveService.instance.nutritionBox.put(id, {
+    await HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
       'meal_type': 'lunch',
@@ -828,7 +828,7 @@ void main() {
     final id = 'nlog_fiber_edit_${now.millisecondsSinceEpoch}';
 
     // Seed a log with fiber = 0.
-    HiveService.instance.nutritionBox.put(id, {
+    await HiveService.instance.nutritionBox.put(id, {
       'id': id,
       'date': dateStr,
       'meal_type': 'snacks',

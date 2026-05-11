@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -172,7 +174,7 @@ class CartAuditorSection extends ConsumerWidget {
     final imageBytes = await image.readAsBytes();
     // Quota increment moved to CartAuditorNotifier.analyseCart() success path
     // so failures don't consume a daily attempt.
-    ref.read(cartAuditorProvider.notifier).analyseCart(imageBytes);
+    unawaited(ref.read(cartAuditorProvider.notifier).analyseCart(imageBytes));
   }
 
   Widget _buildError(String error, WidgetRef ref) {

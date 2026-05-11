@@ -59,7 +59,7 @@ void main() {
       'notes': ['Mentioned shoulder pain', 'Wants to lose weight'],
       'last_extracted': '2026-04-15T22:00:00Z',
     });
-    HiveService.instance.userBox.put('user_id', 'u1');
+    await HiveService.instance.userBox.put('user_id', 'u1');
 
     await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
 
@@ -72,7 +72,7 @@ void main() {
   test('backfill is idempotent — second call is a no-op', () async {
     final box = HiveService.instance.coachBox;
     await box.put('coaching_notes', {'notes': ['a']});
-    HiveService.instance.userBox.put('user_id', 'u1');
+    await HiveService.instance.userBox.put('user_id', 'u1');
 
     await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
     final firstUpdated =
@@ -98,7 +98,7 @@ void main() {
   });
 
   test('buildAiContext includes coach_memory when present in Hive', () async {
-    HiveService.instance.userBox.put('user_id', 'u1');
+    await HiveService.instance.userBox.put('user_id', 'u1');
     await CoachMemory(
       userId: 'u1',
       preferredName: 'Upen',
@@ -113,7 +113,7 @@ void main() {
   });
 
   test('buildAiContext omits coach_memory when private_mode is true', () async {
-    HiveService.instance.userBox.put('user_id', 'u1');
+    await HiveService.instance.userBox.put('user_id', 'u1');
     await CoachMemory(userId: 'u1', preferredName: 'Upen', privateMode: true)
         .writeToBox(HiveService.instance.coachBox);
 

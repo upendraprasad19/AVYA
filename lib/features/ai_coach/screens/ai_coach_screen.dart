@@ -1648,18 +1648,18 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
       // Track last media request in coachBox (rate limit: max once per 7 days)
       final coachBox = HiveService.instance.coachBox;
-      coachBox.put(
+      await coachBox.put(
           'last_media_request_at', DateTime.now().toIso8601String());
 
       // Send the message with media URL
       final messageText = _messageController.text.trim();
       _messageController.clear();
 
-      ref.read(sendMessageProvider.notifier).sendWithMedia(
+      unawaited(ref.read(sendMessageProvider.notifier).sendWithMedia(
             messageText,
             mediaUrl: publicUrl,
             mediaType: 'image',
-          );
+          ));
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
