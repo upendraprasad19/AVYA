@@ -45,6 +45,26 @@ class RestoreResult {
 ///   - Daily 11 PM IST: user_daily_snapshot for AI context
 ///   - Weekly (app launch if >7 days): full sync of all logs
 ///   - On restore (new device): pull full history from Supabase
+/// APK Test #15.1 / Bug A — defensive int coercion for Hive map fields
+/// whose cloud-side representation may be int, num, or String.
+///
+/// `_restoreWorkoutTemplates` historically stringified `prescribed_sets`
+/// into the local Hive shape; home_screen + day_detail_sheet read it as
+/// `int?` and crashed. Coerce at the writer instead of patching every
+/// reader. Accepts int, num, String (parseable), or null → fallback.
+///
+/// closes-diagnose: 2026-05-12-schedule-int-coercion-a2f9e1
+int _coerceInt(dynamic value, {required int fallback}) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) {
+    final parsed = int.tryParse(value);
+    if (parsed != null) return parsed;
+  }
+  return fallback;
+}
+
 class SyncService {
   SyncService._();
   static final SyncService _instance = SyncService._();
@@ -3893,7 +3913,16 @@ class SyncService {
             'exercise_id': ex['exercise_id'],
             'id': ex['exercise_id'],
             'logging_type': ex['logging_type'] ?? 'weight_reps',
-            'sets': ex['prescribed_sets']?.toString() ?? '3',
+            // APK Test #15.1 / Bug A — `sets` MUST be int (Hive readers
+            // cast as int?). Pre-fix this stringified prescribed_sets,
+            // which then flowed through _normalizeExercises unchanged
+            // into the schedule entry, crashing home_screen._buildTodayRow
+            // with `type 'String' is not a subtype of type 'int?'` when
+            // the founder scheduled a custom template for today.
+            // closes-diagnose: 2026-05-12-schedule-int-coercion-a2f9e1
+            'sets': _coerceInt(ex['prescribed_sets'], fallback: 3),
+            // `reps` stays String — exercise library uses ranges like
+            // "8-12" so a single int can't represent all values.
             'reps': ex['prescribed_reps']?.toString() ?? '10',
             'weight_kg': ex['prescribed_weight'],
             'rest_seconds': ex['rest_seconds'],

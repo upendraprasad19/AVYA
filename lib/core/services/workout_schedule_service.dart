@@ -1651,9 +1651,27 @@ class WorkoutScheduleService {
       final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
       final exerciseName =
           (m['exercise_name'] ?? m['name'] ?? 'Unknown').toString();
+      // APK Test #15.1 / Bug A — defensive int coercion for `sets`.
+      // Legacy rows in Hive (pre-fix _restoreWorkoutTemplates) may
+      // carry stringified `prescribed_sets` ("3") even after the
+      // writer-side fix lands. Coerce defensively so home_screen +
+      // day_detail_sheet can keep their `as int?` casts.
+      // closes-diagnose: 2026-05-12-schedule-int-coercion-a2f9e1
+      final rawSets =
+          m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3;
+      final int setsInt;
+      if (rawSets is int) {
+        setsInt = rawSets;
+      } else if (rawSets is num) {
+        setsInt = rawSets.toInt();
+      } else if (rawSets is String) {
+        setsInt = int.tryParse(rawSets) ?? 3;
+      } else {
+        setsInt = 3;
+      }
       return {
         'exercise_name': exerciseName,
-        'sets': m['sets'] ?? m['prescribed_sets'] ?? m['default_sets'] ?? 3,
+        'sets': setsInt,
         'reps': (m['reps'] ?? m['prescribed_reps'] ?? m['default_reps'] ?? '10').toString(),
         'rest_seconds': m['rest_seconds'] ?? m['default_rest_secs'] ?? 60,
         'logging_type': _resolveLoggingType(m, exerciseName),
