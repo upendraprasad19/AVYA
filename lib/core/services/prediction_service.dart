@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -64,8 +67,11 @@ Format (use • not JSON):
         return true;
       }
       return false;
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[PredictionService] Prediction regeneration failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'prediction_service_regenerate_prediction'));
       return false;
     }
   }

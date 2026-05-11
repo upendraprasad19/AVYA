@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+import 'error_telemetry.dart';
 
 /// Nutritional data returned from a barcode lookup.
 class BarcodeFood {
@@ -82,8 +85,11 @@ class BarcodeService {
         servingDesc: product['serving_size'] as String?,
         servingG: servingG > 0 ? servingG : 100,
       );
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[BarcodeService.lookup] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'barcode_service_lookup'));
       return null;
     }
   }

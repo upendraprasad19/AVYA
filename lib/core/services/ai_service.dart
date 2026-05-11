@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 
@@ -206,8 +208,11 @@ class AiService {
       try {
         parsedIntents
             .add(ToolIntent.fromJson(Map<String, dynamic>.from(raw)));
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[AiService] tool_intent parse failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'ai_service_parse_tool_intents'));
       }
     }
     return parsedIntents;
