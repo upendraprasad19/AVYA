@@ -74,7 +74,7 @@
 - **U-2** — Rotate Supabase anon JWT in Dashboard → API → Reset anon key, capture into `.env`, rebuild APK. The leaked JWT in git history is valid until rotation regardless of file removal.
 - **U-3** — Set `CRON_SECRET` env var on Supabase Dashboard → Edge Functions → Secrets. Rotate quarterly. Update pg_cron registrations to send `CRON_SECRET` instead of service-role-key once set.
 - **U-4** — Enable "Leaked password protection" toggle in Supabase Dashboard → Auth → Settings.
-- **H-38** — Bucket lockdown UX decision required (3 mitigation paths documented in audit doc §11).
+- **H-38** — ✅ **CLOSED 2026-05-11 post-merge.** Path 1 (SELECT dedupe) shipped + ACCEPTED disposition. Migration 059 dropped 4 redundant SELECT policies. Public-bucket flag intentional; advisor warning known. See `docs/diagnoses/2026-05-11-h38-bucket-select-dedupe-7ad038.md`.
 
 **Deferred to next named cleanup batch** (NOT "someday"):
 - 21 remaining grandfathered `debugPrint` catches in less-hot services / repositories
@@ -92,8 +92,8 @@
 |---|---|---|
 | ✅ Fixed by Claude | C-1, C-4, C-5, H-29, H-30, H-35, H-36, H-37, H-40, Hermes-R2 #9 | 9 findings closed across 4 migrations + 10 Edge Function deploys + 6 diagnose docs |
 | ✅ Verified false-alarm or no-action | C-13, H-32 | curl tests confirmed — no code change needed |
-| ⏳ Awaiting user-action | C-2 (U-1 keystore), C-3 (U-2 anon JWT rotation), C-4 (U-3 CRON_SECRET env var, optional), H-38 (U-4 leaked-password toggle) | Claude can't perform these — Dashboard / local keystore |
-| 🟡 Deferred with documented rationale | H-38 bucket lockdown — UX trade-off (public buckets allow embedded `<img src>` without auth; flipping to private breaks avatar display). Needs founder decision. | See §"Phase 1 task 10 — H-38 deferral rationale" below. |
+| ⏳ Awaiting user-action | C-2 (U-1 keystore — keystore generated 2026-05-11; password rotation deferred), C-3 (U-2 anon JWT rotation), C-4 (U-3 CRON_SECRET env var, optional), H-39 (U-4 leaked-password toggle) | Claude can't perform these — Dashboard / local keystore |
+| ✅ Founder-decided | H-38 bucket lockdown — Path 1 (SELECT dedupe) shipped + disposition ACCEPTED 2026-05-11. Migration 059 applied. Public-bucket flag intentional (avatar `<img src>` UX). | See `docs/diagnoses/2026-05-11-h38-bucket-select-dedupe-7ad038.md`. |
 | ✅ Infrastructure fix | Hook split (pre-commit + commit-msg) | Required to unblock the discipline gate for `-m`/`-F`/`--amend` commits. |
 
 **Phase 1 done.** Phases 2-8 remain for fresh sessions per audit doc §9.
@@ -550,7 +550,7 @@ Dart's `String.hashCode` is not stable across VM versions. After a Dart/Flutter 
 - **H-35** 14 SECURITY DEFINER functions with mutable `search_path` (advisor `function_search_path_mutable`). Search-path injection risk if a malicious user creates a `users` table in their schema. Affected: `update_user_subscription_status`, `redeem_referral_atomic`, `increment_promo_used_count`, plus 11 others. `handle_new_auth_user` is correctly hardened.
 - **H-36** 1 ERROR advisor: `coach_tool_invocations_v` is a `security_definer_view` — pulls service-role-readable rows for any caller.
 - **H-37** 9 SECURITY DEFINER functions exposed to `anon` role via PostgREST RPC (incl. `extend_subscription` covered in C-1, plus `auto_approve_community_item`, `compute_coach_signals_for_user`, `update_user_subscription_status`, `rls_auto_enable`).
-- **H-38** Public storage buckets `avatars` + `banners` allow listing (advisor `public_bucket_allows_listing`). Users can enumerate every avatar/banner.
+- **H-38** Public storage buckets `avatars` + `banners` allow listing (advisor `public_bucket_allows_listing`). Users can enumerate every avatar/banner. **[CLOSED 2026-05-11 — Path 1 + ACCEPTED. Migration 059 deduped 4 SELECT policies. Advisor flag persists by design — public buckets are intentional for avatar UX.]**
 - **H-39** Auth: leaked password protection DISABLED (Supabase Dashboard → Authentication → Policies). Allows pwned-password sign-ups.
 - **H-40** `account_deletion_log` and `rank_ladder` have RLS enabled with **zero policies** (advisor `rls_enabled_no_policy`). Effectively deny-all for authenticated users. `account_deletion_log` is service-role-only by design (OK). `rank_ladder` is reference data the app likely needs to read — verify if `rank_ladder_screen.dart` reads from this table; if so, add a public-read policy.
 
