@@ -475,7 +475,25 @@ class WorkoutRepository {
   }
 
   /// Get exercise logs actually logged on a specific date.
-  /// Returns entries with type 'exercise_log' matching the date.
+  /// Returns entries with their Hive key injected as `id` so consumers
+  /// can drive edits, deletions, etc.
+  ///
+  /// APK Test #15.1 / Bug F — pre-fix, returned maps did NOT carry the
+  /// Hive key, so EditWorkoutLogSheet's `where(log['id'] is String)`
+  /// filter stripped every row + showed "No exercise logs for this day"
+  /// even when the data was present. Bug class: writer↔reader contract
+  /// drift introduced when Test #6 WriteService rewrite never set an
+  /// `'id'` value field on the entry map (the id IS the Hive key).
+  /// Pre-Test-#6 readers iterated `box.toMap()` directly and saw the
+  /// key; the indexed-path readers introduced afterward lost that
+  /// visibility.
+  ///
+  /// Fix: inject the Hive key as `id` on the returned map (both indexed
+  /// path AND legacy fallback). Also drops the legacy `type ==
+  /// 'exercise_log'` filter — current WriteService doesn't write that
+  /// field; use exercise_name presence as the type-discriminator.
+  ///
+  /// closes-diagnose: 2026-05-12-edit-log-id-injection-f4c9e1
   List<Map<String, dynamic>> getExerciseLogsForDate(DateTime date) {
     final dateStr = formatDateKey(date);
 
@@ -488,7 +506,10 @@ class WorkoutRepository {
       for (final id in index) {
         final raw = _hive.workoutBox.get(id);
         if (raw is Map) {
-          logs.add(Map<String, dynamic>.from(raw));
+          final m = Map<String, dynamic>.from(raw);
+          // Bug F — Hive key is the id; inject so consumers can edit/delete.
+          m['id'] = id;
+          logs.add(m);
         }
       }
       if (logs.isNotEmpty) return logs;
@@ -502,7 +523,12 @@ class WorkoutRepository {
       final raw = _hive.workoutBox.get(key);
       if (raw is! Map) continue;
       final map = Map<String, dynamic>.from(raw);
-      if (map['type'] != 'exercise_log') continue;
+      // Bug F — discriminator is exercise_name presence, NOT a 'type'
+      // field. The Test #6 WriteService stopped writing 'type'.
+      if (map['exercise_name'] == null) continue;
+      // Bug F — inject Hive key as `id` so the legacy-fallback returned
+      // shape matches the indexed-path shape.
+      map['id'] = key;
       logs.add(map);
     }
 

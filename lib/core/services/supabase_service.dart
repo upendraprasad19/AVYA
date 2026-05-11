@@ -212,13 +212,35 @@ class SupabaseService {
       }
     }
 
-    // Single attempt — no auto-retry here.
-    // Callers (e.g. AiCoachProvider) handle auth errors at their own level.
-    final response = await client.functions.invoke(
-      name,
-      headers: headers,
-      body: body,
-    );
+    // APK Test #15.1 / Bug G+H — single retry on transient BOOT_ERROR /
+    // cold-start 5xx. Edge Function logs show daily-snapshot taking
+    // 40 seconds per call (cold start + Gemini extraction); when multiple
+    // users hit it simultaneously, some get a 503 BOOT_ERROR while the
+    // function spins up. One retry after 1.5s clears this in most cases.
+    // Persistent 5xx is a real outage and surfaces to the caller as
+    // before — the retry doesn't mask sustained failure.
+    //
+    // Auth-class errors (401/403) are NOT retried — caller handles those.
+    //
+    // closes-diagnose: 2026-05-12-edge-function-503-retry-0a7b9f
+    FunctionResponse response;
+    try {
+      response = await client.functions.invoke(
+        name,
+        headers: headers,
+        body: body,
+      );
+    } on FunctionException catch (e) {
+      // Retry only on cold-start signatures: 503 BOOT_ERROR + 502 BAD_GATEWAY.
+      final isColdStart502_503 = e.status == 502 || e.status == 503;
+      if (!isColdStart502_503) rethrow;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+      response = await client.functions.invoke(
+        name,
+        headers: headers,
+        body: body,
+      );
+    }
 
     return response;
   }

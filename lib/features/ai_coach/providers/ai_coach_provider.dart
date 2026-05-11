@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -441,6 +442,16 @@ class SendMessageNotifier extends Notifier<bool> {
         errorMsg = 'The vision model is temporarily unavailable. Please try again in a minute.';
       } else {
         errorMsg = 'Sorry, I couldn\'t analyse that photo. Please try again.';
+        // APK Test #15.1 / Bug D — log the unmatched error so the next
+        // user report has a root cause we can diagnose. Pre-fix the
+        // generic fallback ran silently — zero telemetry, zero ability
+        // to isolate the actual ai-media-proxy reject reason. Now every
+        // unmatched ai-media-proxy failure leaves a breadcrumb.
+        // closes-diagnose: 2026-05-12-ai-media-proxy-telemetry-d8e5b3
+        final clipped =
+            errStr2.length > 500 ? errStr2.substring(0, 500) : errStr2;
+        unawaited(ErrorTelemetry.logEvent('ai_media_proxy_unknown_error',
+            message: clipped));
       }
       chatNotifier.replaceLastMessage(ChatMessage(
         text: errorMsg,

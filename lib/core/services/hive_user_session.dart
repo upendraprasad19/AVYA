@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:synchronized/synchronized.dart';
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
@@ -40,6 +41,25 @@ class HiveUserSession {
   /// Full user.id of the current owner. Stored alongside the hash so
   /// guards can compare full ids without depending on prefix collisions.
   static String? _currentOwnerFullId;
+
+  /// APK Test #15.1 / Bug C — serialization lock around the three
+  /// methods that mutate `_currentOwnerHash` / `_currentOwnerFullId`:
+  /// `openForUser`, `closeAll`, `deleteAllFilesForCurrentUser`.
+  ///
+  /// Pre-fix the three methods could interleave on the Dart event loop
+  /// during signOut → signUp transitions. Founder's sumit1 leak
+  /// (2026-05-11): signOut started `clearAllData` (slow), signUp's
+  /// `openForUser` yielded into the middle of it, both paths mutated
+  /// the static state before either finished. Telemetry captured
+  /// `hive_session_opened userId=428cd70c` BEFORE
+  /// `hive_session_closed userId=d7a67a37` plus a follow-on
+  /// `hive_session_reopen_noop` — a clear race signature.
+  ///
+  /// With the lock, the second caller blocks until the first finishes,
+  /// so static-state observers always see a consistent view.
+  ///
+  /// closes-diagnose: 2026-05-12-cross-account-mutex-c7d4f6
+  static final Lock _sessionLock = Lock();
 
   static String? get currentOwnerHash => _currentOwnerHash;
   static String? get currentOwnerFullId => _currentOwnerFullId;
@@ -97,7 +117,17 @@ class HiveUserSession {
   ///
   /// Throws [HiveError] if a box file is corrupted; caller should
   /// surface this as a fatal error and force the user to reinstall.
+  ///
+  /// APK Test #15.1 / Bug C — wrapped in [_sessionLock] so concurrent
+  /// signOut/signUp callers can't interleave + race the static state.
   static Future<void> openForUser(String userId) async {
+    await _sessionLock.synchronized(() => _openForUserLocked(userId));
+  }
+
+  /// Body of [openForUser] — runs while the [_sessionLock] is held.
+  /// Internal callers that already hold the lock invoke this directly
+  /// (no inner re-entry — `synchronized` is non-reentrant).
+  static Future<void> _openForUserLocked(String userId) async {
     if (_currentOwnerFullId == userId) {
       // APK Test #12.8 — surface the no-op so we can see how often
       // SyncService.restoreFromCloudForUser's defensive ensure (Test
@@ -109,7 +139,8 @@ class HiveUserSession {
       return;
     }
     if (_currentOwnerFullId != null) {
-      await closeAll();
+      // Already holding _sessionLock — call the inner variant directly.
+      await _closeAllLocked();
     }
 
     // One-shot migration — copies pre-namespacing shared box contents
@@ -299,7 +330,13 @@ class HiveUserSession {
 
   /// Close + clear references to all user-scoped boxes. Files remain
   /// on disk (use `clearAllDataForCurrentUser` to delete contents).
+  ///
+  /// APK Test #15.1 / Bug C — public API serializes via [_sessionLock].
   static Future<void> closeAll() async {
+    await _sessionLock.synchronized(_closeAllLocked);
+  }
+
+  static Future<void> _closeAllLocked() async {
     if (_currentOwnerFullId == null) return;
     final id = _currentOwnerFullId!;
     for (final root in userScopedBoxRoots) {
@@ -321,7 +358,14 @@ class HiveUserSession {
 
   /// Delete every user-scoped box file for the **current** user.
   /// Used by signOut so leftover bytes can't surface on next sign-in.
+  ///
+  /// APK Test #15.1 / Bug C — public API serializes via [_sessionLock].
   static Future<void> deleteAllFilesForCurrentUser() async {
+    await _sessionLock
+        .synchronized(_deleteAllFilesForCurrentUserLocked);
+  }
+
+  static Future<void> _deleteAllFilesForCurrentUserLocked() async {
     if (_currentOwnerFullId == null) return;
     final id = _currentOwnerFullId!;
     for (final root in userScopedBoxRoots) {

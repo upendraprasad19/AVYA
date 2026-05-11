@@ -1319,23 +1319,41 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   }
 
   /// Returns an error message if required fields are empty, or null if valid.
+  ///
+  /// APK Test #15.1 / Bug E — also enforces realistic per-set bounds
+  /// (reps 1..60) matching the cloud CHECK constraint added in migration
+  /// 060. Pre-fix the field accepted any int, so a typo like "135" (3
+  /// keys vs 1) shipped to cloud and resurfaced as "LAST: 50KG · 135 REPS"
+  /// for the founder. The cloud constraint is the canonical defender;
+  /// this client-side check surfaces the error inline instead of after
+  /// a sync attempt fails.
+  /// closes-diagnose: 2026-05-12-rep-validation-e6a2d4
+  static const int _repsMin = 1;
+  static const int _repsMax = 60;
+
+  String? _validateRepsBound(int reps) {
+    if (reps < _repsMin) return 'Enter reps before marking complete';
+    if (reps > _repsMax) {
+      return 'Reps must be ≤ $_repsMax per set. Typo? Cloud rejects values above this.';
+    }
+    return null;
+  }
+
   String? _validateSetInputs(int setIdx) {
     switch (widget.exercise.loggingType) {
       case 'weight_reps':
         final weight = double.tryParse(_weightControllers[setIdx].text) ?? 0;
         final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
-        if (weight <= 0 || reps <= 0) {
-          return 'Enter weight and reps before marking complete';
-        }
+        if (weight <= 0) return 'Enter weight before marking complete';
+        final repsErr = _validateRepsBound(reps);
+        if (repsErr != null) return repsErr;
         return null;
       case 'bodyweight_reps':
         final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
-        if (reps <= 0) return 'Enter reps before marking complete';
-        return null;
+        return _validateRepsBound(reps);
       case 'weighted_bodyweight':
         final reps = int.tryParse(_repsControllers[setIdx].text) ?? 0;
-        if (reps <= 0) return 'Enter reps before marking complete';
-        return null;
+        return _validateRepsBound(reps);
       case 'timed':
         final duration = int.tryParse(_durationControllers[setIdx].text) ?? 0;
         if (duration <= 0) return 'Enter duration before marking complete';

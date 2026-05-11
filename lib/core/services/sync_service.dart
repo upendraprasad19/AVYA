@@ -45,6 +45,26 @@ class RestoreResult {
 ///   - Daily 11 PM IST: user_daily_snapshot for AI context
 ///   - Weekly (app launch if >7 days): full sync of all logs
 ///   - On restore (new device): pull full history from Supabase
+/// APK Test #15.1 / Bug A — defensive int coercion for Hive map fields
+/// whose cloud-side representation may be int, num, or String.
+///
+/// `_restoreWorkoutTemplates` historically stringified `prescribed_sets`
+/// into the local Hive shape; home_screen + day_detail_sheet read it as
+/// `int?` and crashed. Coerce at the writer instead of patching every
+/// reader. Accepts int, num, String (parseable), or null → fallback.
+///
+/// closes-diagnose: 2026-05-12-schedule-int-coercion-a2f9e1
+int _coerceInt(dynamic value, {required int fallback}) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) {
+    final parsed = int.tryParse(value);
+    if (parsed != null) return parsed;
+  }
+  return fallback;
+}
+
 class SyncService {
   SyncService._();
   static final SyncService _instance = SyncService._();
@@ -3823,6 +3843,36 @@ class SyncService {
             } catch (_) {}
           }
         }
+
+        // APK Test #15.1 / Bug B — vacuum the tail. Migration 051
+        // (Test #15 / Backlog #2) added UNIQUE(template_id, order_index)
+        // and switched DELETE-then-INSERT → upsert with onConflict.
+        // That fix preserved no-torn-state on partial failure but
+        // introduced a NEW failure mode: when a template shrinks
+        // (15 exercises → 5), only slots 0..4 are upserted; slots
+        // 5..14 from the prior version remain orphaned in cloud.
+        // Restore pulls all 15, founder sees 15-exercise "triplicates"
+        // on his Back Day A / Leg Day A / Push Day templates.
+        //
+        // Tail vacuum bounds the cloud row count to exactly the local
+        // exercises.length. One round-trip per template. Idempotent.
+        // Network failure on the DELETE leaves stale tail rows (same
+        // as today's status quo before this commit) — no regression.
+        //
+        // closes-diagnose: 2026-05-12-template-exercises-tail-vacuum-b3c8d2
+        try {
+          await _supabase.client
+              .from('template_exercises')
+              .delete()
+              .eq('template_id', cloudTmplId)
+              .gte('order_index', exercises.length);
+        } catch (vacErr, st) {
+          debugPrint(
+              '[SyncService._syncWorkoutTemplates] tail vacuum failed: $vacErr');
+          unawaited(ErrorTelemetry.recordNonFatal(vacErr, st,
+              reason: 'sync_template_exercises_tail_vacuum'));
+          // Non-fatal — same stale-tail state as pre-fix.
+        }
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -3893,7 +3943,16 @@ class SyncService {
             'exercise_id': ex['exercise_id'],
             'id': ex['exercise_id'],
             'logging_type': ex['logging_type'] ?? 'weight_reps',
-            'sets': ex['prescribed_sets']?.toString() ?? '3',
+            // APK Test #15.1 / Bug A — `sets` MUST be int (Hive readers
+            // cast as int?). Pre-fix this stringified prescribed_sets,
+            // which then flowed through _normalizeExercises unchanged
+            // into the schedule entry, crashing home_screen._buildTodayRow
+            // with `type 'String' is not a subtype of type 'int?'` when
+            // the founder scheduled a custom template for today.
+            // closes-diagnose: 2026-05-12-schedule-int-coercion-a2f9e1
+            'sets': _coerceInt(ex['prescribed_sets'], fallback: 3),
+            // `reps` stays String — exercise library uses ranges like
+            // "8-12" so a single int can't represent all values.
             'reps': ex['prescribed_reps']?.toString() ?? '10',
             'weight_kg': ex['prescribed_weight'],
             'rest_seconds': ex['rest_seconds'],
