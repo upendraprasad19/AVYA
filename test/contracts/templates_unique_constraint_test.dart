@@ -22,11 +22,14 @@ void main() {
     late final String sql;
 
     setUpAll(() {
+      // audit-2026-05-11 H-33 — file renamed to 050b because of a
+      // numeric-prefix collision with 050_streak_freezes_default_one.
+      // See supabase/migrations/README_RECONCILIATION_2026-05-11.md.
       final f = File(
-        'supabase/migrations/050_workout_templates_unique_user_name.sql',
+        'supabase/migrations/050b_workout_templates_unique_user_name.sql',
       );
       expect(f.existsSync(), isTrue,
-          reason: 'migration 050 must exist at the expected path');
+          reason: 'migration 050b must exist at the expected path');
       sql = f.readAsStringSync();
     });
 
