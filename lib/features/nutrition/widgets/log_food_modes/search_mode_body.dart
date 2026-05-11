@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -278,36 +278,41 @@ class _RecentLogs extends ConsumerWidget {
   }
 }
 
-/// Re-log a previous nutrition_log row by writing a fresh `nlog_*`
-/// entry today with the same name + macros + quantity. Mirrors the
-/// barcode flow exactly, then fires the standard sync fan-out so the
-/// AI coach context refreshes.
+/// Re-log a previous nutrition_log row.
+///
+/// T-12 / audit-2026-05-11 — routed through
+/// `NutritionWriteService.logMeal` so the new `nlog_*` row inherits
+/// the canonical field shape (IST date, deterministic key, `items[]`
+/// array). Pre-fix this wrote a flat-totals row directly to Hive with
+/// no `items[]`, so `_syncNutritionLogs` cloud projection wrote 0
+/// rows to `nutrition_log_items`. Same C-12 sibling bug class.
+///
+/// The "recent foods" surface only carries flat totals, so we
+/// synthesise a single `FoodItem` from the source name + quantity +
+/// macros — same approach used by `FoodLogNotifier.logFood`.
 Future<void> _relogFromHistory(
     WidgetRef ref, Map<String, dynamic> source) async {
-  final now = DateTime.now();
-  final dateStr = istDateStr(now);
-  final id = 'nlog_${now.millisecondsSinceEpoch}';
-  final logMap = <String, dynamic>{
-    'id': id,
-    'date': dateStr,
-    'meal_type': _mealTypeForNow(),
-    'food_name': source['food_name'] ?? 'Unknown',
-    'quantity_g': (source['quantity_g'] as num?)?.toDouble() ?? 100.0,
-    'total_calories': (source['total_calories'] as num?)?.toInt() ?? 0,
-    'total_protein': (source['total_protein'] as num?)?.toInt() ?? 0,
-    'total_carbs': (source['total_carbs'] as num?)?.toInt() ?? 0,
-    'total_fat': (source['total_fat'] as num?)?.toInt() ?? 0,
-    'total_fiber': (source['total_fiber'] as num?)?.toInt() ?? 0,
-    'created_at': now.toIso8601String(),
-    'source': 'recent_relog',
-  };
-  await HiveService.instance.nutritionBox.put(id, logMap);
+  final item = FoodItem(
+    name: (source['food_name'] ?? 'Unknown') as String,
+    quantityG: (source['quantity_g'] as num?)?.toDouble() ?? 100.0,
+    calories: (source['total_calories'] as num?)?.toDouble() ?? 0,
+    protein: (source['total_protein'] as num?)?.toDouble() ?? 0,
+    carbs: (source['total_carbs'] as num?)?.toDouble() ?? 0,
+    fat: (source['total_fat'] as num?)?.toDouble() ?? 0,
+    fiber: (source['total_fiber'] as num?)?.toDouble() ?? 0,
+  );
+  await NutritionWriteService.instance.logMeal(
+    date: DateTime.now(),
+    mealType: _mealTypeForNow(),
+    items: [item],
+    source: NutritionWriteSource.manualSearch,
+  );
+  // WriteService invalidates providers + fires sync internally, but
+  // keep these explicit so the recent-foods sheet rebuilds even when
+  // the WriteService onStateChanged hook isn't wired in this widget
+  // tree (defensive — matches the pattern used elsewhere).
   ref.invalidate(dailyNutritionProvider);
-  ref.invalidate(weeklyNutritionProvider);
-  ref.invalidate(nutritionSummaryProvider);
   ref.invalidate(recentFoodLogsProvider);
-  unawaited(SyncService.instance.syncNutritionData());
-  unawaited(SyncService.instance.pushSnapshot());
 }
 
 String _mealTypeForNow() {
