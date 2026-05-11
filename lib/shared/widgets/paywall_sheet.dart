@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -222,6 +223,10 @@ class _PaywallSheetState extends State<PaywallSheet> {
       );
     } catch (e) {
       debugPrint('[PaywallSheet._handleRestore] $e');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('paywall_restore_purchase_failed',
+          message: clipped));
       if (!mounted) return;
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(

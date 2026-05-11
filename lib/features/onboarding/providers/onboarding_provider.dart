@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
@@ -574,6 +575,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       );
       return null;
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('onboarding_complete_failed',
+          message: clipped));
       state = state.copyWith(
         isCompleting: false,
         error: 'Something went wrong: ${e.runtimeType}. Please try again.',

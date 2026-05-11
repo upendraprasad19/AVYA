@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
@@ -219,6 +220,11 @@ class ToolDispatcher {
       // Defensive — shouldn't happen since each handler should catch.
       debugPrint(
           '[ToolDispatcher] unexpected error executing ${intent.type}: $e\n$stack');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_${intent.type}_unexpected_failure',
+          message: clipped));
       return const ToolExecutionResult.failure('Could not execute that action.');
     }
   }
@@ -356,6 +362,10 @@ class ToolDispatcher {
       });
     } catch (e, stack) {
       debugPrint('[ToolDispatcher] log_pr failed: $e\n$stack');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_log_pr_failed',
+          message: clipped));
       return ToolExecutionResult.failure('Could not log PR: $e');
     }
   }
@@ -508,6 +518,13 @@ class ToolDispatcher {
     if (errors.isEmpty) {
       return ToolExecutionResult.success(data: {'swaps': results});
     } else if (results.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_modify_workout_for_injury_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         'Could not modify any workouts: ${errors.join("; ")}',
       );
@@ -616,6 +633,12 @@ class ToolDispatcher {
     if (errors.isEmpty) {
       return ToolExecutionResult.success(data: {'moves': results});
     } else if (results.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_reschedule_week_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         'Could not move any workouts: ${errors.join("; ")}',
       );
@@ -677,6 +700,13 @@ class ToolDispatcher {
     if (errors.isEmpty) {
       return ToolExecutionResult.success(data: {'schedules': results});
     } else if (results.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_generate_hotel_workout_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         'Could not generate any workouts: ${errors.join("; ")}',
       );
@@ -747,6 +777,13 @@ class ToolDispatcher {
         'count': results.length,
       });
     } else if (results.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_regenerate_plan_block_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         'Could not regenerate plan: ${errors.join("; ")}',
       );
@@ -965,6 +1002,11 @@ class ToolDispatcher {
     } catch (e, stack) {
       debugPrint(
           '[ToolDispatcher] create_custom_template failed: $e\n$stack');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_create_custom_template_failed',
+          message: clipped));
       return const ToolExecutionResult.failure(
           'Could not create that template.');
     }
@@ -1036,6 +1078,13 @@ class ToolDispatcher {
     ScheduleTemplatePlanner.instance.clearCache(intent.id);
 
     if (scheduled.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_schedule_template_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         errors.isEmpty
             ? 'No dates were scheduled.'
@@ -1108,6 +1157,11 @@ class ToolDispatcher {
       });
     } catch (e, stack) {
       debugPrint('[ToolDispatcher] log_meal_by_text failed: $e\n$stack');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_log_meal_by_text_failed',
+          message: clipped));
       return const ToolExecutionResult.failure('Could not log that meal.');
     }
   }
@@ -1178,6 +1232,12 @@ class ToolDispatcher {
     if (errors.isEmpty) {
       return ToolExecutionResult.success(data: {'logged': results});
     } else if (results.isEmpty) {
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_prelog_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
           'Could not log any meals: ${errors.join("; ")}');
     } else {
@@ -1216,6 +1276,11 @@ class ToolDispatcher {
     } catch (e, stack) {
       debugPrint(
           '[ToolDispatcher] adjust_caloric_target failed: $e\n$stack');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_adjust_caloric_target_failed',
+          message: clipped));
       return const ToolExecutionResult.failure(
           'Could not adjust your calorie target.');
     }

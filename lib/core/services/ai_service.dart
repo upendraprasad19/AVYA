@@ -285,8 +285,12 @@ class AiService {
     } on http.ClientException {
       return _directHttpCall('ai-proxy', message, compact);
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(
+          ErrorTelemetry.logEvent('ai_service_chat_failed', message: clipped));
       // Web fallback: 'Failed to fetch' is thrown by the browser fetch API
-      if (e.toString().contains('Failed to fetch')) {
+      if (errStr.contains('Failed to fetch')) {
         return _directHttpCall('ai-proxy', message, compact);
       }
       rethrow;
@@ -418,7 +422,11 @@ class AiService {
     } on http.ClientException {
       return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
     } catch (e) {
-      if (e.toString().contains('Failed to fetch')) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('ai_service_chat_with_media_failed',
+          message: clipped));
+      if (errStr.contains('Failed to fetch')) {
         return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
       }
       rethrow;

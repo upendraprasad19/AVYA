@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -417,6 +418,10 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
       subject: 'ICANBEFITTER Diet Plan',
     );
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('nutrition_diet_plan_pdf_export_failed',
+          message: clipped));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

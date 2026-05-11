@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
@@ -327,6 +328,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     try {
       return _buildProfileContent(context);
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('profile_screen_build_failed',
+          message: clipped));
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: SafeArea(

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -94,6 +97,10 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
       }
     } catch (e) {
       debugPrint('[CommunityReviewSheet] $e');
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('community_review_load_failed',
+          message: clipped));
       if (mounted) {
         setState(() {
           _error = 'Failed to load items';

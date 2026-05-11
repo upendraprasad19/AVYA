@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
@@ -457,6 +458,10 @@ class _TemplateBuilderScreenState
         context.go('/train');
       }
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('train_template_save_failed',
+          message: clipped));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

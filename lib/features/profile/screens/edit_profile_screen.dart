@@ -1778,6 +1778,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         context.go('/profile');
       }
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('profile_edit_save_failed',
+          message: clipped));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

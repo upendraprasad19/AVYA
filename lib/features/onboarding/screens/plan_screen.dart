@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -536,6 +539,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       final alreadyInducted = InductionService.instance.inductionCompleted;
       context.go(alreadyInducted ? '/home' : '/coach/induction');
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('onboarding_plan_submit_failed',
+          message: clipped));
       if (!mounted) return;
       setState(() {
         _submitting = false;

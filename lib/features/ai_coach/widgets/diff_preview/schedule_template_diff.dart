@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/schedule_template_planner.dart';
@@ -53,7 +56,12 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
 
       if (mounted) setState(() => _plan = result.plan);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'diff_preview_schedule_template_load_failed',
+          message: clipped));
+      if (mounted) setState(() => _error = errStr);
     }
   }
 

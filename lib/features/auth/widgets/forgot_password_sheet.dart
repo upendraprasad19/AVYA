@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -73,7 +76,11 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         _sending = false;
         _error = e.message;
       });
-    } catch (_) {
+    } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('auth_forgot_password_send_failed',
+          message: clipped));
       setState(() {
         _sending = false;
         _error = 'Could not send reset link. Try again.';

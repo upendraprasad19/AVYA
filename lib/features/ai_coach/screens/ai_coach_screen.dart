@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
@@ -1662,11 +1663,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           ));
       _scrollToBottom();
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('ai_coach_photo_upload_failed',
+          message: clipped));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to upload photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}',
+              'Failed to upload photo: ${errStr.length > 80 ? errStr.substring(0, 80) : errStr}',
               style: AppTypography.body.copyWith(color: AppColors.bad),
             ),
             backgroundColor: AppColors.card,

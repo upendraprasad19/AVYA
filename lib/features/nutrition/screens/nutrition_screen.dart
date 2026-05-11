@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -166,6 +168,10 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
     try {
       return _buildMealsTab();
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('nutrition_meals_tab_build_failed',
+          message: clipped));
       return Padding(
         padding: const EdgeInsets.all(AppSpacing.gutter),
         child: ErrorState(

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/reschedule_week_planner.dart';
@@ -43,7 +46,12 @@ class _RescheduleWeekDiffState extends State<RescheduleWeekDiff> {
       RescheduleWeekPlanner.instance.cache(widget.intent.id, moves);
       if (mounted) setState(() => _moves = moves);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent(
+          'diff_preview_reschedule_week_load_failed',
+          message: clipped));
+      if (mounted) setState(() => _error = errStr);
     }
   }
 

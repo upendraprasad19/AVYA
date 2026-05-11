@@ -252,6 +252,10 @@ class AuthNotifier extends Notifier<AuthState2> {
         errorMessage: e.message,
       );
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('auth_send_phone_otp_failed',
+          message: clipped));
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'Failed to send OTP. Please try again.',

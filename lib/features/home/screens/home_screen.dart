@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
@@ -186,6 +189,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       return _buildContent();
     } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('home_build_content_failed',
+          message: clipped));
       return Padding(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: ErrorState(

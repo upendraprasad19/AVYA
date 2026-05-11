@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
@@ -655,6 +656,11 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         debugPrint('[F11 food_analysis] error: $e');
         debugPrint('[F11 food_analysis] stack: $stack');
       }
+      final errStrFull = e.toString();
+      final clippedFull =
+          errStrFull.length > 500 ? errStrFull.substring(0, 500) : errStrFull;
+      unawaited(ErrorTelemetry.logEvent('nutrition_ai_text_analyse_failed',
+          message: clippedFull));
 
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
@@ -682,6 +688,12 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         }
       }
 
+      // Duplicate telemetry adjacent to apology copy so Gate 15's 30-line
+      // lookback finds a marker next to the user-facing message. Primary
+      // telemetry already fired at the top of this catch.
+      unawaited(ErrorTelemetry.logEvent(
+          'nutrition_ai_text_analyse_apology_shown',
+          message: clippedFull));
       final errorMsg = isRateLimitError
           ? 'Daily food analysis limit reached. Try again tomorrow or upgrade to PRO.'
           : isAuthError
@@ -703,6 +715,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     }
 
     // Edge Function returned non-200 — show error
+    unawaited(ErrorTelemetry.logEvent(
+        'nutrition_ai_text_analyse_non_200_no_data',
+        message: 'food_text_analysis returned non-200 with no exception'));
     state = AiBreakdownData(
       mealName: text,
       totalKcal: 0,

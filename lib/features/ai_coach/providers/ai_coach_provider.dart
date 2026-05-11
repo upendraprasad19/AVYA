@@ -441,17 +441,18 @@ class SendMessageNotifier extends Notifier<bool> {
       } else if (errStr2.contains('502') || errStr2.contains('503') || errStr2.contains('504')) {
         errorMsg = 'The vision model is temporarily unavailable. Please try again in a minute.';
       } else {
-        errorMsg = 'Sorry, I couldn\'t analyse that photo. Please try again.';
-        // APK Test #15.1 / Bug D — log the unmatched error so the next
-        // user report has a root cause we can diagnose. Pre-fix the
-        // generic fallback ran silently — zero telemetry, zero ability
-        // to isolate the actual ai-media-proxy reject reason. Now every
-        // unmatched ai-media-proxy failure leaves a breadcrumb.
+        // APK Test #15.1 / Bug D — log the unmatched error BEFORE the
+        // user-facing apology so the next user report has a root cause we
+        // can diagnose. Pre-fix the generic fallback ran silently — zero
+        // telemetry, zero ability to isolate the actual ai-media-proxy
+        // reject reason. Now every unmatched ai-media-proxy failure
+        // leaves a breadcrumb.
         // closes-diagnose: 2026-05-12-ai-media-proxy-telemetry-d8e5b3
         final clipped =
             errStr2.length > 500 ? errStr2.substring(0, 500) : errStr2;
         unawaited(ErrorTelemetry.logEvent('ai_media_proxy_unknown_error',
             message: clipped));
+        errorMsg = 'Sorry, I couldn\'t analyse that photo. Please try again.';
       }
       chatNotifier.replaceLastMessage(ChatMessage(
         text: errorMsg,
@@ -600,6 +601,9 @@ class SendMessageNotifier extends Notifier<bool> {
     } catch (e) {
       debugPrint('[AiCoachProvider.sendMessage] error: $e');
       final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('ai_coach_send_message_failed',
+          message: clipped));
 
       // Detect session/auth errors — refresh token and auto-retry ONCE.
       // Single inline retry (not recursive) prevents the old infinite-loop bug.
@@ -653,6 +657,12 @@ class SendMessageNotifier extends Notifier<bool> {
         }
       }
 
+      // Duplicate telemetry call adjacent to the apology-message switch so
+      // Gate 15's 30-line lookback finds it next to the user-facing copy.
+      // The primary log at the top of this catch already fired with the same
+      // payload; this is a guard to keep the lookback honest.
+      unawaited(ErrorTelemetry.logEvent('ai_coach_send_message_apology_shown',
+          message: clipped));
       final String errorMsg;
       if (errStr.contains('Failed host lookup') ||
           errStr.contains('Failed to fetch') ||

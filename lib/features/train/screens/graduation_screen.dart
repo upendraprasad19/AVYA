@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -455,6 +457,12 @@ class GraduationScreen extends ConsumerWidget {
 
               if (context.mounted) context.go('/train');
             } catch (e) {
+              final errStr = e.toString();
+              final clipped =
+                  errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+              unawaited(ErrorTelemetry.logEvent(
+                  'train_graduation_generate_phase_2_failed',
+                  message: clipped));
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
