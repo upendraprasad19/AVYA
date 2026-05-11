@@ -3,10 +3,18 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
+import { istDayStartIso } from "../_shared/ist_date.ts";
 
 // F14 · Test #9 — free users get 5 LIFETIME image analyses on the AI coach.
 // Counted via ai_coach_interactions.channel='free_image_analysis'.
 const FREE_IMAGE_ANALYSIS_LIMIT = 5;
+
+// H-23 (audit-2026-05-11) — PRO daily image-chat soft cap. Pre-fix
+// PRO image-chat had NO rate limit, so a compromised PRO token =
+// unlimited Gemini-vision fanout. Picked at a level no legitimate
+// PRO user would hit (50/day = ~2 photos/hour over a 24-hour
+// window) while a stolen token can't drain Gemini quota in minutes.
+const PRO_IMAGE_DAILY_CAP = 50;
 
 /**
  * F14 · Test #9 — counts the user's lifetime free image analyses.
@@ -23,6 +31,29 @@ async function countFreeImageAnalyses(
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("channel", "free_image_analysis");
+    if (error) return 0;
+    return count ?? 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+/**
+ * H-23 (audit-2026-05-11) — counts the PRO user's image analyses
+ * for the current IST day. Returns 0 on any error (fail-open — the
+ * soft cap is a defense-in-depth gate, not a hard accounting one).
+ */
+async function countProImageAnalysesToday(
+  client: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  try {
+    const { count, error } = await client
+      .from("ai_coach_interactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .in("channel", ["pro_image_analysis", "image_analysis"])
+      .gte("created_at", istDayStartIso());
     if (error) return 0;
     return count ?? 0;
   } catch (_) {
@@ -281,6 +312,38 @@ serve(async (req: Request) => {
           {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
+    // H-23 (audit-2026-05-11) — PRO daily image-chat soft cap.
+    // Pre-fix PRO image-chat had no rate limit at all — a compromised
+    // PRO token could drain Gemini quota. Soft cap of 50/day per
+    // user is well above legitimate use but stops abuse cold.
+    // IST-day window via istDayStartIso() (matches the rest of the
+    // codebase post-H-4..H-10 sweep).
+    if (!isVideo && isPro) {
+      const proUsedToday = await countProImageAnalysesToday(
+        supabaseClient,
+        userId,
+      );
+      if (proUsedToday >= PRO_IMAGE_DAILY_CAP) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Daily image analysis limit reached. Try again tomorrow.",
+            code: "RATE_LIMITED",
+            limit: PRO_IMAGE_DAILY_CAP,
+            used_today: proUsedToday,
+          }),
+          {
+            status: 429,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+              "Retry-After": "3600",
+            },
           },
         );
       }

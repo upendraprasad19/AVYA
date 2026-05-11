@@ -522,9 +522,27 @@ class RazorpayService {
     // Phase 1: Poll Supabase with exponential backoff (15 attempts).
     // Attempts 0-11: exact match on razorpay_payment_id (this specific payment).
     // Attempts 12-14: fall back to any active row created in last 5 minutes.
+    //
+    // H-20 (audit-2026-05-11) — per-iteration cancellation check.
+    // The poll loop is fire-and-forget from `_handlePaymentSuccess`,
+    // so the user could sign out / sign in as a different account
+    // while we're sleeping between attempts. Pre-fix, the loop would
+    // keep writing PRO state for the WRONG user. Re-read
+    // `currentUser?.id` at the top of every iteration and abort if it
+    // changed (or went null).
     for (int attempt = 0; attempt < 15; attempt++) {
       final delay = attempt < 5 ? 2 : (attempt < 10 ? 3 : 4);
       await Future.delayed(Duration(seconds: delay));
+
+      // H-20 — cancel if session changed during the wait.
+      final currentSessionUserId =
+          SupabaseService.instance.currentUser?.id;
+      if (currentSessionUserId != userId) {
+        debugPrint(
+            'RazorpayService: H-20 cancel — session changed mid-poll '
+            '(captured=$userId now=$currentSessionUserId). Aborting at attempt $attempt.');
+        return;
+      }
 
       try {
         Map<String, dynamic>? row;
@@ -582,6 +600,11 @@ class RazorpayService {
     }
 
     // Phase 2: Direct verification via Edge Function (server checks Razorpay API)
+    //
+    // H-20 (audit-2026-05-11) — same session-cancellation guard as
+    // Phase 1. Phase 2 awaits an Edge Function call which may take
+    // seconds; the user could sign out / switch accounts in that
+    // window. Re-check before writing PRO state.
     if (paymentId.isNotEmpty) {
       try {
         debugPrint('RazorpayService: polling exhausted, trying verify-payment Edge Function...');
@@ -592,6 +615,16 @@ class RazorpayService {
             'plan': fallbackPlan,
           },
         );
+
+        // H-20 — abort write if session changed during the Edge Function call.
+        final postCallSessionId =
+            SupabaseService.instance.currentUser?.id;
+        if (postCallSessionId != userId) {
+          debugPrint(
+              'RazorpayService: H-20 cancel — session changed during verify-payment '
+              '(captured=$userId now=$postCallSessionId). Aborting PRO write.');
+          return;
+        }
 
         if (verifyResponse.status == 200 && verifyResponse.data != null) {
           final data = verifyResponse.data is Map

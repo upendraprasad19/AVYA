@@ -193,6 +193,17 @@ serve(async (req: Request) => {
     //   2. Call Gemini on the valid reservation.
     //   3. UPDATE the row with the response + model + tokens.
     if (type === "food_text_analysis" && text) {
+      // H-22 (audit-2026-05-11) — length cap. Pre-fix `text` was sent
+      // to Gemini unbounded; a malicious / accidental 1MB description
+      // would burn through both the Gemini context budget and our
+      // per-call cost. Cap to 5000 chars (same as the chat channel).
+      if (typeof text !== "string") {
+        return err(400, "food_text_analysis: 'text' must be a string");
+      }
+      if (text.length > 5000) {
+        return err(400, "food_text_analysis: text too long (max 5000 chars)");
+      }
+
       // Step 1 — reserve a slot (or get rejected by the trigger).
       const { data: reservation, error: insertErr } = await supabaseClient
         .from("ai_coach_interactions")
@@ -284,6 +295,24 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
     // 23:00 IST saw it stay locked for another 6.5h. Switched to
     // istDayStartIso() (IST midnight as +05:30 timestamptz).
     if (type === "scan_meal" || type === "cart_auditor") {
+      // H-21 (audit-2026-05-11) — image size validation. Pre-fix
+      // `body.image` was forwarded to Gemini unbounded — a 50MB
+      // base64 blob would burn through Gemini cost + Edge Function
+      // memory. ai-media-proxy already enforces 5MB; mirror it here.
+      // Base64 expands by ~4/3 so a 5MB decoded ceiling = ~6.7MB
+      // encoded. Use the raw base64 length as a fast proxy.
+      const imgB64 = body.image;
+      if (typeof imgB64 === "string") {
+        // 7_500_000 ≈ 5.6MB decoded — a small slop margin over the
+        // 5MB ai-media-proxy ceiling so legitimate 5MB images don't
+        // edge-trip the cap.
+        if (imgB64.length > 7_500_000) {
+          return err(400, "Image too large (max ~5MB)");
+        }
+      } else if (imgB64 != null) {
+        return err(400, "Image must be a base64 string");
+      }
+
       const { count: visionCount } = await supabaseClient
         .from("ai_coach_interactions")
         .select("id", { count: "exact", head: true })
