@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'error_telemetry.dart';
 
 /// Singleton wrapper around the Supabase client.
 ///
@@ -97,8 +100,11 @@ class SupabaseService {
           expiresAt: DateTime.parse(existing['expires_at'] as String),
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[SupabaseService.getOrCreateReferralCode] read: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'supabase_service_get_or_create_referral_code_read'));
     }
 
     return _generateNewCode(userId);
@@ -124,9 +130,12 @@ class SupabaseService {
           'expires_at': expiresAt.toIso8601String(),
         }, onConflict: 'user_id');
         return (code: code, expiresAt: expiresAt);
-      } catch (e) {
+      } catch (e, st) {
         if (i == 4) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[SupabaseService._generateNewCode] $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'supabase_service_generate_new_referral_code'));
           return null;
         }
       }
@@ -160,8 +169,11 @@ class SupabaseService {
         try {
           final refreshed = await client.auth.refreshSession();
           return refreshed.session?.accessToken;
-        } catch (e) {
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[SupabaseService.ensureFreshToken] refresh failed: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'supabase_service_ensure_fresh_token_refresh'));
           // If token is already past expiry, return null (caller should handle)
           if (DateTime.now().isAfter(expiryTime)) return null;
           // Token hasn't expired yet, return existing

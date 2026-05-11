@@ -232,8 +232,11 @@ class SyncService {
             'loggingType=$loggingTypeRepaired');
         unawaited(_syncCustomItems());
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._backfillCustomEntityIds] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if'));
       try {
         await _reportSyncFailure(opType: 'backfill_custom_entity_ids', error: e);
       } catch (_) {}
@@ -303,8 +306,11 @@ class SyncService {
           'platform': _currentPlatform(),
         },
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService] dead-letter telemetry failed: $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_send_dead_letter_telemetry'));
     }
   }
 
@@ -374,8 +380,11 @@ class SyncService {
           await HealthSyncService.instance.syncToHive();
           debugPrint('[SyncService.checkAndSync] Health sync completed '
               '(wroteData=${HealthSyncService.instance.lastSyncWroteData})');
-        } catch (e) {
+        } catch (e, st) {
           debugPrint('[SyncService.checkAndSync] Health sync failed: $e');
+          // audit-2026-05-11 H-42 — telemetry pair.
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'sync_service_check_and_sync'));
         }
       }
       _healthSyncCompleter!.complete();
@@ -421,8 +430,11 @@ class SyncService {
       // weight, PRs, coaching notes — full AI context for reports/alerts.
       try {
         await pushSnapshot();
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch'));
         try {
           await _reportSyncFailure(opType: 'check_and_sync_snapshot', error: e);
         } catch (_) {}
@@ -442,7 +454,7 @@ class SyncService {
       if (!_restoreCompleteController.isClosed) {
         _restoreCompleteController.add(null);
       }
-    } catch (e) {
+    } catch (e, st) {
       // Offline or error — silently skip.
       // Ensure the health sync completer is resolved even on early failure
       // so the home screen doesn't hang.
@@ -450,6 +462,9 @@ class SyncService {
         _healthSyncCompleter!.complete();
       }
       debugPrint('[SyncService.checkAndSync] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_2'));
       try {
         await _reportSyncFailure(opType: 'check_and_sync', error: e);
       } catch (_) {}
@@ -506,10 +521,13 @@ class SyncService {
               '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
             );
           }
-        } catch (memErr) {
+        } catch (memErr, st) {
           debugPrint(
             '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
           );
+          // audit-2026-05-11 H-42 — telemetry pair.
+          unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
+              reason: 'sync_service_if_3'));
           try {
             await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
           } catch (_) {}
@@ -517,9 +535,12 @@ class SyncService {
       }
 
       await _setTimestamp(_lastSnapshotKey);
-    } catch (e) {
+    } catch (e, st) {
       // Offline — will retry next scheduled run.
       debugPrint('[SyncService.pushSnapshot] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_catch_2'));
       try {
         await _reportSyncFailure(opType: 'push_snapshot', error: e);
       } catch (_) {}
@@ -568,9 +589,12 @@ class SyncService {
       );
 
       await _setTimestamp(_lastFullSyncKey);
-    } catch (e) {
+    } catch (e, st) {
       // Partial sync failure — next launch will retry.
       debugPrint('[SyncService.weeklyFullSync] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_weekly_full_sync'));
       try {
         await _reportSyncFailure(opType: 'weekly_full_sync', error: e);
       } catch (_) {}
@@ -611,9 +635,12 @@ class SyncService {
         ],
         eagerError: false,
       );
-    } catch (e) {
+    } catch (e, st) {
       // Offline — will sync on next weekly sync.
       debugPrint('[SyncService.syncWorkoutData] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_workout_data'));
       try {
         await _reportSyncFailure(opType: 'sync_workout_data', error: e);
       } catch (_) {}
@@ -643,9 +670,12 @@ class SyncService {
         ],
         eagerError: false,
       );
-    } catch (e) {
+    } catch (e, st) {
       // Offline — will sync on next daily full sync.
       debugPrint('[SyncService.syncNutritionData] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_nutrition_data'));
       try {
         await _reportSyncFailure(opType: 'sync_nutrition_data', error: e);
       } catch (_) {}
@@ -738,9 +768,12 @@ class SyncService {
 
       await MigratedKey.delete('pending_onboarding_sync');
       debugPrint('[SyncService._replayPendingOnboardingSync] success — flag cleared');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._replayPendingOnboardingSync] failed: $e '
           '— flag left set; will retry next launch');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_4'));
       unawaited(_reportSyncFailure(
         opType: 'onboarding_sync_replay',
         error: e,
@@ -791,8 +824,11 @@ class SyncService {
         ],
         eagerError: false,
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_lightweight_always'));
       try {
         await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
       } catch (_) {}
@@ -842,9 +878,12 @@ class SyncService {
         ],
         eagerError: false,
       );
-    } catch (e) {
+    } catch (e, st) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_from_cloud'));
       try {
         await _reportSyncFailure(opType: 'restore_from_cloud', error: e);
       } catch (_) {}
@@ -881,10 +920,13 @@ class SyncService {
     // upstream caller ordering.
     try {
       await HiveUserSession.openForUser(userId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint(
         '[SyncService.restoreFromCloudForUser] openForUser failed: $e',
       );
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_5'));
       return RestoreResult.failed(e);
     }
 
@@ -965,9 +1007,12 @@ class SyncService {
       if (_restoreCancelled) return RestoreResult.cancelled();
       try {
         await SubscriptionService.instance.refreshFromSupabase();
-      } catch (e) {
+      } catch (e, st) {
         // Non-fatal — keep cached subscription state.
         debugPrint('[SyncService.restoreFromCloudForUser] subscription refresh error: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch_3'));
         unawaited(_reportSyncFailure(
             opType: 'subscription_refresh_on_restore', error: e));
       }
@@ -1012,8 +1057,11 @@ class SyncService {
           await _hive.coachBox.put('fitness_summary', summary);
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._syncFitnessSummary] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_6'));
       try {
         await _reportSyncFailure(opType: 'sync_fitness_summary', error: e);
       } catch (_) {}
@@ -1041,9 +1089,12 @@ class SyncService {
         ],
         eagerError: false,
       );
-    } catch (e) {
+    } catch (e, st) {
       // Offline or error — silently skip.
       debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_pull_recent_cross_channel_logs'));
       try {
         await _reportSyncFailure(opType: 'pull_cross_channel_logs', error: e);
       } catch (_) {}
@@ -1148,8 +1199,11 @@ class SyncService {
     // refreshSession is idempotent and cheap when token is fresh.
     try {
       await _supabase.client.auth.refreshSession();
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[realtime] refreshSession failed before subscribe: $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_subscribe_to_realtime_sync'));
       // Non-fatal — subscription may still succeed if token is valid.
     }
 
@@ -1224,8 +1278,11 @@ class SyncService {
     _realtimeSubscription = null;
     try {
       await _supabase.client.auth.refreshSession();
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[realtime] refreshSession on reconnect failed: $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_catch_4'));
       return; // can't recover without a fresh token
     }
     _attachRealtimeStream(userId, attempt: attempt);
@@ -1276,8 +1333,11 @@ class SyncService {
           'notes': log['id'], // store local ID for reference
           'created_at': resolved,
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for'));
         try {
           await _reportSyncFailure(opType: 'upsert_workout_log', error: e);
         } catch (_) {}
@@ -1374,17 +1434,23 @@ class SyncService {
               await _supabase.client
                   .from('workout_log_sets')
                   .upsert(rows, onConflict: 'workout_log_id,exercise_id,set_number');
-            } catch (e) {
+            } catch (e, st) {
               debugPrint(
                   '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
+              // audit-2026-05-11 H-42 — telemetry pair.
+              unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                  reason: 'sync_service_if_7'));
               try {
                 await _reportSyncFailure(opType: 'upsert_workout_log_sets', error: e);
               } catch (_) {}
             }
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch_5'));
         try {
           await _reportSyncFailure(opType: 'upsert_exercise_log', error: e);
         } catch (_) {}
@@ -1545,8 +1611,11 @@ class SyncService {
           'completed_at':
               entry['completed_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,scheduled_date');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_2'));
         try {
           await _reportSyncFailure(opType: 'upsert_schedule_completion', error: e);
         } catch (_) {}
@@ -1635,16 +1704,22 @@ class SyncService {
                 if (item['carbs'] != null) 'carbs': item['carbs'],
                 if (item['fat'] != null) 'fat': item['fat'],
               }, onConflict: 'id');
-            } catch (itemErr) {
+            } catch (itemErr, st) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
+              // audit-2026-05-11 H-42 — telemetry pair.
+              unawaited(ErrorTelemetry.recordNonFatal(itemErr, st,
+                  reason: 'sync_service_for_3'));
               try {
                 await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
               } catch (_) {}
             }
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch_6'));
         try {
           await _reportSyncFailure(opType: 'upsert_nutrition_log', error: e);
         } catch (_) {}
@@ -1663,8 +1738,11 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
       await _syncWeightLogs(userId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncWeightNow] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_weight_now'));
       try {
         await _reportSyncFailure(opType: 'sync_weight_now', error: e);
       } catch (_) {}
@@ -1703,15 +1781,21 @@ class SyncService {
             if (log['quality'] != null) 'quality': log['quality'],
             'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
           }, onConflict: 'id');
-        } catch (e) {
+        } catch (e, st) {
           debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
+          // audit-2026-05-11 H-42 — telemetry pair.
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'sync_service_for_4'));
           try {
             await _reportSyncFailure(opType: 'upsert_sleep_log_chat', error: e);
           } catch (_) {}
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncSleepNow] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_catch_7'));
       try {
         await _reportSyncFailure(opType: 'sync_sleep_now', error: e);
       } catch (_) {}
@@ -1727,8 +1811,11 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
       await _syncMeasurements(userId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncMeasurementsNow] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_measurements_now'));
       try {
         await _reportSyncFailure(opType: 'sync_measurements_now', error: e);
       } catch (_) {}
@@ -1753,8 +1840,11 @@ class SyncService {
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_5'));
         try {
           await _reportSyncFailure(opType: 'upsert_weight_log', error: e);
         } catch (_) {}
@@ -1782,8 +1872,11 @@ class SyncService {
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncMeasurements] $key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_6'));
         try {
           await _reportSyncFailure(opType: 'upsert_body_measurement', error: e);
         } catch (_) {}
@@ -1811,8 +1904,11 @@ class SyncService {
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncSleepLogs] $key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_7'));
         try {
           await _reportSyncFailure(opType: 'upsert_sleep_log', error: e);
         } catch (_) {}
@@ -1842,8 +1938,11 @@ class SyncService {
           'source': log['source'] ?? 'health_connect',
           'synced_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,date');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncStepsLogs] $key: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_8'));
         try {
           await _reportSyncFailure(opType: 'upsert_daily_steps', error: e);
         } catch (_) {}
@@ -1870,8 +1969,11 @@ class SyncService {
           'urine_status': log['label'] ?? 'unknown',
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,date');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncUrineColorLogs] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_9'));
         try {
           await _reportSyncFailure(opType: 'upsert_urine_color_log', error: e);
         } catch (_) {}
@@ -1895,8 +1997,11 @@ class SyncService {
           'total_ml': raw,
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,date');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncWaterLogs] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_10'));
         try {
           await _reportSyncFailure(opType: 'upsert_water_log', error: e);
         } catch (_) {}
@@ -1938,8 +2043,11 @@ class SyncService {
         await _supabase.client
             .from('streaks')
             .upsert(payload, onConflict: 'user_id,week_start');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncStreaks] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_11'));
         try {
           await _reportSyncFailure(opType: 'upsert_streak', error: e);
         } catch (_) {}
@@ -1962,6 +2070,9 @@ class SyncService {
     } catch (e, st) {
       debugPrint('[SyncService.syncProfileNow] user_profile upsert failed: '
           '$e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_profile_now'));
       unawaited(_reportSyncFailure(
         opType: 'upsert_user_profile',
         error: e,
@@ -1992,8 +2103,11 @@ class SyncService {
   Future<void> _safeRestoreOp(String label, Future<void> task) async {
     try {
       await task;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[sync/restore] $label failed: $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_safe_restore_op'));
       try {
         await _reportSyncFailure(opType: 'restore_$label', error: e);
       } catch (_) {}
@@ -2117,8 +2231,11 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
       await _syncSavedMeals(userId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncSavedMealsNow] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_saved_meals_now'));
       try {
         await _reportSyncFailure(opType: 'sync_saved_meals_now', error: e);
       } catch (_) {}
@@ -2132,8 +2249,11 @@ class SyncService {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
       await _syncUserProgress(userId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncProgressNow] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_progress_now'));
       try {
         await _reportSyncFailure(opType: 'sync_progress_now', error: e);
       } catch (_) {}
@@ -2293,8 +2413,11 @@ class SyncService {
           .upsert(payload, onConflict: 'user_id')
           .select()
           .single();
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncCoachMemoryNow] coach_memory upsert failed: $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_put_if_present'));
       unawaited(_reportSyncFailure(
         opType: 'upsert_coach_memory_induction',
         error: e,
@@ -2340,11 +2463,14 @@ class SyncService {
             await _supabase.client
                 .from('user_custom_exercises')
                 .upsert(payload, onConflict: 'id');
-          } catch (e) {
+          } catch (e, st) {
             debugPrint(
               '[SyncService._syncCustomItems] exercise '
               '"${payload['name']}" key=$key: $e',
             );
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_service_if_8'));
             try {
               await _reportSyncFailure(opType: 'upsert_custom_exercise', error: e);
             } catch (_) {}
@@ -2361,11 +2487,14 @@ class SyncService {
             await _supabase.client
                 .from('user_custom_foods')
                 .upsert(payload, onConflict: 'id');
-          } catch (e) {
+          } catch (e, st) {
             debugPrint(
               '[SyncService._syncCustomItems] food '
               '"${payload['name']}" key=$key: $e',
             );
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_service_if_9'));
             try {
               await _reportSyncFailure(opType: 'upsert_custom_food', error: e);
             } catch (_) {}
@@ -2383,8 +2512,11 @@ class SyncService {
             await _supabase.client
                 .from('user_custom_exercises')
                 .upsert(_projectCustomExercise(item, userId), onConflict: 'id');
-          } catch (e) {
+          } catch (e, st) {
             debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_service_if_10'));
             try {
               await _reportSyncFailure(opType: 'upsert_custom_exercise_legacy', error: e);
             } catch (_) {}
@@ -2398,8 +2530,11 @@ class SyncService {
             await _supabase.client
                 .from('user_custom_foods')
                 .upsert(_projectCustomFood(item, userId), onConflict: 'id');
-          } catch (e) {
+          } catch (e, st) {
             debugPrint('[SyncService._syncCustomItems] legacy food: $e');
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_service_if_11'));
             try {
               await _reportSyncFailure(opType: 'upsert_custom_food_legacy', error: e);
             } catch (_) {}
@@ -2408,8 +2543,11 @@ class SyncService {
       }
 
       await _setTimestamp(_lastCustomSyncKey);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._syncCustomItems] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_catch_8'));
       try {
         await _reportSyncFailure(opType: 'sync_custom_items', error: e);
       } catch (_) {}
@@ -2579,8 +2717,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_12'));
       try {
         await _reportSyncFailure(opType: 'restore_workout_logs', error: e);
       } catch (_) {}
@@ -2612,9 +2753,12 @@ class SyncService {
               .putIfAbsent(groupKey, () => <Map<String, dynamic>>[])
               .add(m);
         }
-      } catch (e) {
+      } catch (e, st) {
         // Non-fatal — falls back to summary-only restore.
         debugPrint('[SyncService._restoreExerciseLogs] per-set fetch failed: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_13'));
         try {
           await _reportSyncFailure(opType: 'restore_exercise_log_sets_fetch', error: e);
         } catch (_) {}
@@ -2723,8 +2867,11 @@ class SyncService {
           await _hive.workoutBox.put(indexKey, indexList);
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_14'));
       try {
         await _reportSyncFailure(opType: 'restore_exercise_logs', error: e);
       } catch (_) {}
@@ -2761,8 +2908,11 @@ class SyncService {
         // on this device — schedule completions alone aren't useful without
         // the full plan context. Skip silently.
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreScheduleCompletions] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_12'));
       try {
         await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
       } catch (_) {}
@@ -2815,8 +2965,11 @@ class SyncService {
         await customBox.put('custom_exercise_$id', item);
         existingNames.add(name);
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreCustomExercises] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_15'));
       try {
         await _reportSyncFailure(opType: 'restore_custom_exercises', error: e);
       } catch (_) {}
@@ -2859,8 +3012,11 @@ class SyncService {
         await customBox.put('custom_food_$id', item);
         existingNames.add(name);
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreCustomFoods] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_16'));
       try {
         await _reportSyncFailure(opType: 'restore_custom_foods', error: e);
       } catch (_) {}
@@ -2887,8 +3043,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreWeightLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_17'));
       try {
         await _reportSyncFailure(opType: 'restore_weight_logs', error: e);
       } catch (_) {}
@@ -2967,8 +3126,11 @@ class SyncService {
         map['log_key'] = localKey;
         await _hive.nutritionBox.put(localKey, map);
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_13'));
       try {
         await _reportSyncFailure(opType: 'restore_nutrition_logs', error: e);
       } catch (_) {}
@@ -2992,8 +3154,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreMeasurements] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_18'));
       try {
         await _reportSyncFailure(opType: 'restore_measurements', error: e);
       } catch (_) {}
@@ -3023,10 +3188,13 @@ class SyncService {
         if (u != null) {
           usersRow = Map<String, dynamic>.from(u);
         }
-      } catch (e) {
+      } catch (e, st) {
         // Non-fatal — profile restore still proceeds with whatever the
         // user_profile row carries.
         debugPrint('[SyncService._restoreUserProfile] users select: $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_if_14'));
       }
 
       if (rows.isEmpty && usersRow.isEmpty) return;
@@ -3058,8 +3226,11 @@ class SyncService {
         'id': userId,
       };
       await _hive.userBox.put('profile', merged);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreUserProfile] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_catch_9'));
       try {
         await _reportSyncFailure(opType: 'restore_user_profile', error: e);
       } catch (_) {}
@@ -3089,8 +3260,11 @@ class SyncService {
           if (e.value != null) e.key: e.value,
       };
       await _hive.userBox.put('progress', merged);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreUserProgress] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_user_progress'));
       try {
         await _reportSyncFailure(opType: 'restore_user_progress', error: e);
       } catch (_) {}
@@ -3134,8 +3308,11 @@ class SyncService {
           }
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreWaterLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_15'));
       try {
         await _reportSyncFailure(opType: 'restore_water_logs', error: e);
       } catch (_) {}
@@ -3164,8 +3341,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreSleepLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_19'));
       try {
         await _reportSyncFailure(opType: 'restore_sleep_logs', error: e);
       } catch (_) {}
@@ -3200,8 +3380,11 @@ class SyncService {
           'created_at': map['created_at'],
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreStepsLogs] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_20'));
       try {
         await _reportSyncFailure(opType: 'restore_steps_logs', error: e);
       } catch (_) {}
@@ -3252,8 +3435,11 @@ class SyncService {
       }
 
       await healthBox.put('streaks', existing);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreStreaks] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_21'));
       try {
         await _reportSyncFailure(opType: 'restore_streaks', error: e);
       } catch (_) {}
@@ -3297,8 +3483,11 @@ class SyncService {
         'user_id': userId,
         'plan_json': planBundle,
       }, onConflict: 'user_id');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._syncWorkoutPlan] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_16'));
       try {
         await _reportSyncFailure(opType: 'sync_workout_plan', error: e);
       } catch (_) {}
@@ -3326,8 +3515,11 @@ class SyncService {
         if (p['detected_experience_level'] != null)
           'detected_experience_level': p['detected_experience_level'],
       }, onConflict: 'user_id');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._syncUserProgress] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_user_progress'));
       try {
         await _reportSyncFailure(opType: 'sync_user_progress', error: e);
       } catch (_) {}
@@ -3397,8 +3589,11 @@ class SyncService {
           await _hive.workoutBox.put(key, incoming);
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutPlan] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_17'));
       try {
         await _reportSyncFailure(opType: 'restore_workout_plan', error: e);
       } catch (_) {}
@@ -3476,8 +3671,11 @@ class SyncService {
       }
 
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService.syncCommunityItems] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_22'));
       try {
         await _reportSyncFailure(opType: 'sync_community_items', error: e);
       } catch (_) {}
@@ -3558,9 +3756,12 @@ class SyncService {
               .eq('name', tmplName)
               .maybeSingle();
           cloudTmplId = parentRow?['id'] as String?;
-        } catch (idErr) {
+        } catch (idErr, st) {
           debugPrint(
               '[SyncService._syncWorkoutTemplates] parent id lookup: $idErr');
+          // audit-2026-05-11 H-42 — telemetry pair.
+          unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
+              reason: 'sync_service_for_23'));
         }
         if (cloudTmplId == null || cloudTmplId.isEmpty) {
           // Without a valid parent id we can't push children safely.
@@ -3612,15 +3813,21 @@ class SyncService {
                 'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
               if (ex['notes'] != null) 'notes': ex['notes'],
             }, onConflict: 'template_id,order_index');
-          } catch (exErr) {
+          } catch (exErr, st) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(exErr, st,
+                reason: 'sync_service_for_24'));
             try {
               await _reportSyncFailure(opType: 'upsert_template_exercise', error: exErr);
             } catch (_) {}
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch_10'));
         try {
           await _reportSyncFailure(opType: 'upsert_workout_template', error: e);
         } catch (_) {}
@@ -3733,8 +3940,11 @@ class SyncService {
           ));
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_18'));
       try {
         await _reportSyncFailure(opType: 'restore_workout_templates', error: e);
       } catch (_) {}
@@ -3815,9 +4025,12 @@ class SyncService {
         final cloudId = parentRow?['id'] as String?;
         templateNameToCloudId[tmplName] = cloudId;
         return cloudId;
-      } catch (e) {
+      } catch (e, st) {
         debugPrint(
             '[SyncService._syncScheduledWorkouts] resolveCloudTemplateId($tmplName): $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_if_19'));
         templateNameToCloudId[tmplName] = null;
         return null;
       }
@@ -3884,9 +4097,12 @@ class SyncService {
             templatesResynced = true;
             try {
               await _syncWorkoutTemplates(userId);
-            } catch (resyncErr) {
+            } catch (resyncErr, st) {
               debugPrint(
                   '[SyncService._syncScheduledWorkouts] templates resync: $resyncErr');
+              // audit-2026-05-11 H-42 — telemetry pair.
+              unawaited(ErrorTelemetry.recordNonFatal(resyncErr, st,
+                  reason: 'sync_service_if_20'));
             }
             // Clear cache so the post-resync lookup hits cloud fresh
             // instead of returning the stale null/miss.
@@ -3930,19 +4146,25 @@ class SyncService {
                 error: 'tmpl=$rawTemplateId date=$date',
               );
             } catch (_) {}
-          } catch (fallbackErr) {
+          } catch (fallbackErr, st) {
             // Fallback itself failed — surface as the original op_type
             // so retry-queue accounting stays consistent.
             debugPrint(
                 '[SyncService._syncScheduledWorkouts] fallback upsert: $fallbackErr');
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(fallbackErr, st,
+                reason: 'sync_service_catch_11'));
             try {
               await _reportSyncFailure(
                   opType: 'upsert_scheduled_workout', error: fallbackErr);
             } catch (_) {}
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_catch_12'));
         try {
           await _reportSyncFailure(opType: 'upsert_scheduled_workout', error: e);
         } catch (_) {}
@@ -4045,8 +4267,11 @@ class SyncService {
         };
         await _hive.workoutBox.put(key, merged);
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreScheduledWorkouts] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_21'));
       try {
         await _reportSyncFailure(opType: 'restore_scheduled_workouts', error: e);
       } catch (_) {}
@@ -4081,8 +4306,11 @@ class SyncService {
           'times_used': meal['times_used'] ?? 0,
           'created_at': meal['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncSavedMeals] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_25'));
         try {
           await _reportSyncFailure(opType: 'upsert_saved_meal', error: e);
         } catch (_) {}
@@ -4129,8 +4357,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreSavedMeals] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_26'));
       try {
         await _reportSyncFailure(opType: 'restore_saved_meals', error: e);
       } catch (_) {}
@@ -4153,8 +4384,11 @@ class SyncService {
         'preferred_language': p['preferred_language'] ?? 'en',
         'coaching_notes': p['coaching_notes'],
       }, onConflict: 'user_id');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._syncUserPreferences] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_user_preferences'));
       try {
         await _reportSyncFailure(opType: 'upsert_user_preferences', error: e);
       } catch (_) {}
@@ -4185,8 +4419,11 @@ class SyncService {
           if (e.value != null) e.key: e.value,
       };
       await _hive.userBox.put('preferences', merged);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_user_preferences'));
       try {
         await _reportSyncFailure(opType: 'restore_user_preferences', error: e);
       } catch (_) {}
@@ -4229,8 +4466,11 @@ class SyncService {
           'model_used': entry['model_used'] ?? 'unknown',
           'created_at': entry['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
+        // audit-2026-05-11 H-42 — telemetry pair.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_for_27'));
         try {
           await _reportSyncFailure(opType: 'upsert_coach_interaction', error: e);
         } catch (_) {}
@@ -4278,8 +4518,11 @@ class SyncService {
           'source': 'cloud_restore',
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreCoachInteractions] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_28'));
       try {
         await _reportSyncFailure(opType: 'restore_coach_interactions', error: e);
       } catch (_) {}
@@ -4332,8 +4575,11 @@ class SyncService {
       if (notes != null) {
         await coach.put('coaching_notes', notes);
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncService._restoreCoachMemory] $e');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_22'));
       unawaited(_reportSyncFailure(
         opType: 'restore_coach_memory',
         error: e,
@@ -4371,6 +4617,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e, st) {
       debugPrint('[SyncService.syncFreezes] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_freezes'));
       try {
         await _reportSyncFailure(opType: 'sync_freezes', error: e);
       } catch (_) {}
@@ -4412,6 +4661,9 @@ class SyncService {
           .upsert(row, onConflict: 'id');
     } catch (e, st) {
       debugPrint('[SyncService.syncNotificationsInboxEntry] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_notifications_inbox_entry'));
       try {
         await _reportSyncFailure(
             opType: 'sync_notifications_inbox_entry', error: e);
@@ -4434,6 +4686,9 @@ class SyncService {
       }, onConflict: 'user_id');
     } catch (e, st) {
       debugPrint('[SyncService.syncSavedDietPlan] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_saved_diet_plan'));
       try {
         await _reportSyncFailure(opType: 'sync_saved_diet_plan', error: e);
       } catch (_) {}
@@ -4484,6 +4739,9 @@ class SyncService {
       await box.put('progress', existingMap);
     } catch (e, st) {
       debugPrint('[SyncService._restoreFreezes] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_if_23'));
       try {
         await _reportSyncFailure(opType: 'restore_freezes', error: e);
       } catch (_) {}
@@ -4541,6 +4799,9 @@ class SyncService {
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreNotificationsInbox] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_for_29'));
       try {
         await _reportSyncFailure(
             opType: 'restore_notifications_inbox', error: e);
@@ -4567,6 +4828,9 @@ class SyncService {
       await MigratedKey.write('saved_diet_plan', planJson);
     } catch (e, st) {
       debugPrint('[SyncService._restoreSavedDietPlan] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_saved_diet_plan'));
       try {
         await _reportSyncFailure(opType: 'restore_saved_diet_plan', error: e);
       } catch (_) {}
@@ -4590,6 +4854,9 @@ class SyncService {
       await _hive.userBox.put('rank_promotions_history', rows);
     } catch (e, st) {
       debugPrint('[SyncService._restoreRankPromotions] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_rank_promotions'));
       try {
         await _reportSyncFailure(
             opType: 'restore_rank_promotions', error: e);

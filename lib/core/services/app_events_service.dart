@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'error_telemetry.dart';
 import 'supabase_service.dart';
 
 /// Thin analytics helper — fire-and-forget inserts into
@@ -54,9 +55,12 @@ class AppEventsService {
         'model_used': 'n/a',
         'tokens_used': 0,
       });
-    } catch (e) {
+    } catch (e, st) {
       // Silent — analytics must not impact UX.
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[AppEventsService.log] $event: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'app_events_service_log'));
     }
   }
 }

@@ -58,10 +58,11 @@ const _grandfathered = <String>{
   //   ai_service.dart                              (H-42 7ad0e0 cohort 4)
   //   prediction_service.dart                      (H-42 7ad0e0 cohort 4)
   //   barcode_service.dart                         (H-42 7ad0e0 cohort 4)
-  'lib/core/services/app_events_service.dart',
-  'lib/core/services/supabase_service.dart',
-  'lib/core/services/sync_service.dart',
-  'lib/core/services/workout_schedule_service.dart',
+  // Cohort 5 retrofitted (NOT grandfathered):
+  //   sync_service.dart                            (H-42 7ad0e0 cohort 5)
+  //   supabase_service.dart                        (H-42 7ad0e0 cohort 5)
+  //   workout_schedule_service.dart                (H-42 7ad0e0 cohort 5)
+  //   app_events_service.dart                      (H-42 7ad0e0 cohort 5)
   // ── shared/repositories ───────────────────────────────────────
   // Retrofitted (NOT grandfathered):
   //   plan_engine/progression_resolver.dart         (H-42 first batch)
