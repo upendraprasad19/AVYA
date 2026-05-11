@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
@@ -293,6 +294,14 @@ class SubscriptionService {
       final supabase = SupabaseService.instance;
       final userId = supabase.currentUser?.id;
       if (userId == null) return;
+
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash fires `refreshFromSupabase` fire-and-forget BEFORE
+      // `_ensureLocalUser` has opened the per-user namespaced boxes.
+      // Without this, the configBox/userBox reads / writes below race
+      // with the session and the upgrade pill stays grey even after the
+      // server confirms PRO.
+      await HiveUserSession.ensureOpenedForCurrentSession();
 
       // APK Test #12.1 / hotfix — check payment grace window FIRST,
       // before any state evaluation. This is the second downgrade path

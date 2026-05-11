@@ -65,21 +65,8 @@ class SyncService {
   /// `_ensureLocalUser` has run on the auth side — every box read used
   /// to throw `HiveUserSession not opened`, the `unawaited` swallowed
   /// the StateError, and the cloud silently received nothing.
-  Future<String?> _ensureSessionOpen() async {
-    final userId = _supabase.currentUser?.id;
-    if (userId == null) return null;
-    if (HiveUserSession.currentOwnerFullId == userId) return userId;
-    try {
-      await HiveUserSession.openForUser(userId);
-    } catch (e, st) {
-      debugPrint('[SyncService._ensureSessionOpen] openForUser failed: $e');
-      ErrorTelemetry.recordNonFatal(e, st, reason: 'ensure_session_open');
-      // Fall through — let the caller's own catch surface the next
-      // failure with full context. Returning null would short-circuit
-      // sync paths whose only blocker was the session bootstrap.
-    }
-    return userId;
-  }
+  Future<String?> _ensureSessionOpen() =>
+      HiveUserSession.ensureOpenedForCurrentSession();
 
   // ── Restore cancellation flag ───────────────────────────────
 

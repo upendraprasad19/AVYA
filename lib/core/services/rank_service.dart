@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -46,6 +47,14 @@ class RankService {
     try {
       final user = SupabaseService.instance.currentUser;
       if (user == null) return; // not signed in — nothing to write
+
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash fires this fire-and-forget before `_ensureLocalUser` has
+      // necessarily opened the session. Without this, every
+      // user-scoped box read inside `_readEvaluationState` would throw
+      // `HiveUserSession not opened` and the surrounding catch would
+      // silently swallow it → users miss rank promotions.
+      await HiveUserSession.ensureOpenedForCurrentSession();
 
       final signupAt = DateTime.tryParse(user.createdAt);
       final state = _readEvaluationState(signupAt: signupAt);

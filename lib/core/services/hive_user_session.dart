@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'supabase_service.dart';
 
 /// Owns the per-user Hive box lifecycle. Opens namespaced boxes
 /// (`<box>_<8hex>`) when the user signs in; closes them on sign-out.
@@ -61,6 +62,35 @@ class HiveUserSession {
     return '${root}_$hash';
   }
 
+  /// C-7 (audit-2026-05-11) — shared helper any startup/background
+  /// service can call to ensure the user-scoped Hive boxes are open
+  /// for the *current* Supabase session before reading them.
+  ///
+  /// Returns the auth uid on success, or `null` if there's no live
+  /// session (caller should short-circuit). Idempotent — when the
+  /// session is already open for the same uid this is a fast no-op.
+  ///
+  /// Lifted from the pre-existing `SyncService._ensureSessionOpen` so
+  /// `RankService`, `SubscriptionService`, splash startup mutations,
+  /// migrators, etc. all gate on the same signal without duplicating
+  /// the helper. `SyncService._ensureSessionOpen` now delegates here.
+  static Future<String?> ensureOpenedForCurrentSession() async {
+    final userId = SupabaseService.instance.currentUser?.id;
+    if (userId == null) return null;
+    if (_currentOwnerFullId == userId) return userId;
+    try {
+      await openForUser(userId);
+    } catch (e, st) {
+      debugPrint(
+          '[HiveUserSession.ensureOpenedForCurrentSession] openForUser failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'ensure_session_open'));
+      // Fall through — return the uid even on failure so callers can
+      // attempt their work and surface a more specific error.
+    }
+    return userId;
+  }
+
   /// Open the 7 user-scoped boxes for [userId]. Idempotent — calling
   /// twice with the same id is a no-op. Calling with a different id
   /// closes the previous user's boxes first.
@@ -100,6 +130,62 @@ class HiveUserSession {
 
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;
+
+    // C-6 (audit-2026-05-11) — Cross-account guard, lifted from
+    // splash_screen.dart where the `try/catch` swallowed the
+    // `HiveUserSession not opened` throw on first launch and made the
+    // guard a no-op. Now the check runs inside `openForUser` itself, so
+    // every caller (auth_provider._ensureLocalUser, RestoringScreen,
+    // SyncService defensive ensure) gets it for free.
+    //
+    // After opening the namespaced boxes for [userId], inspect the
+    // user-scoped profile. If profile.id is present and mismatches
+    // [userId], the namespaced files were populated by another account
+    // (Android Auto Backup restore, dev-build copy, legacy migration
+    // race). Clear all 7 boxes in place so the caller's downstream
+    // restoreFromCloudForUser path starts from a clean slate.
+    //
+    // The heavier `auth_provider._ensureLocalUser` ClearResult check +
+    // force-signOut path stays in place as a second layer for partial
+    // failures.
+    try {
+      final userBoxName =
+          namespacedBoxName(HiveService.userBoxName, userId);
+      final box = Hive.box(userBoxName);
+      final profile = box.get('profile');
+      if (profile is Map) {
+        final existingId = profile['id'] as String?;
+        if (existingId != null && existingId != userId) {
+          debugPrint(
+              '[HiveUserSession] Cross-account guard fired: namespaced box for $hash contains profile.id=$existingId. Clearing all 7 boxes.');
+          for (final root in userScopedBoxRoots) {
+            final boxName = namespacedBoxName(root, userId);
+            if (Hive.isBoxOpen(boxName)) {
+              try {
+                await Hive.box(boxName).clear();
+              } catch (e) {
+                debugPrint(
+                    '[HiveUserSession] cross-account clear $boxName failed: $e');
+              }
+            }
+          }
+          final foundPrefix = existingId.length >= 8
+              ? existingId.substring(0, 8)
+              : existingId;
+          unawaited(ErrorTelemetry.logEvent(
+              'hive_cross_account_guard_fired',
+              message: 'expected=$hash found=$foundPrefix'));
+        }
+      }
+    } catch (e, st) {
+      // Guard must never throw — log and continue so the session is
+      // usable. The auth_provider second-layer check will catch any
+      // mismatch we missed.
+      debugPrint('[HiveUserSession] cross-account guard error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_cross_account_guard_error'));
+    }
+
     debugPrint('[HiveUserSession] opened 7 boxes for user $hash');
     // APK Test #12.8 — successful open event so we can verify the
     // bootstrap order: every cold start should produce auth_user_ensured

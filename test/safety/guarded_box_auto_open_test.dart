@@ -108,15 +108,31 @@ void main() {
               'edits.',
         );
 
-        // Helper calls openForUser (idempotent).
+        // Helper either calls openForUser inline OR delegates to the
+        // shared `HiveUserSession.ensureOpenedForCurrentSession()`
+        // static (C-7, audit-2026-05-11 — lifted out so RankService /
+        // SubscriptionService / migrators / splash share one entry
+        // point). Either form is acceptable as long as the helper's
+        // body routes through the namespaced-box bootstrap path.
         final helperIdx = src.indexOf('Future<String?> _ensureSessionOpen()');
-        final helperEnd = src.indexOf('\n  }', helperIdx);
+        // Match either `;` (one-liner expression body) or `}`
+        // (block body). Take whichever boundary appears first.
+        final blockEnd = src.indexOf('\n  }', helperIdx);
+        final exprEnd = src.indexOf(';', helperIdx);
+        final helperEnd = (blockEnd < 0 || (exprEnd >= 0 && exprEnd < blockEnd))
+            ? exprEnd
+            : blockEnd;
         final helperBody = src.substring(helperIdx, helperEnd);
+        final routesViaOpenForUser =
+            helperBody.contains('HiveUserSession.openForUser');
+        final routesViaSharedHelper = helperBody
+            .contains('HiveUserSession.ensureOpenedForCurrentSession');
         expect(
-          helperBody,
-          contains('HiveUserSession.openForUser'),
-          reason: '_ensureSessionOpen must call openForUser to '
-              'idempotently open the per-user namespaced boxes.',
+          routesViaOpenForUser || routesViaSharedHelper,
+          isTrue,
+          reason: '_ensureSessionOpen must call openForUser '
+              '(inline) or HiveUserSession.ensureOpenedForCurrentSession '
+              '(delegation) to idempotently open per-user namespaced boxes.',
         );
 
         // Each public sync entry awaits _ensureSessionOpen before any
