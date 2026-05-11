@@ -20,9 +20,11 @@ void main() {
     // The method runs from declaration to the next top-level method
     // declaration. Test #10.1 — bumped to 8000 chars because the
     // verify-after-clear + UserConfigMigrator block added ~50 lines.
+    // audit-2026-05-11 H-3 — bumped to 10000 because the email-prefix
+    // self-heal block added another ~30 lines inside the same method.
     final body = source.substring(
       ensureStart,
-      (ensureStart + 8000).clamp(0, source.length),
+      (ensureStart + 10000).clamp(0, source.length),
     );
 
     // Must call log-client-error Edge Function on catch path
