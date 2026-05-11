@@ -239,7 +239,7 @@ class NutritionRepository {
           'fat': e.value['fat'] ?? 0.0,
         }).toList()
       ..sort((a, b) =>
-          (a['date'] as String).compareTo(b['date'] as String));
+          (a['date']! as String).compareTo(b['date']! as String));
 
     return results;
   }

@@ -139,8 +139,12 @@ void main() {
       return box.put(rowKey, current);
     });
 
-    final editResults = await Future.wait([appendFuture, editFuture]);
-    final appendR = editResults[0] as WriteResult;
+    // Both futures fire in parallel; await both to let the mutex serialize.
+    // Avoid Future.wait — its heterogeneous-result List<dynamic> forces a
+    // cast back to WriteResult that triggers cast_nullable_to_non_nullable.
+    final pendingAppend = appendFuture;
+    await editFuture;
+    final appendR = await pendingAppend;
     expect(appendR.success, isTrue);
 
     // Verify the final state is consistent: edit did not corrupt the append.

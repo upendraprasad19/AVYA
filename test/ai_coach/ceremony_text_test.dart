@@ -118,7 +118,7 @@ void main() {
       };
 
       expect(row['user_message'], isEmpty);
-      expect((row['ai_response'] as String).contains('Promotion:'), isTrue);
+      expect(row['ai_response']!.contains('Promotion:'), isTrue);
       expect(row['model_used'], equals('ceremony_template'));
     });
   });
