@@ -387,9 +387,10 @@ class WaterIntakeNotifier extends Notifier<int> {
   }
 
   Future<void> addWater(int ml) async {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    // C-12 batch (audit-2026-05-11) — water_ml_ key now IST-anchored
+    // via `istDateStr` so the date key matches the rest of the
+    // nutrition surface (CLAUDE.md "All date-keys must use IST").
+    final todayStr = istDateStr(DateTime.now());
 
     state = (state + ml).clamp(0, 5000);
     await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
@@ -402,9 +403,7 @@ class WaterIntakeNotifier extends Notifier<int> {
 
   Future<void> decrement() async {
     if (state <= 0) return;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istDateStr(DateTime.now());
 
     state = (state - 250).clamp(0, 5000);
     await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
@@ -917,16 +916,11 @@ class FoodLogNotifier extends Notifier<void> {
   /// the Supabase sync linkage. Fires sync + snapshot so the AI coach sees
   /// the correction.
   Future<void> restoreFoodLog(Map<String, dynamic> log) async {
-    final key = log['id'] as String?;
-    if (key == null) return;
-    await HiveService.instance.nutritionBox.put(key, log);
-
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
+    // C-12 (audit-2026-05-11) — route through NutritionWriteService
+    // so the restore inherits the canonical provider invalidation
+    // batch + sync fan-out (matches the SoT contract per CLAUDE.md
+    // §15). Service handles the no-op when log['id'] is null/empty.
+    await NutritionWriteService.instance.restoreFoodLog(log);
   }
 
   /// Plan C-16 — Edit Macros sheet's Save button now routes through
@@ -1006,77 +1000,69 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     required int totalFat,
     required List<Map<String, dynamic>> items,
   }) async {
-    final now = DateTime.now();
-    final id = 'saved_meal_${now.millisecondsSinceEpoch}';
-
-    await HiveService.instance.nutritionBox.put(id, {
-      'id': id,
-      'is_saved_meal': true,
-      'name': name,
-      'total_calories': totalCalories,
-      'total_protein': totalProtein,
-      'total_carbs': totalCarbs,
-      'total_fat': totalFat,
-      'items': items,
-      'times_used': 0,
-      'created_at': now.toIso8601String(),
-    });
-
+    // C-12 (audit-2026-05-11) — route through NutritionWriteService.
+    // Service handles Hive write + provider invalidation + sync fan-out.
+    await NutritionWriteService.instance.saveMealPreset(
+      name: name,
+      totalCalories: totalCalories,
+      totalProtein: totalProtein,
+      totalCarbs: totalCarbs,
+      totalFat: totalFat,
+      items: items,
+    );
+    // Service invalidates dailyNutritionProvider et al. via its
+    // _invalidateNutritionProviders helper; this notifier still needs
+    // an explicit invalidateSelf so SavedMealsSection rebuilds with
+    // the new row.
     ref.invalidateSelf();
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 
   /// Re-log a saved meal.
+  ///
+  /// C-12 (audit-2026-05-11) — routed through
+  /// `NutritionWriteService.relogSavedMeal`. The service performs the
+  /// canonical `logMeal` write (with proper `items[]`, IST date,
+  /// per-source counter increment) instead of the legacy flat-totals
+  /// shape this notifier used to write. Also drops the
+  /// `NutritionRepository.syncLogToSupabase` double-write at the old
+  /// line 1050 — WriteService.logMeal handles the projection.
   Future<void> relogSavedMeal(Map<String, dynamic> savedMeal,
       {String mealType = 'snacks'}) async {
-    final now = DateTime.now();
-    final dateStr = istDateStr(now);
-    final id = 'nlog_${now.millisecondsSinceEpoch}';
-
-    final logMap = {
-      'id': id,
-      'date': dateStr,
-      'meal_type': mealType.toLowerCase(),
-      'food_name': savedMeal['name'] ?? 'Saved Meal',
-      'total_calories': savedMeal['total_calories'] ?? 0,
-      'total_protein': savedMeal['total_protein'] ?? 0,
-      'total_carbs': savedMeal['total_carbs'] ?? 0,
-      'total_fat': savedMeal['total_fat'] ?? 0,
-      'created_at': now.toIso8601String(),
-      'source': 'saved_meal',
-    };
-    await HiveService.instance.nutritionBox.put(id, logMap);
-    NutritionRepository.syncLogToSupabase(data: logMap);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-
-    // Increment times_used counter on the saved meal and sync to cloud.
     final savedId = savedMeal['id'] as String?;
-    if (savedId != null) {
-      final existing = HiveService.instance.nutritionBox.get(savedId);
-      if (existing is Map) {
-        final updated = Map<String, dynamic>.from(existing);
-        updated['times_used'] = ((updated['times_used'] as int?) ?? 0) + 1;
-        await HiveService.instance.nutritionBox.put(savedId, updated);
-        // Push the updated counter to Supabase so cloud stays in sync.
-        unawaited(SyncService.instance.syncSavedMealsNow());
-      }
+    if (savedId == null) return;
+
+    final result = await NutritionWriteService.instance.relogSavedMeal(
+      savedMealKey: savedId,
+      date: DateTime.now(),
+      mealType: mealType.toLowerCase(),
+    );
+    if (!result.success) {
+      debugPrint('[SavedMealsNotifier.relogSavedMeal] WriteService failed: '
+          '${result.errorMessage}');
+      return;
     }
 
-    ref.invalidate(dailyNutritionProvider);
-    ref.invalidate(weeklyNutritionProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(recentFoodLogsProvider);
+    // Increment times_used counter on the saved meal and sync to cloud.
+    final box = HiveService.instance.nutritionBox;
+    final existing = box.get(savedId);
+    if (existing is Map) {
+      final updated = Map<String, dynamic>.from(existing);
+      updated['times_used'] = ((updated['times_used'] as int?) ?? 0) + 1;
+      await box.put(savedId, updated);
+      unawaited(SyncService.instance.syncSavedMealsNow());
+    }
+
+    // WriteService invalidates the daily/weekly/summary/recent
+    // providers via its hook; this notifier still rebuilds for the
+    // times_used update.
     ref.invalidateSelf();
   }
 
   /// Delete a saved meal preset.
   Future<void> deleteSavedMeal(String id) async {
-    await HiveService.instance.nutritionBox.delete(id);
+    // C-12 (audit-2026-05-11) — route through NutritionWriteService.
+    await NutritionWriteService.instance.deleteSavedMeal(id);
     ref.invalidateSelf();
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 

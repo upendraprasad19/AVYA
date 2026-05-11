@@ -143,32 +143,61 @@ void main() {
   });
 
   group('sync gap — nutrition_provider SavedMealsNotifier.saveMealPreset', () {
-    test('fires syncNutritionData + pushSnapshot after invalidateSelf', () {
-      final src = _src(
+    test('routes through NutritionWriteService.saveMealPreset', () {
+      // C-12 (audit-2026-05-11) — Hive write + sync fan-out lifted
+      // into NutritionWriteService. Notifier delegates; service fires
+      // syncNutritionData + pushSnapshot.
+      final notifierSrc = _src(
           'lib/features/nutrition/providers/nutrition_provider.dart');
-      final saveMealIdx = src.indexOf('Future<void> saveMealPreset(');
-      final syncIdx = src.indexOf(
-          'unawaited(SyncService.instance.syncNutritionData())', saveMealIdx);
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', syncIdx);
-      expect(saveMealIdx, isNot(-1));
-      expect(syncIdx, isNot(-1));
-      expect(pushIdx, isNot(-1));
+      expect(
+        notifierSrc.contains('Future<void> saveMealPreset('),
+        isTrue,
+        reason: 'saveMealPreset must still exist on the notifier',
+      );
+      // saveMealPreset is the only method in the file that delegates
+      // to `NutritionWriteService.instance.saveMealPreset` — check the
+      // whole-file source rather than a sliced body (multi-line param
+      // blocks defeat the `\n  }` end-marker heuristic).
+      expect(
+        notifierSrc.contains('NutritionWriteService.instance.saveMealPreset('),
+        isTrue,
+        reason:
+            'Notifier must route through NutritionWriteService.saveMealPreset '
+            'so the Hive write + sync fan-out match the SoT contract.',
+      );
+
+      // Verify the service still funnels through sync.
+      final svcSrc =
+          _src('lib/core/services/nutrition_write_service.dart');
+      expect(
+        svcSrc,
+        contains('unawaited(SyncService.instance.syncNutritionData())'),
+        reason: 'WriteService must call syncNutritionData.',
+      );
+      expect(
+        svcSrc,
+        contains('unawaited(SyncService.instance.pushSnapshot())'),
+        reason: 'WriteService must call pushSnapshot.',
+      );
     });
   });
 
   group('sync gap — nutrition_provider SavedMealsNotifier.deleteSavedMeal', () {
-    test('fires syncNutritionData + pushSnapshot after invalidateSelf', () {
-      final src = _src(
+    test('routes through NutritionWriteService.deleteSavedMeal', () {
+      // C-12 — same pattern as saveMealPreset above.
+      final notifierSrc = _src(
           'lib/features/nutrition/providers/nutrition_provider.dart');
-      final deleteMealIdx = src.indexOf('Future<void> deleteSavedMeal(');
-      final syncIdx = src.indexOf(
-          'unawaited(SyncService.instance.syncNutritionData())', deleteMealIdx);
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', syncIdx);
-      expect(deleteMealIdx, isNot(-1));
-      expect(syncIdx, isNot(-1));
-      expect(pushIdx, isNot(-1));
+      expect(
+        notifierSrc.contains('Future<void> deleteSavedMeal('),
+        isTrue,
+        reason: 'deleteSavedMeal must still exist on the notifier',
+      );
+      expect(
+        notifierSrc.contains('NutritionWriteService.instance.deleteSavedMeal('),
+        isTrue,
+        reason:
+            'Notifier must route through NutritionWriteService.deleteSavedMeal.',
+      );
     });
   });
 

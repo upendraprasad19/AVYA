@@ -445,6 +445,121 @@ class NutritionWriteService {
     return WriteResult.ok(templateKey);
   }
 
+  /// C-12 (audit-2026-05-11) — save a meal preset from-scratch.
+  ///
+  /// Distinct from [saveMealAsTemplate] which promotes an existing
+  /// `nlog_*` row. This path is used by the AI breakdown / scan /
+  /// search "Save as preset" flows where the meal hasn't yet been
+  /// logged. Single Hive write (`saved_meal_<ts>`) + fan-out via the
+  /// canonical sync helpers — matches the WriteService SoT contract
+  /// per CLAUDE.md §15.
+  Future<WriteResult> saveMealPreset({
+    required String name,
+    required int totalCalories,
+    required int totalProtein,
+    required int totalCarbs,
+    required int totalFat,
+    int totalFiber = 0,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (name.trim().isEmpty) {
+      return WriteResult.fail('name must be non-empty');
+    }
+    final box = HiveService.instance.nutritionBox;
+    final now = DateTime.now();
+    final id = 'saved_meal_${now.millisecondsSinceEpoch}';
+    final payload = <String, dynamic>{
+      'id': id,
+      'is_saved_meal': true,
+      'name': name.trim(),
+      'total_calories': totalCalories,
+      'total_protein': totalProtein,
+      'total_carbs': totalCarbs,
+      'total_fat': totalFat,
+      if (totalFiber > 0) 'total_fiber': totalFiber,
+      'items': items,
+      'times_used': 0,
+      'created_at': now.toIso8601String(),
+    };
+    try {
+      await box.put(id, payload);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] saveMealPreset put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(id);
+  }
+
+  /// C-12 (audit-2026-05-11) — delete a saved meal preset.
+  ///
+  /// Routes through the WriteService so the provider invalidation + sync
+  /// fan-out happens consistently with every other nutrition mutation.
+  Future<WriteResult> deleteSavedMeal(String savedMealKey) async {
+    if (savedMealKey.isEmpty) {
+      return WriteResult.fail('savedMealKey must be non-empty');
+    }
+    final box = HiveService.instance.nutritionBox;
+    try {
+      await box.delete(savedMealKey);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] deleteSavedMeal delete failed: $e\n$st');
+      return WriteResult.fail('Hive delete failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(savedMealKey);
+  }
+
+  /// C-12 (audit-2026-05-11) — restore a previously-deleted food log
+  /// row at its original Hive key.
+  ///
+  /// Used by the food-log undo flow on the nutrition screen. Distinct
+  /// from [restoreLastDeleted] which relies on the in-memory stash —
+  /// this variant takes the full log map so callers that have their own
+  /// stash (e.g., snackbar undo handlers) can route their write through
+  /// the service.
+  Future<WriteResult> restoreFoodLog(Map<String, dynamic> log) async {
+    final key = log['id'] as String?;
+    if (key == null || key.isEmpty) {
+      return WriteResult.fail('log["id"] must be a non-empty string');
+    }
+    try {
+      await HiveService.instance.nutritionBox.put(key, log);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] restoreFoodLog put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(key);
+  }
+
   // ---- private helpers ----
 
   String? _counterFeatureForSource(NutritionWriteSource s) {
