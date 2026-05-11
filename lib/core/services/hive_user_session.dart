@@ -121,8 +121,11 @@ class HiveUserSession {
       final boxName = namespacedBoxName(root, userId);
       try {
         await Hive.openBox(boxName);
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[HiveUserSession] failed to open $boxName: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'hive_user_session_open_box_corrupt'));
         await Hive.deleteBoxFromDisk(boxName);
         await Hive.openBox(boxName);
       }
@@ -163,9 +166,12 @@ class HiveUserSession {
             if (Hive.isBoxOpen(boxName)) {
               try {
                 await Hive.box(boxName).clear();
-              } catch (e) {
+              } catch (e, st) {
+                // audit-2026-05-11 H-42 — telemetry pair.
                 debugPrint(
                     '[HiveUserSession] cross-account clear $boxName failed: $e');
+                unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                    reason: 'hive_user_session_cross_account_clear'));
               }
             }
           }
@@ -222,11 +228,14 @@ class HiveUserSession {
       if (migBox.get(_legacyMigrationFlagKey) == true) {
         return;
       }
-    } catch (e) {
+    } catch (e, st) {
       // migrationBox not yet initialised (very early cold start).
       // Fall through and let the migration run; it'll set the flag
       // at the end if migrationBox is available by then.
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[HiveUserSession] migrationBox unavailable: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_user_session_migration_box_unavailable'));
     }
 
     for (final root in userScopedBoxRoots) {
@@ -261,8 +270,11 @@ class HiveUserSession {
         debugPrint(
           '[HiveUserSession] migrated $root → $namespaced (${dest.keys.length} keys)',
         );
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[HiveUserSession] migration $root failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'hive_user_session_migrate_legacy_box'));
         // Non-fatal — fresh start, cloud has the data anyway.
       }
     }
@@ -273,8 +285,11 @@ class HiveUserSession {
     try {
       await HiveService.instance.migrationBox
           .put(_legacyMigrationFlagKey, true);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[HiveUserSession] failed to set legacy migration flag: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_user_session_set_legacy_migration_flag'));
       // If we can't set the flag, the migration may re-run next time.
       // The migration body itself is idempotent for already-migrated
       // users (the `if (legacy.keys.isEmpty) … delete + continue` arm
@@ -316,8 +331,11 @@ class HiveUserSession {
           await Hive.box(boxName).close();
         }
         await Hive.deleteBoxFromDisk(boxName);
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[HiveUserSession] failed to delete $boxName: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'hive_user_session_delete_box_file'));
       }
     }
     _currentOwnerHash = null;

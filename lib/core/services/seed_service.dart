@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show compute, debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 
 // Top-level function required by compute() — runs in a background isolate.
@@ -148,8 +150,11 @@ class SeedService {
       await _hive.configBox.put(_exercisesSeededKey, true);
       await _hive.configBox.put(_exerciseVersionKey, _exerciseLibraryVersion);
       debugPrint('[SeedService] Exercises seeded: ${entries.length} items (v$_exerciseLibraryVersion)');
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[SeedService._seedExercises] FAILED: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'seed_service_seed_exercises'));
       // Will retry on next launch since _exercisesSeededKey stays false.
     }
   }
@@ -167,8 +172,11 @@ class SeedService {
       debugPrint(
         '[SeedService] Foods seeded: ${entries.length} items (v$_foodLibraryVersion)',
       );
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[SeedService._seedFoods] FAILED: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'seed_service_seed_foods'));
       // Will retry on next launch since _foodsSeededKey stays false.
     }
   }

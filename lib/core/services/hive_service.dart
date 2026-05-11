@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'error_telemetry.dart';
 import 'guarded_box.dart';
 import 'hive_user_session.dart';
 
@@ -146,15 +149,21 @@ class HiveService with WidgetsBindingObserver {
               : name;
           if (!Hive.isBoxOpen(actualBoxName)) continue;
           await Hive.box(actualBoxName).compact();
-        } catch (e) {
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[HiveService._maybeCompact] $name: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'hive_service_maybe_compact_box'));
         }
       }
 
       await cfg.put(_lastCompactKey, DateTime.now().toIso8601String());
       debugPrint('[HiveService] compact pass complete');
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[HiveService._maybeCompact] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_service_maybe_compact'));
     }
   }
 
@@ -165,8 +174,11 @@ class HiveService with WidgetsBindingObserver {
   Future<Box> _safeOpenBox(String name) async {
     try {
       return await Hive.openBox(name);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[HiveService._safeOpenBox] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_service_safe_open_box'));
       await Hive.deleteBoxFromDisk(name);
       return await Hive.openBox(name);
     }
