@@ -65,21 +65,8 @@ class SyncService {
   /// `_ensureLocalUser` has run on the auth side — every box read used
   /// to throw `HiveUserSession not opened`, the `unawaited` swallowed
   /// the StateError, and the cloud silently received nothing.
-  Future<String?> _ensureSessionOpen() async {
-    final userId = _supabase.currentUser?.id;
-    if (userId == null) return null;
-    if (HiveUserSession.currentOwnerFullId == userId) return userId;
-    try {
-      await HiveUserSession.openForUser(userId);
-    } catch (e, st) {
-      debugPrint('[SyncService._ensureSessionOpen] openForUser failed: $e');
-      ErrorTelemetry.recordNonFatal(e, st, reason: 'ensure_session_open');
-      // Fall through — let the caller's own catch surface the next
-      // failure with full context. Returning null would short-circuit
-      // sync paths whose only blocker was the session bootstrap.
-    }
-    return userId;
-  }
+  Future<String?> _ensureSessionOpen() =>
+      HiveUserSession.ensureOpenedForCurrentSession();
 
   // ── Restore cancellation flag ───────────────────────────────
 
@@ -155,8 +142,18 @@ class SyncService {
     }
     pairs.sort();
     final joined = pairs.join(';');
-    final hash =
-        joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    // H-15 (audit-2026-05-11) — `String.hashCode` is NOT guaranteed
+    // stable across Dart VM versions / isolates / platforms. Two
+    // devices running the same restore could compute different
+    // 8-char tags for the same `(date, meal, items)` tuple → Hive
+    // ends up with two rows for what should be one logical meal.
+    // Switched to UUID v5 (deterministic, cross-platform stable);
+    // take the first 8 hex chars to keep the Hive key compact and
+    // visually similar to the previous shape.
+    final hash = _uuidGen
+        .v5(_syncNamespace, joined)
+        .replaceAll('-', '')
+        .substring(0, 8);
     return 'nlog_${dateStr}_${mealType}_$hash';
   }
 
@@ -2785,24 +2782,39 @@ class SyncService {
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
 
-      // Merge with existing custom exercises
-      final existing = _hive.customBox.get('custom_exercises');
-      final existingList = existing is List
-          ? (existing).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
-          : <Map<String, dynamic>>[];
-
-      final existingNames =
-          existingList.map((e) => (e['name'] as String? ?? '').toLowerCase()).toSet();
-
-      for (final item in items) {
-        final name = (item['name'] as String? ?? '').toLowerCase();
-        if (!existingNames.contains(name)) {
-          existingList.add(item);
-          existingNames.add(name);
+      // H-13 (audit-2026-05-11) — write PER-KEY entries so the
+      // writer (`_syncCustomItems`) + every UI reader
+      // (`your_foods_section`, `train_screen`, `workout_schedule_service`)
+      // can see them. Pre-fix this wrote to the legacy
+      // `custom_exercises` LIST key, which no current consumer reads
+      // → restored items vanished from getCustomExercises() and
+      // never re-synced to cloud (since _syncCustomItems scans
+      // `custom_exercise_*` per-key only).
+      //
+      // Local key uses cloud row's `id` (deterministic v5 UUID) so
+      // repeated restores on the same device don't duplicate rows.
+      // Dedup by name (case-insensitive) against existing per-key
+      // entries already in customBox.
+      final customBox = _hive.customBox;
+      final existingNames = <String>{};
+      for (final k in customBox.keys) {
+        if (k is! String || !k.startsWith('custom_exercise_')) continue;
+        final v = customBox.get(k);
+        if (v is Map) {
+          final n = (v['name'] as String? ?? '').toLowerCase().trim();
+          if (n.isNotEmpty) existingNames.add(n);
         }
       }
 
-      await _hive.customBox.put('custom_exercises', existingList);
+      for (final item in items) {
+        final name = (item['name'] as String? ?? '').toLowerCase().trim();
+        if (name.isEmpty) continue;
+        if (existingNames.contains(name)) continue;
+        final id = (item['id'] as String?) ??
+            'restore_${DateTime.now().microsecondsSinceEpoch}';
+        await customBox.put('custom_exercise_$id', item);
+        existingNames.add(name);
+      }
     } catch (e) {
       debugPrint('[SyncService._restoreCustomExercises] $e');
       try {
@@ -2824,23 +2836,29 @@ class SyncService {
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
 
-      final existing = _hive.customBox.get('custom_foods');
-      final existingList = existing is List
-          ? (existing).cast<Map>().map((m) => Map<String, dynamic>.from(m)).toList()
-          : <Map<String, dynamic>>[];
-
-      final existingNames =
-          existingList.map((e) => (e['name'] as String? ?? '').toLowerCase()).toSet();
-
-      for (final item in items) {
-        final name = (item['name'] as String? ?? '').toLowerCase();
-        if (!existingNames.contains(name)) {
-          existingList.add(item);
-          existingNames.add(name);
+      // H-13 (audit-2026-05-11) — same per-key restore as
+      // _restoreCustomExercises above. Local key uses cloud row's
+      // `id` so repeated restores don't duplicate.
+      final customBox = _hive.customBox;
+      final existingNames = <String>{};
+      for (final k in customBox.keys) {
+        if (k is! String || !k.startsWith('custom_food_')) continue;
+        final v = customBox.get(k);
+        if (v is Map) {
+          final n = (v['name'] as String? ?? '').toLowerCase().trim();
+          if (n.isNotEmpty) existingNames.add(n);
         }
       }
 
-      await _hive.customBox.put('custom_foods', existingList);
+      for (final item in items) {
+        final name = (item['name'] as String? ?? '').toLowerCase().trim();
+        if (name.isEmpty) continue;
+        if (existingNames.contains(name)) continue;
+        final id = (item['id'] as String?) ??
+            'restore_${DateTime.now().microsecondsSinceEpoch}';
+        await customBox.put('custom_food_$id', item);
+        existingNames.add(name);
+      }
     } catch (e) {
       debugPrint('[SyncService._restoreCustomFoods] $e');
       try {
@@ -3392,21 +3410,36 @@ class SyncService {
   /// Pulls approved community foods/exercises from Supabase into local Hive.
   /// Called on app launch to keep the local database growing.
   Future<void> syncCommunityItems() async {
+    // H-14 (audit-2026-05-11) — paginate + apply a hard ceiling.
+    // Pre-fix the queries had no `.limit()` or `.range()` so every
+    // app launch downloaded the FULL approved community library
+    // (potentially thousands of rows) over the user's cellular
+    // connection. At 1000 community items a sync would burn ~500KB
+    // of bandwidth per launch. Now: 500 rows per page, 10-page
+    // ceiling (5000 rows max) for any single sync run.
+    const int pageSize = 500;
+    const int maxPages = 10;
+
     try {
       final lastSync = _hive.syncBox.get('last_community_sync');
       final sinceDate = lastSync != null
           ? DateTime.tryParse(lastSync.toString())?.toIso8601String()
           : '2020-01-01T00:00:00Z';
+      final since = sinceDate ?? '2020-01-01T00:00:00Z';
 
-      // Pull approved community foods
-      final foods = await _supabase.client
-          .from('user_custom_foods')
-          .select()
-          .eq('approved', true)
-          .gte('created_at', sinceDate ?? '2020-01-01T00:00:00Z');
-
-      if (foods.isNotEmpty) {
-        final foodBox = _hive.foodBox;
+      // Pull approved community foods — paginated.
+      final foodBox = _hive.foodBox;
+      for (int page = 0; page < maxPages; page++) {
+        final from = page * pageSize;
+        final to = from + pageSize - 1;
+        final foods = await _supabase.client
+            .from('user_custom_foods')
+            .select()
+            .eq('approved', true)
+            .gte('created_at', since)
+            .order('created_at', ascending: true)
+            .range(from, to);
+        if (foods.isEmpty) break;
         for (final row in foods) {
           final map = Map<String, dynamic>.from(row as Map);
           final id = map['id']?.toString();
@@ -3415,17 +3448,22 @@ class SyncService {
             foodBox.put(id, map);
           }
         }
+        if (foods.length < pageSize) break;
       }
 
-      // Pull approved community exercises
-      final exercises = await _supabase.client
-          .from('user_custom_exercises')
-          .select()
-          .eq('approved_for_library', true)
-          .gte('created_at', sinceDate ?? '2020-01-01T00:00:00Z');
-
-      if (exercises.isNotEmpty) {
-        final exerciseBox = _hive.exerciseBox;
+      // Pull approved community exercises — paginated.
+      final exerciseBox = _hive.exerciseBox;
+      for (int page = 0; page < maxPages; page++) {
+        final from = page * pageSize;
+        final to = from + pageSize - 1;
+        final exercises = await _supabase.client
+            .from('user_custom_exercises')
+            .select()
+            .eq('approved_for_library', true)
+            .gte('created_at', since)
+            .order('created_at', ascending: true)
+            .range(from, to);
+        if (exercises.isEmpty) break;
         for (final row in exercises) {
           final map = Map<String, dynamic>.from(row as Map);
           final id = map['id']?.toString();
@@ -3434,6 +3472,7 @@ class SyncService {
             exerciseBox.put(id, map);
           }
         }
+        if (exercises.length < pageSize) break;
       }
 
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());

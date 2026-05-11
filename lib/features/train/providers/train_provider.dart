@@ -1415,7 +1415,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // ── Daily streak (schedule-aware — skips rest days) ──
     // Calculated on-the-fly by scanning schedule backwards.
     // Handles rest days, schedule changes, and template swaps correctly.
-    final streakDays = repo.calculateCurrentStreak();
+    //
+    // C-14 (audit-2026-05-11) — completeWorkout is the canonical
+    // mutation surface for streak state. If the walk-back encounters
+    // a missed day BEFORE today and the user has a freeze available,
+    // CONSUME it — that's the right user-facing semantic. All other
+    // call sites use `currentStreak()` for pure reads.
+    final streakDays = repo.consumeMissedDayIfFreezeAvailable();
 
     // ── Weekly streak (kept for badge logic — not shown in UI) ───
     final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
@@ -1622,6 +1628,13 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     template['created_at'] = DateTime.now().toIso8601String();
     await hive.workoutBox.put(id, template);
     ref.invalidateSelf();
+    // C-11 (audit-2026-05-11) — fire-and-forget cloud sync.
+    // workoutBox `tmpl_*` is part of the workout-domain fan-out per
+    // CLAUDE.md §15; without these calls a newly-created template
+    // never reaches `workout_templates`/`template_exercises` until
+    // the next weekly full sync. AI coach sees stale template list.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 
   Future<void> updateTemplate(
@@ -1639,6 +1652,9 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     updated['updated_at'] = DateTime.now().toIso8601String();
     await hive.workoutBox.put(templateId, updated);
     ref.invalidateSelf();
+    // C-11 (audit-2026-05-11) — see saveTemplate above for rationale.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
   }
 
   /// Delete a saved template AND clean up its future schedule entries.
@@ -1670,7 +1686,11 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
 
-    // Step 4: fire-and-forget snapshot push (AI coach freshness).
+    // Step 4: fire-and-forget cloud sync + snapshot push.
+    // C-11 (audit-2026-05-11) — pre-fix only pushSnapshot fired here.
+    // Without syncWorkoutData the cloud `workout_templates` row stays
+    // on prod forever (next restore re-imports the "deleted" template).
+    unawaited(SyncService.instance.syncWorkoutData());
     unawaited(SyncService.instance.pushSnapshot());
   }
 }

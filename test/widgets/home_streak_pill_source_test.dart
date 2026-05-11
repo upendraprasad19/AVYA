@@ -43,13 +43,16 @@ void main() {
       final slice = homeProvider.substring(start, end);
 
       expect(
-        slice.contains('calculateCurrentStreak'),
+        slice.contains('currentStreak()') ||
+            slice.contains('calculateCurrentStreak'),
         isTrue,
         reason:
             'StreakNotifier.build() MUST call '
-            'WorkoutRepository.instance.calculateCurrentStreak() so the '
-            'home pill agrees with the rank-chip bottom sheet. See '
-            'feedback_source_of_truth_audit.md.',
+            'WorkoutRepository.instance.currentStreak() (the pure-read '
+            'half of the C-14 audit-2026-05-11 CQRS split) so the home '
+            'pill agrees with the rank-chip bottom sheet. The legacy '
+            'name `calculateCurrentStreak` is still accepted via the '
+            'deprecation shim. See feedback_source_of_truth_audit.md.',
       );
     });
 
@@ -74,22 +77,26 @@ void main() {
       );
     });
 
-    test('rank chip surfaces still call calculateCurrentStreak directly', () {
-      // Sanity check that the OTHER side of the contract (the surfaces we
-      // are aligning with) hasn't been changed. If someone refactors
-      // rank_service_record_sheet to read a cached field, this test will
-      // surface that the alignment was done at the wrong end.
+    test('rank chip surfaces use the same canonical helper as home', () {
+      // C-14 audit-2026-05-11 — the CQRS split renamed the canonical
+      // helper to `currentStreak()` (pure read). Pre-fix this asserted
+      // the legacy `calculateCurrentStreak` literal in
+      // rank_service_record_sheet — keep the spirit (both surfaces use
+      // the same canonical helper) under the new name.
       final f = File(
         'lib/features/profile/widgets/rank_service_record_sheet.dart',
       );
       expect(f.existsSync(), isTrue);
+      final src = f.readAsStringSync();
       expect(
-        f.readAsStringSync().contains('calculateCurrentStreak'),
+        src.contains('currentStreak()') ||
+            src.contains('calculateCurrentStreak'),
         isTrue,
         reason:
-            'rank_service_record_sheet must still call '
-            'calculateCurrentStreak() — it is the canonical source we are '
-            'aligning home with.',
+            'rank_service_record_sheet must call '
+            'WorkoutRepository.instance.currentStreak() — the canonical '
+            'pure-read helper home now uses too. The legacy name is '
+            'still accepted via the deprecation shim.',
       );
     });
   });

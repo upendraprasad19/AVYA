@@ -23,6 +23,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
 class ScheduledWorkoutsResyncMigrator {
@@ -48,6 +49,16 @@ class ScheduledWorkoutsResyncMigrator {
   /// migrator is purely opportunistic and shouldn't escalate failures.
   static Future<void> runIfNeeded() async {
     try {
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash kicks this off fire-and-forget before
+      // `_ensureLocalUser` has opened the per-user namespaced
+      // userBox/workoutBox. Without this, both `userBox.get` and the
+      // `workoutBox.keys` iteration throw `HiveUserSession not opened`
+      // and the migrator silently no-ops every cold start. Returns
+      // null when there's no signed-in session — caller short-circuits.
+      final uid = await HiveUserSession.ensureOpenedForCurrentSession();
+      if (uid == null) return;
+
       final userBox = HiveService.instance.userBox;
       if (userBox.get(_flagKey) == true) return;
 

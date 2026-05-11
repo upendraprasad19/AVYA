@@ -31,18 +31,46 @@ void main() {
     });
 
     test('restoreFoodLog invalidates nutritionSummaryProvider', () {
-      final src = _src(
+      // C-12 (audit-2026-05-11) — restoreFoodLog now delegates to
+      // NutritionWriteService.restoreFoodLog, which fires the canonical
+      // _invalidateNutritionProviders helper (including
+      // `nutritionSummaryProvider`). The literal `ref.invalidate(...)`
+      // call moved out of the notifier; the contract is preserved by
+      // the WriteService.
+      final notifierSrc = _src(
           'lib/features/nutrition/providers/nutrition_provider.dart');
 
-      final restoreStart = src.indexOf('Future<void> restoreFoodLog(');
+      final restoreStart = notifierSrc.indexOf('Future<void> restoreFoodLog(');
       expect(restoreStart, greaterThan(0),
           reason: 'restoreFoodLog method must exist');
 
-      final restoreEnd = src.indexOf('\n  }', restoreStart);
-      final restoreBody = src.substring(restoreStart, restoreEnd);
+      final restoreEnd = notifierSrc.indexOf('\n  }', restoreStart);
+      final restoreBody =
+          notifierSrc.substring(restoreStart, restoreEnd);
 
-      expect(restoreBody, contains('ref.invalidate(nutritionSummaryProvider)'),
-          reason: 'restoreFoodLog must invalidate nutritionSummaryProvider');
+      final delegatesToService = restoreBody.contains(
+          'NutritionWriteService.instance.restoreFoodLog(');
+      final invalidatesInline =
+          restoreBody.contains('ref.invalidate(nutritionSummaryProvider)');
+
+      expect(delegatesToService || invalidatesInline, isTrue,
+          reason:
+              'restoreFoodLog must either invalidate nutritionSummaryProvider '
+              'inline OR delegate to NutritionWriteService (which does).');
+
+      if (delegatesToService) {
+        // Verify the downstream still invalidates the provider.
+        final svcSrc =
+            _src('lib/core/services/nutrition_write_service.dart');
+        expect(
+          svcSrc,
+          contains('c.invalidate(nutritionSummaryProvider)'),
+          reason:
+              'NutritionWriteService._invalidateNutritionProviders must '
+              'invalidate nutritionSummaryProvider — else the delegation '
+              'drops the contract.',
+        );
+      }
     });
   });
 

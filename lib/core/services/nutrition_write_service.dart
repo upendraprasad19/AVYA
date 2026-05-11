@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../constants/app_constants.dart';
 import '../../features/home/providers/home_provider.dart'
@@ -445,6 +446,121 @@ class NutritionWriteService {
     return WriteResult.ok(templateKey);
   }
 
+  /// C-12 (audit-2026-05-11) — save a meal preset from-scratch.
+  ///
+  /// Distinct from [saveMealAsTemplate] which promotes an existing
+  /// `nlog_*` row. This path is used by the AI breakdown / scan /
+  /// search "Save as preset" flows where the meal hasn't yet been
+  /// logged. Single Hive write (`saved_meal_<ts>`) + fan-out via the
+  /// canonical sync helpers — matches the WriteService SoT contract
+  /// per CLAUDE.md §15.
+  Future<WriteResult> saveMealPreset({
+    required String name,
+    required int totalCalories,
+    required int totalProtein,
+    required int totalCarbs,
+    required int totalFat,
+    int totalFiber = 0,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (name.trim().isEmpty) {
+      return WriteResult.fail('name must be non-empty');
+    }
+    final box = HiveService.instance.nutritionBox;
+    final now = DateTime.now();
+    final id = 'saved_meal_${now.millisecondsSinceEpoch}';
+    final payload = <String, dynamic>{
+      'id': id,
+      'is_saved_meal': true,
+      'name': name.trim(),
+      'total_calories': totalCalories,
+      'total_protein': totalProtein,
+      'total_carbs': totalCarbs,
+      'total_fat': totalFat,
+      if (totalFiber > 0) 'total_fiber': totalFiber,
+      'items': items,
+      'times_used': 0,
+      'created_at': now.toIso8601String(),
+    };
+    try {
+      await box.put(id, payload);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] saveMealPreset put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(id);
+  }
+
+  /// C-12 (audit-2026-05-11) — delete a saved meal preset.
+  ///
+  /// Routes through the WriteService so the provider invalidation + sync
+  /// fan-out happens consistently with every other nutrition mutation.
+  Future<WriteResult> deleteSavedMeal(String savedMealKey) async {
+    if (savedMealKey.isEmpty) {
+      return WriteResult.fail('savedMealKey must be non-empty');
+    }
+    final box = HiveService.instance.nutritionBox;
+    try {
+      await box.delete(savedMealKey);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] deleteSavedMeal delete failed: $e\n$st');
+      return WriteResult.fail('Hive delete failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(savedMealKey);
+  }
+
+  /// C-12 (audit-2026-05-11) — restore a previously-deleted food log
+  /// row at its original Hive key.
+  ///
+  /// Used by the food-log undo flow on the nutrition screen. Distinct
+  /// from [restoreLastDeleted] which relies on the in-memory stash —
+  /// this variant takes the full log map so callers that have their own
+  /// stash (e.g., snackbar undo handlers) can route their write through
+  /// the service.
+  Future<WriteResult> restoreFoodLog(Map<String, dynamic> log) async {
+    final key = log['id'] as String?;
+    if (key == null || key.isEmpty) {
+      return WriteResult.fail('log["id"] must be a non-empty string');
+    }
+    try {
+      await HiveService.instance.nutritionBox.put(key, log);
+    } catch (e, st) {
+      debugPrint(
+          '[NutritionWriteService] restoreFoodLog put failed: $e\n$st');
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+    }
+
+    return WriteResult.ok(key);
+  }
+
   // ---- private helpers ----
 
   String? _counterFeatureForSource(NutritionWriteSource s) {
@@ -518,13 +634,31 @@ class NutritionWriteService {
     return 'nlog_${dateStr}_${mealType}_$itemsHash';
   }
 
+  /// UUID namespace for the stable items hash. NEVER change without
+  /// a migration bump in `NlogKeyMigrator`.
+  static const _itemsHashUuidGen = Uuid();
+  static const _itemsHashNamespace =
+      '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
+  /// H-17 (audit-2026-05-11) — was `String.hashCode` which is not
+  /// stable across Dart VM versions / isolates / platforms. Devices
+  /// running the same restore could produce different `_<hash>` tags
+  /// for the same `(meal, items)` tuple → duplicate Hive rows for
+  /// what should be one logical meal. Switched to UUID v5
+  /// (deterministic, cross-platform stable); take the first 8 hex
+  /// chars to keep the Hive key compact and visually identical to
+  /// the prior shape. NlogKeyMigrator bumped v1 → v2 to consolidate
+  /// any pre-existing rows.
   static String _stableItemsHash(List<FoodItem> items) {
     final sorted = [...items]..sort((a, b) => a.name.compareTo(b.name));
     final joined = sorted
         .map((i) =>
             '${i.name.toLowerCase().trim()}|${i.quantityG.toStringAsFixed(1)}')
         .join(';');
-    return joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    return _itemsHashUuidGen
+        .v5(_itemsHashNamespace, joined)
+        .replaceAll('-', '')
+        .substring(0, 8);
   }
 
   static bool isAllowedMealType(String type) =>

@@ -64,17 +64,25 @@ class _CommunityReviewSheetState extends State<CommunityReviewSheet> {
         votedIds = votes.map((v) => v['item_id'].toString()).toSet();
       }
 
+      // audit-2026-05-11 Phase 8 (Hermes perf) — null-safe id
+      // extraction. PostgREST returns rows typed as Map at the static
+      // type level (Dart inference makes `f is! Map` dead code), but
+      // an individual row could still have a missing/null `id` field
+      // on schema drift. Pre-fix `f['id'].toString()` on null would
+      // crash; we now skip silently.
       final items = <Map<String, dynamic>>[];
       for (final f in foods) {
-        final id = f['id'].toString();
+        final id = f['id']?.toString();
+        if (id == null || id.isEmpty) continue;
         if (!votedIds.contains(id)) {
-          items.add({...Map<String, dynamic>.from(f as Map), 'item_type': 'food'});
+          items.add({...Map<String, dynamic>.from(f), 'item_type': 'food'});
         }
       }
       for (final e in exercises) {
-        final id = e['id'].toString();
+        final id = e['id']?.toString();
+        if (id == null || id.isEmpty) continue;
         if (!votedIds.contains(id)) {
-          items.add({...Map<String, dynamic>.from(e as Map), 'item_type': 'exercise'});
+          items.add({...Map<String, dynamic>.from(e), 'item_type': 'exercise'});
         }
       }
 

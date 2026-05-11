@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late String nutritionProvSrc;
   late String syncSvcSrc;
+  late String nutritionWriteSvcSrc;
 
   setUpAll(() {
     final nf = File('lib/features/nutrition/providers/nutrition_provider.dart');
@@ -23,6 +24,14 @@ void main() {
     final sf = File('lib/core/services/sync_service.dart');
     expect(sf.existsSync(), isTrue, reason: 'sync_service.dart must exist');
     syncSvcSrc = sf.readAsStringSync();
+
+    // C-12 (audit-2026-05-11) — saveMealPreset Hive write was lifted
+    // into NutritionWriteService so the literal `saved_meal_` key
+    // prefix now lives in the service, not the notifier.
+    final wf = File('lib/core/services/nutrition_write_service.dart');
+    expect(wf.existsSync(), isTrue,
+        reason: 'nutrition_write_service.dart must exist (now owns the write)');
+    nutritionWriteSvcSrc = wf.readAsStringSync();
   });
 
   group('saved_meals writer↔reader source contract', () {
@@ -32,12 +41,15 @@ void main() {
     });
 
     test('writer uses saved_meal_ key prefix', () {
-      expect(
-          nutritionProvSrc.contains('saved_meal_') ||
-              nutritionProvSrc.contains("'saved_meal"),
-          isTrue,
+      // C-12 — accept the literal in either the notifier OR the service.
+      final inNotifier = nutritionProvSrc.contains('saved_meal_') ||
+          nutritionProvSrc.contains("'saved_meal");
+      final inService = nutritionWriteSvcSrc.contains('saved_meal_') ||
+          nutritionWriteSvcSrc.contains("'saved_meal");
+      expect(inNotifier || inService, isTrue,
           reason:
-              'SavedMealsNotifier must write saved_meal_ keys per sot_registry.hive.key_prefix');
+              'SavedMealsNotifier OR NutritionWriteService must write saved_meal_ '
+              'keys per sot_registry.hive.key_prefix.');
     });
 
     test('writer key uses hash (not ms-timestamp) for cross-device dedup', () {
@@ -45,9 +57,12 @@ void main() {
       // Per sot_registry class_constraints: "Hive key uses name-hash not ms-timestamp"
       // Note: existing code uses ms in the key — this is a KNOWN stale ref in registry
       // We assert the key is deterministic enough for cloud round-trips
+      // C-12 — accept presence in either notifier or service.
       expect(
-          nutritionProvSrc.contains('saved_meal_'), isTrue,
-          reason: 'saved_meal_ key prefix must be present');
+          nutritionProvSrc.contains('saved_meal_') ||
+              nutritionWriteSvcSrc.contains('saved_meal_'),
+          isTrue,
+          reason: 'saved_meal_ key prefix must be present in notifier or service');
     });
 
     test('reader SavedMealsNotifier class exists', () {

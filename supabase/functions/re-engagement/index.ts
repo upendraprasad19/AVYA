@@ -63,9 +63,34 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DROPOUT_THRESHOLD = 0.5;
 const SILENCE_DAYS_FALLBACK = 3;
 
+// Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // ── C-4 cron-auth gate ───────────────────────────────────────────────
+  // Audit 2026-05-11 / closes-diagnose 7ad0c4. These cron functions had
+  // `verify_jwt: false` and no manual auth. Now require Bearer == either
+  // SUPABASE_SERVICE_ROLE_KEY (existing pg_cron path) OR CRON_SECRET
+  // (rotatable hardening). If CRON_SECRET env var is unset, only the
+  // service-role-key path works — graceful rollout.
+  {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const isServiceRole = !!serviceRoleKey && token === serviceRoleKey;
+    const isCronSecret = !!cronSecret && token === cronSecret;
+    if (!isServiceRole && !isCronSecret) {
+      console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
   }
 
   const requestId = crypto.randomUUID().split("-")[0];

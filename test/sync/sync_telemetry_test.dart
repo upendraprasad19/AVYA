@@ -64,22 +64,62 @@ void main() {
     test(
       '_ensureSessionOpen reports openForUser failures via ErrorTelemetry',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
-        final fnIdx = src.indexOf('Future<String?> _ensureSessionOpen()');
+        // C-7 (audit-2026-05-11) — the helper now delegates to the
+        // shared `HiveUserSession.ensureOpenedForCurrentSession` static
+        // (so RankService / SubscriptionService / migrators / splash
+        // all share one entry). Either form is acceptable as long as
+        // openForUser failures still funnel through ErrorTelemetry
+        // somewhere downstream.
+        final syncSrc = _src('lib/core/services/sync_service.dart');
+        final fnIdx =
+            syncSrc.indexOf('Future<String?> _ensureSessionOpen()');
         expect(fnIdx, greaterThan(0));
-        // Slice generously — helper is short, ends before the next
-        // `// ──` divider.
-        final endIdx = src.indexOf('// ──', fnIdx);
-        final body = src.substring(fnIdx,
-            endIdx > fnIdx ? endIdx : (fnIdx + 1500).clamp(0, src.length));
+        final endIdx = syncSrc.indexOf('// ──', fnIdx);
+        final body = syncSrc.substring(
+            fnIdx,
+            endIdx > fnIdx
+                ? endIdx
+                : (fnIdx + 1500).clamp(0, syncSrc.length));
 
+        final reportsInline =
+            body.contains('ErrorTelemetry.recordNonFatal');
+        final delegatesToShared =
+            body.contains('HiveUserSession.ensureOpenedForCurrentSession');
         expect(
-          body,
-          contains('ErrorTelemetry.recordNonFatal'),
-          reason: '_ensureSessionOpen failures must surface to '
-              'ErrorTelemetry — the only signal we have if openForUser '
-              'is itself broken.',
+          reportsInline || delegatesToShared,
+          isTrue,
+          reason: '_ensureSessionOpen must either call '
+              'ErrorTelemetry.recordNonFatal inline OR delegate to '
+              'HiveUserSession.ensureOpenedForCurrentSession (which '
+              'does). Both forms preserve the Crashlytics signal.',
         );
+
+        if (delegatesToShared) {
+          // Verify the downstream helper still funnels through
+          // ErrorTelemetry — otherwise the delegation drops the signal.
+          final hsSrc =
+              _src('lib/core/services/hive_user_session.dart');
+          final ensureIdx = hsSrc.indexOf(
+              'static Future<String?> ensureOpenedForCurrentSession()');
+          expect(ensureIdx, greaterThan(0),
+              reason:
+                  'shared helper must exist if SyncService delegates to it');
+          final ensureEnd = hsSrc.indexOf('\n  }', ensureIdx);
+          final ensureBody = hsSrc.substring(
+              ensureIdx,
+              ensureEnd > ensureIdx
+                  ? ensureEnd
+                  : (ensureIdx + 2000).clamp(0, hsSrc.length));
+          expect(
+            ensureBody,
+            contains('ErrorTelemetry.recordNonFatal'),
+            reason:
+                'HiveUserSession.ensureOpenedForCurrentSession must '
+                'forward openForUser failures to ErrorTelemetry — '
+                'else the delegation drops the only signal we have if '
+                'openForUser is itself broken.',
+          );
+        }
       },
     );
   });

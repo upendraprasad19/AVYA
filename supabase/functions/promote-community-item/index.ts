@@ -8,10 +8,14 @@
  * submitter ("Your submission 'X' is now live").
  *
  * Trigger: invoked by cron (pg_cron schedule) OR manually by admin.
- * `verify_jwt: true` — admins call via service-role key or a signed-in
- * admin JWT; end users can't invoke.
  *
- * Reference: docs/superpowers/plans... plan file Part 4 F18.
+ * Audit C-5 (2026-05-11, closes-diagnose 7ad0c5): caller-identity gate.
+ *
+ * v7 had a bug: anon JWT bypassed the gate because auth.getUser(anon_key)
+ * returns null, and the code treated null user as 'service-role caller'.
+ * v8: explicit token comparison — service-role key matches the env var
+ * literally; authenticated JWTs are admin-checked against ADMIN_USER_IDS;
+ * everything else 401/403.
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -19,9 +23,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") ?? "";
 const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") ?? "";
+
+// Admin allowlist for direct invocation. Comma-separated UUIDs.
+// If empty, end-user calls are auto-rejected (fail-secure default).
+// Service-role callers bypass this — they match SUPABASE_SERVICE_ROLE_KEY
+// literally and don't need to be on the admin list.
+const ADMIN_USER_IDS = (Deno.env.get("ADMIN_USER_IDS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const APPROVAL_THRESHOLD = 10;
 
@@ -31,6 +45,40 @@ serve(async (req: Request) => {
   }
   if (req.method !== "POST") {
     return clientError("Method not allowed", 405);
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return clientError("Missing authorization header", 401);
+  }
+  const token = authHeader.slice("Bearer ".length);
+
+  // ── Caller-identity gate (C-5) ───────────────────────────────────────
+  // Three accepted paths:
+  //   1. Service-role key (cron / dashboard / MCP) — literal match
+  //   2. Authenticated admin JWT — user.id ∈ ADMIN_USER_IDS
+  // Everything else is rejected. Anon JWT is rejected via path 2 because
+  // anon JWT has no user_id claim → auth.getUser returns null.
+
+  const isServiceRole = (token === SUPABASE_SERVICE_ROLE_KEY);
+
+  if (!isServiceRole) {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { user } } = await userClient.auth.getUser(token);
+
+    if (!user) {
+      return clientError("Admin only", 403);
+    }
+
+    if (ADMIN_USER_IDS.length === 0) {
+      console.error("[promote-community-item] ADMIN_USER_IDS env var not set; rejecting end-user call by default");
+      return clientError("Admin only", 403);
+    }
+
+    if (!ADMIN_USER_IDS.includes(user.id)) {
+      console.warn(`[promote-community-item] non-admin caller rejected: user_id=${user.id}`);
+      return clientError("Admin only", 403);
+    }
   }
 
   try {

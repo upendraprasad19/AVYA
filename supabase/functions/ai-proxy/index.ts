@@ -46,6 +46,7 @@ import {
 import { runToolLoop } from "../_shared/tool-loop.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { istDateStr, istDayStartIso } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -192,6 +193,17 @@ serve(async (req: Request) => {
     //   2. Call Gemini on the valid reservation.
     //   3. UPDATE the row with the response + model + tokens.
     if (type === "food_text_analysis" && text) {
+      // H-22 (audit-2026-05-11) — length cap. Pre-fix `text` was sent
+      // to Gemini unbounded; a malicious / accidental 1MB description
+      // would burn through both the Gemini context budget and our
+      // per-call cost. Cap to 5000 chars (same as the chat channel).
+      if (typeof text !== "string") {
+        return err(400, "food_text_analysis: 'text' must be a string");
+      }
+      if (text.length > 5000) {
+        return err(400, "food_text_analysis: text too long (max 5000 chars)");
+      }
+
       // Step 1 — reserve a slot (or get rejected by the trigger).
       const { data: reservation, error: insertErr } = await supabaseClient
         .from("ai_coach_interactions")
@@ -276,14 +288,37 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
     }
 
     // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
+    //
+    // audit-2026-05-11 H-10 — was filtering against UTC midnight
+    // (`<date>T00:00:00Z`), so the cap reset at 05:30 IST every
+    // morning instead of midnight. Indian users hitting the limit at
+    // 23:00 IST saw it stay locked for another 6.5h. Switched to
+    // istDayStartIso() (IST midnight as +05:30 timestamptz).
     if (type === "scan_meal" || type === "cart_auditor") {
-      const todayVisionStr = new Date().toISOString().split("T")[0];
+      // H-21 (audit-2026-05-11) — image size validation. Pre-fix
+      // `body.image` was forwarded to Gemini unbounded — a 50MB
+      // base64 blob would burn through Gemini cost + Edge Function
+      // memory. ai-media-proxy already enforces 5MB; mirror it here.
+      // Base64 expands by ~4/3 so a 5MB decoded ceiling = ~6.7MB
+      // encoded. Use the raw base64 length as a fast proxy.
+      const imgB64 = body.image;
+      if (typeof imgB64 === "string") {
+        // 7_500_000 ≈ 5.6MB decoded — a small slop margin over the
+        // 5MB ai-media-proxy ceiling so legitimate 5MB images don't
+        // edge-trip the cap.
+        if (imgB64.length > 7_500_000) {
+          return err(400, "Image too large (max ~5MB)");
+        }
+      } else if (imgB64 != null) {
+        return err(400, "Image must be a base64 string");
+      }
+
       const { count: visionCount } = await supabaseClient
         .from("ai_coach_interactions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .in("channel", ["scan_meal", "cart_auditor"])
-        .gte("created_at", todayVisionStr + "T00:00:00Z");
+        .gte("created_at", istDayStartIso());
 
       if ((visionCount ?? 0) >= 15) {
         return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
@@ -429,15 +464,16 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     if (!isProUser) {
       // Free-tier gate: 10 messages/day in perpetuity — no trial window.
       // OQ-1 decision: free tier gets 10/day forever. Captain Manual reflects this.
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-
+      //
+      // audit-2026-05-11 H-4 — was setUTCHours(0,0,0,0) which is UTC
+      // midnight = 05:30 IST. Free users in India saw their 10-msg cap
+      // reset at dawn instead of midnight. Switched to istDayStartIso().
       const { count: msgCount, error: countError } = await supabaseClient
         .from("ai_coach_interactions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .eq("channel", "app")
-        .gte("created_at", todayStart.toISOString());
+        .gte("created_at", istDayStartIso());
 
       if (countError) return err(500, "Failed to check rate limit");
 
@@ -722,7 +758,10 @@ yet" — never make up a number.
             content: content_,
             source_type: "conversation",
             metadata: {
-              date: new Date().toISOString().split("T")[0],
+              // audit-2026-05-11 H-7 — was UTC date; embedded
+              // memories now stamped with IST date so they correlate
+              // with the user's "today" when retrieved.
+              date: istDateStr(),
               channel: "app",
               model: modelLabel,
               is_pro: isProUser,

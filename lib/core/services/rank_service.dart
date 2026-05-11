@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -46,6 +48,14 @@ class RankService {
     try {
       final user = SupabaseService.instance.currentUser;
       if (user == null) return; // not signed in — nothing to write
+
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash fires this fire-and-forget before `_ensureLocalUser` has
+      // necessarily opened the session. Without this, every
+      // user-scoped box read inside `_readEvaluationState` would throw
+      // `HiveUserSession not opened` and the surrounding catch would
+      // silently swallow it → users miss rank promotions.
+      await HiveUserSession.ensureOpenedForCurrentSession();
 
       final signupAt = DateTime.tryParse(user.createdAt);
       final state = _readEvaluationState(signupAt: signupAt);
@@ -118,9 +128,14 @@ class RankService {
           'current_rank_achieved_at': DateTime.now().toIso8601String(),
         }).eq('user_id', user.id);
       }
-    } catch (e) {
-      // Fire-and-forget contract — errors must never propagate to UI.
+    } catch (e, st) {
+      // H-42 (audit-2026-05-11) — fire-and-forget contract; errors
+      // must never propagate to UI but they MUST reach Crashlytics +
+      // client_errors. Splash + post-workout hot path; pre-fix a
+      // single debugPrint left us blind to silent failures.
       debugPrint('[RankService.evaluateAndPromote] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'rank_service_evaluate_and_promote'));
     }
   }
 
@@ -134,8 +149,11 @@ class RankService {
           ? DateTime.tryParse(achievedAtRaw)
           : null;
       return RankInfo(entry: entry, achievedAt: achievedAt);
-    } catch (e) {
+    } catch (e, st) {
+      // H-42 (audit-2026-05-11) — same pattern as above.
       debugPrint('[RankService.getCurrentRank] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'rank_service_get_current_rank'));
       return RankInfo(entry: rankByCode('SD2')!);
     }
   }
@@ -312,7 +330,10 @@ class RankService {
   _EvalState _readEvaluationState({DateTime? signupAt}) {
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress() ?? {};
-    final streakDays = repo.calculateCurrentStreak();
+    // C-14 (audit-2026-05-11) — rank-gate evaluation is a READ.
+    // Must not consume freezes as a side effect of cron / splash
+    // / post-workout fire-and-forget evaluation.
+    final streakDays = repo.currentStreak();
     final totalWorkouts =
         (progress['total_workouts_done'] as int?) ?? 0;
 

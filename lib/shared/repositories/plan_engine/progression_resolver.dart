@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 /// Stage 0: Reads exercise logs from Hive for Phase 2+ to suggest starting weights.
@@ -73,8 +76,14 @@ class ProgressionResolver {
         final increment = _isLowerBody(exerciseName) ? 5.0 : 2.5;
         weights[exerciseName] = bestWeight + increment;
       }
-    } catch (e) {
+    } catch (e, st) {
+      // H-42 (audit-2026-05-11) — silent failure here means the plan
+      // generator silently falls back to the default starting weight
+      // for every exercise. Surface the error remotely so we can spot
+      // Hive corruption / schema drift before it tanks user plans.
       debugPrint('[ProgressionResolver] Error reading Hive logs: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'progression_resolver_hive_read'));
     }
 
     return weights;

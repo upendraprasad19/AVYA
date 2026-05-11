@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
@@ -49,15 +52,34 @@ class SubscriptionService {
   static const String _planKey = 'plan';
   static const String _lastVerifiedKey = 'lastVerifiedAt';
 
-  /// APK Test #12 / Task C-1 — payment grace window key. While this
-  /// timestamp is in the future, [verifyFromServer] will NOT downgrade
-  /// the user even if the server reports `is_pro: false` (the webhook
-  /// hasn't fired yet). Set by [RazorpayService] on payment success +
-  /// during polling; cleared after server confirmation.
+  /// APK Test #12 / Task C-1 + H-41 (audit-2026-05-11) — payment
+  /// grace window key. While a payment is in-flight,
+  /// [verifyFromServer] will NOT downgrade the user even if the server
+  /// reports `is_pro: false` (the webhook hasn't fired yet). Set by
+  /// [RazorpayService] on payment success; cleared when the webhook
+  /// lands OR `verify-payment` confirms a final verdict.
+  ///
+  /// H-41 — pre-fix this was a pure ISO-timestamp `until` value.
+  /// Time-based windows have two pathologies: (a) a slow webhook past
+  /// 10 min flips grace to false even though we're still legitimately
+  /// awaiting verdict; (b) a fast confirmation in 5s leaves the
+  /// window open for another 9:55, masking unrelated downgrade events
+  /// during that window.
+  ///
+  /// Now stores `{order_id, started_at_iso}`. Event-based clear from
+  /// [clearPaymentInFlight] (webhook landed / final verdict). The
+  /// 10-min ceiling is preserved ONLY as a fallback safety cap, in
+  /// case the clear path is missed.
+  static const String _paymentInFlightOrderKey = 'paymentInFlightOrder';
+
+  /// Legacy key — read for back-compat one cold start after upgrade,
+  /// then never written again. Removed in a future cleanup batch.
   static const String _paymentInFlightUntilKey = 'paymentInFlightUntil';
 
-  /// Default grace window after payment success — webhook usually fires
-  /// within 30s but we allow up to 10 min to absorb retry storms.
+  /// Hard ceiling — even with the event-based clear path, never honour
+  /// a stale grace window past this duration. Protects against the
+  /// clear path being missed (network drop after webhook, app killed
+  /// mid-verify, etc.).
   static const Duration _paymentGraceWindow = Duration(minutes: 10);
 
   /// Server-side verification cache TTL (5 minutes).
@@ -65,25 +87,71 @@ class SubscriptionService {
 
   /// Returns true if a payment is currently mid-confirmation. While
   /// true, downgrade decisions in [verifyFromServer] are suppressed.
+  ///
+  /// H-41 evaluation logic:
+  ///   1. If a `paymentInFlightOrder` record exists AND `started_at`
+  ///      is within the 10-min ceiling → in flight.
+  ///   2. Else if the legacy `paymentInFlightUntil` timestamp exists
+  ///      and is still in the future (cold-start upgrade) → in flight.
+  ///   3. Otherwise → not in flight.
   bool get isPaymentInFlight {
-    final raw = MigratedKey.read<dynamic>(_paymentInFlightUntilKey);
-    if (raw == null) return false;
-    final until = DateTime.tryParse(raw.toString());
-    if (until == null) return false;
-    return DateTime.now().isBefore(until);
+    final rec = MigratedKey.read<dynamic>(_paymentInFlightOrderKey);
+    if (rec is Map) {
+      final startedAt =
+          DateTime.tryParse((rec['started_at'] ?? '').toString());
+      if (startedAt != null) {
+        return DateTime.now().difference(startedAt) < _paymentGraceWindow;
+      }
+    }
+    // Legacy fallback — read once per device until first event-based
+    // write supersedes it.
+    final legacy = MigratedKey.read<dynamic>(_paymentInFlightUntilKey);
+    if (legacy != null) {
+      final until = DateTime.tryParse(legacy.toString());
+      if (until != null) return DateTime.now().isBefore(until);
+    }
+    return false;
   }
 
-  /// Marks a payment as in-flight for [_paymentGraceWindow]. Public so
-  /// [RazorpayService] can call it on payment success and during poll
-  /// retries.
-  Future<void> markPaymentInFlight() async {
-    final until = DateTime.now().add(_paymentGraceWindow).toIso8601String();
-    await MigratedKey.write(_paymentInFlightUntilKey, until);
+  /// Order id of the in-flight payment (event-based handle for the
+  /// webhook + verify-payment confirmation paths to clear by). Returns
+  /// null when no payment is in flight.
+  String? get paymentInFlightOrderId {
+    final rec = MigratedKey.read<dynamic>(_paymentInFlightOrderKey);
+    if (rec is Map) {
+      final id = rec['order_id'];
+      return id is String && id.isNotEmpty ? id : null;
+    }
+    return null;
   }
 
-  /// Clears the payment grace window. Called after successful server
-  /// confirmation so subsequent [verifyFromServer] calls behave normally.
+  /// Marks a payment as in-flight by recording its Razorpay order_id +
+  /// the start timestamp. Public so [RazorpayService] can call it on
+  /// payment success. The 10-min ceiling enforced by [isPaymentInFlight]
+  /// is a fallback only — the canonical clear path is event-based.
+  Future<void> markPaymentInFlight({String? orderId}) async {
+    final startedAt = DateTime.now().toIso8601String();
+    await MigratedKey.write(_paymentInFlightOrderKey, <String, dynamic>{
+      'order_id': orderId ?? '',
+      'started_at': startedAt,
+    });
+    // Clear the legacy time-based key in the same write — if it
+    // happens to be present from a pre-upgrade install, the event-
+    // based path now owns the grace window.
+    try {
+      await MigratedKey.delete(_paymentInFlightUntilKey);
+    } catch (_) {}
+  }
+
+  /// Clears the payment grace window. Called from:
+  ///   - [RazorpayService] webhook-confirmed path (preferred clear)
+  ///   - [RazorpayService.verifyPayment] final-verdict path (success
+  ///     OR explicit final failure)
+  ///   - Defensive on subscription-state writes after server confirms.
+  ///
+  /// Idempotent — safe to call when no payment is in flight.
   Future<void> clearPaymentInFlight() async {
+    await MigratedKey.delete(_paymentInFlightOrderKey);
     await MigratedKey.delete(_paymentInFlightUntilKey);
   }
 
@@ -294,6 +362,14 @@ class SubscriptionService {
       final userId = supabase.currentUser?.id;
       if (userId == null) return;
 
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash fires `refreshFromSupabase` fire-and-forget BEFORE
+      // `_ensureLocalUser` has opened the per-user namespaced boxes.
+      // Without this, the configBox/userBox reads / writes below race
+      // with the session and the upgrade pill stays grey even after the
+      // server confirms PRO.
+      await HiveUserSession.ensureOpenedForCurrentSession();
+
       // APK Test #12.1 / hotfix — check payment grace window FIRST,
       // before any state evaluation. This is the second downgrade path
       // (alongside `verifyFromServer`); without this gate, a cold start
@@ -392,7 +468,7 @@ class SubscriptionService {
       // ignore: discarded_futures
       ErrorTelemetry.logEvent('subscription_refresh_success',
           message: 'plan=${plan ?? 'monthly'}');
-    } catch (e) {
+    } catch (e, st) {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
 
@@ -402,6 +478,12 @@ class SubscriptionService {
       // Fire-and-forget; never let logging fail block recovery.
       // ignore: discarded_futures
       _logRefreshFailure(e);
+
+      // audit-2026-05-11 H-42 — direct Crashlytics path alongside the
+      // log-client-error funnel above (defense-in-depth — if Edge
+      // Functions are down, Crashlytics still gets the signal).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'subscription_refresh_from_supabase'));
 
       // Don't let network errors perpetuate phantom PRO indefinitely.
       // If local activation grace period (10 min) has passed, clear the flag

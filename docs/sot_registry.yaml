@@ -313,7 +313,7 @@ concepts:
         method: currentTargetMl + computeFromProfile
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1488-1491
+        line_range: 1473-1476
         method: waterTargetProvider
       - file: lib/features/home/widgets/water_quick_sheet.dart
         line_range: 40-50
@@ -852,8 +852,11 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1010-1060
-        method: SavedMealsNotifier.saveMealPreset
+        line_range: 990-1080
+        method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators)
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 448-580
+        method: saveMealPreset + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1-9999

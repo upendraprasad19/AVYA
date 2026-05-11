@@ -30,28 +30,53 @@ void main() {
 
     test('streak_freeze mutations fan out to syncFreezes (workout_repository)',
         () {
-      final src = File(
+      // C-15 (audit-2026-05-11) — the `syncFreezes` call moved out of
+      // `workout_repository` into `StreakProgressService.commitConsume`.
+      // The contract is preserved: workout_repository routes through
+      // the service, which fires syncFreezes. Accept either form.
+      final repoSrc = File(
               'lib/features/train/repositories/workout_repository.dart')
           .readAsStringSync();
-      expect(src.contains('SyncService.instance.syncFreezes'), isTrue,
-          reason:
-              'workout_repository must push freeze state to cloud after '
-              'consuming a freeze (CLAUDE.md §15). Paying users lose '
-              'streak freezes on reinstall without this.');
+      final svcSrc =
+          File('lib/core/services/streak_progress_service.dart')
+              .readAsStringSync();
+      final repoCallsService =
+          repoSrc.contains('StreakProgressService.instance.commitConsume');
+      final serviceFiresSync =
+          svcSrc.contains('SyncService.instance.syncFreezes');
+      expect(
+        (repoCallsService && serviceFiresSync) ||
+            repoSrc.contains('SyncService.instance.syncFreezes'),
+        isTrue,
+        reason: 'workout_repository must push freeze state to cloud after '
+            'consuming a freeze (CLAUDE.md §15). Now routed through '
+            'StreakProgressService.commitConsume which fires syncFreezes.',
+      );
     });
 
     test(
         'streak_freeze weekly refill fans out to syncFreezes (home_provider)',
         () {
-      final src =
+      // C-15 — same pattern: refill moved into
+      // StreakProgressService.commitRefill which fires syncFreezes.
+      final homeSrc =
           File('lib/features/home/providers/home_provider.dart')
               .readAsStringSync();
-      expect(src.contains('SyncService.instance.syncFreezes'), isTrue,
-          reason:
-              'home_provider._refillIfNewWeek must push refilled freeze '
-              'count to cloud (CLAUDE.md §15). Without this, a user who '
-              'reinstalls mid-week starts with 0 freezes instead of the '
-              'refilled count.');
+      final svcSrc =
+          File('lib/core/services/streak_progress_service.dart')
+              .readAsStringSync();
+      final homeCallsService =
+          homeSrc.contains('StreakProgressService.instance.commitRefill');
+      final serviceFiresSync =
+          svcSrc.contains('SyncService.instance.syncFreezes');
+      expect(
+        (homeCallsService && serviceFiresSync) ||
+            homeSrc.contains('SyncService.instance.syncFreezes'),
+        isTrue,
+        reason: 'home_provider._refillIfNewWeek must push refilled freeze '
+            'count to cloud (CLAUDE.md §15). Now routed through '
+            'StreakProgressService.commitRefill which fires syncFreezes.',
+      );
     });
 
     test(
@@ -80,10 +105,12 @@ void main() {
     });
 
     test('all sync callsites use unawaited() (never block UI)', () {
+      // C-15 (audit-2026-05-11) — syncFreezes moved into
+      // StreakProgressService; workout_repository + home_provider now
+      // call commitConsume / commitRefill instead. The service file
+      // itself wraps SyncService.syncFreezes in unawaited().
       final files = {
-        'lib/features/train/repositories/workout_repository.dart':
-            'syncFreezes',
-        'lib/features/home/providers/home_provider.dart': 'syncFreezes',
+        'lib/core/services/streak_progress_service.dart': 'syncFreezes',
         'lib/features/profile/services/notification_inbox_service.dart':
             'syncNotificationsInboxEntry',
         'lib/features/nutrition/screens/diet_plan_screen.dart':

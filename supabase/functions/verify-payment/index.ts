@@ -439,19 +439,44 @@ serve(async (req: Request) => {
         });
 
       if (insertError2) {
-        console.error("Failed to insert subscription:", insertError2);
-        return new Response(
-          JSON.stringify({
-            verified: true,
-            error: "Payment verified but failed to create subscription record",
-            plan,
-            end_date: endDate.toISOString(),
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+        // H-18 (audit-2026-05-11) — detect 23505 unique-violation
+        // and treat it as success. Concurrent webhook + verify-payment
+        // race: the webhook may have already inserted the row by the
+        // time verify-payment's fallback insert fires. Postgres
+        // raises `unique_violation` (SQLSTATE 23505), which the
+        // PostgREST client surfaces via `code: '23505'`. The row
+        // already exists with the same (user_id, razorpay_payment_id);
+        // returning verified=true is correct.
+        const code =
+          (insertError2 as { code?: string }).code ??
+          (insertError2 as { details?: string }).details ??
+          "";
+        const isUniqueViolation =
+          code === "23505" ||
+          String(insertError2.message ?? "")
+            .toLowerCase()
+            .includes("duplicate key value violates unique constraint");
+        if (isUniqueViolation) {
+          console.log(
+            "[verify-payment] H-18 — 23505 on fallback insert; webhook already wrote the row, treating as success.",
+          );
+          // Fall through — the row exists. Continue to users-table
+          // update + success response.
+        } else {
+          console.error("Failed to insert subscription:", insertError2);
+          return new Response(
+            JSON.stringify({
+              verified: true,
+              error: "Payment verified but failed to create subscription record",
+              plan,
+              end_date: endDate.toISOString(),
+            }),
+            {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
       }
     }
 

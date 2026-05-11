@@ -291,11 +291,40 @@ serve(async (req: Request) => {
     const razorpayPaymentId = paymentEntity.id;
     const razorpaySignature = signature;
 
+    // H-19 (audit-2026-05-11) — idempotency pre-SELECT moved BEFORE
+    // auto-capture. Pre-fix the order was capture-then-pre-SELECT, so
+    // a replayed `payment.authorized` for an already-captured payment
+    // fired a second Razorpay capture call → Razorpay 4xx ("already
+    // captured") → we returned 502 → Razorpay kept retrying. Now we
+    // short-circuit the entire pipeline (capture + insert + promo
+    // redemption) for any payment_id already present in subscriptions.
+    const { data: idemRow } = await supabaseClient
+      .from("subscriptions")
+      .select("id")
+      .eq("razorpay_payment_id", razorpayPaymentId)
+      .maybeSingle();
+    if (idemRow !== null) {
+      console.log(
+        `[razorpay-webhook] H-19 idempotent skip: payment ${razorpayPaymentId} already processed; bypassing capture + insert`,
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          alreadyProcessed: true,
+          payment_id: razorpayPaymentId,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // If this is a payment.authorized event, capture the payment now so
     // it becomes final. Razorpay will fire a second payment.captured
-    // event after our capture call, which we handle idempotently below
-    // (UNIQUE(razorpay_payment_id) on subscriptions makes the second
-    // webhook a no-op).
+    // event after our capture call, which we handle idempotently above
+    // (the H-19 pre-SELECT short-circuits the replay before we reach
+    // here a second time).
     if (event === "payment.authorized" && paymentEntity.captured === false) {
       if (!RAZORPAY_KEY_ID) {
         console.error(

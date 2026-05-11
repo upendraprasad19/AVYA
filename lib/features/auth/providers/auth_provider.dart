@@ -461,6 +461,38 @@ class AuthNotifier extends Notifier<AuthState2> {
         'last_active_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', user.id);
 
+      // H-3 (audit-2026-05-11) — backfill `full_name` from the real
+      // onboarding profile. Email signups previously seeded
+      // `full_name` with `email.split('@').first` because Supabase
+      // Auth's email signup carries no metadata. With
+      // `ignoreDuplicates: true` that email-prefix stuck FOREVER —
+      // AI coach + weekly recap + every greeting addressed users by
+      // their email prefix for the lifetime of the account.
+      //
+      // Self-heal: if the local userBox profile carries a real
+      // `full_name`, push it up to public.users (and overwrite the
+      // email-prefix seed). Only overwrites when the local name looks
+      // real (non-empty, contains a letter, not equal to the email
+      // prefix). Idempotent — once names match, this update is a
+      // no-op every cold start.
+      final localProfile = userBox.get('profile');
+      if (localProfile is Map) {
+        final localName = (localProfile['full_name'] as String?)?.trim();
+        final emailPrefix =
+            (user.email?.contains('@') == true)
+                ? user.email!.split('@').first
+                : null;
+        final looksReal = localName != null &&
+            localName.isNotEmpty &&
+            RegExp(r'[A-Za-z]').hasMatch(localName) &&
+            localName != emailPrefix;
+        if (looksReal) {
+          await _supabase.client
+              .from('users')
+              .update({'full_name': localName}).eq('id', user.id);
+        }
+      }
+
       // Sync ToS/Privacy acceptance from Hive (stamped by TermsModal).
       // Only writes if Hive has a value — never overwrites a server-side
       // timestamp with null.

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -149,12 +150,52 @@ class WorkoutRepository {
     return earliest;
   }
 
+  /// Pure read of the current workout streak. Walks the schedule
+  /// backwards and simulates freeze consumption locally to produce
+  /// an accurate count, but does NOT persist any state changes.
+  ///
+  /// C-14 (audit-2026-05-11) — every display surface (RankService
+  /// rank-gate check, streakProvider for home, rank_service_record_sheet,
+  /// streak_explainer_sheet) calls this and must NOT trigger freeze
+  /// consumption as a side effect. Pre-fix `calculateCurrentStreak`
+  /// silently consumed freezes on every render — calling it 3× in a
+  /// short window could consume 3 different freezes for the same
+  /// missed day if the order of state writes raced.
+  int currentStreak() => _calculateStreak(consume: false);
+
+  /// Explicit mutating variant — same walk-back logic, but actually
+  /// consumes available freezes for missed days and persists the new
+  /// state to Hive + cloud. Called from:
+  ///   - `train_provider.completeWorkout` (the canonical mutation
+  ///     surface where a missed day BEFORE today legitimately needs a
+  ///     freeze consumed).
+  ///   - A future daily roll-over service if/when one lands.
+  ///
+  /// Returns the post-consumption streak count so callers can save
+  /// it back to user_progress in the same write.
+  int consumeMissedDayIfFreezeAvailable() =>
+      _calculateStreak(consume: true);
+
+  /// Legacy entry — kept for back-compat. Now a thin wrapper that
+  /// preserves the prior mutating behaviour. New callers should use
+  /// `currentStreak()` for pure reads or
+  /// `consumeMissedDayIfFreezeAvailable()` for explicit consumes.
+  @Deprecated(
+      'C-14 audit-2026-05-11: use `currentStreak()` for pure reads or '
+      '`consumeMissedDayIfFreezeAvailable()` to explicitly consume. '
+      'The unsplit method silently consumed freezes on every render.')
+  int calculateCurrentStreak() => consumeMissedDayIfFreezeAvailable();
+
   /// Calculates the current workout streak by scanning the schedule backwards.
   ///
   /// Schedule-aware: rest days are invisible and never break the streak.
   /// Only missed *scheduled workout days* cause a break.
   /// Handles schedule changes, template swaps, and cross-week boundaries.
-  int calculateCurrentStreak() {
+  ///
+  /// [consume] — when true, persist freeze consumption to Hive + sync to
+  /// cloud. When false, the walk produces the same count but does not
+  /// mutate state. C-14 audit-2026-05-11.
+  int _calculateStreak({required bool consume}) {
     int streak = 0;
     final today = DateTime.now();
 
@@ -230,16 +271,21 @@ class WorkoutRepository {
       }
     }
 
-    // Persist freeze state if any were consumed
-    if (freezeConsumedThisCalc) {
-      UserRepository.instance.updateProgress({
-        'streak_freezes_available': freezesAvailable,
-        'streak_freeze_used_dates': usedDates,
-        'streak_freeze_just_used': true,
-        'streak_freeze_remaining_after_use': freezesAvailable,
-      });
-      // Push freeze state to cloud so it survives reinstall.
-      unawaited(SyncService.instance.syncFreezes());
+    // Persist freeze state if any were consumed AND the caller asked
+    // for the mutating variant. C-14 (audit-2026-05-11) — read-only
+    // call sites must never mutate. The simulated `freezesAvailable`
+    // / `usedDates` are still used above to produce an accurate
+    // count, but the persist + sync only fires on `consume: true`.
+    //
+    // C-15 (audit-2026-05-11) — routed through StreakProgressService
+    // as the sole writer. Both refill (home_provider) and consume
+    // (here) use commitRefill/commitConsume. Cross-device race
+    // protected by migration 056's update_streak_progress RPC.
+    if (consume && freezeConsumedThisCalc) {
+      StreakProgressService.instance.commitConsume(
+        freezesAvailableAfterConsume: freezesAvailable,
+        usedDatesAfterConsume: usedDates,
+      );
     }
 
     return streak;

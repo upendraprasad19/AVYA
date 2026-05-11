@@ -4,17 +4,20 @@
 //
 // Flow (order matters):
 //   1. JWT auth via getUser (server-side verify, not just header)
-//   2. Confirmation token check — body must have DELETE-MY-ACCOUNT-<uid8>
-//   3. Razorpay subscription cancel — MUST succeed or 502 abort
-//   4. OneSignal player unsub — best-effort, non-fatal
-//   5. Storage purge (3 buckets) — best-effort, per-bucket errors logged
-//   6. auth.users delete (service-role) — CASCADE through public.users + all FKs
+//   2. Rate limit — 5 attempts per user per hour (audit Hermes-R2 #9, 7ad009)
+//   3. Confirmation token check — body must have DELETE-MY-ACCOUNT-<uid8>
+//   4. Razorpay subscription cancel — MUST succeed or 502 abort
+//   5. OneSignal player unsub — best-effort, non-fatal
+//   6. Storage purge (3 buckets) — best-effort, per-bucket errors logged
+//   7. auth.users delete (service-role) — CASCADE through public.users + all FKs
 //      (5 community surfaces get user_id = NULL per migration 049, not deleted)
-//   7. Audit insert to account_deletion_log (no FK, survives auth delete)
+//   8. Audit insert to account_deletion_log (no FK, survives auth delete)
 //
 // verify_jwt: true at deploy (user must be authenticated).
 // Error sanitization: every non-200 returns { error: <code>, request_id: <8-hex> }.
 // No PII in error response bodies.
+//
+// closes-diagnose: 7ad009 (audit Hermes-R2 #9 rate limit, 2026-05-11)
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -58,17 +61,24 @@ if (
   throw new Error("[delete-account] required env vars not set");
 }
 
+// Rate-limit config (Hermes-R2 #9): 5 attempts per user per hour. Counted via
+// `ai_coach_interactions` rows with channel='delete_account_attempt'. Mirrors
+// the verify-payment rate-limit pattern.
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MINUTES = 60;
+
 // ── Helper: sanitized error response (no PII, no stack traces) ───────────────
 function jsonError(
   status: number,
   error: string,
   requestId: string,
+  extraHeaders: Record<string, string> = {},
 ): Response {
   return new Response(
     JSON.stringify({ error, request_id: requestId }),
     {
       status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, ...extraHeaders, "Content-Type": "application/json" },
     },
   );
 }
@@ -112,7 +122,64 @@ serve(async (req: Request) => {
     }
     const userId = userRes.user.id;
 
-    // ── 2. CONFIRMATION TOKEN ────────────────────────────────────────────────
+    // Admin client for all privileged operations below
+    const admin = createClient(SUPABASE_URL as string, SERVICE_ROLE as string);
+
+    // ── 2. RATE LIMIT (Hermes-R2 #9, 7ad009) ─────────────────────────────────
+    // 5 attempts per user per hour. Counted via ai_coach_interactions rows
+    // with channel='delete_account_attempt'. Prevents DoS where a malicious
+    // actor knowing a target's 8-char user_id prefix repeatedly attempts
+    // deletion (each attempt fires Razorpay + DB queries before the 400 reject).
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString();
+    const { count: attemptCount, error: rateErr } = await admin
+      .from("ai_coach_interactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("channel", "delete_account_attempt")
+      .gte("created_at", windowStart);
+
+    if (rateErr) {
+      // Fail-open: log + continue. We don't want a counter-query failure to
+      // block account deletion. (Diff from verify-payment which fail-closes;
+      // here the user is exercising a right, not making a payment.)
+      console.warn(
+        `[delete-account] request_id=${requestId} rate-limit query failed (fail-open):`,
+        rateErr.message,
+      );
+    } else if ((attemptCount ?? 0) >= RATE_LIMIT_MAX) {
+      console.warn(
+        `[delete-account] request_id=${requestId} user=${userId} rate-limited:` +
+          ` ${attemptCount}/${RATE_LIMIT_MAX} attempts in last ${RATE_LIMIT_WINDOW_MINUTES}min`,
+      );
+      return jsonError(
+        429,
+        "rate_limited",
+        requestId,
+        { "Retry-After": String(RATE_LIMIT_WINDOW_MINUTES * 60) },
+      );
+    }
+
+    // Record this attempt (whether it succeeds or fails downstream). Fire-and-
+    // forget; counter accuracy is best-effort.
+    admin
+      .from("ai_coach_interactions")
+      .insert({
+        user_id: userId,
+        channel: "delete_account_attempt",
+        prompt_snippet: `request_id=${requestId}`,
+        response_snippet: null,
+        model_used: "none",
+      })
+      .then(({ error }) => {
+        if (error) {
+          console.warn(
+            `[delete-account] request_id=${requestId} attempt-counter insert failed (non-fatal):`,
+            error.message,
+          );
+        }
+      });
+
+    // ── 3. CONFIRMATION TOKEN ────────────────────────────────────────────────
     // Prevents a stolen JWT replay from triggering deletion without also knowing
     // the user's own ID prefix. Body must contain exact token.
     let body: Record<string, unknown>;
@@ -134,10 +201,7 @@ serve(async (req: Request) => {
       `[delete-account] request_id=${requestId} user=${userId} confirmed — starting erasure`,
     );
 
-    // Admin client for all privileged operations below
-    const admin = createClient(SUPABASE_URL as string, SERVICE_ROLE as string);
-
-    // ── 3. RAZORPAY CANCEL — must succeed or abort ───────────────────────────
+    // ── 4. RAZORPAY CANCEL — must succeed or abort ───────────────────────────
     // Risk: if we delete the user first and Razorpay cancel fails, the user has
     // no account to dispute the charge. Cancel first, delete after.
     let razorpayStatus = "no_active_sub";

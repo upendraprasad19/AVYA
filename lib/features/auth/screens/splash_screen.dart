@@ -7,10 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
@@ -109,26 +109,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Supabase must come first — auth state is needed by _navigateNext.
     await SupabaseService.instance.initialize();
 
-    // Cross-account Hive leak guard. If the local `userBox['profile']['id']`
-    // doesn't match the restored session's `currentUser.id`, force a clear +
-    // sign-out. Catches Android Auto Backup restores, dev-build Hive copies,
-    // and any future path that sneaks foreign data past `_ensureLocalUser`'s
-    // one-time sign-in mismatch check. The manifest-level exclusion in
-    // `data_extraction_rules.xml` is the primary defense; this is belt-and-
-    // suspenders.
-    try {
-      final profile = HiveService.instance.userBox.get('profile');
-      final localId = (profile is Map) ? profile['id'] as String? : null;
-      final sessionId = SupabaseService.instance.currentUser?.id;
-      if (localId != null && sessionId != null && localId != sessionId) {
-        debugPrint(
-            '[splash] Hive/session id mismatch — local=$localId session=$sessionId. Clearing.');
-        await UserRepository.instance.clearAllData();
-        await SupabaseService.instance.client.auth.signOut();
-      }
-    } catch (e) {
-      debugPrint('[splash] profile-id mismatch check failed (non-fatal): $e');
-    }
+    // C-6 (audit-2026-05-11) — The cross-account guard previously
+    // lived here and was a no-op: `HiveService.instance.userBox` is a
+    // GuardedBox that throws `HiveUserSession not opened` at this point
+    // in cold start (no `openForUser` has run yet), which the try/catch
+    // swallowed. The guard now lives inside `HiveUserSession.openForUser`
+    // itself, so every code path that opens a session gets it for free.
+    // `auth_provider._ensureLocalUser` performs a heavier
+    // ClearResult / force-signOut second-layer check.
 
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
@@ -221,6 +209,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// progress maps — same inputs the onboarding flow uses for Phase 1.
   Future<void> _autoGenerateNextPhaseForPro() async {
     try {
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Fires fire-and-forget BEFORE `_ensureLocalUser` has opened the
+      // per-user namespaced boxes; without this the `getProfile()` /
+      // `getProgress()` reads below throw `HiveUserSession not opened`
+      // and PRO users silently miss next-phase auto-generation.
+      final uid = await HiveUserSession.ensureOpenedForCurrentSession();
+      if (uid == null) return;
+
       if (!SubscriptionService.instance.isPro()) return;
       if (!WorkoutScheduleService.instance.isPhaseExpired()) return;
 

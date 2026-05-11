@@ -198,7 +198,8 @@ class RankServiceRecordSheet extends ConsumerWidget {
   }
 
   Widget _statusTilesRow() {
-    final streakDays = WorkoutRepository.instance.calculateCurrentStreak();
+    // C-14 (audit-2026-05-11) — display surface; pure READ.
+    final streakDays = WorkoutRepository.instance.currentStreak();
     final progress = UserRepository.instance.getProgress() ?? {};
     final freezesAvailable =
         (progress['streak_freezes_available'] as int?) ?? 0;

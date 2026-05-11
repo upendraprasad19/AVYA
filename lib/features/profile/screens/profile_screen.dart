@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -2192,28 +2193,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   /// Sign out Supabase -> clear Hive -> route to auth screen.
   ///
-  /// Order matters: sign out FIRST so the router never sees
-  /// authenticated + !onboarded which would redirect to /onboarding.
+  /// C-10 (audit-2026-05-11) — routed through
+  /// `AuthNotifier.signOut()` so we get the canonical teardown:
+  /// telemetry → `UserRepository.clearAllData()` →
+  /// `HiveUserSession.deleteAllFilesForCurrentUser()` (DELETES the
+  /// per-user namespaced box files, not just clears the contents) →
+  /// `_supabase.client.auth.signOut()` → state reset to idle.
+  ///
+  /// Pre-fix this method bypassed `AuthNotifier.signOut()` entirely and
+  /// skipped `deleteAllFilesForCurrentUser`. Per-user namespaced Hive
+  /// files survived on disk — re-opening the cross-account leak class
+  /// CLAUDE.md believes closed by namespacing. Same class as the
+  /// splash-time guard bug fixed in C-6.
   Future<void> _performSignOut() async {
-    // 1. Terminate the Supabase session (local scope always works offline).
     try {
-      await SupabaseService.instance.client.auth
-          .signOut(scope: SignOutScope.global);
+      await ref.read(authNotifierProvider.notifier).signOut();
     } catch (e) {
-      debugPrint('[ProfileScreen._performSignOut] global signOut: $e');
+      debugPrint('[ProfileScreen._performSignOut] AuthNotifier.signOut: $e');
+      // Defensive fallback — if the notifier path fails partway, still
+      // try a raw supabase signOut so the auth state is at least
+      // partially terminated before we route.
       try {
         await SupabaseService.instance.client.auth
             .signOut(scope: SignOutScope.local);
       } catch (e) {
-        debugPrint('[ProfileScreen._performSignOut] local signOut: $e');
+        debugPrint('[ProfileScreen._performSignOut] fallback signOut: $e');
       }
-    }
-
-    // 2. Wipe all user-specific Hive boxes after session is gone.
-    try {
-      await UserRepository.instance.clearAllData();
-    } catch (e) {
-      debugPrint('[ProfileScreen._performSignOut] clearAllData: $e');
     }
 
     if (mounted) {

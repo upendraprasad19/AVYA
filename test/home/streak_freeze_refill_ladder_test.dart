@@ -44,21 +44,36 @@ void main() {
     });
 
     test('ladder formula present (currentAvailable + 1 clamped to max)', () {
-      // The fix: read currentAvailable, then `(currentAvailable + 1).clamp(0, maxFreezes)`.
+      // C-15 (audit-2026-05-11) — the ladder formula moved from
+      // `home_provider._refillIfNewWeek` into
+      // `StreakProgressService.commitRefill`. The fix lives in
+      // whichever file owns the write. Accept either location.
+      final svcSrc = File(
+              'lib/core/services/streak_progress_service.dart')
+          .readAsStringSync();
+      final ladderInHome = homeProvSrc
+          .contains('(currentAvailable + 1).clamp(0, maxFreezes)');
+      final ladderInSvc =
+          svcSrc.contains('(currentAvailable + 1).clamp(0, maxFreezes)');
       expect(
-        homeProvSrc.contains('(currentAvailable + 1).clamp(0, maxFreezes)'),
+        ladderInHome || ladderInSvc,
         isTrue,
         reason:
-            '_refillIfNewWeek must use ladder formula '
-            '`(currentAvailable + 1).clamp(0, maxFreezes)`. '
+            'Refill must use ladder formula '
+            '`(currentAvailable + 1).clamp(0, maxFreezes)` — now lives '
+            'inside StreakProgressService.commitRefill per C-15 audit-2026-05-11. '
             'closes-diagnose: 2026-05-10-freeze-ladder',
       );
+      // The read of currentAvailable also moved. Accept either site.
+      final readInHome = homeProvSrc.contains(
+          "(progress['streak_freezes_available'] as int?) ?? 0");
+      final readInSvc = svcSrc.contains(
+          "(progress['streak_freezes_available'] as int?) ?? 0");
       expect(
-        homeProvSrc.contains(
-            "(progress['streak_freezes_available'] as int?) ?? 0"),
+        readInHome || readInSvc,
         isTrue,
         reason:
-            '_refillIfNewWeek must read currentAvailable from progress with '
+            'Refill must read currentAvailable from progress with '
             'a 0-default so a fresh user (no prior progress row) bumps from '
             '0 to 1 on first refill — not skip the ladder.',
       );

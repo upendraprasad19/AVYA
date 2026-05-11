@@ -6,13 +6,19 @@ import 'workout_write_service.dart';
 /// One-shot migration from `exlog_<timestamp>_<hash>` (Test #5 and
 /// earlier) to `exlog_<istDateStr>_<hash(name)>` (Plan A).
 ///
-/// Hash function MUST match WorkoutWriteService.exlogKey — i.e.
-/// `exerciseName.toLowerCase().trim().hashCode`.
+/// Hash function MUST match WorkoutWriteService.exlogKey — currently
+/// the first 8 hex chars of UUID v5 over
+/// `exerciseName.toLowerCase().trim()` (H-16 audit-2026-05-11).
 ///
-/// Idempotent — guarded by configBox['exlog_key_migration_v6'].
+/// Idempotent — guarded by configBox['exlog_key_migration_v7'].
+/// Bumped v6 → v7 in H-16 because the underlying hash function
+/// changed from `String.hashCode` (platform-unstable) to UUID v5
+/// (cross-platform stable). Devices that ran v6 still have rows
+/// keyed under the hashCode shape — v7 re-runs the migration with
+/// the new exlogKey() formula and consolidates.
 class ExlogKeyMigrator {
   ExlogKeyMigrator._();
-  static const _migrationKey = 'exlog_key_migration_v6';
+  static const _migrationKey = 'exlog_key_migration_v7';
 
   static Future<void> runIfNeeded() async {
     final config = HiveService.instance.configBox;

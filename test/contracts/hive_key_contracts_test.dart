@@ -251,22 +251,44 @@ void main() {
     });
 
     test(
-        'conversational_log_handler checks type "workout" (not "scheduled_workout")',
+        'conversational_log_handler delegates schedule-completion to WorkoutWriteService',
         () {
+      // C-8 (audit-2026-05-11) — chat-confirmed workouts now route
+      // through `WorkoutWriteService.markCompleted`, which finds the
+      // schedule by the deterministic `schedule_<date>` key (no need
+      // to iterate `workoutBox.values` filtering by `type == 'workout'`).
+      // Pre-fix the handler hand-rolled that scan + wrote `exlog_*` /
+      // `wlog_*` rows directly with the legacy field shape.
       final handlerSource = allSources.entries
           .firstWhere(
               (e) => e.key.contains('conversational_log_handler.dart'))
           .value;
 
-      // Must check for 'workout' when marking scheduled days completed
-      expect(handlerSource, contains("entry['type'] == 'workout'"),
-          reason:
-              'Log handler must check type == "workout" to match scheduler');
+      expect(
+        handlerSource,
+        contains('WorkoutWriteService.instance.markCompleted('),
+        reason: 'submitWorkoutDraft must route the schedule-status flip '
+            'through WorkoutWriteService.markCompleted so it stays '
+            'consistent with active-workout completion and the receipt '
+            'field shape (Test #8 contract).',
+      );
 
-      // Must NOT check for the old wrong value 'scheduled_workout'
+      // Must NOT check for the old wrong value 'scheduled_workout'.
       expect(handlerSource.contains("== 'scheduled_workout'"), isFalse,
           reason:
               'Log handler must not check type == "scheduled_workout" (stale value)');
+
+      // Must NOT hand-roll the legacy entry iteration that this contract
+      // originally pinned — that path is gone now that WriteService owns
+      // it.
+      expect(
+        handlerSource.contains("entry['type'] == 'workout'"),
+        isFalse,
+        reason: 'Legacy `entry["type"] == "workout"` iteration was '
+            'replaced by WriteService.markCompleted (deterministic '
+            '`schedule_<date>` key lookup). The literal check should '
+            'no longer appear in the handler.',
+      );
     });
   });
 
