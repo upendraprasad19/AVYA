@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'sync_service.dart';
 import 'write_result.dart';
@@ -196,13 +197,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService] invalidation failed: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_log_exercise_invalidation'));
         }
       }
 
       return WriteResult.ok(key);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.logExercise] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_log_exercise'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(lockKey, c);
@@ -380,13 +387,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.markCompleted] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_mark_completed_invalidation'));
         }
       }
 
       return WriteResult.ok(wKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.markCompleted] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_mark_completed'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(dateStr, c);
@@ -420,13 +433,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.upsertScheduled] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_scheduled_invalidation'));
         }
       }
 
       return WriteResult.ok(key);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.upsertScheduled] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_scheduled'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(dateStr, c);
@@ -488,13 +507,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.rescheduleDay] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_reschedule_day_invalidation'));
         }
       }
 
       return WriteResult.ok(toKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.rescheduleDay] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_reschedule_day'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(keys[1], c2);
@@ -536,13 +561,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.regenerateWeek] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_regenerate_week_invalidation'));
         }
       }
 
       return WriteResult.ok('week_$dateStr');
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.regenerateWeek] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_regenerate_week'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock('week_$dateStr', c);
@@ -639,13 +670,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.editLog] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_edit_log_invalidation'));
         }
       }
 
       return WriteResult.ok(logKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.editLog] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_edit_log'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(lockKey, c);
@@ -736,13 +773,19 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
           debugPrint('[WorkoutWriteService.deleteLog] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_delete_log_invalidation'));
         }
       }
 
       return WriteResult.ok(logKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[WorkoutWriteService.deleteLog] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_delete_log'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(lockKey, c);

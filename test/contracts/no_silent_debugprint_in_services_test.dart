@@ -45,20 +45,21 @@ const _grandfathered = <String>{
   //   nlog_key_migrator.dart                       (H-42 7ad0e0 cohort 1)
   //   scheduled_workouts_resync_migrator.dart      (H-42 7ad0e0 cohort 1)
   //   user_config_migrator.dart                    (H-42 7ad0e0 cohort 1)
+  // Cohort 2 retrofitted (NOT grandfathered):
+  //   nutrition_write_service.dart                 (H-42 7ad0e0 cohort 2)
+  //   workout_write_service.dart                   (H-42 7ad0e0 cohort 2)
+  //   sync_queue.dart                              (H-42 7ad0e0 cohort 2)
   'lib/core/services/ai_service.dart',
   'lib/core/services/app_events_service.dart',
   'lib/core/services/barcode_service.dart',
   'lib/core/services/guarded_box.dart',
   'lib/core/services/hive_service.dart',
   'lib/core/services/hive_user_session.dart',
-  'lib/core/services/nutrition_write_service.dart',
   'lib/core/services/prediction_service.dart',
   'lib/core/services/seed_service.dart',
   'lib/core/services/supabase_service.dart',
-  'lib/core/services/sync_queue.dart',
   'lib/core/services/sync_service.dart',
   'lib/core/services/workout_schedule_service.dart',
-  'lib/core/services/workout_write_service.dart',
   // ── shared/repositories ───────────────────────────────────────
   // Retrofitted (NOT grandfathered):
   //   plan_engine/progression_resolver.dart         (H-42 first batch)

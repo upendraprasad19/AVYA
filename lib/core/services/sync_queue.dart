@@ -19,6 +19,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'result.dart';
 import 'sync_error.dart';
@@ -248,9 +249,12 @@ class SyncQueue {
     if (cb != null) {
       try {
         await cb(op);
-      } catch (e) {
+      } catch (e, st) {
         // Telemetry failure is non-fatal — we already logged to debug.
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[SyncQueue] onDeadLetter callback failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_queue_dead_letter_callback'));
       }
     }
     _notifyPending();
@@ -273,9 +277,12 @@ class SyncQueue {
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         out.add(PendingSyncOp.fromJson(json));
-      } catch (e) {
+      } catch (e, st) {
         // Corrupt entry — drop it. Better than looping on a broken payload.
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[SyncQueue] corrupt entry $key: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_queue_load_all_corrupt_entry'));
         _hive.syncBox.delete(key);
       }
     }

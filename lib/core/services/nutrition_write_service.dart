@@ -9,6 +9,7 @@ import '../../features/home/providers/home_provider.dart'
     show aiInsightProvider, nutritionSummaryProvider, recentFoodLogsProvider;
 import '../../features/nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, foodLogProvider, macroTargetsProvider;
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'nutrition_write_source.dart';
 import 'sync_service.dart';
@@ -111,7 +112,10 @@ class NutritionWriteService {
     try {
       await HiveService.instance.nutritionBox.put(key, payload);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] Hive put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_log_meal_hive_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -133,8 +137,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(key);
@@ -173,7 +180,10 @@ class NutritionWriteService {
     try {
       await box.put(existingLogKey, m);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] append put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_append_items_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -181,8 +191,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(existingLogKey);
@@ -229,7 +242,10 @@ class NutritionWriteService {
     try {
       await box.put(logKey, m);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] editLog put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_edit_log_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -237,8 +253,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(logKey);
@@ -266,7 +285,10 @@ class NutritionWriteService {
     try {
       await box.delete(logKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] deleteLog failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_delete_log'));
       return WriteResult.fail('Hive delete failed: $e');
     }
 
@@ -274,8 +296,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(logKey);
@@ -292,7 +317,10 @@ class NutritionWriteService {
     try {
       await HiveService.instance.nutritionBox.put(key, payload);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] restoreLastDeleted failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_restore_last_deleted'));
       return WriteResult.fail('Hive restore failed: $e');
     }
     _lastDeletedPayload = null;
@@ -302,8 +330,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(key);
@@ -343,7 +374,10 @@ class NutritionWriteService {
     try {
       await box.put(key, current);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] logWater put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_log_water_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -351,8 +385,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(key);
@@ -431,7 +468,10 @@ class NutritionWriteService {
     try {
       await box.put(templateKey, payload);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] saveMealAsTemplate failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_save_meal_as_template'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -439,8 +479,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(templateKey);
@@ -485,8 +528,11 @@ class NutritionWriteService {
     try {
       await box.put(id, payload);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint(
           '[NutritionWriteService] saveMealPreset put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_save_meal_preset_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -494,8 +540,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(id);
@@ -513,8 +562,11 @@ class NutritionWriteService {
     try {
       await box.delete(savedMealKey);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint(
           '[NutritionWriteService] deleteSavedMeal delete failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_delete_saved_meal'));
       return WriteResult.fail('Hive delete failed: $e');
     }
 
@@ -522,8 +574,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(savedMealKey);
@@ -545,8 +600,11 @@ class NutritionWriteService {
     try {
       await HiveService.instance.nutritionBox.put(key, log);
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint(
           '[NutritionWriteService] restoreFoodLog put failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_restore_food_log_put'));
       return WriteResult.fail('Hive write failed: $e');
     }
 
@@ -554,8 +612,11 @@ class NutritionWriteService {
     try {
       unawaited(SyncService.instance.syncNutritionData());
       unawaited(SyncService.instance.pushSnapshot());
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
     }
 
     return WriteResult.ok(key);
@@ -609,8 +670,11 @@ class NutritionWriteService {
         c.invalidate(macroTargetsProvider);
         c.invalidate(aiInsightProvider);
         c.invalidate(foodLogProvider);
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[NutritionWriteService] provider invalidate skipped: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'nutrition_write_service_provider_invalidate'));
       }
     }
     // APK Test #12.4 / Task #3 — also fire the static hook. This is
