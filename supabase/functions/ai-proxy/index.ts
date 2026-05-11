@@ -46,6 +46,7 @@ import {
 import { runToolLoop } from "../_shared/tool-loop.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { istDateStr, istDayStartIso } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -276,14 +277,19 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
     }
 
     // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
+    //
+    // audit-2026-05-11 H-10 — was filtering against UTC midnight
+    // (`<date>T00:00:00Z`), so the cap reset at 05:30 IST every
+    // morning instead of midnight. Indian users hitting the limit at
+    // 23:00 IST saw it stay locked for another 6.5h. Switched to
+    // istDayStartIso() (IST midnight as +05:30 timestamptz).
     if (type === "scan_meal" || type === "cart_auditor") {
-      const todayVisionStr = new Date().toISOString().split("T")[0];
       const { count: visionCount } = await supabaseClient
         .from("ai_coach_interactions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .in("channel", ["scan_meal", "cart_auditor"])
-        .gte("created_at", todayVisionStr + "T00:00:00Z");
+        .gte("created_at", istDayStartIso());
 
       if ((visionCount ?? 0) >= 15) {
         return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
@@ -429,15 +435,16 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     if (!isProUser) {
       // Free-tier gate: 10 messages/day in perpetuity — no trial window.
       // OQ-1 decision: free tier gets 10/day forever. Captain Manual reflects this.
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-
+      //
+      // audit-2026-05-11 H-4 — was setUTCHours(0,0,0,0) which is UTC
+      // midnight = 05:30 IST. Free users in India saw their 10-msg cap
+      // reset at dawn instead of midnight. Switched to istDayStartIso().
       const { count: msgCount, error: countError } = await supabaseClient
         .from("ai_coach_interactions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .eq("channel", "app")
-        .gte("created_at", todayStart.toISOString());
+        .gte("created_at", istDayStartIso());
 
       if (countError) return err(500, "Failed to check rate limit");
 
@@ -722,7 +729,10 @@ yet" — never make up a number.
             content: content_,
             source_type: "conversation",
             metadata: {
-              date: new Date().toISOString().split("T")[0],
+              // audit-2026-05-11 H-7 — was UTC date; embedded
+              // memories now stamped with IST date so they correlate
+              // with the user's "today" when retrieved.
+              date: istDateStr(),
               channel: "app",
               model: modelLabel,
               is_pro: isProUser,

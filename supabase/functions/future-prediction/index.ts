@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -236,9 +237,12 @@ serve(async (req: Request) => {
 
     // Check if user already has a recent prediction (within 30 days for monthly)
     if (trigger === "monthly") {
+      // audit-2026-05-11 H-6 — 30-day re-prediction window now
+      // IST-anchored so the monthly cycle aligns with the user's
+      // calendar instead of UTC's.
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const cutoffStr = thirtyDaysAgo.toISOString().split("T")[0];
+      const cutoffStr = istDateStr(thirtyDaysAgo);
 
       const { data: recentPrediction } = await supabaseClient
         .from("user_daily_snapshots")
@@ -331,8 +335,10 @@ serve(async (req: Request) => {
     prediction.trigger = trigger;
     prediction.prediction_horizon_days = 90;
 
-    // Store prediction in user_daily_snapshots
-    const todayStr = new Date().toISOString().split("T")[0];
+    // Store prediction in user_daily_snapshots — IST-anchored to
+    // match daily-snapshot writer + ai-proxy reader semantics
+    // (audit-2026-05-11 H-6).
+    const todayStr = istDateStr();
 
     const { data: existingSnapshot } = await supabaseClient
       .from("user_daily_snapshots")

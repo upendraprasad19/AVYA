@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,9 +168,12 @@ serve(async (req: Request) => {
     // This is a cron job — uses service role key, no JWT validation
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // audit-2026-05-11 H-8 — 4-week window now IST-anchored so the
+    // weekly recalc covers IST weeks not UTC weeks (5h30m drift
+    // would mis-align with the user's actual training calendar).
     const fourWeeksAgo = new Date();
     fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    const fourWeeksAgoStr = fourWeeksAgo.toISOString().split("T")[0];
+    const fourWeeksAgoStr = istDateStr(fourWeeksAgo);
 
     // ── STEP 1: Bulk fetch ALL data in 2 parallel queries ──
     // Read from workout_log_exercises (per-exercise data) instead of workout_logs

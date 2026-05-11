@@ -21,3 +21,18 @@ export function istDateStr(d: Date = new Date()): string {
 export function istDayOfWeek(d: Date = new Date()): number {
   return istNow(d).getUTCDay();
 }
+
+/// Returns IST midnight (00:00:00 IST) for the given date as a
+/// timestamptz-comparable ISO string carrying the +05:30 offset.
+/// Use this for cloud rate-limit / cap queries like
+/// `.gte("created_at", istDayStartIso())` so the "today" window
+/// aligns with the user's IST day instead of UTC midnight (a 5h30m
+/// drift that gives Indian users a stale rate-limit reset at
+/// 05:30 IST every morning).
+///
+/// audit-2026-05-11 H-4 / H-10 — ai-proxy + ai-media-proxy vision
+/// caps + free-tier message count were filtering against UTC
+/// midnight; switched to this helper.
+export function istDayStartIso(d: Date = new Date()): string {
+  return `${istDateStr(d)}T00:00:00+05:30`;
+}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,9 +155,13 @@ serve(async (req: Request) => {
 
     // Check if user already has a recent challenge (within CHALLENGE_INTERVAL_DAYS)
     if (userId && !forceNew) {
+      // audit-2026-05-11 H-5 — cutoff date now IST-anchored so the
+      // 14-day re-challenge window aligns with the user's calendar
+      // (not UTC's). Otherwise IST-evening generations consumed a
+      // window from "tomorrow UTC" and reset 5h30m early.
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - CHALLENGE_INTERVAL_DAYS);
-      const cutoffStr = cutoffDate.toISOString().split("T")[0];
+      const cutoffStr = istDateStr(cutoffDate);
 
       const { data: recentSnap } = await supabaseClient
         .from("user_daily_snapshots")
@@ -305,7 +310,10 @@ serve(async (req: Request) => {
 
     // Store challenge in user's snapshot if user_id provided
     if (userId) {
-      const todayStr = new Date().toISOString().split("T")[0];
+      // audit-2026-05-11 H-5 — snapshot_date is the user's IST day,
+      // not UTC. Matches daily-snapshot writer + ai-proxy snapshot
+      // reader semantics.
+      const todayStr = istDateStr();
 
       const { data: existingSnapshot } = await supabaseClient
         .from("user_daily_snapshots")

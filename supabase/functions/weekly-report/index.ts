@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,11 +100,14 @@ serve(async (req: Request) => {
     }
 
     // ── Gather last 7 days of data ─────────────────────────────
+    // audit-2026-05-11 H-9 — IST-anchored 7-day window so the
+    // weekly report covers the user's actual training week
+    // (Mon-Sun IST), not UTC.
     const now = new Date();
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0];
-    const todayStr = now.toISOString().split("T")[0];
+    const sevenDaysAgoStr = istDateStr(sevenDaysAgo);
+    const todayStr = istDateStr(now);
 
     // 1. Nutrition logs for the past 7 days
     const { data: nutritionLogs, error: nutritionError } = await supabase
