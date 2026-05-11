@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -275,15 +276,16 @@ class WorkoutRepository {
     // call sites must never mutate. The simulated `freezesAvailable`
     // / `usedDates` are still used above to produce an accurate
     // count, but the persist + sync only fires on `consume: true`.
+    //
+    // C-15 (audit-2026-05-11) — routed through StreakProgressService
+    // as the sole writer. Both refill (home_provider) and consume
+    // (here) use commitRefill/commitConsume. Cross-device race
+    // protected by migration 056's update_streak_progress RPC.
     if (consume && freezeConsumedThisCalc) {
-      UserRepository.instance.updateProgress({
-        'streak_freezes_available': freezesAvailable,
-        'streak_freeze_used_dates': usedDates,
-        'streak_freeze_just_used': true,
-        'streak_freeze_remaining_after_use': freezesAvailable,
-      });
-      // Push freeze state to cloud so it survives reinstall.
-      unawaited(SyncService.instance.syncFreezes());
+      StreakProgressService.instance.commitConsume(
+        freezesAvailableAfterConsume: freezesAvailable,
+        usedDatesAfterConsume: usedDates,
+      );
     }
 
     return streak;

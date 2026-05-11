@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
@@ -283,20 +284,16 @@ class StreakFreezeNotifier extends Notifier<int> {
     final isPro = SubscriptionService.instance.isPro();
     final maxFreezes = isPro ? 3 : 1;
 
-    // Ladder: +1 per week capped at max. New users (no prior progress row)
-    // start with whatever default UserRepository returned, fall back to 0
-    // so the first refill bumps them to 1.
-    final currentAvailable =
-        (progress['streak_freezes_available'] as int?) ?? 0;
-    final newAvailable = (currentAvailable + 1).clamp(0, maxFreezes);
-
-    UserRepository.instance.updateProgress({
-      'streak_freezes_available': newAvailable,
-      'streak_freeze_used_dates': <String>[], // Reset weekly used dates
-      'streak_freezes_last_refill': thisMondayStr,
-    });
-    // Push refilled freeze state to cloud so it survives reinstall.
-    unawaited(SyncService.instance.syncFreezes());
+    // C-15 (audit-2026-05-11) — refill routed through
+    // StreakProgressService (the sole writer for streak_freezes_*).
+    // Pre-fix, refill + consume both read-modify-wrote these keys
+    // from two independent code paths — easy for a future change to
+    // introduce drift / async interleave. Cross-device race
+    // protected by migration 056's update_streak_progress RPC.
+    StreakProgressService.instance.commitRefill(
+      maxFreezes: maxFreezes,
+      thisMondayStr: thisMondayStr,
+    );
   }
 }
 
