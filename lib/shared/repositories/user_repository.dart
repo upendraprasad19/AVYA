@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -235,9 +238,12 @@ class UserRepository {
     Future<void> tryClear(String label, Future<void> Function() op) async {
       try {
         await op();
-      } catch (e) {
+      } catch (e, st) {
         failures[label] = e;
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[clearAllData] $label failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'user_repository_clear_all_data'));
       }
     }
 
@@ -299,8 +305,11 @@ class UserRepository {
         {'user_id': userId, ...fields},
         onConflict: 'user_id',
       );
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[UserRepository] updateSupabaseProfileField failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'user_repository_update_supabase_profile_field'));
     }
   }
 
@@ -373,8 +382,11 @@ class UserRepository {
         'is_deleted': true,
         'deleted_at': DateTime.now().toIso8601String(),
       }).eq('id', userId);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[UserRepository] softDeleteAccount write failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'user_repository_soft_delete_account'));
     }
   }
 

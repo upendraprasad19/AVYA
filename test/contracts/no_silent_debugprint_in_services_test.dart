@@ -66,10 +66,11 @@ const _grandfathered = <String>{
   // ── shared/repositories ───────────────────────────────────────
   // Retrofitted (NOT grandfathered):
   //   plan_engine/progression_resolver.dart         (H-42 first batch)
-  'lib/shared/repositories/user_repository.dart',
-  'lib/shared/repositories/exercise_repository.dart',
-  'lib/shared/repositories/food_repository.dart',
-  'lib/shared/repositories/submissions_repository.dart',
+  // Cohort 6 retrofitted (NOT grandfathered):
+  //   user_repository.dart                         (H-42 7ad0e0 cohort 6)
+  //   exercise_repository.dart                     (H-42 7ad0e0 cohort 6)
+  //   food_repository.dart                         (H-42 7ad0e0 cohort 6)
+  //   submissions_repository.dart                  (H-42 7ad0e0 cohort 6)
 };
 
 String _norm(String p) => p.replaceAll('\\', '/');
