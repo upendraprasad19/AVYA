@@ -83,3 +83,13 @@ assets/*.bak
 # Local Claude Code agent permissions — must never be committed.
 # Audit C-3 (2026-05-11): this file held a Supabase anon JWT.
 .claude/settings.local.json
+
+# Local reference materials (not bundled in APK — bundled assets live in
+# assets/data/*.json). Founder's source docs, exercise/food spreadsheets,
+# naval rank reference imagery, etc. — useful on disk, never shipped.
+assets/*.docx
+assets/*.xlsx
+assets/*.pdf
+assets/calisthenics feature.md
+assets/New folder/
+assets/naval pics/
