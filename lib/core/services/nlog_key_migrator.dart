@@ -5,13 +5,19 @@ import 'hive_service.dart';
 /// One-shot migration from `nlog_<timestamp>` (Test #5 and earlier)
 /// to `nlog_<istDateStr>_<mealType>_<hash(items)>` (Plan C).
 ///
-/// Hash function MUST match NutritionWriteService._stableItemsHash — i.e.
-/// items sorted by name, joined with name|quantityG, semicolon-separated.
+/// Hash function MUST match NutritionWriteService._stableItemsHash —
+/// currently first 8 hex chars of UUID v5 over sorted-by-name joined
+/// `name|quantityG;…` (H-17 audit-2026-05-11).
 ///
-/// Idempotent — guarded by configBox['nlog_key_migration_v6'].
+/// Idempotent — guarded by configBox['nlog_key_migration_v7'].
+/// Bumped v6 → v7 in H-17 because the underlying hash function
+/// changed from `String.hashCode` (platform-unstable) to UUID v5
+/// (cross-platform stable). Devices that ran v6 have rows keyed
+/// under the hashCode shape — v7 re-runs and consolidates with the
+/// new `_stableItemsHash` formula.
 class NlogKeyMigrator {
   NlogKeyMigrator._();
-  static const _migrationKey = 'nlog_key_migration_v6';
+  static const _migrationKey = 'nlog_key_migration_v7';
 
   static Future<void> runIfNeeded() async {
     final config = HiveService.instance.configBox;

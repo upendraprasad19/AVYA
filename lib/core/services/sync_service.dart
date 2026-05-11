@@ -142,8 +142,18 @@ class SyncService {
     }
     pairs.sort();
     final joined = pairs.join(';');
-    final hash =
-        joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    // H-15 (audit-2026-05-11) — `String.hashCode` is NOT guaranteed
+    // stable across Dart VM versions / isolates / platforms. Two
+    // devices running the same restore could compute different
+    // 8-char tags for the same `(date, meal, items)` tuple → Hive
+    // ends up with two rows for what should be one logical meal.
+    // Switched to UUID v5 (deterministic, cross-platform stable);
+    // take the first 8 hex chars to keep the Hive key compact and
+    // visually similar to the previous shape.
+    final hash = _uuidGen
+        .v5(_syncNamespace, joined)
+        .replaceAll('-', '')
+        .substring(0, 8);
     return 'nlog_${dateStr}_${mealType}_$hash';
   }
 

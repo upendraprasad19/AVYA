@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../constants/app_constants.dart';
 import '../../features/home/providers/home_provider.dart'
@@ -633,13 +634,31 @@ class NutritionWriteService {
     return 'nlog_${dateStr}_${mealType}_$itemsHash';
   }
 
+  /// UUID namespace for the stable items hash. NEVER change without
+  /// a migration bump in `NlogKeyMigrator`.
+  static const _itemsHashUuidGen = Uuid();
+  static const _itemsHashNamespace =
+      '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
+  /// H-17 (audit-2026-05-11) — was `String.hashCode` which is not
+  /// stable across Dart VM versions / isolates / platforms. Devices
+  /// running the same restore could produce different `_<hash>` tags
+  /// for the same `(meal, items)` tuple → duplicate Hive rows for
+  /// what should be one logical meal. Switched to UUID v5
+  /// (deterministic, cross-platform stable); take the first 8 hex
+  /// chars to keep the Hive key compact and visually identical to
+  /// the prior shape. NlogKeyMigrator bumped v1 → v2 to consolidate
+  /// any pre-existing rows.
   static String _stableItemsHash(List<FoodItem> items) {
     final sorted = [...items]..sort((a, b) => a.name.compareTo(b.name));
     final joined = sorted
         .map((i) =>
             '${i.name.toLowerCase().trim()}|${i.quantityG.toStringAsFixed(1)}')
         .join(';');
-    return joined.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    return _itemsHashUuidGen
+        .v5(_itemsHashNamespace, joined)
+        .replaceAll('-', '')
+        .substring(0, 8);
   }
 
   static bool isAllowedMealType(String type) =>

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import 'hive_service.dart';
 import 'sync_service.dart';
@@ -763,10 +764,25 @@ class WorkoutWriteService {
     return '$y-$m-$d';
   }
 
+  /// Namespace + UUID generator for the deterministic exlog key tag.
+  /// Shared cross-device — must NEVER change without a migration.
+  static const _exlogUuidGen = Uuid();
+  static const _exlogNamespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
   /// Deterministic Hive key for an exercise log.
+  ///
+  /// H-16 (audit-2026-05-11) — was `exerciseName.hashCode` which is
+  /// not stable across Dart VM versions / isolates / platforms.
+  /// Restore on a different device could produce a different `_<h>`
+  /// suffix → duplicate logical entries in Hive. Switched to UUID
+  /// v5 (stable cross-platform); take the first 8 hex chars to
+  /// match the previous shape.
   static String exlogKey(DateTime date, String exerciseName) {
     final d = istDateStr(date);
-    final h = exerciseName.toLowerCase().trim().hashCode;
+    final h = _exlogUuidGen
+        .v5(_exlogNamespace, exerciseName.toLowerCase().trim())
+        .replaceAll('-', '')
+        .substring(0, 8);
     return 'exlog_${d}_$h';
   }
 
