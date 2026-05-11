@@ -156,6 +156,26 @@ dart run scripts/check_migrations_applied.dart
 
 Local `supabase/migrations/*.sql` files must all appear in `backups/applied_migrations.json` snapshot. Exit 0 if snapshot is absent (first run). Update `backups/applied_migrations.json` after applying new migrations.
 
+### Gate 15 — Generic error catch blocks must emit telemetry
+
+```bash
+dart run scripts/check_generic_error_telemetry.dart
+```
+
+Every user-facing generic error message ("Sorry,", "Something went wrong", "temporarily unavailable", "Failed to ...", "Could not ...") inside a `catch (...)` block must be preceded within 30 lines by an `ErrorTelemetry.logEvent` / `recordNonFatal` / `_reportSyncFailure` call. Codifies APK Test #15.1 / Bug D — ai-media-proxy generic else-branch fell through silently with zero telemetry.
+
+Baseline file `backups/generic_error_telemetry_baseline.txt` grandfathers pre-existing violations. NEW violations hard-fail.
+
+### Gate 16 — Repository box.get(key) → Map must inject id
+
+```bash
+dart run scripts/check_id_injection_on_get.dart
+```
+
+In `lib/**/*_repository.dart`, every `box.get(key)` that returns a Map shape must inject the key as `id` on the returned map within 15 lines, OR carry an explicit `// gate16-exempt: <reason>` annotation. Codifies APK Test #15.1 / Bug F — Test #6 WriteService rewrite stopped writing `id` value fields (id IS the Hive key); consumer filters then silently stripped every row.
+
+Baseline file `backups/id_injection_on_get_baseline.txt` for grandfathered patterns. NEW violations hard-fail.
+
 ---
 
 ## Build step

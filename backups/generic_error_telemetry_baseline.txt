@@ -1,0 +1,51 @@
+# Gate 15 baseline — known generic-error catch blocks without telemetry.
+#
+# Each line is `<relative-path>:<line>:<phrase>`. Gate 15 grandfathers
+# these and fails only on NEW violations. Reduce over time by adding
+# telemetry to listed catch blocks + removing them from baseline.
+#
+# Format: <path>:<line>:<phrase>
+# Comments and blank lines allowed.
+
+lib/core/services/ai_service.dart:289:Failed
+lib/core/services/ai_service.dart:421:Failed
+lib/features/ai_coach/providers/ai_coach_provider.dart:444:Sorry,
+lib/features/ai_coach/providers/ai_coach_provider.dart:658:Failed
+lib/features/ai_coach/screens/ai_coach_screen.dart:1669:Failed
+lib/features/ai_coach/services/tool_dispatcher.dart:222:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:359:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:512:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:620:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:681:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:751:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:969:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:1042:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:1111:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:1182:Could
+lib/features/ai_coach/services/tool_dispatcher.dart:1220:Could
+lib/features/ai_coach/widgets/diff_preview/hotel_workout_diff.dart:61:Could
+lib/features/ai_coach/widgets/diff_preview/injury_modify_diff.dart:51:Could
+lib/features/ai_coach/widgets/diff_preview/pause_plan_diff.dart:60:Could
+lib/features/ai_coach/widgets/diff_preview/regenerate_plan_diff.dart:66:Could
+lib/features/ai_coach/widgets/diff_preview/reschedule_week_diff.dart:56:Could
+lib/features/ai_coach/widgets/diff_preview/schedule_template_diff.dart:66:Could
+lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart:78:Could
+lib/features/auth/providers/auth_provider.dart:257:Failed
+lib/features/auth/widgets/forgot_password_sheet.dart:79:Could
+lib/features/home/screens/home_screen.dart:192:Something
+lib/features/nutrition/providers/nutrition_provider.dart:695:Could
+lib/features/nutrition/providers/nutrition_provider.dart:710:Could
+lib/features/nutrition/screens/diet_plan_screen.dart:423:Failed
+lib/features/nutrition/screens/nutrition_screen.dart:172:Failed
+lib/features/onboarding/providers/onboarding_provider.dart:579:Something
+lib/features/onboarding/screens/plan_screen.dart:542:Something
+lib/features/profile/screens/edit_profile_screen.dart:1785:Failed
+lib/features/profile/screens/invite_friends_sheet.dart:117:Could
+lib/features/profile/screens/profile_screen.dart:336:Failed
+lib/features/profile/screens/reports_screen.dart:278:Failed
+lib/features/train/screens/graduation_screen.dart:470:Failed
+lib/features/train/screens/template_builder_screen.dart:464:Failed
+lib/features/train/screens/train_screen.dart:75:Failed
+lib/features/train/screens/train_screen.dart:1854:Failed
+lib/shared/widgets/community_review_sheet.dart:99:Failed
+lib/shared/widgets/paywall_sheet.dart:230:Could

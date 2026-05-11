@@ -19,6 +19,10 @@ class ExerciseRepository {
   }
 
   /// Returns a single exercise by its [id], or null.
+  ///
+  /// gate16-exempt: seed-data read. The exercise JSON already carries
+  /// its `id` field (stable seed identifier); the Hive key equals the
+  /// id. No re-injection needed.
   Map<String, dynamic>? getById(String id) {
     final raw = _hive.exerciseBox.get(id);
     if (raw == null) return null;

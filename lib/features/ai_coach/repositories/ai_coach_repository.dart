@@ -554,6 +554,8 @@ class AiCoachRepository {
     required String aiResponse,
     required String modelUsed,
   }) async {
+    // gate16-exempt: in-place mutation + write-back. Map is not surfaced
+    // to a List consumer; the key is held by the caller.
     final raw = _hive.coachBox.get(key);
     if (raw is! Map) return;
     final entry = Map<String, dynamic>.from(raw);
@@ -572,6 +574,8 @@ class AiCoachRepository {
     String key, {
     required String errorText,
   }) async {
+    // gate16-exempt: in-place mutation + write-back. Map is not surfaced
+    // to a List consumer; the key is held by the caller.
     final raw = _hive.coachBox.get(key);
     if (raw is! Map) return;
     final entry = Map<String, dynamic>.from(raw);

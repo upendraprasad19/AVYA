@@ -20,6 +20,10 @@ class FoodRepository {
   }
 
   /// Returns a single food item by its [id], or null.
+  ///
+  /// gate16-exempt: seed-data read. The food JSON already carries its
+  /// `id` field (stable seed identifier); the Hive key equals the id.
+  /// No re-injection needed.
   Map<String, dynamic>? getById(String id) {
     final raw = _hive.foodBox.get(id);
     if (raw == null) return null;
