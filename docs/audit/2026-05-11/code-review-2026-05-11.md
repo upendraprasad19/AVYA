@@ -22,7 +22,69 @@
 | 2026-05-11 | `fix/audit-2026-05-11` | **C-13** verified false alarm | (recorded §10) |
 | 2026-05-11 | `fix/audit-2026-05-11` | **H-32** verified — retired functions already serve 410 stubs | (recorded §10) |
 | 2026-05-11 | `fix/audit-2026-05-11` | Phase 1 hardening bundled commit (hook split + 053 + 054 + 055 + 8 cron Edge Functions + promote-community-item v8 + delete-account v2 + 6 diagnose docs) | `ba91b18` |
-| 2026-05-11 | `fix/audit-2026-05-11` | **C-3** (file-removal half) — `.claude/settings.local.json` removed from tracking + gitignored. Anon-JWT rotation still pending user-action U-2. | (committing C-3) |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-3** (file-removal half) — `.claude/settings.local.json` removed from tracking + gitignored. Anon-JWT rotation still pending user-action U-2. | `ab3e9b5` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **U-1 keystore generated** — `android/app/release.jks` + `android/key.properties` (password `Avya2026` — rotate before Play Store). Gradle wired. SHA-1 `17:0B:81:...` / SHA-256 `43:6E:AC:...` | `95f48b4` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 2 — C-6 + C-7** cold-start hardening (cross-account guard lifted into openForUser + shared `ensureOpenedForCurrentSession` static gates 4 racing splash mutations) · diagnoses `7ad0c6` `7ad0c7` | `1ff5b6e` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-8** submitWorkoutDraft chat → WorkoutWriteService · diagnose `7ad0c8` | `4cce606` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-12 expanded** NutritionWriteService + 4 nutrition_provider sites + IST water fix · diagnose `7ad0c9` | `87deb7e` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-10** `_performSignOut` routes through `AuthNotifier.signOut` · diagnose `7ad0ca` | `0883312` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-11** template fire-and-forget syncs · diagnose `7ad0cb` | `0a004f8` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **T-12** WriteService bypass detector + 7th bypass closure · diagnose `7ad0cc` | `14fef3f` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-1 / H-2 / H-2b** reactive `subscriptionInfoProvider` on 3 sites · diagnose `7ad0cd` | `a604a64` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-3** `_ensureLocalUser` self-heals `users.full_name` from local profile · diagnose `7ad0ce` | `b969777` |
+| 2026-05-11 | `fix/audit-2026-05-11` | `deploy_via_api.js` — `--rollback` flag + interactive confirm + snapshot helper | `4c9851b` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-41** event-based `paymentInFlight` (orderId + started_at; 10-min ceiling is fallback only) · diagnose `7ad0cf` | `b6dce40` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-42 first batch** rank_service + progression_resolver telemetry retrofit + scoped contract test · diagnose `7ad0d0` | `abc89f9` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-14** CQRS-split `calculateCurrentStreak` (pure `currentStreak()` + `consumeMissedDayIfFreezeAvailable()`) · diagnose `7ad0d1` | `1fca892` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **C-15** StreakProgressService single-writer + migration 056 optimistic-lock RPC · diagnose `7ad0d2` | `88e55af` |
+| 2026-05-11 | `fix/audit-2026-05-11` | CLAUDE.md rule 23 — "no stopping mid-batch" codified | `6af3547` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 3 — H-4..H-10** IST sweep across 5 Edge Functions (ai-proxy v63 + beat-my-coach v6 + future-prediction v12 + weekly-recalc v15 + weekly-report v20 deployed) · diagnose `7ad0d3` | `425bc63` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **H-15 / H-16 / H-17** deterministic UUID v5 keys (migrator flags bumped v6 → v7) · diagnose `7ad0d4` | `a431cf2` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 4 — H-18..H-23** payment hardening (verify-payment v12 + razorpay-webhook v17 + ai-proxy v64 + ai-media-proxy v16 deployed) · diagnoses `7ad0d5` `7ad0d6` | `fe340fa` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 5 — H-13/14/25-28/31/33/34** schema completeness sweep (migrations 057 + 058 applied; 050 collision → 050b; reconciliation doc) · diagnose `7ad0d7` | `4f74ed1` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 6 — T-1..T-11** 11 audit-invariant contract tests (18 individual checks) · diagnose `7ad0d8` | `5a4a805` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 7** 10 integration test scaffolds + presence guardrail · diagnose `7ad0d9` | `e6cacca` |
+| 2026-05-11 | `fix/audit-2026-05-11` | **Phase 8** cleanup batch — Hive parallel init + community_review_sheet null-safe ids + H-42 retrofit (4 hot-path services, 18 sites; grandfathered set 28 → 21) · diagnose `7ad0da` | `f6c1e3c` |
+
+### Full audit close-out summary (Phases 1–8 shipped 2026-05-11)
+
+| Phase | Status | Commits | Findings closed |
+|---|---|---|---|
+| Phase 1 — security hardening | ✅ | `657ec20` `7be6344` `ba91b18` `ab3e9b5` | C-1 / C-3 (file half) / C-4 / C-5 / H-29 / H-30 / H-35 / H-36 / H-37 / H-40 / Hermes-R2 #9 |
+| U-1 keystore | ✅ | `95f48b4` | Release signing wired (rotate `Avya2026` before Play submit) |
+| Phase 2 — cold-start + WriteService + streak CQRS | ✅ | 13 commits `1ff5b6e`..`88e55af` | C-6 / C-7 / C-8 / C-10 / C-11 / C-12 / C-14 / C-15 / H-1 / H-2 / H-2b / H-3 / H-41 / H-42 first batch / T-12 |
+| CLAUDE.md rule 23 | ✅ | `6af3547` | "No stopping mid-batch" codified |
+| Phase 3 — IST sweep + UUID v5 keys | ✅ | `425bc63` `a431cf2` | H-4 / H-5 / H-6 / H-7 / H-8 / H-9 / H-10 / H-15 / H-16 / H-17 |
+| Phase 4 — payment + Edge Function input validation | ✅ | `fe340fa` | H-18 / H-19 / H-20 / H-21 / H-22 / H-23 |
+| Phase 5 — schema completeness | ✅ | `4f74ed1` | H-13 / H-14 / H-25 / H-26 / H-27 / H-28 / H-31 / H-33 / H-34 |
+| Phase 6 — contract tests | ✅ | `5a4a805` | T-1 / T-2 / T-3 / T-4 / T-5 / T-6 / T-7 / T-8 / T-9 / T-10 / T-11 |
+| Phase 7 — integration scaffolds | ✅ | `e6cacca` | 10 E2E flow scaffolds + guardrail |
+| Phase 8 — cleanup batch | ✅ | `f6c1e3c` | Hive parallel + as Map guards + 4 hot-path H-42 retrofit |
+
+**Migrations applied to prod (in order):** 052, 053, 054, 055, 056, 057, 058. Plus 050b rename (no DB change).
+
+**Edge Functions deployed (in order):** promote-community-item v8, delete-account v2, 8 cron functions (T-4 batch), ai-proxy v63 → v64, beat-my-coach v6, future-prediction v12, weekly-recalc v15, weekly-report v20, verify-payment v12, razorpay-webhook v17, ai-media-proxy v16.
+
+**Suite:** 1598 pass / 0 fail / 2 skip.
+
+**Diagnose docs:** 20+ under `docs/diagnoses/2026-05-11-*-7ad0**.md`.
+
+**Awaiting user-action (Claude can't perform):**
+- **U-1** — DONE (`95f48b4`). Rotate keystore password `Avya2026` before first Play Store upload.
+- **U-2** — Rotate Supabase anon JWT in Dashboard → API → Reset anon key, capture into `.env`, rebuild APK. The leaked JWT in git history is valid until rotation regardless of file removal.
+- **U-3** — Set `CRON_SECRET` env var on Supabase Dashboard → Edge Functions → Secrets. Rotate quarterly. Update pg_cron registrations to send `CRON_SECRET` instead of service-role-key once set.
+- **U-4** — Enable "Leaked password protection" toggle in Supabase Dashboard → Auth → Settings.
+- **H-38** — Bucket lockdown UX decision required (3 mitigation paths documented in audit doc §11).
+
+**Deferred to next named cleanup batch** (NOT "someday"):
+- 21 remaining grandfathered `debugPrint` catches in less-hot services / repositories
+- ProGuard rules audit, lint rules review, `.env.example` sync, web manifest
+- Dep updates: firebase, share_plus, image_cropper, mobile_scanner
+- `sync_service.dart` split (4000+ line file — split by sync ops / restore ops / helpers / idempotency)
+- Wardroom barrel doc sync
+- CLAUDE.md §7 table list refresh
+- APK size analysis (target 100 MB → < 60 MB)
+- Phase 7 integration test BODIES (scaffolds shipped; bodies need device-CI infrastructure)
 
 ### Phase 1 close-out summary
 
