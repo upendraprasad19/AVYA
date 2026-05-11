@@ -68,25 +68,62 @@ void main() {
               'to create 30+ duplicate requests.');
     });
 
-    test('callFunction invokes edge function exactly once', () {
+    test('callFunction invokes edge function at most TWICE (single retry max)',
+        () {
+      // APK Test #15.1 / Bug G+H — allowed a SINGLE retry on cold-start
+      // 502/503 BOOT_ERROR. The original 2026-04-07 retry-loop bug was
+      // a 401 recursion that compounded with AiCoachProvider into 30+
+      // requests; this 502/503 retry is gated on status, single-attempt,
+      // bounded by a delay, and does NOT recurse. Different class.
+      //
+      // The historical guardrail "no 401 retry" is preserved in the
+      // tests above and below. This test allows the cold-start retry
+      // while still blocking unbounded loops.
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
 
-      // Extract the callFunction method body
-      final callFnStart = source.indexOf('Future<FunctionResponse> callFunction(');
+      final callFnStart =
+          source.indexOf('Future<FunctionResponse> callFunction(');
       expect(callFnStart, isNot(-1), reason: 'callFunction must exist');
 
-      // Count occurrences of client.functions.invoke within callFunction
-      // (from callFunction declaration to end of file or next top-level method)
       final callFnBody = source.substring(callFnStart);
       final invokeCount =
           RegExp(r'client\.functions\.invoke\(').allMatches(callFnBody).length;
 
-      expect(invokeCount, equals(1),
+      expect(invokeCount, lessThanOrEqualTo(2),
           reason:
-              'callFunction must call client.functions.invoke exactly ONCE. '
-              'Found $invokeCount invocations. Multiple calls = retry logic.');
+              'callFunction must call client.functions.invoke AT MOST 2 '
+              'times (first attempt + single 502/503 cold-start retry). '
+              'Found $invokeCount. closes-diagnose: 2026-05-12-edge-'
+              'function-503-retry-0a7b9f');
+    });
+
+    test('any retry path is gated on 502 OR 503 status (not unconditional)',
+        () {
+      // If 2+ invokes are present, they must be inside a `if (e.status
+      // == 502 || e.status == 503)` branch — never unconditional.
+      final source = allSources.entries
+          .firstWhere((e) => e.key.contains('supabase_service.dart'))
+          .value;
+
+      final callFnStart =
+          source.indexOf('Future<FunctionResponse> callFunction(');
+      final callFnBody = source.substring(callFnStart);
+      final invokeCount =
+          RegExp(r'client\.functions\.invoke\(').allMatches(callFnBody).length;
+
+      if (invokeCount >= 2) {
+        // Must have the 502/503 gate
+        expect(
+          callFnBody.contains('e.status == 502 || e.status == 503'),
+          isTrue,
+          reason:
+              'callFunction has 2+ invocations but no 502/503 gate — that '
+              'is the 2026-04-07 retry-loop bug class. Add `if (e.status '
+              '== 502 || e.status == 503)` around the retry.',
+        );
+      }
     });
   });
 
