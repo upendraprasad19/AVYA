@@ -18,7 +18,10 @@
 // `UserConfigMigrator.userScopedKeys`. Don't use this for genuinely
 // device-level keys (units_metric, seed flags, etc.).
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'hive_user_session.dart';
 
@@ -33,15 +36,21 @@ class MigratedKey {
       try {
         final v = hive.userBox.get(key);
         if (v != null) return v as T?;
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[MigratedKey.read] userBox $key threw: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'migrated_key_read_user_box'));
       }
     }
     // Fallback to configBox (pre-migration installs / no-session reads).
     try {
       return hive.configBox.get(key) as T?;
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[MigratedKey.read] configBox $key threw: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'migrated_key_read_config_box'));
       return null;
     }
   }
@@ -74,14 +83,20 @@ class MigratedKey {
       try {
         await hive.userBox.put(key, value);
         return;
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[MigratedKey.write] userBox $key threw: $e — falling back to configBox');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'migrated_key_write_user_box'));
       }
     }
     try {
       await hive.configBox.put(key, value);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[MigratedKey.write] configBox $key threw: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'migrated_key_write_config_box'));
     }
   }
 
@@ -92,14 +107,20 @@ class MigratedKey {
     if (HiveUserSession.currentOwnerFullId != null) {
       try {
         await hive.userBox.delete(key);
-      } catch (e) {
+      } catch (e, st) {
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[MigratedKey.delete] userBox $key threw: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'migrated_key_delete_user_box'));
       }
     }
     try {
       await hive.configBox.delete(key);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[MigratedKey.delete] configBox $key threw: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'migrated_key_delete_config_box'));
     }
   }
 }

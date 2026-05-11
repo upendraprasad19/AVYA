@@ -17,7 +17,10 @@
 // migration runs once, the flag in `migrationBox` short-circuits all
 // subsequent calls.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 class UserConfigMigrator {
@@ -135,9 +138,12 @@ class UserConfigMigrator {
         }
         await cfg.delete(key);
         copied.add(key);
-      } catch (e) {
+      } catch (e, st) {
         failures[key] = e;
+        // audit-2026-05-11 H-42 — telemetry pair.
         debugPrint('[UserConfigMigrator] copy $key failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'user_config_migrator_copy_key'));
       }
     }
 
@@ -147,8 +153,11 @@ class UserConfigMigrator {
     // resulting leak when the next user signs in.
     try {
       await migBox.put(_flagKey, true);
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[UserConfigMigrator] flag write failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'user_config_migrator_flag_write'));
     }
 
     final result = MigrationResult(

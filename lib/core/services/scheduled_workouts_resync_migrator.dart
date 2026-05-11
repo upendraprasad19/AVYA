@@ -22,6 +22,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -91,11 +92,14 @@ class ScheduledWorkoutsResyncMigrator {
       }
 
       await userBox.put(_flagKey, true);
-    } catch (e) {
+    } catch (e, st) {
       // Flag stays UNSET so the next launch retries. Don't rethrow —
       // a fire-and-forget call site shouldn't surface migrator
       // failures to the user.
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[ScheduledWorkoutsResyncMigrator.runIfNeeded] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'scheduled_workouts_resync_migrator_run_if_needed'));
     }
   }
 }

@@ -46,8 +46,11 @@
 // Read CLAUDE.md §15 "Hive field-name contract" for the broader
 // drift discipline this migration enforces.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
@@ -91,8 +94,11 @@ class LoggingTypeRepairMigrator {
     Box migrationBox;
     try {
       migrationBox = hive.migrationBox;
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[LoggingTypeRepairMigrator] migrationBox unavailable: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'logging_type_repair_migrator_migration_box_unavailable'));
       return 0;
     }
 
@@ -151,7 +157,10 @@ class LoggingTypeRepairMigrator {
         SyncService.instance.syncWorkoutData();
       }
     } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[LoggingTypeRepairMigrator] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'logging_type_repair_migrator_run_if_needed'));
       // DON'T set the flag — let the next launch retry.
     }
 

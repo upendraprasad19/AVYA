@@ -38,24 +38,25 @@ const _grandfathered = <String>{
   //   stat_snapshot_service.dart                   (Phase 8 batch)
   //   subscription_service.dart                    (Phase 8 batch)
   //   razorpay_service.dart                        (Phase 8 batch)
+  // Cohort 1 retrofitted (NOT grandfathered):
+  //   exlog_key_migrator.dart                      (H-42 7ad0e0 cohort 1)
+  //   logging_type_repair_migrator.dart            (H-42 7ad0e0 cohort 1)
+  //   migrated_key.dart                            (H-42 7ad0e0 cohort 1)
+  //   nlog_key_migrator.dart                       (H-42 7ad0e0 cohort 1)
+  //   scheduled_workouts_resync_migrator.dart      (H-42 7ad0e0 cohort 1)
+  //   user_config_migrator.dart                    (H-42 7ad0e0 cohort 1)
   'lib/core/services/ai_service.dart',
   'lib/core/services/app_events_service.dart',
   'lib/core/services/barcode_service.dart',
-  'lib/core/services/exlog_key_migrator.dart',
   'lib/core/services/guarded_box.dart',
   'lib/core/services/hive_service.dart',
   'lib/core/services/hive_user_session.dart',
-  'lib/core/services/logging_type_repair_migrator.dart',
-  'lib/core/services/migrated_key.dart',
-  'lib/core/services/nlog_key_migrator.dart',
   'lib/core/services/nutrition_write_service.dart',
   'lib/core/services/prediction_service.dart',
-  'lib/core/services/scheduled_workouts_resync_migrator.dart',
   'lib/core/services/seed_service.dart',
   'lib/core/services/supabase_service.dart',
   'lib/core/services/sync_queue.dart',
   'lib/core/services/sync_service.dart',
-  'lib/core/services/user_config_migrator.dart',
   'lib/core/services/workout_schedule_service.dart',
   'lib/core/services/workout_write_service.dart',
   // ── shared/repositories ───────────────────────────────────────
