@@ -298,7 +298,7 @@ lib/
                                                       #   /profile/submissions instead.
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
-      wardroom/   # 28 primitives (up from 15) — see "Wardroom primitives" in §9.
+      wardroom/   # 36 exports (up from 28) — see "Wardroom primitives" in §9.
                   # Barrel: wardroom.dart. New since PR R (2026-04-18..20):
                   #   ward_seal_badge.dart            — WardSealBadge + WardSealVariant
                   #   ward_dispatch_header.dart       — WardDispatchHeader (double gold rule eyebrow)
@@ -376,21 +376,25 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (37 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (46 Tables — Supabase Postgres)
 
-> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`.
+> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`. Count verified live on prod 2026-05-11 (`information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`).
 
 | Domain | Tables |
 |---|---|
 | Identity (4) | `users`, `user_profile`, `user_preferences`, `user_progress` |
-| Fitness (8) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets`, `user_custom_exercises` |
-| Nutrition (5) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods` |
+| Fitness (9) | `exercise_library`, `workout_templates`, `template_exercises`, `scheduled_workouts`, `workout_logs`, `workout_log_exercises`, `workout_log_sets`, `workout_schedule_completions`, `user_custom_exercises` |
+| Nutrition (6) | `food_database`, `nutrition_logs`, `nutrition_log_items`, `user_saved_meals`, `user_custom_foods`, `saved_diet_plans` |
 | Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` |
 | Visual (1) | `progress_photos` |
-| AI (3) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory` |
+| AI (4) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory`, `memory_embeddings` |
 | Telemetry (1) | `client_errors` |
 | Monetisation (7) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes`, `referral_redemptions` |
-| Community (2) | `community_reviews`, `memory_embeddings` |
+| Community (1) | `community_reviews` |
+| Ranking (3) | `rank_ladder` (reference — 11 ranks), `rank_promotions` (events, UNIQUE `(user_id, rank_code)`), `user_stat_snapshots` (onboarding + per-promotion lifetime totals) |
+| Notifications (1) | `notifications_inbox` |
+| DPDP / Audit (1) | `account_deletion_log` (no FK, survives `auth.users` cascade — DPDP §17 erasure record) |
+| Deferred / Inactive (2) | `daily_quotes` (Test #9 morning-quote experiment, not wired), `video_renders` (Remotion/Lambda render queue, video-share feature deferred) |
 
 **FK direction quirk — `referral_codes` is the ONLY table with an FK to `auth.users(id)`.** Every other user-scoped table FKs to `public.users(id)` because those tables are populated only after the onboarding sync path has inserted the user into `public.users`. Referral-code generation fires on-demand from Profile → Invite Friends, which can happen BEFORE `public.users` has the user's row (fresh sign-up, onboarding not yet completed). Migration 035 (2026-04-24) repointed the FK to `auth.users` + added `UNIQUE(user_id)` after silent FK violations on new-account testers produced the "Failed to generate referral code" toast. Do not "normalize" this FK back to `public.users` without understanding that timing dependency.
 
@@ -500,9 +504,9 @@ Radius:    pill 100 / card-L 22 / card-M 16 / card-S 14 / row 12
 - **Streak badge:** `accentSoft` bg, `accent` w900 text, `accent`-20% border
 - **Progress bar:** `input` track, `accent` fill, height 6, radius 3
 
-### Wardroom primitives (28 total)
+### Wardroom primitives (36 exports)
 
-Barrel: `lib/shared/widgets/wardroom/wardroom.dart`. Grouped by role:
+Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts ≥ primitives when a file ships a primitive + a variant or helper (e.g. `ward_ring.dart` exports both `WardRing` and `WardMultiRing`). Grouped by role:
 
 | Primitive | File | Purpose |
 |-----------|------|---------|
@@ -513,34 +517,46 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart`. Grouped by role:
 | WardDispatchHeader | ward_dispatch_header.dart | Double gold rule + eyebrow + italic-gold emphasis + context line (reports / coach dispatch) |
 | WardEyebrow | ward_eyebrow.dart | Standalone mono eyebrow label |
 | WardRule | ward_rule.dart | Gold rule with configurable weight / dash pattern |
+| WardTabHeader | ward_tab_header.dart | Unified 56dp top-row header for all 5 tab screens — `[avatar][TAB EYEBROW][spacer][streak chip][freeze chip]`. APK Test #4 hotfix §3 U7. |
 | **Surface** | | |
-| WardCard | ward_card.dart | Standard card — bg, border, radius variants |
-| WardAvatar | ward_avatar.dart | Circular monogram or photo w/ gold ring |
+| WardCard | ward_card.dart | `WardCardVariant.standard` / `hero` (gold border) / `inset` (no border, for nested rails) |
+| WardAvatar | ward_avatar.dart | Circular monogram or photo w/ gold ring at 40% alpha |
 | WardInsightQuote | ward_insight_quote.dart | Gradient card with gold quote watermark + `InsightSegment` list |
-| WardGlassGrid | ward_glass_grid.dart | 8-cell hydration tracker grid |
+| WardDashedBorder | ward_dashed_border.dart | `CustomPaint.foregroundPainter` for "empty / add new" affordances — empty meal slots, "+ Create custom exercise" rows, "Request deep analysis" CTAs. Mirrors handoff `borderStyle: 'dashed'` (1px `accent`-44 / radCard). |
 | **Action** | | |
-| WardButton | ward_button.dart | Primary/secondary/ghost button variants |
-| WardChip | ward_chip.dart | Compact label / toggle chip |
-| WardRadioRow | ward_radio_row.dart | 44px tap row with gold left-border when selected |
+| WardButton | ward_button.dart | 4 variants — `primary` (solid gold), `outline` (1px gold), `ghost` (1px `line2`), `danger` (red-tinted). Fraunces w600 uppercase, +2.5 letter-spacing, sharp 2px corners. |
+| WardChip | ward_chip.dart | 6 `WardChipTone` — neutral / gold / ok / warn / bad / filled (gold-on-navy for the single most-important chip on a screen) |
+| WardRadioRow | ward_radio_row.dart | 44px tap row, 56dp label column, gold left-border when selected |
 | WardToggle | ward_toggle.dart | 36×20 pill toggle, 150ms crossfade |
 | WardUnitToggle | ward_unit_toggle.dart | KG/LBS 2-position inline pill |
 | **Numeric** | | |
-| WardBigNumber | ward_big_number.dart | Fraunces large numeric + unit caption |
+| WardBigNumber | ward_big_number.dart | Fraunces tabular figures + JB Mono uppercase unit. Canonical stat display across Daily/Train/Nutrition/Coach/Weekly Report. |
 | WardKvRow | ward_kv_row.dart | Label + value row with dotted leader |
 | WardStatTile | ward_stat_tile.dart | Mono label + Fraunces numeric + unit |
 | **Meter** | | |
-| WardBar | ward_bar.dart | Progress bar — optional `trailingLabel` for gold "25%" mono numeral |
+| WardBar | ward_bar.dart | Progress bar — optional `trailingLabel` for gold "25%" mono numeral, 400ms ease-out animate-fill |
 | WardSpark | ward_spark.dart | Sparkline with gold stroke |
 | WardRing / WardMultiRing | ward_ring.dart | Single + concentric ring progress |
 | **Structure** | | |
-| WardAchievementStrip | ward_achievement_strip.dart | Horizontal scrollable earned/locked circles |
+| WardGlassGrid | ward_glass_grid.dart | 8-cell hydration tracker grid |
+| WardAchievementStrip | ward_achievement_strip.dart | Horizontal scrollable earned/locked circles, default 36dp diameter |
 | WardPhaseDots | ward_phase_dots.dart | 12-phase progress row |
 | WardPhaseBlock | ward_phase_block.dart | Roman numeral circle + title/weeks/description + START chip |
 | WardSessionRow / WardSessionTable | ward_session_row.dart | Set-log row (set# / weight / reps / status) + table shell |
-| WardCategorySidebar | ward_category_sidebar.dart | Vertical 46px `bgDeep` with rotated mono label |
-| **Badge / Glyph** | | |
+| WardCategorySidebar | ward_category_sidebar.dart | Vertical 46px `bgDeep` with rotated -90° mono category label (Coach Suggested-Actions, Notifications) |
+| WardSetChips | ward_set_chips.dart | Per-set bracketed chip `Wrap` — SoT for "what was logged" rendering. Used by `WorkoutReceiptCard` + Train expanded view. APK Test #12 / Theme E primitive (CLAUDE.md §19 entry "Train expanded view + Receipt rendered exercises in different formats"). |
+| WardStatusStrip | ward_status_strip.dart | Composes streak / freeze / optional rank chips into one horizontal `Wrap`. Used as `WardLetterhead.trailing` slot on Daily / Train / Profile. |
+| **Badge** | | |
 | WardSealBadge | ward_seal_badge.dart | Seal glyph in 4 `WardSealVariant` (report / subscription / phase / founder) |
+| WardRankInsignia | ward_rank_insignia.dart | Indian Navy rank insignia via `CustomPaint`. 11 painters dispatched by `rankCode`. Sizes 16dp (compact chips) / 24dp (`WardRankPill`) / 48dp (record sheets + ladder detail). |
+| WardFreezeBadge | ward_freeze_badge.dart | ❄ glyph + count pill on `bgRaise` with hairline parchment border. Sits beside `StreakBadge` inside `WardStatusStrip`. |
+| **Composite** | | |
+| WardRankPill | ward_rank_pill.dart | Top-of-Profile pill — `[insignia 24dp][shortCapsName][chevron]`. Tap toggles 200ms ease-out inline accordion with caller-supplied `expandedContentBuilder`. |
+| **Glyph** | | |
 | Glyph set (5) | ward_glyphs.dart | `AnchorGlyph`, `CompassRoseGlyph`, `TierChevronsGlyph`, `SealGlyph`, `RankBarGlyph` |
+| **Legacy (slated for removal — do not introduce new usages)** | | |
+| ~~RankChip~~ | rank_chip.dart | Pre-`WardRankInsignia` compact rank row. Audit 2026-05-11 §4 "Dead code" flagged for removal. Migrate callers to `WardRankInsignia` + `WardChip`. |
+| ~~RankInsignia~~ | rank_insignia.dart | Text-fallback placeholder from APK Test #3 (SVG assets that never shipped). Superseded by `WardRankInsignia.CustomPaint` in APK Test #6. |
 
 ---
 
