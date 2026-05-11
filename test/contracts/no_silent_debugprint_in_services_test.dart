@@ -31,13 +31,18 @@ import 'package:flutter_test/flutter_test.dart';
 /// (`rank_service.dart`) has been retrofitted and is intentionally
 /// absent from this list — the test would fail if it regressed.
 const _grandfathered = <String>{
-  // ── core/services (excluding rank_service — retrofitted) ──────
+  // ── core/services ─────────────────────────────────────────────
+  // Retrofitted (NOT grandfathered — must stay clean):
+  //   rank_service.dart                            (H-42 first batch)
+  //   health_sync_service.dart                     (Phase 8 batch)
+  //   stat_snapshot_service.dart                   (Phase 8 batch)
+  //   subscription_service.dart                    (Phase 8 batch)
+  //   razorpay_service.dart                        (Phase 8 batch)
   'lib/core/services/ai_service.dart',
   'lib/core/services/app_events_service.dart',
   'lib/core/services/barcode_service.dart',
   'lib/core/services/exlog_key_migrator.dart',
   'lib/core/services/guarded_box.dart',
-  'lib/core/services/health_sync_service.dart',
   'lib/core/services/hive_service.dart',
   'lib/core/services/hive_user_session.dart',
   'lib/core/services/logging_type_repair_migrator.dart',
@@ -45,11 +50,8 @@ const _grandfathered = <String>{
   'lib/core/services/nlog_key_migrator.dart',
   'lib/core/services/nutrition_write_service.dart',
   'lib/core/services/prediction_service.dart',
-  'lib/core/services/razorpay_service.dart',
   'lib/core/services/scheduled_workouts_resync_migrator.dart',
   'lib/core/services/seed_service.dart',
-  'lib/core/services/stat_snapshot_service.dart',
-  'lib/core/services/subscription_service.dart',
   'lib/core/services/supabase_service.dart',
   'lib/core/services/sync_queue.dart',
   'lib/core/services/sync_service.dart',
@@ -57,6 +59,8 @@ const _grandfathered = <String>{
   'lib/core/services/workout_schedule_service.dart',
   'lib/core/services/workout_write_service.dart',
   // ── shared/repositories ───────────────────────────────────────
+  // Retrofitted (NOT grandfathered):
+  //   plan_engine/progression_resolver.dart         (H-42 first batch)
   'lib/shared/repositories/user_repository.dart',
   'lib/shared/repositories/exercise_repository.dart',
   'lib/shared/repositories/food_repository.dart',

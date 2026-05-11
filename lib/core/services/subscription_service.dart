@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -466,7 +468,7 @@ class SubscriptionService {
       // ignore: discarded_futures
       ErrorTelemetry.logEvent('subscription_refresh_success',
           message: 'plan=${plan ?? 'monthly'}');
-    } catch (e) {
+    } catch (e, st) {
       // Offline or error — keep cached state, do not throw.
       debugPrint('[SubscriptionService.refreshFromSupabase] $e');
 
@@ -476,6 +478,12 @@ class SubscriptionService {
       // Fire-and-forget; never let logging fail block recovery.
       // ignore: discarded_futures
       _logRefreshFailure(e);
+
+      // audit-2026-05-11 H-42 — direct Crashlytics path alongside the
+      // log-client-error funnel above (defense-in-depth — if Edge
+      // Functions are down, Crashlytics still gets the signal).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'subscription_refresh_from_supabase'));
 
       // Don't let network errors perpetuate phantom PRO indefinitely.
       // If local activation grace period (10 min) has passed, clear the flag

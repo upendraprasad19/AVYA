@@ -23,7 +23,10 @@
 /// SyncQueue entry per write.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -224,8 +227,11 @@ class StatSnapshotService {
           .single();
 
       return SnapshotWriteResult.success(UserStatSnapshot.fromRow(inserted));
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[StatSnapshotService.snapshotOnboarding] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'stat_snapshot_onboarding'));
       return SnapshotWriteResult.failure(e.toString());
     }
   }
@@ -281,8 +287,10 @@ class StatSnapshotService {
           .single();
 
       return SnapshotWriteResult.success(UserStatSnapshot.fromRow(inserted));
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[StatSnapshotService.snapshotOnPromotion] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'stat_snapshot_on_promotion'));
       return SnapshotWriteResult.failure(e.toString());
     }
   }
@@ -336,8 +344,10 @@ class StatSnapshotService {
           .single();
 
       return SnapshotWriteResult.success(UserStatSnapshot.fromRow(inserted));
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[StatSnapshotService.snapshotManual] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'stat_snapshot_manual'));
       return SnapshotWriteResult.failure(e.toString());
     }
   }
@@ -358,8 +368,10 @@ class StatSnapshotService {
       return (rows as List)
           .map((r) => UserStatSnapshot.fromRow(Map<String, dynamic>.from(r)))
           .toList();
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[StatSnapshotService.listAll] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'stat_snapshot_list_all'));
       return const [];
     }
   }
@@ -469,8 +481,10 @@ class StatSnapshotService {
         'sleep':
             double.parse(avg(sleepRows as List, 'hours').toStringAsFixed(1)),
       };
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[StatSnapshotService._compute7dAverages] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'stat_snapshot_compute_7d_averages'));
       return {'calories': 0, 'protein': 0, 'steps': 0, 'sleep': 0};
     }
   }

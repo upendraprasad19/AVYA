@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -136,11 +139,16 @@ class RazorpayService {
         onFailure?.call();
         return;
       }
-    } catch (e) {
+    } catch (e, st) {
       // APK Test #12.5 / Class 2a — handle FunctionException from
       // supabase_flutter ^2.12.0. invoke() throws on non-2xx; the
       // 409 branch above is dead code in this version. Parse
       // `e.details` here.
+      // audit-2026-05-11 H-42 — telemetry pair (covers BOTH the
+      // FunctionException branch handlers AND the unknown-exception
+      // tail at the end of this block).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_create_order'));
       if (e is FunctionException) {
         final status = e.status;
         final details = e.details;
@@ -151,8 +159,10 @@ class RazorpayService {
               await _handleAlreadyProResponse(m);
               onSuccess?.call();
               return;
-            } catch (inner) {
+            } catch (inner, innerSt) {
               debugPrint('RazorpayService: 409 handler threw: $inner');
+              unawaited(ErrorTelemetry.recordNonFatal(inner, innerSt,
+                  reason: 'razorpay_already_pro_handler'));
             }
           }
         }
@@ -319,8 +329,11 @@ class RazorpayService {
     try {
       await SupabaseService.instance.client.auth.refreshSession();
       debugPrint('RazorpayService: session refreshed after checkout');
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('RazorpayService: session refresh failed (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_session_refresh'));
     }
 
     // Fix 2 (2026-04-17) · OPTIMISTIC LOCAL ACTIVATION.
@@ -361,8 +374,10 @@ class RazorpayService {
       // a fallback only now.
       await SubscriptionService.instance
           .markPaymentInFlight(orderId: response.orderId);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('RazorpayService: markPaymentInFlight failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_mark_payment_in_flight'));
     }
     try {
       await SubscriptionService.instance.writeSubscriptionState(
@@ -370,16 +385,20 @@ class RazorpayService {
         expiresAt: optimisticEndDate,
         plan: fallbackPlan,
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('RazorpayService: writeSubscriptionState failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_write_subscription_state'));
     }
     try {
       await MigratedKey.write(
         'localActivationAt',
         DateTime.now().toIso8601String(),
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('RazorpayService: localActivationAt write failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_local_activation_at_write'));
     }
 
     // Announce PRO to the user right away — no more 45s "Verifying..." wait.
@@ -395,8 +414,10 @@ class RazorpayService {
         orderId: response.orderId ?? '',
         signature: response.signature ?? '',
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('RazorpayService: _pollAndActivate threw: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'razorpay_poll_and_activate'));
       // Local state is already PRO; background verify retries will keep
       // trying via _scheduleVerificationRetry inside _pollAndActivate's
       // normal flow, or via refreshFromSupabase on next app launch.
@@ -594,8 +615,10 @@ class RazorpayService {
           debugPrint('RazorpayService: webhook confirmed at attempt $attempt (exact=${attempt < 12})');
           return;
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('RazorpayService: poll attempt $attempt failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'razorpay_poll_attempt'));
       }
     }
 
@@ -644,8 +667,10 @@ class RazorpayService {
             return;
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('RazorpayService: verify-payment Edge Function failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'razorpay_verify_payment_edge_function'));
       }
     }
 
@@ -725,8 +750,10 @@ class RazorpayService {
             }
             debugPrint('RazorpayService: verify-payment returned 200 but verified=${data['verified']} — continuing retries');
           }
-        } catch (e) {
+        } catch (e, st) {
           debugPrint('RazorpayService: verify-payment retry failed after ${delay.inSeconds}s: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'razorpay_verify_payment_retry'));
         }
       });
     }

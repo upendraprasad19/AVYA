@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 /// Wraps the `health` package to sync data from Google Fit / Health Connect
@@ -48,8 +51,11 @@ class HealthSyncService {
       );
       debugPrint('[HealthSync] permissions granted: $_permissionsGranted');
       return _permissionsGranted;
-    } catch (e) {
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
       debugPrint('[HealthSync] requestPermissions error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_request_permissions'));
       return false;
     }
   }
@@ -68,8 +74,10 @@ class HealthSyncService {
       _permissionsGranted = hasPerms == true;
       debugPrint('[HealthSync] quiet permission check: $_permissionsGranted');
       return _permissionsGranted;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[HealthSync] quiet permission check error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_quiet_permission_check'));
       return false;
     }
   }
@@ -86,8 +94,10 @@ class HealthSyncService {
       final steps = await _health!.getTotalStepsInInterval(midnight, now);
       debugPrint('[HealthSync] fetchStepsToday: $steps (midnight=$midnight, now=$now)');
       return steps;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[HealthSync] fetchStepsToday error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_fetch_steps_today'));
       return null;
     }
   }
@@ -114,8 +124,10 @@ class HealthSyncService {
         return value.numericValue.toDouble();
       }
       return null;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[HealthSync] fetchLatestWeight error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_fetch_latest_weight'));
       return null;
     }
   }
