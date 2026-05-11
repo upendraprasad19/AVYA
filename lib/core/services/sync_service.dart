@@ -3843,6 +3843,36 @@ class SyncService {
             } catch (_) {}
           }
         }
+
+        // APK Test #15.1 / Bug B — vacuum the tail. Migration 051
+        // (Test #15 / Backlog #2) added UNIQUE(template_id, order_index)
+        // and switched DELETE-then-INSERT → upsert with onConflict.
+        // That fix preserved no-torn-state on partial failure but
+        // introduced a NEW failure mode: when a template shrinks
+        // (15 exercises → 5), only slots 0..4 are upserted; slots
+        // 5..14 from the prior version remain orphaned in cloud.
+        // Restore pulls all 15, founder sees 15-exercise "triplicates"
+        // on his Back Day A / Leg Day A / Push Day templates.
+        //
+        // Tail vacuum bounds the cloud row count to exactly the local
+        // exercises.length. One round-trip per template. Idempotent.
+        // Network failure on the DELETE leaves stale tail rows (same
+        // as today's status quo before this commit) — no regression.
+        //
+        // closes-diagnose: 2026-05-12-template-exercises-tail-vacuum-b3c8d2
+        try {
+          await _supabase.client
+              .from('template_exercises')
+              .delete()
+              .eq('template_id', cloudTmplId)
+              .gte('order_index', exercises.length);
+        } catch (vacErr, st) {
+          debugPrint(
+              '[SyncService._syncWorkoutTemplates] tail vacuum failed: $vacErr');
+          unawaited(ErrorTelemetry.recordNonFatal(vacErr, st,
+              reason: 'sync_template_exercises_tail_vacuum'));
+          // Non-fatal — same stale-tail state as pre-fix.
+        }
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
