@@ -11,7 +11,9 @@ This file is the **canonical single source of truth** for what "L3 discipline" m
 1. **Validator tool** (`scripts/validate_discipline_doc.dart`) — runs on every commit and Git Hook, ensuring that bug fixes cite a discipline entry.
 2. **Pre-commit hook** (`.git/hooks/pre-commit`) — blocks commits with messages starting with `fix:`, `bug:`, or `regression:` unless a discipline stanza is present.
 3. **`/build-apk` skill Gate 10** — refuses to build an APK if there are unfixed discipline violations in the working tree.
-4. **Agent brief** (`docs/agent_brief_preamble.md`) — subagent prompts include the discipline checklist as a mandatory preamble for bug analysis.
+4. **`/build-apk` skill Gate 15** (`scripts/check_generic_error_telemetry.dart`, added APK Test #15.1 — codifies Bug D) — every user-facing generic error message ("Sorry,", "Something went wrong", "temporarily unavailable", "Failed to ...", "Could not ...") inside a `catch (...)` block must be preceded within 30 lines by an `ErrorTelemetry.logEvent` / `recordNonFatal` / `_reportSyncFailure` call. Baseline file `backups/generic_error_telemetry_baseline.txt` grandfathers pre-existing violations; NEW violations hard-fail. Prevents recurrence of the ai-media-proxy generic else-branch silently swallowing errors with zero telemetry.
+5. **`/build-apk` skill Gate 16** (`scripts/check_id_injection_on_get.dart`, added APK Test #15.1 — codifies Bug F) — in `lib/**/*_repository.dart`, every `box.get(key)` that returns a Map shape must inject the key as `id` within 15 lines, OR carry an explicit `// gate16-exempt: <reason>` annotation. Baseline file `backups/id_injection_on_get_baseline.txt`. Prevents recurrence of the Test #6 WriteService rewrite that stopped writing `id` value fields (id IS the Hive key); consumer filters then silently stripped every row.
+6. **Agent brief** (`docs/agent_brief_preamble.md`) — subagent prompts include the discipline checklist as a mandatory preamble for bug analysis.
 
 The file is also referenced by:
 - `.claude/commands/diagnose-bug.md` (interactive skill for the `/diagnose-bug` command)
