@@ -629,7 +629,7 @@ CRITICAL OUTPUT RULES:
 Profile: ${profile['gender']}, age $age, ${profile['height_cm']}cm, ${profile['current_weight_kg']}kg → ${profile['target_weight_kg']}kg goal
 Goal: ${profile['primary_goal']}, Experience: ${profile['fitness_experience']}
 Training: ${profile['days_per_week']} days/week, ${profile['equipment_access']}
-BMR: ${profile['bmr']?.toStringAsFixed(0)}, TDEE: ${profile['tdee']?.toStringAsFixed(0)}
+BMR: ${(profile['bmr'] as num?)?.toStringAsFixed(0)}, TDEE: ${(profile['tdee'] as num?)?.toStringAsFixed(0)}
 $rulesBlock
 
 Format (use • not JSON):

@@ -1,3 +1,4 @@
+import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
 
@@ -10,7 +11,7 @@ class BadgeService {
 
   // Use HiveService singleton instead of Hive.box() directly to avoid
   // HiveError if the box is not yet open.
-  dynamic get _box => HiveService.instance.configBox;
+  Box<dynamic> get _box => HiveService.instance.configBox;
 
   /// Checks milestones and unlocks any newly earned badges.
   /// Returns the list of newly unlocked BadgeIds (empty if none).

@@ -65,7 +65,7 @@ class VideoRenderNotifier extends Notifier<VideoRenderState> {
         throw Exception('Trigger failed: ${response.data}');
       }
 
-      final jobId = response.data['jobId'] as String;
+      final jobId = (response.data as Map<String, dynamic>)['jobId'] as String;
       state = state.copyWith(jobId: jobId);
       _startPolling(jobId);
     } catch (e) {

@@ -29,6 +29,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Generic write result for snapshot operations.
@@ -443,7 +444,7 @@ class StatSnapshotService {
   /// `sleep_logs` for the snapshot user. Defensive on errors —
   /// returns 0s rather than nulls so the row inserts cleanly.
   Future<Map<String, num>> _compute7dAverages(
-      dynamic supa, String userId) async {
+      SupabaseClient supa, String userId) async {
     try {
       final since = DateTime.now()
           .subtract(const Duration(days: 7))
@@ -470,7 +471,7 @@ class StatSnapshotService {
       double avg(List rows, String key) {
         if (rows.isEmpty) return 0;
         final sum = rows.fold<double>(
-            0, (s, r) => s + ((r[key] as num?)?.toDouble() ?? 0));
+            0, (s, r) => s + (((r as Map)[key] as num?)?.toDouble() ?? 0));
         return sum / rows.length;
       }
 

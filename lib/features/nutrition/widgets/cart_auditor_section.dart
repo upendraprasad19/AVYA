@@ -250,7 +250,8 @@ class CartAuditorSection extends ConsumerWidget {
         const SizedBox(height: 10),
 
         // Items
-        ...items.map((item) {
+        ...items.map((raw) {
+          final item = raw as Map<String, dynamic>;
           final name = item['name'] as String? ?? 'Unknown';
           final verdict = item['verdict'] as String? ?? '';
           final color = verdict == 'good' ? AppColors.ok : AppColors.warn;
@@ -288,7 +289,8 @@ class CartAuditorSection extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 6),
-          ...swaps.map((swap) {
+          ...swaps.map((raw) {
+            final swap = raw as Map<String, dynamic>;
             final from = swap['from'] as String? ?? '';
             final to = swap['to'] as String? ?? '';
             final reason = swap['reason'] as String? ?? '';

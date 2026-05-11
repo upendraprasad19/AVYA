@@ -215,8 +215,8 @@ void main() {
       final sets = entry['sets'] as List;
       expect(sets, hasLength(2));
       expect(sets[0], isA<Map>());
-      expect(sets[0]['reps'], 12);
-      expect(sets[1]['reps'], 10);
+      expect((sets[0] as Map)['reps'], 12);
+      expect((sets[1] as Map)['reps'], 10);
     });
   });
 }

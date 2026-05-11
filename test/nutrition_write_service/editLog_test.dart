@@ -51,7 +51,7 @@ void main() {
         HiveService.instance.nutritionBox.get(r1.logKey!) as Map);
     expect(m['total_calories'], 270);
     expect(m['total_fiber'], 6);
-    expect((m['items'] as List).first['quantity_g'], 75);
+    expect(((m['items'] as List).first as Map)['quantity_g'], 75);
   });
 
   test('editLog returns error when key missing', () async {

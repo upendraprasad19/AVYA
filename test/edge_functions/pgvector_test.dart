@@ -159,7 +159,7 @@ void main() {
         final list = results as List;
         expect(list, isNotEmpty,
             reason: 'Same vector should match with high similarity');
-        expect(list.first['content'], contains('push/pull/legs'));
+        expect((list.first as Map)['content'], contains('push/pull/legs'));
       } catch (e) {
         if (e.toString().contains('function') ||
             e.toString().contains('does not exist')) {

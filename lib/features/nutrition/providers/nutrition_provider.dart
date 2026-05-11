@@ -624,15 +624,18 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
             : response.data as Map<String, dynamic>;
 
         final items = (data['items'] as List<dynamic>?)
-                ?.map((item) => AiFoodItem(
-                      name: item['name'] as String? ?? 'Unknown',
-                      quantity: item['quantity'] as String? ?? '1 serving',
-                      calories: (item['calories'] as num?)?.toInt() ?? 0,
-                      protein: '${(item['protein'] as num?)?.toInt() ?? 0}g',
-                      carbs: '${(item['carbs'] as num?)?.toInt() ?? 0}g',
-                      fat: '${(item['fat'] as num?)?.toInt() ?? 0}g',
-                      fiber: (item['fiber'] as num?)?.toInt() ?? 0,
-                    ))
+                ?.map((raw) {
+                  final item = raw as Map<String, dynamic>;
+                  return AiFoodItem(
+                    name: item['name'] as String? ?? 'Unknown',
+                    quantity: item['quantity'] as String? ?? '1 serving',
+                    calories: (item['calories'] as num?)?.toInt() ?? 0,
+                    protein: '${(item['protein'] as num?)?.toInt() ?? 0}g',
+                    carbs: '${(item['carbs'] as num?)?.toInt() ?? 0}g',
+                    fat: '${(item['fat'] as num?)?.toInt() ?? 0}g',
+                    fiber: (item['fiber'] as num?)?.toInt() ?? 0,
+                  );
+                })
                 .toList() ??
             [];
 

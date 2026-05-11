@@ -89,7 +89,8 @@ class SubmissionsRepository {
         .select('item_type, item_id')
         .eq('reviewer_id', reviewerId);
     return {
-      for (final r in res as List) '${r['item_type']}:${r['item_id']}',
+      for (final r in res as List)
+        '${(r as Map)['item_type']}:${r['item_id']}',
     };
   }
 

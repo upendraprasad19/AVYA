@@ -108,8 +108,9 @@ void main() {
 
     final ctx = AiCoachRepository.instance.buildAiContext();
     expect(ctx['coach_memory'], isNotNull);
-    expect(ctx['coach_memory']['preferred_name'], equals('Upen'));
-    expect(ctx['coach_memory']['communication_style'], equals('hinglish'));
+    final cm = ctx['coach_memory'] as Map<String, dynamic>;
+    expect(cm['preferred_name'], equals('Upen'));
+    expect(cm['communication_style'], equals('hinglish'));
   });
 
   test('buildAiContext omits coach_memory when private_mode is true', () async {

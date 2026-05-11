@@ -1,3 +1,5 @@
+import 'package:hive/hive.dart';
+
 import '../../../core/services/hive_service.dart';
 
 /// One date in a `scheduleTemplate` plan (display row).
@@ -222,7 +224,7 @@ class ScheduleTemplatePlanner {
     _assignmentCache.remove(intentId);
   }
 
-  Map<String, dynamic>? _findTemplateById(dynamic box, String templateId) {
+  Map<String, dynamic>? _findTemplateById(Box<dynamic> box, String templateId) {
     // Fast path — direct key lookup.
     final raw = box.get(templateId);
     if (raw is Map) return Map<String, dynamic>.from(raw);

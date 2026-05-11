@@ -76,8 +76,9 @@ void main() {
     expect(breakfast['total_kcal'], equals(292));
     expect(breakfast['total_protein_g'], equals(13));
     expect((breakfast['items'] as List).length, equals(2));
-    final names =
-        (breakfast['items'] as List).map((i) => i['name'] as String).toList();
+    final names = (breakfast['items'] as List)
+        .map((i) => (i as Map)['name'] as String)
+        .toList();
     expect(names, containsAll(['Oats', 'Milk (Toned)']));
 
     final lunch = meals.firstWhere((m) => m['slot'] == 'lunch',

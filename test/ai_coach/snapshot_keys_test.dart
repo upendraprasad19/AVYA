@@ -230,8 +230,8 @@ void main() {
       );
 
       final ctx = AiCoachRepository.instance.buildAiContext();
-      final sessions =
-          (ctx['current_plan_summary']['weekly_sessions'] as List);
+      final summary = ctx['current_plan_summary'] as Map<String, dynamic>;
+      final sessions = summary['weekly_sessions'] as List;
       final names = sessions.map((s) => (s as Map)['name']).toList();
       expect(names, contains('PUSH A'));
       expect(names, contains('PULL A'));
@@ -242,8 +242,8 @@ void main() {
     test('skips REST days', () async {
       // No schedule entries for today + 6 days = all rest
       final ctx = AiCoachRepository.instance.buildAiContext();
-      final sessions =
-          (ctx['current_plan_summary']['weekly_sessions'] as List);
+      final summary = ctx['current_plan_summary'] as Map<String, dynamic>;
+      final sessions = summary['weekly_sessions'] as List;
       expect(sessions, isEmpty);
     });
 
@@ -269,8 +269,10 @@ void main() {
       );
 
       final ctx = AiCoachRepository.instance.buildAiContext();
-      final sessions = ctx['current_plan_summary']['weekly_sessions'] as List;
-      final firstExercise = (sessions.first as Map)['exercises'][0] as Map;
+      final summary = ctx['current_plan_summary'] as Map<String, dynamic>;
+      final sessions = summary['weekly_sessions'] as List;
+      final firstExercise =
+          ((sessions.first as Map)['exercises'] as List)[0] as Map;
       expect(firstExercise.keys, containsAll(['name', 'sets', 'reps', 'weight']));
       expect(firstExercise['logging_type'], isNull);
       expect(firstExercise['rest_seconds'], isNull);
@@ -466,7 +468,7 @@ void main() {
       final next = ctx['next_rank'] as Map;
       expect(next['code'], 'SD1');
       // SD1 gate has streak_days:7 requirement (canonical kRankGates)
-      expect(next['requirements']['streak_days'], 7);
+      expect((next['requirements'] as Map)['streak_days'], 7);
       expect(next['binding_constraint'], isA<String>());
     });
 

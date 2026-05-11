@@ -25,7 +25,7 @@ void main() {
     final compact = AiService.compactForTest(ctx);
     expect(compact['coach_memory'], isNotNull,
         reason: 'coach_memory must survive aggressive trimming');
-    expect(compact['coach_memory']['preferred_name'], equals('Upen'));
+    expect((compact['coach_memory'] as Map)['preferred_name'], equals('Upen'));
     expect(compact.containsKey('step_history_7d'), isFalse,
         reason: 'sanity: trim list executed');
   });
