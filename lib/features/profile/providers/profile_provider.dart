@@ -271,6 +271,15 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
     final profile = UserRepository.instance.getProfile() ?? {};
     final progress = UserRepository.instance.getProgress() ?? {};
 
+    // H-1 (audit-2026-05-11) — watch `subscriptionInfoProvider`
+    // instead of snapshotting `SubscriptionService.isPro()` at build
+    // time. Without this the userStatsProvider stays at `isPro:false`
+    // after a fresh PRO upgrade until the user manually triggers a
+    // rebuild — same APK Test #12 / C-2 regression class. Watch means
+    // the notifier rebuilds whenever the canonical subscription
+    // provider invalidates.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+
     final weight =
         (profile['current_weight_kg'] as num?)?.toDouble() ?? 0;
     final heightCm = (profile['height_cm'] as num?)?.toDouble() ?? 0;
@@ -289,7 +298,7 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
       currentWeek: WorkoutScheduleService.instance.getCurrentWeekNumber(),
       primaryGoal:
           (profile['primary_goal'] as String?) ?? 'Not set',
-      isPro: SubscriptionService.instance.isPro(),
+      isPro: isPro,
     );
   }
 }

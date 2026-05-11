@@ -9,6 +9,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../repositories/workout_repository.dart';
@@ -224,8 +225,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                       totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
                       onSelect: (week) {
+                          // H-2 (audit-2026-05-11) — read the reactive
+                          // subscription provider instead of the snapshot
+                          // `SubscriptionService.isPro()`. Stale snapshot
+                          // class APK Test #12 / C-2 — a free user who
+                          // upgrades mid-session would still be routed to
+                          // the preview screen until the next rebuild.
+                          // `ref.read` here is fine: the surrounding
+                          // build already watches `subscriptionInfoProvider`
+                          // (or its descendants) so this callback re-binds
+                          // when the provider invalidates.
                           final isProUser =
-                              SubscriptionService.instance.isPro();
+                              ref.read(subscriptionInfoProvider).isPro;
                           // Weeks 5-12 are PRO-only. Free users tapping a
                           // locked week chip are routed to the read-only
                           // preview screen (Q7 surface C) instead of
@@ -357,10 +368,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
+                // H-2 sibling (audit-2026-05-11) — read the reactive
+                // subscription provider rather than the cached snapshot.
+                // Same stale-pro class as `onSelect` above.
                 onTap: () => StreakExplainerSheet.show(
                   context,
                   freezesAvailable: ref.read(streakFreezeProvider),
-                  isPro: SubscriptionService.instance.isPro(),
+                  isPro: ref.read(subscriptionInfoProvider).isPro,
                 ),
                 child: WardStatusStrip(
                   streakDays: ref.watch(streakProvider),

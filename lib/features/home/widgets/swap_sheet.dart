@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Bottom sheet that allows swapping a workout day with another day
 /// in the same week. Long-press a day on the weekly calendar to open.
-class SwapSheet extends StatefulWidget {
+class SwapSheet extends ConsumerStatefulWidget {
   /// The date of the day that was long-pressed.
   final DateTime sourceDate;
 
@@ -40,12 +41,11 @@ class SwapSheet extends StatefulWidget {
   }
 
   @override
-  State<SwapSheet> createState() => _SwapSheetState();
+  ConsumerState<SwapSheet> createState() => _SwapSheetState();
 }
 
-class _SwapSheetState extends State<SwapSheet> {
+class _SwapSheetState extends ConsumerState<SwapSheet> {
   final _scheduleService = WorkoutScheduleService.instance;
-  final _subscriptionService = SubscriptionService.instance;
 
   DateTime? _selectedTarget;
   String? _errorText;
@@ -55,7 +55,6 @@ class _SwapSheetState extends State<SwapSheet> {
   late final List<DateTime> _weekDays;
   late final List<Map<String, dynamic>?> _schedules;
   late final Map<String, dynamic>? _sourceSchedule;
-  late final bool _isPro;
 
   static const _dayNames = [
     'Monday',
@@ -70,7 +69,11 @@ class _SwapSheetState extends State<SwapSheet> {
   @override
   void initState() {
     super.initState();
-    _isPro = _subscriptionService.isPro();
+    // H-2b (audit-2026-05-11) — `_isPro` removed. Pre-fix this was
+    // captured ONCE at sheet-open time, so a user who upgraded mid-
+    // session would still be treated as free until the sheet was
+    // reopened. The PRO check now reads `subscriptionInfoProvider`
+    // at call time inside `_onConfirm` (see below).
     final src = widget.sourceDate;
     _weekStart = DateTime(src.year, src.month, src.day)
         .subtract(Duration(days: src.weekday - 1));
@@ -118,10 +121,14 @@ class _SwapSheetState extends State<SwapSheet> {
       _errorText = null;
     });
 
+    // H-2b (audit-2026-05-11) — read PRO state at the moment of
+    // confirmation, not at sheet-open time. Reactive to mid-session
+    // upgrades.
+    final isPro = ref.read(subscriptionInfoProvider).isPro;
     final result = await _scheduleService.swapDays(
       widget.sourceDate,
       _selectedTarget!,
-      isPro: _isPro,
+      isPro: isPro,
     );
 
     if (result != null) {
