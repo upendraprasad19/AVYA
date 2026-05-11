@@ -1,11 +1,11 @@
 {
-    "name": "icanbefitter",
-    "short_name": "icanbefitter",
+    "name": "Avya FIT",
+    "short_name": "Avya FIT",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#02070F",
+    "theme_color": "#D4B270",
+    "description": "Personalised fitness & nutrition for the disciplined. Built on 14 years of military training.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
