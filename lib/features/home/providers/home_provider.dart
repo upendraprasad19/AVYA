@@ -227,7 +227,13 @@ class StreakNotifier extends Notifier<int> {
     // Calling the canonical helper here aligns home with rank-chip and
     // makes the displayed value match the user's mental model
     // (consecutive completed-or-rest days walking back from today).
-    return WorkoutRepository.instance.calculateCurrentStreak();
+    //
+    // C-14 (audit-2026-05-11) — pure READ. streakProvider rebuilds
+    // freely (provider invalidations, hot reload, dev tools). The
+    // pre-CQRS-split `calculateCurrentStreak` silently consumed
+    // freezes on each render — three displays in 10s could burn
+    // three freezes for the same missed day.
+    return WorkoutRepository.instance.currentStreak();
   }
 }
 

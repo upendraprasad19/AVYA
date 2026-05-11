@@ -330,7 +330,10 @@ class RankService {
   _EvalState _readEvaluationState({DateTime? signupAt}) {
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress() ?? {};
-    final streakDays = repo.calculateCurrentStreak();
+    // C-14 (audit-2026-05-11) — rank-gate evaluation is a READ.
+    // Must not consume freezes as a side effect of cron / splash
+    // / post-workout fire-and-forget evaluation.
+    final streakDays = repo.currentStreak();
     final totalWorkouts =
         (progress['total_workouts_done'] as int?) ?? 0;
 

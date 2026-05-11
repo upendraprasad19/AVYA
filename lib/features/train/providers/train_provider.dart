@@ -1415,7 +1415,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // ── Daily streak (schedule-aware — skips rest days) ──
     // Calculated on-the-fly by scanning schedule backwards.
     // Handles rest days, schedule changes, and template swaps correctly.
-    final streakDays = repo.calculateCurrentStreak();
+    //
+    // C-14 (audit-2026-05-11) — completeWorkout is the canonical
+    // mutation surface for streak state. If the walk-back encounters
+    // a missed day BEFORE today and the user has a freeze available,
+    // CONSUME it — that's the right user-facing semantic. All other
+    // call sites use `currentStreak()` for pure reads.
+    final streakDays = repo.consumeMissedDayIfFreezeAvailable();
 
     // ── Weekly streak (kept for badge logic — not shown in UI) ───
     final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
