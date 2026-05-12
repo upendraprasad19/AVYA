@@ -163,6 +163,20 @@ void main() {
           reason: 'PR flag from exlog must propagate to snapshot');
       expect(concurl['sets'], 2,
           reason: 'sets count from logged data, not planned');
+
+      // top_set_weight_kg is OMITTED for non-weighted logging types
+      // (bodyweight_reps, timed, cardio) so Gemini doesn't describe a
+      // misleading "0 kg top set" on a Hanging Leg Raise.
+      final hlr =
+          exercises.firstWhere((e) => e['name'] == 'Hanging Leg Raise');
+      expect(hlr['logging_type'], 'bodyweight_reps');
+      expect(hlr.containsKey('top_set_weight_kg'), isFalse,
+          reason: 'omit top_set_weight_kg for non-weighted logging types');
+
+      // ... but present for weighted exercises.
+      expect(concurl['logging_type'], 'weight_reps');
+      expect(concurl['top_set_weight_kg'], 15.0,
+          reason: 'weighted exercise reports max weight across sets');
     });
 
     test('no logs (rest day / pre-workout) — exercises is empty, no fallback',

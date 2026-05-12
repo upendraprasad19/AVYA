@@ -1387,16 +1387,26 @@ class AiCoachRepository {
         );
         // Top set weight (max across sets) — most useful single-number
         // for the model to call out ("hit 70 kg on Lat Pulldown today").
-        final topWeight = sets
-            .map((s) =>
-                (((s is Map ? s['weight_kg'] : null) as num?) ?? 0).toDouble())
-            .fold<double>(0, (a, b) => b > a ? b : a);
+        // Top set weight (max across sets) — most useful single-number
+        // for the model to call out ("hit 70 kg on Lat Pulldown today").
+        // Omit for non-weighted logging types so Gemini doesn't describe
+        // a "0 kg top set" on a bodyweight / timed / cardio exercise.
+        final loggingType = log['logging_type'] as String?;
+        final isWeighted = loggingType == 'weight_reps' ||
+            loggingType == 'weighted_bodyweight';
+        final double? topWeight = isWeighted
+            ? sets
+                .map((s) =>
+                    (((s is Map ? s['weight_kg'] : null) as num?) ?? 0)
+                        .toDouble())
+                .fold<double>(0, (a, b) => b > a ? b : a)
+            : null;
         logged.add({
           'name': log['exercise_name'] ?? 'Unknown',
           'sets': sets.length,
           'reps_total': totalReps,
-          'top_set_weight_kg': topWeight,
-          'logging_type': log['logging_type'],
+          if (topWeight != null) 'top_set_weight_kg': topWeight,
+          'logging_type': loggingType,
           'is_pr': log['is_pr'] ?? false,
         });
       }
