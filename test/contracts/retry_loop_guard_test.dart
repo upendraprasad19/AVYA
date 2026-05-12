@@ -68,17 +68,25 @@ void main() {
               'to create 30+ duplicate requests.');
     });
 
-    test('callFunction invokes edge function at most TWICE (single retry max)',
+    test('callFunction invokes edge function at most THREE times (two retries max)',
         () {
-      // APK Test #15.1 / Bug G+H — allowed a SINGLE retry on cold-start
-      // 502/503 BOOT_ERROR. The original 2026-04-07 retry-loop bug was
-      // a 401 recursion that compounded with AiCoachProvider into 30+
-      // requests; this 502/503 retry is gated on status, single-attempt,
-      // bounded by a delay, and does NOT recurse. Different class.
+      // APK Test #15.3 / Bug 7c4e1a — bumped to TWO retries on
+      // cold-start 502/503 (backoff schedule [1500ms, 4000ms]) because
+      // ai-proxy cold-start can take 20+ seconds; single 1500 ms retry
+      // wasn't enough wait time. Edge-function logs showed two
+      // consecutive 502 BAD_GATEWAY at 05:08:05/05:08:13 UTC followed
+      // by a 20219 ms warm-start success.
       //
-      // The historical guardrail "no 401 retry" is preserved in the
-      // tests above and below. This test allows the cold-start retry
-      // while still blocking unbounded loops.
+      // Prior bound (APK Test #15.1 / Bug G+H) was at most 2; this
+      // raises it to at most 3 (1 initial + 2 retries). The original
+      // 2026-04-07 401-recursion guard is preserved in the tests above
+      // — this is a different class (bounded loop, status-gated, no
+      // recursion).
+      //
+      // The retry path uses a loop, so we only expect 1 textual
+      // `client.functions.invoke(` literal in the source — the
+      // assertion below tolerates the implementation choice (1 literal
+      // in a loop OR up to 3 inline retries).
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
@@ -91,12 +99,109 @@ void main() {
       final invokeCount =
           RegExp(r'client\.functions\.invoke\(').allMatches(callFnBody).length;
 
-      expect(invokeCount, lessThanOrEqualTo(2),
+      expect(invokeCount, lessThanOrEqualTo(3),
           reason:
-              'callFunction must call client.functions.invoke AT MOST 2 '
-              'times (first attempt + single 502/503 cold-start retry). '
-              'Found $invokeCount. closes-diagnose: 2026-05-12-edge-'
-              'function-503-retry-0a7b9f');
+              'callFunction must call client.functions.invoke AT MOST 3 '
+              'times (first attempt + two 502/503 cold-start retries). '
+              'Found $invokeCount. closes-diagnose: 2026-05-12-ai-proxy-'
+              'retry-undersized-7c4e1a');
+      expect(invokeCount, greaterThanOrEqualTo(1),
+          reason:
+              'callFunction must call client.functions.invoke at least once.');
+    });
+
+    test('retry uses a const backoff schedule with exactly two entries', () {
+      // Backoff schedule [1500ms, 4000ms] is the contract. Both values
+      // must be present, must be ascending, and the list must have
+      // exactly two entries (1 initial + 2 retries = 3 total
+      // invocations). Bumping to 3 retries silently would re-introduce
+      // the runaway-retry risk — keep it pinned here.
+      final source = allSources.entries
+          .firstWhere((e) => e.key.contains('supabase_service.dart'))
+          .value;
+
+      expect(source, contains('_coldStartBackoffsMs'),
+          reason:
+              'callFunction must declare _coldStartBackoffsMs const list '
+              'so the backoff schedule is readable and pinned by this test.');
+
+      final listMatch = RegExp(
+        r'_coldStartBackoffsMs\s*=\s*\[(.*?)\]',
+        dotAll: true,
+      ).firstMatch(source);
+      expect(listMatch, isNotNull,
+          reason:
+              '_coldStartBackoffsMs must be declared as a const list literal');
+      final entries = listMatch!
+          .group(1)!
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      expect(entries.length, 2,
+          reason:
+              'Backoff schedule must have exactly 2 entries (= 2 retries). '
+              'Found ${entries.length}: $entries');
+      // Pinned values from the diagnose-doc.
+      expect(entries[0], '1500',
+          reason: 'First retry delay must be 1500 ms');
+      expect(entries[1], '4000',
+          reason: 'Second retry delay must be 4000 ms');
+    });
+
+    test('retry path emits edge_function_cold_start_retry telemetry', () {
+      // Each retry must log to ErrorTelemetry.logEvent so ops can see
+      // cold-start frequency in client_errors. Telemetry must be
+      // unawaited so it doesn't double the retry latency.
+      final source = allSources.entries
+          .firstWhere((e) => e.key.contains('supabase_service.dart'))
+          .value;
+
+      final callFnStart =
+          source.indexOf('Future<FunctionResponse> callFunction(');
+      final callFnBody = source.substring(callFnStart);
+
+      expect(callFnBody, contains("'edge_function_cold_start_retry'"),
+          reason:
+              'Retry path must emit ErrorTelemetry.logEvent with op_type '
+              "'edge_function_cold_start_retry' for ops visibility.");
+      // Confirm the telemetry call is wrapped in unawaited(...) so we
+      // don't await a network round-trip inside the retry loop.
+      final unawaitedTelemetryRegex = RegExp(
+        r'unawaited\(\s*ErrorTelemetry\.logEvent\(\s*[\x27"]edge_function_cold_start_retry',
+        multiLine: true,
+      );
+      expect(unawaitedTelemetryRegex.hasMatch(callFnBody), isTrue,
+          reason:
+              'edge_function_cold_start_retry telemetry must be wrapped in '
+              'unawaited() so the retry delay is not doubled by the '
+              'log-client-error round-trip.');
+    });
+
+    test('non-502/503 errors still rethrow (no retry on auth/validation)', () {
+      // Defence-in-depth: the retry path must rethrow when the status
+      // gate fails. A regression that drops `rethrow` would retry every
+      // 4xx (auth, validation, payload-too-large) and re-introduce the
+      // pre-2026-04-07 compounding-retry class.
+      final source = allSources.entries
+          .firstWhere((e) => e.key.contains('supabase_service.dart'))
+          .value;
+
+      final callFnStart =
+          source.indexOf('Future<FunctionResponse> callFunction(');
+      final callFnBody = source.substring(callFnStart);
+
+      // After the 502/503 gate fails, we must rethrow.
+      // Tolerant pattern: `if (!isColdStart` followed by `rethrow` on a
+      // nearby line.
+      final rethrowAfterGate = RegExp(
+        r'if\s*\(\s*!isColdStart[^)]*\)[^;]*rethrow',
+        dotAll: true,
+      );
+      expect(rethrowAfterGate.hasMatch(callFnBody), isTrue,
+          reason:
+              'Non-cold-start FunctionException must rethrow. Missing '
+              'rethrow re-introduces unbounded-retry risk for 4xx.');
     });
 
     test('any retry path is gated on 502 OR 503 status (not unconditional)',

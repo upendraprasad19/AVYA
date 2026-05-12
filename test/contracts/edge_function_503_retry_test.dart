@@ -2,21 +2,26 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 /// APK Test #15.1 / Bugs G + H — Edge Function 503 BOOT_ERROR retry.
+/// APK Test #15.3 / Bug 7c4e1a — bumped to TWO retries [1500, 4000]
+/// after ai-proxy logs showed 20+ s cold-starts.
 ///
 /// Telemetry showed `push_snapshot FunctionException(status: 503, code:
-/// BOOT_ERROR, message: Function failed to start)` for the founder's
-/// account. Edge Function logs confirm daily-snapshot takes ~40 seconds
-/// per call (Gemini extraction inline); when multiple users hit it
-/// simultaneously, some get a cold-start 503 while the function spins
-/// up. Same BOOT_ERROR class affects `ai-proxy` → food_text_analysis
-/// → "AI temporarily unavailable" user-facing copy.
+/// BOOT_ERROR, message: Function failed to start)` and edge-function
+/// logs showed `ai-proxy` 502 BAD_GATEWAY pairs followed by a 20219 ms
+/// warm-start success. Edge Function logs confirm daily-snapshot takes
+/// ~40 seconds per call (Gemini extraction inline) and ai-proxy
+/// cold-start can take 20+ seconds (Gemini model load + tools
+/// registry); when multiple users hit one of these simultaneously, the
+/// first calls get a cold-start 502/503 while the function spins up.
 ///
 /// Fix — in SupabaseService.callFunction, catch FunctionException with
-/// status 502 or 503 and retry once after a 1.5s delay. Persistent 5xx
+/// status 502 or 503 and retry up to TWICE on the const backoff
+/// schedule `_coldStartBackoffsMs = [1500, 4000]`. Persistent 5xx
 /// still surfaces to caller; the retry only handles transient
 /// cold-start blips. Auth errors (401/403) are NOT retried.
 ///
-/// closes-diagnose: 2026-05-12-edge-function-503-retry-0a7b9f
+/// closes-diagnose: 2026-05-12-ai-proxy-retry-undersized-7c4e1a
+/// supersedes-diagnose: 2026-05-12-edge-function-503-retry-0a7b9f
 void main() {
   late String src;
 
@@ -47,49 +52,75 @@ void main() {
       );
     });
 
-    test('retry delay is bounded (1500ms target, 250-3000ms acceptable)', () {
-      final match = RegExp(r'Duration\(\s*milliseconds:\s*(\d+)\s*\)')
-          .allMatches(src);
-      bool foundReasonableDelay = false;
-      for (final m in match) {
-        final ms = int.parse(m.group(1)!);
-        if (ms >= 250 && ms <= 3000) {
-          foundReasonableDelay = true;
-          break;
-        }
-      }
-      expect(foundReasonableDelay, isTrue,
+    test('backoff schedule is the pinned [1500, 4000] ms list', () {
+      // Bug 7c4e1a: bumped from single 1500 ms retry to two retries on
+      // [1500, 4000]. The const list must contain both values; either
+      // missing means the schedule has drifted from the pin.
+      expect(src.contains('_coldStartBackoffsMs'), isTrue,
           reason:
-              'Retry delay must be 250–3000 ms. Too short causes thundering '
-              'herd on a cold-starting function; too long is bad UX.');
+              'callFunction must declare a _coldStartBackoffsMs const list '
+              'so the backoff schedule is auditable.');
+      final listMatch = RegExp(
+        r'_coldStartBackoffsMs\s*=\s*\[(.*?)\]',
+        dotAll: true,
+      ).firstMatch(src);
+      expect(listMatch, isNotNull,
+          reason:
+              '_coldStartBackoffsMs must be declared as a const list literal.');
+      final body = listMatch!.group(1)!;
+      expect(body.contains('1500'), isTrue,
+          reason: 'First backoff entry must be 1500 ms (initial retry).');
+      expect(body.contains('4000'), isTrue,
+          reason: 'Second backoff entry must be 4000 ms (covers 20+ s cold-start).');
     });
 
     test('forbidden: unconditional retry (would mask sustained outages)', () {
       // A naive `try { invoke } catch (_) { invoke }` would retry on EVERY
       // exception, masking auth failures + sustained outages. Pin that
       // the retry happens only inside the 502/503 branch.
-      // Look for a bare retry without status check.
+      //
+      // Bug 7c4e1a refactor — retry is now a loop with ONE textual
+      // `client.functions.invoke(` literal that runs up to 3 times.
+      // We pin invokeCount to exactly 1 to forbid accidental
+      // duplicate-invoke regression (e.g. inlining retries).
       final invokeCount =
           RegExp(r'client\.functions\.invoke\(').allMatches(src).length;
-      // Two invokes inside callFunction (first attempt + retry). If the
-      // count is > 2, something else is reusing the method or there are
-      // additional invoke sites that need their own retry. Should be
-      // exactly 2.
-      expect(invokeCount, equals(2),
+      expect(invokeCount, equals(1),
           reason:
-              'callFunction body should contain exactly 2 client.functions.'
-              'invoke calls (first attempt + single retry). Found '
-              '$invokeCount. If more, audit for unsafe retry semantics.');
+              'callFunction body should contain exactly 1 client.functions.'
+              'invoke call (single literal inside a bounded retry loop). '
+              'Found $invokeCount. If more, audit for unsafe retry semantics.');
     });
 
     test('rethrow happens on non-cold-start FunctionExceptions', () {
-      expect(
-        src.contains('if (!isColdStart502_503) rethrow;'),
-        isTrue,
-        reason:
-            'Non-502/503 FunctionExceptions must be rethrown so callers '
-            'can handle 401 auth / 4xx validation / etc.',
+      // Bug 7c4e1a refactor — rethrow guard renamed from
+      // `isColdStart502_503` to `isColdStart`. Pin the new pattern + the
+      // attempt-budget exhaustion condition.
+      final rethrowGate = RegExp(
+        r'if\s*\(\s*!isColdStart[^)]*\|\|[^)]*attempt[^)]*\)[\s\S]{0,40}?rethrow',
       );
+      expect(rethrowGate.hasMatch(src), isTrue,
+          reason:
+              'Non-cold-start FunctionExceptions OR exhausted retry budget '
+              'must rethrow so callers can handle 401 auth / 4xx validation '
+              '/ persistent outage.');
+    });
+
+    test('each retry emits edge_function_cold_start_retry telemetry', () {
+      // Ops visibility: every retry must log to ErrorTelemetry.logEvent
+      // so cold-start frequency surfaces in client_errors.
+      expect(src.contains("'edge_function_cold_start_retry'"), isTrue,
+          reason:
+              'Retry path must emit ErrorTelemetry.logEvent with op_type '
+              "'edge_function_cold_start_retry' for ops visibility.");
+      // Telemetry must be unawaited so the retry latency isn't doubled.
+      final unawaitedTelemetry = RegExp(
+        r'unawaited\(\s*ErrorTelemetry\.logEvent\(\s*[\x27"]edge_function_cold_start_retry',
+      );
+      expect(unawaitedTelemetry.hasMatch(src), isTrue,
+          reason:
+              'edge_function_cold_start_retry telemetry must be unawaited '
+              'so the log-client-error round-trip does not double retry latency.');
     });
   });
 }
