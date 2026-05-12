@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
+import '../constants/app_constants.dart';
 import 'supabase_service.dart';
 
 /// APK Test #12.6 — unified non-fatal error + event telemetry.
@@ -113,7 +114,10 @@ class ErrorTelemetry {
     return 'web';
   }
 
+  /// Audit 2026-05-12 P2-A — was hardcoded '0.0.0+release' which prevented
+  /// correlating client_errors rows to APK builds. Now reads AppConstants
+  /// .appVersion (kept in sync with pubspec.yaml `version:` field).
   static String _currentClientVersion() {
-    return kDebugMode ? '0.0.0+dev' : '0.0.0+release';
+    return kDebugMode ? '${AppConstants.appVersion}+dev' : AppConstants.appVersion;
   }
 }
