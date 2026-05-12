@@ -2,11 +2,16 @@
 
 ## Status
 
-Source migration count: **57 numbered + 3 timestamp-prefixed = 60** SQL files
+Source migration count: **59 numbered + 3 timestamp-prefixed = 62** SQL files
 (post-H-31 + H-33 — 058 added for `community_reviews`, 050 collision
-split into `050` + `050b`).
+split into `050` + `050b`; post-Test-#15.1 060 + post-audit-2026-05-12 061).
 
-Prod migration count: **53 rows** in `supabase_migrations.schema_migrations`.
+Prod migration count: **55 rows** in `supabase_migrations.schema_migrations`
+(audit-2026-05-12 P3-H verified live via Management API; was stale at 53).
+
+Recent additions:
+- `060_workout_log_exercises_realistic_bounds` (APK Test #15.1 Bug E, 2026-05-11)
+- `061_audit_2026_05_12_cron_and_bounds` (Audit 2026-05-12 P1-D + P1-E + P1-G + P3-B, 2026-05-12)
 
 The deltas are bookkeeping artefacts, **not schema drift**. The schemas
 themselves (tables, columns, constraints, indexes, RLS policies) are

@@ -1349,6 +1349,11 @@ class SyncService {
         // (or AI coach via tool calls) supplied a rating-of-perceived-
         // exertion. Cloud column was always there; client just never
         // shipped the field. Safe to send null when Hive doesn't have it.
+        // Audit 2026-05-12 P2-E — onConflict was 'id'; same class as P0-A.
+        // Live data had 27 rows for 8 sessions (founder's account had 4-6
+        // dupes for each completed workout). Migration 062 added natural
+        // UNIQUE on (user_id, date, exercise_name); switch the upsert to
+        // target it so re-syncs merge instead of producing fresh dupes.
         await _supabase.client.from('workout_logs').upsert({
           'id': _deterministicId(key),
           'user_id': userId,
@@ -1360,7 +1365,7 @@ class SyncService {
           if (log['rpe'] != null) 'rpe': log['rpe'],
           'notes': log['id'], // store local ID for reference
           'created_at': resolved,
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,date,exercise_name');
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
