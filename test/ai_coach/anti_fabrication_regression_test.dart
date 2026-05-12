@@ -114,12 +114,19 @@ void main() {
       expect(tw['status'], 'pending');
     });
 
-    test('today_workout includes the exercise list', () {
+    test(
+        'today_workout.exercises is LOGGED-only (empty when nothing logged) — Bug a13a01',
+        () {
+      // Bug a13a01 (APK Test #15.3): today_workout.exercises must reflect
+      // exlog_* rows, not the planned schedule. Founder direction Option A
+      // 2026-05-12: no plan fallback. The OBS-3 seed plants a schedule but
+      // no exlog_* rows for today, so exercises must be empty. The planned
+      // list still reaches the model via current_plan_summary (see next test).
       final ctx = _seedObs3StateAndBuild();
       final tw = ctx['today_workout'] as Map;
       final exercises = tw['exercises'] as List;
-      expect(exercises, isNotEmpty);
-      expect((exercises.first as Map)['name'], 'Bench Press');
+      expect(exercises, isEmpty,
+          reason: 'no exlog_* rows for today → empty list, never planned fallback');
     });
 
     test('current_plan_summary exposes PUSH A exercises — coach should not ask "what is in leg day"',

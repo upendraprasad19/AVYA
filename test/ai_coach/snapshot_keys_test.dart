@@ -53,27 +53,38 @@ void main() {
       expect(ctx['today_workout'], isNull);
     });
 
-    test('reflects scheduled session with type, status, and exercises', () async {
+    test(
+        'reflects type+status from schedule but LOGGED exercises only (Bug a13a01)',
+        () async {
+      // Bug a13a01 (APK Test #15.3, 2026-05-12) — today_workout.exercises
+      // now reads from exlog_* / exercise_log_index_<date>, NOT the planned
+      // schedule. Founder direction Option A: logged only, no plan fallback.
+      // type + status still come from the schedule_<date> entry.
       await HiveService.instance.workoutBox.put('schedule_${todayIso()}', {
         'type': 'PUSH A',
         'status': 'pending',
         'workout_name': 'PUSH A',
         'exercises': [
-          {
-            'name': 'Bench Press',
-            'sets': 4,
-            'reps': '8-10',
-            'weight': 60,
-            'logging_type': 'weight_reps',
-          },
-          {
-            'name': 'OHP',
-            'sets': 3,
-            'reps': '6-8',
-            'weight': 45,
-            'logging_type': 'weight_reps',
-          },
+          {'name': 'Bench Press', 'sets': 4, 'reps': '8-10', 'weight': 60},
+          {'name': 'OHP', 'sets': 3, 'reps': '6-8', 'weight': 45},
         ],
+      });
+      // Log only ONE of the two planned exercises via the canonical
+      // exlog_* + exercise_log_index_<date> shape.
+      await HiveService.instance.workoutBox
+          .put('exercise_log_index_${todayIso()}', ['exlog_bench_today']);
+      await HiveService.instance.workoutBox.put('exlog_bench_today', {
+        'exercise_name': 'Bench Press',
+        'date': todayIso(),
+        'sets': [
+          {'reps': 10, 'weight_kg': 60.0, 'logged_at_ms': 1},
+        ],
+        'set_number': 1,
+        'reps_completed': 10,
+        'weight_kg': 60.0,
+        'volume_kg': 600.0,
+        'is_pr': false,
+        'logging_type': 'weight_reps',
       });
 
       final ctx = AiCoachRepository.instance.buildAiContext();
@@ -82,7 +93,9 @@ void main() {
       expect(tw['type'], 'PUSH A');
       expect(tw['status'], 'pending');
       expect(tw['exercises'], isList);
-      expect((tw['exercises'] as List).length, 2);
+      // exercises[] reflects 1 LOGGED row, not 2 planned.
+      expect((tw['exercises'] as List).length, 1);
+      expect(((tw['exercises'] as List).first as Map)['name'], 'Bench Press');
     });
 
     test('falls back to workout_name if type missing', () async {
