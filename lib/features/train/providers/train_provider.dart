@@ -95,7 +95,13 @@ LastPerformanceData _getLastPerformance(String exerciseName) {
       }
       lastWeight = perSetWeight;
       lastReps = perSetReps;
-      lastSets = (log['sets_completed'] as int?);
+      // Bug a8f1c2 sibling fix (APK Test #15.3 code-review N2) — writer
+      // normalizes incoming `sets_completed` → `set_number` (workout_write_
+      // service.dart:617-619) and canonical writes only set `set_number`
+      // (line 171). Reading `sets_completed` alone silently returned null
+      // for every modern row. Read canonical first, fall back to legacy.
+      lastSets =
+          (log['set_number'] as int?) ?? (log['sets_completed'] as int?);
       loggingType = log['logging_type'] as String?;
     }
   }

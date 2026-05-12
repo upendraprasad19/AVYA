@@ -148,4 +148,158 @@ void main() {
       );
     });
   });
+
+  group('lastPerformanceProvider — malformed sets[] guards', () {
+    // Nit 1 (APK Test #15.3 code-review): reader silently handles three
+    // degenerate sets[] shapes via type guards. Pin those fall-throughs
+    // so a refactor doesn't accidentally let null/cast errors escape.
+
+    test('empty sets[] returns null lastReps + null lastWeight', () async {
+      const exerciseName = 'Air Squat';
+      const dateStr = '2026-05-08';
+      final exlogKey = 'exlog_${dateStr}_air_squat';
+      await HiveService.instance.workoutBox.put(exlogKey, {
+        'type': 'exercise_log',
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        'sets': <Map<String, dynamic>>[], // empty
+        'set_number': 0,
+        'reps_completed': 0,
+        'weight_kg': 0.0,
+        'logging_type': 'bodyweight_reps',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final lastPerf =
+          container.read(lastPerformanceProvider(exerciseName));
+
+      expect(lastPerf.lastReps, isNull,
+          reason: 'sets.isNotEmpty guard must short-circuit on empty list.');
+      expect(lastPerf.lastWeight, isNull,
+          reason: 'sets.isNotEmpty guard must short-circuit on empty list.');
+    });
+
+    test('non-map elements in sets[] return null lastReps + null lastWeight',
+        () async {
+      const exerciseName = 'Plank';
+      const dateStr = '2026-05-08';
+      final exlogKey = 'exlog_${dateStr}_plank';
+      await HiveService.instance.workoutBox.put(exlogKey, {
+        'type': 'exercise_log',
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        'sets': <dynamic>[42, 'junk'], // non-map garbage
+        'set_number': 2,
+        'reps_completed': 0,
+        'weight_kg': 0.0,
+        'logging_type': 'timed',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final lastPerf =
+          container.read(lastPerformanceProvider(exerciseName));
+
+      expect(lastPerf.lastReps, isNull,
+          reason: '`first is Map` guard must reject non-map elements.');
+      expect(lastPerf.lastWeight, isNull,
+          reason: '`first is Map` guard must reject non-map elements.');
+    });
+
+    test('sets[] with null reps/weight keys returns null lastReps + lastWeight',
+        () async {
+      const exerciseName = 'Burpee';
+      const dateStr = '2026-05-08';
+      final exlogKey = 'exlog_${dateStr}_burpee';
+      await HiveService.instance.workoutBox.put(exlogKey, {
+        'type': 'exercise_log',
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        'sets': <Map<String, dynamic>>[
+          {'weight_kg': null, 'reps': null},
+        ],
+        'set_number': 1,
+        'reps_completed': 0,
+        'weight_kg': 0.0,
+        'logging_type': 'bodyweight_reps',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final lastPerf =
+          container.read(lastPerformanceProvider(exerciseName));
+
+      expect(lastPerf.lastReps, isNull,
+          reason:
+              '(first[\'reps\'] as num?)?.toInt() must propagate null through '
+              'the cast — no toInt() on a null receiver.');
+      expect(lastPerf.lastWeight, isNull,
+          reason:
+              '(first[\'weight_kg\'] as num?)?.toDouble() must propagate null.');
+    });
+  });
+
+  group('lastPerformanceProvider — set_number / sets_completed reader', () {
+    // Nit 2 (APK Test #15.3 code-review): writer canonicalizes
+    // `sets_completed` → `set_number` (workout_write_service.dart:617-619)
+    // and the canonical write only sets `set_number` (line 171). Reader
+    // must prefer `set_number` and fall back to `sets_completed` for
+    // legacy rows so neither path silently returns null.
+
+    test('modern row with set_number returns it as lastSets', () async {
+      const exerciseName = 'Pull Up';
+      const dateStr = '2026-05-09';
+      final exlogKey = 'exlog_${dateStr}_pull_up';
+      await HiveService.instance.workoutBox.put(exlogKey, {
+        'type': 'exercise_log',
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        'sets': <Map<String, dynamic>>[
+          {'weight_kg': 0.0, 'reps': 8},
+        ],
+        'set_number': 7, // canonical field — what the writer emits today
+        'reps_completed': 56,
+        'weight_kg': 0.0,
+        'logging_type': 'bodyweight_reps',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final lastPerf =
+          container.read(lastPerformanceProvider(exerciseName));
+
+      expect(lastPerf.lastSets, equals(7),
+          reason: 'Reader must read canonical `set_number` field first. '
+              'Pre-fix this returned null for every modern row (silent '
+              'data-loss class same as Bug 1).');
+    });
+
+    test('legacy row with only sets_completed falls back correctly',
+        () async {
+      const exerciseName = 'Push Up';
+      const dateStr = '2026-04-10';
+      final exlogKey = 'exlog_${dateStr}_push_up';
+      await HiveService.instance.workoutBox.put(exlogKey, {
+        'type': 'exercise_log',
+        'exercise_name': exerciseName,
+        'date': dateStr,
+        // legacy: no `set_number`, only `sets_completed`
+        'sets_completed': 4,
+        'reps_completed': 40,
+        'weight_kg': 0.0,
+        'logging_type': 'bodyweight_reps',
+      });
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final lastPerf =
+          container.read(lastPerformanceProvider(exerciseName));
+
+      expect(lastPerf.lastSets, equals(4),
+          reason: 'Reader must fall back to legacy `sets_completed` when '
+              '`set_number` is absent. Otherwise reinstall users on '
+              'pre-Test-#6 Hive data lose the count entirely.');
+    });
+  });
 }

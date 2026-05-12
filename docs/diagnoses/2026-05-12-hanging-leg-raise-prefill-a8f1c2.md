@@ -99,11 +99,18 @@ CLAUDE.md §15 "Hive field-name contract" sub-section enumerated the field NAMES
 
 Replace the per-set read of `log['reps_completed']` / `log['weight_kg']` with a first-set lookup against `log['sets']`. Legacy rows without `sets[]` fall back to null (UI shows empty inputs). See `proposed_fix` above for the exact diff.
 
+**Code-review follow-up (commit f6bf88e → this commit):** the sibling `lastSets` read in the same function had the SAME class of writer/reader drift. It was reading `log['sets_completed']`, but `WorkoutWriteService` normalizes incoming `sets_completed` → `set_number` (workout_write_service.dart:617-619) and the canonical write at line 171 only emits `set_number`. Modern rows had `lastSets == null` silently. Fixed by reading `set_number` first with `sets_completed` as legacy fallback. Same class as the primary `reps_completed`/`weight_kg` aggregate-vs-per-set drift — sibling fields needed sibling attention.
+
 ## Verification
 
 - New contract test `test/contracts/last_performance_per_set_contract_test.dart` asserts:
   - Modern row with `sets: [{reps: 10, weight_kg: 0}, ...]` totaling 85 → `lastReps == 10`, `lastWeight == 0.0`.
   - Legacy row without `sets[]` → `lastReps == null`, `lastWeight == null`.
+  - Empty `sets: []` → `lastReps == null`, `lastWeight == null` (sets.isNotEmpty guard).
+  - `sets: [42, "junk"]` (non-map elements) → null (`first is Map` guard).
+  - `sets: [{weight_kg: null, reps: null}]` → null (`as num?`?.toX() casts propagate null).
+  - Modern row with `set_number: 7` → `lastSets == 7` (canonical reader path).
+  - Legacy row with only `sets_completed: 4` → `lastSets == 4` (fallback path).
 - Existing audit of LastPerformanceData consumers: `active_workout_screen.dart:1147,1610,1856` + `expandable_day_card.dart:217` all treat the values as per-set pre-fill / "LAST" hint. No consumer expects aggregates. Fix is reader-only.
 
 ## Related
