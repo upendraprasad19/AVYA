@@ -53,6 +53,11 @@ class _PaywallSheetState extends State<PaywallSheet> {
   int _promoDiscountPct = 0;
   String? _promoError;
 
+  // Audit 2026-05-12 P2-C — paywall funnel events. `_upgradeTapped`
+  // distinguishes "user closed without action" from "user tapped upgrade
+  // (paywall_upgrade_tapped already fired in _handleUpgrade)".
+  bool _upgradeTapped = false;
+
   static const List<String> _proBenefits = [
     'Unlimited AI Coach with deep personalised coaching',
     'AI food analysis & meal scanning (camera)',
@@ -98,8 +103,30 @@ class _PaywallSheetState extends State<PaywallSheet> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Audit 2026-05-12 P2-C — funnel event 1/3. Logs the feature gate
+    // that surfaced the paywall so conversion analytics can attribute
+    // upgrade taps to specific PRO features.
+    unawaited(ErrorTelemetry.logEvent(
+      'paywall_shown',
+      message: 'feature=${widget.feature}',
+    ));
+  }
+
+  @override
   void dispose() {
     _promoController.dispose();
+    // Audit 2026-05-12 P2-C — funnel event 3/3. Fires only when the user
+    // closed the sheet WITHOUT tapping UPGRADE TO PRO. Distinguishes
+    // "dismiss" (didn't convert) from "upgrade tap in flight" (still
+    // converting via Razorpay WebView).
+    if (!_upgradeTapped) {
+      unawaited(ErrorTelemetry.logEvent(
+        'paywall_dismissed',
+        message: 'feature=${widget.feature}',
+      ));
+    }
     super.dispose();
   }
 
@@ -158,6 +185,16 @@ class _PaywallSheetState extends State<PaywallSheet> {
 
   Future<void> _handleUpgrade() async {
     if (_isProcessing) return;
+
+    // Audit 2026-05-12 P2-C — funnel event 2/3. Fires the moment the user
+    // taps the UPGRADE TO PRO button, BEFORE Razorpay/network. Captures
+    // intent independent of whether the payment ultimately succeeds.
+    _upgradeTapped = true;
+    unawaited(ErrorTelemetry.logEvent(
+      'paywall_upgrade_tapped',
+      message: 'feature=${widget.feature} plan=$_selectedPlan'
+          '${_promoApplied ? " promo_pct=$_promoDiscountPct" : ""}',
+    ));
 
     if (kIsWeb) {
       Navigator.of(context).pop();

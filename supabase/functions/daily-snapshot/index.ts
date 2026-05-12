@@ -2,6 +2,14 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { upsertCoachMemory, fetchCoachMemory } from "../_shared/coach_memory.ts";
+// Audit 2026-05-12 P2-D — daily-snapshot must embed merged coaching_notes
+// so semantic retrieval at chat-time can pull the highest-signal facts
+// the user revealed (diet preference, lifestyle, injuries, etc.). Pre-fix
+// only `conversation` source-type entries existed in memory_embeddings;
+// the AI coach could match a chat-turn fragment but never a structured
+// fact extracted by this nightly job.
+import { getEmbedding } from "../_shared/embeddings.ts";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,6 +163,35 @@ async function mergeCoachingNotes(
     { user_id: userId, coaching_notes: JSON.stringify(merged) },
     { onConflict: "user_id" },
   );
+
+  // Audit 2026-05-12 P2-D — embed the merged notes as a daily_summary
+  // memory_embeddings row so semantic retrieval at chat-time can pull
+  // structured facts. Fire-and-forget: embedding failure must NEVER
+  // break the primary extraction path (matches ai-proxy pattern at
+  // ai-proxy/index.ts:748-772). Skip on empty.
+  try {
+    const flat = Object.entries(merged)
+      .filter(([k, v]) => k !== "last_extracted_at" && v != null && v !== "")
+      .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+      .join(". ");
+    if (flat.length > 0) {
+      const embedding = await getEmbedding(flat, "RETRIEVAL_DOCUMENT");
+      if (embedding) {
+        await supabase.from("memory_embeddings").insert({
+          user_id: userId,
+          embedding,
+          content: flat,
+          source_type: "daily_summary",
+          metadata: {
+            date: istDateStr(),
+            keys: Object.keys(merged).filter((k) => k !== "last_extracted_at"),
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[daily-snapshot] embed coaching_notes error:", e);
+  }
 
   // Also update lifestyle_activity and diet_preference directly on user_profile
   // if extracted, so recalculateTargets() picks them up immediately.

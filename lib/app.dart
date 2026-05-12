@@ -104,12 +104,23 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
               // Crashlytics must never break the fallback UI.
             }
           }
-          // Fire-and-forget event post; cap message to 200 chars.
-          final raw = details.exception.toString();
-          final capped = raw.length > 200 ? raw.substring(0, 200) : raw;
+          // Audit 2026-05-12 P2-G — pre-fix this only sent the exception
+          // string, capped at 200 chars. The stack trace was already
+          // captured (and recorded to Crashlytics above) but not surfaced
+          // in client_errors. Now compose exception + first ~400 chars of
+          // stack so the active widget crash ("String' is not subtype
+          // 'int?'" on 2026-05-11) has enough breadcrumbs to triage from
+          // the server-side log without a Crashlytics seat.
+          final exMsg = details.exception.toString();
+          final exCapped = exMsg.length > 200 ? exMsg.substring(0, 200) : exMsg;
+          final stackStr = details.stack?.toString() ?? '';
+          final stackCapped = stackStr.length > 400 ? stackStr.substring(0, 400) : stackStr;
+          final composed = stackCapped.isEmpty
+              ? exCapped
+              : '$exCapped\n--stack--\n$stackCapped';
           unawaited(ErrorTelemetry.logEvent(
             'widget_error_fallback',
-            message: capped,
+            message: composed,
           ));
           return Scaffold(
             backgroundColor: AppColors.bg,

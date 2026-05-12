@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -343,11 +344,12 @@ class SyncService {
     return 'web';
   }
 
-  /// Placeholder — wire up `package_info_plus` in a follow-up. For now
-  /// return a sentinel so server-side analytics can distinguish dev
-  /// builds from release builds without adding a new dependency.
+  /// Audit 2026-05-12 P2-A — was `0.0.0+release` hardcoded which prevented
+  /// correlating client_errors rows to APK builds. Now reads from
+  /// AppConstants.appVersion (kept in sync with pubspec.yaml version).
+  /// kDebugMode override preserves the historical dev/release distinction.
   static String _currentClientVersion() {
-    return kDebugMode ? '0.0.0+dev' : '0.0.0+release';
+    return kDebugMode ? '${AppConstants.appVersion}+dev' : AppConstants.appVersion;
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -1342,6 +1344,16 @@ class SyncService {
         // alternate authoring time (helper's last-resort path); the
         // null branch is friendlier to PostgREST than a fabricated
         // wall-clock that misrepresents history.
+        // Audit 2026-05-12 P2-F — include `rpe` in the projection so
+        // weekly-report stops rendering "N/A" for sessions where the user
+        // (or AI coach via tool calls) supplied a rating-of-perceived-
+        // exertion. Cloud column was always there; client just never
+        // shipped the field. Safe to send null when Hive doesn't have it.
+        // Audit 2026-05-12 P2-E — onConflict was 'id'; same class as P0-A.
+        // Live data had 27 rows for 8 sessions (founder's account had 4-6
+        // dupes for each completed workout). Migration 062 added natural
+        // UNIQUE on (user_id, date, exercise_name); switch the upsert to
+        // target it so re-syncs merge instead of producing fresh dupes.
         await _supabase.client.from('workout_logs').upsert({
           'id': _deterministicId(key),
           'user_id': userId,
@@ -1350,9 +1362,10 @@ class SyncService {
           'logged_at': resolved,
           'sets_completed': log['sets_completed'],
           'duration_seconds': log['duration_seconds'],
+          if (log['rpe'] != null) 'rpe': log['rpe'],
           'notes': log['id'], // store local ID for reference
           'created_at': resolved,
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,date,exercise_name');
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -1410,6 +1423,16 @@ class SyncService {
           hiveKey: key,
         );
 
+        // Audit 2026-05-12 P0-A — onConflict was 'id', but live schema has a
+        // partial UNIQUE on (workout_log_id, exercise_id, set_number). When a
+        // Hive key for the same exercise mutates (e.g. name re-normalize) the
+        // deterministic `id` shifts, the natural unique trips first, and the
+        // upsert raises 23505 + orphan sets accumulate in workout_log_sets
+        // (per-set rows succeed in their own try-block). 31 errors over 24h
+        // in production. Switch to the natural key so PostgREST merges instead
+        // of inserting. The PK `id` is still UNIQUE but is no longer the
+        // conflict target — duplicate rows from the legacy 'id' path become
+        // unreachable but harmless (next sync overwrites the natural-key row).
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
           'workout_log_id': workoutLogId,
@@ -1425,7 +1448,7 @@ class SyncService {
           'is_pr': log['is_pr'] ?? false,
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
           'completed_at': completedAt,
-        }, onConflict: 'id');
+        }, onConflict: 'workout_log_id,exercise_id,set_number');
 
         // ── PER-SET ROWS (F4) ──
         // Upserts a row per set into `workout_log_sets`. Natural key is
@@ -1684,9 +1707,15 @@ class SyncService {
           'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
+        // Audit 2026-05-12 P0-B — onConflict was 'id', but live schema has a
+        // partial UNIQUE on (user_id, date, meal_type). When client-side
+        // dedup key rotates (e.g. meal renamed) the natural unique trips
+        // first, raising 23505 + per-item rows orphan. 16 errors over 24h
+        // in production. Switch to natural key so PostgREST merges instead
+        // of failing.
         await _supabase.client.from("nutrition_logs").upsert(
           parentPayload,
-          onConflict: "id",
+          onConflict: "user_id,date,meal_type",
         );
 
         // Push individual nutrition_log_items. Same schema trap — id,
@@ -4593,8 +4622,21 @@ class SyncService {
   // ── Gap 7: AI Coach Interactions ───────────────────────────
 
   /// Pushes AI coach interactions to Supabase.
-  /// Note: The AI proxy Edge Function already writes server-side,
-  /// so this mainly catches edge-case local-only entries.
+  ///
+  /// Audit 2026-05-12 P2-B — pre-fix this was a hot double-write path. The
+  /// `ai-proxy` Edge Function ALREADY writes an authoritative
+  /// `ai_coach_interactions` row server-side at every chat turn (channel =
+  /// 'app'). Then this method walked the Hive coachBox and re-upserted each
+  /// entry with `channel: 'in_app'`, producing 81 phantom-duplicate rows
+  /// vs. 22 legitimate 'app' rows in the live table (79% noise).
+  /// Interaction-volume analytics were inflated 4× by this double-write.
+  ///
+  /// New behaviour: skip the upsert by default. The 'app' rows from
+  /// ai-proxy ARE the source of truth. If `entry['id']` is non-null AND
+  /// shaped like a UUID, the server already received this turn, so we have
+  /// nothing to add. The pre-fix path only existed to catch "edge-case
+  /// local-only entries" — those were always rare and the cost (4× row
+  /// inflation) wasn't worth the catch.
   Future<void> _syncCoachInteractions(String userId) async {
     final coachBox = _hive.coachBox;
     for (final key in coachBox.keys) {
@@ -4604,23 +4646,22 @@ class SyncService {
       final entry = Map<String, dynamic>.from(raw);
 
       try {
-        // APK Test #12.7 — convert Hive `coach_<timestamp>` key to a
-        // deterministic v5 UUID. Cloud `ai_coach_interactions.id` is a
-        // UUID column; passing the raw Hive key triggered Postgres
-        // 22P02 (`invalid input syntax for type uuid: "coach_999852984"`)
-        // for every legacy entry. Use the same uuid generator + sync
-        // namespace as the rest of this file (workout/nutrition logs).
-        // `entry['id']` may already be a valid UUID set by `ai-proxy`
-        // server-side — accept it as-is when it looks UUID-shaped;
-        // otherwise hash through.
         final rawId = entry['id'];
-        final cloudId = (rawId is String && _looksLikeUuid(rawId))
-            ? rawId
-            : _deterministicId('coach|$userId|$key');
+        // Audit 2026-05-12 P2-B — server already wrote the authoritative
+        // row when id is a real UUID (ai-proxy emits one on every turn).
+        // Skip the duplicate 'in_app' write.
+        if (rawId is String && _looksLikeUuid(rawId)) {
+          continue;
+        }
+        // Edge case: pre-server entry with no UUID. Persist with a
+        // deterministic v5 UUID under a clearer channel so server-side
+        // analytics can isolate this fallback path if it becomes
+        // surprisingly hot.
+        final cloudId = _deterministicId('coach|$userId|$key');
         await _supabase.client.from('ai_coach_interactions').upsert({
           'id': cloudId,
           'user_id': userId,
-          'channel': 'in_app',
+          'channel': 'in_app_orphan',
           'user_message': entry['user_message'] ?? '',
           'ai_response': entry['ai_response'] ?? '',
           'model_used': entry['model_used'] ?? 'unknown',

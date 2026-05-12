@@ -1593,6 +1593,20 @@ class WorkoutScheduleService {
     }
 
     await _hive.workoutBox.put(scheduleKey, templateEntry);
+
+    // Audit 2026-05-12 P3-C — stamp last_used_at on the parent template so
+    // "recently used templates" sort works. Cloud column was projected in
+    // _syncWorkoutTemplates since migration set, but nothing on the Hive
+    // side ever WROTE the value. Caller's fire-and-forget sync picks it
+    // up on the next syncWorkoutData() tick.
+    try {
+      final updatedTmpl = Map<String, dynamic>.from(tmplMap);
+      updatedTmpl['last_used_at'] = DateTime.now().toUtc().toIso8601String();
+      await _hive.workoutBox.put(templateId, updatedTmpl);
+    } catch (_) {
+      // Non-fatal — last_used_at is purely a sort hint.
+    }
+
     return const AssignTemplateOk();
   }
 

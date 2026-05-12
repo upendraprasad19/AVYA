@@ -90,6 +90,14 @@ class AppConstants {
   /// `users.terms_version` column for audit.
   static const String termsVersion = 'v1';
 
+  /// App version (pubspec `version:` field). Audit 2026-05-12 P2-A — fixes the
+  /// hardcoded `0.0.0+release` placeholder in error telemetry so client_errors
+  /// rows can be correlated to specific APK builds.
+  ///
+  /// IMPORTANT: Keep this in sync with `pubspec.yaml` `version:` field. The
+  /// `/build-apk` skill bumps both when shipping a new APK.
+  static const String appVersion = '1.0.0+23';
+
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';
 

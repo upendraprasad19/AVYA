@@ -53,7 +53,9 @@ concepts:
       key_formula: "'exlog_${istDateStr(date)}_${exerciseName.hashCode.toUnsigned(32).toRadixString(16)}'"
     cloud:
       table: workout_log_exercises
-      columns: [exercise_id, workout_log_id, set_number, reps, weight_kg, volume_kg, logging_type, is_pr, completed_at]
+      # Audit 2026-05-12 P3-G — `volume_kg` does NOT exist on workout_log_exercises
+      # (verified information_schema). Removed.
+      columns: [exercise_id, workout_log_id, set_number, reps, weight_kg, logging_type, is_pr, completed_at]
     sync_methods: [_syncExerciseLogs]
     restore_methods: [_restoreExerciseLogs]
     provider_invalidation_set: [currentPlanProvider, workoutStatsProvider, calendarWeekProvider, streakProvider, todayWorkoutProvider, allExercisePRsProvider]
@@ -248,7 +250,9 @@ concepts:
       key_prefix: "coaching_notes"
     cloud:
       table: user_daily_snapshots
-      columns: [user_id, snapshot_date, snapshot_json, token_count]
+      # Audit 2026-05-12 P3-G — removed `token_count` claim (column does
+      # not exist live; verified via information_schema).
+      columns: [user_id, snapshot_date, snapshot_json]
     sync_methods: [pushSnapshot]
     telemetry:
       failure_op_types: [push_snapshot, mirror_coach_memory_from_snapshot]
@@ -353,7 +357,9 @@ concepts:
       key_prefix: "saved_diet_plan"
     cloud:
       table: saved_diet_plans
-      columns: [user_id, plan_json, updated_at]
+      # Audit 2026-05-12 P3-G — `updated_at` does NOT exist (verified
+      # information_schema 2026-05-12).
+      columns: [user_id, plan_json]
     sync_methods: [syncSavedDietPlan]
     restore_methods: [_restoreSavedDietPlan]
     provider_invalidation_set: [dietPlanProvider]
@@ -451,7 +457,9 @@ concepts:
       key_formula: "'exlog_${istDateStr(date)}_${exerciseName.hashCode.toUnsigned(32).toRadixString(16)}'"
     cloud:
       table: workout_log_exercises
-      columns: [exercise_id, workout_log_id, set_number, reps, weight_kg, volume_kg, logging_type, is_pr, completed_at]
+      # Audit 2026-05-12 P3-G — `volume_kg` does NOT exist on workout_log_exercises
+      # (verified information_schema). Removed.
+      columns: [exercise_id, workout_log_id, set_number, reps, weight_kg, logging_type, is_pr, completed_at]
     sync_methods: [_syncExerciseLogs]
     restore_methods: [_restoreExerciseLogs]
     forbidden_legacy_patterns:
@@ -492,7 +500,11 @@ concepts:
       key_prefix: "nlog_"
     cloud:
       table: nutrition_logs
-      columns: [user_id, date, meal_type, total_calories, total_protein, total_carbs, total_fat, total_fiber, source, logged_at]
+      # Audit 2026-05-12 P3-G — `source` and `logged_at` do NOT exist
+      # (verified information_schema 2026-05-12). Decision (P3-D): do NOT
+      # add. logged_at semantics already captured by created_at; source
+      # was an unused enrichment idea.
+      columns: [user_id, date, meal_type, total_calories, total_protein, total_carbs, total_fat, total_fiber]
     sync_methods: [_syncNutritionLogs]
     restore_methods: [_restoreNutritionLogs]
     forbidden_legacy_patterns:
@@ -832,7 +844,9 @@ concepts:
       key_formula: "'water_ml_${istDateStr(DateTime.now())}'"
     cloud:
       table: water_logs
-      columns: [user_id, date, amount_ml, logged_at]
+      # Audit 2026-05-12 P3-G — `logged_at` does NOT exist (verified
+      # information_schema 2026-05-12). created_at carries the timestamp.
+      columns: [user_id, date, amount_ml]
       unique_constraint: "(user_id, date)"
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
@@ -911,7 +925,9 @@ concepts:
       key_formula: "'weight_${istDateStr(DateTime.now())}'"
     cloud:
       table: weight_logs
-      columns: [user_id, date, weight_kg, logged_at]
+      # Audit 2026-05-12 P3-G — `logged_at` does NOT exist (verified
+      # information_schema 2026-05-12). created_at carries the timestamp.
+      columns: [user_id, date, weight_kg]
     sync_methods: [_syncWeightLogs, syncWeightNow]
     restore_methods: [_restoreWeightLogs]
     ist_sites:
@@ -1005,7 +1021,11 @@ concepts:
       key_formula: "'sleep_log_${istDateStr(DateTime.now())}'"
     cloud:
       table: sleep_logs
-      columns: [user_id, date, sleep_hours, quality, logged_at]
+      # Audit 2026-05-12 P3-G — corrected. Live columns: user_id, date,
+      # duration_hrs, quality, bed_time, wake_time, notes, created_at.
+      # `sleep_hours` and `logged_at` were never columns (Codex audit
+      # phantom claims). The Hive `hours` field maps to cloud `duration_hrs`.
+      columns: [user_id, date, duration_hrs, quality, bed_time, wake_time, notes]
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
@@ -1140,7 +1160,10 @@ concepts:
       key_formula: "'coach_${DateTime.now().millisecondsSinceEpoch}'"
     cloud:
       table: ai_coach_interactions
-      columns: [id, user_id, channel, user_message, assistant_response, model_used, tokens_used, tool_calls, created_at]
+      # Audit 2026-05-12 P3-G — `assistant_response` renamed `ai_response`
+      # in live schema (verified information_schema 2026-05-12). Other
+      # 8 phantom claims fixed in same audit pass.
+      columns: [id, user_id, channel, user_message, ai_response, model_used, tokens_used, tool_calls, created_at]
     sync_methods: [_syncCoachInteractions]
     forbidden_legacy_patterns:
       - { pattern: "coach_\\$\\{id\\.hashCode\\}", reason: "Legacy key format before Test #12.7; current format is coach_<ms>" }
