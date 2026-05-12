@@ -2038,13 +2038,45 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
 
     final sortedDates = selected.toList()..sort();
 
+    // APK Test #15.3 / Bug 4b (closes-diagnose: 8f3d22): collect
+    // rejections so we can show the user which days were skipped.
+    final List<DateTime> skippedCompleted = [];
     for (final date in sortedDates) {
-      await WorkoutScheduleService.instance
+      final result = await WorkoutScheduleService.instance
           .assignTemplateToDate(templateId, date);
+      if (result is AssignTemplateRejected &&
+          result.reason == AssignTemplateRejectionReason.alreadyCompleted) {
+        skippedCompleted.add(date);
+      }
     }
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(currentPlanProvider);
     ref.invalidate(todayWorkoutProvider);
+
+    if (!context.mounted) return;
+
+    // Show the "already completed" warning first (if any), then the
+    // success snackbar for the dates that were actually written.
+    if (skippedCompleted.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${skippedCompleted.length} '
+            '${skippedCompleted.length == 1 ? 'day' : 'days'} already completed'
+            ' — can\'t reschedule a logged workout.',
+            style: AppTypography.bodySm,
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    final scheduledDates = sortedDates
+        .where((d) => !skippedCompleted.contains(d))
+        .toList();
+
+    if (scheduledDates.isEmpty) return; // all rejected — no success toast
 
     const monthNames = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -2052,11 +2084,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
     ];
 
     final String dateStr;
-    if (sortedDates.length == 1) {
+    if (scheduledDates.length == 1) {
       dateStr =
-          '${monthNames[sortedDates.first.month - 1]} ${sortedDates.first.day}';
+          '${monthNames[scheduledDates.first.month - 1]} ${scheduledDates.first.day}';
     } else {
-      dateStr = '${sortedDates.length} days';
+      dateStr = '${scheduledDates.length} days';
     }
 
     if (!context.mounted) return;

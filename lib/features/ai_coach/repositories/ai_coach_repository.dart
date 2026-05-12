@@ -1326,37 +1326,100 @@ class AiCoachRepository {
   // APK Test #4 / A4 — Workout schedule snapshot helpers
   // ---------------------------------------------------------------------------
 
-  /// Returns today's scheduled workout as {type, status, exercises[]} or null
-  /// if no `schedule_<today>` key exists in workoutBox (pure rest day / no
-  /// plan seeded yet).
+  /// Returns today's workout snapshot as {type, status, exercises[]} or
+  /// null if no `schedule_<today>` key exists in workoutBox (pure rest day
+  /// / no plan seeded yet).
   ///
-  /// Falls back to `workout_name` when the `type` field is absent (some legacy
-  /// schedule entries were written without an explicit `type` key).
+  /// `type` + `status` come from the planned `schedule_<today>` entry
+  /// (so the coach still knows it's PULL_A / completed / scheduled).
+  /// `exercises[]` is built from LOGGED exlog_* rows — NOT the planned
+  /// exercises list. This is the SoT-correct read per CLAUDE.md §15
+  /// bullet 1 (WorkoutReceiptData.fromExerciseLogs pattern).
+  ///
+  /// Bug a13a01 (APK Test #15.3): pre-fix this reader emitted the planned
+  /// `exercises[]` verbatim. When a user partially completed (logged 4 of
+  /// 8 planned), the coach answered "how was my workout today?" with all
+  /// 8 names as if everything had been done. Founder direction 2026-05-12
+  /// (Option A locked): logged only, no plan fallback, no "you skipped X"
+  /// coaching. closes-diagnose: a13a01
   Map<String, dynamic>? _getTodayWorkout() {
     final today = istDateStr(DateTime.now());
-    final schedule = _hive.workoutBox.get('schedule_$today');
-    if (schedule is! Map) return null;
-    return {
-      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
-      'status': (schedule['status'] ?? 'pending') as String,
-      'exercises': (schedule['exercises'] as List?) ?? const [],
-    };
+    return _buildWorkoutSnapshotForDate(today);
   }
 
-  /// Returns yesterday's scheduled workout as {type, status} or null if no
-  /// `schedule_<yesterday>` key exists. Omits the exercises list (yesterday's
-  /// session contents are less useful than the status — completed/skipped).
+  /// Symmetric to [_getTodayWorkout] for yesterday's IST date. Pre-Bug-a13a01
+  /// fix this returned only {type, status} (no exercises[]); the symmetric
+  /// fix adds exercises[] from logged rows so the coach can answer
+  /// "what did I do yesterday?" without fabricating the planned list.
+  /// closes-diagnose: a13a01
   Map<String, dynamic>? _getYesterdayWorkout() {
     // Test #11.1 — use raw DateTime.now() with istDateStr (which handles
     // the +5:30 IST conversion internally). istDateStr(istNow()) would
     // double-shift because istNow() already returns the shifted instant.
     final yesterday =
         istDateStr(DateTime.now().subtract(const Duration(days: 1)));
-    final schedule = _hive.workoutBox.get('schedule_$yesterday');
+    return _buildWorkoutSnapshotForDate(yesterday);
+  }
+
+  /// Shared builder for today_workout / yesterday_workout snapshot entries.
+  /// Returns null when no `schedule_[date]` key exists. Otherwise emits
+  /// `{type, status}` from the schedule entry and `{exercises[]}` built from
+  /// LOGGED `exlog_*` rows via `exercise_log_index_[date]`. Exercises list is
+  /// EMPTY (not the planned list) when no logs exist.
+  Map<String, dynamic>? _buildWorkoutSnapshotForDate(String dateStr) {
+    final schedule = _hive.workoutBox.get('schedule_$dateStr');
     if (schedule is! Map) return null;
+
+    final logIndex = _hive.workoutBox.get('exercise_log_index_$dateStr');
+    final logged = <Map<String, dynamic>>[];
+    if (logIndex is List) {
+      // gate16-exempt: stripped projection for AI snapshot — the returned
+      // logged[] is consumed only by Gemini system-prompt JSON; never by
+      // Edit sheets or SyncService, so id injection is not required.
+      for (final key in logIndex) {
+        final raw = _hive.workoutBox.get(key);
+        if (raw is! Map) continue;
+        final log = Map<String, dynamic>.from(raw);
+        final sets = (log['sets'] as List?) ?? const [];
+        // Total reps across all sets — gives the model a concise summary
+        // without forcing it to compute from per-set arrays.
+        final totalReps = sets.fold<int>(
+          0,
+          (a, s) =>
+              a + (((s is Map ? s['reps'] : null) as num?)?.toInt() ?? 0),
+        );
+        // Top set weight (max across sets) — most useful single-number
+        // for the model to call out ("hit 70 kg on Lat Pulldown today").
+        // Top set weight (max across sets) — most useful single-number
+        // for the model to call out ("hit 70 kg on Lat Pulldown today").
+        // Omit for non-weighted logging types so Gemini doesn't describe
+        // a "0 kg top set" on a bodyweight / timed / cardio exercise.
+        final loggingType = log['logging_type'] as String?;
+        final isWeighted = loggingType == 'weight_reps' ||
+            loggingType == 'weighted_bodyweight';
+        final double? topWeight = isWeighted
+            ? sets
+                .map((s) =>
+                    (((s is Map ? s['weight_kg'] : null) as num?) ?? 0)
+                        .toDouble())
+                .fold<double>(0, (a, b) => b > a ? b : a)
+            : null;
+        logged.add({
+          'name': log['exercise_name'] ?? 'Unknown',
+          'sets': sets.length,
+          'reps_total': totalReps,
+          if (topWeight != null) 'top_set_weight_kg': topWeight,
+          'logging_type': loggingType,
+          'is_pr': log['is_pr'] ?? false,
+        });
+      }
+    }
+
     return {
-      'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
-      'status': (schedule['status'] ?? 'unknown') as String,
+      'type':
+          (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
+      'status': (schedule['status'] ?? 'pending') as String,
+      'exercises': logged,
     };
   }
 

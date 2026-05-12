@@ -186,6 +186,20 @@ class SupabaseService {
     return session.accessToken;
   }
 
+  /// Cold-start backoff schedule for 502/503 retries on Edge Function calls.
+  ///
+  /// Length defines the retry count (here: 2 retries → up to 3 total
+  /// invocations). Values are millisecond delays before each retry.
+  ///
+  /// Pinned by `test/contracts/retry_loop_guard_test.dart` — bump
+  /// deliberately and update the test in the same commit.
+  ///
+  /// History:
+  /// - 2026-05-11 (Bug G+H, commit 24d6d54): single retry @ 1500 ms.
+  /// - 2026-05-12 (Bug 7c4e1a): bumped to [1500, 4000] after ai-proxy
+  ///   logs showed 20+ s cold-start; 1500 ms wasn't enough wait time.
+  static const List<int> _coldStartBackoffsMs = [1500, 4000];
+
   /// Shortcut to invoke a Supabase Edge Function by [name].
   ///
   /// Proactively refreshes the JWT if it expires within 60 seconds.
@@ -212,36 +226,66 @@ class SupabaseService {
       }
     }
 
-    // APK Test #15.1 / Bug G+H — single retry on transient BOOT_ERROR /
-    // cold-start 5xx. Edge Function logs show daily-snapshot taking
-    // 40 seconds per call (cold start + Gemini extraction); when multiple
-    // users hit it simultaneously, some get a 503 BOOT_ERROR while the
-    // function spins up. One retry after 1.5s clears this in most cases.
-    // Persistent 5xx is a real outage and surfaces to the caller as
-    // before — the retry doesn't mask sustained failure.
+    // APK Test #15.3 / Bug 7c4e1a — bounded retry loop on transient
+    // cold-start 502/503. Edge Function logs show ai-proxy cold-start
+    // can take 20+ seconds (Gemini model load + tools registry); the
+    // earlier single retry @ 1500 ms (Bug G+H, 24d6d54) was correct in
+    // shape but undersized in wait time. Two retries at [1500ms, 4000ms]
+    // give a ~5.5 s total wait window — enough to land on a warm
+    // instance after most cold-starts while still surfacing a real
+    // outage reasonably quickly.
     //
-    // Auth-class errors (401/403) are NOT retried — caller handles those.
+    // Auth-class errors (401/403) and other 4xx are NOT retried — they
+    // rethrow immediately so the caller (e.g. AiCoachProvider) handles
+    // them. The 2026-04-07 401-recursion guard is preserved.
     //
-    // closes-diagnose: 2026-05-12-edge-function-503-retry-0a7b9f
-    FunctionResponse response;
-    try {
-      response = await client.functions.invoke(
-        name,
-        headers: headers,
-        body: body,
-      );
-    } on FunctionException catch (e) {
-      // Retry only on cold-start signatures: 503 BOOT_ERROR + 502 BAD_GATEWAY.
-      final isColdStart502_503 = e.status == 502 || e.status == 503;
-      if (!isColdStart502_503) rethrow;
-      await Future<void>.delayed(const Duration(milliseconds: 1500));
-      response = await client.functions.invoke(
-        name,
-        headers: headers,
-        body: body,
-      );
-    }
+    // Retry control flow is factored into [retryColdStart] so it can
+    // be exercised by behavioral tests with a mock invoker (source-grep
+    // alone can't catch a future refactor that breaks the break/rethrow
+    // condition while keeping the const list + telemetry string intact).
+    //
+    // closes-diagnose: 2026-05-12-ai-proxy-retry-undersized-7c4e1a
+    return retryColdStart(
+      () => client.functions.invoke(name, headers: headers, body: body),
+      functionName: name,
+    );
+  }
 
-    return response;
+  /// Bounded retry loop for transient 502/503 cold-start failures.
+  ///
+  /// Invokes [invoke] and retries on `FunctionException` with status 502
+  /// or 503, using the supplied [backoffsMs] schedule. Other exceptions
+  /// rethrow immediately (auth-class 401/403 and other 4xx do NOT retry).
+  ///
+  /// Exposed `@visibleForTesting` so behavioral tests can inject a mock
+  /// invoker and assert runtime semantics — see
+  /// `test/contracts/edge_function_cold_start_retry_behavioral_test.dart`.
+  @visibleForTesting
+  static Future<FunctionResponse> retryColdStart(
+    Future<FunctionResponse> Function() invoke, {
+    required String functionName,
+    List<int> backoffsMs = _coldStartBackoffsMs,
+  }) async {
+    int attempt = 0;
+    while (true) {
+      try {
+        return await invoke();
+      } on FunctionException catch (e) {
+        final isColdStart = e.status == 502 || e.status == 503;
+        if (!isColdStart || attempt >= backoffsMs.length) {
+          rethrow;
+        }
+        final backoffMs = backoffsMs[attempt];
+        // Fire-and-forget telemetry — keeps the retry latency from
+        // being doubled by the log-client-error network round-trip.
+        unawaited(ErrorTelemetry.logEvent(
+          'edge_function_cold_start_retry',
+          message:
+              'fn=$functionName attempt=${attempt + 1} status=${e.status} backoff_ms=$backoffMs',
+        ));
+        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        attempt++;
+      }
+    }
   }
 }

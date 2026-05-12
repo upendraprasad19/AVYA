@@ -99,10 +99,23 @@ class ExerciseSet {
         'logged_at_ms': loggedAtMs ?? DateTime.now().millisecondsSinceEpoch,
       };
 
+  /// APK Test #15.3 / Bug 4c (6e1b45) — accept BOTH 'duration_sec'
+  /// (canonical, written by [toMap]) AND 'duration_seconds' (legacy
+  /// field name written by sync_service._restoreExerciseLogs and the
+  /// EditWorkoutLogSheet pre-Test-#12 path).
+  ///
+  /// Pre-fix this factory read only 'duration_sec'. When restored
+  /// per-set entries (which carry 'duration_seconds') flowed back into
+  /// the writer via [WorkoutWriteService.logExercise]'s existing-sets
+  /// merge or [editLog]'s recompute, the duration silently dropped to
+  /// null → next persist wrote sets without duration → Train day card
+  /// rendered "N sets · 0s" via the WardSetChips fallback (perSetBreakdown
+  /// effectively empty of usable duration data).
   factory ExerciseSet.fromMap(Map<dynamic, dynamic> m) => ExerciseSet(
         weightKg: (m['weight_kg'] as num?)?.toDouble() ?? 0.0,
         reps: (m['reps'] as num?)?.toInt() ?? 0,
-        durationSec: (m['duration_sec'] as num?)?.toInt(),
+        durationSec: (m['duration_sec'] as num?)?.toInt() ??
+            (m['duration_seconds'] as num?)?.toInt(),
         loggedAtMs: (m['logged_at_ms'] as num?)?.toInt(),
       );
 

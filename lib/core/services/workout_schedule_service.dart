@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import '../services/error_telemetry.dart';
 import '../services/hive_service.dart';
 import '../services/migrated_key.dart';
 import '../services/seed_service.dart';
@@ -127,6 +130,39 @@ class PausePlanException implements Exception {
   const PausePlanException(this.code, this.message);
   @override
   String toString() => 'PausePlanException($code): $message';
+}
+
+/// Result returned by [WorkoutScheduleService.assignTemplateToDate].
+///
+/// Callers MUST inspect the concrete type:
+/// - [AssignTemplateOk]       — template was written to Hive + cloud.
+/// - [AssignTemplateRejected] — assignment was refused; `reason` describes why.
+///
+/// APK Test #15.3 / Bug 4b (closes-diagnose: 8f3d22): pre-fix the
+/// method returned `Future<void>`, making silent rejections (e.g. when
+/// the target day is already `completed`) indistinguishable from success.
+sealed class AssignTemplateResult {
+  const AssignTemplateResult();
+}
+
+/// The template was successfully written to the `schedule_<date>` Hive key.
+class AssignTemplateOk extends AssignTemplateResult {
+  const AssignTemplateOk();
+}
+
+/// The assignment was refused. Callers should surface [reason] to the user.
+class AssignTemplateRejected extends AssignTemplateResult {
+  const AssignTemplateRejected(this.reason);
+  final AssignTemplateRejectionReason reason;
+}
+
+/// Why [AssignTemplateRejected] was returned.
+enum AssignTemplateRejectionReason {
+  /// Target date has `status == 'completed'` — history is sacred.
+  alreadyCompleted,
+
+  /// The template Hive key was not found (template may have been deleted).
+  templateMissing,
 }
 
 /// Maps generated plan days to real calendar dates and persists to Hive.
@@ -1438,9 +1474,16 @@ class WorkoutScheduleService {
   ///
   /// Only backs up entries that are NOT already `custom_template`
   /// (avoids chained displaced entries from template-over-template).
-  Future<void> assignTemplateToDate(String templateId, DateTime date) async {
+  // APK Test #15.3 / Bug 4b (closes-diagnose: 8f3d22): return type
+  // changed from Future<void> to Future<AssignTemplateResult> so callers
+  // can distinguish success from silent rejection (e.g. completed day).
+  Future<AssignTemplateResult> assignTemplateToDate(
+      String templateId, DateTime date) async {
     final tmpl = _hive.workoutBox.get(templateId);
-    if (tmpl == null) return;
+    if (tmpl == null) {
+      return const AssignTemplateRejected(
+          AssignTemplateRejectionReason.templateMissing);
+    }
 
     final tmplMap = Map<String, dynamic>.from(tmpl as Map);
     final dateKey = _dateKey(date);
@@ -1452,7 +1495,16 @@ class WorkoutScheduleService {
     if (existing is Map) {
       final existingMap = Map<String, dynamic>.from(existing);
       // Never displace a completed workout — history is sacred.
-      if (existingMap['status'] == 'completed') return;
+      // Bug 4b fix: return an explicit rejection so callers can
+      // surface feedback instead of silently discarding the request.
+      if (existingMap['status'] == 'completed') {
+        unawaited(ErrorTelemetry.logEvent(
+          'template_assign_rejected_completed',
+          message: 'date=$dateKey templateId=$templateId',
+        ));
+        return const AssignTemplateRejected(
+            AssignTemplateRejectionReason.alreadyCompleted);
+      }
 
       // Only back up if the displaced entry is an auto-plan entry, NOT
       // another custom_template. This prevents chained backups when a
@@ -1541,6 +1593,7 @@ class WorkoutScheduleService {
     }
 
     await _hive.workoutBox.put(scheduleKey, templateEntry);
+    return const AssignTemplateOk();
   }
 
   /// Detect workout day type from exercise categories.

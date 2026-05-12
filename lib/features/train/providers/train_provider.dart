@@ -70,9 +70,38 @@ LastPerformanceData _getLastPerformance(String exerciseName) {
 
     if (latestDate == null || date.isAfter(latestDate)) {
       latestDate = date;
-      lastWeight = (log['weight_kg'] as num?)?.toDouble();
-      lastReps = (log['reps_completed'] as int?);
-      lastSets = (log['sets_completed'] as int?);
+      // Bug a8f1c2 (APK Test #15.3) — read per-set values, not aggregates.
+      //
+      // Post-APK-Test-#6 WorkoutWriteService writes:
+      //   log['reps_completed'] = SUM of per-set reps (line 134,172)
+      //   log['weight_kg']      = MAX across per-set weights (line 135-136,173)
+      //   log['sets']           = per-set array [{weight_kg, reps, ...}]
+      // The pre-fill UX needs the FIRST SET's values, not workout aggregates.
+      // Reading the aggregates here pre-filled "85 reps" into every set of
+      // a Hanging Leg Raise session (sum of a 7-set [10,15,10,15,10,10,15]).
+      //
+      // Legacy rows (pre-Test-#6) lack the sets[] array — we cannot tell
+      // whether their top-level reps_completed was per-set or aggregate,
+      // so fall through to null. UI shows empty inputs / prescribed default.
+      final sets = log['sets'];
+      double? perSetWeight;
+      int? perSetReps;
+      if (sets is List && sets.isNotEmpty) {
+        final first = sets.first;
+        if (first is Map) {
+          perSetWeight = (first['weight_kg'] as num?)?.toDouble();
+          perSetReps = (first['reps'] as num?)?.toInt();
+        }
+      }
+      lastWeight = perSetWeight;
+      lastReps = perSetReps;
+      // Bug a8f1c2 sibling fix (APK Test #15.3 code-review N2) — writer
+      // normalizes incoming `sets_completed` → `set_number` (workout_write_
+      // service.dart:617-619) and canonical writes only set `set_number`
+      // (line 171). Reading `sets_completed` alone silently returned null
+      // for every modern row. Read canonical first, fall back to legacy.
+      lastSets =
+          (log['set_number'] as int?) ?? (log['sets_completed'] as int?);
       loggingType = log['logging_type'] as String?;
     }
   }

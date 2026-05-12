@@ -403,9 +403,12 @@ class _TemplateBuilderScreenState
                 .add(Duration(days: weekOffset * 7 + dayNum - 1));
             if (targetDate.isBefore(today)) continue;
             if (targetDate.isAfter(planEnd)) continue;
-            await scheduleService.assignTemplateToDate(
+            // APK Test #15.3 / Bug 4b (closes-diagnose: 8f3d22):
+            // only count the date as written when the service confirms
+            // success — completed days return AssignTemplateRejected.
+            final result = await scheduleService.assignTemplateToDate(
                 templateId, targetDate);
-            writtenCount++;
+            if (result is AssignTemplateOk) writtenCount++;
           }
         }
       }

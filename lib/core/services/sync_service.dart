@@ -4232,13 +4232,43 @@ class SyncService {
   }
 
   /// Restores scheduled workouts from Supabase (supplement to plan restore).
+  ///
+  /// APK Test #15.3 / Bug 4a (closes-diagnose: 9e2c1a) — cloud
+  /// `scheduled_workouts` has NO `workout_name` / NO `exercises`
+  /// columns (verified live against `dedsavbjuwgarrhphgnl`). The
+  /// display content for a template-assigned day lives in
+  /// `workout_templates.name` + `template_exercises.*` and is only
+  /// reachable via JOIN. Pre-fix this method pulled the bare cloud
+  /// row, so on fresh-install restore the plan-generator default
+  /// (`workout_name = "PUSH A"`) survived in Hive even when
+  /// `template_id` pointed at the user's "Leg Day A" template
+  /// assignment. The today-card header rendered the stale plan-gen
+  /// name. Founder hit this on +22 install 2026-05-12.
+  ///
+  /// Fix: embed the parent template + its exercises via PostgREST
+  /// select syntax and hydrate `workout_name` / `workout_focus` /
+  /// `exercises[]` / `type='custom_template'` whenever the embed
+  /// resolves. Rows where `template_id IS NULL` (rest days, plan-gen
+  /// entries) keep the existing merge — local data survives.
   Future<void> _restoreScheduledWorkouts(String userId, String since) async {
     try {
-      final rows = await _fetchAllRows(
-        'scheduled_workouts', userId,
-        dateColumn: 'scheduled_date', since: since.substring(0, 10),
-        orderBy: 'scheduled_date',
-      );
+      // APK Test #15.3 / Bug 4a — direct query with embed instead of
+      // _fetchAllRows so we can pull the parent template + its
+      // exercises in a single round trip. Page size 1000 mirrors
+      // _fetchAllRows; in practice no user has anywhere near 1000
+      // scheduled workouts (one row per day).
+      final rows = await _supabase.client
+          .from('scheduled_workouts')
+          .select(
+            '*, template:template_id('
+            'id, name, workout_type, '
+            'template_exercises(*)'
+            ')',
+          )
+          .eq('user_id', userId)
+          .gte('scheduled_date', since.substring(0, 10))
+          .order('scheduled_date')
+          .range(0, 999);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -4306,14 +4336,79 @@ class SyncService {
           mergedStatus = 'completed';
         }
 
+        // APK Test #15.3 / Bug 4a — hydrate workout_name + exercises[]
+        // from the embedded template when one is assigned. Without
+        // this, the today-card header renders the plan-gen default
+        // ("PUSH A") instead of the user's template ("Leg Day A").
+        //
+        // closes-diagnose: 2026-05-12-restore-template-schedule-gap-9e2c1a
+        String? hydratedWorkoutName;
+        String? hydratedWorkoutFocus;
+        List<Map<String, dynamic>>? hydratedExercises;
+        bool templateResolved = false;
+
+        if (map['template_id'] != null) {
+          final templateEmbed = map['template'];
+          if (templateEmbed is Map) {
+            final tmpl = Map<String, dynamic>.from(templateEmbed);
+            final tmplName = tmpl['name'] as String?;
+            if (tmplName != null && tmplName.isNotEmpty) {
+              hydratedWorkoutName = tmplName;
+              hydratedWorkoutFocus =
+                  (tmpl['workout_type'] as String?) ?? 'Custom';
+              templateResolved = true;
+
+              // Mirror _restoreWorkoutTemplates exercise mapping
+              // (lines ~3938-3962). prescribed_sets → sets via
+              // _coerceInt(fallback: 3) — Hive readers cast sets as
+              // int? and an unchecked stringified value would crash
+              // home_screen._buildTodayRow (closes-diagnose: a2f9e1).
+              final exerciseRows = tmpl['template_exercises'] as List? ?? [];
+              final sortedExercises = List.from(exerciseRows);
+              sortedExercises.sort((a, b) =>
+                  ((a as Map)['order_index'] as int? ?? 0)
+                      .compareTo((b as Map)['order_index'] as int? ?? 0));
+
+              hydratedExercises = sortedExercises.map((e) {
+                final ex = Map<String, dynamic>.from(e as Map);
+                return <String, dynamic>{
+                  'exercise_name': ex['exercise_name'],
+                  'name': ex['exercise_name'],
+                  'exercise_id': ex['exercise_id'],
+                  'id': ex['exercise_id'],
+                  'logging_type': ex['logging_type'] ?? 'weight_reps',
+                  'sets': _coerceInt(ex['prescribed_sets'], fallback: 3),
+                  // `reps` stays String — library uses ranges like "8-12".
+                  'reps': ex['prescribed_reps']?.toString() ?? '10',
+                  'weight_kg': ex['prescribed_weight'],
+                  'rest_seconds': ex['rest_seconds'],
+                  'rest_secs': ex['rest_seconds'],
+                  'notes': ex['notes'],
+                };
+              }).toList();
+            }
+          } else {
+            // template_id set but embed null — template was deleted
+            // (FK SET NULL would zero it; an RLS-hidden row would
+            // also surface as null embed). Don't overwrite local
+            // workout_name/exercises with empties.
+            unawaited(ErrorTelemetry.logEvent(
+              'restore_scheduled_workouts_template_missing',
+              message: 'date=$date template_id=${map['template_id']}',
+            ));
+          }
+        }
+
         final merged = <String, dynamic>{
           ...existingMap,
           'date': date,
-          // Preserve existing type if present (plan-generator-derived
-          // type is richer than cloud's binary template_id check); only
-          // fall back when local has none.
-          'type': existingMap['type'] ??
-              (map['template_id'] != null ? 'custom_template' : 'workout'),
+          // When the template resolved, force the type to
+          // 'custom_template' (overrides any stale local type written
+          // by plan-gen). Otherwise preserve existing behavior.
+          'type': templateResolved
+              ? 'custom_template'
+              : (existingMap['type'] ??
+                  (map['template_id'] != null ? 'custom_template' : 'workout')),
           if (map['template_id'] != null) 'template_id': map['template_id'],
           if (mergedStatus != null && mergedStatus.isNotEmpty)
             'status': mergedStatus,
@@ -4322,6 +4417,12 @@ class SyncService {
           if (map['week_number'] != null) 'week': map['week_number'],
           if (map['week_number'] != null) 'week_number': map['week_number'],
           if (map['day_of_week'] != null) 'day_of_week': map['day_of_week'],
+          // APK Test #15.3 / Bug 4a — overlay template-derived display
+          // content LAST so it wins over the existingMap spread above.
+          if (hydratedWorkoutName != null) 'workout_name': hydratedWorkoutName,
+          if (hydratedWorkoutFocus != null)
+            'workout_focus': hydratedWorkoutFocus,
+          if (hydratedExercises != null) 'exercises': hydratedExercises,
           'source': 'cloud_restore',
         };
         await _hive.workoutBox.put(key, merged);
