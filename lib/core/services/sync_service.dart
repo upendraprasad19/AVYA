@@ -1410,6 +1410,16 @@ class SyncService {
           hiveKey: key,
         );
 
+        // Audit 2026-05-12 P0-A — onConflict was 'id', but live schema has a
+        // partial UNIQUE on (workout_log_id, exercise_id, set_number). When a
+        // Hive key for the same exercise mutates (e.g. name re-normalize) the
+        // deterministic `id` shifts, the natural unique trips first, and the
+        // upsert raises 23505 + orphan sets accumulate in workout_log_sets
+        // (per-set rows succeed in their own try-block). 31 errors over 24h
+        // in production. Switch to the natural key so PostgREST merges instead
+        // of inserting. The PK `id` is still UNIQUE but is no longer the
+        // conflict target — duplicate rows from the legacy 'id' path become
+        // unreachable but harmless (next sync overwrites the natural-key row).
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
           'workout_log_id': workoutLogId,
@@ -1425,7 +1435,7 @@ class SyncService {
           'is_pr': log['is_pr'] ?? false,
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
           'completed_at': completedAt,
-        }, onConflict: 'id');
+        }, onConflict: 'workout_log_id,exercise_id,set_number');
 
         // ── PER-SET ROWS (F4) ──
         // Upserts a row per set into `workout_log_sets`. Natural key is
@@ -1684,9 +1694,15 @@ class SyncService {
           'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
+        // Audit 2026-05-12 P0-B — onConflict was 'id', but live schema has a
+        // partial UNIQUE on (user_id, date, meal_type). When client-side
+        // dedup key rotates (e.g. meal renamed) the natural unique trips
+        // first, raising 23505 + per-item rows orphan. 16 errors over 24h
+        // in production. Switch to natural key so PostgREST merges instead
+        // of failing.
         await _supabase.client.from("nutrition_logs").upsert(
           parentPayload,
-          onConflict: "id",
+          onConflict: "user_id,date,meal_type",
         );
 
         // Push individual nutrition_log_items. Same schema trap — id,
