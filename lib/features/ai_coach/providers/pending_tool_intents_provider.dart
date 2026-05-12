@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+
 import '../models/tool_intent.dart';
 import '../services/tool_dispatcher.dart';
 
@@ -13,7 +15,10 @@ import '../services/tool_dispatcher.dart';
 ///   failed → confirming (retry)
 class PendingToolIntentsNotifier extends Notifier<List<ToolIntent>> {
   @override
-  List<ToolIntent> build() => const [];
+  List<ToolIntent> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return const [];
+  }
 
   /// Add intents received from a new ai-proxy response.
   /// Filters out duplicates by id (idempotent if response is replayed).

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 class ReferralEligibility {
   final int daysRemaining;
@@ -23,6 +24,7 @@ class ReferralEligibility {
 
 final referralEligibilityProvider =
     FutureProvider<ReferralEligibility>((ref) async {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final supabase = Supabase.instance.client;
   final user = supabase.auth.currentUser;
 

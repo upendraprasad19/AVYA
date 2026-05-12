@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 enum UploadResult { success, cancelled, error }
@@ -31,6 +32,7 @@ class UploadOutcome {
 class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   @override
   Map<String, dynamic> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return UserRepository.instance.getProfile() ?? {};
   }
 
@@ -268,6 +270,7 @@ class UserStatsData {
 class UserStatsNotifier extends Notifier<UserStatsData> {
   @override
   UserStatsData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile() ?? {};
     final progress = UserRepository.instance.getProgress() ?? {};
 
@@ -333,6 +336,7 @@ class SubscriptionInfoData {
 class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
   @override
   SubscriptionInfoData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final sub = SubscriptionService.instance;
     final localIsPro = sub.isPro();
     final inFlight = sub.isPaymentInFlight;
@@ -397,6 +401,7 @@ class BiometricData {
 class BiometricNotifier extends Notifier<BiometricData> {
   @override
   BiometricData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final configBox = HiveService.instance.configBox;
     final healthBox = HiveService.instance.healthBox;
     final syncEnabled =
@@ -523,6 +528,7 @@ class ProgressPhotosData {
 class ProgressPhotosNotifier extends Notifier<ProgressPhotosData> {
   @override
   ProgressPhotosData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final count =
         MigratedKey.readWithDefault<int>('progress_photo_count', 0);
     return ProgressPhotosData(photoCount: count);
@@ -538,6 +544,7 @@ final progressPhotosProvider =
 class UsageWeeksNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final configBox = HiveService.instance.configBox;
     final firstLaunchRaw = configBox.get('first_launch_date') as String?;
     if (firstLaunchRaw == null) return 0;
@@ -557,6 +564,7 @@ final usageWeeksProvider =
 class FirstReportViewedNotifier extends Notifier<bool> {
   @override
   bool build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return MigratedKey.readWithDefault<bool>('first_report_viewed', false);
   }
 

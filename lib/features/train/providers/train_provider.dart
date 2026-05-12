@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
 import '../repositories/workout_repository.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 
 // ── Last Performance Data ────────────────────────────────────────
@@ -528,6 +529,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
   @override
   CurrentPlanData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;
@@ -723,6 +725,7 @@ final currentPlanProvider =
 class SelectedWeekNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Default to the calendar week that contains today so the chip for
     // the current date range is highlighted when the Train tab opens.
     // Falls back to the stored progress week if no plan is scheduled yet.
@@ -746,6 +749,7 @@ final selectedWeekProvider =
 /// automatically after workout completion via ref.invalidate().
 final workoutStatsProvider =
     Provider<Map<String, Map<String, double>>>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   return WorkoutRepository.instance.loadKeyLiftPRs();
 });
 
@@ -917,6 +921,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
   @override
   ActiveWorkoutData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     ref.onDispose(() => _timer?.cancel());
     return const ActiveWorkoutData();
   }
@@ -1634,6 +1639,7 @@ final restTimerProvider =
 class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final box = HiveService.instance.workoutBox;
     final templates = <Map<String, dynamic>>[];
 
@@ -1754,6 +1760,7 @@ class GraduationStatsData {
 }
 
 final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final hive = HiveService.instance;
   final progress = UserRepository.instance.getProgress() ?? {};
 

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Theme B · APK Test #8 — single rank promotion record fetched from
 /// the `rank_promotions` table. Consumed only by
@@ -28,6 +29,7 @@ class PromotionRecord {
 /// signed in. The sheet's empty-state handles both branches identically.
 final promotionHistoryProvider =
     FutureProvider<List<PromotionRecord>>((ref) async {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final user = SupabaseService.instance.currentUser;
   if (user == null) return const [];
   try {

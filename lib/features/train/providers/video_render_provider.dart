@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 enum VideoRenderStatus { idle, queued, rendering, ready, failed }
 
@@ -43,7 +44,10 @@ class VideoRenderNotifier extends Notifier<VideoRenderState> {
   int _pollAttempts = 0;
 
   @override
-  VideoRenderState build() => const VideoRenderState();
+  VideoRenderState build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return const VideoRenderState();
+  }
 
   Future<void> triggerWorkoutVideo({
     required String compositionId,

@@ -21,6 +21,7 @@ import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/services/water_target_service.dart';
 
@@ -289,6 +290,7 @@ class DailyNutritionData {
 class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
   @override
   DailyNutritionData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final selectedDate = ref.watch(selectedDateProvider);
     final dateStr =
         '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
@@ -356,6 +358,7 @@ final dailyNutritionProvider =
 class MacroTargetsNotifier extends Notifier<Map<String, double>> {
   @override
   Map<String, double> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile();
     final targets = _resolveNutritionTargets(profile);
     return {
@@ -378,6 +381,7 @@ final macroTargetsProvider =
 class WaterIntakeNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final healthBox = HiveService.instance.healthBox;
     final now = DateTime.now();
     final todayStr =
@@ -420,7 +424,10 @@ final waterIntakeProvider =
 
 class WaterUnitNotifier extends Notifier<String> {
   @override
-  String build() => 'ml';
+  String build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return 'ml';
+  }
 
   void toggle(String unit) => state = unit;
 }
@@ -438,6 +445,7 @@ class UrineColorNotifier extends Notifier<int> {
 
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Restore today's selection from Hive if previously saved.
     final now = DateTime.now();
     final todayStr =
@@ -978,6 +986,7 @@ final foodLogProvider =
 class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final nutritionBox = HiveService.instance.nutritionBox;
     final results = <Map<String, dynamic>>[];
 
@@ -1352,6 +1361,7 @@ final cartAuditorProvider =
 
 /// Returns remaining AI text log count for display.
 final aiTextLogRemainingProvider = Provider<int>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final isPro = SubscriptionService.instance.isPro();
   return UsageCounterService.instance
       .remaining(AppConstants.featureAiTextLogPro, isPro);
@@ -1359,6 +1369,7 @@ final aiTextLogRemainingProvider = Provider<int>((ref) {
 
 /// Returns remaining scan meal count for display.
 final scanMealRemainingProvider = Provider<int>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final isPro = SubscriptionService.instance.isPro();
   return UsageCounterService.instance
       .remaining(AppConstants.featureScanMealPro, isPro);
@@ -1366,6 +1377,7 @@ final scanMealRemainingProvider = Provider<int>((ref) {
 
 /// Returns remaining cart auditor count for display.
 final cartAuditorRemainingProvider = Provider<int>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final isPro = SubscriptionService.instance.isPro();
   return UsageCounterService.instance
       .remaining(AppConstants.featureCartAuditorPro, isPro);
@@ -1397,6 +1409,7 @@ class WeeklyNutritionData {
 class WeeklyNutritionNotifier extends Notifier<WeeklyNutritionData> {
   @override
   WeeklyNutritionData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final nutritionBox = HiveService.instance.nutritionBox;
     final profile = UserRepository.instance.getProfile();
     final targets = _resolveNutritionTargets(profile);
@@ -1491,5 +1504,6 @@ final deleteNutritionLogProvider =
 // Call `ref.invalidate(waterTargetProvider)` after any
 // [WaterTargetService.setUserOverride] call to propagate the change.
 final waterTargetProvider = Provider<int>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   return WaterTargetService.instance.currentTargetMl();
 });
