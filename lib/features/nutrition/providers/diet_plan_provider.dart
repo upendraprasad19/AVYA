@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// One planned meal slot derived from the saved diet plan
@@ -51,6 +52,7 @@ class PlannedSlot {
 class DietPlanNotifier extends Notifier<Map<String, PlannedSlot>> {
   @override
   Map<String, PlannedSlot> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final raw = UserRepository.instance.getSavedDietPlan();
     if (raw == null) return const {};
 

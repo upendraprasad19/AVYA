@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Tier 2 profile fields ordered by plan impact (highest first).
@@ -33,6 +34,7 @@ class ProfileCompletenessData {
 }
 
 final profileCompletenessProvider = Provider<ProfileCompletenessData>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final profile = UserRepository.instance.getProfile() ?? {};
 
   // Count Tier 1 filled

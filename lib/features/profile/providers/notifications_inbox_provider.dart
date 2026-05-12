@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+
 import '../models/app_notification.dart';
 import '../services/notification_inbox_service.dart';
 
@@ -13,6 +15,7 @@ import '../services/notification_inbox_service.dart';
 class NotificationInboxNotifier extends Notifier<List<AppNotification>> {
   @override
   List<AppNotification> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return NotificationInboxService.instance.readAll();
   }
 

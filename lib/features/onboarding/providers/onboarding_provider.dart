@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
 import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -178,7 +179,10 @@ class OnboardingState {
 
 class OnboardingNotifier extends Notifier<OnboardingState> {
   @override
-  OnboardingState build() => const OnboardingState();
+  OnboardingState build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return const OnboardingState();
+  }
 
   UserRepository get _userRepo => UserRepository.instance;
   HiveService get _hive => HiveService.instance;

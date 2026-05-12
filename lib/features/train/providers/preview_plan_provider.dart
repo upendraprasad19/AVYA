@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 
 /// Identifies a specific phase/week/day combination to preview.
@@ -38,6 +39,7 @@ class PreviewKey {
 /// render it without importing PlanGenerator types directly.
 final previewPlanProvider =
     FutureProvider.family<Map<String, dynamic>, PreviewKey>((ref, key) async {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final profileBox = HiveService.instance.userBox;
   final profile = profileBox.get('profile') as Map?;
   if (profile == null) {

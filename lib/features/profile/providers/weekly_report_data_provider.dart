@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Last-7-days numeric series feeding the [WeeklyReportCard]'s 4-up
 /// sparkline grid.
@@ -39,6 +40,7 @@ class WeeklyReportSeries {
 class WeeklyReportDataNotifier extends Notifier<WeeklyReportSeries> {
   @override
   WeeklyReportSeries build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final hive = HiveService.instance;
     final today = DateTime.now();
 

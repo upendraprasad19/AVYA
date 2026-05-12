@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../repositories/ai_coach_repository.dart';
 import 'pending_tool_intents_provider.dart';
 
@@ -67,6 +68,7 @@ class _CoachEntry {
 class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   @override
   List<ChatMessage> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final coachBox = HiveService.instance.coachBox;
     final messages = <ChatMessage>[];
 
@@ -212,6 +214,7 @@ class MessageLimitNotifier extends Notifier<int> {
 
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final today = istDateStr(DateTime.now());
     final box = HiveService.instance.userBox;
     final cached = box.get('$_keyPrefix$today') as int?;
@@ -285,6 +288,7 @@ class TrialInfoData {
 class TrialInfoNotifier extends Notifier<TrialInfoData> {
   @override
   TrialInfoData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // PRO users are never trial-limited
     if (SubscriptionService.instance.isPro()) {
       return const TrialInfoData(
@@ -716,6 +720,7 @@ final sendMessageProvider =
 class TelegramConnectionNotifier extends Notifier<bool> {
   @override
   bool build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return MigratedKey.readWithDefault<bool>('telegram_connected', false);
   }
 }
@@ -729,6 +734,7 @@ final telegramConnectionProvider =
 class ChannelNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return MigratedKey.readWithDefault<String>('coach_channel', 'in_app');
   }
 
@@ -914,6 +920,7 @@ class PredictionNotifier extends Notifier<PredictionData> {
 
   @override
   PredictionData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final rawText = MigratedKey.read<String>('prediction_text');
     final predText = _sanitisePredictionText(rawText);
     // _sanitisePredictionText calls _writeBackToHive internally when it
@@ -987,6 +994,7 @@ final contextualPromptsProvider = Provider<List<String>>((ref) {
 // ── Coach Insight ───────────────────────────────────────────────
 
 final coachInsightProvider = Provider<String>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final insight = AiCoachRepository.instance.getLatestInsight();
   if (insight.isNotEmpty) return insight;
   return 'Start chatting with your AI coach to get personalised fitness insights and tips!';
@@ -1018,7 +1026,10 @@ class PendingLogAction {
 
 class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
   @override
-  List<PendingLogAction> build() => [];
+  List<PendingLogAction> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return [];
+  }
 
   /// Parse raw actions from AI response and add to pending list.
   /// Routes `confirm_workout_log` to [WorkoutDraftNotifier] instead.
@@ -1173,7 +1184,10 @@ class WorkoutDraft {
 
 class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
   @override
-  WorkoutDraft? build() => null;
+  WorkoutDraft? build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    return null;
+  }
 
   void setDraft(Map<String, dynamic> data) {
     final rawExercises = data['exercises'] as List? ?? [];

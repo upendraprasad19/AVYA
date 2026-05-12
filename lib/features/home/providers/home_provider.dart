@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
@@ -67,6 +68,7 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
 
   @override
   List<CalendarDayData> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final now = DateTime.now();
     final todayDate = DateTime(now.year, now.month, now.day);
     final weekStart = todayDate.subtract(Duration(days: now.weekday - 1));
@@ -127,6 +129,7 @@ final calendarWeekProvider =
 class UserGreetingNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile();
     final name = profile?['full_name'] as String? ?? 'there';
     final firstName = name.split(' ').first;
@@ -173,6 +176,7 @@ final userTimeOfDayProvider =
 class UserFirstNameNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile();
     final rawName = profile?['full_name'] as String?;
     // APK Test #12.8 — probe for the founder's "Profile name USER"
@@ -201,6 +205,7 @@ final userFirstNameProvider =
 class UserInitialNotifier extends Notifier<String> {
   @override
   String build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile();
     final name = profile?['full_name'] as String? ?? 'U';
     return name.isNotEmpty ? name[0].toUpperCase() : 'U';
@@ -215,6 +220,7 @@ final userInitialProvider =
 class StreakNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // APK Test #12.7 — single source of truth for streak count.
     // Previously read cached `current_streak_days` from `user_progress`,
     // which was only refreshed inside `completeWorkout`. The rank-chip
@@ -246,6 +252,7 @@ final streakProvider =
 class StreakFreezeNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     _refillIfNewWeek();
     final progress = UserRepository.instance.getProgress();
     return (progress?['streak_freezes_available'] as int?) ?? 1;
@@ -304,6 +311,7 @@ final streakFreezeProvider =
 /// Read by [StreakBadge] (and [WardStatusStrip] passthrough) to render
 /// the `available/max` ladder format. APK Test #14 / Bug D.3.
 final streakFreezeMaxProvider = Provider<int>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   return SubscriptionService.instance.isPro() ? 3 : 1;
 });
 
@@ -348,6 +356,7 @@ class StreakWarningEligibilityNotifier
     extends Notifier<StreakWarningEligibility> {
   @override
   StreakWarningEligibility build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final streakDays = ref.watch(streakProvider);
     final todaySchedule = ref.watch(todayWorkoutProvider);
 
@@ -425,6 +434,7 @@ final streakWarningEligibilityProvider = NotifierProvider<
 class TodayWorkoutNotifier extends Notifier<Map<String, dynamic>?> {
   @override
   Map<String, dynamic>? build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Read today's schedule from WorkoutScheduleService (single source of truth)
     return WorkoutScheduleService.instance.getScheduleForDate(DateTime.now());
   }
@@ -461,6 +471,7 @@ class NutritionSummaryData {
 class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
   @override
   NutritionSummaryData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // F7 · Single source of truth — Home + Nutrition screens sum
     // identically via NutritionRepository.dailyMacros.
     final today = DateTime.now();
@@ -507,6 +518,7 @@ final nutritionSummaryProvider =
 class WeightHistoryNotifier extends Notifier<List<WeightEntryData>> {
   @override
   List<WeightEntryData> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
 
@@ -543,6 +555,7 @@ final weightHistoryProvider =
 class AiInsightNotifier extends Notifier<String?> {
   @override
   String? build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final now = DateTime.now();
 
     // 1. Always compute insight from LOCAL schedule data (source of truth)
@@ -632,6 +645,7 @@ class RecentFoodLogEntry {
 class RecentFoodLogsNotifier extends Notifier<List<RecentFoodLogEntry>> {
   @override
   List<RecentFoodLogEntry> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final hive = HiveService.instance;
     final nutritionBox = hive.nutritionBox;
     final today = DateTime.now();
@@ -708,6 +722,7 @@ class DailyQuoteNotifier extends Notifier<DailyQuoteData> {
 
   @override
   DailyQuoteData build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Use day of year as index to rotate quotes daily.
     final dayOfYear = DateTime.now().difference(
       DateTime(DateTime.now().year, 1, 1),
@@ -726,6 +741,7 @@ final dailyQuoteProvider =
 class TodayStepsNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
     final today = DateTime.now();
@@ -797,6 +813,7 @@ final weightLogNotifierProvider =
 class TodayWeightLoggedNotifier extends Notifier<bool> {
   @override
   bool build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final healthBox = HiveService.instance.healthBox;
     final today = DateTime.now();
     final todayStr =
@@ -818,6 +835,7 @@ final todayWeightLoggedProvider =
 class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
   @override
   List<ExercisePR> build() {
+    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     return WorkoutRepository.instance.loadAllExercisePRs();
   }
 }

@@ -5,11 +5,13 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Provider for the top coaching insight (highest severity pattern).
 /// Refreshes once per build (cached by PatternDetector internally).
 final topInsightProvider = Provider<CoachingInsight?>((ref) {
+  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   return AiCoachRepository.instance.getTopInsight();
 });
 
