@@ -52,8 +52,8 @@ These are the items only the Master Audit surfaced. Codex stopped at symptoms; M
 | # | Finding | Severity | Why Codex missed |
 |---|---|---|---|
 | **M-1** | **Vault root cause** for all 12 cron 401s (Codex saw the 401s but didn't drill to `vault.decrypted_secrets`) | P0 | Codex doesn't have the `private.morning_alert_get_service_key()` runtime read |
-| **M-2** | `restore_coach_memory` queries wrong column `coaching_notes` (actual: `coach_notes`) — silently drops all notes on every restore | P1 | Codex didn't grep restore code paths |
-| **M-3** | `_syncScheduledWorkouts` runs before `_syncWorkoutTemplates` finishes → 48 FK violations in 2 days | P1 | Codex didn't inspect sync ordering |
+| ~~**M-2**~~ | ~~`restore_coach_memory` queries wrong column~~ — **FALSE ALARM (verified 2026-05-12).** Code at `sync_service.dart:4722` already SELECTs `coach_notes` (the live column). The `coaching_notes` reference is the Hive key — intentional back-compat per CLAUDE.md §15 Hive field-name contract. | ~~P1~~ CLOSED |
+| ~~**M-3**~~ | ~~`_syncScheduledWorkouts` runs before templates~~ — **FALSE ALARM (verified 2026-05-12).** Already fixed in Test #14 / Bug B.1 at `sync_service.dart:579-584` + `:638-642`. The 48 FK violations cited were all 2026-05-09 to 2026-05-10 09:06–12:45 — i.e. BEFORE the fix landed. No errors since. | ~~P1~~ CLOSED |
 | **M-4** | `compute-coach-signals` upserts silently fail — RLS likely blocking service-role; `signals_computed_at` NULL after 23 nightly runs | P1 | Codex saw the table state but didn't correlate to function execution |
 | **M-5** | `rolling-context` cron sends hardcoded anon JWT (pre-Vault pattern) — embeddings corpus may be frozen | P1 | Codex flagged "different auth paths" but didn't enumerate |
 | **M-6** | `weekly-recap-ready` + `expiry-reminder` deployed but NO `pg_cron` job registered — never auto-triggered | P1 | Codex inventoried functions but didn't cross-check cron registrations |
@@ -88,39 +88,39 @@ Verdict: **Master Audit was substantially more thorough — root-cause + system-
 
 | # | Item | Type |
 |---|---|---|
-| **P1-A** | `restore_coach_memory` wrong column `coaching_notes` → `coach_notes` | Code (single-line) |
-| **P1-B** | `_syncScheduledWorkouts` ordering — `await` template sync first | Code |
-| **P1-C** | `compute-coach-signals` upsert silently fails — likely RLS on `coach_memory`; even after Vault fix, plateau-alert + re-engagement stay broken until this is fixed | Edge Fn / RLS investigation |
-| **P1-D** | `rolling-context` cron auth — switch from hardcoded anon JWT to Vault service-key pattern | pg_cron + Edge Fn |
-| **P1-E** | Register `pg_cron` for `weekly-recap-ready` (Sunday) + `expiry-reminder` | Migration |
+| ~~**P1-A**~~ | ~~`restore_coach_memory` wrong column~~ — **CLOSED 2026-05-12. False alarm.** Code already correct. |
+| ~~**P1-B**~~ | ~~`_syncScheduledWorkouts` ordering~~ — **CLOSED 2026-05-12. False alarm.** Fixed in Test #14 / Bug B.1. |
+| ~~**P1-C**~~ | ~~`compute-coach-signals` silent upsert~~ — **CLOSED 2026-05-12.** Root cause was Bearer null (Vault empty), not RLS (`force_rls=false` on `coach_memory` so service-role bypasses RLS). Self-resolves on next 21:00 UTC tick post-Vault-fix. Server-side cron observability deferred to M2. |
+| **P1-D** ✅ | `rolling-context` + `streak-guardian` crons rewritten via Vault key (migration 061) |
+| **P1-E** ✅ | `weekly_recap_ready_sunday` + `expiry_reminder_daily` crons registered (migration 061) |
 | ~~**P1-F**~~ | ~~terms columns missing~~ — **CLOSED 2026-05-12.** Migration targeted `users` (correct); columns present; client reads from `users`. False alarm in Master Audit. | — |
-| **P1-G** | `workout_log_sets` realistic-bounds checks (parity with migration 060) — but resolve cardio/bodyweight semantics first (Jump Rope 540 reps may be legitimate seconds, not reps) | Migration after decision |
-| **P1-H** | `account_deletion_log` zero-policy RLS — document intent + add guard test | Doc + test |
+| **P1-G** ✅ | `workout_log_sets` NOT VALID bounds (migration 061) — legacy corrupt rows survive; new inserts bounded `[0, 60]` reps + `[0, 10]` set_number + `[0, 3600]` duration_secs |
+| **P1-H** ✅ | `account_deletion_log` zero-policy RLS documented in CLAUDE.md §7 as intentional |
 
 ### P2 — data gaps / analytics blind (7 items)
 
 | # | Item | Type |
 |---|---|---|
-| **P2-A** | `client_version` read from `PackageInfo.fromPlatform()` not hardcoded | Code |
-| **P2-B** | Stop SyncService writing `in_app` duplicate `ai_coach_interactions` rows (Edge Function already authoritative) | Code |
-| **P2-C** | Add `paywall_shown` / `paywall_dismissed` / `paywall_upgrade_tapped` events | Code |
-| **P2-D** | `daily-snapshot` must call `getEmbedding()` after extracting coaching notes | Edge Fn |
-| **P2-E** | `workout_logs` dedupe + UNIQUE constraint + sync fix (27 rows for 8 sessions) | Migration + Code |
-| **P2-F** | Add `workout_logs.rpe` to `_syncWorkoutLogs` payload | Code |
-| **P2-G** | Widget crash `'String' is not subtype 'int?'` — add `StackTrace.current` to `logEvent` call; investigate | Code |
+| **P2-A** ✅ | `client_version` reads `AppConstants.appVersion` (mirrors pubspec) |
+| **P2-B** ✅ | SyncService no longer double-writes `ai_coach_interactions` (channel='in_app_orphan' fallback for rare pre-server entries only) |
+| **P2-C** ✅ | Paywall funnel events `paywall_shown` / `paywall_upgrade_tapped` / `paywall_dismissed` instrumented |
+| **P2-D** ✅ | `daily-snapshot` v20 deployed — embeds merged coaching_notes into `memory_embeddings` (source_type=`daily_summary`) |
+| **P2-E** ✅ | `workout_logs` deduped (27→8 rows via migration 062) + natural UNIQUE added + sync onConflict updated |
+| **P2-F** ✅ | `workout_logs.rpe` in `_syncWorkoutLogs` projection |
+| **P2-G** ✅ | `ErrorWidget.builder` composes exception+stack (~600 chars) into `client_errors.message` |
 
 ### P3 — minor / documentation (8 items)
 
 | # | Item | Type |
 |---|---|---|
-| **P3-A** | CLAUDE.md §7: `referral_redemptions` FK direction (DB correct, doc wrong) | Doc |
-| **P3-B** | Drop duplicate UNIQUE on `referral_redemptions.referee_id` | Migration |
-| **P3-C** | `workout_templates.last_used_at` — stamp in `WorkoutScheduleService` on template start | Code |
-| **P3-D** | `nutrition_logs.source` + `logged_at` migration (if wanted) | Decision + Migration |
-| **P3-E** | Redeploy `ai-proxy-pro` as proper 410 stub | Edge Fn |
-| **P3-F** | `scheduled_workouts.template_id` — 50/56 NULL non-recoverable; future rows handled by P1-B fix | Accept |
-| **P3-G** | `docs/sot_registry.yaml` — remove 9 phantom column claims (`ai_coach_interactions.assistant_response`, `nutrition_logs.logged_at` + `source`, `saved_diet_plans.updated_at`, `sleep_logs.sleep_hours`, `user_daily_snapshots.token_count`, `water_logs.logged_at`, `weight_logs.logged_at`, `workout_log_exercises.volume_kg`) | Doc |
-| **P3-H** | Update `supabase/migrations/README_RECONCILIATION_2026-05-11.md` (53 → 55 rows) | Doc |
+| **P3-A** ✅ | CLAUDE.md §7 corrected — `referral_redemptions` FKs point at `public.users` |
+| **P3-B** ✅ | Duplicate UNIQUE dropped (migration 061). Canonical: `unique_referee_redemption` |
+| **P3-C** ✅ | `WorkoutScheduleService.assignTemplateToDate` stamps `last_used_at` |
+| ~~**P3-D**~~ | `nutrition_logs.source` + `logged_at` — **DECIDED AGAINST 2026-05-12.** `created_at` already carries timestamp; `source` was an unused enrichment. Phantom claims in sot_registry removed (P3-G) instead. |
+| ~~**P3-E**~~ | ~~Redeploy `ai-proxy-pro` as 410 stub~~ — **CLOSED 2026-05-12.** Local source IS already a 410 stub (since 2026-04-18). Deployed v17 matches. |
+| **P3-F** | `scheduled_workouts.template_id` 50/56 NULL — historical, not recoverable; accept. Future rows handled by P1-B fix (which was already in place). |
+| **P3-G** ✅ | 9 phantom column claims removed from `docs/sot_registry.yaml` (verified via `information_schema`) |
+| **P3-H** ✅ | `README_RECONCILIATION_2026-05-11.md` updated: 53→55 prod migrations + 060+061+062 |
 
 ---
 
