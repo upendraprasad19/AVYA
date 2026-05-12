@@ -50,7 +50,7 @@ class EditWorkoutLogSheet extends ConsumerStatefulWidget {
 class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   /// One entry per exlog row — preserves original id + loggingType and
   /// carries the live controllers the user edits.
-  late final List<_ExerciseEditRow> _rows;
+  late final List<EditLogExerciseRow> _rows;
   bool _saving = false;
 
   @override
@@ -59,14 +59,14 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     _rows = _loadRows();
   }
 
-  List<_ExerciseEditRow> _loadRows() {
+  List<EditLogExerciseRow> _loadRows() {
     // WorkoutRepository handles both the O(1) index path AND the legacy
     // full-scan fallback for pre-index data, so this covers every log shape.
     final logs =
         WorkoutRepository.instance.getExerciseLogsForDate(widget.date);
     return logs
         .where((log) => log['id'] is String)
-        .map((log) => _ExerciseEditRow.fromLog(log['id'] as String, log))
+        .map((log) => EditLogExerciseRow.fromLog(log['id'] as String, log))
         .toList();
   }
 
@@ -384,7 +384,7 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     );
   }
 
-  Widget _buildEditRow(_ExerciseEditRow row) {
+  Widget _buildEditRow(EditLogExerciseRow row) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: WardCard(
@@ -411,7 +411,7 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 
   /// Per-set editing: renders a header row + individual set rows.
-  Widget _buildPerSetFields(_ExerciseEditRow row) {
+  Widget _buildPerSetFields(EditLogExerciseRow row) {
     return Column(
       children: [
         // Header labels
@@ -468,7 +468,7 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     }
   }
 
-  Widget _buildSetRow(_SetEditRow setRow, int setNumber, String loggingType) {
+  Widget _buildSetRow(EditLogSetRow setRow, int setNumber, String loggingType) {
     return SizedBox(
       height: 44,
       child: Row(
@@ -500,7 +500,7 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     );
   }
 
-  List<Widget> _buildSetInputFields(_SetEditRow setRow, String loggingType) {
+  List<Widget> _buildSetInputFields(EditLogSetRow setRow, String loggingType) {
     switch (loggingType) {
       case 'bodyweight_reps':
         return [
@@ -580,11 +580,11 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
   }
 
   /// Legacy flattened view for old logs without per-set data.
-  Widget _buildFlattenedFields(_ExerciseEditRow row) {
+  Widget _buildFlattenedFields(EditLogExerciseRow row) {
     return _buildFieldsForLoggingType(row);
   }
 
-  Widget _buildFieldsForLoggingType(_ExerciseEditRow row) {
+  Widget _buildFieldsForLoggingType(EditLogExerciseRow row) {
     switch (row.loggingType) {
       case 'bodyweight_reps':
         return Row(
@@ -786,29 +786,48 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
 }
 
 /// Per-set controllers for individual set editing.
-class _SetEditRow {
+/// Per-set edit row. Carries one set's controllers (reps / weight /
+/// duration / distance).
+///
+/// Marked [visibleForTesting] so the contract test at
+/// `test/contracts/edit_workout_log_sets_field_contract_test.dart`
+/// can drive `fromSetDetail` directly without mounting the widget.
+/// Not part of the public widget API.
+@visibleForTesting
+class EditLogSetRow {
   final TextEditingController repsCtrl;
   final TextEditingController weightCtrl;
   final TextEditingController durationCtrl;
   final TextEditingController distanceCtrl;
 
-  _SetEditRow({
+  EditLogSetRow({
     required this.repsCtrl,
     required this.weightCtrl,
     required this.durationCtrl,
     required this.distanceCtrl,
   });
 
-  factory _SetEditRow.fromSetDetail(Map<String, dynamic> set) {
+  /// APK Test #15.3 / Bug 6 (e1f8a2) — accept BOTH 'duration_sec'
+  /// (canonical, written by `ExerciseSet.toMap`) AND 'duration_seconds'
+  /// (legacy, written by `SyncService._restoreExerciseLogs` and
+  /// pre-Test-#6 edit-sheet payloads).
+  ///
+  /// Mirrors the dual-name fallback that `ExerciseSet.fromMap` got in
+  /// Bug 4c (6e1b45). Without this, modern WriteService rows with
+  /// `duration_sec` per-set lose their duration when the edit sheet
+  /// re-reads them.
+  factory EditLogSetRow.fromSetDetail(Map<String, dynamic> set) {
     final reps = (set['reps'] as num?)?.toInt() ?? 0;
     final weight = (set['weight_kg'] as num?)?.toDouble() ?? 0;
-    final duration = (set['duration_seconds'] as num?)?.toInt() ?? 0;
+    final duration = (set['duration_sec'] as num?)?.toInt() ??
+        (set['duration_seconds'] as num?)?.toInt() ??
+        0;
     final distance = (set['distance_km'] as num?)?.toDouble() ?? 0;
 
     String fmtDouble(double v) =>
         v == v.truncateToDouble() ? v.toStringAsFixed(0) : v.toString();
 
-    return _SetEditRow(
+    return EditLogSetRow(
       repsCtrl: TextEditingController(text: reps > 0 ? reps.toString() : ''),
       weightCtrl:
           TextEditingController(text: weight > 0 ? fmtDouble(weight) : ''),
@@ -828,25 +847,36 @@ class _SetEditRow {
 }
 
 /// Carries the original log id + loggingType + controllers for one exlog row.
-/// When `sets_detail` is present, `setRows` is populated and `hasPerSetData`
-/// is true. Otherwise, falls back to aggregate controllers.
-class _ExerciseEditRow {
+///
+/// When the log has a non-empty per-set array (either canonical `'sets'`
+/// written by `WorkoutWriteService.logExercise` post-Test-#6, OR legacy
+/// `'sets_detail'` written by pre-Test-#6 paths), `setRows` is populated
+/// and `hasPerSetData` is true. Otherwise, falls back to aggregate
+/// controllers (`setsCtrl` / `repsCtrl` / `weightCtrl` / `durationCtrl` /
+/// `distanceCtrl`).
+///
+/// Marked [visibleForTesting] so the contract test at
+/// `test/contracts/edit_workout_log_sets_field_contract_test.dart` can
+/// drive `fromLog` directly without mounting the widget. Not part of the
+/// public widget API.
+@visibleForTesting
+class EditLogExerciseRow {
   final String logId;
   final String exerciseName;
   final String loggingType;
   final bool hasPerSetData;
 
-  // Per-set rows (populated when sets_detail exists)
-  final List<_SetEditRow> setRows;
+  // Per-set rows (populated when per-set array exists on the log)
+  final List<EditLogSetRow> setRows;
 
-  // Legacy aggregate controllers (used when no sets_detail)
+  // Legacy aggregate controllers (used when no per-set array)
   final TextEditingController setsCtrl;
   final TextEditingController repsCtrl;
   final TextEditingController weightCtrl;
   final TextEditingController durationCtrl;
   final TextEditingController distanceCtrl;
 
-  _ExerciseEditRow._({
+  EditLogExerciseRow._({
     required this.logId,
     required this.exerciseName,
     required this.loggingType,
@@ -859,20 +889,36 @@ class _ExerciseEditRow {
     required this.distanceCtrl,
   });
 
-  factory _ExerciseEditRow.fromLog(String logId, Map<String, dynamic> log) {
+  /// APK Test #15.3 / Bug 6 (e1f8a2) — prefer canonical `'sets'`
+  /// (written by `WorkoutWriteService.logExercise` post-Test-#6) with
+  /// legacy `'sets_detail'` fallback for pre-Test-#6 rows that may
+  /// still exist in long-installed devices' Hive (or until the
+  /// editLog migration in `WorkoutWriteService.editLog` line 643
+  /// promotes them).
+  ///
+  /// Pre-fix this factory read only `log['sets_detail']`. Modern
+  /// WriteService rows have `sets` (not `sets_detail`), so the per-set
+  /// path was bypassed and the user fell back to the aggregate view
+  /// with empty duration inputs. Same class as Bug 4c (6e1b45) — see
+  /// `docs/diagnoses/2026-05-12-edit-log-sets-detail-legacy-e1f8a2.md`.
+  factory EditLogExerciseRow.fromLog(
+      String logId, Map<String, dynamic> log) {
     final name = (log['exercise_name'] as String?) ?? 'Exercise';
     final type = (log['logging_type'] as String?) ?? 'weight_reps';
-    final setsDetailRaw = log['sets_detail'];
+    // Canonical `'sets'` first (post-Test-#6); legacy `'sets_detail'`
+    // fallback for pre-Test-#6 rows.
+    final setsListRaw = log['sets'] ?? log['sets_detail'];
 
     // Check if per-set data exists and is a non-empty list
-    if (setsDetailRaw is List && setsDetailRaw.isNotEmpty) {
-      final setRows = setsDetailRaw
+    if (setsListRaw is List && setsListRaw.isNotEmpty) {
+      final setRows = setsListRaw
           .whereType<Map>()
-          .map((s) => _SetEditRow.fromSetDetail(Map<String, dynamic>.from(s)))
+          .map((s) =>
+              EditLogSetRow.fromSetDetail(Map<String, dynamic>.from(s)))
           .toList();
 
       if (setRows.isNotEmpty) {
-        return _ExerciseEditRow._(
+        return EditLogExerciseRow._(
           logId: logId,
           exerciseName: name,
           loggingType: type,
@@ -898,7 +944,7 @@ class _ExerciseEditRow {
     String fmtDouble(double v) =>
         v == v.truncateToDouble() ? v.toStringAsFixed(0) : v.toString();
 
-    return _ExerciseEditRow._(
+    return EditLogExerciseRow._(
       logId: logId,
       exerciseName: name,
       loggingType: type,
