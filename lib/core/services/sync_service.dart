@@ -1433,6 +1433,28 @@ class SyncService {
         // of inserting. The PK `id` is still UNIQUE but is no longer the
         // conflict target — duplicate rows from the legacy 'id' path become
         // unreachable but harmless (next sync overwrites the natural-key row).
+        //
+        // Bug a2b3c4 (APK Test #15.3) — duration_seconds aggregate. The
+        // WorkoutWriteService Hive shape carries per-set durations inside
+        // `sets[]` entries (`duration_sec` canonical; `duration_seconds`
+        // legacy after restore). The pre-fix line `log['duration_seconds']`
+        // resolved to null for every WriteService row → cloud column was
+        // dead schema data. Consumers (receipt, train_screen,
+        // weekly-report) all worked around by summing per-set rows from
+        // workout_log_sets. Populate the aggregate so future analytics
+        // queries joining workout_log_exercises directly see the correct
+        // total seconds for timed/cardio exercises.
+        final loggingType = log['logging_type'] as String?;
+        final isTimedOrCardio =
+            loggingType == 'timed' || loggingType == 'cardio';
+        int aggregateDurationSecs = 0;
+        if (isTimedOrCardio && resolvedSets.isNotEmpty) {
+          for (final s in resolvedSets) {
+            final raw =
+                s['duration_sec'] ?? s['duration_seconds'];
+            aggregateDurationSecs += (raw as num?)?.toInt() ?? 0;
+          }
+        }
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': _deterministicId(key),
           'workout_log_id': workoutLogId,
@@ -1443,7 +1465,7 @@ class SyncService {
           'set_number': summarySetCount,
           'reps': log['reps_completed'],
           'weight_kg': log['weight_kg'],
-          'duration_seconds': log['duration_seconds'],
+          'duration_seconds': aggregateDurationSecs,
           'distance_km': log['distance_km'],
           'is_pr': log['is_pr'] ?? false,
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
