@@ -239,28 +239,49 @@ class SupabaseService {
     // rethrow immediately so the caller (e.g. AiCoachProvider) handles
     // them. The 2026-04-07 401-recursion guard is preserved.
     //
+    // Retry control flow is factored into [retryColdStart] so it can
+    // be exercised by behavioral tests with a mock invoker (source-grep
+    // alone can't catch a future refactor that breaks the break/rethrow
+    // condition while keeping the const list + telemetry string intact).
+    //
     // closes-diagnose: 2026-05-12-ai-proxy-retry-undersized-7c4e1a
+    return retryColdStart(
+      () => client.functions.invoke(name, headers: headers, body: body),
+      functionName: name,
+    );
+  }
+
+  /// Bounded retry loop for transient 502/503 cold-start failures.
+  ///
+  /// Invokes [invoke] and retries on `FunctionException` with status 502
+  /// or 503, using the supplied [backoffsMs] schedule. Other exceptions
+  /// rethrow immediately (auth-class 401/403 and other 4xx do NOT retry).
+  ///
+  /// Exposed `@visibleForTesting` so behavioral tests can inject a mock
+  /// invoker and assert runtime semantics — see
+  /// `test/contracts/edge_function_cold_start_retry_behavioral_test.dart`.
+  @visibleForTesting
+  static Future<FunctionResponse> retryColdStart(
+    Future<FunctionResponse> Function() invoke, {
+    required String functionName,
+    List<int> backoffsMs = _coldStartBackoffsMs,
+  }) async {
     int attempt = 0;
     while (true) {
       try {
-        return await client.functions.invoke(
-          name,
-          headers: headers,
-          body: body,
-        );
+        return await invoke();
       } on FunctionException catch (e) {
-        // Retry only on cold-start signatures: 503 BOOT_ERROR + 502 BAD_GATEWAY.
         final isColdStart = e.status == 502 || e.status == 503;
-        if (!isColdStart || attempt >= _coldStartBackoffsMs.length) {
+        if (!isColdStart || attempt >= backoffsMs.length) {
           rethrow;
         }
-        final backoffMs = _coldStartBackoffsMs[attempt];
+        final backoffMs = backoffsMs[attempt];
         // Fire-and-forget telemetry — keeps the retry latency from
         // being doubled by the log-client-error network round-trip.
         unawaited(ErrorTelemetry.logEvent(
           'edge_function_cold_start_retry',
           message:
-              'fn=$name attempt=${attempt + 1} status=${e.status} backoff_ms=$backoffMs',
+              'fn=$functionName attempt=${attempt + 1} status=${e.status} backoff_ms=$backoffMs',
         ));
         await Future<void>.delayed(Duration(milliseconds: backoffMs));
         attempt++;
