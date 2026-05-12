@@ -1373,6 +1373,9 @@ class AiCoachRepository {
     final logIndex = _hive.workoutBox.get('exercise_log_index_$dateStr');
     final logged = <Map<String, dynamic>>[];
     if (logIndex is List) {
+      // gate16-exempt: stripped projection for AI snapshot — the returned
+      // logged[] is consumed only by Gemini system-prompt JSON; never by
+      // Edit sheets or SyncService, so id injection is not required.
       for (final key in logIndex) {
         final raw = _hive.workoutBox.get(key);
         if (raw is! Map) continue;
