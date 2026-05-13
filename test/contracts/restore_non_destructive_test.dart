@@ -9,8 +9,9 @@
 //
 // See docs/diagnoses/2026-05-10-restore-overwrite-d9b2c5.md.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 void main() {
   group(
@@ -19,7 +20,7 @@ void main() {
       late String src;
 
       setUpAll(() {
-        src = File('lib/core/services/sync_service.dart').readAsStringSync();
+        src = loadSyncServiceSource().readAsStringSync();
       });
 
       test('reads existing local status before merge (`localStatus`)', () {

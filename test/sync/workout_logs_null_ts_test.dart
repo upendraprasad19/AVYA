@@ -10,21 +10,16 @@
 //
 // Source-grep test pinning the absence of the buggy pattern.
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
-String _src(String relativePath) {
-  final file = File('${Directory.current.path}/$relativePath');
-  return file.readAsStringSync();
-}
+import '../contracts/_sync_service_source.dart';
 
 void main() {
   group('Test #12.7 — workout_logs null timestamp handling', () {
     test(
       '_syncScheduledWorkouts sanitizes empty-string completed_at',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         final mIdx = src.indexOf('Future<void> _syncScheduledWorkouts(');
         expect(mIdx, greaterThan(0));
@@ -55,7 +50,7 @@ void main() {
     test(
       '_syncWorkoutLogs uses _resolveCompletedAt which rejects empty strings',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // The helper itself filters empty strings. Slice from the
         // declaration to the next sibling helper.

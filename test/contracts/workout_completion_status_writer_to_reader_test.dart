@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// Source-of-truth contract: writer/reader pairs for `workout_completion_status`
 /// from docs/sot_registry.yaml.
 ///
@@ -24,7 +26,7 @@ void main() {
         reason: 'workout_schedule_service.dart must exist (primary writer)');
     schedSvcSrc = sf.readAsStringSync();
 
-    final ssf = File('lib/core/services/sync_service.dart');
+    final ssf = loadSyncServiceSource();
     expect(ssf.existsSync(), isTrue,
         reason: 'sync_service.dart must exist (restore writer)');
     syncSvcSrc = ssf.readAsStringSync();

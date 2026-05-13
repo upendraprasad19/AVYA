@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// Source-of-truth contract: writer/reader pairs for `coaching_notes`
 /// from docs/sot_registry.yaml.
 ///
@@ -88,7 +90,7 @@ void main() {
     });
 
     test('cloud restore pulls coaching_notes from coach_memory', () {
-      final sf = File('lib/core/services/sync_service.dart');
+      final sf = loadSyncServiceSource();
       if (!sf.existsSync()) return;
       final src = sf.readAsStringSync();
       expect(

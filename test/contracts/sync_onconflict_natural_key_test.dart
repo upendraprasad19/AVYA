@@ -16,8 +16,9 @@
 // restore-completeness gaps — writer/reader contract mismatch). Per
 // CLAUDE.md Rule 21 + 22.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 void main() {
   group('Audit 2026-05-12 P0-A + P0-B · sync onConflict natural-key contract',
@@ -25,7 +26,7 @@ void main() {
     late String src;
 
     setUpAll(() {
-      src = File('lib/core/services/sync_service.dart').readAsStringSync();
+      src = loadSyncServiceSource().readAsStringSync();
     });
 
     test('workout_log_exercises upsert uses natural-key onConflict, not "id"',

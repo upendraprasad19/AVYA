@@ -15,6 +15,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../contracts/_sync_service_source.dart';
+
 String _src(String relativePath) {
   final file = File('${Directory.current.path}/$relativePath');
   return file.readAsStringSync();
@@ -23,7 +25,7 @@ String _src(String relativePath) {
 void main() {
   group('Test #12.7 — sync error telemetry sweep', () {
     test('SyncService imports ErrorTelemetry', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(
         src,
         contains(
@@ -36,7 +38,7 @@ void main() {
     test(
       '_reportSyncFailure invokes ErrorTelemetry.recordNonFatal — single funnel',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         final fnIdx = src.indexOf('Future<void> _reportSyncFailure(');
         expect(fnIdx, greaterThan(0),
@@ -70,7 +72,7 @@ void main() {
         // all share one entry). Either form is acceptable as long as
         // openForUser failures still funnel through ErrorTelemetry
         // somewhere downstream.
-        final syncSrc = _src('lib/core/services/sync_service.dart');
+        final syncSrc = loadSyncServiceSource().readAsStringSync();
         final fnIdx =
             syncSrc.indexOf('Future<String?> _ensureSessionOpen()');
         expect(fnIdx, greaterThan(0));

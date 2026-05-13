@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// APK Test #15.1 / Bug A — schedule exercise `sets` must be int, not
 /// String, in Hive.
 ///
@@ -27,7 +29,7 @@ void main() {
 
   setUpAll(() {
     syncSrc =
-        File('lib/core/services/sync_service.dart').readAsStringSync();
+        loadSyncServiceSource().readAsStringSync();
     scheduleSrc =
         File('lib/core/services/workout_schedule_service.dart')
             .readAsStringSync();

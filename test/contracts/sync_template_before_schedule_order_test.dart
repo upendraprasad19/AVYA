@@ -15,8 +15,9 @@
 //
 // See docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 void main() {
   group(
@@ -25,7 +26,7 @@ void main() {
       late String src;
 
       setUpAll(() {
-        src = File('lib/core/services/sync_service.dart').readAsStringSync();
+        src = loadSyncServiceSource().readAsStringSync();
       });
 
       /// Extract a method body by locating the signature line and

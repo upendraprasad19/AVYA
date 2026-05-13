@@ -1,6 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+
+import '../contracts/_sync_service_source.dart';
 
 /// APK Test #12.9 — pin two restore-stack contracts.
 ///
@@ -20,7 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// Source-grep contract — cheap, durable, regression-proof.
 void main() {
-  final file = File('lib/core/services/sync_service.dart');
+  final file = loadSyncServiceSource();
   late final String source;
 
   setUpAll(() {

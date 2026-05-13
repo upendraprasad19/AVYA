@@ -31,6 +31,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
+import '_sync_service_source.dart';
+
 void main() {
   // ── Unit tests (pure Dart, no Flutter bindings needed) ────────────────
 
@@ -136,7 +138,7 @@ void main() {
     late String source;
 
     setUpAll(() {
-      final f = File('lib/core/services/sync_service.dart');
+      final f = loadSyncServiceSource();
       source = f.readAsStringSync();
     });
 

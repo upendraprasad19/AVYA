@@ -18,19 +18,14 @@
 // These tests pin the invariant via source-grep, the same pattern used in
 // `test/sync/sync_gap_test.dart` (production singletons can't be DI'd).
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
-String _src(String relativePath) {
-  final file = File('${Directory.current.path}/$relativePath');
-  return file.readAsStringSync();
-}
+import '../contracts/_sync_service_source.dart';
 
 void main() {
   group('Test #12.6 — restoreFromCloudForUser opens HiveUserSession', () {
     test('imports HiveUserSession', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(
         src,
         contains("import 'package:icanbefitter/core/services/hive_user_session.dart'"),
@@ -43,7 +38,7 @@ void main() {
       'calls HiveUserSession.openForUser inside restoreFromCloudForUser, '
       'before any restore op',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // Locate the method body.
         final methodSig = 'Future<RestoreResult> restoreFromCloudForUser()';
@@ -81,7 +76,7 @@ void main() {
     test(
       'sync_service.dart no longer selects coach_memory.coaching_notes',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // The `coach_memory` table query must NOT request `coaching_notes`.
         // Find the `_restoreCoachMemory` method and inspect the select string.
@@ -117,7 +112,7 @@ void main() {
         // The cloud column was renamed but the Hive coachBox key stays
         // `coaching_notes` so existing readers (AiCoachRepository,
         // tool_dispatcher, coach_memory.dart) keep working unchanged.
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
         expect(
           src,
           contains("await coach.put('coaching_notes', notes)"),
@@ -132,7 +127,7 @@ void main() {
     test(
       'subscribeToRealtimeSync refreshes the session before subscribing',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // The method must be async (returns Future) and must call
         // refreshSession on the auth client.
@@ -164,7 +159,7 @@ void main() {
     test(
       'realtime stream onError reconnects with refreshed JWT on token-expired',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // The reconnect helper exists.
         expect(

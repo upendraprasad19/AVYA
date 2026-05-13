@@ -11,6 +11,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../contracts/_sync_service_source.dart';
+
 /// Extract the body of a private method by finding its `Future<void>` definition
 /// and grabbing up to [maxChars] characters from that point.
 String _methodBody(String src, String methodName, {int maxChars = 2000}) {
@@ -26,9 +28,7 @@ void main() {
   late String authSrc;
 
   setUpAll(() async {
-    syncSrc = await File(
-      'lib/core/services/sync_service.dart',
-    ).readAsString();
+    syncSrc = await loadSyncServiceSource().readAsString();
     authSrc = await File(
       'lib/features/auth/providers/auth_provider.dart',
     ).readAsString();

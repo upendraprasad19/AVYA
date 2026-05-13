@@ -10,13 +10,9 @@
 // pattern — they assert the production code follows the deterministic
 // shape rather than spinning up Hive boxes + Supabase mocks.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
-String _src(String relativePath) {
-  final file = File('${Directory.current.path}/$relativePath');
-  return file.readAsStringSync();
-}
+import '../contracts/_sync_service_source.dart';
 
 /// Returns the body of `Future<void> _restore<Name>(...)` from
 /// [src] up to the next top-level `Future<void>` declaration.
@@ -32,7 +28,7 @@ void main() {
   late String src;
 
   setUpAll(() {
-    src = _src('lib/core/services/sync_service.dart');
+    src = loadSyncServiceSource().readAsStringSync();
   });
 
   group('Bug #1 — restore writes deterministic Hive keys', () {
