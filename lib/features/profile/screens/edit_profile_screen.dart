@@ -61,6 +61,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // was still null on a post-onboarding account.
   DateTime? _dateOfBirth; // stored as ISO date string in Hive/Supabase
   TimeOfDay? _wakeUpTime; // stored as 'HH:MM:SS' string in Hive/Supabase
+  TimeOfDay? _preferredWorkoutTime; // stored as 'HH:MM' string in Hive/Supabase
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
   bool _isAssessingBf = false;
@@ -197,6 +198,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     }
 
+    // Preferred workout time: stored as "HH:MM" or "HH:MM:SS" string. Parse if present.
+    final pwtStr = (profile['preferred_workout_time'] as String?)?.trim() ?? '';
+    if (pwtStr.isNotEmpty) {
+      final parts = pwtStr.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        if (h != null && m != null) {
+          _preferredWorkoutTime = TimeOfDay(hour: h, minute: m);
+        }
+      }
+    }
+
     // Capture original values for rescheduling detection.
     // _injuries is captured as List.of(...) so later edits via the chip
     // row don't mutate the original snapshot (List references are aliased
@@ -329,6 +343,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildDateOfBirthField(),
               const SizedBox(height: AppSpacing.gridGap),
               _buildWakeUpTimeField(),
+              const SizedBox(height: AppSpacing.gridGap),
+              _buildPreferredWorkoutTimeField(),
               const SizedBox(height: AppSpacing.sectionGap),
 
               _sectionHeader('Body'),
@@ -617,6 +633,55 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
     if (picked != null && mounted) {
       setState(() => _wakeUpTime = picked);
+    }
+  }
+
+  /// Preferred workout time picker row — same visual pattern as wake-up time.
+  /// Feeds into the per-user proactive nudge slot used by the morning-alert
+  /// + workout-window-closing Edge Functions.
+  Widget _buildPreferredWorkoutTimeField() {
+    final displayText = _preferredWorkoutTime == null
+        ? 'Preferred Workout Time'
+        : _preferredWorkoutTime!.format(context);
+    return InkWell(
+      onTap: _pickPreferredWorkoutTime,
+      borderRadius: BorderRadius.circular(AppRadius.row),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        decoration: BoxDecoration(
+          color: AppColors.input,
+          borderRadius: BorderRadius.circular(AppRadius.row),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.fitness_center,
+                color: AppColors.textSecondary, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayText,
+                style: AppTypography.body.copyWith(fontSize: 15, fontWeight: FontWeight.w400, color: _preferredWorkoutTime == null
+                      ? AppColors.textDim
+                      : AppColors.textPrimary),
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPreferredWorkoutTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime:
+          _preferredWorkoutTime ?? const TimeOfDay(hour: 7, minute: 0),
+    );
+    if (picked != null && mounted) {
+      setState(() => _preferredWorkoutTime = picked);
     }
   }
 
@@ -1522,6 +1587,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final wakeIso = _wakeUpTime == null
           ? null
           : '${_wakeUpTime!.hour.toString().padLeft(2, '0')}:${_wakeUpTime!.minute.toString().padLeft(2, '0')}:00';
+      final pwtIso = _preferredWorkoutTime == null
+          ? null
+          : '${_preferredWorkoutTime!.hour.toString().padLeft(2, '0')}:${_preferredWorkoutTime!.minute.toString().padLeft(2, '0')}';
 
       final updates = <String, dynamic>{
         'full_name': name,
@@ -1541,6 +1609,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'phone': _phoneController.text.trim(),
         'date_of_birth': ?dobIso,
         'wake_up_time': ?wakeIso,
+        'preferred_workout_time': ?pwtIso,
         if (_bodyFatController.text.isNotEmpty)
           'body_fat_percent': double.tryParse(_bodyFatController.text),
         if (_bodyFatAssessedAt != null)

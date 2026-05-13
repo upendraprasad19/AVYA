@@ -769,6 +769,7 @@ class SyncService {
           'avatar_url': p['avatar_url'],
           'banner_url': p['banner_url'],
           'wake_up_time': p['wake_up_time'],
+          'preferred_workout_time': p['preferred_workout_time'],
           'daily_calories': p['daily_calories'],
           'protein_grams': p['protein_grams'],
           'carbs_grams': p['carbs_grams'],
@@ -2387,6 +2388,8 @@ class SyncService {
       if (_hasValue(p['avatar_url'])) 'avatar_url': p['avatar_url'],
       if (_hasValue(p['banner_url'])) 'banner_url': p['banner_url'],
       if (_hasValue(p['wake_up_time'])) 'wake_up_time': p['wake_up_time'],
+      if (_hasValue(p['preferred_workout_time']))
+        'preferred_workout_time': p['preferred_workout_time'],
       // F17 · Computed nutrition targets (integer columns added migration 021).
       // Coerce to int — NutritionTargets uses ints today but defensively round
       // in case a caller ever stores a double here.
