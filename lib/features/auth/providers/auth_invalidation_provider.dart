@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/hive_session_owner_provider.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 
 /// Token provider whose identity changes on every auth state change.
@@ -26,6 +27,23 @@ final authUserIdTokenProvider = Provider<String>((ref) {
   // Subscribe to the auth state stream so this provider rebuilds on every
   // sign-in / sign-out / token refresh.
   ref.watch(authStateProvider);
-  final user = ref.watch(currentUserProvider);
-  return user?.id ?? '<anon>';
+  final authUid = ref.watch(currentUserProvider)?.id;
+
+  // APK Test #15.4 / B1 Layer B — gate on agreement with HiveUserSession.
+  // Auth-state-changed alone is not the moment user-scoped Hive becomes
+  // safe to read. _ensureLocalUser awaits openForUser AFTER auth fires,
+  // so this provider returns '<anon>' until the listenable confirms the
+  // box swap completed for the same user id.
+  //
+  // Cold start: hiveOwner is set by splash bootstrap before UI mounts →
+  // agreement on first read → token = authUid.
+  // Live signOut+signUp: hiveOwner lags auth by a tick → token = '<anon>'
+  // → 56 user-scoped providers render empty for ~100ms → listenable
+  // fires when openForUser completes → token = authUid → providers
+  // re-render with correctly-namespaced data.
+  final hiveOwner = ref.watch(hiveSessionOwnerProvider);
+  if (authUid == null || hiveOwner == null || authUid != hiveOwner) {
+    return '<anon>';
+  }
+  return authUid;
 });
