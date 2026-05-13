@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Single source for induction state. Idempotency lives here — [hasCommitted]
 /// and [inductionCompleted] are the canonical guards.
@@ -43,12 +47,58 @@ class InductionService {
     'body_part_priorities',
   };
 
-  /// Records a single muster answer. Throws [ArgumentError] on unknown key.
+  /// Records a single muster answer to [HiveService.coachBox] AND bridges
+  /// the value to [userBox['profile']] for keys that map to profile
+  /// fields. Per CLAUDE.md §15 "Source of Truth Rules" — the muster is
+  /// the SoT for these facts; profile reads from a mirrored copy so Edit
+  /// Profile and plan generator see the values.
+  ///
+  /// Throws [ArgumentError] on unknown key. Profile-bridge failures are
+  /// logged via [ErrorTelemetry] but do not throw — the coachBox write
+  /// already succeeded; the bridge re-runs on next attempt.
   Future<void> recordMusterAnswer(String key, dynamic value) async {
     if (!_allowedMusterKeys.contains(key)) {
       throw ArgumentError('Unknown muster key: $key');
     }
     await HiveService.instance.coachBox.put(key, value);
+
+    // B2b — bridge into userBox['profile'].
+    try {
+      await _bridgeToProfile(key, value);
+    } catch (e, st) {
+      debugPrint('[InductionService._bridgeToProfile] $key failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'muster_bridge_to_profile'));
+    }
+  }
+
+  Future<void> _bridgeToProfile(String musterKey, dynamic value) async {
+    final Map<String, dynamic> fields;
+    switch (musterKey) {
+      case 'known_injuries':
+        fields = {'injuries': (value as List).cast<String>()};
+      case 'typical_wake_time':
+        fields = {'wake_up_time': value as String};
+      case 'preferred_workout_time':
+        fields = {'preferred_workout_time': value as String};
+      case 'body_part_priorities':
+        final v = (value as List).cast<String>();
+        // Only bridge single-select (B2d). Multi-select legacy data
+        // (length > 1) is left in coachBox without a fuzzy guess.
+        if (v.length != 1) return;
+        fields = {'physique_focus': v.first};
+      default:
+        // why_now / definition_of_winning — no profile mapping.
+        return;
+    }
+
+    await UserRepository.instance.updateProfileFields(fields);
+
+    final uid = SupabaseService.instance.currentUser?.id;
+    if (uid != null) {
+      unawaited(SyncService.instance.syncProfileNow(uid));
+      unawaited(SyncService.instance.pushSnapshot());
+    }
   }
 
   /// Marks the muster complete. Writes Hive + fires sync + pushSnapshot
