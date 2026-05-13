@@ -33,6 +33,19 @@ import 'supabase_service.dart';
 class HiveUserSession {
   HiveUserSession._();
 
+  /// APK Test #15.4 / B1 Layer B — observable mirror of
+  /// [_currentOwnerFullId]. Flutter `ValueNotifier` so Riverpod's
+  /// `hiveSessionOwnerProvider` can watch it without polling.
+  ///
+  /// Mutated under [_sessionLock] from [_openForUserLocked],
+  /// [_closeAllLocked], and [_deleteAllFilesForCurrentUserLocked].
+  /// Always reflects the latest value of [_currentOwnerFullId].
+  ///
+  /// Test code may NOT mutate this directly — go through the three
+  /// locked methods so the lock invariant is preserved.
+  static final ValueNotifier<String?> currentOwnerListenable =
+      ValueNotifier<String?>(null);
+
   /// 8-hex prefix of the currently signed-in user.id. Null when no
   /// user-scoped boxes are open (cold start before sign-in,
   /// post-sign-out before the next sign-in).
@@ -164,6 +177,9 @@ class HiveUserSession {
 
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;
+    // APK Test #15.4 / B1 Layer B — mirror static field into listenable
+    // so Riverpod providers re-emit. Mutated under _sessionLock.
+    currentOwnerListenable.value = userId;
 
     // C-6 (audit-2026-05-11) — Cross-account guard, lifted from
     // splash_screen.dart where the `try/catch` swallowed the
@@ -348,6 +364,8 @@ class HiveUserSession {
     final closedHash = _currentOwnerHash;
     _currentOwnerHash = null;
     _currentOwnerFullId = null;
+    // APK Test #15.4 / B1 Layer B — mirror cleared state.
+    currentOwnerListenable.value = null;
     debugPrint('[HiveUserSession] closed all user-scoped boxes');
     // APK Test #12.8 — close event so we can detect close-races
     // (close fires while a sync is inflight → GuardedBox auto-open
@@ -384,5 +402,7 @@ class HiveUserSession {
     }
     _currentOwnerHash = null;
     _currentOwnerFullId = null;
+    // APK Test #15.4 / B1 Layer B — mirror cleared state.
+    currentOwnerListenable.value = null;
   }
 }

@@ -6,8 +6,8 @@ import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/typing_indicator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
-/// 5-question muster — captures motivational anchor + definitions + injuries
-/// + schedule + body-part priorities. Sequential reveal with typing pause.
+/// 3-question muster — captures injuries + schedule + body-part focus.
+/// Sequential reveal with typing pause.
 ///
 /// Route: /coach/muster (entered from InductionScreen after I COMMIT)
 ///
@@ -16,7 +16,15 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 /// [InductionService.recordMusterAnswer].
 ///
 /// Sequence: typing indicator (1100ms) → reveal question → user answers →
-/// CONTINUE → typing indicator → next question. Repeat × 5.
+/// CONTINUE → typing indicator → next question. Repeat × 3.
+///
+/// Note: question identifiers in coachBox keep the original Q3/Q4/Q5
+/// naming (`known_injuries`, `typical_wake_time`, `preferred_workout_time`,
+/// `body_part_priorities`). Q1 (`why_now`) and Q2 (`definition_of_winning`)
+/// were dropped per founder direction (APK Test #15.4 / B2a) — they were
+/// high-friction essay prompts with low AI-context value. Their keys are
+/// retained in `InductionService._allowedMusterKeys` so legacy data still
+/// round-trips on read.
 class MusterScreen extends ConsumerStatefulWidget {
   const MusterScreen({super.key});
 
@@ -25,33 +33,30 @@ class MusterScreen extends ConsumerStatefulWidget {
 }
 
 class _MusterScreenState extends ConsumerState<MusterScreen> {
-  /// Current question index 0..4. After Q5 commits, [_completed] flips true.
+  /// Current question index 0..2. After Q5 commits, [_completed] flips true.
+  ///
+  /// Indices map to the original Q3 → Q5 sequence (Q1/Q2 were dropped):
+  ///   0 → injuries (was Q3)
+  ///   1 → wake time + workout time (was Q4)
+  ///   2 → body-part focus (was Q5, now single-select)
   int _qIdx = 0;
   bool _typing = true;
   bool _completed = false;
 
-  // Q1
-  final _whyNowCtrl = TextEditingController();
-  // Q2
-  final _winningCtrl = TextEditingController();
-  // Q3
+  // Q3 — injuries
   final _injuriesCtrl = TextEditingController();
-  // Q4
+  // Q4 — wake/workout time
   TimeOfDay? _wakeTime;
   TimeOfDay? _workoutTime;
-  // Q5
-  final Set<String> _bodyParts = {};
-
-  static const _bodyPartOptions = [
-    'Back',
-    'Chest',
-    'Shoulders',
-    'Arms',
-    'Legs',
-    'Glutes',
-    'Core',
-    'None',
+  // Q5 — single-select matching profile.physique_focus enum
+  // (see edit_profile_screen.dart _buildPhysiqueFocusSelector line ~980).
+  static const _physiqueFocusOptions = <(String, String)>[
+    ('balanced', 'Balanced — all-round'),
+    ('glutes_legs', 'Glutes & Legs'),
+    ('chest_shoulders_arms', 'Chest, Shoulders & Arms'),
+    ('strength', 'Strength — heavy compounds'),
   ];
+  String? _physiqueFocus;
 
   @override
   void initState() {
@@ -72,33 +77,11 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
 
   @override
   void dispose() {
-    _whyNowCtrl.dispose();
-    _winningCtrl.dispose();
     _injuriesCtrl.dispose();
     super.dispose();
   }
 
   // ── Submit handlers ────────────────────────────────────────────────────────
-
-  Future<void> _onSubmitQ1() async {
-    final v = _whyNowCtrl.text.trim();
-    if (v.length < 10) {
-      _toast('At least a sentence, Recruit.');
-      return;
-    }
-    await InductionService.instance.recordMusterAnswer('why_now', v);
-    await _showTypingThen(1);
-  }
-
-  Future<void> _onSubmitQ2() async {
-    final v = _winningCtrl.text.trim();
-    if (v.length < 10) {
-      _toast('At least a sentence, Recruit.');
-      return;
-    }
-    await InductionService.instance.recordMusterAnswer('definition_of_winning', v);
-    await _showTypingThen(2);
-  }
 
   Future<void> _onSubmitQ3({bool skipped = false}) async {
     final List<String> injuries;
@@ -117,7 +100,7 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
       }
     }
     await InductionService.instance.recordMusterAnswer('known_injuries', injuries);
-    await _showTypingThen(3);
+    await _showTypingThen(1); // was 3 — renumbered after dropping Q1/Q2.
   }
 
   Future<void> _onSubmitQ4() async {
@@ -129,14 +112,22 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
         .recordMusterAnswer('typical_wake_time', _formatTime(_wakeTime!));
     await InductionService.instance
         .recordMusterAnswer('preferred_workout_time', _formatTime(_workoutTime!));
-    await _showTypingThen(4);
+    await _showTypingThen(2); // was 4 — renumbered after dropping Q1/Q2.
   }
 
   Future<void> _onSubmitQ5() async {
-    final list = _bodyParts.contains('None')
-        ? <String>[]
-        : _bodyParts.map((s) => s.toLowerCase()).toList();
-    await InductionService.instance.recordMusterAnswer('body_part_priorities', list);
+    if (_physiqueFocus == null) {
+      _toast('Pick one focus, Recruit.');
+      return;
+    }
+    // Wrap single value in 1-element List so the existing coachBox key
+    // shape (List<String>) is preserved. ai_coach_repository reads this as
+    // `(coach.get('body_part_priorities') as List?) ?? const <String>[]`
+    // — no consumer change needed. (APK Test #15.4 / B2d.)
+    await InductionService.instance.recordMusterAnswer(
+      'body_part_priorities',
+      [_physiqueFocus!],
+    );
     await _completeMuster();
   }
 
@@ -207,7 +198,7 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
 
   Widget _buildProgress() {
     return Row(
-      children: List.generate(5, (i) {
+      children: List.generate(3, (i) {
         final filled = i <= _qIdx;
         return Expanded(
           child: Container(
@@ -226,15 +217,11 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
   Widget _buildCurrentQ() {
     switch (_qIdx) {
       case 0:
-        return _buildQ1();
+        return _buildQ3(); // injuries (now first)
       case 1:
-        return _buildQ2();
+        return _buildQ4(); // wake/workout time
       case 2:
-        return _buildQ3();
-      case 3:
-        return _buildQ4();
-      case 4:
-        return _buildQ5();
+        return _buildQ5(); // body part focus (single-select, physique_focus)
       default:
         return const SizedBox.shrink();
     }
@@ -259,51 +246,6 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
           color: Color(0xFFD8D8D8),
         ),
       ),
-    );
-  }
-
-  // ── Q1: Why now ────────────────────────────────────────────────────────────
-
-  Widget _buildQ1() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildBubble(
-            'Why now? What triggered this enlistment?'),
-        TextField(
-          controller: _whyNowCtrl,
-          maxLines: 3,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: _inputDecoration(hint: 'October wedding, want to feel strong...'),
-          style: const TextStyle(color: Colors.white),
-        ),
-        const SizedBox(height: 16),
-        WardButton(label: 'CONTINUE', onPressed: _onSubmitQ1),
-      ],
-    );
-  }
-
-  // ── Q2: Definition of winning ──────────────────────────────────────────────
-
-  Widget _buildQ2() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildBubble(
-            'What does winning look like to you? Describe it in your own words.'),
-        TextField(
-          controller: _winningCtrl,
-          maxLines: 3,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration:
-              _inputDecoration(hint: 'Strong. Energetic. Not tired all day...'),
-          style: const TextStyle(color: Colors.white),
-        ),
-        const SizedBox(height: 16),
-        WardButton(label: 'CONTINUE', onPressed: _onSubmitQ2),
-      ],
     );
   }
 
@@ -432,21 +374,22 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
     );
   }
 
-  // ── Q5: Body part priorities ───────────────────────────────────────────────
+  // ── Q5: Physique focus (single-select, mirrors profile.physique_focus) ────
 
   Widget _buildQ5() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildBubble(
-            'Beyond your goal, any body part you specifically want to bring up?'),
+            'Where do you want to put extra emphasis? Pick one — your plan '
+            'will weight that area.'),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _bodyPartOptions.map((opt) {
-            final selected = _bodyParts.contains(opt);
+          children: _physiqueFocusOptions.map((opt) {
+            final selected = _physiqueFocus == opt.$1;
             return GestureDetector(
-              onTap: () => _toggleBodyPart(opt),
+              onTap: () => _setPhysiqueFocus(opt.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding:
@@ -459,7 +402,7 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
-                  opt,
+                  opt.$2,
                   style: TextStyle(
                     color: selected ? AppColors.bgDeep : Colors.white,
                     fontWeight:
@@ -474,27 +417,14 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
         const SizedBox(height: 16),
         WardButton(
           label: 'COMPLETE MUSTER',
-          onPressed: _bodyParts.isEmpty ? null : _onSubmitQ5,
+          onPressed: _physiqueFocus == null ? null : _onSubmitQ5,
         ),
       ],
     );
   }
 
-  void _toggleBodyPart(String opt) {
-    setState(() {
-      if (opt == 'None') {
-        _bodyParts
-          ..clear()
-          ..add('None');
-      } else {
-        _bodyParts.remove('None');
-        if (_bodyParts.contains(opt)) {
-          _bodyParts.remove(opt);
-        } else {
-          _bodyParts.add(opt);
-        }
-      }
-    });
+  void _setPhysiqueFocus(String key) {
+    setState(() => _physiqueFocus = key);
   }
 
   // ── Final message ──────────────────────────────────────────────────────────

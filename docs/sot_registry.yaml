@@ -1329,3 +1329,155 @@ concepts:
       syncNutritionData() + pushSnapshot() fire-and-forget after
       the Hive delete to keep cloud in sync. Never delete directly
       from a widget.
+
+  - concept: muster_to_profile_bridge
+    domain: ai_coach
+    description: |
+      MusterScreen (post-onboarding 3-question chat) writes 6 keys to
+      coachBox via InductionService.recordMusterAnswer. For 4 of those
+      keys, the same call also mirrors the value into userBox['profile']
+      via the private _bridgeToProfile method so Edit Profile + plan
+      generator + AI context all see consistent values.
+
+      Mappings (all bridged inside _bridgeToProfile switch):
+        known_injuries        -> injuries (List<String>, direct copy)
+        typical_wake_time     -> wake_up_time ("HH:MM", direct copy)
+        preferred_workout_time-> preferred_workout_time ("HH:MM", new column from migration 063)
+        body_part_priorities  -> physique_focus (single-element only;
+                                 legacy multi-select len > 1 skipped)
+
+      why_now and definition_of_winning are written to coachBox but NOT
+      bridged (no profile mapping; questions removed from MusterScreen
+      in APK Test #15.4 / B2a). Cloud coach_memory columns retained for
+      legacy round-trip.
+
+      Backfill (one-shot per device, gated by migrationBox flag
+      'muster_bridge_backfill_v1_done') runs from
+      auth_provider._ensureLocalUser AFTER UserConfigMigrator. Mirrors
+      pre-bridge muster answers into profile defaults; never clobbers
+      user-edited values; skips legacy multi-select.
+    writers:
+      - file: lib/features/ai_coach/services/induction_service.dart
+        method: InductionService.recordMusterAnswer
+        notes: |
+          Sole writer for the 6 coachBox muster keys. After the coachBox
+          put, calls _bridgeToProfile which switches on key and writes
+          the mapped profile field via UserRepository.updateProfileFields.
+      - file: lib/features/ai_coach/services/induction_service.dart
+        method: InductionService._bridgeToProfile
+        notes: |
+          Private method. Maps muster key -> profile field per the table
+          above. Bridge failures are logged via ErrorTelemetry but do
+          NOT throw (coachBox write already succeeded; bridge retries on
+          next muster turn).
+      - file: lib/features/ai_coach/services/induction_service.dart
+        method: InductionService.backfillMusterToProfileIfNeeded
+        notes: |
+          One-shot backfill for existing users. Gated by
+          migrationBox['muster_bridge_backfill_v1_done']. Only writes to
+          profile fields that are still at their default value. Skips
+          legacy multi-select body_part_priorities (length > 1).
+    readers:
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: _EditProfileScreenState.initState
+        notes: |
+          Reads injuries, wake_up_time, preferred_workout_time,
+          physique_focus from userProfileProvider; surfaces as form
+          fields. Save path writes back via updateProfile.
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: ExerciseSelector
+        notes: Reads injuries List for exclusion mask in cascade fill.
+      - file: lib/features/profile/providers/profile_completeness_provider.dart
+        method: profileCompletenessProvider
+        notes: Reads injuries to compute completeness score.
+    cloud_table: user_profile
+    cloud_columns:
+      - injuries (text[], migration 033)
+      - wake_up_time (text)
+      - preferred_workout_time (text, migration 063 — 2026-05-13)
+      - physique_focus (text)
+    sync_methods:
+      - SyncService.syncProfileNow
+      - SyncService.pushSnapshot
+    provider_invalidation_set:
+      - userProfileProvider
+      - profileCompletenessProvider
+    regression_test: test/contracts/muster_profile_bridge_test.dart
+    additional_tests:
+      - test/contracts/muster_question_count_test.dart
+      - test/contracts/muster_bridge_backfill_test.dart
+    class_constraints: |
+      Adding a new muster question that maps to a profile field requires
+      updating BOTH _bridgeToProfile AND backfillMusterToProfileIfNeeded.
+      Never write coachBox['known_injuries' / 'typical_wake_time' /
+      'preferred_workout_time' / 'body_part_priorities'] from anywhere
+      else — InductionService.recordMusterAnswer is the sole writer.
+      Source-grep contract test will fail if a new writer appears.
+
+  - concept: auth_hive_owner_agreement
+    domain: cross_domain
+    description: |
+      Two-layer cross-account guard preventing the previous user's data
+      from leaking into the new user's session during the live
+      signOut+signUp race window. Closes APK Test #15.4 / B1.
+
+      Layer A (correctness): wrapUserScopedBox compares Supabase
+      auth.currentUser.id against HiveUserSession.currentOwnerFullId on
+      every call. On disagreement, returns GuardedBox.empty(authUid)
+      which short-circuits all reads to null/empty/0/false/true and
+      throws StateError on writes. Telemetry event
+      'guarded_box_disagreement' fires per occurrence.
+
+      Layer B (liveness): HiveUserSession.currentOwnerListenable is a
+      ValueNotifier mirrored under _sessionLock from the 3 locked
+      methods (openForUser / closeAll / deleteAllFilesForCurrentUser).
+      hiveSessionOwnerProvider wraps it as a Riverpod Provider.
+      authUserIdTokenProvider returns '<anon>' until authUid agrees with
+      hiveOwner. The 56 user-scoped Riverpod providers from c4055a all
+      watch this token — they automatically rebuild when the listenable
+      fires after openForUser completes for the new user.
+
+      Cold start unaffected because splash awaits _ensureLocalUser
+      (which awaits openForUser) BEFORE UI mounts. Only the live
+      in-session sign-out+sign-up race window benefits from this guard.
+    writers:
+      - file: lib/core/services/hive_user_session.dart
+        method: HiveUserSession.openForUser / closeAll / deleteAllFilesForCurrentUser
+        notes: |
+          The 3 locked methods that mutate _currentOwnerFullId also
+          mirror the value into currentOwnerListenable under the same
+          _sessionLock. Listenable can never disagree with the static
+          field.
+    readers:
+      - file: lib/core/services/hive_session_owner_provider.dart
+        method: hiveSessionOwnerProvider
+        notes: Riverpod Provider wrapping the listenable.
+      - file: lib/features/auth/providers/auth_invalidation_provider.dart
+        method: authUserIdTokenProvider
+        notes: |
+          Watches authStateProvider + currentUserProvider +
+          hiveSessionOwnerProvider. Returns '<anon>' on disagreement;
+          authUid on agreement.
+      - file: lib/core/services/guarded_box.dart
+        method: wrapUserScopedBox
+        notes: |
+          Reads Supabase.instance.client.auth.currentUser?.id and
+          HiveUserSession.currentOwnerFullId; returns
+          GuardedBox.empty(authUid) on disagreement.
+    telemetry:
+      - guarded_box_disagreement (Layer A fires)
+      - hive_session_opened (Layer B owner change)
+      - hive_session_closed (Layer B owner cleared)
+    regression_test: test/contracts/auth_invalidation_timing_test.dart
+    additional_tests:
+      - test/contracts/wrap_user_scoped_box_disagreement_test.dart
+      - test/contracts/auth_invalidation_contract_test.dart
+    class_constraints: |
+      The two layers are intentionally redundant. Layer A is the
+      correctness net (no leak even if Layer B fails). Layer B is the
+      liveness net (without it, providers would stay at empty state
+      forever after the disagreement window opens). Never remove either
+      half. Never read user-scoped Hive without going through
+      wrapUserScopedBox (raw Hive.box() bypasses the guard). When adding
+      a new user-scoped Hive box, route reads through HiveService
+      getters that delegate to wrapUserScopedBox.

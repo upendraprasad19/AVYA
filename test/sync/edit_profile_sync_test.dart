@@ -18,8 +18,13 @@ void main() {
     final saveStart = source.indexOf('Future<void> _save() async {');
     expect(saveStart, isNot(-1), reason: '_save must exist');
 
-    // Take a generous body slice (5000 chars covers the whole method)
-    final body = source.substring(saveStart, saveStart + 5000);
+    // Take a generous body slice. APK Test #15.4 / Phase 4.3 grew the
+    // method to ~15K chars after adding the preferred_workout_time picker;
+    // the original 5000-char window no longer covered the syncProfileNow
+    // call near the bottom. Use 20K chars to leave headroom for future
+    // additions without re-breaking this assertion.
+    final bodyEnd = (saveStart + 20000).clamp(0, source.length);
+    final body = source.substring(saveStart, bodyEnd);
 
     expect(
       body.contains('syncProfileNow'),
