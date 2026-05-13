@@ -113,4 +113,96 @@ class InductionService {
       unawaited(SyncService.instance.pushSnapshot());
     }
   }
+
+  /// Migration flag key for the one-shot bridge backfill. Stored in
+  /// [HiveService.migrationBox] which is NEVER cleared by clearAllData()
+  /// — keeps the backfill from re-running after a sign-out + sign-in.
+  static const String _backfillFlagKey =
+      'muster_bridge_backfill_v1_done';
+
+  /// APK Test #15.4 / B2 — one-shot backfill of pre-bridge muster
+  /// answers into [userBox['profile']]. Called from
+  /// `auth_provider._ensureLocalUser` after `HiveUserSession.openForUser`
+  /// succeeds.
+  ///
+  /// Idempotency rules:
+  /// - Gated by [_backfillFlagKey] in `migrationBox` — runs at most once
+  ///   per device lifetime per migration version.
+  /// - Only writes to a profile field if the field is currently at its
+  ///   default value. User-edited values are NEVER clobbered.
+  /// - Skips multi-select legacy `body_part_priorities` (length > 1) —
+  ///   no fuzzy guess; user can re-pick via Edit Profile.
+  ///
+  /// Non-fatal on failure: logs + telemeters; flag stays unset so the
+  /// backfill retries on next launch. Never throws.
+  Future<void> backfillMusterToProfileIfNeeded() async {
+    try {
+      final mig = HiveService.instance.migrationBox;
+      if (mig.get(_backfillFlagKey) == true) return;
+
+      final coach = HiveService.instance.coachBox;
+      final profile = UserRepository.instance.getProfile() ?? {};
+      final updates = <String, dynamic>{};
+
+      // injuries
+      final cbInjuries = coach.get('known_injuries');
+      if (cbInjuries is List && cbInjuries.isNotEmpty) {
+        final existing = profile['injuries'];
+        final isDefault = existing == null ||
+            (existing is List &&
+                (existing.isEmpty ||
+                    (existing.length == 1 && existing.first == 'none')));
+        if (isDefault) {
+          updates['injuries'] = cbInjuries.cast<String>();
+        }
+      }
+
+      // wake_up_time
+      final cbWake = coach.get('typical_wake_time');
+      if (cbWake is String && cbWake.isNotEmpty) {
+        final existing = profile['wake_up_time'];
+        if (existing == null || (existing is String && existing.isEmpty)) {
+          updates['wake_up_time'] = cbWake;
+        }
+      }
+
+      // preferred_workout_time
+      final cbWorkout = coach.get('preferred_workout_time');
+      if (cbWorkout is String && cbWorkout.isNotEmpty) {
+        if (profile['preferred_workout_time'] == null) {
+          updates['preferred_workout_time'] = cbWorkout;
+        }
+      }
+
+      // physique_focus — single-select legacy data only.
+      final cbBodyParts = coach.get('body_part_priorities');
+      if (cbBodyParts is List && cbBodyParts.length == 1) {
+        final v = cbBodyParts.first as String;
+        const validEnum = {
+          'balanced', 'glutes_legs', 'chest_shoulders_arms', 'strength',
+        };
+        final currentDefault =
+            (profile['physique_focus'] as String?) == 'balanced';
+        if (validEnum.contains(v) && currentDefault && v != 'balanced') {
+          updates['physique_focus'] = v;
+        }
+      }
+
+      if (updates.isNotEmpty) {
+        await UserRepository.instance.updateProfileFields(updates);
+        final uid = SupabaseService.instance.currentUser?.id;
+        if (uid != null) {
+          unawaited(SyncService.instance.syncProfileNow(uid));
+          unawaited(SyncService.instance.pushSnapshot());
+        }
+      }
+
+      await mig.put(_backfillFlagKey, true);
+    } catch (e, st) {
+      debugPrint('[InductionService.backfillMusterToProfileIfNeeded] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'muster_bridge_backfill'));
+      // Don't set the flag on failure — retry next launch.
+    }
+  }
 }

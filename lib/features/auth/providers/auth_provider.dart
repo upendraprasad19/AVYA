@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 // ── Auth State Stream ───────────────────────────────────────────
@@ -432,6 +433,15 @@ class AuthNotifier extends Notifier<AuthState2> {
       debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
       // Non-fatal — readers will see legacy configBox values until next
       // launch. Cross-account guard would still clear them if needed.
+    }
+
+    // APK Test #15.4 / B2 backfill — one-shot mirror of pre-bridge muster
+    // answers into userBox['profile']. Gated by migrationBox flag.
+    try {
+      await InductionService.instance.backfillMusterToProfileIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] muster backfill failed: $e');
+      // Non-fatal — backfill is idempotent and retries on next launch.
     }
 
     // APK Test #12.2 / Task #2b — one-shot self-repair migration that
