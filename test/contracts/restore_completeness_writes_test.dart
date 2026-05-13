@@ -17,8 +17,18 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('APK Test #11 · Theme A · restore-completeness write contract', () {
     test('SyncService exposes 3 new restore-completeness methods', () {
-      final src =
+      final rootSrc =
           File('lib/core/services/sync_service.dart').readAsStringSync();
+      final partsDir = Directory('lib/core/services/sync');
+      final partsSrc = partsDir.existsSync()
+          ? partsDir
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.dart'))
+              .map((f) => f.readAsStringSync())
+              .join('\n\n')
+          : '';
+      final src = '$rootSrc\n\n$partsSrc';
       expect(src.contains('Future<void> syncFreezes'), isTrue,
           reason: 'SyncService must expose syncFreezes() (Theme A1)');
       expect(src.contains('Future<void> syncNotificationsInboxEntry'), isTrue,

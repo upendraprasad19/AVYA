@@ -16,10 +16,21 @@ void main() {
   late String syncServiceSrc;
 
   setUpAll(() {
-    final f = File('lib/core/services/sync_service.dart');
-    expect(f.existsSync(), isTrue,
+    final root = File('lib/core/services/sync_service.dart');
+    expect(root.existsSync(), isTrue,
         reason: 'Run from project root');
-    syncServiceSrc = f.readAsStringSync();
+    final partsDir = Directory('lib/core/services/sync');
+    final parts = partsDir.existsSync()
+        ? partsDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))
+            .toList()
+        : <File>[];
+    syncServiceSrc = [
+      root.readAsStringSync(),
+      ...parts.map((f) => f.readAsStringSync()),
+    ].join('\n\n');
   });
 
   /// Extracts the body of a named `Future<void>` method as a string.
