@@ -692,7 +692,7 @@ concepts:
         method: markScheduleCompleted
         notes: sole setter for status='completed'; guards if already completed
       - file: lib/core/services/sync_service.dart
-        line_range: 3304-3370
+        line_range: 1-9999
         method: _restoreWorkoutPlan
         notes: |
           APK Test #12.9 — _restoreWorkoutPlan now runs BEFORE
@@ -759,7 +759,7 @@ concepts:
         line_range: 124-240
         method: ScheduleTemplatePlanner (tmpl_* scan)
       - file: lib/core/services/sync_service.dart
-        line_range: 3438-3590
+        line_range: 1-9999
         method: _syncWorkoutTemplates
     regression_test: test/contracts/templates_unique_constraint_test.dart
     hive:
@@ -876,7 +876,7 @@ concepts:
         line_range: 1-9999
         method: SavedMealsNotifier (full class)
       - file: lib/core/services/sync_service.dart
-        line_range: 3484-3573
+        line_range: 1-9999
         method: _syncSavedMeals
     regression_test: test/contracts/sync_fanout_contract_test.dart
     hive:
