@@ -27,7 +27,22 @@ void main(List<String> args) async {
   }
 
   final registryContent = registryFile.readAsStringSync();
-  final syncContent = syncServiceFile.readAsStringSync();
+
+  // refactor/sync-service-part-split (2026-05-13) — SyncService is now
+  // split across `sync_service.dart` plus N part files under
+  // `lib/core/services/sync/`. Concatenate all of them so the
+  // declaration scan finds methods that moved into part-file extensions.
+  final rootSyncContent = syncServiceFile.readAsStringSync();
+  final partsDir = Directory('$projectRoot/lib/core/services/sync');
+  final partSources = partsDir.existsSync()
+      ? partsDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .map((f) => f.readAsStringSync())
+          .toList()
+      : <String>[];
+  final syncContent = [rootSyncContent, ...partSources].join('\n\n');
 
   // ── 1. Extract declared sync/restore method names from sync_service.dart ──
 
