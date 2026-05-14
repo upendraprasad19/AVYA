@@ -1057,9 +1057,10 @@ concepts:
         method: _save
         notes: calls syncProfileNow after updating userBox
     readers:
-      - file: lib/core/services/sync_service.dart
-        line_range: 2969-3030
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 1-9999
         method: _restoreUserProfile
+        # Moved here from sync_service.dart by refactor/sync-service-part-split (2026-05-13)
         notes: |
           APK Test #12.8 fix — SELECTs from 'users' table for
           full_name + email in addition to user_profile columns.
