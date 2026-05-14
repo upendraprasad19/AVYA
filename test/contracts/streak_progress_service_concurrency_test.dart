@@ -130,6 +130,11 @@ void main() {
           // surface, not a write.
           'lib/features/ai_coach/repositories/ai_coach_repository.dart',
         };
+        // refactor/sync-service-part-split (2026-05-13) — every part
+        // file under `lib/core/services/sync/` is library-equivalent
+        // to `sync_service.dart` and inherits its allowlist exemption.
+        // Sync/restore projection lives here post-split.
+        const syncPartFilePrefix = 'lib/core/services/sync/';
         final root = Directory('lib');
         final offenders = <String>[];
         for (final f in root
@@ -138,6 +143,7 @@ void main() {
             .where((f) => f.path.endsWith('.dart'))) {
           final rel = f.path.replaceAll('\\', '/');
           if (allowlist.any((a) => rel.endsWith(a))) continue;
+          if (rel.contains(syncPartFilePrefix)) continue;
           final src = f.readAsStringSync();
           // Pattern: `'streak_freezes_available':` inside a Map
           // literal — typically the LHS of a write.
