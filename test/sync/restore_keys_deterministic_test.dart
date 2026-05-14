@@ -19,9 +19,12 @@ import '../contracts/_sync_service_source.dart';
 String _restoreBody(String src, String name) {
   final start = src.indexOf('Future<void> _restore$name(');
   expect(start, greaterThan(0), reason: '_restore$name function must exist');
+  // After refactor/sync-service-part-split (2026-05-13) the union source
+  // can end on a method (no trailing `Future<void>` if the last extracted
+  // method is the file's last). Fall back to end-of-source.
   final next = src.indexOf('\n  Future<void> ', start + 1);
-  expect(next, greaterThan(start));
-  return src.substring(start, next);
+  final end = next > start ? next : src.length;
+  return src.substring(start, end);
 }
 
 void main() {

@@ -959,9 +959,10 @@ concepts:
         line_range: 244-270
         method: StreakFreezeNotifier._refillIfNewWeek
     readers:
-      - file: lib/core/services/sync_service.dart
-        line_range: 1894-1935
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
         method: _syncStreaks
+        # Moved here from sync_service.dart by refactor/sync-service-part-split (2026-05-13)
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 116-240
         method: calculateCurrentStreak
@@ -1011,9 +1012,10 @@ concepts:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1302-1320
         method: _getSleep7d
-      - file: lib/core/services/sync_service.dart
-        line_range: 1781-1810
+      - file: lib/core/services/sync/sync_health.dart
+        line_range: 1-9999
         method: _syncSleepLogs
+        # Moved here from sync_service.dart by refactor/sync-service-part-split (2026-05-13)
     regression_test: test/sync/sync_gap_test.dart
     hive:
       box: healthBox
@@ -1254,7 +1256,7 @@ concepts:
         method: ErrorTelemetry (whole class)
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2051-2095
+        line_range: 1-9999
         method: _reportSyncFailure (funnel — all sync failures route through here)
       - file: lib/core/services/hive_user_session.dart
         line_range: 77-220
