@@ -876,7 +876,7 @@ concepts:
         line_range: 1-9999
         method: SavedMealsNotifier (full class)
       - file: lib/core/services/sync_service.dart
-        line_range: 3817-3895
+        line_range: 3484-3573
         method: _syncSavedMeals
     regression_test: test/contracts/sync_fanout_contract_test.dart
     hive:
@@ -1150,9 +1150,10 @@ concepts:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
         line_range: 79-90
         method: AiCoachHistoryProvider (skips 'coaching_notes' singleton)
-      - file: lib/core/services/sync_service.dart
-        line_range: 3959-3995
+      - file: lib/core/services/sync/sync_coach.dart
+        line_range: 67-107
         method: _syncCoachInteractions
+        # Moved here from sync_service.dart by refactor/sync-service-part-split (2026-05-13)
     regression_test: test/sync/coach_uuid_format_test.dart
     hive:
       box: coachBox
