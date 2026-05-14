@@ -4,14 +4,15 @@
 // caused silent sync failures for custom exercises with default_duration_secs
 // set (timed exercises like "Plank", "Handstand Hold").
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../contracts/_sync_service_source.dart';
 
 void main() {
   group('sync_service custom exercise projection', () {
     test('source has no invalid ?defaultDur syntax (regression for F1)', () {
       final source =
-          File('lib/core/services/sync_service.dart').readAsStringSync();
+          loadSyncServiceSource().readAsStringSync();
       expect(
         source.contains('?defaultDur'),
         false,
@@ -24,7 +25,7 @@ void main() {
 
     test('source uses conditional spread for default_duration_secs', () {
       final source =
-          File('lib/core/services/sync_service.dart').readAsStringSync();
+          loadSyncServiceSource().readAsStringSync();
       expect(
         source.contains("if (defaultDur != null) 'default_duration_secs'") ||
             source.contains('if (defaultDur != null) "default_duration_secs"'),

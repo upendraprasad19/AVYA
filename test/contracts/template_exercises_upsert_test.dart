@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// APK Test #15 closeout / Backlog #2 — template_exercises upsert contract.
 ///
 /// Migration 051 added UNIQUE (template_id, order_index). Now
@@ -28,7 +30,7 @@ void main() {
   late String syncSrc;
 
   setUpAll(() {
-    final f = File('lib/core/services/sync_service.dart');
+    final f = loadSyncServiceSource();
     expect(f.existsSync(), isTrue, reason: 'sync_service.dart must exist');
     syncSrc = f.readAsStringSync();
   });

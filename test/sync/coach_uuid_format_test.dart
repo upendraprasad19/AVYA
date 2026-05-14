@@ -11,22 +11,17 @@
 // pass through; otherwise we hash via the existing `_deterministicId`
 // (sync namespace v5).
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
 
-String _src(String relativePath) {
-  final file = File('${Directory.current.path}/$relativePath');
-  return file.readAsStringSync();
-}
+import '../contracts/_sync_service_source.dart';
 
 void main() {
   group('Test #12.7 — coach interaction UUID format', () {
     test(
       '_syncCoachInteractions does NOT pass `entry["id"] ?? key` directly to upsert',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         final mIdx = src.indexOf('Future<void> _syncCoachInteractions(');
         expect(mIdx, greaterThan(0));

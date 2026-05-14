@@ -21,6 +21,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../contracts/_sync_service_source.dart';
+
 String _src(String relativePath) {
   final file = File('${Directory.current.path}/$relativePath');
   return file.readAsStringSync();
@@ -97,7 +99,7 @@ void main() {
     test(
       '_ensureSessionOpen helper exists and is called at every public sync entry',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         // Helper is declared.
         expect(

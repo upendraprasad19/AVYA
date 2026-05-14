@@ -12,6 +12,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 void main() {
   late String writeServiceSource;
   late String receiptSource;
@@ -25,7 +27,7 @@ void main() {
         File('lib/features/train/widgets/workout_receipt_card.dart')
             .readAsStringSync();
     syncSource =
-        File('lib/core/services/sync_service.dart').readAsStringSync();
+        loadSyncServiceSource().readAsStringSync();
     aiRepoSource =
         File('lib/features/ai_coach/repositories/ai_coach_repository.dart')
             .readAsStringSync();

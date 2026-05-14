@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 /// APK Test #15.1 / Bug B — template_exercises tail vacuum after upsert.
 ///
@@ -25,7 +26,7 @@ void main() {
   late String src;
 
   setUpAll(() {
-    src = File('lib/core/services/sync_service.dart').readAsStringSync();
+    src = loadSyncServiceSource().readAsStringSync();
   });
 
   group('_syncWorkoutTemplates tail vacuum', () {

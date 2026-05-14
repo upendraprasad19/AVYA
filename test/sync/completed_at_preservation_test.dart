@@ -17,21 +17,16 @@
 // Source-grep tests — _resolveCompletedAt + _dateFromKey are private,
 // and the production singleton can't be DI'd from a unit test.
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 
-String _src(String relativePath) {
-  final file = File('${Directory.current.path}/$relativePath');
-  return file.readAsStringSync();
-}
+import '../contracts/_sync_service_source.dart';
 
 void main() {
   group('Test #12.7 — completed_at preservation in workout sync', () {
     test(
       '_resolveCompletedAt helper exists and reads in priority order',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
         final fnIdx = src.indexOf('String _resolveCompletedAt(');
         expect(fnIdx, greaterThan(0),
             reason: '_resolveCompletedAt helper must exist.');
@@ -87,7 +82,7 @@ void main() {
     test(
       '_dateFromKey extracts YYYY-MM-DD prefix from exlog/wlog keys',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
         final fnIdx = src.indexOf('String? _dateFromKey(');
         expect(fnIdx, greaterThan(0),
             reason: '_dateFromKey helper must exist.');
@@ -97,7 +92,7 @@ void main() {
     test(
       '_syncExerciseLogs uses _resolveCompletedAt instead of DateTime.now()',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         final mIdx = src.indexOf('Future<void> _syncExerciseLogs(');
         expect(mIdx, greaterThan(0));
@@ -130,7 +125,7 @@ void main() {
     test(
       '_syncWorkoutLogs uses _resolveCompletedAt for both logged_at and created_at',
       () {
-        final src = _src('lib/core/services/sync_service.dart');
+        final src = loadSyncServiceSource().readAsStringSync();
 
         final mIdx = src.indexOf('Future<void> _syncWorkoutLogs(');
         expect(mIdx, greaterThan(0));

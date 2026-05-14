@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 /// F5 · Test #9 — fan-out coverage contract.
 ///
@@ -16,10 +17,7 @@ void main() {
   late String syncServiceSrc;
 
   setUpAll(() {
-    final f = File('lib/core/services/sync_service.dart');
-    expect(f.existsSync(), isTrue,
-        reason: 'Run from project root');
-    syncServiceSrc = f.readAsStringSync();
+    syncServiceSrc = loadSyncServiceSource().readAsStringSync();
   });
 
   /// Extracts the body of a named `Future<void>` method as a string.

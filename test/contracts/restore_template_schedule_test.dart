@@ -28,8 +28,9 @@
 //
 // See docs/diagnoses/2026-05-12-restore-template-schedule-gap-9e2c1a.md.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 void main() {
   group(
@@ -39,7 +40,7 @@ void main() {
     late String methodSrc;
 
     setUpAll(() {
-      src = File('lib/core/services/sync_service.dart').readAsStringSync();
+      src = loadSyncServiceSource().readAsStringSync();
       // Slice out just _restoreScheduledWorkouts so the assertions can't
       // accidentally match an unrelated occurrence elsewhere in the file
       // (e.g. _restoreWorkoutTemplates also embeds template_exercises).

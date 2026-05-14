@@ -11,6 +11,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../contracts/_sync_service_source.dart';
+
 String _src(String relativePath) {
   final file = File('${Directory.current.path}/$relativePath');
   return file.readAsStringSync();
@@ -23,7 +25,7 @@ void main() {
     late String src;
 
     setUpAll(() {
-      src = _src('lib/core/services/sync_service.dart');
+      src = loadSyncServiceSource().readAsStringSync();
     });
 
     test("_restoreExerciseLogs must NOT write legacy 'sets_completed'", () {

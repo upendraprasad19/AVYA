@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// APK Test #11 — Theme A push-side contract.
 ///
 /// Asserts that the three Hive-only surfaces that previously vanished on
@@ -17,8 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('APK Test #11 · Theme A · restore-completeness write contract', () {
     test('SyncService exposes 3 new restore-completeness methods', () {
-      final src =
-          File('lib/core/services/sync_service.dart').readAsStringSync();
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src.contains('Future<void> syncFreezes'), isTrue,
           reason: 'SyncService must expose syncFreezes() (Theme A1)');
       expect(src.contains('Future<void> syncNotificationsInboxEntry'), isTrue,
@@ -131,8 +132,7 @@ void main() {
     });
 
     test('syncFreezes reads from userBox progress key (not raw Hive.box)', () {
-      final src =
-          File('lib/core/services/sync_service.dart').readAsStringSync();
+      final src = loadSyncServiceSource().readAsStringSync();
       // Confirm it uses HiveService.instance or _hive accessor — not raw Hive.box
       expect(src.contains('Hive.box('), isFalse,
           reason:

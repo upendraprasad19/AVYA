@@ -32,6 +32,26 @@ void main() {
     allSources = readAllDartFiles(libDir);
   });
 
+  /// refactor/sync-service-part-split (2026-05-13) — SyncService is now
+  /// split across `sync_service.dart` plus N part files under
+  /// `lib/core/services/sync/`. Helper returns the concatenated source so
+  /// contract `expect(syncSource, contains(...))` checks still find strings
+  /// that may have moved into a part file.
+  String syncServiceUnion() {
+    final root = allSources.entries
+        .firstWhere(
+          (e) => e.key.endsWith('sync_service.dart') &&
+              !e.key.contains('health_sync'),
+        )
+        .value;
+    final parts = allSources.entries
+        .where((e) =>
+            e.key.replaceAll(r'\', '/').contains('/core/services/sync/'))
+        .map((e) => e.value)
+        .toList();
+    return [root, ...parts].join('\n\n');
+  }
+
   // ── Weight Keys ────────────────────────────────────────────────
 
   group('Contract: weight key format', () {
@@ -61,9 +81,7 @@ void main() {
     });
 
     test('sync reader scans weight_* prefix (not list key)', () {
-      final syncSource = allSources.entries
-          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
-          .value;
+      final syncSource = syncServiceUnion();
 
       // Must iterate keys with startsWith('weight_')
       expect(syncSource, contains("startsWith('weight_')"),
@@ -149,9 +167,7 @@ void main() {
     });
 
     test('sync reader scans sleep_log_* prefix (not list key)', () {
-      final syncSource = allSources.entries
-          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
-          .value;
+      final syncSource = syncServiceUnion();
 
       expect(syncSource, contains("startsWith('sleep_log_')"),
           reason:
@@ -192,9 +208,7 @@ void main() {
     });
 
     test('sync reader scans measurement_* prefix (not list key)', () {
-      final syncSource = allSources.entries
-          .firstWhere((e) => e.key.endsWith('sync_service.dart') && !e.key.contains('health_sync'))
-          .value;
+      final syncSource = syncServiceUnion();
 
       expect(syncSource, contains("startsWith('measurement_')"),
           reason:

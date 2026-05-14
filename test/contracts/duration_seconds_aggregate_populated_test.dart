@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 /// APK Test #15.3 / Bug 7 — workout_log_exercises.duration_seconds must be
 /// populated from the per-set sum for timed/cardio exercises.
@@ -25,7 +26,7 @@ void main() {
   late String projectionBlock;
 
   setUpAll(() {
-    syncSrc = File('lib/core/services/sync_service.dart').readAsStringSync();
+    syncSrc = loadSyncServiceSource().readAsStringSync();
     // Scope assertions to the projection block built right before the
     // workout_log_exercises upsert call, so a coincidental match
     // elsewhere in the file doesn't pass the test.

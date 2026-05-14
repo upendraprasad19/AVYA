@@ -13,6 +13,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../contracts/_sync_service_source.dart';
+
 String _src(String relativePath) {
   final file = File('${Directory.current.path}/$relativePath');
   return file.readAsStringSync();
@@ -23,13 +25,13 @@ void main() {
 
   group('Item 1 — relogSavedMeal times_used sync', () {
     test('syncSavedMealsNow public method exists in SyncService', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('Future<void> syncSavedMealsNow()'),
           reason: 'Public syncSavedMealsNow wrapper must exist');
     });
 
     test('syncSavedMealsNow delegates to _syncSavedMeals', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       // The public method must call the private helper.
       expect(src, contains('await _syncSavedMeals(userId)'),
           reason: '_syncSavedMeals must be called from syncSavedMealsNow');
@@ -96,44 +98,44 @@ void main() {
 
   group('Item 3 — telemetry failure queue', () {
     test('_telemetryQueueKey constant exists', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains("_telemetryQueueKey = 'pending_telemetry_failures'"),
           reason: 'Queue Hive key must be defined');
     });
 
     test('_telemetryQueueMax is 50', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('_telemetryQueueMax = 50'),
           reason: 'Queue cap must be 50');
     });
 
     test('_enqueueTelemetryFailure method exists', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('Future<void> _enqueueTelemetryFailure('),
           reason: '_enqueueTelemetryFailure must be defined');
     });
 
     test('drainTelemetryQueue public method exists', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('Future<void> drainTelemetryQueue()'),
           reason: 'Public drainTelemetryQueue must be defined');
     });
 
     test('_reportSyncFailure catch calls _enqueueTelemetryFailure', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('await _enqueueTelemetryFailure(opType, error)'),
           reason: '_reportSyncFailure catch must enqueue instead of silently drop');
     });
 
     test('checkAndSync fires drainTelemetryQueue on app launch', () {
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('unawaited(drainTelemetryQueue())'),
           reason: 'checkAndSync must drain the telemetry queue on every launch');
     });
 
     test('queue cap logic: while loop trims to _telemetryQueueMax', () {
       // Structural: confirm the while-loop trim is present in _enqueueTelemetryFailure.
-      final src = _src('lib/core/services/sync_service.dart');
+      final src = loadSyncServiceSource().readAsStringSync();
       expect(src, contains('while (queue.length > _telemetryQueueMax)'),
           reason: 'Queue must be trimmed to prevent unbounded Hive growth');
     });

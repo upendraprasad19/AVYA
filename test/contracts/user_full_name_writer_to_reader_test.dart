@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 /// Source-of-truth contract: writer/reader pairs for `user_full_name`
 /// from docs/sot_registry.yaml.
 ///
@@ -22,7 +24,7 @@ void main() {
   late String onboardingProvSrc;
 
   setUpAll(() {
-    final sf = File('lib/core/services/sync_service.dart');
+    final sf = loadSyncServiceSource();
     expect(sf.existsSync(), isTrue, reason: 'sync_service.dart must exist');
     syncSvcSrc = sf.readAsStringSync();
 

@@ -11,6 +11,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_sync_service_source.dart';
+
 void main() {
   late String writeServiceSource;
   late String syncSource;
@@ -21,7 +23,7 @@ void main() {
             'lib/core/services/nutrition_write_service.dart')
         .readAsStringSync();
     syncSource =
-        File('lib/core/services/sync_service.dart').readAsStringSync();
+        loadSyncServiceSource().readAsStringSync();
     aiRepoSource =
         File('lib/features/ai_coach/repositories/ai_coach_repository.dart')
             .readAsStringSync();

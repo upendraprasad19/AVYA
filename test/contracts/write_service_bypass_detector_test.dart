@@ -31,6 +31,11 @@ import 'package:flutter_test/flutter_test.dart';
 const _workoutPrefixAllowlist = <String>[
   'lib/core/services/workout_write_service.dart',
   'lib/core/services/sync_service.dart',
+  // refactor/sync-service-part-split (2026-05-13) — part files of
+  // sync_service.dart inherit its allowlist exemption. Sync/restore
+  // paths legitimately write workout-prefixed keys via cloud-restore
+  // projection (_restoreWorkoutLogs / _restoreExerciseLogs).
+  'lib/core/services/sync/sync_workout.dart',
   // Legacy repository — slated for removal in Phase 8. Tracked
   // separately; the existing call sites here are the legacy fallback
   // path WorkoutWriteService delegates to via the deprecation shim.
@@ -42,6 +47,8 @@ const _workoutPrefixAllowlist = <String>[
 const _nutritionPrefixAllowlist = <String>[
   'lib/core/services/nutrition_write_service.dart',
   'lib/core/services/sync_service.dart',
+  // refactor/sync-service-part-split — see comment above.
+  'lib/core/services/sync/sync_nutrition.dart',
 ];
 
 /// Forbidden patterns. Each regex matches a direct Hive put whose key

@@ -12,15 +12,16 @@
 //
 // See docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import '_sync_service_source.dart';
 
 void main() {
   group('_syncScheduledWorkouts FK resilience (APK Test #14 / Bug B.1)', () {
     late String src;
 
     setUpAll(() {
-      src = File('lib/core/services/sync_service.dart').readAsStringSync();
+      src = loadSyncServiceSource().readAsStringSync();
     });
 
     test('per-call cache `templateNameToCloudId` is present', () {

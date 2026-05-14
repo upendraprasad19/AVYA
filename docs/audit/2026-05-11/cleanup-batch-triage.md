@@ -128,6 +128,35 @@ Effort: ~1-2 hours per dep depending on breaking changes (image_cropper
 4 majors is the riskiest).
 
 ### B-5. `sync_service.dart` 4572-line file split
+
+**Status:** CLOSED 2026-05-13 — split landed on branch
+`refactor/sync-service-part-split` (10 commits, awaiting merge to main).
+Chose **domain split** with 8 part files under
+`lib/core/services/sync/`. Root file went from 5104 → ~1339 lines
+(74% reduction). Mechanism: Dart `part`/`part of` + per-domain
+`extension SyncService<Domain> on SyncService { ... }`. Spec:
+`docs/superpowers/specs/2026-05-13-sync-service-part-split-design.md`.
+Plan: `docs/superpowers/plans/2026-05-13-sync-service-part-split-plan.md`.
+
+**Scope adjustment from plan:** Task 10 (extract infrastructure helpers
+`_reportSyncFailure` / `_safeRestoreOp` / `_setTimestamp` etc. to a 9th
+part file) was DROPPED at execution time after discovering Dart cannot
+dispatch instance methods across extensions of the same type. Those
+helpers stay on the SyncService class body where every domain part file
+can call them via `this._foo(...)`. Net: 8 part files instead of 9, but
+the refactor goal (split for readability) is achieved.
+
+**Process notes for future refactors:** the test-surface impact was
+~10× the plan's estimate (66 contract-test references to
+`sync_service.dart` across 41 files, vs the plan's awareness of 2). Most
+broke on the first extraction. Required interstitial Task 1.5 to add a
+`loadSyncServiceSource()` helper at `test/contracts/_sync_service_source.dart`
+and migrate 37 test files to call it. Future part-file splits should
+audit `grep -rl sync_service.dart test/` BEFORE the first extraction
+commit, not after.
+
+---
+
 Single class doing 7 sync ops + 6 restore ops + helpers + idempotency +
 fan-out + retry logic.
 
