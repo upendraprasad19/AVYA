@@ -99,11 +99,32 @@ extension SyncServiceWorkout on SyncService {
         // dupes for each completed workout). Migration 062 added natural
         // UNIQUE on (user_id, date, exercise_name); switch the upsert to
         // target it so re-syncs merge instead of producing fresh dupes.
+        //
+        // Audit 2026-05-15 — belt-and-suspenders null-key guard. If the
+        // Hive row is missing `date` OR `workout_name` (the natural-key
+        // columns), the upsert would either send null/empty values that
+        // PostgREST 23502-rejects, or worse — collapse multiple rows
+        // onto a single null-keyed row in cloud. Skip and emit telemetry
+        // so a future column-nullability regression doesn't silently
+        // swallow data.
+        final wlogDate = (log['date'] as String?)?.trim();
+        final wlogName = (log['workout_name'] as String?)?.trim();
+        if (wlogDate == null ||
+            wlogDate.isEmpty ||
+            wlogName == null ||
+            wlogName.isEmpty) {
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_skipped_null_natural_key',
+            message:
+                'table=workout_logs key=$key date_null=${wlogDate == null || wlogDate.isEmpty} name_null=${wlogName == null || wlogName.isEmpty}',
+          ));
+          continue;
+        }
         await _supabase.client.from('workout_logs').upsert({
           'id': SyncService._deterministicId(key),
           'user_id': userId,
-          'exercise_name': log['workout_name'],
-          'date': log['date'],
+          'exercise_name': wlogName,
+          'date': wlogDate,
           'logged_at': resolved,
           'sets_completed': log['sets_completed'],
           'duration_seconds': log['duration_seconds'],
@@ -200,6 +221,21 @@ extension SyncServiceWorkout on SyncService {
             aggregateDurationSecs += (raw as num?)?.toInt() ?? 0;
           }
         }
+        // Audit 2026-05-15 — belt-and-suspenders null-key guard. Skip the
+        // upsert when the natural-key triple (workout_log_id, exercise_id,
+        // set_number) has any null/empty member. Prevents a future
+        // column-nullability regression from quietly merging unrelated
+        // exercises onto a single null-keyed cloud row.
+        final wlIdGuard = workoutLogId.trim();
+        final exIdGuard = exerciseId.trim();
+        if (wlIdGuard.isEmpty || exIdGuard.isEmpty) {
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_skipped_null_natural_key',
+            message:
+                'table=workout_log_exercises key=$key workout_log_id_null=${wlIdGuard.isEmpty} exercise_id_null=${exIdGuard.isEmpty} set_number_null=false',
+          ));
+          continue;
+        }
         await _supabase.client.from('workout_log_exercises').upsert({
           'id': SyncService._deterministicId(key),
           'workout_log_id': workoutLogId,
@@ -224,20 +260,42 @@ extension SyncServiceWorkout on SyncService {
         // WorkoutWriteService `sets` list (Plan A A-5).
         if (resolvedSets.isNotEmpty) {
           final rows = <Map<String, dynamic>>[];
-          for (final sm in resolvedSets) {
-            final setNum = (sm['set_number'] as num?)?.toInt();
-            if (setNum == null) continue;
-            rows.add({
-              'user_id': userId,
-              'workout_log_id': workoutLogId,
-              'exercise_id': exerciseId,
-              'set_number': setNum,
-              'weight_kg': sm['weight_kg'],
-              'reps': sm['reps'],
-              'duration_secs': sm['duration_seconds'] ?? sm['duration_sec'],
-              'distance_km': sm['distance_km'],
-              'completed_at': completedAt,
-            });
+          // Audit 2026-05-15 — belt-and-suspenders null-key guard.
+          // Mirrors the summary-row guard above; ensures we never push
+          // per-set rows whose natural-key parents (workout_log_id /
+          // exercise_id) are empty even if a future code path bypasses
+          // the summary-row early-continue.
+          final perSetWlId = workoutLogId.trim();
+          final perSetExId = exerciseId.trim();
+          if (perSetWlId.isEmpty || perSetExId.isEmpty) {
+            unawaited(ErrorTelemetry.logEvent(
+              'sync_skipped_null_natural_key',
+              message:
+                  'table=workout_log_sets key=$key workout_log_id_null=${perSetWlId.isEmpty} exercise_id_null=${perSetExId.isEmpty}',
+            ));
+          } else {
+            for (final sm in resolvedSets) {
+              final setNum = (sm['set_number'] as num?)?.toInt();
+              if (setNum == null) {
+                unawaited(ErrorTelemetry.logEvent(
+                  'sync_skipped_null_natural_key',
+                  message:
+                      'table=workout_log_sets key=$key workout_log_id_null=false exercise_id_null=false set_number_null=true',
+                ));
+                continue;
+              }
+              rows.add({
+                'user_id': userId,
+                'workout_log_id': workoutLogId,
+                'exercise_id': exerciseId,
+                'set_number': setNum,
+                'weight_kg': sm['weight_kg'],
+                'reps': sm['reps'],
+                'duration_secs': sm['duration_seconds'] ?? sm['duration_sec'],
+                'distance_km': sm['distance_km'],
+                'completed_at': completedAt,
+              });
+            }
           }
           if (rows.isNotEmpty) {
             try {

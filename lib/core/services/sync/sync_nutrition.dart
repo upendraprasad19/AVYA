@@ -116,6 +116,27 @@ extension SyncServiceNutrition on SyncService {
         // first, raising 23505 + per-item rows orphan. 16 errors over 24h
         // in production. Switch to natural key so PostgREST merges instead
         // of failing.
+        //
+        // Audit 2026-05-15 — belt-and-suspenders null-key guard. The
+        // parentPayload above is built with conditional spreads that
+        // OMIT `date`/`meal_type` when null — meaning a missing key
+        // would silently produce a partial row with NULL natural-key
+        // columns + a deterministic id, which PostgREST would 23502
+        // (or worse, succeed and merge unrelated rows onto a single
+        // null-keyed cloud row). Skip + telemetry instead.
+        final nlogDate = (log['date'] as String?)?.trim();
+        final nlogMeal = (log['meal_type'] as String?)?.trim();
+        if (nlogDate == null ||
+            nlogDate.isEmpty ||
+            nlogMeal == null ||
+            nlogMeal.isEmpty) {
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_skipped_null_natural_key',
+            message:
+                'table=nutrition_logs key=$key date_null=${nlogDate == null || nlogDate.isEmpty} meal_type_null=${nlogMeal == null || nlogMeal.isEmpty}',
+          ));
+          continue;
+        }
         await _supabase.client.from("nutrition_logs").upsert(
           parentPayload,
           onConflict: "user_id,date,meal_type",
