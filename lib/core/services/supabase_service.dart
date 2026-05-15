@@ -186,9 +186,9 @@ class SupabaseService {
     return session.accessToken;
   }
 
-  /// Cold-start backoff schedule for 502/503 retries on Edge Function calls.
+  /// Cold-start backoff schedule for 502/503/504 retries on Edge Function calls.
   ///
-  /// Length defines the retry count (here: 2 retries → up to 3 total
+  /// Length defines the retry count (here: 3 retries → up to 4 total
   /// invocations). Values are millisecond delays before each retry.
   ///
   /// Pinned by `test/contracts/retry_loop_guard_test.dart` — bump
@@ -198,7 +198,12 @@ class SupabaseService {
   /// - 2026-05-11 (Bug G+H, commit 24d6d54): single retry @ 1500 ms.
   /// - 2026-05-12 (Bug 7c4e1a): bumped to [1500, 4000] after ai-proxy
   ///   logs showed 20+ s cold-start; 1500 ms wasn't enough wait time.
-  static const List<int> _coldStartBackoffsMs = [1500, 4000];
+  /// - 2026-05-15 (Bug c01d57): bumped to [2000, 6000, 12000] after
+  ///   09:33 IST logs showed 3 consecutive 502s in a row (6.1s / 6.6s /
+  ///   7.2s exec_times) — [1500, 4000] (~5.5s) still didn't span the
+  ///   20.2 s worst-case warm-start. 504 added to the retry-trigger set
+  ///   since cold-start gateway timeouts can present as either status.
+  static const List<int> _coldStartBackoffsMs = [2000, 6000, 12000];
 
   /// Shortcut to invoke a Supabase Edge Function by [name].
   ///
@@ -226,14 +231,13 @@ class SupabaseService {
       }
     }
 
-    // APK Test #15.3 / Bug 7c4e1a — bounded retry loop on transient
-    // cold-start 502/503. Edge Function logs show ai-proxy cold-start
-    // can take 20+ seconds (Gemini model load + tools registry); the
-    // earlier single retry @ 1500 ms (Bug G+H, 24d6d54) was correct in
-    // shape but undersized in wait time. Two retries at [1500ms, 4000ms]
-    // give a ~5.5 s total wait window — enough to land on a warm
-    // instance after most cold-starts while still surfacing a real
-    // outage reasonably quickly.
+    // APK Test #15.5 / Bug c01d57 — bounded retry loop on transient
+    // cold-start 502/503/504. Edge Function logs (2026-05-15 09:33 IST)
+    // showed 3 consecutive 502s — [1500, 4000] (~5.5 s) from Test #15.3
+    // didn't span the 20.2 s worst-case warm-start. Now [2000, 6000,
+    // 12000] (~20 s) covers it. 504 added to retry set since cold-start
+    // gateway timeouts can surface as either 502 or 504; 500 stays
+    // excluded (server error, not boot delay).
     //
     // Auth-class errors (401/403) and other 4xx are NOT retried — they
     // rethrow immediately so the caller (e.g. AiCoachProvider) handles
@@ -244,18 +248,19 @@ class SupabaseService {
     // alone can't catch a future refactor that breaks the break/rethrow
     // condition while keeping the const list + telemetry string intact).
     //
-    // closes-diagnose: 2026-05-12-ai-proxy-retry-undersized-7c4e1a
+    // closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57
     return retryColdStart(
       () => client.functions.invoke(name, headers: headers, body: body),
       functionName: name,
     );
   }
 
-  /// Bounded retry loop for transient 502/503 cold-start failures.
+  /// Bounded retry loop for transient 502/503/504 cold-start failures.
   ///
-  /// Invokes [invoke] and retries on `FunctionException` with status 502
-  /// or 503, using the supplied [backoffsMs] schedule. Other exceptions
-  /// rethrow immediately (auth-class 401/403 and other 4xx do NOT retry).
+  /// Invokes [invoke] and retries on `FunctionException` with status 502,
+  /// 503, or 504, using the supplied [backoffsMs] schedule. Other
+  /// exceptions rethrow immediately (auth-class 401/403, other 4xx, and
+  /// non-cold-start 5xx like 500 do NOT retry).
   ///
   /// Exposed `@visibleForTesting` so behavioral tests can inject a mock
   /// invoker and assert runtime semantics — see
@@ -271,7 +276,8 @@ class SupabaseService {
       try {
         return await invoke();
       } on FunctionException catch (e) {
-        final isColdStart = e.status == 502 || e.status == 503;
+        final isColdStart =
+            e.status == 502 || e.status == 503 || e.status == 504;
         if (!isColdStart || attempt >= backoffsMs.length) {
           rethrow;
         }

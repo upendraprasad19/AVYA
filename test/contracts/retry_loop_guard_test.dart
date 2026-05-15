@@ -68,25 +68,22 @@ void main() {
               'to create 30+ duplicate requests.');
     });
 
-    test('callFunction invokes edge function at most THREE times (two retries max)',
+    test('callFunction delegates to retryColdStart helper (at-most-once invoke literal)',
         () {
-      // APK Test #15.3 / Bug 7c4e1a — bumped to TWO retries on
-      // cold-start 502/503 (backoff schedule [1500ms, 4000ms]) because
-      // ai-proxy cold-start can take 20+ seconds; single 1500 ms retry
-      // wasn't enough wait time. Edge-function logs showed two
-      // consecutive 502 BAD_GATEWAY at 05:08:05/05:08:13 UTC followed
-      // by a 20219 ms warm-start success.
+      // APK Test #15.5 / Bug c01d57 — bumped to THREE retries on
+      // cold-start 502/503/504 (backoff schedule [2000, 6000, 12000])
+      // because ai-proxy cold-start can take 20+ seconds and the
+      // 2026-05-15 09:33 IST logs showed 3 consecutive 502s exhausting
+      // the previous 2-retry schedule. The retry control flow lives in
+      // `retryColdStart` (a `@visibleForTesting` static helper)
+      // so `callFunction` itself contains a single
+      // `client.functions.invoke(` literal — the loop is inside the
+      // helper. Total invocations on the worst path: 1 initial + 3
+      // retries = 4. Pinned by the behavioral tests in
+      // edge_function_cold_start_retry_behavioral_test.dart.
       //
-      // Prior bound (APK Test #15.1 / Bug G+H) was at most 2; this
-      // raises it to at most 3 (1 initial + 2 retries). The original
-      // 2026-04-07 401-recursion guard is preserved in the tests above
-      // — this is a different class (bounded loop, status-gated, no
-      // recursion).
-      //
-      // The retry path uses a loop, so we only expect 1 textual
-      // `client.functions.invoke(` literal in the source — the
-      // assertion below tolerates the implementation choice (1 literal
-      // in a loop OR up to 3 inline retries).
+      // The original 2026-04-07 401-recursion guard is preserved (no
+      // recursion, bounded loop, status-gated).
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
@@ -95,27 +92,40 @@ void main() {
           source.indexOf('Future<FunctionResponse> callFunction(');
       expect(callFnStart, isNot(-1), reason: 'callFunction must exist');
 
-      final callFnBody = source.substring(callFnStart);
+      // Find the next top-level method (retryColdStart helper) and
+      // scope our analysis to just the callFunction body.
+      final retryStart = source.indexOf('retryColdStart', callFnStart);
+      expect(retryStart, isNot(-1),
+          reason: 'retryColdStart helper must exist');
+      final callFnBody = source.substring(callFnStart, retryStart);
+
       final invokeCount =
           RegExp(r'client\.functions\.invoke\(').allMatches(callFnBody).length;
 
-      expect(invokeCount, lessThanOrEqualTo(3),
+      expect(invokeCount, lessThanOrEqualTo(1),
           reason:
-              'callFunction must call client.functions.invoke AT MOST 3 '
-              'times (first attempt + two 502/503 cold-start retries). '
-              'Found $invokeCount. closes-diagnose: 2026-05-12-ai-proxy-'
-              'retry-undersized-7c4e1a');
-      expect(invokeCount, greaterThanOrEqualTo(1),
+              'callFunction body must contain AT MOST 1 textual '
+              '`client.functions.invoke(` literal (the retry loop lives '
+              'inside retryColdStart). Found $invokeCount. '
+              'closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57');
+
+      // The helper itself must contain exactly 1 invoke literal too
+      // (the single call site inside the bounded loop).
+      final helperBody = source.substring(retryStart);
+      final helperInvokeCount = RegExp(r'invoke\(\)')
+          .allMatches(helperBody)
+          .length;
+      expect(helperInvokeCount, greaterThanOrEqualTo(1),
           reason:
-              'callFunction must call client.functions.invoke at least once.');
+              'retryColdStart must call its injected invoker at least once.');
     });
 
-    test('retry uses a const backoff schedule with exactly two entries', () {
-      // Backoff schedule [1500ms, 4000ms] is the contract. Both values
-      // must be present, must be ascending, and the list must have
-      // exactly two entries (1 initial + 2 retries = 3 total
-      // invocations). Bumping to 3 retries silently would re-introduce
-      // the runaway-retry risk — keep it pinned here.
+    test('retry uses a const backoff schedule with exactly three entries', () {
+      // Backoff schedule [2000, 6000, 12000] is the contract. Bumped
+      // 2026-05-15 (Bug c01d57) from [1500, 4000] after 09:33 IST logs
+      // showed 3 consecutive 502s — the previous ~5.5 s wait window
+      // didn't span the 20.2 s worst-case warm-start. Three entries =
+      // 3 retries = up to 4 total invocations.
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
@@ -138,30 +148,31 @@ void main() {
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      expect(entries.length, 2,
+      expect(entries.length, 3,
           reason:
-              'Backoff schedule must have exactly 2 entries (= 2 retries). '
-              'Found ${entries.length}: $entries');
-      // Pinned values from the diagnose-doc.
-      expect(entries[0], '1500',
-          reason: 'First retry delay must be 1500 ms');
-      expect(entries[1], '4000',
-          reason: 'Second retry delay must be 4000 ms');
+              'Backoff schedule must have exactly 3 entries (= 3 retries). '
+              'Found ${entries.length}: $entries. '
+              'closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57');
+      // Pinned values from the c01d57 diagnose-doc.
+      expect(entries[0], '2000',
+          reason: 'First retry delay must be 2000 ms');
+      expect(entries[1], '6000',
+          reason: 'Second retry delay must be 6000 ms');
+      expect(entries[2], '12000',
+          reason: 'Third retry delay must be 12000 ms');
     });
 
     test('retry path emits edge_function_cold_start_retry telemetry', () {
       // Each retry must log to ErrorTelemetry.logEvent so ops can see
       // cold-start frequency in client_errors. Telemetry must be
-      // unawaited so it doesn't double the retry latency.
+      // unawaited so it doesn't double the retry latency. The retry
+      // loop lives in `retryColdStart`, so we scope to the whole file
+      // (callFunction body itself is now a thin delegate).
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
 
-      final callFnStart =
-          source.indexOf('Future<FunctionResponse> callFunction(');
-      final callFnBody = source.substring(callFnStart);
-
-      expect(callFnBody, contains("'edge_function_cold_start_retry'"),
+      expect(source, contains("'edge_function_cold_start_retry'"),
           reason:
               'Retry path must emit ErrorTelemetry.logEvent with op_type '
               "'edge_function_cold_start_retry' for ops visibility.");
@@ -171,64 +182,63 @@ void main() {
         r'unawaited\(\s*ErrorTelemetry\.logEvent\(\s*[\x27"]edge_function_cold_start_retry',
         multiLine: true,
       );
-      expect(unawaitedTelemetryRegex.hasMatch(callFnBody), isTrue,
+      expect(unawaitedTelemetryRegex.hasMatch(source), isTrue,
           reason:
               'edge_function_cold_start_retry telemetry must be wrapped in '
               'unawaited() so the retry delay is not doubled by the '
               'log-client-error round-trip.');
     });
 
-    test('non-502/503 errors still rethrow (no retry on auth/validation)', () {
+    test('non-502/503/504 errors still rethrow (no retry on auth/validation)', () {
       // Defence-in-depth: the retry path must rethrow when the status
       // gate fails. A regression that drops `rethrow` would retry every
       // 4xx (auth, validation, payload-too-large) and re-introduce the
-      // pre-2026-04-07 compounding-retry class.
+      // pre-2026-04-07 compounding-retry class. Test #15.5 / c01d57
+      // widened the gate to also include 504, but 500 and 4xx still
+      // rethrow.
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
 
-      final callFnStart =
-          source.indexOf('Future<FunctionResponse> callFunction(');
-      final callFnBody = source.substring(callFnStart);
-
-      // After the 502/503 gate fails, we must rethrow.
+      // After the cold-start gate fails, we must rethrow.
       // Tolerant pattern: `if (!isColdStart` followed by `rethrow` on a
       // nearby line.
       final rethrowAfterGate = RegExp(
-        r'if\s*\(\s*!isColdStart[^)]*\)[^;]*rethrow',
+        r'if\s*\(\s*!isColdStart[^)]*\)\s*\{[^}]*rethrow',
         dotAll: true,
       );
-      expect(rethrowAfterGate.hasMatch(callFnBody), isTrue,
+      expect(rethrowAfterGate.hasMatch(source), isTrue,
           reason:
               'Non-cold-start FunctionException must rethrow. Missing '
               'rethrow re-introduces unbounded-retry risk for 4xx.');
     });
 
-    test('any retry path is gated on 502 OR 503 status (not unconditional)',
+    test('retry path is gated on 502 OR 503 OR 504 status (not unconditional)',
         () {
-      // If 2+ invokes are present, they must be inside a `if (e.status
-      // == 502 || e.status == 503)` branch — never unconditional.
+      // Test #15.5 / c01d57 — widened the cold-start trigger set from
+      // {502, 503} to {502, 503, 504} since cold-start gateway timeouts
+      // can surface as either 502 (gave up) or 504 (timed out). 500 is
+      // NOT retryable — it's a server runtime error, not a boot delay.
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
 
-      final callFnStart =
-          source.indexOf('Future<FunctionResponse> callFunction(');
-      final callFnBody = source.substring(callFnStart);
-      final invokeCount =
-          RegExp(r'client\.functions\.invoke\(').allMatches(callFnBody).length;
-
-      if (invokeCount >= 2) {
-        // Must have the 502/503 gate
-        expect(
-          callFnBody.contains('e.status == 502 || e.status == 503'),
-          isTrue,
+      // The gate must include all 3 cold-start statuses.
+      final hasGate = source.contains(
+              'e.status == 502 || e.status == 503 || e.status == 504') ||
+          source.contains(
+              'e.status == 502 ||\n            e.status == 503 ||\n            e.status == 504');
+      expect(hasGate, isTrue,
           reason:
-              'callFunction has 2+ invocations but no 502/503 gate — that '
-              'is the 2026-04-07 retry-loop bug class. Add `if (e.status '
-              '== 502 || e.status == 503)` around the retry.',
-        );
-      }
+              'Retry gate must cover 502, 503, AND 504 cold-start statuses. '
+              'closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57');
+
+      // 500 must NOT be in the gate (would re-introduce broken-call
+      // retry for server runtime errors).
+      expect(source.contains('e.status == 500'), isFalse,
+          reason:
+              '500 is a server runtime error, not a cold-start. Must not '
+              'be in the retry-trigger set.');
     });
   });
 
