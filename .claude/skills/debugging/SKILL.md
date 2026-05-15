@@ -102,17 +102,21 @@ Per CLAUDE.md rules 21 + 22:
 - **Fix pattern:** Two-layer — (a) `authUserIdTokenProvider` returns `'<anon>'` while authUid disagrees with `HiveUserSession.currentOwnerFullId`; (b) `wrapUserScopedBox` returns `GuardedBox.empty(authUid)` on disagreement. Every user-scoped provider `ref.watch(authUserIdTokenProvider)` as first line of `build()`. Source-grep contract test walks `lib/features/*/providers/` for non-watchers.
 - **Prior incidents:** Test #15.3 Bug 5 (`c4055a`), Test #15.4 B1 (`project_apk_test_15_4_batch.md`).
 
-### 2.4 Partial unique index `ON CONFLICT` trap
-- **Telltale:** `PostgrestException 23505 unique_violation` on writes that should be idempotent; orphaned child rows (per-set / per-item) without parents.
-- **Root-cause shape:** `upsert(..., onConflict: 'id')` translates to `ON CONFLICT (id) DO UPDATE`. PostgreSQL still evaluates EVERY unique constraint; a different partial UNIQUE (`uniq_workout_log_exercises_wlog_ex_set`, `uniq_nutrition_logs_user_date_meal`) trips first → 23505 instead of merge.
-- **Fix pattern:** Switch `onConflict` to the natural-key column list, not `id`. Pin via `test/contracts/sync_onconflict_natural_key_test.dart`.
-- **Prior incidents:** Audit 2026-05-12 P0-A/P0-B (`project_audit_2026_05_12.md`).
+### 2.4 Partial unique index `ON CONFLICT` trap (two failure modes)
+- **Telltale (mode A — 23505):** `PostgrestException 23505 unique_violation` on writes that should be idempotent; orphaned child rows (per-set / per-item) without parents.
+- **Telltale (mode B — 42P10):** `PostgrestException 42P10 "there is no unique or exclusion constraint matching the ON CONFLICT specification"` on EVERY write that should use a natural-key arbiter. Zero rows reach cloud silently.
+- **Root-cause shape (A):** `upsert(..., onConflict: 'id')` translates to `ON CONFLICT (id) DO UPDATE`. PostgreSQL still evaluates EVERY unique constraint; a different partial UNIQUE trips first → 23505 instead of merge.
+- **Root-cause shape (B):** `upsert(..., onConflict: '<natural-key columns>')` targets a partial UNIQUE index (`WHERE col IS NOT NULL AND ...`). PostgreSQL requires the partial predicate to be STATICALLY provable from the row's NOT NULL column constraints. If even one arbiter column is NULLABLE, the planner refuses the partial index as arbiter → 42P10. **Source-grep contract tests miss this because they pin the onConflict string, not the runtime arbiter behavior.**
+- **Fix pattern (A):** Switch `onConflict` to the natural-key column list.
+- **Fix pattern (B):** Two layers — (1) schema migration: backfill NULL columns with writer-contract-aligned defaults → `ALTER COLUMN ... SET NOT NULL` → `DROP INDEX` partial → `CREATE UNIQUE INDEX` non-partial; (2) client guard: skip the upsert + emit `sync_skipped_null_natural_key` telemetry if any natural-key column is null. Pin via `test/contracts/sync_natural_key_guard_test.dart` AND the **live-arbiter scaffold** at `test/sql/onconflict_live_arbiter.sql` + `scripts/check_onconflict_live_arbiter.dart` which runs `INSERT ... ON CONFLICT` in a rollback transaction against the live schema. Wire into `/build-apk` Gate set after one round of CI green.
+- **Class rule (NEW 2026-05-15):** any partial UNIQUE index intended to back `ON CONFLICT` MUST have all arbiter columns `NOT NULL`, OR the index MUST be non-partial. Verify via the live-arbiter scaffold before merging the onConflict change.
+- **Prior incidents:** Audit 2026-05-12 P0-A/P0-B (mode A — `project_audit_2026_05_12.md`); APK Test #16 (mode B — `project_apk_test_16_batch.md`, diagnose `76c8f4` + `9f4ab2` + `25e91d`). See `feedback_partial_unique_arbiter_trap.md`.
 
 ### 2.5 Edge Function cold-start retry budget
-- **Telltale:** "AI is temporarily unavailable" / generic 502/503 within seconds of an idle period; works on retry.
-- **Root-cause shape:** Supabase Edge Function cold-start can exceed any single-attempt timeout (20s+). Client retries at undersized backoff (1.5s once) → user sees failure.
-- **Fix pattern:** `retryColdStart` helper in `lib/core/services/supabase_service.dart` with schedule `[1500, 4000]` ms (~5.5s window). Emit `ErrorTelemetry.logEvent('edge_function_cold_start_retry', ...)` per attempt. 401-recursion guard preserved.
-- **Prior incidents:** Test #15.3 Bug 2 (`7c4e1a`).
+- **Telltale:** "AI is temporarily unavailable" / generic 502/503/504 within seconds of an idle period; works on retry.
+- **Root-cause shape:** Supabase Edge Function cold-start can exceed any single-attempt timeout (logged 6-7s execution_time on 2026-05-15 ai-proxy 502s). Client retries at undersized backoff → user sees failure. Direct-HTTP fallbacks (`_directHttpCall`, `_directMediaHttpCall`) often bypass the retry helper entirely.
+- **Fix pattern:** `retryColdStart` helper in `lib/core/services/supabase_service.dart` with schedule `[2000, 6000, 12000]` ms (3 retries, ~20s window — bumped from `[1500, 4000]` in APK Test #16 after live evidence). Retry-trigger status set: 502 + 503 + 504 (not 500). Wrap BOTH `client.functions.invoke` callsites AND raw `http.post` direct-HTTP fallbacks via `_retryHttpColdStart` helper. Emit `ErrorTelemetry.logEvent('edge_function_cold_start_retry', ...)` per attempt. 401-recursion guard preserved.
+- **Prior incidents:** Test #15.3 Bug 2 (`7c4e1a`); APK Test #16 (`c01d57` — schedule bump + ai-media-proxy wiring).
 
 ### 2.6 Vault service-role-key for cron auth
 - **Telltale:** Cron jobs send `Authorization: Bearer null` → 401 on every tick; `cron.job_run_details` reports "succeeded" (because `net.http_post` dispatched), but Edge Function gateway logs 401.
@@ -138,6 +142,13 @@ Per CLAUDE.md rules 21 + 22:
 - **Fix pattern:** Treat every numeric claim from a subagent as UNVERIFIED. Re-read the cited file with `Read` or `Grep` before citing in your own work or in CLAUDE.md / diagnose-docs. 3 of 21 Master Audit findings on 2026-05-12 were false alarms by this exact mechanism.
 - **Prior incidents:** `feedback_mistake_restore_window.md`, `feedback_audit_findings_require_live_verification.md`.
 
+### 2.11 Repository `box.get(key) → Map` drops Hive key as id (Gate 16 class)
+- **Telltale:** Edit sheet fields blank; downstream consumers (delete, sync, diff) get `id=null` despite the row existing in Hive; "saved but can't be edited" / "selected exercise has no id."
+- **Root-cause shape:** Repository iterates `box.keys` (or reads a single `box.get(key)`) and returns the value Map without injecting the key as `id` on the returned map. The Hive key IS the identity in this codebase (`exlog_<...>`, `custom_exercise_<uuid>`, `wlog_<date>`, etc.). Restored entries from cloud sync writers (e.g. `sync_community._restoreCustomExercises`) carry NO `id` value field — the id field lives in the cloud row but the local writer keys the box by the same value, expecting readers to extract it from the key.
+- **Fix pattern:** After every `final raw = box.get(key)` that returns a Map, do `final m = Map<String, dynamic>.from(raw); m['id'] ??= key;` (preserve any existing id; never overwrite). Or annotate `// gate16-exempt: <reason>` within 8 lines above when stripping is intentional.
+- **Class enforcement:** `scripts/check_id_injection_on_get.dart` (Gate 16) — runs on `/build-apk`. Baseline at `backups/id_injection_on_get_baseline.txt` for grandfathered violations; NEW occurrences hard-fail.
+- **Prior incidents:** APK Test #15.1 Bug F (founding incident; the WriteService rewrite stopped writing id-as-value-field, downstream filters silently stripped every row); APK Test #16 caught a fresh introduction in A5's swap-picker fix via Gate 16 before merge. See `feedback_id_must_be_injected_on_get.md`.
+
 ### 2.10 Provider-invalidation-after-mutation gaps
 - **Telltale:** Write succeeds; UI shows stale value until cold restart; insight card / receipt / calendar week shows pre-mutation state.
 - **Root-cause shape:** Hive write path forgets to invalidate one of the canonical provider batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`, `aiInsightProvider`, `dietPlanProvider`.
@@ -159,6 +170,8 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"I'll defer this to a follow-up batch."** Banned per `feedback_no_deferrals.md` + `feedback_no_deferrals_recurrence.md`. Fix all surfaced bugs in the same batch.
 - **"The founder didn't approve explicitly but said 'continue' — let me build the APK."** APK builds require explicit per-build approval per `feedback_apk_build_explicit_approval.md`.
 - **"I'll bypass the pre-commit hook with --no-verify."** Banned unless the founder approves per-batch AND a final full-suite gate runs before merge (`feedback_bulk_commit_hook_bypass.md`).
+- **"I'm changing onConflict to a new column set — it'll work."** STOP. Verify (a) a UNIQUE index exists on those columns; (b) the index is non-partial OR all arbiter columns are NOT NULL; (c) run a live `INSERT ... ON CONFLICT (...) DO UPDATE` in a rollback transaction and confirm no 42P10. Source-grep contract tests do NOT catch partial-arbiter bugs — see §2.4 mode B.
+- **"The subagent's fix introduced a regression but Gate XX caught it — I'll skip the fix-up commit since the gate already passed somehow."** Gate scripts may report FAIL but exit 0 during baselining. Re-run the gate standalone and check `$?`. If `[Gate XX] FAIL` appears in output, ALWAYS fix-up and commit, even if exit code says 0. APK Test #16 caught this nuance via Gate 16.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---
@@ -214,3 +227,4 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 ## Changelog
 
 - **2026-05-15** — Skill created. Seeded with 10 bug classes from Tests #6 through #15.4 + audit 2026-05-12. Diagnose-doc `2026-05-15-debugging-skill-creation-4e9515.md`.
+- **2026-05-15 (evening, post-APK-Test-#16)** — Self-evolution. (a) §2.4 expanded with mode-B 42P10 trap (5th writer/reader drift instance), live-arbiter scaffold reference, NOT-NULL-arbiter class rule. (b) §2.5 retry budget bumped to `[2000, 6000, 12000]` + 504 trigger + direct-HTTP wrapping. (c) §2.11 added — Repository `box.get(key) → Map` id-injection class (Gate 16). (d) Two new red flags in §3: onConflict-change verification + "Gate FAIL output but exit 0" trap. Closes-diagnose: `76c8f4`, `9f4ab2`, `25e91d`, `c01d57`, `a5d29c`.
