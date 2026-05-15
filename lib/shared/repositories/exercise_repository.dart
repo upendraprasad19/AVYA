@@ -344,6 +344,15 @@ class ExerciseRepository {
       final isExercise = ex['type'] == 'exercise' ||
           (key is String && key.startsWith('custom_exercise_'));
       if (isExercise) {
+        // Inject Hive key as `id` per Gate 16 / feedback_id_must_be_injected_on_get.md.
+        // Restored entries from sync_community._restoreCustomExercises do not
+        // carry an `id` value field — the deterministic v5 UUID lives in the
+        // Hive key (custom_exercise_<uuid>). Without this injection,
+        // downstream consumers (swap picker, template builder) see id=null
+        // and cannot diff or delete the entry.
+        if (ex['id'] == null) {
+          ex['id'] = key;
+        }
         results.add(ex);
       }
     }
