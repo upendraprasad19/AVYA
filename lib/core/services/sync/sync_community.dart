@@ -347,6 +347,13 @@ extension SyncServiceCommunity on SyncService {
         if (existingNames.contains(name)) continue;
         final id = (item['id'] as String?) ??
             'restore_${DateTime.now().microsecondsSinceEpoch}';
+        // APK Test #15.4 / A5 — stamp `type: 'exercise'` so legacy
+        // readers that filter by `ex['type'] == 'exercise'` see the
+        // restored entry. Cloud `user_custom_exercises` has no `type`
+        // column; without this every reader except those that grew
+        // key-prefix fallback would skip it. Pinned by
+        // `test/widgets/swap_sheet_custom_exercises_test.dart`.
+        item['type'] = 'exercise';
         await customBox.put('custom_exercise_$id', item);
         existingNames.add(name);
       }

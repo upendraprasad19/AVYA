@@ -319,13 +319,31 @@ class ExerciseRepository {
   }
 
   /// Returns all user-created custom exercises from the customBox.
+  ///
+  /// Identifies custom exercises by EITHER the legacy `type: 'exercise'`
+  /// value field (entries written by `CreateCustomExerciseSheet` /
+  /// `WorkoutRepository.createCustomExercise`) OR the canonical Hive
+  /// key prefix `custom_exercise_*` (entries restored from cloud via
+  /// `SyncService._restoreCustomExercises`, which writes raw
+  /// `user_custom_exercises` rows that do NOT carry the `type` field).
+  ///
+  /// Without the key-prefix fallback, restored custom exercises were
+  /// silently invisible to every reader (swap sheet, train screen,
+  /// active workout add-exercise picker, template builder) on fresh
+  /// installs — bug discovered in APK Test #15.4 post-install when
+  /// founder's `Single Leg Front Lever` (created 2026-05-02, present
+  /// in cloud row `29aeaa20-...`) returned "No matching exercises
+  /// found" in the swap picker after reinstall.
   List<Map<String, dynamic>> getCustomExercises() {
     final customBox = _hive.customBox;
     final results = <Map<String, dynamic>>[];
-    for (final raw in customBox.values) {
+    for (final key in customBox.keys) {
+      final raw = customBox.get(key);
       if (raw is! Map) continue;
       final ex = Map<String, dynamic>.from(raw);
-      if (ex['type'] == 'exercise') {
+      final isExercise = ex['type'] == 'exercise' ||
+          (key is String && key.startsWith('custom_exercise_'));
+      if (isExercise) {
         results.add(ex);
       }
     }

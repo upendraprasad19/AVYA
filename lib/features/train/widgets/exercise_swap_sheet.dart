@@ -286,26 +286,21 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                   ),
                 ),
 
-                if (filtered.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Text(
-                      'No matching exercises found',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textDim,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ...filtered.map((ex) => _SwapItem(
+                // APK Test #15.4 / A5 — render library results when non-empty.
+                // Empty-state moved below to fire only when BOTH library AND
+                // custom filtered lists are empty (pre-fix: a search that
+                // matched a custom exercise but no library entry showed
+                // misleading "No matching exercises found" above the custom
+                // results below, confusing the founder into reporting
+                // "Single Leg Front Lever" as missing).
+                ...filtered.map((ex) => _SwapItem(
+                      name: ex['name'] as String? ?? 'Unknown',
+                      detail: _buildDetail(ex),
+                      onSelect: () => widget.onSelect(SwapExerciseData(
                         name: ex['name'] as String? ?? 'Unknown',
                         detail: _buildDetail(ex),
-                        onSelect: () => widget.onSelect(SwapExerciseData(
-                          name: ex['name'] as String? ?? 'Unknown',
-                          detail: _buildDetail(ex),
-                        )),
                       )),
+                    )),
 
                 if (filteredCustom.isNotEmpty) ...[
                   Padding(
@@ -322,12 +317,25 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                         name: ex['name'] as String? ?? 'Custom Exercise',
                         detail:
                             'Custom · ${ex['category'] ?? ''} · ${ex['logging_type'] ?? 'weight_reps'}',
+                        isCustom: true,
                         onSelect: () => widget.onSelect(SwapExerciseData(
                           name: ex['name'] as String? ?? 'Custom Exercise',
                           detail: 'Custom',
                         )),
                       )),
                 ],
+
+                if (filtered.isEmpty && filteredCustom.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Text(
+                      'No matching exercises found',
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textDim,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
 
                 const SizedBox(height: 20),
               ],
@@ -352,11 +360,13 @@ class _SwapItem extends StatelessWidget {
   final String name;
   final String detail;
   final VoidCallback onSelect;
+  final bool isCustom;
 
   const _SwapItem({
     required this.name,
     required this.detail,
     required this.onSelect,
+    this.isCustom = false,
   });
 
   @override
@@ -392,11 +402,40 @@ class _SwapItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: AppTypography.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          style: AppTypography.body.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      // APK Test #15.4 / A5 — CUSTOM badge so users
+                      // can visually distinguish their own exercises
+                      // from the seeded library.
+                      if (isCustom) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft,
+                            borderRadius: BorderRadius.circular(2),
+                            border:
+                                Border.all(color: AppColors.accent, width: 1),
+                          ),
+                          child: Text(
+                            'CUSTOM',
+                            style: AppTypography.monoXs.copyWith(
+                              color: AppColors.accent,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(

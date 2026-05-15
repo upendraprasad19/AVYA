@@ -333,6 +333,11 @@ class AiService {
 
   /// Direct HTTP fallback for web when Supabase client fails.
   /// Proactively refreshes JWT before making the call.
+  ///
+  /// Test #15.5 / Bug c01d57 — also retries 502/503/504 cold-start
+  /// responses using the same schedule as `SupabaseService.retryColdStart`
+  /// so the web/CORS fallback inherits cold-start resilience instead of
+  /// surfacing the first 502 to the user.
   Future<AiChatResponse> _directHttpCall(
       String functionName, String message, Map<String, dynamic> context) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
@@ -341,18 +346,21 @@ class AiService {
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
     final compact = _compactContext(context);
-    final response = await _client.post(
-      Uri.parse(url),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-        'apikey': AppConstants.supabaseAnonKey,
-      },
-      body: json.encode({
-        'message': message,
-        'context': compact,
-        'snapshot_json': compact,
-      }),
+    final response = await _retryHttpColdStart(
+      () => _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'apikey': AppConstants.supabaseAnonKey,
+        },
+        body: json.encode({
+          'message': message,
+          'context': compact,
+          'snapshot_json': compact,
+        }),
+      ),
+      functionName: functionName,
     );
 
     if (response.statusCode != 200) {
@@ -369,6 +377,42 @@ class AiService {
 
     final data = json.decode(response.body) as Map<String, dynamic>;
     return _buildResponse(data);
+  }
+
+  /// Bounded retry mirror for the direct `http.post` fallback paths
+  /// (`_directHttpCall` and `_directMediaHttpCall`). Mirrors the
+  /// schedule + 502/503/504 gate + telemetry op_type from
+  /// `SupabaseService.retryColdStart` but operates on `http.Response`
+  /// status codes instead of `FunctionException`.
+  ///
+  /// 4xx (incl. 401/403) and 500 are NOT retried — the response is
+  /// returned to the caller which decides how to surface it.
+  ///
+  /// Test #15.5 / Bug c01d57 — closes-diagnose:
+  /// 2026-05-15-ai-proxy-cold-start-budget-c01d57
+  static const List<int> _httpColdStartBackoffsMs = [2000, 6000, 12000];
+
+  Future<http.Response> _retryHttpColdStart(
+    Future<http.Response> Function() invoke, {
+    required String functionName,
+  }) async {
+    int attempt = 0;
+    while (true) {
+      final resp = await invoke();
+      final isColdStart =
+          resp.statusCode == 502 || resp.statusCode == 503 || resp.statusCode == 504;
+      if (!isColdStart || attempt >= _httpColdStartBackoffsMs.length) {
+        return resp;
+      }
+      final backoffMs = _httpColdStartBackoffsMs[attempt];
+      unawaited(ErrorTelemetry.logEvent(
+        'edge_function_cold_start_retry',
+        message:
+            'fn=$functionName attempt=${attempt + 1} status=${resp.statusCode} backoff_ms=$backoffMs path=direct_http',
+      ));
+      await Future<void>.delayed(Duration(milliseconds: backoffMs));
+      attempt++;
+    }
   }
 
   // ── PRO tier (retired 2026-04-18) ─────────────────────────────
@@ -435,6 +479,11 @@ class AiService {
 
   /// Direct HTTP fallback for media calls on web when Supabase client fails.
   /// Proactively refreshes JWT before making the call.
+  ///
+  /// Test #15.5 / Bug c01d57 — also retries 502/503/504 cold-start
+  /// responses using `_retryHttpColdStart` so the ai-media-proxy
+  /// web/CORS fallback inherits the same resilience as the primary
+  /// `callFunction` path.
   Future<AiChatResponse> _directMediaHttpCall(
     String message,
     String mediaUrl,
@@ -447,20 +496,23 @@ class AiService {
     final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
 
     final compact = _compactContext(context);
-    final response = await _client.post(
-      Uri.parse(url),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-        'apikey': AppConstants.supabaseAnonKey,
-      },
-      body: json.encode({
-        'message': message,
-        'media_url': mediaUrl,
-        'media_type': mediaType,
-        'context': compact,
-        'snapshot_json': compact,
-      }),
+    final response = await _retryHttpColdStart(
+      () => _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'apikey': AppConstants.supabaseAnonKey,
+        },
+        body: json.encode({
+          'message': message,
+          'media_url': mediaUrl,
+          'media_type': mediaType,
+          'context': compact,
+          'snapshot_json': compact,
+        }),
+      ),
+      functionName: 'ai-media-proxy',
     );
 
     if (response.statusCode != 200) {
