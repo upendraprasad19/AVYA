@@ -572,19 +572,26 @@ extension SyncServiceWorkout on SyncService {
         final map = Map<String, dynamic>.from(row as Map);
         final completedAt = map['completed_at'] as String? ?? '';
         final name = map['exercise_name'] as String? ?? '';
-        // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
-        final dateStr = completedAt.length >= 10
-            ? completedAt.substring(0, 10)
-            : istDateStr(DateTime.now());
-        // APK Test #12.8 / Bug #1 — Hive key MUST mirror what
-        // [WorkoutWriteService.exlogKey] produces. Pre-fix used
-        // `exlog_<rawMs>_<name.hashCode>` which (a) drifts off the
-        // IST date contract and (b) skipped lowercase+trim normalization,
-        // so a re-restore created a sibling row alongside the local
-        // exlog written by the WriteService — founder ended up with
-        // 30+ exlog entries for one workout day on May 4.
-        final nameNormalized = name.toLowerCase().trim();
-        final logId = 'exlog_${dateStr}_${nameNormalized.hashCode}';
+        // APK Test #16.1 / Agent A — single SoT for exlog key. The
+        // previous "Bug #1 fix" comment claimed parity with
+        // WorkoutWriteService.exlogKey but still used `name.hashCode`
+        // (platform-unstable) over a substring(0, 10) date (could be
+        // UTC date if cloud row carries UTC completed_at). Founder
+        // observed 26+ phantom exlog rows for May 14 after restore.
+        // Now delegates to WorkoutWriteService.exlogKey — UUID v5 over
+        // lowercase+trim(name) + IST date — so restore writes the same
+        // canonical key the WriteService produces. Re-restore is now
+        // truly idempotent.
+        DateTime dateForKey;
+        try {
+          dateForKey = completedAt.isNotEmpty
+              ? DateTime.parse(completedAt)
+              : DateTime.now();
+        } catch (_) {
+          dateForKey = DateTime.now();
+        }
+        final logId = WorkoutWriteService.exlogKey(dateForKey, name);
+        final dateStr = WorkoutWriteService.istDateStr(dateForKey);
 
         final logMap = <String, dynamic>{
           'id': logId,

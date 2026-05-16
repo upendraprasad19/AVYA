@@ -10,15 +10,25 @@ import 'workout_write_service.dart';
 /// the first 8 hex chars of UUID v5 over
 /// `exerciseName.toLowerCase().trim()` (H-16 audit-2026-05-11).
 ///
-/// Idempotent — guarded by configBox['exlog_key_migration_v7'].
+/// Idempotent — guarded by configBox['exlog_key_migration_v8'].
 /// Bumped v6 → v7 in H-16 because the underlying hash function
 /// changed from `String.hashCode` (platform-unstable) to UUID v5
 /// (cross-platform stable). Devices that ran v6 still have rows
 /// keyed under the hashCode shape — v7 re-runs the migration with
 /// the new exlogKey() formula and consolidates.
+///
+/// APK Test #16.1 / Agent A — bumped v7 → v8 because two rogue
+/// writers (`SyncService._restoreExerciseLogs` and
+/// `WorkoutRepository.logSetWithPrRescan`) were still emitting
+/// non-canonical `exlog_*` keys (hashCode-based and
+/// timestamp+hashCode-based respectively) AFTER v7 ran. Founder hit
+/// 26+ phantom exlog rows for May 14 on a +24 APK install. v8
+/// re-runs the merge against the v7 boundary, picking up the
+/// rogue rows; the writers themselves were rewritten to delegate
+/// to [WorkoutWriteService.exlogKey] so the issue does not recur.
 class ExlogKeyMigrator {
   ExlogKeyMigrator._();
-  static const _migrationKey = 'exlog_key_migration_v7';
+  static const _migrationKey = 'exlog_key_migration_v8';
 
   static Future<void> runIfNeeded() async {
     final config = HiveService.instance.configBox;

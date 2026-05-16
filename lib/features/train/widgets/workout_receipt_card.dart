@@ -293,8 +293,32 @@ class WorkoutReceiptData {
     final dateKey = formatDateKey(date);
 
     final indexKey = 'exercise_log_index_$dateKey';
-    final logIds = wb.get(indexKey);
-    if (logIds == null || logIds is! List || logIds.isEmpty) return null;
+    final indexRaw = wb.get(indexKey);
+    // APK Test #16.1 / Agent A — defence-in-depth fallback. Before the
+    // rogue-restore-writer fix, `_restoreExerciseLogs` wrote rows under
+    // a UTC-date index key while the receipt reader looked up an
+    // IST-date index. Symptom: "View Card does nothing" for the founder
+    // on May 14 even though 26+ exlog_* rows existed in workoutBox.
+    // When the index is missing, scan workoutBox for any `exlog_*` row
+    // whose stored `date` matches `dateKey` (IST) and synthesise the
+    // id list on the fly. The migrator v8 normally rebuilds the index;
+    // this fallback covers the window between rogue-write and
+    // next-launch migration.
+    List logIds;
+    if (indexRaw is List && indexRaw.isNotEmpty) {
+      logIds = indexRaw;
+    } else {
+      final synthesized = <String>[];
+      for (final k in wb.keys) {
+        final ks = k.toString();
+        if (!ks.startsWith('exlog_')) continue;
+        final v = wb.get(k);
+        if (v is! Map) continue;
+        if (v['date'] == dateKey) synthesized.add(ks);
+      }
+      if (synthesized.isEmpty) return null;
+      logIds = synthesized;
+    }
 
     double totalVolume = 0;
     int totalSets = 0;
