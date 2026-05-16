@@ -39,6 +39,24 @@ class ChatBubble extends StatelessWidget {
   /// inside the error bubble. Tap re-sends the original user message.
   final VoidCallback? onRetry;
 
+  /// Bug 2026-05-16 photo-analysis-500 — when true, the bubble renders an
+  /// explicit "Photo failed to upload" failure state instead of the broken-
+  /// image icon that `CachedNetworkImage.errorWidget` shows by default.
+  /// Set by the provider when the photo upload itself failed OR when
+  /// `ai-media-proxy` returned an error tagged `error_type='storage'`
+  /// (image upload incomplete).
+  ///
+  /// When this is true the bubble also renders an [onMediaRetry] tap target
+  /// (if provided) so the user can re-trigger the upload without typing
+  /// the message again.
+  final bool mediaFailed;
+
+  /// Bug 2026-05-16 — invoked when the user taps the "Photo failed to
+  /// upload — Retry" affordance. Null when no retry path is wired (e.g.
+  /// the file picker has already been disposed). The widget gracefully
+  /// degrades to a non-tappable failure state when null.
+  final VoidCallback? onMediaRetry;
+
   const ChatBubble({
     super.key,
     required this.text,
@@ -51,6 +69,8 @@ class ChatBubble extends StatelessWidget {
     this.mediaUrl,
     this.mediaType,
     this.onRetry,
+    this.mediaFailed = false,
+    this.onMediaRetry,
   });
 
   @override
@@ -115,11 +135,29 @@ class ChatBubble extends StatelessWidget {
   }
 
   Widget _buildContent() {
+    // Bug 2026-05-16 photo-analysis-500 — explicit failure state:
+    // mediaFailed=true OR mediaUrl is null/empty while mediaType indicates
+    // a photo message → render "Photo failed to upload" with optional
+    // Retry button. Pre-fix the only failure surface was
+    // CachedNetworkImage's broken-image icon, which gave no actionable
+    // context. The user reported "the image he sent is NOT visible in
+    // the chat — only the 'Analyse this photo' caption shows over a blank
+    // black square."
+    final bool isPhotoMessage =
+        (mediaType ?? '').toLowerCase().startsWith('image') ||
+            (mediaType ?? '').isNotEmpty;
+    final bool hasMediaUrl = mediaUrl != null && mediaUrl!.isNotEmpty;
+    final bool showFailedSlot =
+        mediaFailed || (isPhotoMessage && !hasMediaUrl);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Image thumbnail (if media attached)
-        if (mediaUrl != null && mediaUrl!.isNotEmpty) ...[
+        if (showFailedSlot) ...[
+          _buildPhotoFailedTile(),
+          if (text.isNotEmpty) const SizedBox(height: 6),
+        ] else if (hasMediaUrl) ...[
           Builder(builder: (ctx) => GestureDetector(
             onTap: () => _openFullScreenImage(ctx, mediaUrl!),
             child: ClipRRect(
@@ -147,22 +185,11 @@ class ChatBubble extends StatelessWidget {
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) => Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: AppColors.input,
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: AppColors.textSecondary,
-                      size: 28,
-                    ),
-                  ),
-                ),
+                // Bug 2026-05-16 — when CachedNetworkImage itself can't
+                // load the URL (CDN propagation, ACL drift), surface the
+                // same "Photo failed to upload" tile as the no-URL case.
+                // Keeps a single failure mode visible to the user.
+                errorWidget: (context, url, error) => _buildPhotoFailedTile(),
               ),
             ),
           )),
@@ -365,6 +392,60 @@ class ChatBubble extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Bug 2026-05-16 photo-analysis-500 — replaces the broken-image icon
+  /// with a 120×120 tile that explicitly says "Photo failed to upload"
+  /// and exposes an optional Retry tap target. Wired from two sites:
+  ///   (a) `_buildContent` when `mediaFailed=true` OR mediaUrl missing on
+  ///       a photo-message.
+  ///   (b) `CachedNetworkImage.errorWidget` — same failure mode for CDN /
+  ///       ACL drift cases where the URL is set but doesn't resolve.
+  Widget _buildPhotoFailedTile() {
+    final tile = Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: AppColors.input,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        border: Border.all(color: AppColors.bad.withValues(alpha: 0.4)),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_outlined,
+            color: AppColors.bad.withValues(alpha: 0.85),
+            size: 22,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'PHOTO FAILED',
+            textAlign: TextAlign.center,
+            style: AppTypography.monoXs.copyWith(
+              fontSize: 9,
+              letterSpacing: 1.2,
+              color: AppColors.bad,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Tap to retry',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.getFont(
+              'DM Sans',
+              fontSize: 10,
+              color: AppColors.textMute,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (onMediaRetry == null) return tile;
+    return GestureDetector(onTap: onMediaRetry, child: tile);
   }
 
   /// Opens a full-screen image viewer for the attached photo.

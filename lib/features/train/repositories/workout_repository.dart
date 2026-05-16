@@ -1093,7 +1093,8 @@ class WorkoutRepository {
   /// The earliest log is never a PR (needs a baseline to beat).
   ///
   /// Returns the deterministic Hive key written
-  /// (`exlog_<millisSinceEpoch>_<nameHash>`).
+  /// (`exlog_<istDateStr>_<uuidV5Prefix>` — see
+  /// [WorkoutWriteService.exlogKey]).
   Future<String> logSetWithPrRescan({
     required String exerciseId,
     required String exerciseName,
@@ -1129,8 +1130,14 @@ class WorkoutRepository {
     // byte-identical pre-A.7 behavior (Σ per-set weight × reps).
     final volumeKg = overrideVolumeKg ?? (weightKg * reps * sets);
 
-    final logId =
-        'exlog_${now.millisecondsSinceEpoch}_${exerciseName.hashCode}';
+    // APK Test #16.1 / Agent A — delegate to canonical key helper so the
+    // AI coach `logPR` path produces the same key shape as
+    // WorkoutWriteService.logExercise. Pre-fix used
+    // `exlog_<ms>_<name.hashCode>` which (a) created a new key on every
+    // call (timestamp differs) and (b) used unstable hashCode. Result:
+    // re-logging the same PR generated duplicate rows + diverged from
+    // the migrator's idempotency boundary.
+    final logId = WorkoutWriteService.exlogKey(logDate, exerciseName);
 
     final logMap = <String, dynamic>{
       'id': logId,
@@ -1192,13 +1199,15 @@ class WorkoutRepository {
 
     // Append to the per-date index for O(1) reads by
     // [getExerciseLogsForDate]. Multiple workouts on the same day all
-    // accumulate in this list.
+    // accumulate in this list. APK Test #16.1 — since logId is now
+    // deterministic (canonical exlogKey), guard against duplicate
+    // append when the same exercise is re-logged on the same date.
     final indexKey = 'exercise_log_index_$dateStr';
     final existingIndex = _hive.workoutBox.get(indexKey);
     final indexList = existingIndex is List
         ? List<String>.from(existingIndex)
         : <String>[];
-    indexList.add(logId);
+    if (!indexList.contains(logId)) indexList.add(logId);
     await _hive.workoutBox.put(indexKey, indexList);
 
     // Walk every exlog_* for this exercise across all dates and rewrite

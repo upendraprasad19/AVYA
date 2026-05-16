@@ -156,10 +156,27 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // openForUser (so per-user namespaced workoutBox is open) and BEFORE
     // any provider that lists exlog keys (home/train/calendar all key off
     // exercise_log_index_<date>). Idempotent — guarded by configBox.
+    bool migratorDidRun = false;
     try {
+      // Track whether the migrator actually had work to do this launch
+      // so we know to ship canonical keys back up to cloud.
+      final config = HiveService.instance.configBox;
+      final wasAlreadyDone =
+          config.get('exlog_key_migration_v8') == true;
       await ExlogKeyMigrator.runIfNeeded();
+      migratorDidRun = !wasAlreadyDone;
     } catch (e) {
       debugPrint('[RestoringScreen] ExlogKeyMigrator failed (non-fatal): $e');
+    }
+
+    // APK Test #16.1 / Agent A — once the migrator has consolidated
+    // legacy + rogue exlog keys into canonical UUID v5 keys, fire a
+    // fire-and-forget syncWorkoutData() so the cloud `workout_log_exercises`
+    // / `workout_log_sets` rows pick up the canonical Hive key (the cloud
+    // tables key by natural columns so this just heals any divergence
+    // introduced by pre-fix `_restoreExerciseLogs` rounds).
+    if (migratorDidRun) {
+      unawaited(SyncService.instance.syncWorkoutData());
     }
 
     // Migrate nutrition logs from `nlog_<timestamp>` to deterministic

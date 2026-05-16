@@ -17,6 +17,43 @@ const FREE_IMAGE_ANALYSIS_LIMIT = 5;
 const PRO_IMAGE_DAILY_CAP = 50;
 
 /**
+ * Bug 2026-05-16 photo-analysis-500 — typed error class so the catch
+ * branch at the bottom of the serve() handler can map specific failure
+ * modes to the right HTTP status. Pre-fix every thrown error fell into
+ * a generic catch that returned 500, including:
+ *
+ *   - validation errors (SSRF reject, image too large, body parse) →
+ *     should be 400 (caller bug, won't be helped by retry).
+ *   - Storage fetch failures (image URL 404/5xx, propagation race) →
+ *     should be 400 with "upload incomplete" hint (caller can retry
+ *     after a moment).
+ *   - upstream Gemini issues (timeout, 5xx, parse failure) →
+ *     should be 502 (transient, client retry layer should kick in).
+ *   - genuine internal bugs (uncaught exception, malformed response) →
+ *     should be 500 (rare, alarm-worthy).
+ *
+ * The 500-to-502 split matters because the client-side `retryColdStart`
+ * helper retries `{502, 503, 504}` but NOT 500. Pre-fix a Gemini timeout
+ * caught at the bottom returned 500 and bypassed the retry budget. Now
+ * the same timeout returns 502 and benefits from the ~20s warm-start
+ * budget added in Bug c01d57 (2026-05-15).
+ */
+class HttpError extends Error {
+  readonly status: number;
+  readonly errorType: "validation" | "upstream" | "internal" | "storage";
+
+  constructor(
+    status: number,
+    errorType: "validation" | "upstream" | "internal" | "storage",
+    message: string,
+  ) {
+    super(message);
+    this.status = status;
+    this.errorType = errorType;
+  }
+}
+
+/**
  * F14 · Test #9 — counts the user's lifetime free image analyses.
  * Returns 0 on any error (fail-open is safer than fail-closed for counts —
  * the LIMIT comparison still gates correctly because 0 < 5).
@@ -107,6 +144,15 @@ function extractLogActions(rawReply: string): {
 /**
  * Fetch an image from a URL and return its base64 representation.
  * Supports Supabase Storage URLs (adds service role auth).
+ *
+ * Throws typed `HttpError` so the outer handler can map to the right
+ * status code. Pre-fix every failure here ended in the generic catch
+ * → 500. Now:
+ *   - SSRF reject (non-Storage URL) → 400 validation
+ *   - Storage 404 (image hasn't propagated yet or upload truly failed) →
+ *     400 storage with "upload incomplete" hint
+ *   - Storage 5xx (transient Storage outage) → 502 upstream
+ *   - Oversized image → 400 validation
  */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB server-side limit
 const STORAGE_PREFIX = `${SUPABASE_URL}/storage/v1/object/`;
@@ -116,7 +162,7 @@ async function fetchImageAsBase64(
 ): Promise<{ base64: string; mimeType: string }> {
   // Security: only allow Supabase Storage URLs to prevent SSRF
   if (!imageUrl.startsWith(STORAGE_PREFIX)) {
-    throw new Error("Only Supabase Storage URLs are allowed");
+    throw new HttpError(400, "validation", "Only Supabase Storage URLs are allowed");
   }
 
   const headers: Record<string, string> = {
@@ -124,20 +170,63 @@ async function fetchImageAsBase64(
     apikey: SUPABASE_SERVICE_ROLE_KEY,
   };
 
-  const response = await fetch(imageUrl, { headers });
+  let response: Response;
+  try {
+    response = await fetch(imageUrl, { headers });
+  } catch (err) {
+    // DNS / network unreachable while fetching Storage — treat as transient
+    // upstream so the client retry layer kicks in (502 is in the cold-start
+    // retry-trigger set; 500 isn't).
+    throw new HttpError(
+      502,
+      "upstream",
+      `Storage fetch network error: ${err}`,
+    );
+  }
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    // 404 = image not yet propagated to CDN or upload truly failed.
+    // Caller should retry after a brief wait (or re-upload).
+    if (response.status === 404) {
+      throw new HttpError(
+        400,
+        "storage",
+        "Image upload incomplete — please retry sending the photo.",
+      );
+    }
+    // 5xx from Storage = transient outage. 502 = retry-eligible.
+    if (response.status >= 500) {
+      throw new HttpError(
+        502,
+        "upstream",
+        `Storage fetch upstream error: ${response.status} ${response.statusText}`,
+      );
+    }
+    // Other 4xx (403, etc.) = validation / config issue. 400.
+    throw new HttpError(
+      400,
+      "storage",
+      `Failed to fetch image: ${response.status} ${response.statusText}`,
+    );
   }
 
   // Reject oversized images before reading into memory
   const contentLength = parseInt(response.headers.get("content-length") ?? "0", 10);
   if (contentLength > MAX_IMAGE_BYTES) {
-    throw new Error(`Image too large (${contentLength} bytes, max ${MAX_IMAGE_BYTES})`);
+    throw new HttpError(
+      400,
+      "validation",
+      `Image too large (${contentLength} bytes, max ${MAX_IMAGE_BYTES})`,
+    );
   }
 
   const arrayBuffer = await response.arrayBuffer();
   if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error(`Image too large (${arrayBuffer.byteLength} bytes)`);
+    throw new HttpError(
+      400,
+      "validation",
+      `Image too large (${arrayBuffer.byteLength} bytes)`,
+    );
   }
   const uint8Array = new Uint8Array(arrayBuffer);
   const base64 = base64Encode(uint8Array);
@@ -207,9 +296,21 @@ serve(async (req: Request) => {
       .maybeSingle();
     const isPro = !!subscription;
 
-    // Parse request body
-    const body = await req.json();
-    const { message, media_url, media_type, snapshot_json } = body;
+    // Parse request body. JSON.parse failures here are caller bugs
+    // (malformed payload) — re-raise as 400 validation rather than
+    // 500 internal.
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch (_err) {
+      throw new HttpError(400, "validation", "Request body is not valid JSON");
+    }
+    const { message, media_url, media_type, snapshot_json } = body as {
+      message?: unknown;
+      media_url?: unknown;
+      media_type?: unknown;
+      snapshot_json?: unknown;
+    };
 
     if (!message || typeof message !== "string") {
       return new Response(
@@ -242,7 +343,9 @@ serve(async (req: Request) => {
       );
     }
 
-    const isVideo = (media_type ?? "").toLowerCase().startsWith("video");
+    const isVideo = (typeof media_type === "string" ? media_type : "")
+      .toLowerCase()
+      .startsWith("video");
 
     // F15 · TODO server-side video duration validation deferred — client cap
     // (pickVideo maxDuration: Duration(seconds: 30)) is primary enforcement
@@ -387,7 +490,8 @@ serve(async (req: Request) => {
         "\n\nUser's daily snapshot:\n" + JSON.stringify(snapshot_json);
     }
 
-    // Fetch the image and convert to base64
+    // Fetch the image and convert to base64. Throws typed HttpError —
+    // see fetchImageAsBase64 doc for the status mapping.
     const { base64: imageBase64, mimeType } = await fetchImageAsBase64(
       media_url,
     );
@@ -395,6 +499,10 @@ serve(async (req: Request) => {
     // Single Gemini call (Flash Lite is the vision SKU). No fallback —
     // already on the cheapest Gemini SKU; falling back to the same model
     // wouldn't add resilience.
+    //
+    // `geminiChat` swallows timeouts / 5xx / safety-filter blocks and
+    // returns `{content: null}` rather than throwing. We map that to a
+    // 502 below (upstream, retry-eligible) — not a 500.
     const { content: rawReply, tokensUsed } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt,
@@ -409,9 +517,13 @@ serve(async (req: Request) => {
     const modelLabel = MODEL_LABEL;
 
     if (!rawReply) {
+      // Bug 2026-05-16 photo-analysis-500 — was already 502 here, but
+      // adding `error_type` so the client can recognise an upstream
+      // failure and retry without ambiguity.
       return new Response(
         JSON.stringify({
           error: "AI image analysis temporarily unavailable. Please try again.",
+          error_type: "upstream",
         }),
         {
           status: 502,
@@ -485,11 +597,37 @@ serve(async (req: Request) => {
       },
     );
   } catch (err) {
-    // Sanitised 5xx: never leak raw exception / upstream provider text.
+    // Bug 2026-05-16 photo-analysis-500 — typed-status mapping.
+    //   HttpError (400/502)  → use the typed status + error_type so
+    //                          callers can map to user-actionable copy
+    //                          or trigger client retry (502 only).
+    //   anything else        → genuine internal bug, 500 with
+    //                          request_id for grepping logs.
     const requestId = crypto.randomUUID().split("-")[0];
+    if (err instanceof HttpError) {
+      console.error(
+        `[ai-media-proxy] request_id=${requestId} type=${err.errorType} status=${err.status}`,
+        err.message,
+      );
+      return new Response(
+        JSON.stringify({
+          error: err.message,
+          error_type: err.errorType,
+          request_id: requestId,
+        }),
+        {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     console.error(`[ai-media-proxy] request_id=${requestId}`, err);
     return new Response(
-      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      JSON.stringify({
+        error: "Internal server error",
+        error_type: "internal",
+        request_id: requestId,
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

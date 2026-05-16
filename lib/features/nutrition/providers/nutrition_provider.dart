@@ -605,9 +605,78 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
   @override
   AiBreakdownData? build() => null;
 
+  /// APK Test #16.1 / Agent B (closes-diagnose: a17bc3) — front-of-chat
+  /// retry circuit breaker. In-memory only (NOT Hive persisted) so app
+  /// restart clears the block; counter auto-resets after 5 minutes of
+  /// inactivity for the same text.
+  ///
+  /// State machine:
+  ///   - Any service error (502/503/504, "AI temporarily unavailable")
+  ///     increments the per-text counter and stamps `lastFailAt`.
+  ///   - On the 4th attempt for the same text, if counter >= 3 and
+  ///     `lastFailAt` is within 5 minutes, the call is blocked
+  ///     client-side without contacting `ai-proxy`. State is set with
+  ///     an "AI overloaded — try again in 5 minutes" error.
+  ///   - A successful analyse for that text clears the counter.
+  ///   - [clear] clears the counter for any in-flight text.
+  ///   - 5 minutes after the last fail the counter is treated as 0
+  ///     even without an explicit clear.
+  ///
+  /// Exposed `@visibleForTesting` so circuit_breaker_test.dart can
+  /// reset state between cases.
+  @visibleForTesting
+  static final Map<String, int> serviceFailCounts = <String, int>{};
+  @visibleForTesting
+  static final Map<String, DateTime> serviceFailLastAt = <String, DateTime>{};
+  @visibleForTesting
+  static const int circuitBreakerThreshold = 3;
+  @visibleForTesting
+  static const Duration circuitBreakerCooldown = Duration(minutes: 5);
+
+  @visibleForTesting
+  static void resetCircuitBreakerForTests() {
+    serviceFailCounts.clear();
+    serviceFailLastAt.clear();
+  }
+
+  /// Returns true if the circuit breaker is currently open for [text].
+  /// Exposed `@visibleForTesting`.
+  @visibleForTesting
+  static bool isCircuitBreakerOpen(String text) {
+    final count = serviceFailCounts[text] ?? 0;
+    if (count < circuitBreakerThreshold) return false;
+    final lastAt = serviceFailLastAt[text];
+    if (lastAt == null) return false;
+    final age = DateTime.now().difference(lastAt);
+    if (age >= circuitBreakerCooldown) {
+      // Auto-reset stale counter.
+      serviceFailCounts.remove(text);
+      serviceFailLastAt.remove(text);
+      return false;
+    }
+    return true;
+  }
+
   /// Calls Edge Function for AI text analysis.
   /// Falls back to mock data if Edge Function is unreachable.
   Future<void> analyse(String text) async {
+    // Layer 4 circuit-breaker gate — block the 4th+ retry for the same
+    // text within the cooldown window. Returns immediately without
+    // contacting ai-proxy.
+    if (isCircuitBreakerOpen(text)) {
+      unawaited(ErrorTelemetry.logEvent(
+        'nutrition_ai_text_circuit_breaker_block',
+        message: 'text_len=${text.length}',
+      ));
+      state = AiBreakdownData(
+        mealName: text,
+        totalKcal: 0,
+        items: [],
+        error: 'AI overloaded — try again in 5 minutes.',
+      );
+      return;
+    }
+
     try {
       // F11 — refresh subscription cache to avoid stale-PRO/free state after restore.
       // Cheap (~50ms hit if cache miss); resolves the most-likely cause of
@@ -651,6 +720,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         final totalKcal =
             items.fold<int>(0, (sum, item) => sum + item.calories);
 
+        // Success — clear circuit breaker for this text.
+        serviceFailCounts.remove(text);
+        serviceFailLastAt.remove(text);
         state = AiBreakdownData(
           mealName: data['meal_name'] as String? ?? text,
           totalKcal: totalKcal,
@@ -675,8 +747,17 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
                           msg.contains('unauthorized') || msg.contains('jwt') ||
                           msg.contains('no active session') || msg.contains('session expired');
       final isServiceError = msg.contains('503') || msg.contains('502') ||
+                             msg.contains('504') ||
                              msg.contains('unavailable') || msg.contains('non-2xx') ||
                              msg.contains('food ai') || msg.contains('food analysis failed');
+      // Layer 4 — increment circuit breaker counter on service errors
+      // (502/503/504). Other error classes (auth, rate-limit, message-
+      // too-long) do NOT increment — those are user-actionable and
+      // re-trying immediately is the correct UX.
+      if (isServiceError) {
+        serviceFailCounts[text] = (serviceFailCounts[text] ?? 0) + 1;
+        serviceFailLastAt[text] = DateTime.now();
+      }
       final isRateLimitError = msg.contains('food_text_daily_limit_reached') ||
                                msg.contains('daily food analysis limit') ||
                                msg.contains('429') || msg.contains('rate limit');
@@ -750,7 +831,13 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     state = data.copyWith(items: newItems, totalKcal: newTotalKcal);
   }
 
-  void clear() => state = null;
+  void clear() {
+    // Reset circuit breaker on explicit clear — user dismissing the
+    // breakdown card means they're starting fresh.
+    serviceFailCounts.clear();
+    serviceFailLastAt.clear();
+    state = null;
+  }
 
   /// Save the analysed meal to nutrition log via NutritionWriteService.
   /// (Plan C-10: routes through service to ensure per-item rows reach
