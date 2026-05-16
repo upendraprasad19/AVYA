@@ -205,18 +205,69 @@ serve(async (req: Request) => {
       }
 
       // Step 1 — reserve a slot (or get rejected by the trigger).
-      const { data: reservation, error: insertErr } = await supabaseClient
+      //
+      // APK Test #16.1 / Agent B (closes-diagnose: a17bc3) — server-side
+      // 60s dedup. The chat channel ('app') has had 30s dedup since
+      // forever (see line ~488 below) but the food_text_analysis branch
+      // was added later and skipped the pattern. During a Gemini 502
+      // storm the founder's account accumulated 9 pending placeholder
+      // rows for one message because each manual retry tap minted a
+      // fresh INSERT. Pre-SELECT for an existing 'pending' placeholder
+      // for the same (user_id, channel, user_message) within 60s. If
+      // found, refresh its created_at and reuse the id instead of
+      // INSERTing. The Postgres trigger `trg_food_text_rate_limit`
+      // only fires on INSERT — dedup also avoids artificially burning
+      // rate-limit slots on retry-storm.
+      const truncatedText = text.substring(0, 500);
+      const dedupSince = new Date(Date.now() - 60_000).toISOString();
+      const { data: existingPending } = await supabaseClient
         .from("ai_coach_interactions")
-        .insert({
-          user_id: userId,
-          channel: "food_text_analysis",
-          user_message: text.substring(0, 500),
-          ai_response: "",
-          model_used: "pending",
-          tokens_used: 0,
-        })
         .select("id")
-        .single();
+        .eq("user_id", userId)
+        .eq("channel", "food_text_analysis")
+        .eq("user_message", truncatedText)
+        .eq("model_used", "pending")
+        .gte("created_at", dedupSince)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let reservation: { id: string } | null = null;
+      let insertErr: { message?: string } | null = null;
+
+      if (existingPending?.id) {
+        // Refresh the slot's created_at so the next call's dedup window
+        // starts from now and the placeholder isn't garbage-collected
+        // by cleanup migrations. Trigger doesn't fire on UPDATE.
+        const refreshed = await supabaseClient
+          .from("ai_coach_interactions")
+          .update({ created_at: new Date().toISOString() })
+          .eq("id", existingPending.id)
+          .select("id")
+          .single();
+        reservation = refreshed.data;
+        insertErr = refreshed.error as { message?: string } | null;
+        if (!insertErr) {
+          console.log(
+            `[ai-proxy.food] dedup hit — reusing pending row ${existingPending.id} for user ${userId}`,
+          );
+        }
+      } else {
+        const inserted = await supabaseClient
+          .from("ai_coach_interactions")
+          .insert({
+            user_id: userId,
+            channel: "food_text_analysis",
+            user_message: truncatedText,
+            ai_response: "",
+            model_used: "pending",
+            tokens_used: 0,
+          })
+          .select("id")
+          .single();
+        reservation = inserted.data;
+        insertErr = inserted.error as { message?: string } | null;
+      }
 
       if (insertErr) {
         const msg = String(insertErr.message ?? "");

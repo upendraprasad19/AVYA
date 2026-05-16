@@ -515,10 +515,24 @@ class AiCoachRepository {
     }
   }
 
+  /// 60-second client-side dedup window for [saveUserMessagePending].
+  /// APK Test #16.1 / Agent B (closes-diagnose: a17bc3).
+  /// Exposed for tests so the window can be exercised deterministically.
+  @visibleForTesting
+  static const Duration coachWriterDedupWindow = Duration(seconds: 60);
+
   /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
   /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
   /// it as a loading bubble even if the app is killed mid-call. Returns the
   /// Hive key so the caller can update it on success/failure.
+  ///
+  /// APK Test #16.1 / Agent B (closes-diagnose: a17bc3) — added a 60s
+  /// dedup window. If a recent NON-FAILED `coach_*` entry exists with the
+  /// same `user_message` AND `mode` AND `media_url` within the last 60
+  /// seconds, returns the existing key instead of minting a new one.
+  /// Prevents the 3-tap "Analyze with AI" duplication observed in the
+  /// founder's chat surface during a Gemini 502 storm. Failed entries
+  /// are exempt so explicit "Retry" taps still mint a new row.
   Future<String> saveUserMessagePending({
     required String userMessage,
     required String mode,
@@ -528,6 +542,17 @@ class AiCoachRepository {
     // Run cheap on-device identity heuristics on every outbound user message.
     // Patches Hive coach_memory in place; no-op if no signals detected.
     await detectAndPersistIdentitySignals(userMessage);
+
+    // Layer 1 dedup — scan coachBox for a recent non-failed match.
+    final existing = _findRecentDuplicateMessageKey(
+      userMessage: userMessage,
+      mode: mode,
+      mediaUrl: mediaUrl,
+      window: coachWriterDedupWindow,
+    );
+    if (existing != null) {
+      return existing;
+    }
 
     final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
     await _hive.coachBox.put(id, {
@@ -544,6 +569,63 @@ class AiCoachRepository {
       'media_type': ?mediaType,
     });
     return id;
+  }
+
+  /// Returns the Hive key of an existing `coach_*` entry that is a
+  /// duplicate of the proposed write under the dedup window, or null
+  /// if no recent duplicate exists. Failed entries (failed=true) are
+  /// not considered duplicates so a user-initiated Retry still mints
+  /// a fresh row.
+  ///
+  /// Exposed `@visibleForTesting` for the dedup contract test.
+  @visibleForTesting
+  String? findRecentDuplicateMessageKey({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    Duration window = coachWriterDedupWindow,
+  }) =>
+      _findRecentDuplicateMessageKey(
+        userMessage: userMessage,
+        mode: mode,
+        mediaUrl: mediaUrl,
+        window: window,
+      );
+
+  String? _findRecentDuplicateMessageKey({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    required Duration window,
+  }) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(window);
+    String? bestKey;
+    DateTime bestCreated = DateTime.fromMillisecondsSinceEpoch(0);
+    for (final entry in _hive.coachBox.toMap().entries) {
+      final key = entry.key;
+      final raw = entry.value;
+      if (key is! String || !key.startsWith('coach_')) continue;
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      // Skip failed entries — explicit retry should mint a new row.
+      if (map['failed'] == true) continue;
+      if (map['user_message'] != userMessage) continue;
+      if ((map['mode'] as String?) != mode) continue;
+      // Media is part of the dedup identity — same text + different photo
+      // is a legitimate new turn.
+      if ((map['media_url'] as String?) != mediaUrl) continue;
+      final createdStr = map['created_at'] as String?;
+      if (createdStr == null) continue;
+      final created = DateTime.tryParse(createdStr);
+      if (created == null) continue;
+      if (created.isBefore(cutoff)) continue;
+      if (created.isAfter(bestCreated)) {
+        bestCreated = created;
+        bestKey = key;
+      }
+    }
+    return bestKey;
   }
 
   /// Bug #19 — Updates a pending interaction with the AI's reply on success.
