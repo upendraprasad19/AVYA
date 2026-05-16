@@ -53,7 +53,7 @@ void main() {
       );
     });
 
-    test('_restoreExerciseLogs keys by IST date + lower(name).hashCode', () {
+    test('_restoreExerciseLogs routes through WorkoutWriteService.exlogKey', () {
       final body = _restoreBody(src, 'ExerciseLogs');
       // Pre-fix: `exlog_${ts}_${name.hashCode}` (raw ms, raw name).
       expect(
@@ -63,13 +63,18 @@ void main() {
             'Pre-fix `exlog_<ms>_<name.hashCode>` (no IST, no normalize) '
             'must not appear',
       );
-      // Must lowercase + trim before hashCode (mirror of
-      // WorkoutWriteService.exlogKey).
+      // Post-Test-#16.1 / Bug A: restore body uses the CANONICAL
+      // `WorkoutWriteService.exlogKey(date, name)` helper, which
+      // internally does lower+trim+IST. Pin the routing, not the
+      // implementation details (which now live in the canonical method).
       expect(
-        body.contains('toLowerCase()') && body.contains('.trim()'),
+        body.contains('WorkoutWriteService.exlogKey('),
         isTrue,
-        reason: 'name must be lower+trim before hashCode (matches '
-            'WorkoutWriteService.exlogKey)',
+        reason: '_restoreExerciseLogs must derive the Hive key via '
+            'WorkoutWriteService.exlogKey() (Test #16.1 / Bug A centralized '
+            'the formula). The canonical method does lower+trim+IST '
+            'internally — do NOT inline the normalization in the restore '
+            'body or you re-open the rogue-key class.',
       );
     });
 

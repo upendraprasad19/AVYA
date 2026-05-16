@@ -126,10 +126,10 @@ class _ServiceRecordSectionState extends ConsumerState<ServiceRecordSection> {
 
     return Row(
       children: [
-        RankInsignia(
+        // audit-2026-05-16 E.11 — migrated from legacy RankInsignia.
+        WardRankInsignia(
           rankCode: current.entry.code,
           size: 32,
-          dimmed: false,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -229,10 +229,14 @@ class _LadderRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          RankInsignia(
+          // audit-2026-05-16 E.11 — migrated from legacy RankInsignia.
+          // `dimmed: dim` → `color: dim ? AppColors.textMute : null`
+          // (legacy ringColor mapped to textMute.withAlpha(0.45);
+          // textMute is the closest semantic match in the canonical palette).
+          WardRankInsignia(
             rankCode: entry.entry.code,
             size: 28,
-            dimmed: dim,
+            color: dim ? AppColors.textMute : null,
           ),
           const SizedBox(width: 12),
           Expanded(

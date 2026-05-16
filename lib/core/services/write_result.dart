@@ -52,6 +52,12 @@ enum WriteSource {
   /// delegation shim. Deprecated — will be removed after Test #12 once all
   /// callers migrate directly to WorkoutWriteService.logExercise.
   legacyRepository,
+  /// Manual UI tap (e.g. profile biometrics, water quick sheet, hydration
+  /// save, urine color selector, home weight tile). Added for
+  /// `HealthWriteService` (audit 2026-05-16 task E.7).
+  manual,
+  /// Initial seed during onboarding (e.g. starting weight from stats step).
+  onboarding,
 }
 
 extension WriteSourceCode on WriteSource {
@@ -73,6 +79,10 @@ extension WriteSourceCode on WriteSource {
         return 'restore';
       case WriteSource.legacyRepository:
         return 'legacy_repository';
+      case WriteSource.manual:
+        return 'manual';
+      case WriteSource.onboarding:
+        return 'onboarding';
     }
   }
 }

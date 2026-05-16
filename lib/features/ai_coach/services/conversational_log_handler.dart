@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -118,6 +119,15 @@ class ConversationalLogHandler {
       'created_at': now.toIso8601String(),
     });
 
+    // audit-2026-05-16 task E.7 — INTENTIONAL DIRECT WRITE.
+    // `HealthWriteService.logSleep` writes the canonical per-day key
+    // `sleep_log_<istDate>` (one entry per day, overwrite semantics).
+    // This list-key path appends conversational sleep logs into a single
+    // `sleep_logs` LIST so the AI coach's chat history retains every
+    // sleep mention. The list shape is also consumed by
+    // `SyncService.syncSleepNow` (list-item upsert path). Keeping this
+    // direct keeps the asymmetric semantics (list vs per-day) explicit;
+    // routing through the service would lose the append behaviour.
     await healthBox.put('sleep_logs', logs);
     unawaited(SyncService.instance.syncSleepNow());
     unawaited(SyncService.instance.pushSnapshot());
@@ -132,27 +142,16 @@ class ConversationalLogHandler {
     if (type == null || valueCm == null || valueCm <= 0) return false;
     if (!['waist', 'chest', 'hips', 'arms'].contains(type)) return false;
 
-    final healthBox = HiveService.instance.healthBox;
-    final now = DateTime.now();
-    final dateStr = istDateStr(now);
-    final key = 'measurement_$dateStr';
-
-    // Read-update-write: merge single field into today's measurement record
-    final existing = healthBox.get(key);
-    final record = existing is Map
-        ? Map<String, dynamic>.from(existing)
-        : {
-            'id': 'meas_${now.millisecondsSinceEpoch}',
-            'date': dateStr,
-            'created_at': now.toIso8601String(),
-          };
-
-    record[type] = valueCm;
-    record['updated_at'] = now.toIso8601String();
-    await healthBox.put(key, record);
-    unawaited(SyncService.instance.syncMeasurementsNow());
-    unawaited(SyncService.instance.pushSnapshot());
-    return true;
+    // audit-2026-05-16 task E.7 — route through HealthWriteService so the
+    // measurement key uses `istDateStr` and the sync fan-out + telemetry
+    // pattern is identical to every other health-domain mutation.
+    final result = await HealthWriteService.instance.logMeasurement(
+      date: DateTime.now(),
+      partName: type,
+      valueCm: valueCm,
+      source: WriteSource.aiCoach,
+    );
+    return result.success;
   }
 
   // ── Helpers ────────────────────────────────────────────────────

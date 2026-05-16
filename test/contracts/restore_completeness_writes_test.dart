@@ -141,5 +141,51 @@ void main() {
       expect(src.contains('_hive.userBox'), isTrue,
           reason: 'syncFreezes must read from _hive.userBox (progress key)');
     });
+
+    // E.10 (F4-S2 / audit 2026-05-16) — referral restore completeness.
+    test(
+        'SyncService exposes _restoreReferralCodes and '
+        '_restoreReferralRedemptions methods', () {
+      final src = loadSyncServiceSource().readAsStringSync();
+      expect(
+          src.contains('Future<void> _restoreReferralCodes(String userId)'),
+          isTrue,
+          reason: 'SyncService must expose _restoreReferralCodes() '
+              '(E.10 — referral_codes restore-completeness). Without it, '
+              'codes generated on one device vanish on cross-device login.');
+      expect(
+          src.contains(
+              'Future<void> _restoreReferralRedemptions(String userId)'),
+          isTrue,
+          reason: 'SyncService must expose _restoreReferralRedemptions() '
+              '(E.10 — referral_redemptions restore-completeness). Without '
+              'it, audit history of who redeemed what is invisible on a '
+              'fresh install.');
+    });
+
+    test(
+        'restoreFromCloudForUser folds in _restoreReferralCodes and '
+        '_restoreReferralRedemptions via _safeRestoreOp', () {
+      final src = loadSyncServiceSource().readAsStringSync();
+      // The wiring lives in the Step C "restore-completeness surfaces"
+      // block, mirroring the existing freezes / inbox / saved_diet_plan /
+      // rank_promotions calls. Source-grep both shapes.
+      expect(
+          src.contains(
+              "_safeRestoreOp('referral_codes', _restoreReferralCodes("),
+          isTrue,
+          reason: 'restoreFromCloudForUser must wrap _restoreReferralCodes '
+              "in _safeRestoreOp('referral_codes', ...) so failures are "
+              'telemetered without aborting the rest of the restore.');
+      // Tolerate optional whitespace / newline between the op-type literal
+      // and the method call (dart formatter wraps long argument lists).
+      final redemptionsWired = RegExp(
+        r"_safeRestoreOp\(\s*'referral_redemptions'\s*,\s*_restoreReferralRedemptions\(",
+      ).hasMatch(src);
+      expect(redemptionsWired, isTrue,
+          reason: 'restoreFromCloudForUser must wrap '
+              "_restoreReferralRedemptions in _safeRestoreOp("
+              "'referral_redemptions', ...).");
+    });
   });
 }

@@ -881,6 +881,13 @@ class SyncService {
       await _safeRestoreOp('saved_diet_plan', _restoreSavedDietPlan(userId));
       if (_restoreCancelled) return RestoreResult.cancelled();
       await _safeRestoreOp('rank_promotions', _restoreRankPromotions(userId));
+      // E.10 (F4-S2 / audit 2026-05-16) — referral surfaces.
+      // Codes survive reinstall + audit history visible cross-device.
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp('referral_codes', _restoreReferralCodes(userId));
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      await _safeRestoreOp(
+          'referral_redemptions', _restoreReferralRedemptions(userId));
 
       // A3 — Subscription refresh folded into restore as the atomic last
       // step so it's never skipped when the post-auth flow changes.

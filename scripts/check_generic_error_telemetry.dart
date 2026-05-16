@@ -5,6 +5,25 @@
 // or _reportSyncFailure call, so silent failures leave a breadcrumb in
 // client_errors.
 //
+// Audit 2026-05-16 / E.14.D extension — additionally bans NEW generic
+// numbered op_types (`reason: 'sync_service_catch_5'`, `'_for_25'`,
+// etc.) from `ErrorTelemetry.recordNonFatal` / `logEvent` calls. The
+// audit P2-G class: numbered catch-block labels defeat triage because
+// the line number drifts and the label tells you nothing about what
+// the failure actually was.
+//
+// Pattern rules (case-sensitive):
+//   - `reason:`/`opType:` value matching `_catch_\d+$` (e.g. `sync_service_catch_5`)
+//   - `reason:`/`opType:` value matching `_for$`        (literal `sync_service_for`)
+//   - `reason:`/`opType:` value matching `_for_\d+$`    (e.g. `sync_service_for_25`)
+//   - `reason:`/`opType:` value matching `_if_\d+$`     (extension — same shape)
+//   - `reason:`/`opType:` value matching `_if$`         (extension — same shape)
+//
+// Pre-existing violations are tracked in
+// `backups/generic_op_type_baseline.txt` (same shape as the generic-
+// phrase baseline above) and grandfathered through. The gate fails on
+// any NEW occurrence.
+//
 // Codifies APK Test #15.1 / Bug D — ai-media-proxy photo upload silently
 // fell through to "Sorry, I couldn't analyse that photo." with ZERO
 // telemetry, leaving us blind to the actual reject reason. The audit-
@@ -69,6 +88,26 @@ const _allowedPaths = <String>{
   // the gate uncovers exceptions.
 };
 
+// Generic numbered op_type detector — E.14.D.
+//
+// Matches `reason: '...'` or `opType: '...'` where the quoted value
+// ends in one of the banned suffix patterns. Captures the full op_type
+// so it can be reported.
+final RegExp _genericOpTypeRegex = RegExp(
+  r'''(?:reason|opType):\s*['"]([A-Za-z_][A-Za-z0-9_]*?'''
+  r'''(?:_catch_\d+|_for|_for_\d+|_if|_if_\d+))['"]''',
+);
+
+/// Returns the offending op_type string when the line carries a banned
+/// generic-numbered op_type. Null otherwise.
+String? _scanLineForGenericOpType(String line) {
+  // Skip comment lines — pattern docs in module comments are fine.
+  final trimmed = line.trim();
+  if (trimmed.startsWith('//') || trimmed.startsWith('*')) return null;
+  final m = _genericOpTypeRegex.firstMatch(line);
+  return m?.group(1);
+}
+
 // Baseline of known pre-existing violations (technical debt). Each
 // entry is `<relative-path>:<phrase>` (line number omitted — line
 // numbers drift; phrase + path is enough to identify). Gate 15 ignores
@@ -93,6 +132,26 @@ Set<String> _loadBaseline() {
   return out;
 }
 
+/// Pre-existing op_type baseline (E.14.D). Each entry is
+/// `<relative-path>::<op_type>` — line number stripped. Gate ignores
+/// matches in this set so the existing ~45 generic numbered op_types
+/// in lib/core/services/sync/ don't break the build. New code must use
+/// semantic op_type names.
+///
+/// Source of truth: backups/generic_op_type_baseline.txt
+Set<String> _loadOpTypeBaseline() {
+  final f = File('backups/generic_op_type_baseline.txt');
+  if (!f.existsSync()) return <String>{};
+  final out = <String>{};
+  for (final raw in f.readAsLinesSync()) {
+    final line = raw.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+    // Format `path::op_type` (line-number-free) for stability across edits.
+    out.add(line);
+  }
+  return out;
+}
+
 void main() {
   final libDir = Directory('lib');
   if (!libDir.existsSync()) {
@@ -101,8 +160,11 @@ void main() {
   }
 
   final baseline = _loadBaseline();
+  final opTypeBaseline = _loadOpTypeBaseline();
   final violations = <String>[];
   final grandfathered = <String>[];
+  final opTypeViolations = <String>[];
+  final opTypeGrandfathered = <String>[];
   final files = libDir
       .listSync(recursive: true)
       .whereType<File>()
@@ -115,6 +177,20 @@ void main() {
     final lines = file.readAsLinesSync();
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
+      // E.14.D — generic op_type scan (independent of generic-phrase
+      // scan below; this scan does NOT require a catch-block context
+      // because the offending shape is the literal op_type itself).
+      final genericOp = _scanLineForGenericOpType(line);
+      if (genericOp != null) {
+        final key = '$relPath::$genericOp';
+        final row = '$relPath:${i + 1}  op_type "$genericOp" '
+            '(matches E.14.D ban: _catch_N / _for / _for_N / _if / _if_N)';
+        if (opTypeBaseline.contains(key)) {
+          opTypeGrandfathered.add(row);
+        } else {
+          opTypeViolations.add(row);
+        }
+      }
       // Skip comment lines.
       final trimmed = line.trim();
       if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
@@ -169,30 +245,55 @@ void main() {
     }
   }
 
-  if (violations.isEmpty) {
+  final hasGenericPhraseFails = violations.isNotEmpty;
+  final hasGenericOpTypeFails = opTypeViolations.isNotEmpty;
+  if (!hasGenericPhraseFails && !hasGenericOpTypeFails) {
+    final notes = <String>[];
     if (grandfathered.isNotEmpty) {
-      stdout.writeln('[Gate 15] PASS — no NEW generic-error catch blocks '
-          'without telemetry. Tracked debt: ${grandfathered.length} '
-          'pre-existing violations (see backups/generic_error_telemetry_'
-          'baseline.txt). Reduce over time.');
+      notes.add('${grandfathered.length} grandfathered generic-phrase entries');
+    }
+    if (opTypeGrandfathered.isNotEmpty) {
+      notes.add(
+          '${opTypeGrandfathered.length} grandfathered generic op_types (E.14.D)');
+    }
+    if (notes.isEmpty) {
+      stdout.writeln('[Gate 15] PASS — no generic-error copy without telemetry '
+          'and no generic numbered op_types.');
     } else {
-      stdout.writeln('[Gate 15] PASS — every generic-error catch block has '
-          'telemetry within 30 lines.');
+      stdout.writeln(
+          '[Gate 15] PASS — no NEW violations. Tracked debt: ${notes.join(", ")}.');
     }
     exit(0);
   }
 
-  stderr.writeln(
-      '[Gate 15] FAIL — ${violations.length} generic-error catch block(s) '
-      'without telemetry:');
-  for (final v in violations) {
-    stderr.writeln('  $v');
+  if (hasGenericPhraseFails) {
+    stderr.writeln(
+        '[Gate 15] FAIL — ${violations.length} generic-error catch block(s) '
+        'without telemetry:');
+    for (final v in violations) {
+      stderr.writeln('  $v');
+    }
+    stderr.writeln('');
+    stderr.writeln(
+        'Fix: add `unawaited(ErrorTelemetry.logEvent("<op_type>", '
+        'message: errStr))` or `_reportSyncFailure(...)` inside the catch '
+        'block. Generic apology copy without telemetry leaves ops blind to '
+        'the actual failure mode. See APK Test #15.1 / Bug D diagnose-doc.');
   }
-  stderr.writeln('');
-  stderr.writeln(
-      'Fix: add `unawaited(ErrorTelemetry.logEvent("<op_type>", '
-      'message: errStr))` or `_reportSyncFailure(...)` inside the catch '
-      'block. Generic apology copy without telemetry leaves ops blind to '
-      'the actual failure mode. See APK Test #15.1 / Bug D diagnose-doc.');
+  if (hasGenericOpTypeFails) {
+    stderr.writeln('');
+    stderr.writeln(
+        '[Gate 15 / E.14.D] FAIL — ${opTypeViolations.length} new generic '
+        'numbered op_type(s):');
+    for (final v in opTypeViolations) {
+      stderr.writeln('  $v');
+    }
+    stderr.writeln('');
+    stderr.writeln(
+        'Fix: replace the numbered label with a semantic op_type that names '
+        'the failure mode (e.g. "upsert_user_profile_failed", '
+        '"restore_weight_logs_failed"). Numbered catch labels defeat triage '
+        'because the line number drifts. Audit 2026-05-16 / E.14.D.');
+  }
   exit(1);
 }

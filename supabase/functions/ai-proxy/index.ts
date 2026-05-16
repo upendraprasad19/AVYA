@@ -302,38 +302,77 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
         jsonMode: true,
       });
 
-      if (!content) return err(502, "Food analysis failed");
+      // audit-2026-05-16 F6-3 — placeholder resolution contract.
+      // The reserved row MUST reach a terminal state (model_used != 'pending')
+      // on every code path below — success OR Gemini failure OR JSON parse
+      // failure. Pre-fix the success-path UPDATE was fire-and-forget AND
+      // the two failure paths (502/`!content` + invalid-JSON) just returned
+      // err() without touching the row. Result: 8 stuck `pending` placeholder
+      // rows across 2026-05-11→15, each from a Gemini failure that left
+      // the reservation orphaned. The dedup window at L222 then kept reusing
+      // these rows for 60s, but past that they accumulated forever as noise.
+      // Resolution helper closes the row to a known terminal state on every
+      // exit branch.
+      const resolvePlaceholder = async (
+        finalModel: string,
+        finalResponse: string,
+        tokens: number,
+      ): Promise<void> => {
+        if (!reservationId) return;
+        const { error } = await supabaseClient
+          .from("ai_coach_interactions")
+          .update({
+            ai_response: finalResponse,
+            model_used: finalModel,
+            tokens_used: tokens,
+          })
+          .eq("id", reservationId);
+        if (error) {
+          const requestId = crypto.randomUUID().split("-")[0];
+          console.error(
+            `[ai-proxy.food] placeholder resolution failed request_id=${requestId} model=${finalModel}:`,
+            error,
+          );
+        }
+      };
+
+      if (!content) {
+        // Gemini failed — close the placeholder so it doesn't orphan.
+        await resolvePlaceholder(
+          "failed_gemini",
+          JSON.stringify({ error: "Gemini returned no content" }),
+          0,
+        );
+        return err(502, "Food analysis failed");
+      }
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        // Step 3 — update the reserved row with real telemetry + the
-        // parsed JSON response. Fire-and-forget so the HTTP response
-        // doesn't block on this final write.
-        //
-        // Bug fix (2026-04-25, F11 server-side): the UPDATE previously
-        // omitted `ai_response` entirely, leaving every row with the
-        // empty placeholder string. Tokens were charged but the
-        // response never landed in the audit row, breaking analytics
-        // + the AI coach's ability to reference past food analyses.
-        if (reservationId) {
-          supabaseClient
-            .from("ai_coach_interactions")
-            .update({
-              ai_response: JSON.stringify(parsed),
-              model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
-              tokens_used: tokensUsed,
-            })
-            .eq("id", reservationId)
-            .then((r: { error: unknown }) => {
-              if (r.error) console.error("food interaction update failed:", r.error);
-            });
-        }
+        // Success — resolve placeholder with real telemetry + parsed JSON.
+        // Awaited (not fire-and-forget) so HTTP response truly reflects
+        // the row's terminal state. Costs one extra RTT (~30ms locally,
+        // ~80ms cross-region) but eliminates the orphaned-pending class.
+        // Bug fix (2026-04-25 F11): the pre-pre-fix UPDATE omitted
+        // `ai_response` entirely → empty placeholder forever.
+        await resolvePlaceholder(
+          modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+          JSON.stringify(parsed),
+          tokensUsed,
+        );
 
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (_) {
+        // Gemini answered but with non-JSON content — still a billable call
+        // (tokens spent), still must close the placeholder. Record the
+        // raw content so future analytics can post-mortem the bad output.
+        await resolvePlaceholder(
+          "failed_parse",
+          JSON.stringify({ error: "non-JSON response", raw: content.substring(0, 500) }),
+          tokensUsed,
+        );
         return err(502, "Food analysis returned invalid JSON");
       }
     }

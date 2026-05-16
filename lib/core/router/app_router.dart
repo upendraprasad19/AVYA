@@ -28,7 +28,6 @@ import 'package:icanbefitter/features/ai_coach/screens/induction_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/muster_screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile_screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
-import 'package:icanbefitter/features/profile/screens/my_submissions_screen.dart';
 import 'package:icanbefitter/features/profile/screens/rank_ladder_screen.dart';
 import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -427,14 +426,13 @@ class AppRouter {
                     builder: (context, state) =>
                         const ProgressComparisonScreen(),
                   ),
-                  GoRoute(
-                    // Legacy route kept for deep-links in notifications
-                    // that were filed against the old "My Submissions"
-                    // row. New Profile entry points at `/profile/submissions`.
-                    path: 'my-submissions',
-                    name: 'mySubmissions',
-                    builder: (context, state) => const MySubmissionsScreen(),
-                  ),
+                  // audit-2026-05-16 E.8 — legacy `/profile/my-submissions`
+                  // route + `MySubmissionsScreen` widget deleted. The
+                  // canonical `/profile/submissions` (tabbed unified screen)
+                  // shipped in Test #1 / S1 batch 2026-04-24; zero deep-link
+                  // hits recorded against the legacy route in `client_errors`
+                  // over 3 weeks. Founder approved deletion via Phase D
+                  // NEEDS_DECISION 2 Option A.
                   GoRoute(
                     path: 'submissions',
                     name: 'submissions',

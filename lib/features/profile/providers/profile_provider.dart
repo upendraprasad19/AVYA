@@ -7,7 +7,8 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -491,21 +492,20 @@ class BiometricNotifier extends Notifier<BiometricData> {
   }
 
   /// Manually log sleep for today.
+  ///
+  /// audit-2026-05-16 task E.7 / finding F2-R2: routes through
+  /// `HealthWriteService` so the Hive key uses `istDateStr` (was
+  /// device-local `now.year-now.month-now.day`, which at IST 00:00–05:30
+  /// produced the prev-UTC-day key and silently dropped the entry from
+  /// IST readers).
   Future<void> logSleep({required double hours, required String quality}) async {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await HiveService.instance.healthBox.put('sleep_log_$todayStr', {
-      'date': todayStr,
-      'sleep_hours': hours,
-      'duration_hrs': hours,
-      'quality': quality,
-      'source': 'manual',
-      'created_at': now.toIso8601String(),
-    });
+    await HealthWriteService.instance.logSleep(
+      date: DateTime.now(),
+      hours: hours,
+      quality: quality,
+      source: WriteSource.manual,
+    );
     ref.invalidateSelf();
-    unawaited(SyncService.instance.syncSleepNow());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 

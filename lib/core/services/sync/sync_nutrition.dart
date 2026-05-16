@@ -254,6 +254,11 @@ extension SyncServiceNutrition on SyncService {
           'times_used': meal['times_used'] ?? 0,
           'created_at': meal['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
+        // E.14.A · audit-2026-05-16 — success-path emission. Lets the
+        // next audit distinguish "user has zero saved meals" from
+        // "_syncSavedMeals silently throws on every run".
+        unawaited(ErrorTelemetry.logEvent('upsert_user_saved_meals_success',
+            message: 'name=${meal['name']}'));
       } catch (e, st) {
         debugPrint('[SyncService._syncSavedMeals] $e');
         // audit-2026-05-11 H-42 — telemetry pair.

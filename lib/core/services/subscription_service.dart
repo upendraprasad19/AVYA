@@ -27,21 +27,25 @@ class SubscriptionService {
   /// All feature keys that require a PRO subscription.
   /// Usage-gated features (scan_meal, cart_auditor, ai_text_log)
   /// are included here — the usage counter service handles limits.
+  ///
+  /// audit-2026-05-16 E.8 — `featureActiveWorkoutMode`, `featureVoiceNotes`,
+  /// `featureDietPlanPdf` removed entirely. Active workout is free since
+  /// Test #2 Q6, voice is free since Test #9 F13, diet-plan PDF is free per
+  /// CLAUDE.md §14. The constants themselves are also deleted from
+  /// AppConstants in this batch.
+  /// `featurePhotoAnalysis` added — was a documented PRO feature per §14
+  /// with no gate callsite anywhere (audit F8.1 sub-bug); now in the list.
   static const List<String> allProFeatures = [
     AppConstants.featurePhases2To12,
-    AppConstants.featureActiveWorkoutMode,
     AppConstants.featureAiCoachUnlimited,
-    // featureReasoningTab removed 2026-04-18 — Chat/Reasoning toggle gone.
     AppConstants.featureWeeklyAiReport,
     AppConstants.featureProgressPhotos,
     AppConstants.featureScanMealPro,
     AppConstants.featureCartAuditorPro,
     AppConstants.featureAiTextLogPro,
-    // F13 · Test #9 — featureVoiceNotes removed: voice = FREE.
-    // On-device speech_to_text has zero infra cost; gating it discouraged
-    // engagement for no margin gain.
     AppConstants.featureMorningAlertPro,
     AppConstants.featurePredictionMonthly,
+    AppConstants.featurePhotoAnalysis,
     AppConstants.featureAdaptiveWorkouts,
   ];
 

@@ -324,11 +324,21 @@ class ToolDispatcher {
         data: {'log_id': result.logKey, 'exercise_name': name});
   }
 
-  /// D.2 logPR — wrapper over `logSetWithPrRescan` for PR claims.
+  /// D.2 logPR — routes through `WorkoutWriteService.logExercise` (sets=1).
   ///
-  /// Reuses the same Hive write path as Phase A's log_set (sets=1,
-  /// PR detection rescans chronologically). If the claim isn't actually a
-  /// new PR, the row still lands but `is_pr=false` on the underlying entry.
+  /// audit-2026-05-16 F6-2 — pre-fix this called the legacy
+  /// `WorkoutRepository.logSetWithPrRescan` directly, which was ONE OF THE 3
+  /// ROGUE `exlog_*` key formulas closed in APK Test #16.1 / Bug A. Even after
+  /// the rogue-key bug was fixed at the repository layer, this dispatcher
+  /// still bypassed the canonical WriteService (no mutex, no batched telemetry,
+  /// no consistent cloud sync timing). 8th writer/reader drift instance per
+  /// `feedback_writer_reader_field_drift_recurring.md`.
+  ///
+  /// Now routes through `WorkoutWriteService.logExercise(sets=[single])` —
+  /// PR detection is automatic via the WriteService's internal `_rescanPrFor`
+  /// (workout_write_service.dart:183). If the claim isn't actually a new PR,
+  /// the row still lands but `is_pr=false` on the underlying entry — same
+  /// semantics as before, canonical path now.
   Future<ToolExecutionResult> _executeLogPR(ToolIntent intent) async {
     final p = intent.payload;
     final exerciseId = p['exerciseId'] as String?;
@@ -342,20 +352,29 @@ class ToolDispatcher {
 
     final name = _resolveExerciseName(exerciseId) ?? exerciseId;
     final date = (dateRaw == null || dateRaw.isEmpty)
-        ? null
-        : DateTime.tryParse(dateRaw);
+        ? DateTime.now()
+        : (DateTime.tryParse(dateRaw) ?? DateTime.now());
 
     try {
-      final logId = await WorkoutRepository.instance.logSetWithPrRescan(
-        exerciseId: exerciseId,
-        exerciseName: name,
-        weightKg: weightKg,
-        reps: reps,
-        sets: 1, // PR is a single max-effort attempt
+      final result = await WorkoutWriteService.instance.logExercise(
         date: date,
+        exerciseName: name,
+        sets: [
+          ExerciseSet(
+            weightKg: weightKg,
+            reps: reps,
+            loggedAtMs: DateTime.now().millisecondsSinceEpoch,
+          ),
+        ],
+        source: WriteSource.aiCoach,
+        // ref: null — dispatcher's outer flow handles invalidation + sync.
       );
+      if (!result.success) {
+        return ToolExecutionResult.failure(
+            result.errorMessage ?? 'Could not log PR.');
+      }
       return ToolExecutionResult.success(data: {
-        'log_id': logId,
+        'log_id': result.logKey,
         'exercise_name': name,
         'weight_kg': weightKg,
         'reps': reps,

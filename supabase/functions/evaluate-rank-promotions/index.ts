@@ -28,6 +28,7 @@ import {
   rankAddressFor,
   rankDisplayFor,
 } from "../_shared/ceremony_text.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,20 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // audit-2026-05-16 E.14.C — installed shared `isAuthorizedCronCall(req)`
+  // gate (no prior inline check existed; cron caller relied on
+  // `verify_jwt: false` alone). Survives Vault/env key rotation: verifies
+  // JWT signature against SUPABASE_JWT_SECRET + role-claim ===
+  // 'service_role'. CRON_SECRET opaque-token escape hatch preserved
+  // inside the helper. Closes Test #16 P1-D drift class.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const requestId = crypto.randomUUID().split("-")[0];

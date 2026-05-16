@@ -4,6 +4,7 @@ import '../services/error_telemetry.dart';
 import '../services/hive_service.dart';
 import '../services/migrated_key.dart';
 import '../services/seed_service.dart';
+import '../services/sync_service.dart';
 import '../services/workout_write_service.dart';
 import '../services/write_result.dart';
 import '../utils/date_utils.dart';
@@ -246,6 +247,12 @@ class WorkoutScheduleService {
     await MigratedKey.write(_planStartKey, monday.toIso8601String());
     await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     await workoutBox.put(_planKey, plan.toMap());
+    // audit-2026-05-16 F11-C11-2 / E.6 — fan-out after non-schedule write.
+    // `_planKey` is a global plan key (not a per-date schedule), so it can't
+    // route through WorkoutWriteService.upsertScheduled. Explicit fire-and-
+    // forget sync + pushSnapshot per CLAUDE.md §15 allowed-writers contract.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
     if (preferredDays != null) {
       await MigratedKey.write('preferred_training_days', preferredDays);
     }
@@ -410,6 +417,10 @@ class WorkoutScheduleService {
       await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     }
     await workoutBox.put(_planKey, plan.toMap());
+    // audit-2026-05-16 F11-C11-2 / E.6 — fan-out after non-schedule write.
+    // `_planKey` is global plan state, not a per-date schedule entry.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
     if (preferredDays != null) {
       await MigratedKey.write('preferred_training_days', preferredDays);
     }
@@ -701,7 +712,8 @@ class WorkoutScheduleService {
       final sourceDate = week4Start.add(Duration(days: offset));
       final targetDate = rollStart.add(Duration(days: offset));
       final sourceKey = '$_schedulePrefix${_dateKey(sourceDate)}';
-      final targetKey = '$_schedulePrefix${_dateKey(targetDate)}';
+      // E.6 — targetKey removed; WorkoutWriteService.upsertScheduled
+      // derives the schedule key internally from targetDate via scheduleKey().
 
       final raw = workoutBox.get(sourceKey);
       if (raw is! Map) continue;
@@ -714,7 +726,12 @@ class WorkoutScheduleService {
       copy['is_swapped'] = false;
       copy['original_date'] = null;
 
-      await workoutBox.put(targetKey, copy);
+      // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: targetDate,
+        entry: copy,
+        source: WriteSource.schedSwap,
+      );
     }
 
     // Extend the plan end by 7 days so downstream clamping stays valid.
@@ -841,7 +858,13 @@ class WorkoutScheduleService {
     map['status'] = 'completed';
     map['completed_at'] = completionTime.toIso8601String();
     map['duration_seconds'] = durationSeconds;
-    await _hive.workoutBox.put(key, map);
+    // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+    // upsertScheduled handles mutex + sync fan-out + provider invalidation.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: date,
+      entry: map,
+      source: WriteSource.schedSwap,
+    );
   }
 
   /// Mark a workout day as skipped.
@@ -852,7 +875,12 @@ class WorkoutScheduleService {
 
     final map = Map<String, dynamic>.from(data as Map);
     map['status'] = 'skipped';
-    await _hive.workoutBox.put(key, map);
+    // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: date,
+      entry: map,
+      source: WriteSource.schedSwap,
+    );
   }
 
   // ── Pause range (Phase D.4) ─────────────────────────────────────
@@ -1156,7 +1184,14 @@ class WorkoutScheduleService {
 
     exercises[matchIndex] = replacement;
     scheduleMap['exercises'] = exercises;
-    await _hive.workoutBox.put(scheduleKey, scheduleMap);
+    // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+    // `date` is the String form (YYYY-MM-DD) so parse to DateTime for the
+    // WriteService contract. Date is IST-canonical per CLAUDE.md §15.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: DateTime.parse(date),
+      entry: scheduleMap,
+      source: WriteSource.schedSwap,
+    );
 
     return SwapExerciseResult(
       date: date,
@@ -1299,7 +1334,12 @@ class WorkoutScheduleService {
     scheduleMap['exercises'] = trimmedExercises;
     scheduleMap['shortened_via'] = 'ai_coach';
     scheduleMap['shortened_at'] = DateTime.now().toIso8601String();
-    await _hive.workoutBox.put(scheduleKey, scheduleMap);
+    // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: DateTime.parse(date),
+      entry: scheduleMap,
+      source: WriteSource.schedSwap,
+    );
 
     return ShortenDayResult(
       date: date,
@@ -1427,7 +1467,12 @@ class WorkoutScheduleService {
       if (data != null) {
         final map = Map<String, dynamic>.from(data as Map);
         map['status'] = 'travel';
-        await _hive.workoutBox.put(key, map);
+        // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: date,
+          entry: map,
+          source: WriteSource.schedSwap,
+        );
       }
     }
 
@@ -1592,7 +1637,13 @@ class WorkoutScheduleService {
       }
     }
 
-    await _hive.workoutBox.put(scheduleKey, templateEntry);
+    // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+    // `date` is DateTime per assignTemplateToDate signature.
+    await WorkoutWriteService.instance.upsertScheduled(
+      date: date,
+      entry: templateEntry,
+      source: WriteSource.schedSwap,
+    );
 
     // Audit 2026-05-12 P3-C — stamp last_used_at on the parent template so
     // "recently used templates" sort works. Cloud column was projected in
@@ -1603,6 +1654,9 @@ class WorkoutScheduleService {
       final updatedTmpl = Map<String, dynamic>.from(tmplMap);
       updatedTmpl['last_used_at'] = DateTime.now().toUtc().toIso8601String();
       await _hive.workoutBox.put(templateId, updatedTmpl);
+      // audit-2026-05-16 F11-C11-2 / E.6 — template metadata change must
+      // reach cloud so the recently-used-templates sort picks it up.
+      unawaited(SyncService.instance.syncWorkoutData());
     } catch (_) {
       // Non-fatal — last_used_at is purely a sort hint.
     }
@@ -1666,8 +1720,13 @@ class WorkoutScheduleService {
     // Restore displaced backup if one exists, otherwise delete.
     final backup = _hive.workoutBox.get(displacedKey);
     if (backup is Map) {
-      await _hive.workoutBox.put(
-          scheduleKey, Map<String, dynamic>.from(backup));
+      // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+      // `date` is DateTime per unscheduleTemplateFromDate signature.
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: date,
+        entry: Map<String, dynamic>.from(backup),
+        source: WriteSource.schedSwap,
+      );
       await _hive.workoutBox.delete(displacedKey);
     } else {
       await _hive.workoutBox.delete(scheduleKey);
@@ -1848,7 +1907,12 @@ class WorkoutScheduleService {
         ..['is_swapped'] = false
         ..['original_date'] = null;
 
-      await workoutBox.put('$_schedulePrefix$targetDateKey', newEntry);
+      // audit-2026-05-16 F11-C11-2 / E.6 — route through canonical WriteService.
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: targetDate,
+        entry: newEntry,
+        source: WriteSource.schedSwap,
+      );
     }
   }
 }

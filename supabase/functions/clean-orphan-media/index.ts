@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { isAuthorizedCronCall } from '../_shared/cron_auth.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -15,28 +16,17 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // ── C-4 cron-auth gate ───────────────────────────────────────────────
-  // Audit 2026-05-11 / closes-diagnose 7ad0c4. These cron functions had
-  // `verify_jwt: false` and no manual auth. Now require Bearer == either
-  // SUPABASE_SERVICE_ROLE_KEY (existing pg_cron path) OR CRON_SECRET
-  // (rotatable hardening). If CRON_SECRET env var is unset, only the
-  // service-role-key path works — graceful rollout.
-  {
-    const authHeader = req.headers.get('Authorization') ?? '';
-    const token = authHeader.startsWith('Bearer ')
-      ? authHeader.slice('Bearer '.length)
-      : '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const cronSecret = Deno.env.get('CRON_SECRET');
-    const isServiceRole = !!serviceRoleKey && token === serviceRoleKey;
-    const isCronSecret = !!cronSecret && token === cronSecret;
-    if (!isServiceRole && !isCronSecret) {
-      console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+  // audit-2026-05-16 E.14.C — replaced inline env-equality JWT auth
+  // (Test #16 P1-D drift class) with shared `isAuthorizedCronCall(req)`.
+  // Survives Vault/env key rotation: verifies JWT signature against
+  // SUPABASE_JWT_SECRET + role-claim === 'service_role'. CRON_SECRET
+  // opaque-token escape hatch preserved inside the helper.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   if (req.method !== 'POST') {

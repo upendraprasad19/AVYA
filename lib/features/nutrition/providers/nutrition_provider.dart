@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
@@ -383,37 +384,36 @@ class WaterIntakeNotifier extends Notifier<int> {
   int build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final healthBox = HiveService.instance.healthBox;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
+    // audit-2026-05-16 task E.7 — read with IST date to match the
+    // canonical writer in HealthWriteService.setWaterMl.
+    final todayStr = istDateStr(DateTime.now());
     final raw = healthBox.get('water_ml_$todayStr');
     return (raw as int?) ?? 0;
   }
 
   Future<void> addWater(int ml) async {
-    // C-12 batch (audit-2026-05-11) — water_ml_ key now IST-anchored
-    // via `istDateStr` so the date key matches the rest of the
-    // nutrition surface (CLAUDE.md "All date-keys must use IST").
-    final todayStr = istDateStr(DateTime.now());
-
+    // audit-2026-05-16 task E.7 — routes through HealthWriteService.
+    // C-12 batch (audit-2026-05-11) already aligned the key to IST via
+    // `istDateStr`; the service formalises that contract and centralises
+    // the sync fan-out / telemetry pattern.
     state = (state + ml).clamp(0, 5000);
-    await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
-    // Fire-and-forget cloud sync + AI coach snapshot refresh.
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    await HealthWriteService.instance.setWaterMl(
+      date: DateTime.now(),
+      totalMl: state,
+      source: WriteSource.manual,
+    );
   }
 
   Future<void> increment() async => addWater(250);
 
   Future<void> decrement() async {
     if (state <= 0) return;
-    final todayStr = istDateStr(DateTime.now());
-
     state = (state - 250).clamp(0, 5000);
-    await HiveService.instance.healthBox.put('water_ml_$todayStr', state);
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    await HealthWriteService.instance.setWaterMl(
+      date: DateTime.now(),
+      totalMl: state,
+      source: WriteSource.manual,
+    );
   }
 }
 
@@ -446,10 +446,9 @@ class UrineColorNotifier extends Notifier<int> {
   @override
   int build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    // Restore today's selection from Hive if previously saved.
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    // audit-2026-05-16 task E.7 — IST-anchored read to match the
+    // HealthWriteService.logUrine writer.
+    final todayStr = istDateStr(DateTime.now());
     final saved = HiveService.instance.healthBox.get('urine_color_$todayStr');
     if (saved is Map) {
       return (saved['index'] as int?) ?? -1;
@@ -459,22 +458,18 @@ class UrineColorNotifier extends Notifier<int> {
 
   void select(int index) {
     state = index;
-    // Persist to Hive for data analysis
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    HiveService.instance.healthBox.put('urine_color_$todayStr', {
-      'type': 'urine_color',
-      'date': todayStr,
-      'index': index,
-      'label': index >= 0 && index < _labels.length ? _labels[index] : 'unknown',
-      'recorded_at': now.toIso8601String(),
-    });
-    // APK Test #3 / Plan D Task 1 sync-gap close. Previously only
-    // pushSnapshot fired here; the health_logs cloud row never updated
-    // until the next launch's full sync. Mirror the addWater pattern.
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
+    // audit-2026-05-16 task E.7 — routes through HealthWriteService so
+    // the urine_color_<istDate> key is IST-anchored (pre-fix used
+    // device-local now.year-now.month-now.day) and the sync fan-out is
+    // identical to every other health mutation.
+    final label =
+        index >= 0 && index < _labels.length ? _labels[index] : 'unknown';
+    unawaited(HealthWriteService.instance.logUrine(
+      date: DateTime.now(),
+      color: label,
+      source: WriteSource.manual,
+      colorIndex: index,
+    ));
   }
 }
 
@@ -488,18 +483,20 @@ class HydrationSaveNotifier extends Notifier<bool> {
   bool build() => false;
 
   Future<void> save() async {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
     final waterMl = ref.read(waterIntakeProvider);
     final urineIdx = ref.read(urineColorProvider);
 
-    await HiveService.instance.healthBox.put('hydration_$todayStr', {
-      'water_ml': waterMl,
-      'urine_color_index': urineIdx,
-      'saved_at': now.toIso8601String(),
-    });
+    // audit-2026-05-16 task E.7 — routes through HealthWriteService.
+    // Hydration score is left at 0 since the prior snapshot never
+    // captured one; callers can pass a real score once the scoring rule
+    // lives somewhere canonical.
+    await HealthWriteService.instance.logHydration(
+      date: DateTime.now(),
+      totalMl: waterMl,
+      hydrationScore: 0,
+      source: WriteSource.manual,
+      urineColorIndex: urineIdx,
+    );
 
     state = true;
     await Future.delayed(const Duration(milliseconds: 2500));

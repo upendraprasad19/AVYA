@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -769,16 +771,16 @@ class WeightLogNotifier extends Notifier<void> {
   void build() {}
 
   void logWeight(double weightKg) {
-    final today = DateTime.now();
-    final dateStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    final healthBox = HiveService.instance.healthBox;
-    healthBox.put('weight_$dateStr', {
-      'type': 'weight_log',
-      'date': dateStr,
-      'weight_kg': weightKg,
-      'created_at': today.toIso8601String(),
-    });
+    // audit-2026-05-16 task E.7 — routes through HealthWriteService so
+    // the `weight_<istDate>` key is IST-anchored and the syncWeightNow
+    // + pushSnapshot fan-out lives in a single canonical place. The
+    // companion profile mutation stays here (the service is scoped to
+    // healthBox writes).
+    unawaited(HealthWriteService.instance.logWeight(
+      date: DateTime.now(),
+      weightKg: weightKg,
+      source: WriteSource.manual,
+    ));
     // Also update profile current_weight_kg
     final userBox = HiveService.instance.userBox;
     final profile =
@@ -787,17 +789,8 @@ class WeightLogNotifier extends Notifier<void> {
     userBox.put('profile', profile);
     BadgeService.instance.checkAll();
 
-    // Immediate cloud sync (CLAUDE.md §15 "fire-and-forget sync pattern").
-    // Before this, weight_logs only synced during weeklyFullSync, leaving
-    // cloud empty for hours/days after the user logged weight. Observed
-    // 2026-04-18 on icanbefitter@gmail.com: logged 75.9 kg, weight_logs
-    // table still had 0 rows at test time.
-    //
-    // `syncWeightNow` pushes just weight_logs (cheap, single table).
-    // `pushSnapshot` refreshes AI coach context with the new weight.
-    // Also re-sync the profile row since current_weight_kg changed.
-    unawaited(SyncService.instance.syncWeightNow());
-    unawaited(SyncService.instance.pushSnapshot());
+    // Re-sync the profile row since current_weight_kg changed (the
+    // HealthWriteService already handles weight_logs + pushSnapshot).
     final userId = SupabaseService.instance.currentUser?.id;
     if (userId != null && userId.isNotEmpty) {
       unawaited(SyncService.instance.syncProfileNow(userId));

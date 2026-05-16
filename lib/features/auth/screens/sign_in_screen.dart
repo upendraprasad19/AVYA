@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/auth_header.dart';
@@ -604,6 +605,33 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   final email = _emailController.text.trim();
                   final password = _passwordController.text;
                   if (_isSignUp) {
+                    // E.3 fix (audit 2026-05-16, F3-1.2 DPDP gap):
+                    // Stamp ToS/Privacy acceptance to Hive BEFORE signUp.
+                    // The pre-checked checkbox + visible link affordance is
+                    // the affirmative-action signal per DPDP §11; this write
+                    // captures the timestamp + version so `_ensureLocalUser`
+                    // (auth_provider.dart:505-516) can project upward to
+                    // `users.terms_accepted_at` / `users.terms_version`
+                    // on the first post-auth sync. UTC ISO8601 because the
+                    // cloud column is `timestamptz` (IST applies to date-keys
+                    // only, not timestamps — see CLAUDE.md §15 IST contract).
+                    // closes-diagnose: 2026-05-16-terms-accepted-at-dpdp
+                    try {
+                      HiveService.instance.userBox.put(
+                        'terms_accepted_at',
+                        DateTime.now().toUtc().toIso8601String(),
+                      );
+                      HiveService.instance.userBox.put(
+                        'terms_version',
+                        AppConstants.termsVersion,
+                      );
+                    } catch (_) {
+                      // Hive write failure is non-fatal — the upward sync
+                      // is gated on Hive presence, so a failure here just
+                      // means terms_accepted_at stays NULL in cloud (same
+                      // as pre-fix state). The auth flow itself must not
+                      // block on telemetry-side writes.
+                    }
                     authNotifier.signUpWithEmail(email, password);
                   } else {
                     authNotifier.signInWithEmail(email, password);
