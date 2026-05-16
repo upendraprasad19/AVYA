@@ -14,6 +14,7 @@ import {
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,28 +36,20 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // ── C-4 cron-auth gate ───────────────────────────────────────────────
-  // Audit 2026-05-11 / closes-diagnose 7ad0c4. These cron functions had
-  // `verify_jwt: false` and no manual auth. Now require Bearer == either
-  // SUPABASE_SERVICE_ROLE_KEY (existing pg_cron path) OR CRON_SECRET
-  // (rotatable hardening). If CRON_SECRET env var is unset, only the
-  // service-role-key path works — graceful rollout.
-  {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.slice("Bearer ".length)
-      : "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const cronSecret = Deno.env.get("CRON_SECRET");
-    const isServiceRole = !!serviceRoleKey && token === serviceRoleKey;
-    const isCronSecret = !!cronSecret && token === cronSecret;
-    if (!isServiceRole && !isCronSecret) {
-      console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+  // ── Audit 2026-05-16 / E.14.C — JWT signature + role-claim auth.
+  //
+  // Was: inline env-equality `token === SUPABASE_SERVICE_ROLE_KEY`. That
+  // shape silently 401-stormed when the Vault-stored JWT and the env-
+  // injected SUPABASE_SERVICE_ROLE_KEY drifted (Test #16 P1-D root
+  // cause). New: verify the JWT signature against SUPABASE_JWT_SECRET and
+  // require `role === 'service_role'`. CRON_SECRET opaque-token path is
+  // preserved inside the helper as escape hatch.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] unauthorized caller; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const requestId = crypto.randomUUID().split("-")[0];

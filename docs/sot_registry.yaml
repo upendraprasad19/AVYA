@@ -1485,3 +1485,151 @@ concepts:
       wrapUserScopedBox (raw Hive.box() bypasses the guard). When adding
       a new user-scoped Hive box, route reads through HiveService
       getters that delegate to wrapUserScopedBox.
+
+  # ─── Audit 2026-05-16 — APK Test #16.2 Phase E batch (5 new concepts) ───
+
+  - concept: coach_memory_coach_notes_upward_sync
+    domain: ai_coach
+    description: |
+      Hive `coachBox['coaching_notes']` → cloud `coach_memory.coach_notes`
+      column name asymmetry. Pre-audit-2026-05-16 the upward sync omitted
+      this projection entirely → cloud column was 100% NULL across all 4
+      live users → AI coach memory lost on every reinstall (9th writer/
+      reader drift instance).
+    writers:
+      - file: lib/core/services/sync/sync_coach.dart
+        line_range: 32-42
+        method: syncCoachMemoryNow
+        notes: |
+          The Hive read uses 'coaching_notes' (singular Hive key); the
+          cloud write uses 'coach_notes' (singular cloud column — DIFFERENT
+          word). Both names are intentional history; do not rename either
+          without updating both sides + the contract test.
+    readers:
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        method: buildAiContext (coaching_notes section)
+      - file: supabase/functions/rolling-context/index.ts
+        method: reads coach_memory.coach_notes server-side
+    regression_test: test/contracts/coach_notes_upward_sync_test.dart
+    hive:
+      box: coachBox
+      key: coaching_notes
+    cloud:
+      table: coach_memory
+      columns: [coach_notes]
+    sync_methods: [syncCoachMemoryNow]
+    class_constraints: |
+      Hive name + cloud name MUST stay aligned with their canonical (different
+      but documented) spellings. Field rename on either side requires the
+      other side updated in the same PR + contract test updated.
+
+  - concept: ai_coach_tool_dispatcher_log_pr
+    domain: ai_coach
+    description: |
+      AI coach `logPR` tool intent → canonical `WorkoutWriteService.logExercise`
+      with a single-set ExerciseSet (NOT the legacy
+      `WorkoutRepository.logSetWithPrRescan` shim). PR detection happens
+      inside the WriteService via `_rescanPrFor`. Pre-fix routed through
+      the legacy shim → bypassed mutex + telemetry + cloud sync batching;
+      8th writer/reader drift instance.
+    writers:
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: _executeLogPR
+        line_range: 327-380
+    regression_test: test/contracts/tool_dispatcher_log_pr_uses_writeservice_test.dart
+    forbidden_legacy_patterns:
+      - 'WorkoutRepository.instance.logSetWithPrRescan('
+    class_constraints: |
+      MUST construct an ExerciseSet (single-element list) and call
+      WorkoutWriteService.instance.logExercise(...). Do NOT add a new
+      log_pr-specific path that bypasses the WriteService.
+
+  - concept: workout_schedule_service_routes_through_write_service
+    domain: workout
+    description: |
+      All 9 schedule mutations in WorkoutScheduleService route through
+      `WorkoutWriteService.upsertScheduled` (mutex + sync + invalidation).
+      3 non-schedule writes (2 `_planKey` upserts in generate*Plan + 1
+      template `last_used_at` stamp) keep direct `workoutBox.put` + fire
+      explicit `unawaited(SyncService.instance.syncWorkoutData())` adjacent.
+      1 `displacedKey` backup write stays direct (internal rollback state,
+      no cloud sync needed — the sibling restore path produces the
+      cloud-visible mutation).
+    writers:
+      - file: lib/core/services/workout_schedule_service.dart
+        method: markCompleted, markSkipped, activateTravelMode,
+                swapExerciseInDay, shortenDay, _copyWeek*, assignTemplateToDate,
+                unscheduleTemplateFromDate
+        notes: |
+          9 schedule writes all delegate to WorkoutWriteService.upsertScheduled
+          with `source: WriteSource.schedSwap`. The 3 non-schedule writes
+          are at `workout_schedule_service.dart:249` + `:419` (_planKey)
+          + `:1655` (templateId last_used_at).
+    regression_test: test/contracts/workout_schedule_service_uses_write_service_test.dart
+    sync_methods: [syncWorkoutData]
+    class_constraints: |
+      Direct `workoutBox.put` count in WorkoutScheduleService is bounded
+      to exactly 4 (3 non-schedule + 1 displacedKey backup). Any new
+      direct put requires adding either (a) a routing through
+      WorkoutWriteService.upsertScheduled if it's a schedule write, or
+      (b) explicit `unawaited(SyncService.instance.syncWorkoutData())`
+      adjacent if it's a non-schedule write that should reach cloud.
+
+  - concept: health_write_service
+    domain: health
+    description: |
+      Canonical writer for the health domain (sleep, weight, measurement,
+      water, urine, hydration). Mirrors WorkoutWriteService + NutritionWriteService.
+      Per-(kind, date) mutex. Every date key uses `istDateStr(date)` (closes
+      F2-R2 sleep IST drift in BiometricNotifier.logSleep). Fire-and-forget
+      cloud sync via routed `SyncService.syncXxxNow()` per method.
+    writers:
+      - file: lib/core/services/health_write_service.dart
+        method: logSleep, logWeight, logMeasurement, setWaterMl, logUrine, logHydration
+    readers:
+      - file: lib/features/home/providers/home_provider.dart
+        method: WeightLogNotifier + weight history readers
+      - file: lib/features/profile/providers/profile_provider.dart
+        method: BiometricNotifier (sleep)
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
+      - file: lib/core/services/sync/sync_health.dart
+        method: cloud projection
+    regression_test: test/contracts/health_write_service_writer_to_reader_test.dart
+    hive:
+      box: healthBox
+      key_prefixes: ['sleep_log_', 'weight_', 'measurement_', 'water_ml_', 'urine_color_', 'hydration_']
+    sync_methods: [syncSleepNow, syncWeightNow, syncMeasurementsNow, syncNutritionData]
+    class_constraints: |
+      ALL UI-layer health mutations MUST go through HealthWriteService.
+      Direct `healthBox.put('sleep_log_*' | 'weight_*' | 'measurement_*' | ...)`
+      outside the allowed-writers list (HiveService boot / SyncService restore /
+      HealthSyncService HealthKit-pull / Migrators) is a regression. The list
+      key `coachBox['sleep_logs']` write in conversational_log_handler is
+      intentionally direct (list-append semantics, documented).
+
+  - concept: ai_proxy_placeholder_resolution
+    domain: ai_coach
+    description: |
+      `ai-proxy` food_text_analysis branch reserves a placeholder row
+      BEFORE calling Gemini (so the rate-limit trigger can count atomically).
+      Every exit branch — success / Gemini failure / JSON parse failure —
+      MUST `await` the placeholder UPDATE to a terminal `model_used` value
+      (real label / 'failed_gemini' / 'failed_parse'). Pre-fix only the
+      success path UPDATEd fire-and-forget, and the 2 failure paths just
+      returned err() → 8 stuck `pending` rows accumulated 2026-05-11→15.
+    writers:
+      - file: supabase/functions/ai-proxy/index.ts
+        method: resolvePlaceholder helper inside food_text_analysis branch
+        notes: |
+          The helper closes the placeholder on every exit. Awaited (not
+          fire-and-forget) — one extra round-trip is worth the orphan
+          elimination.
+    regression_test: test/contracts/ai_proxy_placeholder_resolution_test.dart
+    cloud:
+      table: ai_coach_interactions
+      columns: [model_used, ai_response, tokens_used]
+    class_constraints: |
+      Placeholder-row pattern: any reservation BEFORE an external call
+      must resolve on EVERY exit branch. Fire-and-forget shortcuts produce
+      orphan classes — explicitly banned for this surface.

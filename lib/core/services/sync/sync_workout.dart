@@ -107,6 +107,9 @@ extension SyncServiceWorkout on SyncService {
         // onto a single null-keyed row in cloud. Skip and emit telemetry
         // so a future column-nullability regression doesn't silently
         // swallow data.
+        // audit-2026-05-16 E.12 — `sets_completed`, `rpe` columns dropped
+        // from workout_logs in migration 067 (cloud was 100% NULL). Hive
+        // fields retained for restore round-trip + migrators.
         final wlogDate = (log['date'] as String?)?.trim();
         final wlogName = (log['workout_name'] as String?)?.trim();
         if (wlogDate == null ||
@@ -126,9 +129,7 @@ extension SyncServiceWorkout on SyncService {
           'exercise_name': wlogName,
           'date': wlogDate,
           'logged_at': resolved,
-          'sets_completed': log['sets_completed'],
           'duration_seconds': log['duration_seconds'],
-          if (log['rpe'] != null) 'rpe': log['rpe'],
           'notes': log['id'], // store local ID for reference
           'created_at': resolved,
         }, onConflict: 'user_id,date,exercise_name');
@@ -420,16 +421,33 @@ extension SyncServiceWorkout on SyncService {
       final date = entry['date'] as String?;
       if (date == null) continue;
 
+      // audit-2026-05-16 F3-1.3 — `duration_seconds` lives on the
+      // `wlog_<dateStr>` workout-log row (written by
+      // `WorkoutWriteService.markCompleted`), NOT on the schedule entry.
+      // Pre-fix this projection pulled the field directly off the schedule
+      // entry map, which never has it → cloud column was 100% NULL (11/11
+      // rows). Look up the matching wlog by IST date and pull the field
+      // from there. Absent → omit from payload (column is nullable;
+      // absence beats null on the wire).
+      // (Anti-regression test in test/contracts/schedule_completion_duration_*
+      // bans the pre-fix shape `<entry>[<key>]` so don't restore it.)
+      final wlog = workoutBox.get('wlog_$date');
+      final durationSeconds =
+          wlog is Map ? (wlog['duration_seconds'] as num?)?.toInt() : null;
+
       try {
-        await _supabase.client.from('workout_schedule_completions').upsert({
+        final payload = <String, dynamic>{
           'user_id': userId,
           'scheduled_date': date,
           'day_of_week': entry['day_of_week']?.toString(),
           'workout_name': entry['workout_name'],
-          'duration_seconds': entry['duration_seconds'],
+          if (durationSeconds != null) 'duration_seconds': durationSeconds,
           'completed_at':
               entry['completed_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id,scheduled_date');
+        };
+        await _supabase.client
+            .from('workout_schedule_completions')
+            .upsert(payload, onConflict: 'user_id,scheduled_date');
       } catch (e, st) {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -948,13 +966,15 @@ extension SyncServiceWorkout on SyncService {
         final exercises = tmpl['exercises'] as List? ?? [];
 
         // Upsert template header — `id` deliberately omitted.
+        // audit-2026-05-16 E.12 — migration 067 dropped
+        // workout_templates.description + estimated_duration_mins (template
+        // builder UI never exposes these inputs; 100% NULL across all
+        // live rows). Hive `description` field is retained for the restore
+        // round-trip (cloud read returns null → empty in Hive).
         await _supabase.client.from('workout_templates').upsert({
           'user_id': userId,
           'name': tmplName,
-          if (tmpl['description'] != null) 'description': tmpl['description'],
           'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'] ?? 'custom',
-          if (tmpl['estimated_duration_mins'] != null)
-            'estimated_duration_mins': tmpl['estimated_duration_mins'],
           'source': 'user',
           'is_active': true,
           'created_at':
@@ -1014,7 +1034,13 @@ extension SyncServiceWorkout on SyncService {
               // (template_id, order_index), the existing row's id is
               // preserved and other fields are updated.
               'template_id': cloudTmplId,
-              if (isUuid) 'exercise_id': rawExerciseId,
+              // audit-2026-05-16 E.12 — migration 067 dropped 5 columns
+              // from template_exercises (exercise_id, rest_seconds,
+              // prescribed_weight, prescribed_time_secs, notes — all 100%
+              // NULL in prod, no UI writers). Projection trimmed to the
+              // surviving columns. Hive-side fields are retained for the
+              // restore round-trip (cloud → Hive reads of dropped columns
+              // return null, which is the expected default).
               'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
               'order_index': i,
               'logging_type': ex['logging_type'] ?? 'weight_reps',
@@ -1023,16 +1049,6 @@ extension SyncServiceWorkout on SyncService {
                     ? ex['sets']
                     : int.tryParse(ex['sets'].toString()),
               if (ex['reps'] != null) 'prescribed_reps': ex['reps'].toString(),
-              if (ex['weight_kg'] != null || ex['prescribed_weight'] != null)
-                'prescribed_weight': (ex['weight_kg'] ??
-                        ex['prescribed_weight'])
-                    .toString(),
-              if (ex['time_secs'] != null || ex['prescribed_time_secs'] != null)
-                'prescribed_time_secs':
-                    ex['time_secs'] ?? ex['prescribed_time_secs'],
-              if (ex['rest_seconds'] != null || ex['rest_secs'] != null)
-                'rest_seconds': ex['rest_seconds'] ?? ex['rest_secs'],
-              if (ex['notes'] != null) 'notes': ex['notes'],
             }, onConflict: 'template_id,order_index');
           } catch (exErr, st) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');

@@ -31,6 +31,14 @@ extension SyncServiceCoach on SyncService {
       putIfPresent('preferred_workout_time');
       putIfPresent('body_part_priorities');
 
+      // audit-2026-05-16 F3-1.1 — Hive `coaching_notes` <-> cloud `coach_notes`
+      // name mismatch caused this column to be 100% NULL across all users (4/4).
+      // Upward sync never projected it; AI memory was lost on every reinstall.
+      // Hive key preserved as `coaching_notes` for back-compat with consumers
+      // (`coachBox.get('coaching_notes')`); the cloud column is `coach_notes`.
+      final notes = coach.get('coaching_notes');
+      if (notes != null) payload['coach_notes'] = notes;
+
       await _supabase.client
           .from('coach_memory')
           .upsert(payload, onConflict: 'user_id')
@@ -80,10 +88,55 @@ extension SyncServiceCoach on SyncService {
         if (rawId is String && SyncService._looksLikeUuid(rawId)) {
           continue;
         }
-        // Edge case: pre-server entry with no UUID. Persist with a
-        // deterministic v5 UUID under a clearer channel so server-side
-        // analytics can isolate this fallback path if it becomes
-        // surprisingly hot.
+
+        // audit-2026-05-16 F6-4 — cross-channel dedup. Pre-fix the orphan
+        // path silently produced paired duplicate rows whenever a user
+        // pasted the same meal text into both the AI Coach chat (Hive
+        // `coach_<ms>` entry → orphan upsert) and the Nutrition AI Text
+        // tab (server-side `food_text_analysis` placeholder insert from
+        // ai-proxy) within 60-90 seconds of each other. The server-side
+        // 60s dedup gate at ai-proxy/index.ts:222-254 only catches
+        // intra-channel duplicates — it can't see the client orphan path.
+        //
+        // Live audit found 8 such cross-channel pairs spanning
+        // 2026-05-11 → 2026-05-15 (every one was a meal-log text the
+        // founder typed twice during testing). Class fix: before the
+        // orphan upsert, SELECT for ANY existing row from this user with
+        // the same user_message within the last 5 minutes. If hit, skip
+        // the orphan write — the server-side row IS the source of truth
+        // for that turn regardless of channel.
+        final userMsg = (entry['user_message'] as String? ?? '').trim();
+        if (userMsg.isNotEmpty) {
+          final cutoff =
+              DateTime.now().toUtc().subtract(const Duration(minutes: 5));
+          final existing = await _supabase.client
+              .from('ai_coach_interactions')
+              .select('id, channel, created_at')
+              .eq('user_id', userId)
+              .eq('user_message', userMsg.substring(
+                  0, userMsg.length > 500 ? 500 : userMsg.length))
+              .gte('created_at', cutoff.toIso8601String())
+              .limit(1)
+              .maybeSingle();
+          if (existing != null) {
+            // Server already has a row for this turn (any channel) — drop
+            // the orphan write. Stamp the Hive entry with the cloud id
+            // so future cold restores collapse cleanly on the
+            // `coach_<ts>` derivation path in _restoreCoachInteractions.
+            final cloudId = existing['id'] as String?;
+            if (cloudId != null && cloudId.isNotEmpty) {
+              final updated = Map<String, dynamic>.from(entry);
+              updated['id'] = cloudId;
+              await coachBox.put(key, updated);
+            }
+            continue;
+          }
+        }
+
+        // True local-only entry (no server-side match within 5 min).
+        // Persist with a deterministic v5 UUID under the orphan channel
+        // so server-side analytics can isolate this fallback path if it
+        // becomes surprisingly hot.
         final cloudId = SyncService._deterministicId('coach|$userId|$key');
         await _supabase.client.from('ai_coach_interactions').upsert({
           'id': cloudId,

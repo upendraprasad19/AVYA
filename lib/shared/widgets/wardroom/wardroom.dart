@@ -44,8 +44,11 @@ export 'ward_kv_row.dart';
 export 'ward_letterhead.dart';
 export 'ward_phase_block.dart';
 export 'ward_phase_dots.dart';
-export 'rank_chip.dart';
-export 'rank_insignia.dart';
+// audit-2026-05-16 E.11 — `rank_chip.dart` + `rank_insignia.dart` DELETED.
+// 5 callsites migrated to `WardRankInsignia`; founder approved
+// NEEDS_DECISION 1 Option A. Re-introducing either file would be a
+// regression — use WardRankInsignia (+ optional `color: AppColors.textMute`
+// for the "dimmed" variant) instead.
 export 'ward_radio_row.dart';
 export 'ward_rank_insignia.dart';
 export 'ward_rank_pill.dart';

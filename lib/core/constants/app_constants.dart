@@ -35,11 +35,10 @@ class AppConstants {
   // ── PRO Feature Keys ──────────────────────────────────────
 
   static const String featurePhases2To12 = 'phases_2_to_12';
-  @Deprecated(
-    'Active workout is always free as of Q6 (APK test #2 batch). '
-    'Kept for legacy code compatibility; do not gate against this.',
-  )
-  static const String featureActiveWorkoutMode = 'active_workout_mode';
+  // audit-2026-05-16 E.8 — `featureActiveWorkoutMode` constant deleted.
+  // Active workout has been free since Test #2 Q6 (2026-04-25) and had 0
+  // `gate()` callsites. The constant remained @Deprecated for back-compat
+  // but accumulated zero references over 3 weeks of testing. Removed cleanly.
   static const String featureAiCoachUnlimited = 'ai_coach_unlimited';
   // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle
   // deleted from UI, single AI coach backend, no separate reasoning gate.
@@ -48,11 +47,14 @@ class AppConstants {
   static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)
   static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)
   static const String featureAiTextLogPro = 'ai_text_log_pro';      // Unlimited PRO (free=10/day)
-  static const String featureVoiceNotes = 'voice_notes';
+  // audit-2026-05-16 E.8 — `featureVoiceNotes` constant deleted.
+  // Voice has been free since Test #9 F13 (zero on-device compute cost via
+  // speech_to_text) and the constant had 0 `gate()` callsites.
   static const String featureMorningAlertPro = 'morning_alert_pro'; // AI-personalised (free=generic)
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
   static const String featureAdaptiveWorkouts = 'adaptive_workouts'; // Phase 2
-  static const String featureDietPlanPdf = 'diet_plan_pdf';        // PDF export
+  // audit-2026-05-16 E.8 — `featureDietPlanPdf` constant deleted.
+  // CLAUDE.md §14 confirms diet-plan PDF export is FREE. 0 `gate()` callsites.
   static const String featurePhotoAnalysis = 'photo_analysis';     // Photo in chat (PRO)
 
   // ── Free Tier Limits ──────────────────────────────────────
@@ -94,9 +96,14 @@ class AppConstants {
   /// hardcoded `0.0.0+release` placeholder in error telemetry so client_errors
   /// rows can be correlated to specific APK builds.
   ///
-  /// IMPORTANT: Keep this in sync with `pubspec.yaml` `version:` field. The
-  /// `/build-apk` skill bumps both when shipping a new APK.
-  static const String appVersion = '1.0.0+23';
+  /// IMPORTANT: Keep this in sync with `pubspec.yaml` `version:` field.
+  ///
+  /// audit-2026-05-16 F10.1 — was hardcoded `'1.0.0+23'` since Test #11 but
+  /// APKs +24/+25/+26 shipped without bumping the constant. 358 telemetry
+  /// rows in the last 30 days were mis-labelled. Bumped to `+27` for the
+  /// audit ship; permanent gate `scripts/check_app_version_matches_pubspec.dart`
+  /// added so the next regression is caught pre-build.
+  static const String appVersion = '1.0.0+27';
 
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';

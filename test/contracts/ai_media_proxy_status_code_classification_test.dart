@@ -88,14 +88,21 @@ void main() {
 
     test('Storage 5xx throws HttpError(502, "upstream") for retry-eligibility',
         () {
+      // Use a regex that's robust to both `\n` and `\r\n` line endings
+      // (Windows checkout) and to varying indentation. We just need to
+      // see `throw new HttpError(`, then `502`, then `"upstream"` in
+      // proximity (within ~80 chars to scope to the same expression).
+      final pattern = RegExp(
+          r'throw\s+new\s+HttpError\s*\(\s*502\s*,\s*"upstream"',
+          multiLine: true);
       expect(
-        src.contains('throw new HttpError(\n      502,\n      "upstream"') ||
-            src.contains('HttpError(502, "upstream"'),
+        pattern.hasMatch(src),
         isTrue,
         reason:
             'Storage upstream 5xx must produce 502 so the client '
             'retryColdStart layer (which retries 502/503/504) can absorb '
-            'transient Storage outages instead of surfacing them.',
+            'transient Storage outages instead of surfacing them. '
+            'Pattern looked for: `throw new HttpError(502, "upstream"`.',
       );
     });
 

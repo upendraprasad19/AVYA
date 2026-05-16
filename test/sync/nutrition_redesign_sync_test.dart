@@ -17,24 +17,23 @@ void main() {
     'lib/features/nutrition/providers/nutrition_provider.dart',
   ).readAsStringSync();
 
-  test('UrineColorNotifier.select fires syncNutritionData + pushSnapshot',
+  test('UrineColorNotifier.select routes through HealthWriteService (audit-2026-05-16 E.7)',
       () {
     final selectStart = source.indexOf('void select(int index)');
     expect(selectStart, isNot(-1), reason: 'select() must exist');
     final body = source.substring(selectStart, selectStart + 1200);
 
+    // Post-E.7: writes go through HealthWriteService.logUrine which
+    // internally fires syncNutritionData + pushSnapshot. The canonical
+    // path is the WriteService — calling `SyncService.instance.*`
+    // directly is now a regression. Pin the routing instead.
     expect(
-      body.contains('SyncService.instance.syncNutritionData'),
+      body.contains('HealthWriteService.instance.logUrine'),
       isTrue,
-      reason: 'UrineColorNotifier.select must fire syncNutritionData() so '
-          'urine_color_<date> changes propagate to cloud, not just the AI '
-          'snapshot.',
-    );
-    expect(
-      body.contains('SyncService.instance.pushSnapshot'),
-      isTrue,
-      reason: 'pushSnapshot must remain (already present) so AI coach '
-          'context updates live.',
+      reason: 'UrineColorNotifier.select must route through '
+          'HealthWriteService.logUrine (E.7 canonical writer). The '
+          'WriteService internally fires syncNutritionData + pushSnapshot — '
+          'do NOT call them in addition.',
     );
   });
 
@@ -60,14 +59,17 @@ void main() {
 
   // ── Task 10 — broader regression locks ────────────────────────────
 
-  test('addWater fires syncNutritionData + pushSnapshot', () {
-    // Sanity rebar — already correct in the codebase, locked here so a
-    // future "let's batch sync calls" refactor doesn't drop them.
+  test('addWater routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7)', () {
+    // Post-E.7: writes go through HealthWriteService.setWaterMl which
+    // internally fires syncNutritionData + pushSnapshot. Direct calls
+    // to SyncService.instance.* from addWater are now redundant — the
+    // WriteService is the canonical fan-out point.
     final addStart = source.indexOf('Future<void> addWater(int ml)');
     expect(addStart, isNot(-1));
     final body = source.substring(addStart, addStart + 600);
-    expect(body.contains('syncNutritionData'), isTrue);
-    expect(body.contains('pushSnapshot'), isTrue);
+    expect(body.contains('HealthWriteService.instance.setWaterMl'), isTrue,
+        reason: 'addWater must route through HealthWriteService.setWaterMl '
+            '(E.7 canonical writer).');
   });
 
   test('LogFoodSheet mode bodies use HiveService, never raw Hive.box(...)',

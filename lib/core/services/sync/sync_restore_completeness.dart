@@ -102,6 +102,10 @@ extension SyncServiceRestoreCompleteness on SyncService {
         'plan_json': planJson,
         'saved_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'user_id');
+      // E.14.A · audit-2026-05-16 — success-path emission. The audit
+      // could not distinguish "user never saved a diet plan" from
+      // "this call has been silently failing for a week".
+      unawaited(ErrorTelemetry.logEvent('upsert_saved_diet_plans_success'));
     } catch (e, st) {
       debugPrint('[SyncService.syncSavedDietPlan] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -278,6 +282,94 @@ extension SyncServiceRestoreCompleteness on SyncService {
       try {
         await _reportSyncFailure(
             opType: 'restore_rank_promotions', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// E.10 (F4-S2 / audit 2026-05-16) — Restores the user's current
+  /// non-expired referral code from `referral_codes` cloud table
+  /// (migration 035 + 037) into `userBox['referral_code']`.
+  ///
+  /// The cloud table has `UNIQUE(user_id)` so there is at most one
+  /// active row per user. We filter by `expires_at > now()` (matching
+  /// the 7-day window introduced in migration 037) and stash the most
+  /// recent code so [InviteFriendsSheet] can render without hitting the
+  /// network on cold-start. If the local cache is missing or expired,
+  /// the UI still calls [SupabaseService.getOrCreateReferralCode] which
+  /// upserts a fresh row.
+  ///
+  /// FK quirk (CLAUDE.md §7): `referral_codes.user_id` is the ONLY
+  /// user-scoped FK pointing at `auth.users(id)` rather than
+  /// `public.users(id)` — because codes are generated before the
+  /// onboarding sync path inserts the user into `public.users`. The
+  /// restore path is FK-direction-agnostic (we SELECT by user_id, not
+  /// JOIN), so no special handling is required here.
+  Future<void> _restoreReferralCodes(String userId) async {
+    try {
+      final res = await _supabase.client
+          .from('referral_codes')
+          .select('code, expires_at, created_at')
+          .eq('user_id', userId)
+          .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res == null) return;
+      final code = res['code'] as String?;
+      final expiresAt = res['expires_at'];
+      if (code == null || code.isEmpty) return;
+      await _hive.userBox.put('referral_code', <String, dynamic>{
+        'code': code,
+        if (expiresAt != null) 'expires_at': expiresAt.toString(),
+        if (res['created_at'] != null)
+          'created_at': res['created_at'].toString(),
+      });
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreReferralCodes] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_referral_codes'));
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_referral_codes', error: e);
+      } catch (_) {}
+    }
+  }
+
+  /// E.10 (F4-S2 / audit 2026-05-16) — Restores up to 50 referral
+  /// redemption audit rows from `referral_redemptions` cloud table
+  /// (migration 037) into `userBox['referral_redemption_history']`.
+  ///
+  /// Pulled for BOTH sides of the relationship — the user may be the
+  /// referrer (someone used their code) or the referee (they used
+  /// someone else's code). Stored as a raw list of maps so the
+  /// Profile → Invite Friends sheet can render an audit list without
+  /// hitting the network. 50-row cap is plenty (rare-enough event).
+  ///
+  /// FK note (CLAUDE.md §7): both `referrer_id` and `referee_id` FK to
+  /// `public.users(id)` (corrected 2026-05-12 P3-A). Both columns are
+  /// indexed (idx_referral_redemptions_referrer + the implicit unique
+  /// index on referee_id), so the `OR` filter is cheap. PostgREST
+  /// uses comma-separated `or=` syntax via the `.or()` builder.
+  Future<void> _restoreReferralRedemptions(String userId) async {
+    try {
+      final rows = await _supabase.client
+          .from('referral_redemptions')
+          .select(
+            'code, referrer_id, referee_id, days_granted_each, created_at',
+          )
+          .or('referrer_id.eq.$userId,referee_id.eq.$userId')
+          .order('created_at', ascending: false)
+          .limit(50);
+      await _hive.userBox.put('referral_redemption_history', rows);
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreReferralRedemptions] error: $e\n$st');
+      // audit-2026-05-11 H-42 — telemetry pair.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_referral_redemptions'));
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_referral_redemptions', error: e);
       } catch (_) {}
     }
   }

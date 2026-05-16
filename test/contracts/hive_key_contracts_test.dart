@@ -56,23 +56,31 @@ void main() {
 
   group('Contract: weight key format', () {
     test('all weight writers use "weight_\$dateStr" key prefix', () {
-      // Every healthBox.put that writes a weight_log must use 'weight_' prefix
-      final writers = <String>[];
+      // audit-2026-05-16 E.7 — `HealthWriteService.logWeight` is the
+      // canonical writer; it builds `final key = 'weight_$dateStr';`
+      // then calls `box.put(key, payload)`. The literal
+      // `healthBox.put('weight_` shape no longer appears at any callsite.
+      // Pin the routing through the canonical WriteService instead.
+      bool foundWeightWriter = false;
       for (final entry in allSources.entries) {
         final source = entry.value;
-        // Match: healthBox.put('weight_$...'
-        if (RegExp(r"healthBox\.put\('weight_").hasMatch(source)) {
-          writers.add(entry.key);
+        // Canonical post-E.7: HealthWriteService.logWeight callsite OR
+        // the WriteService body containing the `'weight_$dateStr'` key.
+        if (source.contains('HealthWriteService.instance.logWeight') ||
+            RegExp(r"'weight_\$dateStr'").hasMatch(source) ||
+            RegExp(r"healthBox\.put\('weight_").hasMatch(source)) {
+          foundWeightWriter = true;
+          break;
         }
       }
-      expect(writers, isNotEmpty,
-          reason: 'Must have at least one weight writer');
+      expect(foundWeightWriter, isTrue,
+          reason: 'Must have at least one weight writer — either '
+              'HealthWriteService.logWeight callsite or the WriteService '
+              'body using `weight_\$dateStr` key.');
 
       // Verify no writer uses the OLD list-based key 'weight_logs'
       for (final entry in allSources.entries) {
         final source = entry.value;
-        // Old pattern: healthBox.put('weight_logs', ...) or healthBox.get('weight_logs')
-        // as a list write/read should NOT exist
         final hasOldPut = source.contains("healthBox.put('weight_logs'");
         expect(hasOldPut, isFalse,
             reason:

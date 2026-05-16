@@ -14,7 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/shared/widgets/wardroom/rank_insignia.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
 /// Full-width rank strip displayed below [WardTabHeader] on every tab.
 ///
@@ -52,7 +52,8 @@ class RankChipFullWidth extends StatelessWidget {
         child: Row(
           children: [
             // Insignia
-            RankInsignia(rankCode: current.entry.code, size: 18),
+            // audit-2026-05-16 E.11 — migrated from legacy RankInsignia.
+            WardRankInsignia(rankCode: current.entry.code, size: 18),
             const SizedBox(width: 10),
             // Rank name
             Text(

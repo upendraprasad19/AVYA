@@ -9,7 +9,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
-import 'package:icanbefitter/shared/widgets/wardroom/rank_insignia.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
 /// 12-week + lifetime phase roadmap.
 ///
@@ -362,7 +362,8 @@ class _PromotionMarker extends StatelessWidget {
                 color: AppColors.line2,
               ),
               const SizedBox(width: 14),
-              RankInsignia(
+              // audit-2026-05-16 E.11 — migrated from legacy RankInsignia.
+              WardRankInsignia(
                 rankCode: rankCode,
                 size: emphasised ? 32 : 24,
               ),
@@ -423,7 +424,8 @@ class _PromotionMarker extends StatelessWidget {
           children: [
             Row(
               children: [
-                RankInsignia(rankCode: entry.code, size: 56),
+                // audit-2026-05-16 E.11 — migrated from legacy RankInsignia.
+                WardRankInsignia(rankCode: entry.code, size: 56),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

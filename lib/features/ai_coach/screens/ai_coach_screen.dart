@@ -1564,6 +1564,23 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   /// Pick an image from camera or gallery, compress it, upload, and send.
   Future<void> _pickImage(ImageSource source) async {
+    // audit-2026-05-16 F8.1 / E.8 — `featurePhotoAnalysis` is documented as
+    // a PRO feature in CLAUDE.md §14, but pre-fix had ZERO client-side gate
+    // callsites — free users could silently upload photos to chat (server-
+    // side ai-media-proxy enforced a separate PRO check, but the client UX
+    // never surfaced the paywall). Gate at the entry point.
+    SubscriptionService.instance.gate(
+      AppConstants.featurePhotoAnalysis,
+      onPro: () => _doPickImage(source),
+      onFree: () {
+        if (!mounted) return;
+        showPaywallSheet(context, feature: 'Photo Analysis');
+      },
+    );
+  }
+
+  /// PRO-only image picker body (extracted from _pickImage for gate routing).
+  Future<void> _doPickImage(ImageSource source) async {
     try {
       // On web, camera is not available
       if (kIsWeb && source == ImageSource.camera) {

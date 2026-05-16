@@ -323,26 +323,24 @@ void main() {
     });
   });
 
-  // ── H1-E: softDeleteAccount @Deprecated ─────────────────────────────────
-  group('H1-E — softDeleteAccount deprecated', () {
+  // ── H1-E: softDeleteAccount REMOVED ─────────────────────────────────
+  // audit-2026-05-16 E.8 — `softDeleteAccount` method deleted from
+  // UserRepository (founder approved Phase D NEEDS_DECISION 4 Option A).
+  // The H1-E group is inverted: assert the method NO LONGER exists.
+  // Hard-delete via `delete-account` Edge Function (DeleteAccountScreen)
+  // is the canonical path.
+  group('H1-E — softDeleteAccount removed (audit 2026-05-16 E.8)', () {
     final src = _src(_repoPath);
 
-    test('softDeleteAccount still compiles (not removed)', () {
+    test('softDeleteAccount method no longer exists', () {
       expect(
         src,
-        contains('softDeleteAccount'),
-        reason: 'Method kept for compile compatibility; callers may still exist '
-            'in other worktrees',
-      );
-    });
-
-    test('softDeleteAccount is annotated @Deprecated', () {
-      expect(
-        src,
-        contains('@Deprecated'),
+        isNot(contains('static Future<void> softDeleteAccount')),
         reason:
-            'softDeleteAccount must be marked @Deprecated so the analyzer '
-            'warns any future callers',
+            'audit-2026-05-16 E.8 deleted softDeleteAccount. Hard-delete '
+            'via delete-account Edge Function (DeleteAccountScreen) is the '
+            'canonical path. If you re-add this method you re-open the '
+            'class of bug Test #11 H1 closed.',
       );
     });
   });

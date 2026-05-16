@@ -362,33 +362,15 @@ class UserRepository {
   }
 
   // ── Account Management ───────────────────────────────────────────────────
-
-  /// Marks the user's account as deleted in Supabase (`users.is_deleted = true`).
-  ///
-  /// @Deprecated — APK Test #11 Task H1 replaced the soft-delete flow with the
-  /// 2-step hard-delete screen ([DeleteAccountScreen]) which invokes the
-  /// `delete-account` Edge Function and performs a full data erasure.
-  ///
-  /// This method has no callers since the old [_showDeleteAccountDialog] was
-  /// removed from [ProfileScreen]. It is retained only so call-sites in existing
-  /// worktrees / stale branches still compile. Remove on the next major cleanup.
-  @Deprecated(
-    'Use the delete-account Edge Function via DeleteAccountScreen. '
-    'Will be removed in a future cleanup.',
-  )
-  static Future<void> softDeleteAccount(String userId) async {
-    try {
-      await SupabaseService.instance.client.from('users').update({
-        'is_deleted': true,
-        'deleted_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
-    } catch (e, st) {
-      // audit-2026-05-11 H-42 — telemetry pair.
-      debugPrint('[UserRepository] softDeleteAccount write failed: $e');
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'user_repository_soft_delete_account'));
-    }
-  }
+  //
+  // audit-2026-05-16 E.8 — `softDeleteAccount(userId)` method DELETED.
+  // APK Test #11 Task H1 replaced the soft-delete flow with the canonical
+  // 2-step hard-delete via the `delete-account` Edge Function (see
+  // `DeleteAccountScreen`). The legacy method had 0 production callers for
+  // 3 weeks; founder approved deletion via Phase D NEEDS_DECISION 4
+  // Option A. Tests at `test/features/profile/delete_account_screen_test.dart`
+  // H1-E group (which previously asserted the deprecated method still
+  // compiled) are deleted in the same batch.
 
   // ── AI Assessment (Edge Functions) ───────────────────────────────────────
 

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
@@ -388,35 +390,26 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // by WeightLogRepository.logWeight (lib/shared/repositories/health_repository.dart).
       if (currentWeightKg > 0) {
         try {
+          // audit-2026-05-16 task E.7 — routes through HealthWriteService.
+          // The service writes the canonical `weight_<istDate>` key with
+          // IST anchoring built-in. Idempotency: skip if any weight_log
+          // already exists for today's IST date (defensive — a re-run of
+          // completeOnboarding shouldn't double-seed).
           final now = DateTime.now();
-          final isoTs = now.toIso8601String();
-          // Inline IST date until F-4 creates lib/core/utils/ist_date.dart.
           final dateStr = now
               .toUtc()
               .add(const Duration(hours: 5, minutes: 30))
               .toIso8601String()
               .substring(0, 10);
-          final key = 'wlog_$isoTs';
-
-          // Idempotent: skip if a weight_log already exists for today (defensive
-          // — a re-run of completeOnboarding shouldn't double-seed).
           final existing = _hive.healthBox.values.whereType<Map>().any((row) {
             return row['type'] == 'weight_log' && row['date'] == dateStr;
           });
-
           if (!existing) {
-            await _hive.healthBox.put(key, {
-              'type': 'weight_log',
-              'date': dateStr,
-              'weight_kg': currentWeightKg,
-              'source': 'onboarding', // marker for analytics / debugging
-              'created_at': isoTs,
-            });
-
-            // CLAUDE.md §15 fire-and-forget — push weight_log to Supabase so the
-            // AI coach context (rolling-context Edge Function) sees it on the
-            // first post-onboarding snapshot push.
-            unawaited(SyncService.instance.syncWeightNow());
+            await HealthWriteService.instance.logWeight(
+              date: now,
+              weightKg: currentWeightKg,
+              source: WriteSource.onboarding,
+            );
           }
         } catch (e) {
           // Defensive — Hive write failure must not block onboarding completion.

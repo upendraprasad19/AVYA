@@ -188,10 +188,11 @@ extension SyncServiceProfile on SyncService {
       if (prefs == null) return;
       final p = Map<String, dynamic>.from(prefs as Map);
 
+      // audit-2026-05-16 E.12 — migration 067 dropped
+      // `user_preferences.biggest_obstacle` (no UI writer; 100% NULL).
       await _supabase.client.from('user_preferences').upsert({
         'user_id': userId,
         'motivational_style': p['motivational_style'] ?? 'encouraging',
-        'biggest_obstacle': p['biggest_obstacle'],
         'preferred_language': p['preferred_language'] ?? 'en',
         'coaching_notes': p['coaching_notes'],
       }, onConflict: 'user_id');

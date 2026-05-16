@@ -101,6 +101,8 @@ extension SyncServiceCommunity on SyncService {
   /// New behavior: iterate `customBox.keys` by prefix. Falls back to the
   /// legacy list-key path for any old-shape boxes still in the wild.
   Future<void> _syncCustomItems() async {
+    var exerciseSuccessCount = 0;
+    var foodSuccessCount = 0;
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
@@ -125,6 +127,7 @@ extension SyncServiceCommunity on SyncService {
             await _supabase.client
                 .from('user_custom_exercises')
                 .upsert(payload, onConflict: 'id');
+            exerciseSuccessCount++;
           } catch (e, st) {
             debugPrint(
               '[SyncService._syncCustomItems] exercise '
@@ -149,6 +152,7 @@ extension SyncServiceCommunity on SyncService {
             await _supabase.client
                 .from('user_custom_foods')
                 .upsert(payload, onConflict: 'id');
+            foodSuccessCount++;
           } catch (e, st) {
             debugPrint(
               '[SyncService._syncCustomItems] food '
@@ -205,6 +209,14 @@ extension SyncServiceCommunity on SyncService {
       }
 
       await _setTimestamp(SyncService._lastCustomSyncKey);
+      // E.14.A · audit-2026-05-16 — success-path emission. One event
+      // per batch with per-table counts so the audit can distinguish
+      // "user has zero custom items" from "this loop silently throws".
+      if (exerciseSuccessCount > 0 || foodSuccessCount > 0) {
+        unawaited(ErrorTelemetry.logEvent('upsert_custom_items_success',
+            message:
+                'exercises=$exerciseSuccessCount foods=$foodSuccessCount'));
+      }
     } catch (e, st) {
       debugPrint('[SyncService._syncCustomItems] $e');
       // audit-2026-05-11 H-42 — telemetry pair.

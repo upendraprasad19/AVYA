@@ -97,16 +97,17 @@ void main() {
       expect(pushIdx > sleepIdx, isTrue);
     });
 
-    test('fires pushSnapshot at end of _logMeasurement', () {
+    test('routes through HealthWriteService.logMeasurement (audit-2026-05-16 E.7)', () {
+      // Post-E.7: _logMeasurement no longer writes healthBox directly.
+      // It calls HealthWriteService.instance.logMeasurement which
+      // internally fires syncMeasurementsNow + pushSnapshot. The
+      // canonical sync emission point is the WriteService, not the
+      // caller.
       final src = _src(
           'lib/features/ai_coach/services/conversational_log_handler.dart');
-      final measIdx = src.indexOf("await healthBox.put(key, record)");
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', measIdx);
-      expect(measIdx, isNot(-1));
-      expect(pushIdx, isNot(-1),
-          reason: 'pushSnapshot must appear after measurement put');
-      expect(pushIdx > measIdx, isTrue);
+      expect(src.contains('HealthWriteService.instance.logMeasurement'), isTrue,
+          reason: '_logMeasurement must route through '
+              'HealthWriteService.logMeasurement (E.7 canonical writer).');
     });
   });
 
@@ -227,15 +228,22 @@ void main() {
   });
 
   group('sync gap — profile_provider BiometricNotifier.logSleep', () {
-    test('fires pushSnapshot after invalidateSelf in logSleep', () {
+    test('routes through HealthWriteService.logSleep (audit-2026-05-16 E.7)', () {
+      // Post-E.7: BiometricNotifier.logSleep no longer writes healthBox
+      // directly (closes F2-R2 IST drift + the F-A WriteService asymmetry).
+      // It calls HealthWriteService.instance.logSleep which internally
+      // fires syncSleepNow + pushSnapshot. Canonical sync emission point
+      // is now the WriteService.
       final src = _src(
           'lib/features/profile/providers/profile_provider.dart');
       final logSleepIdx = src.indexOf(
           'Future<void> logSleep({required double hours, required String quality})');
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', logSleepIdx);
       expect(logSleepIdx, isNot(-1));
-      expect(pushIdx, isNot(-1));
+      expect(src.contains('HealthWriteService.instance.logSleep'), isTrue,
+          reason: 'BiometricNotifier.logSleep must route through '
+              'HealthWriteService.logSleep (E.7 canonical writer). The '
+              'WriteService bakes IST into the date key (closes F2-R2) and '
+              'internally fires syncSleepNow + pushSnapshot.');
     });
   });
 

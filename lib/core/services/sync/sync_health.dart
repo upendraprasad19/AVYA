@@ -156,6 +156,9 @@ extension SyncServiceHealth on SyncService {
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
+        // E.14.A · audit-2026-05-16 — success-path emission.
+        unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
+            message: 'date=${log['date']}'));
       } catch (e, st) {
         debugPrint('[SyncService._syncMeasurements] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -188,6 +191,9 @@ extension SyncServiceHealth on SyncService {
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
         }, onConflict: 'id');
+        // E.14.A · audit-2026-05-16 — success-path emission.
+        unawaited(ErrorTelemetry.logEvent('upsert_sleep_logs_success',
+            message: 'date=${log['date']}'));
       } catch (e, st) {
         debugPrint('[SyncService._syncSleepLogs] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
