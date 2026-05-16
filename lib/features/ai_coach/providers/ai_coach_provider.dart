@@ -36,6 +36,13 @@ class ChatMessage {
   /// retry path can update the same row instead of creating a duplicate.
   final String? coachKey;
 
+  /// Bug 2026-05-16 photo-analysis-500 — true when the user-side photo
+  /// message failed to upload (Storage failure) or `ai-media-proxy`
+  /// returned `error_type='storage'` (image upload incomplete). Drives
+  /// the chat bubble's "PHOTO FAILED — Tap to retry" tile instead of
+  /// the confusing broken-image icon.
+  final bool mediaFailed;
+
   const ChatMessage({
     required this.text,
     required this.isUser,
@@ -47,6 +54,7 @@ class ChatMessage {
     this.mediaType,
     this.retryUserMessage,
     this.coachKey,
+    this.mediaFailed = false,
   });
 }
 
@@ -185,6 +193,44 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   void removeLastMessage() {
     if (state.isEmpty) return;
     state = [...state.sublist(0, state.length - 1)];
+  }
+
+  /// Bug 2026-05-16 photo-analysis-500 — marks the most recent user-side
+  /// photo message as `mediaFailed=true` so the chat bubble renders the
+  /// "PHOTO FAILED — Tap to retry" affordance instead of the broken-image
+  /// icon. Walks the list from the end and stops at the first user message
+  /// that carries a `mediaUrl` (since the very last entry is typically
+  /// the AI loading placeholder / error bubble).
+  void markLastUserMediaFailed() {
+    if (state.isEmpty) return;
+    for (var i = state.length - 1; i >= 0; i--) {
+      final m = state[i];
+      if (!m.isUser) continue;
+      if ((m.mediaUrl == null || m.mediaUrl!.isEmpty) &&
+          (m.mediaType == null || m.mediaType!.isEmpty)) {
+        continue;
+      }
+      if (m.mediaFailed) return; // already marked — no-op
+      final updated = ChatMessage(
+        text: m.text,
+        isUser: true,
+        timestamp: m.timestamp,
+        isLoading: m.isLoading,
+        isError: m.isError,
+        mode: m.mode,
+        mediaUrl: m.mediaUrl,
+        mediaType: m.mediaType,
+        retryUserMessage: m.retryUserMessage,
+        coachKey: m.coachKey,
+        mediaFailed: true,
+      );
+      state = [
+        ...state.sublist(0, i),
+        updated,
+        ...state.sublist(i + 1),
+      ];
+      return;
+    }
   }
 }
 
@@ -432,12 +478,28 @@ class SendMessageNotifier extends Notifier<bool> {
     } catch (e) {
       final errStr2 = e.toString();
       final String errorMsg;
+      // Bug 2026-05-16 photo-analysis-500 — true when the server reported
+      // `error_type='storage'` (image upload incomplete) OR when the
+      // user-side upload-related copy fired. Drives the chat-bubble photo
+      // tile to render the "PHOTO FAILED" affordance instead of the
+      // broken-image icon. The `chatHistoryProvider.notifier` re-renders
+      // the user-side message with `mediaFailed=true` so the broken-image
+      // placeholder is replaced before the user gives up on the chat.
+      final bool isStorageFailure = errStr2.contains('upload incomplete') ||
+          errStr2.contains("error_type: 'storage'") ||
+          errStr2.contains('error_type":"storage"') ||
+          errStr2.contains('Only Supabase Storage URLs are allowed');
       if (errStr2.contains('Failed host lookup') || errStr2.contains('SocketException')) {
         errorMsg = 'No internet connection. Please check your network and try again.';
       } else if (errStr2.contains('Image too large') || errStr2.contains('max 5242880')) {
         errorMsg = 'That photo is too large (max 5 MB). Please pick a smaller one or retake at lower resolution.';
       } else if (errStr2.contains('Only Supabase Storage URLs are allowed')) {
         errorMsg = 'Upload failed — please try picking the photo again.';
+      } else if (errStr2.contains('upload incomplete')) {
+        // Bug 2026-05-16 — `error_type='storage'` from ai-media-proxy.
+        // The photo URL didn't resolve server-side (CDN propagation or
+        // upload failure). User-actionable: pick the photo again.
+        errorMsg = 'Photo upload failed — please try picking the photo again.';
       } else if (errStr2.contains('Message too long')) {
         errorMsg = 'Your caption is too long (max 5000 chars). Please shorten it and try again.';
       } else if (errStr2.contains('PRO subscription required') || errStr2.contains('subscription required')) {
@@ -469,6 +531,14 @@ class SendMessageNotifier extends Notifier<bool> {
         // still survives restart so the user can see what they sent.
         coachKey: coachKey,
       ));
+      // Bug 2026-05-16 photo-analysis-500 — if the failure was specifically
+      // a storage / upload-incomplete failure, mark the user-side photo
+      // bubble's `mediaFailed=true` so its tile flips from broken-image to
+      // "PHOTO FAILED — Tap to retry". Without this, the user is staring at
+      // a black square with no actionable signal.
+      if (isStorageFailure) {
+        chatNotifier.markLastUserMediaFailed();
+      }
       // Bug #19 — Persist the failed state.
       await repo.updateInteractionWithError(coachKey, errorText: errorMsg);
     } finally {

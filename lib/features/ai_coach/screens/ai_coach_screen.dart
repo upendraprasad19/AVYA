@@ -723,6 +723,16 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               timestamp: time,
               mediaUrl: message.mediaUrl,
               mediaType: message.mediaType,
+              // Bug 2026-05-16 photo-analysis-500 — wire `mediaFailed` so
+              // the bubble swaps the broken-image icon for the explicit
+              // "PHOTO FAILED — Tap to retry" tile when upload didn't
+              // complete or `ai-media-proxy` returned error_type='storage'.
+              mediaFailed: message.mediaFailed,
+              // Tapping the failed tile re-opens the gallery picker so the
+              // user can pick the photo again without retyping the caption.
+              onMediaRetry: message.mediaFailed
+                  ? () => _pickImage(ImageSource.gallery)
+                  : null,
               onRetry: canRetry
                   ? () {
                       ref.read(sendMessageProvider.notifier).send(
