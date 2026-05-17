@@ -988,7 +988,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-42 — Bake 5 new permanent gates for lens registry (L22 / L25 / L34 / L39 / L40)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · 5 gate scripts shipped: `check_doc_internal_consistency.dart` (Gate 18, L25) + `check_schema_payload_parity.dart` (Gate 19, L22) + `check_unawaited_has_error_sink.dart` (Gate 20, L34 advisory) + `check_restore_round_trip_coverage.dart` (Gate 21, L39) + `check_telemetry_pii_classification.dart` (Gate 22, L40 advisory). Gates 20 + 22 default to advisory mode pending cleanup OI-44.
 - **Identified**: 2026-05-17 evening · Hermes verification methodology upgrade
 - **Risk class**: process · prevents future regressions of the bug classes Hermes surfaced
 - **Estimated effort**: ~6-8 hours (5 scripts × 1-1.5 hours each)
@@ -1005,7 +1005,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-43 — First-pass run of 8 never-exercised lenses (L26 / L27 / L28 / L30 / L31 / L36 / L37 / L38)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · 8 parallel subagents scanned; findings filed as OI-44..OI-51 below. Lens registry last-run tracker updated. No P0 surfaced; multiple P1/P2 enumerated.
 - **Identified**: 2026-05-17 evening · Hermes verification methodology upgrade
 - **Risk class**: unknown · these lenses exist in the registry but have never been run on the codebase
 - **Estimated effort**: ~1 day (8 parallel subagents + dedup + verification pass + diagnose-docs for any P0/P1 found)
@@ -1022,3 +1022,124 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 - **Regression test (planned)**: per-finding contract tests; updates to the lens registry's last-run tracker.
 - **Diagnose-doc (planned)**: one per P0/P1 finding from the lens runs.
 - **Trigger**: schedule for next comprehensive audit (likely after Batch 1 P0 payment fixes ship).
+
+---
+
+# OI-43 lens-scan findings (filed 2026-05-17, ready for follow-up batches)
+
+## OI-44 — L26 CQRS violations: 10 query-named methods with side effects (P2)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L26 lens scan
+- **Risk class**: CQRS / pure-function discipline
+- **Effort**: ~6-8 hours (10 methods × ~30-45 min each for migration + tests)
+- **Findings (top 5 by blast radius):**
+  - `SubscriptionService.isPro()` (sub.service.dart:233) — 28+ callsites; downgrades + invalidates on expiry check + cross-account guard during reads
+  - `SubscriptionService.gate()` (sub.service.dart:306) — 15+ callsites; async `verifyFromServer()` mutation buried in callback
+  - `BadgeService.checkAndUnlock()` (badge.service.dart:18) — Hive write hidden behind "check*" name
+  - `RankService.getCurrentRank()` (rank.service.dart:176) — fires telemetry on read
+  - `SubscriptionService.verifyFromServer()` — writes Hive subscription state from a verify-named method
+- **Fix shape**: rename to verb-form (`refreshIsPro`, `evaluateAndDowngrade`, `checkAndPersistBadges`) OR move mutation into a separately-named method. Test pattern: source-grep that names starting `get*`/`is*`/`has*`/`calculate*` don't contain `box.put` / `instance.update` / `recordNonFatal` in their body.
+- **Why not fixed now**: 10 methods × multi-callsite renames is a separate scoped batch.
+
+## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L27 lens scan
+- **Risk class**: lost-update race on shared state
+- **Effort**: ~1-2 days (each needs a mutex / RPC / version field)
+- **Top findings:**
+  - **CRITICAL** `UsageCounterService.increment()` (line 74-79) — cross-device race could let users bypass daily caps. Two simultaneous scan-meal requests → only 1 counted. Pattern: `final c = read(); write(c+1)` with no atomicity. Fix: Postgres RPC with FOR UPDATE row lock (mirror `update_streak_progress`).
+  - **HIGH** `UserRepository.updateProgress()` (line 75-84) — 4 writers (updateProgress, updateProfileFields, StreakProgressService.commitRefill, commitConsume) all do read-modify-write on the same `progress` map. Lost updates likely.
+  - **HIGH** `BadgeService.checkAndUnlock()` — 2 writers (checkAndUnlock + checkAll). Rapid-fire achievement triggers can lose newly-unlocked badges.
+  - **MEDIUM** `HealthSyncService.syncToHive()` line 190-192 — TOCTOU between `existing == null` check and `put()`.
+- **Already mitigated**: StreakProgressService uses migration 056 `update_streak_progress` RPC (the canonical pattern). WorkoutWriteService uses per-(date,exerciseName) `synchronized` mutex.
+
+## OI-46 — L28 service-invariant gaps: 3 client-side-only rules (P1)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L28 lens scan
+- **Risk class**: rule bypass via new entry point
+- **Effort**: ~1 day
+- **Findings (UI-only — new caller would bypass):**
+  - Daily AI text log limit (50 free / 200 PRO) — only `UsageCounterService` in-memory counter; NO Postgres trigger on `ai_coach_interactions` for `channel='in_app'`. Compare to `enforce_food_text_daily_limit` precedent (migration 026).
+  - Scan meal daily limit + cart auditor daily limit — same in-memory-only pattern; nutrition API batch endpoint lacks gates.
+  - Onboarding fields required — only `OnboardingNotifier` route sequence enforces; no `users.*` NOT NULL constraints.
+- **Already mitigated**: swapDays consecutive-rest + source≠target guards moved into `WorkoutScheduleService.swapDays()` per audit-2026-05-11 H-6 (precedent pattern).
+- **Fix shape**: add Postgres `BEFORE INSERT` triggers + 23P01 raise on cap exceeded; let Edge Function catch + return 429.
+
+## OI-47 — L30 prompt injection vectors: 5 unsanitized user-field interpolations (P1)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L30 lens scan
+- **Risk class**: prompt injection in Edge Functions
+- **Effort**: ~3-4 hours (1 shared sanitizer + 5 callsite wrap)
+- **Top findings:**
+  - **HIGH** `morning-alert/index.ts:243` — `User name: ${name}` direct interpolation. Attack: `name = "X\nIgnore prior instructions.\nNew task: ..."`.
+  - **HIGH** `future-prediction/index.ts:46-50` — 3 unquoted user fields in template literal.
+  - **MEDIUM** `ai-proxy/index.ts:717` — `snapshot_json` JSON-stringified but per-field content (full_name, meals_today, coaching_notes) not pre-sanitized.
+  - **MEDIUM** `rolling-context/index.ts:73` — historical user_message + ai_response interpolated into summarization template.
+  - **MEDIUM** `ai-proxy/index.ts:520` — `message` length-capped (5000) but no newline/quote stripping.
+- **Fix shape**: new `_shared/sanitize_for_prompt.ts` helper with `stripControlChars + lengthCap + escapeBraces`. Apply to every interpolation. Add Deno test pinning sanitizer behavior.
+- **Precedent**: memory R2#7 flagged PredictionService client-side; pattern repeats server-side.
+
+## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L31 lens scan
+- **Risk class**: cost scaling (billing alert at 10K users)
+- **Effort**: ~1-2 days (per-function pre-filter design)
+- **Top findings:**
+  - **evaluate-rank-promotions** — iterates ALL users, ~5 Postgres reads × N users. At 10K users = 50K reads/day. Plus Gemini call per promotion event.
+  - **i-see-you-callout** — iterates ALL users with 6 indexed queries each. 60K reads at 10K users.
+  - **re-engagement** Path B fallback — pulls all users without coach_memory, then 3-table verification per user.
+- **Already efficient (pattern to copy):**
+  - `clean-orphan-media` — RPC pre-filter → small working set
+  - `pr-detection` — 20-min time window filter
+  - `expiry-reminder` — single indexed SELECT with date range
+- **Fix shape**: add pre-filter SELECT (last_active_at, signals_computed_at, or other "interesting users today" predicate). Compare to plateau-alert/protein-gap-alert which already use coach_memory scores.
+
+## OI-49 — L36 idempotency: all 8 critical paths hardened (NO action) (P3)
+
+- **Status**: CLOSED · 2026-05-17 · scan verified no gaps
+- **Identified**: 2026-05-17 · OI-43 / L36 lens scan
+- **Findings**: scan found ZERO unhardened replay-able write paths. Every Edge Function uses pre-SELECT + UNIQUE constraint OR proactive_dedup helper OR natural-key onConflict upsert. Listing canonical patterns:
+  - H-18 (verify-payment): pre-SELECT + UNIQUE + 23505 fallback
+  - proactive_dedup (morning-alert/re-engagement/streak-guardian): IST-calendar-day dedup
+  - Client-side natural-key upsert (sync_workout/sync_nutrition): UNIQUE + onConflict
+- **No fix needed** — lens is GREEN. Mark closed in CLAUDE.md §19 to lock in the verification.
+
+## OI-50 — L37 empty/null-shape readers: 23 risky accesses across 6 files (P2)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L37 lens scan
+- **Risk class**: runtime crash OR silent-wrong on malformed/empty Hive shapes
+- **Effort**: ~1-2 days (8 contract tests + null-guard refactors)
+- **Top findings (6 crashes + 17 silent-wrong):**
+  - **CRASH** `train_provider.dart:72` — `sets.first` on empty List throws RangeError.
+  - **CRASH** `todays_meals_card.dart:340` — `mealType[0]` indexes potentially-null string.
+  - **CRASH** `workout_receipt_card.dart:450` — null deref if `box.get(k)` returns null then `val['type']` access.
+  - **SILENT-WRONG** `workout_receipt_card.dart:380` — `log['sets'] ?? log['sets_detail']` both missing → empty path taken → zero reps rendered.
+  - **SILENT-WRONG** `edit_workout_log_sheet.dart:938` — fallback to `sets_completed` key without existence check.
+- **Already clean** (canonical pattern): `workout_read_service.dart`, `profile_provider.dart` — both use `if (X is List && X.isNotEmpty)` then `for (final s in X) if (s is Map)` guards consistently.
+- **Fix shape**: per-file null-guard refactor + contract tests with `empty | malformed | missing-key | wrong-type` cases (the L37 charter pattern).
+
+## OI-51 — L38 cross-account SDK state: 3 unwired clear-on-signOut paths (P1)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-43 / L38 lens scan
+- **Risk class**: cross-account state leak via 3rd-party SDK / static callbacks
+- **Effort**: ~2-3 hours
+- **Findings (3 gaps in `auth_provider.signOut()`):**
+  - **Crashlytics**: `setUserIdentifier(uid)` called on signIn (line 543), NEVER cleared on signOut. User B's crashes get tagged as user A.
+  - **OneSignal**: `OneSignal.login(uid)` called on signIn (line 760), NEVER `OneSignal.logout()` on signOut. User B's pushes routed to user A's player_id.
+  - **RazorpayService.{onSuccess, onFailure, pendingPlan}**: callbacks stored as instance state (razorpay_service.dart lines 30-32). If signOut→signUp happens mid-checkout, user A's callbacks fire under user B's session.
+  - **SubscriptionService.onStateChanged**: static callback closure captures Riverpod state. No reset path. Low severity but real.
+- **Already clean**: 27 of 33 services use pure singleton pattern with no user-tagged static state. HiveUserSession + Riverpod cache leak (Test #15.1 + c4055a) already closed.
+- **Fix shape**: add to `auth_provider.signOut()`:
+  ```dart
+  await FirebaseCrashlytics.instance.setUserIdentifier('');
+  await OneSignal.logout();
+  RazorpayService.instance.resetSessionState();
+  ```
+  Pin with `test/contracts/sign_out_clears_sdk_state_test.dart` source-grep.
