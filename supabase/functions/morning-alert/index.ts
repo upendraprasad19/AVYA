@@ -6,6 +6,7 @@ import { captainPrompt } from "../_shared/captain_manual.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { istDayOfWeek } from "../_shared/ist_date.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -571,6 +572,8 @@ serve(async (req: Request) => {
     });
   }
 
+  const logId = await logCronStart("morning-alert");
+
   try {
     const startTime = Date.now();
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -603,6 +606,7 @@ serve(async (req: Request) => {
           `${totalAlerts} alerts, ${pushSent} push sent, ${telegramSent} telegram sent`,
       );
 
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -650,6 +654,10 @@ serve(async (req: Request) => {
         console.error(`Failed to fetch users at offset ${offset}:`, usersError);
         // If first page fails, return error; otherwise continue with what we have
         if (offset === 0) {
+          await logCronEnd(logId, "failed", {
+            httpStatus: 500,
+            errorSummary: `fetch users failed: ${String(usersError)}`,
+          });
           return new Response(
             JSON.stringify({ error: "Failed to fetch active users" }),
             {
@@ -689,6 +697,7 @@ serve(async (req: Request) => {
         `${successCount} success, ${proAlerts} pro, ${proLightAlerts} pro_light, ${freeAlerts} free, ${errorCount} errors`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -711,6 +720,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / upstream provider text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[morning-alert] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

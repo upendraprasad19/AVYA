@@ -15,6 +15,7 @@ import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_ded
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,6 +56,8 @@ serve(async (req: Request) => {
     );
   }
 
+  const logId = await logCronStart("streak-guardian");
+
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const todayIST = getTodayIST();
@@ -66,6 +69,7 @@ serve(async (req: Request) => {
       .gte("current_streak_weeks", 2);
 
     if (streakErr || !streakUsers || streakUsers.length === 0) {
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -98,6 +102,7 @@ serve(async (req: Request) => {
     );
 
     if (atRiskUsers.length === 0) {
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -233,6 +238,7 @@ serve(async (req: Request) => {
       }
     }
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -250,6 +256,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[streak-guardian] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

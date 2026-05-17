@@ -673,3 +673,117 @@ shipped).
   function-only). (4) regression test asserting the cron is
   registered + the function exists + the orphan-detection query
   shape matches the schema.
+
+## OI-21 — Wire cron_telemetry into remaining 8 cron Edge Functions
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` (10 functions
+  wired in same batch as OI-23/OI-24)
+- **Identified**: 2026-05-17 · OI-15 closure had scope-capped to the
+  4 cron functions redeployed for OI-11
+- **Risk class**: operational visibility (incremental)
+- **Estimated effort**: ~1.5 hours (actual: ~45 min — agent did the
+  10 source edits in parallel)
+- **How closed**: Agent applied the canonical 4-step pattern from
+  `pr-detection` to 10 remaining cron Edge Functions:
+  `morning-alert`, `re-engagement`, `plateau-alert`, `protein-gap-alert`,
+  `workout-window-closing`, `i-see-you-callout`, `rolling-context`,
+  `streak-guardian`, `weekly-recap-ready`, `expiry-reminder`. Each got:
+  (1) `import { logCronStart, logCronEnd }`, (2) `await logCronStart`
+  after auth gate, (3) `logCronEnd(_, "success", ...)` before every
+  HTTP-200 return, (4) `logCronEnd(_, "failed", ...)` in every catch
+  block. Spot-verified via `grep -c logCronStart\|logCronEnd` — 63
+  occurrences across 14 functions + 1 helper module. Contract test
+  `test/contracts/cron_telemetry_adoption_test.dart` extended from
+  17 → 57 tests; all passing. 10 deploys via host-shell API
+  (all HTTP 201, version bumps recorded above). The 14 cron
+  Edge Functions now all write to `cron_call_log` for every
+  invocation; 7-day retention via `cleanup_cron_call_log` daily 03:30
+  UTC (migration 069 section B).
+- **Coverage gap remaining**: `compute-coach-signals` (jobid 8) and
+  `morning_alert_generate` (jobid 5) have `null` fn_slug per the
+  cron registry — they invoke Postgres RPCs not Edge Functions. Not
+  in scope for this gate. Anything that calls a Postgres function
+  directly is observable via Postgres logs without per-function
+  telemetry.
+- **Closes**: no diagnose-doc (operational helper expansion, not a
+  bug fix).
+
+## OI-23 — `coach-media` Storage bucket missing (founder decision)
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` · migration 070A
+- **Identified**: 2026-05-17 · OI-18 audit surfaced `delete-account`
+  Edge Function references `coach-media/` bucket which did not exist
+- **Risk class**: cleanup-fidelity (silent no-op in delete-account
+  purge) + future-feature blocker
+- **Estimated effort**: ~30 min (actual: ~20 min)
+- **How closed**: Founder decided 2026-05-17: "i intend to store
+  coach uploaded media. We ask user does he want to store the pic
+  for future reference and on consent we save it." Migration 070
+  section A creates the bucket: `coach-media` private + 5 MB cap +
+  image/jpeg|png|webp MIME allowlist. Owner-only RLS policies added
+  for SELECT / INSERT / DELETE mirroring `progress_photos` shape
+  (`(storage.foldername(name))[1] = (auth.uid())::text`). Path
+  layout `<user_id>/<filename>` per CLAUDE.md §19 image-upload
+  convention. **Consent UI flow** is a separate follow-up (deferred
+  client-side work tracked as OI-25 below): user uploads to
+  `chat-media` first (transient, AI analysis), then on user consent
+  app copies blob to `coach-media` for long-term storage. Live
+  verification: `SELECT * FROM storage.buckets ORDER BY id` shows
+  all 5 buckets with correct caps + MIME lists.
+- **Closes**: migration `070_coach_media_bucket_and_caps.sql`
+  section A. No diagnose-doc.
+
+## OI-24 — Storage bucket-level size + MIME caps
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` · migration 070B
+- **Identified**: 2026-05-17 · OI-18 audit
+- **Risk class**: abuse / cost / defense-in-depth
+- **Estimated effort**: ~45 min (actual: ~10 min — bundled into
+  migration 070)
+- **How closed**: Migration 070 section B applies bucket-level
+  `file_size_limit` + `allowed_mime_types` to all 4 pre-existing
+  buckets that lacked them:
+  - `avatars`: 1 MB cap, image-only
+  - `banners`: 2 MB cap, image-only
+  - `progress-photos`: 8 MB cap, image-only (PRO photos up to
+    3000×3000 @ 95% quality per CLAUDE.md §10)
+  - `chat-media`: 5 MB cap, image-only (matches
+    `ai-media-proxy` server-side `MAX_IMAGE_BYTES`)
+  Storage REST API enforces these at the gateway. Any rooted /
+  malicious client can no longer bypass client-side caps to upload
+  arbitrary files. Live verification post-migration: all 5 buckets
+  now have non-null `file_size_limit` + 3-element `allowed_mime_types`.
+- **Closes**: migration `070_coach_media_bucket_and_caps.sql`
+  section B. No diagnose-doc.
+
+## OI-25 — Coach-media consent UI flow (client follow-up)
+
+- **Status**: OPEN
+- **Identified**: 2026-05-17 · OI-23 closure spawned this follow-up
+- **Risk class**: feature work
+- **Estimated effort**: TBD (~3-4 hours estimate)
+- **What's missing**: Founder direction was "We ask user does he
+  want to store the pic for future reference and on consent we save
+  it." The bucket + policies now exist (OI-23 closed) but the UI
+  flow does NOT:
+  - After AI analysis returns in chat (ai-media-proxy success path),
+    show inline "Save this photo for future reference?" prompt.
+  - On user tap → copy blob from `chat-media/<uid>/<filename>` to
+    `coach-media/<uid>/<filename>` (atomic — keep source until
+    target write succeeds; then optionally delete source if free
+    user, retain if PRO).
+  - Persist consent decision so it doesn't re-prompt for the same
+    photo on a re-render.
+  - Surface "Saved photos" in a profile sub-screen so users can
+    review / delete their long-term collection.
+- **Why class-killing**: Without this UI, the bucket sits empty +
+  founder's product intent is unimplemented. The infra is now
+  ready; needs Flutter work to plumb the consent + copy flow.
+- **Plan**: (1) brainstorm the UX (single confirmation chip vs
+  modal). (2) add `coachMediaRepository` with `saveForLater(chatMediaPath)`
+  method. (3) wire into `ChatBubble.onMediaSaved` callback after
+  ai-media-proxy success. (4) profile sub-screen at
+  `/profile/saved-coach-photos`. (5) RLS already correct so no
+  server-side work beyond ensuring `delete-account` Edge Function's
+  Storage purge step lists `coach-media/<uid>/` (already does per
+  CLAUDE.md §16).

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,6 +90,8 @@ serve(async (req: Request) => {
     });
   }
 
+  const logId = await logCronStart("rolling-context");
+
   try {
     // This is a cron job — uses service role key, no JWT validation needed
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -118,6 +121,10 @@ serve(async (req: Request) => {
 
       if (distinctError || !distinctUsers) {
         console.error("Failed to fetch users:", distinctError);
+        await logCronEnd(logId, "failed", {
+          httpStatus: 500,
+          errorSummary: `fetch users failed: ${String(distinctError)}`,
+        });
         return new Response(
           JSON.stringify({ error: "Failed to fetch users for processing" }),
           {
@@ -157,6 +164,7 @@ serve(async (req: Request) => {
     }
 
     if (usersToProcess.length === 0) {
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -313,6 +321,7 @@ serve(async (req: Request) => {
       }
     }
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -330,6 +339,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[rolling-context] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {
