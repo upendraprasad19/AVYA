@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
@@ -296,8 +297,13 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
           (progress['total_workouts_done'] as int?) ?? 0,
       currentWeight: weight,
       bmi: double.parse(bmi.toStringAsFixed(1)),
-      currentStreak:
-          (progress['current_streak_weeks'] as int?) ?? 0,
+      // OI-41 (audit-2026-05-17 Hermes C7) — single streak source.
+      // Pre-fix this read the cached `current_streak_weeks` from
+      // user_progress while Home/Rank computed live via
+      // `WorkoutRepository.currentStreak()`. Users saw different
+      // streak numbers in different places. Now both surfaces hit the
+      // canonical live walk-back. sot_registry entry pins this contract.
+      currentStreak: WorkoutRepository.instance.currentStreak(),
       currentPhase: (progress['current_phase'] as int?) ?? 1,
       currentWeek: WorkoutScheduleService.instance.getCurrentWeekNumber(),
       primaryGoal:

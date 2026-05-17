@@ -314,44 +314,78 @@ serve(async (req: Request) => {
     // objects that might be missed here (not yet implemented — post-Test-#11).
     const purgeStats: { [key: string]: number | string[] } = { errors: [] };
 
+    // OI-32 (audit-2026-05-17 Hermes F7) — recursive Storage purge.
+    // Pre-fix this loop only called `.list(userId)` which returns the
+    // top-level entries under `userId/` (objects + subdirectory names,
+    // not contents of subdirectories). Any nested path like
+    // `userId/2026/photo.jpg` survived account deletion. DPDP §17
+    // requires erasure of all user-tagged objects — nested or otherwise.
+    //
+    // Supabase Storage SDK has no `recursive: true` option on .list();
+    // we implement DFS ourselves. Folder entries have `id === null`,
+    // file entries have a non-null id. Paginated 1000-per-call for
+    // users with large photo histories.
+    async function listAllObjectsRecursive(
+      bucket: string,
+      prefix: string,
+    ): Promise<string[]> {
+      const objectPaths: string[] = [];
+      const stack: string[] = [prefix];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        let offset = 0;
+        while (true) {
+          const { data: entries, error } = await admin.storage
+            .from(bucket)
+            .list(current, { limit: 1000, offset });
+          if (error) throw new Error(`list ${current}: ${error.message}`);
+          if (!entries || entries.length === 0) break;
+          for (const e of entries) {
+            const fullPath = current ? `${current}/${e.name}` : e.name;
+            if (e.id === null) {
+              // Folder entry — recurse into it.
+              stack.push(fullPath);
+            } else {
+              objectPaths.push(fullPath);
+            }
+          }
+          if (entries.length < 1000) break;
+          offset += 1000;
+        }
+      }
+      return objectPaths;
+    }
+
     for (const bucket of ["progress-photos", "chat-media", "coach-media"]) {
       try {
-        const { data: files, error: lsErr } = await admin.storage
-          .from(bucket)
-          .list(userId);
+        const paths = await listAllObjectsRecursive(bucket, userId);
 
-        if (lsErr) {
-          (purgeStats.errors as string[]).push(
-            `${bucket}_list:${lsErr.message}`,
-          );
-          console.warn(
-            `[delete-account] request_id=${requestId} storage list error bucket=${bucket}:`,
-            lsErr.message,
-          );
-          continue;
-        }
-
-        if (files && files.length > 0) {
-          const paths = files.map((f) => `${userId}/${f.name}`);
-          const { error: rmErr } = await admin.storage
-            .from(bucket)
-            .remove(paths);
-
-          if (rmErr) {
-            purgeStats[bucket] = 0;
-            (purgeStats.errors as string[]).push(
-              `${bucket}_rm:${rmErr.message}`,
-            );
-            console.warn(
-              `[delete-account] request_id=${requestId} storage remove error bucket=${bucket}:`,
-              rmErr.message,
-            );
-          } else {
-            purgeStats[bucket] = paths.length;
-            console.log(
-              `[delete-account] request_id=${requestId} purged ${paths.length} objects from bucket=${bucket}`,
-            );
+        if (paths.length > 0) {
+          // Storage .remove() takes a flat array; chunk by 1000 (the
+          // Supabase REST batch limit) so large purges don't reject.
+          let removed = 0;
+          for (let i = 0; i < paths.length; i += 1000) {
+            const chunk = paths.slice(i, i + 1000);
+            const { error: rmErr } = await admin.storage
+              .from(bucket)
+              .remove(chunk);
+            if (rmErr) {
+              (purgeStats.errors as string[]).push(
+                `${bucket}_rm:${rmErr.message}`,
+              );
+              console.warn(
+                `[delete-account] request_id=${requestId} storage remove error bucket=${bucket} (chunk@${i}):`,
+                rmErr.message,
+              );
+              // Don't break — try remaining chunks.
+            } else {
+              removed += chunk.length;
+            }
           }
+          purgeStats[bucket] = removed;
+          console.log(
+            `[delete-account] request_id=${requestId} purged ${removed}/${paths.length} objects from bucket=${bucket} (recursive)`,
+          );
         } else {
           purgeStats[bucket] = 0;
           console.log(

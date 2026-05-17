@@ -95,15 +95,31 @@ void main() {
     );
 
     test(
-      'sole-writer contract — home_provider routes through the service',
+      'sole-writer contract — day_rollover routes through the service',
       () {
-        final src =
-            _src('lib/features/home/providers/home_provider.dart');
+        // OI-38 (audit-2026-05-17 Hermes C3) — refill orchestration
+        // moved out of home_provider's build (write-on-read anti-pattern)
+        // into StreakProgressService.refillIfNewWeek(); day_rollover
+        // invokes that public method. home_provider no longer touches
+        // commitRefill directly. Sole-writer contract preserved — the
+        // service is still the only caller of UserRepository.updateProgress
+        // for the streak_freezes_* keys.
+        final dayRolloverSrc =
+            _src('lib/core/services/day_rollover_service.dart');
         expect(
-          src.contains('StreakProgressService.instance.commitRefill'),
+          dayRolloverSrc
+              .contains('StreakProgressService.instance.refillIfNewWeek'),
           isTrue,
-          reason: 'home_provider._refillIfNewWeek must commit refill '
-              'via StreakProgressService.commitRefill — the sole writer.',
+          reason:
+              'day_rollover_service must invoke StreakProgressService.instance.refillIfNewWeek().',
+        );
+        final svcSrc =
+            _src('lib/core/services/streak_progress_service.dart');
+        expect(
+          svcSrc.contains('commitRefill(') && svcSrc.contains('refillIfNewWeek'),
+          isTrue,
+          reason:
+              'StreakProgressService must expose both commitRefill (internal) and refillIfNewWeek (orchestrator).',
         );
       },
     );

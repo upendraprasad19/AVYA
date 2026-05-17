@@ -1965,7 +1965,7 @@ concepts:
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 820-838
+        line_range: 790-800
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -3611,7 +3611,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 520-815
+        line_range: 520-790
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]

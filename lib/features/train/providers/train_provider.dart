@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -40,72 +41,50 @@ class LastPerformanceData {
   bool get hasData => lastWeight != null || lastReps != null;
 }
 
+/// OI-39 (audit-2026-05-17 Hermes C5) — delegates to
+/// `WorkoutReadService.logsForExercise()`. Pre-fix this method
+/// iterated `workoutBox.values` inline + filtered by `type == 'exercise_log'`
+/// (depended on the writer stamping that string field). Now the read
+/// service owns the cross-date scan + name match; this function only
+/// extracts the latest row's per-set values for the pre-fill UI.
 LastPerformanceData _getLastPerformance(String exerciseName) {
-  final hive = HiveService.instance;
-  final nameLower = exerciseName.toLowerCase();
+  final logs = WorkoutReadService.instance.logsForExercise(exerciseName);
+  if (logs.isEmpty) {
+    return const LastPerformanceData(
+      lastWeight: null,
+      lastReps: null,
+      lastSets: null,
+      lastDate: null,
+      suggestedWeight: null,
+    );
+  }
+  // logsForExercise returns chronologically sorted (oldest first); last
+  // is most recent.
+  final latest = logs.last;
+  final dateStr = latest['date'] as String?;
+  final latestDate = dateStr != null ? DateTime.tryParse(dateStr) : null;
 
-  DateTime? latestDate;
+  // Bug a8f1c2 (APK Test #15.3) — pre-fill UX needs FIRST SET values,
+  // not workout aggregates. The top-level `reps_completed` / `weight_kg`
+  // are SUM/MAX per WorkoutWriteService contract; reading them as
+  // "per-set" pre-fills "85 reps" into every set on a 7-set session.
+  // Legacy rows (pre-Test-#6) lack sets[] — fall through to null; UI
+  // shows empty inputs / prescribed default.
+  final sets = latest['sets'];
   double? lastWeight;
   int? lastReps;
-  int? lastSets;
-  String? loggingType;
-
-  for (final raw in hive.workoutBox.values) {
-    if (raw is! Map) continue;
-    final log = Map<String, dynamic>.from(raw);
-    if (log['type'] != 'exercise_log') continue;
-
-    final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
-    if (logName.isEmpty) continue;
-    // Exact match first; fuzzy contains only when both names are long enough
-    // to avoid false positives like "Press" matching "Leg Press"
-    if (logName != nameLower) {
-      if (nameLower.length < 6 || logName.length < 6) continue;
-      if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
-    }
-
-    final dateStr = log['date'] as String?;
-    if (dateStr == null) continue;
-    final date = DateTime.tryParse(dateStr);
-    if (date == null) continue;
-
-    if (latestDate == null || date.isAfter(latestDate)) {
-      latestDate = date;
-      // Bug a8f1c2 (APK Test #15.3) — read per-set values, not aggregates.
-      //
-      // Post-APK-Test-#6 WorkoutWriteService writes:
-      //   log['reps_completed'] = SUM of per-set reps (line 134,172)
-      //   log['weight_kg']      = MAX across per-set weights (line 135-136,173)
-      //   log['sets']           = per-set array [{weight_kg, reps, ...}]
-      // The pre-fill UX needs the FIRST SET's values, not workout aggregates.
-      // Reading the aggregates here pre-filled "85 reps" into every set of
-      // a Hanging Leg Raise session (sum of a 7-set [10,15,10,15,10,10,15]).
-      //
-      // Legacy rows (pre-Test-#6) lack the sets[] array — we cannot tell
-      // whether their top-level reps_completed was per-set or aggregate,
-      // so fall through to null. UI shows empty inputs / prescribed default.
-      final sets = log['sets'];
-      double? perSetWeight;
-      int? perSetReps;
-      if (sets is List && sets.isNotEmpty) {
-        final first = sets.first;
-        if (first is Map) {
-          perSetWeight = (first['weight_kg'] as num?)?.toDouble();
-          perSetReps = (first['reps'] as num?)?.toInt();
-        }
-      }
-      lastWeight = perSetWeight;
-      lastReps = perSetReps;
-      // Bug a8f1c2 sibling fix (APK Test #15.3 code-review N2) — writer
-      // normalizes incoming `sets_completed` → `set_number` (workout_write_
-      // service.dart:617-619) and canonical writes only set `set_number`
-      // (line 171). Reading `sets_completed` alone silently returned null
-      // for every modern row. Read canonical first, fall back to legacy.
-      lastSets =
-          (log['set_number'] as int?) ?? (log['sets_completed'] as int?);
-      loggingType = log['logging_type'] as String?;
+  if (sets is List && sets.isNotEmpty) {
+    final first = sets.first;
+    if (first is Map) {
+      lastWeight = (first['weight_kg'] as num?)?.toDouble();
+      lastReps = (first['reps'] as num?)?.toInt();
     }
   }
+  // Bug a8f1c2 sibling — `set_number` is canonical post-Test-#6,
+  // `sets_completed` is legacy. Read both with fallback.
+  final lastSets =
+      (latest['set_number'] as int?) ?? (latest['sets_completed'] as int?);
+  final loggingType = latest['logging_type'] as String?;
 
   double? suggested;
   if (lastWeight != null &&
@@ -128,37 +107,17 @@ final lastPerformanceProvider =
   return _getLastPerformance(exerciseName);
 });
 
+/// OI-39 (audit-2026-05-17 Hermes C5) — delegates to
+/// `WorkoutReadService.logsForExercise()`. Pre-fix iterated workoutBox
+/// inline; now reuses the canonical cross-date scan + name match.
 final exerciseHistoryProvider =
     Provider.family<List<double>, String>((ref, exerciseName) {
-  final hive = HiveService.instance;
-  final nameLower = exerciseName.toLowerCase();
-  final entries = <MapEntry<DateTime, double>>[];
-
-  for (final raw in hive.workoutBox.values) {
-    if (raw is! Map) continue;
-    final log = Map<String, dynamic>.from(raw);
-    if (log['type'] != 'exercise_log') continue;
-
-    final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
-    if (logName.isEmpty) continue;
-    if (logName != nameLower) {
-      if (nameLower.length < 6 || logName.length < 6) continue;
-      if (!logName.contains(nameLower) && !nameLower.contains(logName)) continue;
-    }
-
-    final weight = (log['weight_kg'] as num?)?.toDouble();
-    if (weight == null || weight <= 0) continue;
-
-    final dateStr = log['date'] as String?;
-    final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
-    if (date == null) continue;
-
-    entries.add(MapEntry(date, weight));
+  final logs = WorkoutReadService.instance.logsForExercise(exerciseName);
+  final weights = <double>[];
+  for (final log in logs) {
+    final w = (log['weight_kg'] as num?)?.toDouble();
+    if (w != null && w > 0) weights.add(w);
   }
-
-  entries.sort((a, b) => a.key.compareTo(b.key));
-
-  final weights = entries.map((e) => e.value).toList();
   if (weights.length > 8) {
     return weights.sublist(weights.length - 8);
   }

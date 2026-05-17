@@ -56,27 +56,47 @@ void main() {
     });
 
     test(
-        'streak_freeze weekly refill fans out to syncFreezes (home_provider)',
+        'streak_freeze weekly refill fans out to syncFreezes (via service)',
         () {
-      // C-15 — same pattern: refill moved into
-      // StreakProgressService.commitRefill which fires syncFreezes.
-      final homeSrc =
-          File('lib/features/home/providers/home_provider.dart')
-              .readAsStringSync();
+      // C-15 — refill moved into StreakProgressService.commitRefill which
+      // fires syncFreezes.
+      // OI-38 update (audit-2026-05-17 Hermes C3) — the orchestration
+      // moved OUT of home_provider into
+      // StreakProgressService.refillIfNewWeek + invoked from
+      // DayRolloverObserver. Test now asserts: service has
+      // refillIfNewWeek + commitRefill, AND day_rollover invokes the
+      // public orchestrator. Old check (home_provider calls
+      // commitRefill) no longer applies — that pattern was the OI-38
+      // anti-pattern.
       final svcSrc =
           File('lib/core/services/streak_progress_service.dart')
               .readAsStringSync();
-      final homeCallsService =
-          homeSrc.contains('StreakProgressService.instance.commitRefill');
-      final serviceFiresSync =
-          svcSrc.contains('SyncService.instance.syncFreezes');
+      final dayRolloverSrc =
+          File('lib/core/services/day_rollover_service.dart')
+              .readAsStringSync();
       expect(
-        (homeCallsService && serviceFiresSync) ||
-            homeSrc.contains('SyncService.instance.syncFreezes'),
+        svcSrc.contains('SyncService.instance.syncFreezes'),
         isTrue,
-        reason: 'home_provider._refillIfNewWeek must push refilled freeze '
-            'count to cloud (CLAUDE.md §15). Now routed through '
-            'StreakProgressService.commitRefill which fires syncFreezes.',
+        reason:
+            'StreakProgressService.commitRefill must fire syncFreezes '
+            '(CLAUDE.md §15 restore-completeness contract).',
+      );
+      expect(
+        svcSrc.contains('int? refillIfNewWeek()') ||
+            svcSrc.contains('refillIfNewWeek('),
+        isTrue,
+        reason:
+            'StreakProgressService.refillIfNewWeek must exist as the '
+            'orchestration entry point.',
+      );
+      expect(
+        dayRolloverSrc
+            .contains('StreakProgressService.instance.refillIfNewWeek'),
+        isTrue,
+        reason:
+            'day_rollover_service must invoke '
+            'StreakProgressService.instance.refillIfNewWeek() inside '
+            '_doRolloverWithRef so the weekly refill fires off-build.',
       );
     });
 

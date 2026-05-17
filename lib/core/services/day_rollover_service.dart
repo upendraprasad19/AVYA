@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 
@@ -136,6 +138,20 @@ class DayRolloverObserver with WidgetsBindingObserver {
   Future<void> _doRolloverWithRef(WidgetRef ref, String today) async {
     // 1. Reset usage counters (AI text logs, scan meal, etc.)
     await UsageCounterService.instance.checkAndResetCounters();
+
+    // OI-38 (audit-2026-05-17 Hermes C3) — streak freeze weekly refill.
+    // Moved out of StreakFreezeNotifier.build() (write-on-read anti-pattern).
+    // Idempotent — only refills on Monday-after-last-refill, no-op otherwise.
+    // Fires on every rollover (and from splash on first launch) so users
+    // who don't open the app exactly on Monday still get their refill the
+    // next launch after.
+    try {
+      StreakProgressService.instance.refillIfNewWeek();
+    } catch (e, st) {
+      debugPrint('[DayRollover] refillIfNewWeek failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_rollover_streak_freeze_refill'));
+    }
 
     // 2. Store new date
     await HiveService.instance.configBox.put(_hiveKey, today);

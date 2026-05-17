@@ -868,7 +868,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-32 — delete-account Storage purge may not be recursive (P2 — verification pending)
 
-- **Status**: OPEN (needs verification — subagent didn't read full file)
+- **Status**: CLOSED · 2026-05-17 · diagnose `a2d0e1` · verified REAL + fixed · delete-account v2→v3 deployed
 - **Identified**: 2026-05-17 evening · Hermes audit F7 · UNVERIFIED — subagent only read lines 1-150
 - **Risk class**: DPDP §17 incomplete erasure · nested user-tagged paths may survive after account deletion
 - **Estimated effort**: ~30 min verification + ~1 hour fix if needed
@@ -880,7 +880,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-33 — `check_apk_size_within_bounds.dart` exits 0 when APK missing (silent CI pass) (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `c84e33` · --release flag added; default behavior unchanged
 - **Identified**: 2026-05-17 evening · Hermes audit F8 · verified by direct read at lines 44-48
 - **Risk class**: gate-bypass · in clean CI or wrong order pipeline, APK size validation silently passes
 - **Estimated effort**: ~30 min
@@ -892,7 +892,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-34 — `check_migrations_applied.dart` compares snapshot file, not live Supabase (P2)
 
-- **Status**: OPEN (self-documented TODO in script)
+- **Status**: CLOSED · 2026-05-17 · diagnose `1c3401` · new `check_migrations_live.dart` shipped (companion to Gate 14)
 - **Identified**: 2026-05-17 evening · Hermes audit F9 · verified by direct read at lines 11-13
 - **Risk class**: gate-bypass · repo can believe migrations are applied while live Supabase differs
 - **Estimated effort**: ~2 hours (write `check_migrations_live.dart` + wire into `/build-apk` Gate 14)
@@ -904,7 +904,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-35 — CLAUDE.md §2 says "21 tables", §7 header says "46 tables" — intra-document drift (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `d0c352` · CLAUDE.md + AGENTS.md corrected; new `check_doc_internal_consistency.dart` Gate 18 pins drift pairs
 - **Identified**: 2026-05-17 evening · Hermes audit F10 (re-attributed — drift is intra-CLAUDE.md not inter-file) · verified via grep
 - **Risk class**: agent guidance drift · agents reading §2 quick-summary get stale count; §7 was bumped 2026-05-11 didn't propagate
 - **Estimated effort**: ~5 min (fix) + ~1 hour (build permanent gate)
@@ -940,7 +940,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-38 — `streakFreezeProvider.build()` writes via `commitRefill()` — Riverpod anti-pattern (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `5fe338` · refill extracted to `StreakProgressService.refillIfNewWeek()`; day_rollover invokes; build is now read-only
 - **Identified**: 2026-05-17 evening · Hermes audit C3 · verified via subagent read of `home_provider.dart:258 + 291-305`
 - **Risk class**: side-effect-on-read (CQRS violation, lens L26)
 - **Estimated effort**: ~1.5 hours (extract to splash / day-rollover path)
@@ -952,7 +952,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-39 — `train_provider` scans Hive directly instead of via WorkoutRepository / WorkoutReadService (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `39ead9` · new `WorkoutReadService.logsForExercise` + both providers delegate
 - **Identified**: 2026-05-17 evening · Hermes audit C5 · verified via subagent read of `train_provider.dart:43-124` + `:137`
 - **Risk class**: writer/reader discipline · OI-02 closed read services this morning but train_provider wasn't migrated
 - **Estimated effort**: ~1.5 hours
@@ -964,7 +964,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-40 — Two paywall UI surfaces (`paywall_sheet.dart` + `paywall_sheet_phase_variant.dart`) (P2)
 
-- **Status**: OPEN (PARTIAL — needs decision)
+- **Status**: CLOSED · 2026-05-17 · diagnose `40c401` · phase variant CTA now escalates to canonical paywall (one purchase pipeline, two pitch surfaces)
 - **Identified**: 2026-05-17 evening · Hermes audit C6 · verified via subagent read of both files
 - **Risk class**: drift in pricing / copy / analytics / restore behavior
 - **Estimated effort**: ~2 hours (decide consolidation vs documented variants)
@@ -976,7 +976,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-41 — Profile/Report streak source drifts from Home/Rank live calc (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `41507e` · Profile now reads `WorkoutRepository.currentStreak()` (same as Home + Rank)
 - **Identified**: 2026-05-17 evening · Hermes audit C7 · verified via subagent grep `home_provider.dart:245` vs `profile_provider.dart:300`
 - **Risk class**: writer/reader drift · users see different streak numbers in different places
 - **Estimated effort**: ~1 hour (pin SoT + migrate Profile reader)

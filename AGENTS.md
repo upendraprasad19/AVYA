@@ -92,7 +92,7 @@ Use `mcp__ba7b5e8e__deploy_edge_function` to deploy. Do not use `supabase` CLI �
 | State Management | Riverpod (with code generation) |
 | Local Storage | Hive (offline-first, primary for all reads/writes) |
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
-| Database | Supabase Postgres (21 tables — backup + AI + community) |
+| Database | Supabase Postgres (46 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
 | AI Coach Free | Edge Function → Cerebras Llama 3.1 8B free tier (30-day trial, 15 msg/day) |
 | AI Coach PRO | Cerebras gpt-oss-120B (direct via Edge Function, ~₹1.80/user/month) |
