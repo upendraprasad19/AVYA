@@ -14,20 +14,39 @@ void main() {
   group(
       'Task 9a – nutritionSummaryProvider invalidated in FoodLogNotifier', () {
     test('deleteFoodLog invalidates nutritionSummaryProvider', () {
-      final src = _src(
+      // OI-36 (audit-2026-05-17 Hermes C1) — deleteFoodLog now delegates to
+      // NutritionWriteService.deleteLog. The WriteService's onStateChanged
+      // hook (wired in app.dart) fires the canonical invalidation batch
+      // including `nutritionSummaryProvider`. We assert the delegation in
+      // the provider AND the invalidation in app.dart so the contract is
+      // preserved end-to-end.
+      final providerSrc = _src(
           'lib/features/nutrition/providers/nutrition_provider.dart');
+      final appSrc = _src('lib/app.dart');
 
-      // Find the deleteFoodLog method body and confirm the invalidation is
-      // present within it (not just anywhere in the file).
-      final deleteStart = src.indexOf('Future<void> deleteFoodLog(');
+      final deleteStart =
+          providerSrc.indexOf('Future<void> deleteFoodLog(');
       expect(deleteStart, greaterThan(0),
           reason: 'deleteFoodLog method must exist');
+      final deleteEnd = providerSrc.indexOf('\n  }', deleteStart);
+      final deleteBody = providerSrc.substring(deleteStart, deleteEnd);
 
-      final deleteEnd = src.indexOf('\n  }', deleteStart);
-      final deleteBody = src.substring(deleteStart, deleteEnd);
+      expect(
+        deleteBody,
+        contains('NutritionWriteService.instance.deleteLog'),
+        reason:
+            'deleteFoodLog must delegate to NutritionWriteService.instance.deleteLog '
+            'so the canonical writer owns the mutation.',
+      );
 
-      expect(deleteBody, contains('ref.invalidate(nutritionSummaryProvider)'),
-          reason: 'deleteFoodLog must invalidate nutritionSummaryProvider');
+      expect(
+        appSrc,
+        contains('ref.invalidate(nutritionSummaryProvider)'),
+        reason:
+            'NutritionWriteService.onStateChanged in app.dart must invalidate '
+            'nutritionSummaryProvider so deleteFoodLog (via the WriteService) '
+            'triggers UI rebuild.',
+      );
     });
 
     test('restoreFoodLog invalidates nutritionSummaryProvider', () {

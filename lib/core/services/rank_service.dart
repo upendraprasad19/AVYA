@@ -42,6 +42,14 @@ class RankService {
   RankService._();
   static final RankService instance = RankService._();
 
+  /// OI-37 (audit-2026-05-17 Hermes C2) — invalidation hook. Mirrors
+  /// `NutritionWriteService.onStateChanged` set from `app.dart`. Fires after
+  /// every successful promotion so reactive readers (`userProfileProvider`,
+  /// rank widgets) rebuild against the freshly-updated local Hive profile.
+  /// Pre-fix the cloud `user_profile.current_rank_code` was updated but the
+  /// local Hive profile + UI showed the stale rank until next sync.
+  static void Function()? onStateChanged;
+
   // ── Public API ─────────────────────────────────────────────────
 
   Future<void> evaluateAndPromote() async {
@@ -123,10 +131,36 @@ class RankService {
           ? null
           : (currentDenorm)['current_rank_code'] as String?;
       if (currentCode != qualified.code) {
+        final achievedAtIso = DateTime.now().toIso8601String();
         await supa.from('user_profile').update({
           'current_rank_code': qualified.code,
-          'current_rank_achieved_at': DateTime.now().toIso8601String(),
+          'current_rank_achieved_at': achievedAtIso,
         }).eq('user_id', user.id);
+
+        // OI-37 — sync the same fields into local Hive so getCurrentRank()
+        // returns the new rank immediately. Without this the cloud has the
+        // new rank but local readers serve the old rank until the next
+        // SyncService.restoreFromCloudForUser cycle (could be minutes).
+        // Fire-and-forget telemetry on failure; the cloud write succeeded
+        // so the user does have PRO entitlement to the new rank.
+        try {
+          await UserRepository.instance.updateProfileFields({
+            'current_rank_code': qualified.code,
+            'current_rank_achieved_at': achievedAtIso,
+          });
+        } catch (e, st) {
+          debugPrint('[RankService] local profile update failed: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'rank_service_local_profile_update'));
+        }
+
+        // OI-37 — notify Riverpod listeners. app.dart wires this to
+        // `ref.invalidate(userProfileProvider)` so rank widgets rebuild.
+        try {
+          onStateChanged?.call();
+        } catch (_) {
+          // ProviderScope may be disposing — invalidation is best-effort.
+        }
       }
     } catch (e, st) {
       // H-42 (audit-2026-05-11) — fire-and-forget contract; errors

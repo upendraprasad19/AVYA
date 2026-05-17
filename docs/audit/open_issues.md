@@ -820,7 +820,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-28 — ai-media-proxy SSRF: service-role fetch of any user's Storage URL leaks cross-user images (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `5e055f` · ai-media-proxy v17→v18 deployed
 - **Identified**: 2026-05-17 evening · Hermes audit F3 · verified via subagent quote of `ai-media-proxy/index.ts:163-176`
 - **Risk class**: privacy / DPDP / cross-user data leak · affects progress photos + body comp + food photos + AI coach media
 - **Estimated effort**: ~3 hours (refactor schema + 4 client callsites + contract test)
@@ -844,7 +844,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-30 — clean-orphan-media scans `coach-media` (consented retention bucket) instead of `chat-media` (transient) (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `c1ea30` · migration 071 + clean-orphan-media v5→v6 deployed
 - **Identified**: 2026-05-17 evening · Hermes audit F5 · verified via subagent quote of migration 070 comments + `clean-orphan-media/index.ts:70`
 - **Risk class**: silent data loss · paying users' explicitly-saved photos deleted by routine cron
 - **Estimated effort**: ~1 hour (flip bucket + rename helper RPC + 1-line migration)
@@ -856,7 +856,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-31 — 5 cron Edge Functions lack `isAuthorizedCronCall(req)` auth gate (P1) — DISTINCT FROM OI-21
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `c4031b` · 3 deploys (expiry-reminder v13→v14, morning-alert v24→v25, rolling-context v13→v14) · scope narrowed to active-cron via live `cron.job` query
 - **Identified**: 2026-05-17 evening · Hermes audit F6 · verified via subagent grep of 5 named files + cross-reference to `_shared/cron_auth.ts`
 - **Risk class**: privilege escalation · these functions create service-role clients without verifying the caller is the cron scheduler
 - **Estimated effort**: ~2 hours (5 functions × ~15 min each + redeploy)
@@ -916,7 +916,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-36 — `NutritionProvider.deleteFoodLog` bypasses NutritionWriteService (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `d1e7e6` · client-only change (no deploy)
 - **Identified**: 2026-05-17 evening · Hermes audit C1 · verified via subagent read of `nutrition_provider.dart:987-1019`
 - **Risk class**: writer/reader drift class (8th instance per `feedback_writer_reader_field_drift_recurring.md`)
 - **Estimated effort**: ~1 hour (mirror `restoreFoodLog` shape into a `deleteLog` method on NutritionWriteService)
@@ -928,7 +928,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-37 — RankService writes Supabase post-promotion but reads local Hive — UI drifts (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-05-17 · diagnose `4a37e7` · client-only change (no deploy)
 - **Identified**: 2026-05-17 evening · Hermes audit C2 · verified via subagent read of `rank_service.dart:97-129` (write) + `:142-149` (read)
 - **Risk class**: writer/reader drift · UI shows old rank until next sync or app restart
 - **Estimated effort**: ~1 hour

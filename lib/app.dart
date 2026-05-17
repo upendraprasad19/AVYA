@@ -10,6 +10,7 @@ import 'core/services/ai_service.dart';
 import 'core/services/day_rollover_service.dart';
 import 'core/services/error_telemetry.dart';
 import 'core/services/nutrition_write_service.dart';
+import 'core/services/rank_service.dart';
 import 'core/services/razorpay_service.dart';
 import 'core/services/subscription_service.dart';
 import 'package:flutter/foundation.dart';
@@ -64,6 +65,18 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
         ref.invalidate(macroTargetsProvider);
         ref.invalidate(aiInsightProvider);
         ref.invalidate(foodLogProvider);
+      } catch (_) {
+        // ProviderScope may be disposing — invalidation is best-effort.
+      }
+    };
+    // OI-37 (audit-2026-05-17 Hermes C2) — rank promotion invalidation hook.
+    // Pre-fix the cloud `user_profile.current_rank_code` was updated but the
+    // local Hive profile + UI showed the stale rank until next sync. Now
+    // RankService.evaluateAndPromote updates Hive synchronously AND fires
+    // this callback so all rank-reading widgets rebuild immediately.
+    RankService.onStateChanged = () {
+      try {
+        ref.invalidate(userProfileProvider);
       } catch (_) {
         // ProviderScope may be disposing — invalidation is best-effort.
       }

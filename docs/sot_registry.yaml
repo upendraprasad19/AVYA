@@ -841,7 +841,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1583-1593
+        line_range: 1580-1583
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]

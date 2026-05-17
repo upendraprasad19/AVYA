@@ -64,13 +64,26 @@ void main() {
     });
 
     test('deleteFoodLog provider fires syncNutritionData after delete', () {
-      // The sync call lives in the provider layer (not the screen directly).
+      // OI-36 (audit-2026-05-17 Hermes C1) — deleteFoodLog now delegates to
+      // NutritionWriteService.deleteLog which fires `syncNutritionData()`
+      // internally. The sync wiring lives in the WriteService, not in the
+      // provider. We assert BOTH conditions:
+      //   1. The provider delegates to NutritionWriteService.deleteLog.
+      //   2. The WriteService still fires `syncNutritionData()` in deleteLog.
       expect(
         nutritionProviderSource,
+        contains('NutritionWriteService.instance.deleteLog'),
+        reason:
+            'deleteFoodLog in nutrition_provider must delegate to '
+            'NutritionWriteService.instance.deleteLog (canonical writer).',
+      );
+      expect(
+        nutritionWriteSource,
         contains('syncNutritionData'),
         reason:
-            'deleteFoodLog in nutrition_provider must fire syncNutritionData() '
-            'so cloud stays in sync. Missing sync = AI coach sees stale meal context.',
+            'NutritionWriteService.deleteLog must fire `syncNutritionData()` '
+            'so cloud stays in sync. Missing sync = AI coach sees stale '
+            'meal context.',
       );
     });
   });

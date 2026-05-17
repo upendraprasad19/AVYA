@@ -157,12 +157,82 @@ function extractLogActions(rawReply: string): {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB server-side limit
 const STORAGE_PREFIX = `${SUPABASE_URL}/storage/v1/object/`;
 
+// OI-28 (audit-2026-05-17 Hermes F3) — buckets we'll service-role-fetch from.
+// Anything outside this allowlist is rejected even if it's technically a
+// valid Storage URL. Mirrors the Storage RLS policies which only allow
+// `(storage.foldername(name))[1] = (auth.uid())::text` on these buckets.
+const ALLOWED_BUCKETS = new Set<string>([
+  "chat-media",
+  "coach-media",
+  "progress-photos",
+]);
+
+/**
+ * Parse a Supabase Storage URL of any shape (public / sign / authenticated)
+ * into its bucket + path components. Used by the OI-28 user-scope assertion
+ * inside fetchImageAsBase64. Returns null if the URL isn't shaped like a
+ * Storage object URL.
+ *
+ * Shapes accepted:
+ *   ${SUPABASE_URL}/storage/v1/object/public/<bucket>/<path>
+ *   ${SUPABASE_URL}/storage/v1/object/sign/<bucket>/<path>?token=...
+ *   ${SUPABASE_URL}/storage/v1/object/authenticated/<bucket>/<path>
+ */
+export function parseStorageUrl(
+  imageUrl: string,
+): { bucket: string; path: string } | null {
+  if (!imageUrl.startsWith(STORAGE_PREFIX)) return null;
+  const tail = imageUrl.substring(STORAGE_PREFIX.length); // e.g. "public/chat-media/<uid>/file.jpg?token=..."
+  // Strip query string before parsing path components.
+  const cleanTail = tail.split("?")[0];
+  const parts = cleanTail.split("/");
+  if (parts.length < 3) return null;
+  const access = parts[0]; // public | sign | authenticated
+  if (!["public", "sign", "authenticated"].includes(access)) return null;
+  const bucket = parts[1];
+  const path = parts.slice(2).join("/");
+  if (!bucket || !path) return null;
+  return { bucket, path };
+}
+
 async function fetchImageAsBase64(
   imageUrl: string,
+  authUserId: string,
 ): Promise<{ base64: string; mimeType: string }> {
   // Security: only allow Supabase Storage URLs to prevent SSRF
   if (!imageUrl.startsWith(STORAGE_PREFIX)) {
     throw new HttpError(400, "validation", "Only Supabase Storage URLs are allowed");
+  }
+
+  // OI-28 (audit-2026-05-17 Hermes F3) — user-scope assertion. Pre-fix
+  // any authenticated user could supply ANOTHER user's private Storage
+  // URL and the service-role fetch would happily fetch the bytes + send
+  // them to Gemini. RLS doesn't apply to service role — application
+  // code is the only guard. We now parse the URL into bucket+path and
+  // assert path starts with the authenticated userId, matching the
+  // Storage RLS policy shape `(storage.foldername(name))[1] = (auth.uid())::text`.
+  const parsed = parseStorageUrl(imageUrl);
+  if (!parsed) {
+    throw new HttpError(
+      400,
+      "validation",
+      "Storage URL does not match expected shape (object/{public|sign|authenticated}/<bucket>/<path>)",
+    );
+  }
+  if (!ALLOWED_BUCKETS.has(parsed.bucket)) {
+    throw new HttpError(
+      400,
+      "validation",
+      `Bucket "${parsed.bucket}" is not allowed for AI image analysis`,
+    );
+  }
+  if (!parsed.path.startsWith(`${authUserId}/`)) {
+    // Don't leak whose URL it was — generic 403.
+    throw new HttpError(
+      403,
+      "authorization",
+      "Image path does not belong to the authenticated user",
+    );
   }
 
   const headers: Record<string, string> = {
@@ -491,9 +561,12 @@ serve(async (req: Request) => {
     }
 
     // Fetch the image and convert to base64. Throws typed HttpError —
-    // see fetchImageAsBase64 doc for the status mapping.
+    // see fetchImageAsBase64 doc for the status mapping. OI-28 hardened:
+    // function now requires authUserId and asserts the Storage path is
+    // user-scoped before the service-role fetch.
     const { base64: imageBase64, mimeType } = await fetchImageAsBase64(
       media_url,
+      userId,
     );
 
     // Single Gemini call (Flash Lite is the vision SKU). No fallback —

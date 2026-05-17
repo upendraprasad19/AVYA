@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +27,20 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // OI-31 (audit-2026-05-17 Hermes F6) — cron-only function. Reject any
+  // caller that isn't pg_cron (helper verifies JWT signature against
+  // SUPABASE_JWT_SECRET + role-claim === 'service_role'). Pre-fix this
+  // function created a service-role client without verifying the caller —
+  // a public POST could trigger fan-out of push notifications to every
+  // PRO user expiring within 3 days.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] expiry-reminder unauthorized; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const logId = await logCronStart("expiry-reminder");
