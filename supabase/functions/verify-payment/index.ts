@@ -352,9 +352,25 @@ serve(async (req: Request) => {
       );
     }
 
-    // Verify the user_id in notes matches the authenticated user
+    // OI-29 (audit-2026-05-17 Hermes F4) — ownership check is now two-step.
+    // Pre-fix `if (notesUserId && notesUserId !== userId)` was fail-open when
+    // `notes.user_id` was absent — attacker who knows a captured payment_id
+    // without notes could claim entitlement under their own JWT. Now we
+    // require notes.user_id to be present AND to match.
     const notesUserId = payment.notes?.user_id;
-    if (notesUserId && notesUserId !== userId) {
+    if (!notesUserId) {
+      return new Response(
+        JSON.stringify({
+          verified: false,
+          error: "Missing user_id in payment notes",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (notesUserId !== userId) {
       return new Response(
         JSON.stringify({
           verified: false,
@@ -407,6 +423,17 @@ serve(async (req: Request) => {
       endDate.setDate(endDate.getDate() + 30);
     }
 
+    // OI-27 (audit-2026-05-17 Hermes F2) — `razorpay_signature` is NOT NULL
+    // since migration 052 (2026-05-13). verify-payment validates via Razorpay
+    // REST API (not HMAC), so we synthesize a sentinel marking the
+    // verification mode. Without this both upsert + fallback insert below
+    // throw 23502 not_null_violation on every fallback path after webhook
+    // lag. Sentinel format `verified_via_api:<12-hex>` is grep-able for
+    // later analytics on which subscriptions were created via this code path
+    // vs the HMAC-verified webhook (which stores the real signature).
+    const razorpaySignatureSentinel =
+      "verified_via_api:" + paymentId.substring(0, 12);
+
     const { error: insertError } = await supabase
       .from("subscriptions")
       .upsert(
@@ -418,6 +445,7 @@ serve(async (req: Request) => {
           end_date: endDate.toISOString(),
           razorpay_payment_id: paymentId,
           razorpay_order_id: payment.order_id ?? null,
+          razorpay_signature: razorpaySignatureSentinel,
           created_at: now.toISOString(),
         },
         { onConflict: "user_id,razorpay_payment_id" },
@@ -435,6 +463,7 @@ serve(async (req: Request) => {
           end_date: endDate.toISOString(),
           razorpay_payment_id: paymentId,
           razorpay_order_id: payment.order_id ?? null,
+          razorpay_signature: razorpaySignatureSentinel,
           created_at: now.toISOString(),
         });
 
