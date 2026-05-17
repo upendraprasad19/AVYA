@@ -109,16 +109,27 @@ void main() {
 
     test('rethrow happens on non-cold-start FunctionExceptions', () {
       // Bug 7c4e1a refactor — rethrow guard renamed from
-      // `isColdStart502_503` to `isColdStart`. Pin the new pattern + the
-      // attempt-budget exhaustion condition.
-      final rethrowGate = RegExp(
-        r'if\s*\(\s*!isColdStart[^)]*\|\|[^)]*attempt[^)]*\)[\s\S]{0,40}?rethrow',
-      );
-      expect(rethrowGate.hasMatch(src), isTrue,
+      // `isColdStart502_503` to `isColdStart`.
+      // audit-2026-05-16 / Obs 6 — retry helper refactored to support
+      // dual retry tracks (cold-start + storage-race). Old pattern
+      // `if (!isColdStart || attempt >= ...) rethrow` is gone; new
+      // shape uses two if/continue blocks and a bare `rethrow` at the
+      // bottom of the catch:
+      //   if (isColdStart) { ... continue; }
+      //   if (isStorageRace) { ... continue; }
+      //   rethrow;
+      // Contract unchanged: anything that isn't cold-start or storage-
+      // race exits the catch via rethrow.
+      final hasColdStartGate = src.contains('if (isColdStart)');
+      final hasStorageRaceGate = src.contains('if (isStorageRace)');
+      final hasBareRethrow =
+          RegExp(r'\bcontinue;\s*\}\s*rethrow;').hasMatch(src);
+      expect(hasColdStartGate && hasStorageRaceGate && hasBareRethrow, isTrue,
           reason:
-              'Non-cold-start FunctionExceptions OR exhausted retry budget '
-              'must rethrow so callers can handle 401 auth / 4xx validation '
-              '/ persistent outage.');
+              'Non-cold-start, non-storage-race FunctionExceptions must '
+              'rethrow so callers can handle 401 auth / 4xx validation / '
+              'persistent outage. Looked for the two if/continue blocks + '
+              'bare rethrow shape.');
     });
 
     test('each retry emits edge_function_cold_start_retry telemetry', () {

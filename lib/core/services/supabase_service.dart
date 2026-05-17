@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -270,28 +271,74 @@ class SupabaseService {
     Future<FunctionResponse> Function() invoke, {
     required String functionName,
     List<int> backoffsMs = _coldStartBackoffsMs,
+    List<int> storageRaceBackoffsMs = _storageRaceBackoffsMs,
   }) async {
-    int attempt = 0;
+    int coldStartAttempt = 0;
+    int storageRaceAttempt = 0;
     while (true) {
       try {
         return await invoke();
       } on FunctionException catch (e) {
         final isColdStart =
             e.status == 502 || e.status == 503 || e.status == 504;
-        if (!isColdStart || attempt >= backoffsMs.length) {
-          rethrow;
+        // audit-2026-05-16 / Obs 6 — Storage 404 upload-CDN race.
+        // ai-media-proxy v17 maps Storage 404 to 400 with the typed
+        // body `{"error_type": "storage", ...}`. CDN propagation
+        // resolves in sub-second; brief retry budget absorbs it. Any
+        // other 400 (validation, oversized, malformed body) is a
+        // caller bug and must NOT retry.
+        final isStorageRace =
+            e.status == 400 && _functionDetailsIsStorageRace(e.details);
+
+        if (isColdStart) {
+          if (coldStartAttempt >= backoffsMs.length) rethrow;
+          final backoffMs = backoffsMs[coldStartAttempt];
+          unawaited(ErrorTelemetry.logEvent(
+            'edge_function_cold_start_retry',
+            message:
+                'fn=$functionName attempt=${coldStartAttempt + 1} status=${e.status} backoff_ms=$backoffMs',
+          ));
+          await Future<void>.delayed(Duration(milliseconds: backoffMs));
+          coldStartAttempt++;
+          continue;
         }
-        final backoffMs = backoffsMs[attempt];
-        // Fire-and-forget telemetry — keeps the retry latency from
-        // being doubled by the log-client-error network round-trip.
-        unawaited(ErrorTelemetry.logEvent(
-          'edge_function_cold_start_retry',
-          message:
-              'fn=$functionName attempt=${attempt + 1} status=${e.status} backoff_ms=$backoffMs',
-        ));
-        await Future<void>.delayed(Duration(milliseconds: backoffMs));
-        attempt++;
+
+        if (isStorageRace) {
+          if (storageRaceAttempt >= storageRaceBackoffsMs.length) rethrow;
+          final backoffMs = storageRaceBackoffsMs[storageRaceAttempt];
+          unawaited(ErrorTelemetry.logEvent(
+            'edge_function_storage_race_retry',
+            message:
+                'fn=$functionName attempt=${storageRaceAttempt + 1} status=400 error_type=storage backoff_ms=$backoffMs',
+          ));
+          await Future<void>.delayed(Duration(milliseconds: backoffMs));
+          storageRaceAttempt++;
+          continue;
+        }
+
+        rethrow;
       }
     }
+  }
+
+  /// Storage-race retry schedule. Sub-second-friendly because CDN
+  /// propagation typically resolves in <1s; total budget ~5s.
+  static const List<int> _storageRaceBackoffsMs = [500, 1500, 3000];
+
+  /// True if the FunctionException body carries `error_type=="storage"`.
+  /// Tolerant of varied shapes — `details` may be a Map, a JSON string,
+  /// or null depending on supabase_flutter internals.
+  static bool _functionDetailsIsStorageRace(dynamic details) {
+    if (details == null) return false;
+    if (details is Map) return details['error_type'] == 'storage';
+    if (details is String) {
+      try {
+        final m = jsonDecode(details);
+        if (m is Map) return m['error_type'] == 'storage';
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
   }
 }

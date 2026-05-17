@@ -620,6 +620,17 @@ extension SyncServiceWorkout on SyncService {
           'is_pr': map['is_pr'] ?? false,
           'has_warmup_sets': map['has_warmup_sets'] ?? false,
           'created_at': completedAt,
+          // audit-2026-05-16 reader-side / Obs 1 — project cloud
+          // `workout_log_id` to Hive so session-scoped receipt filters
+          // (`WorkoutReceiptData.fromExerciseLogs(date, workoutLogId)`)
+          // can match restored rows. Pre-fix the field was dropped on
+          // restore — multi-session days surfaced as "View Card does
+          // nothing" because the session filter rejected every row.
+          // Fall back to canonical `wlog_<istDate>` (matches the writer
+          // default at workout_write_service.dart:164) when the cloud
+          // row has no explicit workout_log_id.
+          'workout_log_id': map['workout_log_id'] as String? ??
+              WorkoutWriteService.wlogKey(dateForKey),
         };
 
         if (map['weight_kg'] != null) {
@@ -1023,10 +1034,10 @@ extension SyncServiceWorkout on SyncService {
           final ex = exercises[i] is Map
               ? Map<String, dynamic>.from(exercises[i] as Map)
               : <String, dynamic>{};
-          final rawExerciseId = ex['exercise_id']?.toString() ?? ex['id']?.toString();
-          final isUuid = rawExerciseId != null &&
-              RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
-                  .hasMatch(rawExerciseId);
+          // audit-2026-05-16 E.12 — migration 067 dropped exercise_id from
+          // template_exercises. The pre-fix `isUuid` UUID-shape check
+          // gated the projection of that column; with the column gone,
+          // the variable is dead. Removed to satisfy analyzer.
           try {
             await _supabase.client.from('template_exercises').upsert({
               // APK Test #12.8 / Bug #4 — `id` omitted; child UUID

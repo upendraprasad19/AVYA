@@ -590,15 +590,32 @@ class WorkoutRepository {
 
   /// Loads personal records for ALL exercises the user has ever logged.
   ///
-  /// Single pass through workoutBox. Groups by exercise name, tracks
-  /// best value per logging type. Returns sorted by most recent date first.
+  /// Single pass over workoutBox `exlog_*` keys. Groups by exercise name,
+  /// tracks best per-set value. Returns sorted by most recent date first.
+  ///
+  /// audit-2026-05-16 reader-side / R2 — fixed compounded drift:
+  /// 1. Filter changed from `raw['type'] != 'exercise_log'` (modern
+  ///    `WorkoutWriteService.logExercise` never stamps `type`) to key-
+  ///    prefix `exlog_*` (consistent with `_getPersonalRecords` post-
+  ///    Test #8 / Theme D fix).
+  /// 2. Per-set MAX is now read from canonical `sets[]` array — not from
+  ///    the fictional `best_single_set_reps` / `best_single_set_duration`
+  ///    fields that the writer never produces.
+  /// 3. The legacy fallback `reps_completed / sets_completed.clamp(1,999)`
+  ///    is gone — `reps_completed` is SUM (Test #6 writer contract),
+  ///    `sets_completed` is null on modern rows → was returning SUM as
+  ///    "best per-set" (live bug surfaced as Push Up 100 reps,
+  ///    Hanging Leg Raise 85 reps, Jump Rope 5m).
+  /// closes-diagnose: 2026-05-16-pr-cumulative-bug
   List<ExercisePR> loadAllExercisePRs() {
-    // key = exercise_name.toLowerCase().trim()
     final bestMap = <String, ExercisePR>{};
 
-    for (final raw in _hive.workoutBox.values) {
+    final entries = _hive.workoutBox.toMap();
+    for (final entry in entries.entries) {
+      final keyStr = entry.key.toString();
+      if (!keyStr.startsWith('exlog_')) continue;
+      final raw = entry.value;
       if (raw is! Map) continue;
-      if (raw['type'] != 'exercise_log') continue; // skip before allocating
       final log = Map<String, dynamic>.from(raw);
 
       final name = (log['exercise_name'] as String? ?? '').trim();
@@ -609,28 +626,74 @@ class WorkoutRepository {
       final createdAt = log['created_at'] as String? ?? log['date'] as String? ?? '';
       final date = DateTime.tryParse(createdAt) ?? DateTime(2020);
 
+      // Canonical per-set array. Each entry: {weight_kg, reps,
+      // duration_sec | duration_seconds, logged_at_ms}.
+      final setsRaw = log['sets'];
+      final List<Map> sets = (setsRaw is List)
+          ? setsRaw.whereType<Map>().toList()
+          : const <Map>[];
+
       double value;
       switch (loggingType) {
         case 'weight_reps':
         case 'weighted_bodyweight':
-          value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+          // Best per-set weight. Top-level `weight_kg` IS already MAX
+          // (writer contract), so both paths agree; sets[] preferred
+          // for forward-compat.
+          if (sets.isNotEmpty) {
+            value = sets.fold<double>(0.0, (acc, s) {
+              final w = (s['weight_kg'] as num?)?.toDouble() ?? 0.0;
+              return w > acc ? w : acc;
+            });
+          } else {
+            value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+          }
           break;
         case 'bodyweight_reps':
-          // Use per-set best reps (not cumulative). Fallback: estimate average for old logs.
-          value = (log['best_single_set_reps'] as num?)?.toDouble() ??
-              (((log['reps_completed'] as num?)?.toDouble() ?? 0) /
-                  ((log['sets_completed'] as num?)?.toDouble() ?? 1)
-                      .clamp(1, 999));
+          // Best per-set REPS (not cumulative). Iterate sets[]; fallback
+          // to top-level reps_completed only when sets[] is missing AND
+          // set_number == 1 (legitimate single-set legacy row).
+          if (sets.isNotEmpty) {
+            value = sets.fold<double>(0.0, (acc, s) {
+              final r = (s['reps'] as num?)?.toDouble() ?? 0.0;
+              return r > acc ? r : acc;
+            });
+          } else {
+            final setCount = (log['set_number'] as num?)?.toInt() ??
+                (log['sets_completed'] as num?)?.toInt() ??
+                1;
+            final totalReps = (log['reps_completed'] as num?)?.toDouble() ?? 0;
+            // Only trust top-level for true single-set logs. Multi-set
+            // legacy rows without sets[] are unrecoverable — skip rather
+            // than show the cumulative as "best per-set".
+            value = setCount == 1 ? totalReps : 0;
+          }
           break;
         case 'timed':
-          // Use per-set best duration (not cumulative). Fallback: estimate average for old logs.
-          value = (log['best_single_set_duration'] as num?)?.toDouble() ??
-              (((log['duration_seconds'] as num?)?.toDouble() ?? 0) /
-                  ((log['sets_completed'] as num?)?.toDouble() ?? 1)
-                      .clamp(1, 999));
+          // Best per-set DURATION (not cumulative). Same per-set MAX
+          // pattern as bodyweight_reps. Per-set duration field name is
+          // `duration_sec` (canonical) or `duration_seconds` (restore
+          // path legacy alias).
+          if (sets.isNotEmpty) {
+            value = sets.fold<double>(0.0, (acc, s) {
+              final d = (s['duration_sec'] as num?)?.toDouble() ??
+                  (s['duration_seconds'] as num?)?.toDouble() ??
+                  0.0;
+              return d > acc ? d : acc;
+            });
+          } else {
+            final setCount = (log['set_number'] as num?)?.toInt() ??
+                (log['sets_completed'] as num?)?.toInt() ??
+                1;
+            final totalDur =
+                (log['duration_seconds'] as num?)?.toDouble() ?? 0;
+            value = setCount == 1 ? totalDur : 0;
+          }
           break;
         case 'cardio':
-          // Cardio: keep cumulative — total distance IS the meaningful metric
+          // Cardio: cumulative distance IS the meaningful metric.
+          // Read top-level `distance_km` / `duration_seconds` which the
+          // writer maintains as totals.
           final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
           final dur = (log['duration_seconds'] as num?)?.toDouble() ?? 0;
           value = dist > 0 ? dist : dur;

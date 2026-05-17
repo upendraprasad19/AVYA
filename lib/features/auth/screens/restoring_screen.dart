@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -83,8 +84,15 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
           hiveProfileMap['primary_goal'] != null &&
           hiveProfileMap['fitness_experience'] != null &&
           hiveProfileMap['current_weight_kg'] != null;
-      final flagOnboarded = HiveService.instance.configBox
-          .get('onboarding_completed', defaultValue: false) as bool;
+      // audit-2026-05-16 reader-side / F3-2.1 — onboarding_completed
+      // moved to userBox via MigratedKey (Test #11.1, UserConfigMigrator
+      // v2). Reading from configBox directly returns the legacy/empty
+      // value for any device that's run the migration → fresh-install
+      // self-heal misclassifies onboarded users as new. Use MigratedKey
+      // so we read whichever store the migration left the value in.
+      // closes-diagnose: 2026-05-16-onboarding-triplicate-storage
+      final flagOnboarded =
+          MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
       if (flagOnboarded || hasCorePlanFields) {
         debugPrint(

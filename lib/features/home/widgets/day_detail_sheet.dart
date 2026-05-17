@@ -369,9 +369,24 @@ class DayDetailSheet extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.sharp),
             child: InkWell(
               onTap: () {
-                final receiptData = WorkoutReceiptData.fromExerciseLogs(date);
+                // audit-2026-05-16 reader-side / Obs 1 — silent null
+                // tap was the "View Card does nothing" bug. When restore
+                // hasn't finished or the exlog index for this IST date
+                // is empty, surface a clear message instead of no-op'ing.
+                final receiptData =
+                    WorkoutReceiptData.fromExerciseLogs(date);
                 if (receiptData != null) {
                   WorkoutReceiptSheet.show(context, receiptData);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text(
+                      'No exercise data for this day yet. '
+                      'If you just installed, give cloud restore a few '
+                      'seconds and try again.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 4),
+                  ));
                 }
               },
               borderRadius: BorderRadius.circular(AppRadius.sharp),

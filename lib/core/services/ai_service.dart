@@ -392,27 +392,77 @@ class AiService {
   /// 2026-05-15-ai-proxy-cold-start-budget-c01d57
   static const List<int> _httpColdStartBackoffsMs = [2000, 6000, 12000];
 
+  /// audit-2026-05-16 / Obs 6 — Storage 404 retry budget.
+  ///
+  /// Test #16.1 / Bug 913261 mapped Storage 404 ("upload incomplete /
+  /// CDN propagation race") to `HttpError(400, "storage", ...)`. 400s
+  /// are not retried by `_retryHttpColdStart` (correct — most 400s are
+  /// caller bugs). But Storage 404 specifically is an upload-CDN race
+  /// that resolves in seconds — the new image just hasn't propagated.
+  ///
+  /// Smaller, faster schedule than cold-start (CDN propagation is
+  /// typically sub-second). Up to ~5s total before giving up.
+  /// closes-diagnose: 2026-05-16-photo-storage-retry
+  static const List<int> _httpStorageRaceBackoffsMs = [500, 1500, 3000];
+
   Future<http.Response> _retryHttpColdStart(
     Future<http.Response> Function() invoke, {
     required String functionName,
   }) async {
-    int attempt = 0;
+    int coldStartAttempt = 0;
+    int storageRaceAttempt = 0;
     while (true) {
       final resp = await invoke();
-      final isColdStart =
-          resp.statusCode == 502 || resp.statusCode == 503 || resp.statusCode == 504;
-      if (!isColdStart || attempt >= _httpColdStartBackoffsMs.length) {
-        return resp;
+      final isColdStart = resp.statusCode == 502 ||
+          resp.statusCode == 503 ||
+          resp.statusCode == 504;
+      final isStorageRace = resp.statusCode == 400 &&
+          _isStorageRaceBody(resp.body);
+
+      if (isColdStart) {
+        if (coldStartAttempt >= _httpColdStartBackoffsMs.length) return resp;
+        final backoffMs = _httpColdStartBackoffsMs[coldStartAttempt];
+        unawaited(ErrorTelemetry.logEvent(
+          'edge_function_cold_start_retry',
+          message:
+              'fn=$functionName attempt=${coldStartAttempt + 1} status=${resp.statusCode} backoff_ms=$backoffMs path=direct_http',
+        ));
+        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        coldStartAttempt++;
+        continue;
       }
-      final backoffMs = _httpColdStartBackoffsMs[attempt];
-      unawaited(ErrorTelemetry.logEvent(
-        'edge_function_cold_start_retry',
-        message:
-            'fn=$functionName attempt=${attempt + 1} status=${resp.statusCode} backoff_ms=$backoffMs path=direct_http',
-      ));
-      await Future<void>.delayed(Duration(milliseconds: backoffMs));
-      attempt++;
+
+      if (isStorageRace) {
+        if (storageRaceAttempt >= _httpStorageRaceBackoffsMs.length) return resp;
+        final backoffMs = _httpStorageRaceBackoffsMs[storageRaceAttempt];
+        unawaited(ErrorTelemetry.logEvent(
+          'edge_function_storage_race_retry',
+          message:
+              'fn=$functionName attempt=${storageRaceAttempt + 1} status=400 error_type=storage backoff_ms=$backoffMs',
+        ));
+        await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        storageRaceAttempt++;
+        continue;
+      }
+
+      return resp;
     }
+  }
+
+  /// Returns true if the response body is the typed storage-class error
+  /// shape from ai-media-proxy v17: `{"error_type": "storage", ...}`.
+  /// Tolerant of malformed/non-JSON bodies — anything that fails to
+  /// parse or doesn't have `error_type == "storage"` returns false (no
+  /// retry).
+  static bool _isStorageRaceBody(String body) {
+    if (body.isEmpty) return false;
+    try {
+      final m = json.decode(body);
+      if (m is Map && m['error_type'] == 'storage') return true;
+    } catch (_) {
+      // Non-JSON body (e.g. plaintext "Bad Request"). No retry signal.
+    }
+    return false;
   }
 
   // ── PRO tier (retired 2026-04-18) ─────────────────────────────
