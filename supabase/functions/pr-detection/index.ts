@@ -15,6 +15,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,6 +54,7 @@ Deno.serve(async (req) => {
   }
 
   const requestId = crypto.randomUUID().split("-")[0];
+  const logId = await logCronStart("pr-detection");
 
   try {
     const supabase = createClient(
@@ -75,6 +77,7 @@ Deno.serve(async (req) => {
       console.log(
         `[pr-detection] request_id=${requestId} no PRs in window`,
       );
+      await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(JSON.stringify({ checked: 0, sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -162,6 +165,7 @@ Deno.serve(async (req) => {
       `[pr-detection] request_id=${requestId} pr_rows=${rows.length} users=${prsByUser.size} sent=${sent} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({
         pr_rows: rows.length,
@@ -174,6 +178,11 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error(`[pr-detection] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

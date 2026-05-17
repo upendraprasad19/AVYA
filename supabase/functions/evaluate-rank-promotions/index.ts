@@ -29,6 +29,7 @@ import {
   rankDisplayFor,
 } from "../_shared/ceremony_text.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +61,7 @@ serve(async (req: Request) => {
   }
 
   const requestId = crypto.randomUUID().split("-")[0];
+  const logId = await logCronStart("evaluate-rank-promotions");
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -71,6 +73,11 @@ serve(async (req: Request) => {
 
     if (usersErr || !users) {
       console.error(`[evaluate-rank-promotions] request_id=${requestId}`, usersErr);
+      await logCronEnd(logId, "failed", {
+        httpStatus: 500,
+        requestId,
+        errorSummary: String(usersErr),
+      });
       return new Response(
         JSON.stringify({ error: "Internal server error", request_id: requestId }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -226,6 +233,7 @@ serve(async (req: Request) => {
       evaluated += 1;
     }
 
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -237,6 +245,11 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     console.error(`[evaluate-rank-promotions] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
