@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,8 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const logId = await logCronStart("expiry-reminder");
+
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -42,6 +45,7 @@ serve(async (req: Request) => {
       .lte("end_date", threeDaysFromNow.toISOString());
 
     if (subErr || !expiringSubs || expiringSubs.length === 0) {
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -117,6 +121,7 @@ serve(async (req: Request) => {
       }
     }
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -133,6 +138,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[expiry-reminder] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

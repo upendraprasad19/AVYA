@@ -45,6 +45,7 @@ import {
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,6 +85,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const requestId = crypto.randomUUID().split("-")[0];
+  const logId = await logCronStart("re-engagement");
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -183,6 +185,7 @@ Deno.serve(async (req: Request) => {
       console.log(
         `[re-engagement] request_id=${requestId} no candidates (path_a=0 path_b=0)`,
       );
+      await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -285,6 +288,7 @@ Deno.serve(async (req: Request) => {
       `[re-engagement] request_id=${requestId} from_memory=${candidatesFromMemory.size} from_fallback=${fallbackCandidates.length} sent=${sent} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -301,6 +305,11 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error(`[re-engagement] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

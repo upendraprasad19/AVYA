@@ -15,6 +15,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,6 +107,8 @@ serve(async (req: Request) => {
     );
   }
 
+  const logId = await logCronStart("weekly-recap-ready");
+
   try {
     const startTime = Date.now();
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -133,6 +136,10 @@ serve(async (req: Request) => {
       if (usersErr) {
         console.error(`weekly-recap-ready: users fetch error at offset ${offset}:`, usersErr);
         if (offset === 0) {
+          await logCronEnd(logId, "failed", {
+            httpStatus: 500,
+            errorSummary: `fetch users failed: ${String(usersErr)}`,
+          });
           return new Response(
             JSON.stringify({ error: "Failed to fetch active users" }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -213,6 +220,7 @@ serve(async (req: Request) => {
         `${totalUsers} users, ${sent} sent, ${skipped} skipped, ${errors} errors`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -229,6 +237,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[weekly-recap-ready] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

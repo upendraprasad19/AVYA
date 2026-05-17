@@ -36,6 +36,7 @@ import {
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +75,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const requestId = crypto.randomUUID().split("-")[0];
+  const logId = await logCronStart("plateau-alert");
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -94,6 +96,7 @@ Deno.serve(async (req: Request) => {
       console.log(
         `[plateau-alert] request_id=${requestId} no users above threshold ${PLATEAU_THRESHOLD}`,
       );
+      await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(
         JSON.stringify({ status: "success", candidates: 0, sent: 0 }),
         {
@@ -206,6 +209,7 @@ Deno.serve(async (req: Request) => {
       `[plateau-alert] request_id=${requestId} candidates=${highRisk.length} sent=${sent} non_pro=${nonPro} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -223,6 +227,11 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     // Sanitised 5xx — never leak raw exception / SQL text.
     console.error(`[plateau-alert] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

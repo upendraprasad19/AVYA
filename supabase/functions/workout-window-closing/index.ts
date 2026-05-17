@@ -29,6 +29,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,7 @@ serve(async (req: Request) => {
   }
 
   const requestId = crypto.randomUUID().split("-")[0];
+  const logId = await logCronStart("workout-window-closing");
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -89,6 +91,7 @@ serve(async (req: Request) => {
       console.log(
         `[workout-window-closing] request_id=${requestId} no actionable scheduled workouts for ${todayIST}`,
       );
+      await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -132,6 +135,7 @@ serve(async (req: Request) => {
       console.log(
         `[workout-window-closing] request_id=${requestId} all ${scheduled.length} scheduled users have logged`,
       );
+      await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(
         JSON.stringify({
           status: "success",
@@ -284,6 +288,7 @@ serve(async (req: Request) => {
       `[workout-window-closing] request_id=${requestId} checked=${atRiskByUser.size} sent=${sent} dedup_skipped=${dedupSkipped} pref_skipped=${prefSkipped} errors=${errors}`,
     );
 
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({
         status: "success",
@@ -301,6 +306,11 @@ serve(async (req: Request) => {
   } catch (err) {
     // Sanitised 5xx — never leak raw exception / SQL text.
     console.error(`[workout-window-closing] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

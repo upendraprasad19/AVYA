@@ -18,6 +18,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { shouldSendProactive, markProactiveSent } from "../_shared/proactive_dedup.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -57,6 +58,8 @@ serve(async (req) => {
     );
   }
 
+  const logId = await logCronStart("i-see-you-callout");
+
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -67,6 +70,7 @@ serve(async (req) => {
 
     if (userErr) throw userErr;
     if (!users || users.length === 0) {
+      await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({ ok: true, processed: 0, sent: 0 }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -109,6 +113,7 @@ serve(async (req) => {
       }
     }
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return new Response(
       JSON.stringify({ ok: true, processed, sent }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -116,6 +121,11 @@ serve(async (req) => {
   } catch (err) {
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[i-see-you-callout] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

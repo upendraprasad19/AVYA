@@ -24,10 +24,22 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 const _wiredCronFunctions = <String>[
+  // Wired in 2026-05-17 OI-15 batch (commit 35005b3):
   'pr-detection',
   'evaluate-rank-promotions',
   'clean-orphan-media',
   'promote-community-item',
+  // Wired in 2026-05-17 OI-21 batch (this commit):
+  'morning-alert',
+  're-engagement',
+  'plateau-alert',
+  'protein-gap-alert',
+  'workout-window-closing',
+  'i-see-you-callout',
+  'rolling-context',
+  'streak-guardian',
+  'weekly-recap-ready',
+  'expiry-reminder',
 ];
 
 const _functionsDir = 'supabase/functions';
