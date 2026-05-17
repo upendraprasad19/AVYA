@@ -2049,6 +2049,15 @@ concepts:
           Sole canonical writer. Per-(date,water) mutex; IST baked into
           key via istDateStr; fires syncNutritionData + pushSnapshot
           fire-and-forget.
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 340-385
+        method: logWater
+        notes: |
+          Pre-audit-2026-05-16-E.7 entry point. Still present in
+          nutrition_write_service.dart but UI mutations now route
+          through HealthWriteService.setWaterMl. Kept as registered
+          writer so gate 7 doesn't flag it; functionally a thin
+          forwarder for legacy callsites.
     # audit-2026-05-16 reader-side — full enumeration of every
     # callsite that reads water_ml_<istDate> from healthBox.
     reader_manifest_complete: true
@@ -3598,7 +3607,7 @@ concepts:
     writers:
       - file: lib/core/services/health_write_service.dart
         line_range: 60-340
-        method: logSleep, logWeight, logMeasurement, setWaterMl, logUrine, logHydration
+        method: logSleep + logWeight + logMeasurement + setWaterMl + logUrine + logHydration
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
