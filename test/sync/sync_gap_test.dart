@@ -83,18 +83,22 @@ void main() {
               'fresh workout context.');
     });
 
-    test('fires pushSnapshot at end of _logSleep', () {
+    test('_logSleep routes through HealthWriteService.logSleep '
+        '(audit-2026-05-16 F2-R3)', () {
+      // Post-F2-R3 (closes-diagnose 2026-05-16-sleep-dual-key):
+      // _logSleep no longer writes healthBox directly OR fires sync
+      // calls inline. It delegates to HealthWriteService.logSleep —
+      // same pattern _logMeasurement already follows per E.7 — and the
+      // canonical writer fires syncSleepNow + pushSnapshot internally.
+      // The pre-fix "direct write + adjacent pushSnapshot" pattern was
+      // the dual-key writer asymmetry that surfaced as AI-logged sleep
+      // being invisible to canonical per-day readers.
       final src = _src(
           'lib/features/ai_coach/services/conversational_log_handler.dart');
-      // Verify the pushSnapshot call appears after the sleep_logs put
-      final sleepIdx = src.indexOf("await healthBox.put('sleep_logs', logs)");
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', sleepIdx);
-      expect(sleepIdx, isNot(-1),
-          reason: 'sleep_logs put must exist');
-      expect(pushIdx, isNot(-1),
-          reason: 'pushSnapshot must appear after sleep_logs put');
-      expect(pushIdx > sleepIdx, isTrue);
+      expect(src.contains('HealthWriteService.instance.logSleep'), isTrue,
+          reason: '_logSleep must delegate to HealthWriteService.logSleep '
+              'so the canonical per-day key + sync fan-out are emitted by '
+              'the WriteService, not by the caller.');
     });
 
     test('routes through HealthWriteService.logMeasurement (audit-2026-05-16 E.7)', () {

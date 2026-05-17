@@ -858,27 +858,44 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       final setsDetailLen = setsDetail is List ? setsDetail.length : 0;
       final sets = [setNum, setsCompleted, setsArrLen, setsDetailLen]
           .reduce((a, b) => a > b ? a : b);
-      final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
-      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final isPr = log['is_pr'] == true;
 
+      // audit-2026-05-16 reader-side / Obs 3 \u2014 per-set MAX semantics.
+      // Top-level `reps_completed` is SUM and `duration_seconds` is SUM
+      // per Test #6 writer contract. Pre-fix this widget surfaced
+      // cumulative reps (Hanging Leg Raise "7 sets \u00b7 85 reps" when the
+      // user logged 5 sets of 17) and cumulative duration. Same class
+      // as the PR cumulative bug in `loadAllExercisePRs`.
+      //
+      // For non-weighted types we now derive best-per-set from `sets[]`
+      // (canonical per-set array). Top-level fallback applies only for
+      // legacy single-set rows (where SUM == per-set value).
+      final perSetMaxReps = _bestPerSetReps(log);
+      final perSetMaxDur = _bestPerSetDuration(log);
+      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+      // For weight_reps the writer's top-level `weight_kg` is already
+      // MAX, so it's safe to use directly.
+      final totalDuration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+
       String detail;
       if (loggingType == 'timed') {
-        final mins = duration ~/ 60;
-        final secs = duration % 60;
+        final secs = perSetMaxDur > 0 ? perSetMaxDur : totalDuration;
+        final mins = secs ~/ 60;
+        final tail = secs % 60;
+        final dur = '${mins > 0 ? '${mins}m ' : ''}${tail}s';
         detail = sets > 1
-            ? '$sets sets \u00b7 ${mins > 0 ? '${mins}m ' : ''}${secs}s'
-            : '${mins > 0 ? '${mins}m ' : ''}${secs}s';
+            ? '$sets sets \u00b7 best $dur'
+            : dur;
       } else if (loggingType == 'cardio') {
         final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-        detail = '${duration ~/ 60} min \u00b7 ${dist.toStringAsFixed(1)} km';
+        detail =
+            '${totalDuration ~/ 60} min \u00b7 ${dist.toStringAsFixed(1)} km';
       } else if (weight > 0) {
         detail =
-            '$sets sets \u00b7 $reps reps \u00b7 ${weight.toStringAsFixed(1)} kg';
+            '$sets sets \u00b7 $perSetMaxReps reps \u00b7 ${weight.toStringAsFixed(1)} kg';
       } else {
-        detail = '$sets sets \u00b7 $reps reps';
+        detail = '$sets sets \u00b7 $perSetMaxReps reps';
       }
 
       return Padding(
@@ -2389,4 +2406,59 @@ class _CollapsibleExerciseSectionState
       ],
     );
   }
+}
+
+// audit-2026-05-16 reader-side / Obs 3 — per-set MAX helpers for the
+// Train screen expanded view. Top-level `reps_completed` /
+// `duration_seconds` are SUM per the Test #6 writer contract; reading
+// them as "best per-set" surfaced cumulative totals (Hanging Leg Raise
+// "85 reps", Jump Rope "5m 30s") in the screenshot. These helpers
+// mirror the per-set MAX semantic now enforced in
+// `WorkoutRepository.loadAllExercisePRs`.
+
+int _bestPerSetReps(Map<String, dynamic> log) {
+  final setsRaw = log['sets'];
+  if (setsRaw is List && setsRaw.isNotEmpty) {
+    var best = 0;
+    for (final s in setsRaw) {
+      if (s is Map) {
+        final r = (s['reps'] as num?)?.toInt() ?? 0;
+        if (r > best) best = r;
+      }
+    }
+    if (best > 0) return best;
+  }
+  // Legacy fallback: only trust top-level for true single-set rows.
+  // Multi-set legacy rows without sets[] are unrecoverable — show 0
+  // rather than surface SUM as "best per-set".
+  final setCount = (log['set_number'] as num?)?.toInt() ??
+      (log['sets_completed'] as num?)?.toInt() ??
+      1;
+  if (setCount <= 1) {
+    return (log['reps_completed'] as num?)?.toInt() ?? 0;
+  }
+  return 0;
+}
+
+int _bestPerSetDuration(Map<String, dynamic> log) {
+  final setsRaw = log['sets'];
+  if (setsRaw is List && setsRaw.isNotEmpty) {
+    var best = 0;
+    for (final s in setsRaw) {
+      if (s is Map) {
+        final d = (s['duration_sec'] as num?)?.toInt() ??
+            (s['duration_seconds'] as num?)?.toInt() ??
+            0;
+        if (d > best) best = d;
+      }
+    }
+    if (best > 0) return best;
+  }
+  final setCount = (log['set_number'] as num?)?.toInt() ??
+      (log['sets_completed'] as num?)?.toInt() ??
+      1;
+  if (setCount <= 1) {
+    return (log['duration_seconds'] as num?)?.toInt() ?? 0;
+  }
+  return 0;
 }

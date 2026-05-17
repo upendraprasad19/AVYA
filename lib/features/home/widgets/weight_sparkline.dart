@@ -38,8 +38,15 @@ class _WeightSparklineState extends State<WeightSparkline> {
       '90d' => now.subtract(const Duration(days: 90)),
       _ => now.subtract(const Duration(days: 7)),
     };
+    // audit-2026-05-16 reader-side — entry `date` field is IST-formatted
+    // (HealthWriteService writes `istDateStr(date)`). Cutoff must also
+    // be in IST or we get an off-by-one at the IST midnight boundary
+    // (UTC-local cutoff could exclude a weigh-in that's still inside
+    // the window in IST). Mirrors `WorkoutWriteService.istDateStr` —
+    // not imported here to avoid widget→service back-dep; inlined.
+    final cutoffIst = cutoff.toUtc().add(const Duration(hours: 5, minutes: 30));
     final cutoffStr =
-        '${cutoff.year}-${cutoff.month.toString().padLeft(2, '0')}-${cutoff.day.toString().padLeft(2, '0')}';
+        '${cutoffIst.year}-${cutoffIst.month.toString().padLeft(2, '0')}-${cutoffIst.day.toString().padLeft(2, '0')}';
     final filtered =
         widget.entries.where((e) => e.date.compareTo(cutoffStr) >= 0).toList();
     return filtered.isEmpty ? widget.entries : filtered;

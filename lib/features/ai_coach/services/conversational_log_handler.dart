@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -102,36 +100,38 @@ class ConversationalLogHandler {
     final quality = data['quality'] as String? ?? 'fair';
     if (hrs == null || hrs <= 0 || hrs > 24) return false;
 
-    final now = DateTime.now();
-    final dateStr = istDateStr(now);
-    final id = 'sleep_${now.millisecondsSinceEpoch}';
-
-    final healthBox = HiveService.instance.healthBox;
-    final existing = healthBox.get('sleep_logs');
-    final logs = existing is List ? List<Map>.from(existing) : <Map>[];
-
-    logs.add({
-      'id': id,
-      'date': dateStr,
-      'sleep_hours': hrs,
-      'quality': quality,
-      'source': 'chat',
-      'created_at': now.toIso8601String(),
-    });
-
-    // audit-2026-05-16 task E.7 — INTENTIONAL DIRECT WRITE.
-    // `HealthWriteService.logSleep` writes the canonical per-day key
-    // `sleep_log_<istDate>` (one entry per day, overwrite semantics).
-    // This list-key path appends conversational sleep logs into a single
-    // `sleep_logs` LIST so the AI coach's chat history retains every
-    // sleep mention. The list shape is also consumed by
-    // `SyncService.syncSleepNow` (list-item upsert path). Keeping this
-    // direct keeps the asymmetric semantics (list vs per-day) explicit;
-    // routing through the service would lose the append behaviour.
-    await healthBox.put('sleep_logs', logs);
-    unawaited(SyncService.instance.syncSleepNow());
-    unawaited(SyncService.instance.pushSnapshot());
-    return true;
+    // audit-2026-05-16 reader-side / F2-R3 — dual-key hazard close-out.
+    //
+    // Pre-fix this handler wrote ONLY to the legacy `sleep_logs` LIST
+    // key. Canonical readers (`profile_provider.dailySleepProvider`,
+    // `ai_coach_repository._countSleepLogsLast7Days`, AI snapshot's
+    // sleep_7d series) all key off `sleep_log_<istDate>` per-day. So a
+    // user who reported sleep through the AI chat had ZERO sleep data
+    // visible to the coach's own context — surfaced as "your sleep
+    // data isn't logged" responses despite the chat turn appearing to
+    // succeed.
+    //
+    // Fix: route through `HealthWriteService.logSleep` — same canonical
+    // writer the manual UI uses. Writes `sleep_log_<istDate>` with
+    // overwrite-per-day semantics, fires `syncSleepNow + pushSnapshot`
+    // exactly as the audit-2026-05-16 E.7 health-domain pattern
+    // mandates. Multiple chat mentions in one IST day collapse to the
+    // last-mentioned value (matches how the user actually wants sleep
+    // tracked — one value per night).
+    //
+    // The legacy `sleep_logs` LIST is no longer written from the chat
+    // path. `syncSleepNow`'s list-path remains for back-compat with
+    // pre-fix on-device data; once devices upgrade past +28, that path
+    // can be retired in a follow-up cleanup.
+    //
+    // closes-diagnose: 2026-05-16-sleep-dual-key
+    final result = await HealthWriteService.instance.logSleep(
+      date: DateTime.now(),
+      hours: hrs,
+      quality: quality,
+      source: WriteSource.aiCoach,
+    );
+    return result.success;
   }
 
   // ── Body Measurements ─────────────────────────────────────────

@@ -20,6 +20,18 @@ class PredictionCard extends StatelessWidget {
   final bool isStale;
   final VoidCallback onRefreshTap;
 
+  /// audit-2026-05-16 reader-side / R7 — prediction card placeholder
+  /// copy used to say "Complete onboarding to get your personalised
+  /// fitness prediction" whenever [predictionText] was empty, even for
+  /// onboarded users whose prediction simply hadn't been generated yet
+  /// (e.g. fresh install on a returning account — `prediction_text` is
+  /// not restored from cloud). Caller now passes the actual onboarding
+  /// state so the placeholder can branch:
+  ///   - !onboarded  → "Complete onboarding..."
+  ///   - onboarded   → "Tap UPDATE to generate your prediction"
+  /// closes-diagnose: 2026-05-16-prediction-card-onboarding-copy
+  final bool onboardingCompleted;
+
   const PredictionCard({
     super.key,
     this.predictionText,
@@ -28,6 +40,7 @@ class PredictionCard extends StatelessWidget {
     required this.canRefresh,
     this.isStale = false,
     required this.onRefreshTap,
+    this.onboardingCompleted = false,
   });
 
   @override
@@ -89,14 +102,54 @@ class PredictionCard extends StatelessWidget {
                   ),
                 ),
               ),
-          ] else
+          ] else ...[
             Text(
-              'Complete onboarding to get your personalised fitness prediction.',
+              onboardingCompleted
+                  ? 'Your forecast is queued. Tap UPDATE to generate it now.'
+                  : 'Complete onboarding to get your personalised fitness prediction.',
               style: AppTypography.body.copyWith(
                 color: AppColors.textDim,
                 height: 1.6,
               ),
             ),
+            // Empty-state CTA for onboarded users — first prediction is
+            // free per CLAUDE.md §14; surface a single UPDATE button so
+            // they can actually trigger generation instead of staring at
+            // a static "queued" message.
+            if (onboardingCompleted) ...[
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  onTap: onRefreshTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                      border: Border.all(color: AppColors.accent, width: 2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.refresh,
+                            size: 12, color: AppColors.bgDeep),
+                        const SizedBox(width: 6),
+                        Text(
+                          'UPDATE',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.bgDeep,
+                            letterSpacing: 1.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
 
           // Stale prediction badge (free users whose goal changed)
           if (isStale && hasPrediction) ...[

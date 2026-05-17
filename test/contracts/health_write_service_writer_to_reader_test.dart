@@ -135,17 +135,30 @@ void main() {
     });
 
     test(
-        'conversational_log_handler.dart: sleep_logs LIST key write retained '
-        '(intentional asymmetry)', () {
+        'conversational_log_handler.dart: _logSleep routes through '
+        'HealthWriteService.logSleep (audit-2026-05-16 F2-R3)', () {
+      // Post-F2-R3: the previously "intentional" direct write to the
+      // legacy `sleep_logs` LIST key was the source of a dual-key reader
+      // hazard — AI-logged sleeps were invisible to canonical readers
+      // (profile.dailySleepProvider, AI snapshot sleep_7d series) that
+      // key off `sleep_log_<istDate>` per-day. Fix routes through
+      // HealthWriteService.logSleep — same pattern as _logMeasurement
+      // for E.7 — so the canonical writer emits the per-day key + sync
+      // fan-out.
       final src = File(
               '$root/lib/features/ai_coach/services/conversational_log_handler.dart')
           .readAsStringSync();
-      // The list-key path is intentionally kept direct so the conversational
-      // sleep history retains append semantics. Just assert the comment
-      // documenting that is present.
-      expect(src.contains("INTENTIONAL DIRECT WRITE"), isTrue,
-          reason: 'The sleep_logs list-key direct write must be marked '
-              'INTENTIONAL DIRECT WRITE so future audits do not flag it.');
+      expect(src.contains('HealthWriteService.instance.logSleep'), isTrue,
+          reason:
+              '_logSleep must route through HealthWriteService.logSleep '
+              'so the canonical per-day key sleep_log_<istDate> is '
+              'written and downstream readers see the AI-logged sleep.');
+      // Anti-regression: the pre-fix direct write must not return.
+      expect(
+          RegExp(r"healthBox\.put\(\s*'sleep_logs'").hasMatch(src), isFalse,
+          reason:
+              'Pre-fix direct write to the legacy sleep_logs LIST key '
+              'must not return — bypassed canonical readers.');
     });
 
     test('nutrition_provider.dart: no direct water_ml_ / urine_color_ / '

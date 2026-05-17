@@ -200,17 +200,20 @@ void main() {
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
 
-      // After the cold-start gate fails, we must rethrow.
-      // Tolerant pattern: `if (!isColdStart` followed by `rethrow` on a
-      // nearby line.
-      final rethrowAfterGate = RegExp(
-        r'if\s*\(\s*!isColdStart[^)]*\)\s*\{[^}]*rethrow',
-        dotAll: true,
-      );
-      expect(rethrowAfterGate.hasMatch(source), isTrue,
+      // After all retry-class gates pass, we must rethrow.
+      // audit-2026-05-16 / Obs 6 — retry helper refactored to support
+      // dual retry tracks (cold-start + storage-race). New shape uses
+      // two if/continue blocks and a bare `rethrow` at the bottom of
+      // the catch. Old `if (!isColdStart) { ... rethrow }` pattern gone.
+      final hasColdStartGate = source.contains('if (isColdStart)');
+      final hasStorageRaceGate = source.contains('if (isStorageRace)');
+      final hasBareRethrow =
+          RegExp(r'\bcontinue;\s*\}\s*rethrow;').hasMatch(source);
+      expect(hasColdStartGate && hasStorageRaceGate && hasBareRethrow, isTrue,
           reason:
-              'Non-cold-start FunctionException must rethrow. Missing '
-              'rethrow re-introduces unbounded-retry risk for 4xx.');
+              'Non-cold-start, non-storage-race FunctionException must '
+              'rethrow. Missing rethrow re-introduces unbounded-retry '
+              'risk for 4xx.');
     });
 
     test('retry path is gated on 502 OR 503 OR 504 status (not unconditional)',
