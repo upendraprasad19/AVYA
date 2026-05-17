@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -832,11 +833,23 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
         WorkoutRepository.instance.getExerciseLogsForDate(day.date!);
 
     if (logs.isEmpty) {
+      // audit-2026-05-17 OI-05 — differentiate "marked done outside
+      // the app" (schedule.status=completed with NO exlog rows — the
+      // user used markCompleted directly without active workout) from
+      // a true "no data yet" state (e.g. fresh-install restore race).
+      // Pre-fix copy said only "No exercise data logged" which was
+      // misleading on completed days.
+      final msg = day.isDone
+          ? 'Marked done outside the app — no exercises were logged.'
+          : 'No exercise data logged';
       return Padding(
         padding: const EdgeInsets.fromLTRB(50, 0, 14, 10),
         child: Text(
-          'No exercise data logged',
-          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+          msg,
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.textDim,
+            fontStyle: day.isDone ? FontStyle.italic : FontStyle.normal,
+          ),
         ),
       );
     }
@@ -871,8 +884,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       // For non-weighted types we now derive best-per-set from `sets[]`
       // (canonical per-set array). Top-level fallback applies only for
       // legacy single-set rows (where SUM == per-set value).
-      final perSetMaxReps = _bestPerSetReps(log);
-      final perSetMaxDur = _bestPerSetDuration(log);
+      // OI-02 / OI-08 — per-set MAX semantic centralised in WorkoutReadService.
+      // closes-diagnose: 2026-05-17-oi-02-read-services
+      final perSetMaxReps = WorkoutReadService.bestPerSetReps(log);
+      final perSetMaxDur = WorkoutReadService.bestPerSetDuration(log);
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       // For weight_reps the writer's top-level `weight_kg` is already
       // MAX, so it's safe to use directly.
@@ -2408,57 +2423,8 @@ class _CollapsibleExerciseSectionState
   }
 }
 
-// audit-2026-05-16 reader-side / Obs 3 — per-set MAX helpers for the
-// Train screen expanded view. Top-level `reps_completed` /
-// `duration_seconds` are SUM per the Test #6 writer contract; reading
-// them as "best per-set" surfaced cumulative totals (Hanging Leg Raise
-// "85 reps", Jump Rope "5m 30s") in the screenshot. These helpers
-// mirror the per-set MAX semantic now enforced in
-// `WorkoutRepository.loadAllExercisePRs`.
-
-int _bestPerSetReps(Map<String, dynamic> log) {
-  final setsRaw = log['sets'];
-  if (setsRaw is List && setsRaw.isNotEmpty) {
-    var best = 0;
-    for (final s in setsRaw) {
-      if (s is Map) {
-        final r = (s['reps'] as num?)?.toInt() ?? 0;
-        if (r > best) best = r;
-      }
-    }
-    if (best > 0) return best;
-  }
-  // Legacy fallback: only trust top-level for true single-set rows.
-  // Multi-set legacy rows without sets[] are unrecoverable — show 0
-  // rather than surface SUM as "best per-set".
-  final setCount = (log['set_number'] as num?)?.toInt() ??
-      (log['sets_completed'] as num?)?.toInt() ??
-      1;
-  if (setCount <= 1) {
-    return (log['reps_completed'] as num?)?.toInt() ?? 0;
-  }
-  return 0;
-}
-
-int _bestPerSetDuration(Map<String, dynamic> log) {
-  final setsRaw = log['sets'];
-  if (setsRaw is List && setsRaw.isNotEmpty) {
-    var best = 0;
-    for (final s in setsRaw) {
-      if (s is Map) {
-        final d = (s['duration_sec'] as num?)?.toInt() ??
-            (s['duration_seconds'] as num?)?.toInt() ??
-            0;
-        if (d > best) best = d;
-      }
-    }
-    if (best > 0) return best;
-  }
-  final setCount = (log['set_number'] as num?)?.toInt() ??
-      (log['sets_completed'] as num?)?.toInt() ??
-      1;
-  if (setCount <= 1) {
-    return (log['duration_seconds'] as num?)?.toInt() ?? 0;
-  }
-  return 0;
-}
+// OI-02 / OI-08 (closes-diagnose: 2026-05-17-oi-02-read-services) —
+// file-private `_bestPerSetReps` / `_bestPerSetDuration` helpers
+// migrated to `WorkoutReadService.bestPerSetReps` /
+// `.bestPerSetDuration` in `lib/core/services/workout_read_service.dart`.
+// All callsites in this file now delegate to the canonical service.

@@ -89,6 +89,37 @@ concepts:
         method: WorkoutReceiptSheet.show
         semantic: display-only
         fields_read: [receiptData.exercises, totalVolumeKg, totalSets, prs, sessionLabel, workoutName, tagline]
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 457-475
+        method: _hasExerciseLogsForDate (OI-05 cheap probe)
+        semantic: flag-check
+        fields_read: [exercise_log_index_<istDate>, date]
+        notes: Cheap "did the user actually log" probe used to gate snackbar copy on completed days with no logs.
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 96-110
+        method: legacy exlog_* date scan (`_ensureExlogDateIndex` fallback path)
+        semantic: aggregated
+        fields_read: [date, exercise_name]
+        notes: Builds the lazy secondary date-keyed index for legacy rows lacking exercise_log_index_<date>.
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 905-940
+        method: AI snapshot recent_logs builder
+        semantic: aggregated
+        fields_read: [date, exercise_name, sets, weight_kg, reps_completed, logging_type]
+        notes: Reads exlog_* rows for the AI snapshot's recent_logs section.
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        line_range: 40-90
+        method: ProgressionResolver weight scan
+        semantic: max
+        fields_read: [date, exercise_name, weight_kg, logging_type]
+        notes: Walks the last 28 days of exlog_* rows to seed starting weights for the next phase.
+    reader_allow_files:
+      - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
+      - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep over exlog_*" }
+      - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer for workout domain — scans exlog_* prefix" }
+      - { file: lib/core/services/sync_service.dart, reason: "orchestrator — fan-out across exlog_* + wlog_* during weeklyFullSync" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks ExlogKeyMigrator flag (config.get('exlog_key_migration_v8')) — not an exlog_* row reader" }
+      - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — exposes exerciseLogsForIstDate + per-set MAX primitives delegated to by every other reader" }
     regression_test: test/contracts/receipt_scoping_test.dart
     hive:
       box: workoutBox
@@ -166,6 +197,35 @@ concepts:
         method: Train expanded view Edit button
         semantic: pass-through
         fields_read: [routes through EditWorkoutLogSheet.show(day.date!)]
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 457-475
+        method: _hasExerciseLogsForDate
+        semantic: flag-check
+        fields_read: [date, exercise_log_index_<istDate>]
+        notes: Probe used by calendar-day detail to gate the View Workout Card button.
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 905-940
+        method: AI snapshot recent_logs builder
+        semantic: aggregated
+        fields_read: [exlog_* row maps]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 96-110
+        method: legacy exlog_* date scan
+        semantic: aggregated
+        fields_read: [date]
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        line_range: 40-90
+        method: ProgressionResolver weight scan
+        semantic: max
+        fields_read: [date, exercise_name, weight_kg]
+    reader_allow_files:
+      - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
+      - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair" }
+      - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans exlog_* prefix" }
+      - { file: lib/core/services/sync_service.dart, reason: "orchestrator — fan-out includes exlog_*" }
+      - { file: lib/core/services/workout_write_service.dart, reason: "canonical writer for exlog_* rows — listed as writer above; touches its own prefix during rescan" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks migrator config flag — not an exlog_* row reader" }
+      - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
     regression_test: test/contracts/edit_log_field_normalization_test.dart
     hive:
       box: workoutBox
@@ -218,6 +278,13 @@ concepts:
         method: Train day-detail sheet renderer
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(day.date!)]
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 457-475
+        method: _hasExerciseLogsForDate
+        semantic: flag-check
+        fields_read: [exercise_log_index_<istDate>]
+    reader_allow_files:
+      - { file: lib/core/services/exlog_key_migrator.dart, reason: "ExlogKeyMigrator deletes orphaned exercise_log_index_* entries during v8 rewrite" }
     regression_test: test/contracts/format_date_key_ist_test.dart
     hive:
       box: workoutBox
@@ -284,6 +351,9 @@ concepts:
         method: WorkoutRepository (5 call-throughs)
         semantic: pass-through
         fields_read: [via _schedule.getScheduleForDate(date) at :351, :357, :364, :972, :1055]
+    reader_allow_files:
+      - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
+      - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
     regression_test: test/workout_write_service/upsert_scheduled_test.dart
     hive:
       box: workoutBox
@@ -443,6 +513,9 @@ concepts:
         notes: |
           Reads from Supabase 'nutrition_logs' cloud table (NOT Hive
           nlog_*). Aggregates last-N-days avg for the lifetime snapshot.
+    reader_allow_files:
+      - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
+      - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -521,6 +594,18 @@ concepts:
           AI coach reads the 'recent_deletes' Hive bucket so it can
           acknowledge corrections like "you removed your lunch Biryani"
           without the user re-explaining.
+      - file: lib/features/nutrition/widgets/log_food_modes/search_mode_body.dart
+        line_range: 220-245
+        method: SearchModeBody recent-foods scan
+        semantic: historical-series
+        fields_read: [created_at, food_name, total_calories]
+        notes: |
+          Reads nlog_* rows from the last 14 days to build the recent-
+          foods relog list. Not part of delete flow but reads the same
+          nlog_* prefix.
+    reader_allow_files:
+      - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
+      - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
     regression_test: test/contracts/food_log_notifier_to_nutrition_log_items_test.dart
     hive:
       box: nutritionBox
@@ -587,6 +672,9 @@ concepts:
           Compiles daily snapshot from buildAiContext + uploads to
           user_daily_snapshots. Mirror to coach_memory runs in same
           pass.
+    reader_allow_files:
+      - { file: lib/core/services/sync/sync_coach.dart, reason: "syncCoachMemoryNow projects coaching_notes UP to cloud — writer-side allow" }
+      - { file: lib/core/services/sync/sync_profile.dart, reason: "_restoreUserProfile projects coaching_notes via the user_profile row payload — pass-through writer" }
     regression_test: test/ai_coach/meals_today_snapshot_test.dart
     hive:
       box: coachBox
@@ -916,6 +1004,21 @@ concepts:
           yet" empty state when series.isEmpty. Not watched anywhere
           else — invalidate manually after mutation if real-time
           refresh needed.
+      - file: lib/core/services/badge_service.dart
+        line_range: 110-115
+        method: BadgeService weight-log counter
+        semantic: aggregated
+        fields_read: [healthBox.keys with prefix weight_]
+        notes: Counts the number of weight_* rows for the "log your weight N times" badge.
+      - file: lib/features/profile/screens/profile_screen.dart
+        line_range: 1183-1200
+        method: profile weight trajectory builder
+        semantic: historical-series
+        fields_read: [weight_kg, date]
+        notes: Reads every healthBox weight_* row to compute weekly rate + ETA for the profile dossier.
+    reader_allow_files:
+      - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
+      - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg scans healthBox weight_* prefix" }
     regression_test: test/profile/weekly_report_data_provider_test.dart
     hive:
       box: healthBox
@@ -1079,6 +1182,15 @@ concepts:
         semantic: per-set
         fields_read: [weight_kg, reps, duration_sec, duration_seconds, distance_km]
         notes: Dual-name reader added Test #15.3 Bug 4c.
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 457-475
+        method: _hasExerciseLogsForDate
+        semantic: flag-check
+        fields_read: [date]
+    reader_allow_files:
+      - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_* during weeklyFullSync" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for ExlogKeyMigrator state — not a row reader" }
+      - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
     regression_test: test/contracts/workout_write_to_read_contract_test.dart
     hive:
       box: workoutBox
@@ -1164,6 +1276,13 @@ concepts:
         method: weeklyReportDataProvider
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
+      - file: lib/features/nutrition/widgets/log_food_modes/search_mode_body.dart
+        line_range: 220-245
+        method: SearchModeBody recent-foods scan
+        semantic: historical-series
+        fields_read: [created_at, food_name, total_calories]
+    reader_allow_files:
+      - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -1704,6 +1823,14 @@ concepts:
         method: home plan-expired + week-rollover banners
         semantic: flag-check
         fields_read: [status]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 218-235
+        method: WorkoutRepository.calculateCurrentStreak (schedule_* prefix cache build)
+        semantic: aggregated
+        fields_read: [status, completed_at across 365 days]
+    reader_allow_files:
+      - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
+      - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
     regression_test: test/sync/restore_ordering_and_sweep_test.dart
     hive:
       box: workoutBox
@@ -1861,6 +1988,30 @@ concepts:
           Reads top-level weight_kg only (safe — writer contract guarantees
           MAX). Does NOT handle non-weighted types — AI sees PRs only for
           weight_reps / weighted_bodyweight exercises.
+      - file: lib/features/train/widgets/workout_receipt_card.dart
+        line_range: 305-340
+        method: WorkoutReceiptData.fromExerciseLogs (is_pr badge)
+        semantic: flag-check
+        fields_read: [is_pr, exercise_name]
+        notes: Receipt scans exlog_* rows and includes PR-badged exercises in the receipt PNG.
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 457-475
+        method: _hasExerciseLogsForDate (probe)
+        semantic: flag-check
+        fields_read: [date]
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        line_range: 40-90
+        method: ProgressionResolver.resolve (28d best-weight scan)
+        semantic: max
+        fields_read: [date, exercise_name, weight_kg, logging_type]
+        notes: Reads exlog_* over the last 28 days for next-phase starting weights — not strictly "is_pr" but uses the same prefix.
+    reader_allow_files:
+      - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator" }
+      - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep" }
+      - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans exlog_* prefix" }
+      - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_*" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for migrator state — not a row reader" }
+      - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — bestPerSet primitives + exerciseLogsForIstDate delegated to by loadAllExercisePRs and train_screen" }
     regression_test: test/contracts/load_all_exercise_prs_per_set_semantic_test.dart
     hive:
       box: workoutBox
@@ -2113,6 +2264,20 @@ concepts:
         notes: |
           Forward-filled across 7-day window (last-known value carries
           on un-weighed days). Skipping is a bug — gap should not show 0.
+      - file: lib/core/services/badge_service.dart
+        line_range: 110-115
+        method: BadgeService weight-log count
+        semantic: aggregated
+        fields_read: [healthBox.keys with prefix weight_]
+        notes: Counts weight_* rows for the "log weight N times" badge.
+      - file: lib/features/profile/screens/profile_screen.dart
+        line_range: 1183-1200
+        method: profile weight-trajectory builder
+        semantic: historical-series
+        fields_read: [weight_kg, date]
+    reader_allow_files:
+      - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
+      - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg" }
     regression_test: test/sync/streaks_source_field_test.dart
     hive:
       box: healthBox
@@ -2398,6 +2563,33 @@ concepts:
         fields_read: [full_name]
         notes: |
           Injected into AI snapshot's user.name; fallback empty string.
+    reader_allow_files:
+      # Every callsite below reads `userBox.get('profile')` for DIFFERENT
+      # fields (id, goal, current_weight_kg, sex, equipment_access, etc.).
+      # The `user_full_name` concept is narrowly about the `full_name`
+      # field. These callers don't read `full_name` so they belong here,
+      # not in `readers:` of this concept.
+      - { file: lib/core/services/hive_user_session.dart, reason: "reads profile.id for cross-account ownership check" }
+      - { file: lib/core/services/stat_snapshot_service.dart, reason: "reads goal/weight/height for lifetime stat snapshot" }
+      - { file: lib/core/services/subscription_service.dart, reason: "reads profile.id for cross-account isPro guard" }
+      - { file: lib/core/services/sync_service.dart, reason: "reads profile fields for upward projection to user_profile cloud row" }
+      - { file: lib/core/services/water_target_service.dart, reason: "reads weight/training-days/activity for daily water target" }
+      - { file: lib/core/services/workout_schedule_service.dart, reason: "reads goal/equipment/days_per_week for plan generation" }
+      - { file: lib/features/ai_coach/screens/induction_screen.dart, reason: "reads goal/experience for induction copy customization" }
+      - { file: lib/features/ai_coach/services/hotel_workout_planner.dart, reason: "reads equipment_access for fallback bodyweight plan" }
+      - { file: lib/features/ai_coach/services/induction_service.dart, reason: "reads profile.id for muster-answer bridge" }
+      - { file: lib/features/ai_coach/services/regenerate_plan_planner.dart, reason: "reads goal/days/equipment for regenerated phase plan" }
+      - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads profile.id + goal for tool intent confirmation" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart, reason: "reads current goal for switch-goal diff preview" }
+      - { file: lib/features/auth/providers/auth_provider.dart, reason: "_ensureLocalUser reads existing profile to merge new auth fields" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "reads existing Hive profile to drive new-vs-returning decision" }
+      - { file: lib/features/home/widgets/weight_log_sheet.dart, reason: "reads current_weight_kg for weight-log sheet seed" }
+      - { file: lib/features/nutrition/repositories/nutrition_repository.dart, reason: "reads goal/pace for projection subtitle" }
+      - { file: lib/features/onboarding/screens/plan_screen.dart, reason: "reads in-progress profile for preview computation" }
+      - { file: lib/features/profile/screens/profile_screen.dart, reason: "Edit-profile dialog seeds from existing profile map" }
+      - { file: lib/features/train/providers/preview_plan_provider.dart, reason: "reads fitness_experience/days_per_week for Phase II/III preview" }
+      - { file: lib/features/train/repositories/workout_repository.dart, reason: "reads goal/experience for plan generation calls" }
+      - { file: lib/shared/repositories/user_repository.dart, reason: "canonical profile read path — getUserProfile(); not a full_name-specific reader" }
     regression_test: test/sync/restore_field_canonical_test.dart
     hive:
       box: userBox
@@ -2564,6 +2756,12 @@ concepts:
           wrote — audit P2-B closed 4× row inflation). Orphan path
           uses channel='in_app_orphan' so future audits can detect if
           that path becomes hot.
+    reader_allow_files:
+      # 'coach_memory' is a sibling singleton key in coachBox (NOT a
+      # coach_* interaction row). These callers read coach_memory, not
+      # individual coach_<ms> rows. Distinct concept; see coaching_notes.
+      - { file: lib/features/ai_coach/models/coach_memory.dart, reason: "reads coach_memory singleton — not a coach_* interaction row" }
+      - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads coach_memory singleton (proactive trigger state) — not a coach_* row" }
     regression_test: test/sync/coach_uuid_format_test.dart
     hive:
       box: coachBox
@@ -3527,3 +3725,97 @@ concepts:
       Placeholder-row pattern: any reservation BEFORE an external call
       must resolve on EVERY exit branch. Fire-and-forget shortcuts produce
       orphan classes — explicitly banned for this surface.
+
+  # ─────────────────────────────────────────────────────────────
+  # OI-02 canonical READ services — 2026-05-17
+  #
+  # Mirror the writer-side WorkoutWriteService / NutritionWriteService /
+  # HealthWriteService pattern. The PR-cumulative-bug surfaced on
+  # APK +27 (2026-05-16) was the canonical instance of the gap these
+  # close: the per-set MAX semantic was re-implemented in 2 places and
+  # diverged silently. Centralising prevents the next divergence.
+  # ─────────────────────────────────────────────────────────────
+
+  - concept: workout_read_service
+    domain: workout
+    description: |
+      Canonical READ service for workout-domain Hive surfaces.
+      Owns the per-set MAX semantic (best reps / duration / weight),
+      `exlog_*` row IST date extraction, and the indexed
+      exercise-logs-for-date lookup. Every reader that needs "best
+      single-set value across a logged exercise" delegates here.
+    writers:
+      - file: lib/core/services/workout_read_service.dart
+        line_range: 1-182
+        method: WorkoutReadService (static + instance methods)
+        notes: |
+          Reads only — the "writer" label here is the canonical owner
+          of the per-set MAX semantic. Storage writers (the row
+          producers) are listed under `exercise_personal_records`,
+          `workout_receipt_rendering`, etc.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 610-700
+        method: loadAllExercisePRs
+        semantic: per-set
+        fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration / .bestPerSetWeight]
+      - file: lib/features/train/screens/train_screen.dart
+        line_range: 885-895
+        method: _buildExpandedExercises
+        semantic: per-set
+        fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration]
+    regression_test: test/contracts/workout_read_service_per_set_semantic_test.dart
+    class_constraints: |
+      No file outside this service may re-implement `bestPerSet*` for
+      `exlog_*` rows. The pre-OI-02 state had `loadAllExercisePRs`
+      inline math + file-private `_bestPerSetReps` / `_bestPerSetDuration`
+      in `train_screen.dart` — both deleted in the OI-02 batch.
+
+  - concept: nutrition_read_service
+    domain: nutrition
+    description: |
+      Canonical READ service for nutrition-domain Hive surfaces.
+      Owns the daily macro summation (with `is_saved_meal` exclusion)
+      and the per-item Atwater fallback summation
+      (`kcal > 0 ? kcal : 4P+4C+9F`).
+    writers:
+      - file: lib/core/services/nutrition_read_service.dart
+        line_range: 1-127
+        method: NutritionReadService
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/nutrition/repositories/nutrition_repository.dart
+        line_range: 45-65
+        method: NutritionRepository.dailyMacros
+        semantic: aggregated
+        fields_read: [via NutritionReadService.totalMacrosForDate]
+        notes: |
+          Public API preserved (Map<String,double>) — 2 transitive
+          consumers (nutrition_provider, home_provider) untouched.
+    regression_test: test/contracts/nutrition_read_service_total_macros_test.dart
+    class_constraints: |
+      Atwater fallback math (`kcal > 0 ? kcal : 4P+4C+9F`) mirrors
+      `FoodItem.kcalWithFallback` in `nutrition_write_source.dart`.
+      Any change to the writer-side fallback rule MUST update the
+      reader-side equivalent here in the same commit.
+
+  - concept: health_read_service
+    domain: health
+    description: |
+      Canonical READ service for health-domain Hive surfaces.
+      Exposes latest-weight / sleep-hours-for-date / water-ml-for-date
+      with IST-anchored key formulas matching HealthWriteService.
+    writers:
+      - file: lib/core/services/health_read_service.dart
+        line_range: 1-82
+        method: HealthReadService
+    reader_manifest_complete: true
+    readers: []
+    reader_allow_files:
+      - { file: lib/core/services/health_read_service.dart, reason: "self — instance methods read healthBox weight_*/sleep_log_*/water_ml_* prefixes" }
+    regression_test: test/contracts/health_read_service_test.dart
+    class_constraints: |
+      Date keys MUST be computed via `istDateStr(date)` to agree with
+      `HealthWriteService`. Any divergence in IST handling between
+      writer + reader is a writer/reader drift instance.

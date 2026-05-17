@@ -94,4 +94,41 @@ void main() {
           'Violations:\n${violations.join("\n")}',
     );
   });
+
+  // audit-2026-05-17 OI-10 — closes the manual-exemption-list drift risk.
+  // Every file in the `exemptions` set above must self-declare its
+  // exemption with a `// AUTH_INVALIDATION_EXEMPT: <reason>` marker in
+  // its source. That makes exempt status visible at the file itself,
+  // not just in the test's exemption list — closes the slow-drift
+  // surface where someone adds a file to the exemption set without
+  // documenting why.
+  test('OI-10 — exempt files self-declare exemption marker in source', () {
+    // Mirror the exemption set above (test scoping makes it cleaner to
+    // re-list than to extract from the closure).
+    const exemptions = <String>[
+      'lib/features/auth/providers/referral_code_stash_provider.dart',
+      'lib/features/auth/providers/auth_provider.dart',
+      'lib/features/auth/providers/auth_invalidation_provider.dart',
+    ];
+    final missing = <String>[];
+    for (final path in exemptions) {
+      final f = File(path);
+      if (!f.existsSync()) {
+        // File renamed or deleted — the exemption is stale.
+        missing.add('$path (file missing)');
+        continue;
+      }
+      final src = f.readAsStringSync();
+      if (!src.contains('AUTH_INVALIDATION_EXEMPT:')) {
+        missing.add(
+            '$path (no `AUTH_INVALIDATION_EXEMPT:` marker comment)');
+      }
+    }
+    expect(missing, isEmpty,
+        reason:
+            'OI-10 — every exempt file must self-declare with a comment '
+            '`// AUTH_INVALIDATION_EXEMPT: <reason>` so the exemption is '
+            'visible at the file itself, not just in the test exemption '
+            'list. Missing:\n${missing.join("\n")}');
+  });
 }

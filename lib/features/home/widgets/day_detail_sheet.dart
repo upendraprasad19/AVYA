@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -326,10 +328,20 @@ class DayDetailSheet extends StatelessWidget {
   }
 
   Widget _buildCompletedFooter(BuildContext context) {
+    // audit-2026-05-17 OI-05 — differentiate "completed with logged
+    // exercises" from "marked completed without exercise logging". The
+    // user can flip schedule status via `markCompleted` for workouts
+    // they trained outside the app (e.g., outdoor run, gym session
+    // without phone). The schedule says completed; no exlog rows ever
+    // existed for that IST date. Live cloud query 2026-05-17 confirmed
+    // 2/11 of Upendra's completions were of this shape (May 14 + 15
+    // Hybrid A) — both produced misleading "View Card does nothing"
+    // observations on +27 install.
+    final hasLoggedExercises = _hasExerciseLogsForDate();
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Completed badge
+        // Completed badge — label differentiates by data state.
         SizedBox(
           width: double.infinity,
           height: 48,
@@ -348,7 +360,7 @@ class DayDetailSheet extends StatelessWidget {
                 const Icon(Icons.check_circle, size: 16, color: AppColors.ok),
                 const SizedBox(width: 8),
                 Text(
-                  'COMPLETED',
+                  hasLoggedExercises ? 'COMPLETED' : 'MARKED DONE',
                   style: AppTypography.mono.copyWith(
                     color: AppColors.ok,
                     letterSpacing: 2,
@@ -360,66 +372,106 @@ class DayDetailSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // View Workout Card button — sharp 2-px accent outline
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: Material(
-            color: AppColors.accentSoft,
-            borderRadius: BorderRadius.circular(AppRadius.sharp),
-            child: InkWell(
-              onTap: () {
-                // audit-2026-05-16 reader-side / Obs 1 — silent null
-                // tap was the "View Card does nothing" bug. When restore
-                // hasn't finished or the exlog index for this IST date
-                // is empty, surface a clear message instead of no-op'ing.
-                final receiptData =
-                    WorkoutReceiptData.fromExerciseLogs(date);
-                if (receiptData != null) {
-                  WorkoutReceiptSheet.show(context, receiptData);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: const Text(
-                      'No exercise data for this day yet. '
-                      'If you just installed, give cloud restore a few '
-                      'seconds and try again.',
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 4),
-                  ));
-                }
-              },
+        // audit-2026-05-17 OI-05 — only render View Card when exlog
+        // rows actually exist for this IST date. For "marked done
+        // without logging" completions, render a small dim hint
+        // instead.
+        if (hasLoggedExercises)
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: Material(
+              color: AppColors.accentSoft,
               borderRadius: BorderRadius.circular(AppRadius.sharp),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.33),
-                  ),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.receipt_long,
-                          size: 14, color: AppColors.accent),
-                      const SizedBox(width: 8),
-                      Text(
-                        'VIEW WORKOUT CARD',
-                        style: AppTypography.mono.copyWith(
-                          color: AppColors.accent,
-                          letterSpacing: 2,
-                        ),
+              child: InkWell(
+                onTap: () {
+                  final receiptData =
+                      WorkoutReceiptData.fromExerciseLogs(date);
+                  if (receiptData != null) {
+                    WorkoutReceiptSheet.show(context, receiptData);
+                  } else {
+                    // Race: hasLoggedExercises said yes but receipt
+                    // builder still returned null (cloud-restore race
+                    // or read-after-write inconsistency). Snackbar
+                    // copy points at the likely cause.
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text(
+                        'Workout data still syncing — try again in a moment.',
                       ),
-                    ],
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 4),
+                    ));
+                  }
+                },
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.33),
+                    ),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.receipt_long,
+                            size: 14, color: AppColors.accent),
+                        const SizedBox(width: 8),
+                        Text(
+                          'VIEW WORKOUT CARD',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Text(
+              'Marked done outside the app — no exercises were logged.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ),
-        ),
       ],
     );
+  }
+
+  /// audit-2026-05-17 OI-05 — cheap probe for "did the user actually
+  /// log exercises on this IST date". True when the canonical exercise
+  /// log index has entries OR a fallback grep over `exlog_*` rows
+  /// finds a match (covers restored rows that landed without the index).
+  /// False for "marked completed without logging" (Hybrid A May 14/15
+  /// shape in Upendra's data).
+  bool _hasExerciseLogsForDate() {
+    try {
+      final wb = HiveService.instance.workoutBox;
+      final dateKey = formatDateKey(date);
+      final indexRaw = wb.get('exercise_log_index_$dateKey');
+      if (indexRaw is List && indexRaw.isNotEmpty) return true;
+      // Fallback — same heuristic the receipt fromExerciseLogs uses
+      // (Test #16.1 / Agent A defence-in-depth).
+      for (final k in wb.keys) {
+        final ks = k.toString();
+        if (!ks.startsWith('exlog_')) continue;
+        final v = wb.get(k);
+        if (v is Map && v['date'] == dateKey) return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget _buildStartButton(BuildContext context, {required bool enabled}) {

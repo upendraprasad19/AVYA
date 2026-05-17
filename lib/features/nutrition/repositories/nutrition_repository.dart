@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
@@ -43,36 +44,18 @@ class NutritionRepository {
   /// etc. are already computed at log time with per-item Atwater fallback
   /// (see `_ScanResultEditor` and `logFoodItem`).
   Map<String, double> dailyMacros(DateTime date) {
-    final dateStr = '${date.year}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-
-    double calories = 0;
-    double protein = 0;
-    double carbs = 0;
-    double fat = 0;
-    double fiber = 0;
-
-    for (final raw in _hive.nutritionBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if (log['date'] != dateStr) continue;
-      // Exclude saved-meal templates — they're not actual logs.
-      if (log['is_saved_meal'] == true) continue;
-
-      calories += (log['total_calories'] as num?)?.toDouble() ?? 0;
-      protein += (log['total_protein'] as num?)?.toDouble() ?? 0;
-      carbs += (log['total_carbs'] as num?)?.toDouble() ?? 0;
-      fat += (log['total_fat'] as num?)?.toDouble() ?? 0;
-      fiber += (log['total_fiber'] as num?)?.toDouble() ?? 0;
-    }
-
+    // OI-02 (closes-diagnose: 2026-05-17-oi-02-read-services) —
+    // delegates to canonical NutritionReadService. Public API preserved
+    // (Map<String,double>) so the 2 consumers (nutrition_provider +
+    // home_provider) don't need updates; service returns Map<String,num>
+    // which we widen to double here.
+    final raw = NutritionReadService.instance.totalMacrosForDate(date);
     return {
-      'calories': calories,
-      'protein': protein,
-      'carbs': carbs,
-      'fat': fat,
-      'fiber': fiber,
+      'calories': raw['calories']!.toDouble(),
+      'protein': raw['protein']!.toDouble(),
+      'carbs': raw['carbs']!.toDouble(),
+      'fat': raw['fat']!.toDouble(),
+      'fiber': raw['fiber']!.toDouble(),
     };
   }
 

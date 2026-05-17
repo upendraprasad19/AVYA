@@ -3,25 +3,30 @@
 // Audit gate (build-apk Gate 18) — enforces the reader-side manifest in
 // `docs/sot_registry.yaml`.
 //
-// Check: any pattern listed under any `forbidden_legacy_patterns:` block
-// MUST be absent from `lib/`, `supabase/functions/`, and `test/` (with
-// this script's own file excluded). Catches the recurring writer/reader
-// drift bug class — pre-2026-05-16 the patterns `log['best_single_set_reps']`
-// and `log['best_single_set_duration']` were live in
-// `workout_repository.dart` even though the writer never produced either
-// field.
+// PHASE 1 (forbidden-patterns):
+//   Any pattern listed under any `forbidden_legacy_patterns:` block MUST
+//   be absent from `lib/` and `supabase/functions/`. Catches the
+//   recurring writer/reader drift bug class.
+//
+// PHASE 2 (exhaustive reader completeness — added OI-01, 2026-05-17):
+//   For every concept with BOTH `reader_manifest_complete: true` AND
+//   `hive.key_prefix` set (non-empty, non-placeholder), every source
+//   file in `lib/` + `supabase/functions/` that contains a Hive-read
+//   reference to the prefix MUST appear in EITHER:
+//     - the concept's `readers:` list
+//     - the concept's `writers:` list (writers may read their own prefix)
+//     - the concept's `reader_allow_files:` whitelist (ad-hoc helpers,
+//       migrators, dead-code-elimination tools)
+//
+//   Reference forms detected (heuristic source-grep):
+//     - `<box>.get('<prefix>...')`
+//     - `key.startsWith('<prefix>')` / `keyStr.startsWith('<prefix>')`
+//     - `<map>['<prefix>...']` literal-string key access
+//     - `<prefix>` substring inside a Hive-read context (loose backup)
 //
 // Exit codes:
-//   0  — no forbidden patterns found anywhere they shouldn't be.
-//   1  — at least one violation. Stderr lists pattern + file(s).
-//
-// Bootstrap context (2026-05-16):
-//   Today's audit demonstrated that the writer-side registry didn't
-//   catch reader-side regressions — 6 user-visible bugs on +27 fresh-
-//   install, all from readers reading the wrong field with the wrong
-//   semantic. This gate locks down the FUTURE; existing drift must be
-//   eliminated by populating reader_manifest_complete + adding
-//   forbidden_legacy_patterns to each concept.
+//   0  — all phases pass.
+//   1  — at least one violation. Stderr lists the offender(s).
 
 import 'dart:io';
 
@@ -36,21 +41,16 @@ void main(List<String> args) async {
 
   final content = registry.readAsStringSync();
 
-  // Extract every `{ pattern: "...", reason: "..." }` entry under any
-  // `forbidden_legacy_patterns:` block. We don't strictly require the
-  // entries to be nested under a specific concept — every forbidden
-  // pattern in the file is enforced globally.
+  // PHASE 1 — forbidden patterns.
   final patternEntries = _extractForbiddenPatterns(content);
-  if (patternEntries.isEmpty) {
-    stdout.writeln(
-        'check_reader_manifest_complete: registry has no forbidden_legacy_patterns entries — gate is a no-op.');
-    exit(0);
-  }
+
+  // PHASE 2 — concept manifests with key_prefix.
+  final concepts = _extractConcepts(content);
 
   // Scan production code only. Test files (especially test/contracts/)
   // legitimately reference forbidden patterns in their assertion strings
   // to lock-down anti-regression — including them would create circular
-  // failures where the test that prevents the bug fails the gate.
+  // failures.
   final filesToScan = <File>[];
   for (final dir in ['lib', 'supabase/functions']) {
     final d = Directory('$repoRoot/$dir');
@@ -64,16 +64,21 @@ void main(List<String> args) async {
   }
 
   // Pre-read all files once. Strip comments so docstrings that
-  // explicitly document anti-patterns (e.g. "// pre-fix this called
-  // log['best_single_set_reps']") don't false-positive the gate.
-  // Only the code body should be scanned.
+  // document anti-patterns don't false-positive the gate.
   final fileSources = <File, String>{};
+  final fileRelPaths = <File, String>{};
+  final normalRoot = repoRoot.replaceAll(r'\', '/');
   for (final f in filesToScan) {
     if (f.path.endsWith('check_reader_manifest_complete.dart')) continue;
     fileSources[f] = _stripComments(f.readAsStringSync());
+    fileRelPaths[f] = f.path
+        .replaceAll(r'\', '/')
+        .replaceFirst('$normalRoot/', '');
   }
 
   var failures = 0;
+
+  // --- Phase 1 ---
   for (final entry in patternEntries) {
     final pattern = entry.pattern;
     final reason = entry.reason;
@@ -86,13 +91,7 @@ void main(List<String> args) async {
     final hits = <String>[];
     for (final f in fileSources.entries) {
       if (re.hasMatch(f.value)) {
-        // Normalise to forward-slash repo-relative path.
-        final normalRoot = repoRoot.replaceAll(r'\', '/');
-        final rel = f.key.path
-            .replaceAll(r'\', '/')
-            .replaceFirst('$normalRoot/', '');
-        // Allowlist — pattern is intentionally permitted at canonical
-        // callsite(s).
+        final rel = fileRelPaths[f.key]!;
         if (entry.allowFiles.contains(rel)) continue;
         hits.add(rel);
       }
@@ -107,9 +106,98 @@ void main(List<String> args) async {
     }
   }
 
+  // --- Phase 2 ---
+  var conceptsChecked = 0;
+  for (final c in concepts) {
+    if (!c.readerManifestComplete) continue;
+    final prefix = c.keyPrefix;
+    if (prefix == null || prefix.isEmpty) continue;
+    // Skip placeholder/sentinel prefixes such as
+    // "<per-key — see UserConfigMigrator.userScopedKeys>".
+    if (prefix.startsWith('<') || prefix.contains('—')) continue;
+    conceptsChecked++;
+
+    // Build the set of files declared as readers / writers / allow.
+    final declared = <String>{
+      ...c.readers,
+      ...c.writers,
+      ...c.readerAllowFiles,
+    };
+
+    // Find every source file that references the prefix in a
+    // Hive-read context. Detection forms:
+    //   a) `.get('<prefix>...')`
+    //   b) `.startsWith('<prefix>')`  (key.startsWith / s.startsWith / etc.)
+    //   c) `['<prefix>...']`           (literal-string map key)
+    //   d) The naked prefix string literal `'<prefix>...'` or `"<prefix>..."`
+    //      appearing AFTER a Hive box reference within ~10 lines.
+    // Edge case: prefixes that are full single keys (e.g. "is_pro",
+    // "profile", "onboarding_completed", "streaks", "coaching_notes",
+    // "saved_diet_plan", "water_target_override_ml") use exact-match,
+    // not prefix-match, in the detector.
+    final escaped = RegExp.escape(prefix);
+    final isExactKey = !prefix.endsWith('_') && !prefix.endsWith('-');
+
+    // Build the set of strict "Hive-read context" detectors. A reader is
+    // a file that contains AT LEAST ONE of:
+    //   (a) `.get('<key>')` / `.get("<key>")` / `.containsKey('<key>')`
+    //   (b) `.put('<key>'` / `.delete('<key>')`  (writers/eraser of the key are still readers in the manifest sense — they touch the prefix)
+    //   (c) `.startsWith('<prefix>')` or `.startsWith("<prefix>")`
+    //   (d) Map subscript `['<key>']` ONLY when the file ALSO contains
+    //       a Hive box reference. This is the weakest signal; many Map
+    //       reads share the same literal but aren't Hive accesses.
+    //
+    // The key-literal form is either exact ("is_pro") or
+    // prefix-with-suffix-chars ("exlog_<hex>"); we DO NOT match an
+    // unbounded substring inside a longer identifier
+    // (`weight_kg` should NOT match prefix `weight_`).
+    final suffix = isExactKey ? '' : '[A-Za-z0-9_\\-:]*';
+    final literal = "['\"]$escaped$suffix['\"]";
+
+    // Strict detectors — Hive-key read contexts ONLY. We intentionally
+    // do NOT match bare subscript form `['<prefix>...']` because it
+    // overwhelmingly false-positives on Map field reads (e.g.,
+    // `row['weight_kg']` for prefix `weight_`). Field-name contracts
+    // are enforced by a separate test class (Hive field-name contracts
+    // per CLAUDE.md §15).
+    final getCtxRe = RegExp(
+        r'\.(get|containsKey|delete|put)\s*\(\s*' + literal);
+    final startsWithRe =
+        RegExp(r'\.startsWith\s*\(\s*' + literal + r'\s*\)');
+
+    for (final f in fileSources.entries) {
+      final src = f.value;
+      String? matchedLine;
+      int matchedLineNo = -1;
+
+      for (final re in [getCtxRe, startsWithRe]) {
+        final m = re.firstMatch(src);
+        if (m != null) {
+          matchedLineNo = _lineNumberFor(src, m.start);
+          matchedLine = _lineAt(src, m.start);
+          break;
+        }
+      }
+      if (matchedLine == null) continue;
+
+      final rel = fileRelPaths[f.key]!;
+      if (declared.contains(rel)) continue;
+
+      failures++;
+      String snippet = matchedLine.trim();
+      if (snippet.length > 160) snippet = '${snippet.substring(0, 160)}…';
+      stderr.writeln(
+          'FAIL reader-manifest-incomplete · concept=${c.name} · prefix=$prefix');
+      stderr.writeln('  - $rel:$matchedLineNo  ($snippet)');
+      stderr.writeln(
+          '  fix: add to `readers:` or `reader_allow_files:` of `${c.name}` in docs/sot_registry.yaml');
+    }
+  }
+
   stdout.writeln(
-      'check_reader_manifest_complete: scanned ${fileSources.length} files '
-      'against ${patternEntries.length} forbidden patterns.');
+      'check_reader_manifest_complete: phase-1 scanned ${fileSources.length} files '
+      'against ${patternEntries.length} forbidden patterns; '
+      'phase-2 enforced $conceptsChecked manifest-complete concepts.');
   if (failures > 0) {
     stderr.writeln(
         'Reader manifest check FAILED with $failures violation(s).');
@@ -119,20 +207,17 @@ void main(List<String> args) async {
   exit(0);
 }
 
+// ---------------------------------------------------------------------------
+// Phase 1 — forbidden_legacy_patterns extraction.
+// ---------------------------------------------------------------------------
+
 class _PatternEntry {
   final String pattern;
   final String reason;
-  /// Files where the pattern is expected to appear (canonical callsite).
-  /// Comma-separated path list in the registry; relative to repo root.
   final List<String> allowFiles;
   _PatternEntry(this.pattern, this.reason, this.allowFiles);
 }
 
-/// Matches inline-map entries under `forbidden_legacy_patterns:`. The
-/// schema in `sot_registry.yaml` consistently writes these as:
-///   - { pattern: "regex", reason: "..." }
-/// or with single quotes. Multi-line maps not supported (none exist
-/// today; add when needed).
 List<_PatternEntry> _extractForbiddenPatterns(String yaml) {
   final result = <_PatternEntry>[];
   final lines = yaml.split('\n');
@@ -144,18 +229,20 @@ List<_PatternEntry> _extractForbiddenPatterns(String yaml) {
       continue;
     }
     if (inBlock) {
-      // Continued list item?
       if (RegExp(r'^\s{6}-\s*\{').hasMatch(line)) {
         final pat = _readQuoted(line, 'pattern:');
         final rsn = _readQuoted(line, 'reason:');
         final allowRaw = _readQuoted(line, 'allow_files:');
         final allow = allowRaw == null
             ? const <String>[]
-            : allowRaw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            : allowRaw
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
         if (pat != null) result.add(_PatternEntry(pat, rsn ?? '', allow));
         continue;
       }
-      // Anything else at <=4 space indent ends the block.
       if (RegExp(r'^\s{0,4}\S').hasMatch(line)) {
         inBlock = false;
       }
@@ -164,27 +251,183 @@ List<_PatternEntry> _extractForbiddenPatterns(String yaml) {
   return result;
 }
 
-/// Reads the quoted string value of `key:` from a single line. Supports
-/// both `"..."` and `'...'` quoting. Escaped quotes inside the value
-/// are passed through unmodified (regex authors keep their `\\` etc).
-/// Strips `//`-line comments and `/* ... */` block comments from Dart/TS
-/// source. String literals are NOT preserved across the strip — gate
-/// patterns are anti-regression checks on code shape, not strict syntax
-/// fidelity. Replaces stripped content with spaces to preserve line
-/// numbers if anyone wants to extend the gate later.
+// ---------------------------------------------------------------------------
+// Phase 2 — concept manifest extraction.
+// ---------------------------------------------------------------------------
+
+class _Concept {
+  final String name;
+  bool readerManifestComplete = false;
+  String? keyPrefix;
+  final Set<String> readers = <String>{};
+  final Set<String> writers = <String>{};
+  final Set<String> readerAllowFiles = <String>{};
+  _Concept(this.name);
+}
+
+/// Walks the YAML line-by-line. Concepts start with `  - concept: <name>`
+/// at 2-space indent under the top-level `concepts:` array. Within each
+/// concept, we look for:
+///   - `reader_manifest_complete: true`
+///   - `hive:` block followed by `key_prefix:` at +2 indent
+///   - `writers:` / `readers:` lists with `file:` entries
+///   - `reader_allow_files:` list with either inline `- path/to/file`
+///     or `- { file: path/to/file }` entries
+///
+/// Concept boundary: next `  - concept:` line OR end-of-file.
+List<_Concept> _extractConcepts(String yaml) {
+  final out = <_Concept>[];
+  final lines = yaml.split('\n');
+  _Concept? cur;
+  // Sub-block tracker: 'writers' | 'readers' | 'reader_allow_files' | 'hive'
+  //                     | null (no active sub-block)
+  String? sub;
+
+  void closeCurrent() {
+    if (cur != null) out.add(cur!);
+    cur = null;
+    sub = null;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    // Skip pure-comment lines for sub-block parsing (but keep concept
+    // boundary detection).
+    final trimmed = line.trim();
+    if (trimmed.startsWith('#')) continue;
+
+    // Concept boundary.
+    final conceptMatch =
+        RegExp(r'^\s{2}-\s+concept:\s*(\S+)').firstMatch(line);
+    if (conceptMatch != null) {
+      closeCurrent();
+      cur = _Concept(conceptMatch.group(1)!);
+      sub = null;
+      continue;
+    }
+    if (cur == null) continue;
+
+    // reader_manifest_complete at concept root (4 spaces).
+    if (RegExp(r'^\s{4}reader_manifest_complete:\s*true\s*$').hasMatch(line)) {
+      cur!.readerManifestComplete = true;
+      continue;
+    }
+
+    // Sub-block headers at 4-space indent.
+    if (RegExp(r'^\s{4}writers:\s*$').hasMatch(line)) {
+      sub = 'writers';
+      continue;
+    }
+    if (RegExp(r'^\s{4}readers:\s*$').hasMatch(line)) {
+      sub = 'readers';
+      continue;
+    }
+    if (RegExp(r'^\s{4}reader_allow_files:\s*$').hasMatch(line)) {
+      sub = 'reader_allow_files';
+      continue;
+    }
+    if (RegExp(r'^\s{4}hive:\s*$').hasMatch(line)) {
+      sub = 'hive';
+      continue;
+    }
+
+    // Inside a sub-block — keys at 6-space indent indicate list items
+    // or kv pairs.
+    if (sub == 'hive') {
+      // `      key_prefix: "..."` at 6-space indent.
+      final kp = _readQuoted(line, 'key_prefix:');
+      if (kp != null) {
+        cur!.keyPrefix = kp;
+        continue;
+      }
+      // A 4-space indented line that isn't blank breaks `hive` block.
+      if (RegExp(r'^\s{4}\S').hasMatch(line) &&
+          !RegExp(r'^\s{6,}').hasMatch(line)) {
+        sub = null;
+      }
+      continue;
+    }
+
+    if (sub == 'writers' || sub == 'readers') {
+      // List items like `      - file: lib/foo.dart`
+      final m = RegExp(r'^\s{6}-\s+file:\s*(\S+)').firstMatch(line);
+      if (m != null) {
+        final path = m.group(1)!.replaceAll(',', '').trim();
+        if (sub == 'writers') {
+          cur!.writers.add(path);
+        } else {
+          cur!.readers.add(path);
+        }
+        continue;
+      }
+      // Break sub when a sibling key shows up at 4-space indent.
+      if (RegExp(r'^\s{4}\S').hasMatch(line)) {
+        sub = null;
+      }
+      continue;
+    }
+
+    if (sub == 'reader_allow_files') {
+      // Two accepted forms:
+      //   `      - lib/path/to/file.dart`
+      //   `      - { file: lib/path/to/file.dart, reason: ... }`
+      var m = RegExp(r'^\s{6}-\s+\{\s*file:\s*([^\s,}]+)').firstMatch(line);
+      if (m != null) {
+        cur!.readerAllowFiles.add(m.group(1)!.trim());
+        continue;
+      }
+      m = RegExp(r"^\s{6}-\s+([^\s#].*?)\s*(#.*)?$").firstMatch(line);
+      if (m != null) {
+        final raw = m.group(1)!.trim();
+        // Strip surrounding quotes if present.
+        var path = raw;
+        if ((path.startsWith('"') && path.endsWith('"')) ||
+            (path.startsWith("'") && path.endsWith("'"))) {
+          path = path.substring(1, path.length - 1);
+        }
+        if (path.isNotEmpty) cur!.readerAllowFiles.add(path);
+        continue;
+      }
+      if (RegExp(r'^\s{4}\S').hasMatch(line)) {
+        sub = null;
+      }
+    }
+  }
+  closeCurrent();
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers.
+// ---------------------------------------------------------------------------
+
+int _lineNumberFor(String src, int offset) {
+  var n = 1;
+  for (var i = 0; i < offset && i < src.length; i++) {
+    if (src[i] == '\n') n++;
+  }
+  return n;
+}
+
+String _lineAt(String src, int offset) {
+  var start = offset;
+  while (start > 0 && src[start - 1] != '\n') start--;
+  var end = offset;
+  while (end < src.length && src[end] != '\n') end++;
+  return src.substring(start, end);
+}
+
 String _stripComments(String src) {
   final out = StringBuffer();
   var i = 0;
   while (i < src.length) {
     if (i + 1 < src.length && src[i] == '/' && src[i + 1] == '/') {
-      // Line comment — skip to newline.
       while (i < src.length && src[i] != '\n') {
         i++;
       }
       continue;
     }
     if (i + 1 < src.length && src[i] == '/' && src[i + 1] == '*') {
-      // Block comment — skip to closing.
       i += 2;
       while (i + 1 < src.length &&
           !(src[i] == '*' && src[i + 1] == '/')) {
@@ -206,7 +449,6 @@ String? _readQuoted(String line, String key) {
   if (after.isEmpty) return null;
   final quote = after[0];
   if (quote != '"' && quote != "'") return null;
-  // Find the matching closing quote (skip over `\"` or `\'`).
   var i = 1;
   while (i < after.length) {
     final c = after[i];

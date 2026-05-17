@@ -1,3 +1,8 @@
+// AUTH_INVALIDATION_EXEMPT: the auth provider IS the source of truth
+// for auth state. It produces the signal that `authUserIdTokenProvider`
+// derives from — it can't self-watch without creating a circular
+// rebuild loop.
+
 import 'dart:async';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
