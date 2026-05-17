@@ -1,3 +1,8 @@
+// AUTH_INVALIDATION_EXEMPT: this provider DEFINES authUserIdTokenProvider —
+// the very provider every user-scoped consumer is required to watch. It
+// derives its token from `currentUserProvider` + the Hive session owner
+// listenable directly; watching itself would be a tautology.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_session_owner_provider.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';

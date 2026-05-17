@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -626,69 +627,21 @@ class WorkoutRepository {
       final createdAt = log['created_at'] as String? ?? log['date'] as String? ?? '';
       final date = DateTime.tryParse(createdAt) ?? DateTime(2020);
 
-      // Canonical per-set array. Each entry: {weight_kg, reps,
-      // duration_sec | duration_seconds, logged_at_ms}.
-      final setsRaw = log['sets'];
-      final List<Map> sets = (setsRaw is List)
-          ? setsRaw.whereType<Map>().toList()
-          : const <Map>[];
-
+      // OI-02 / OI-08 (closes-diagnose: 2026-05-17-oi-02-read-services) —
+      // per-set MAX semantic delegated to canonical WorkoutReadService.
+      // Pre-fix the math was inline here AND duplicated in
+      // train_screen.dart `_bestPerSetReps`/`_bestPerSetDuration`.
       double value;
       switch (loggingType) {
         case 'weight_reps':
         case 'weighted_bodyweight':
-          // Best per-set weight. Top-level `weight_kg` IS already MAX
-          // (writer contract), so both paths agree; sets[] preferred
-          // for forward-compat.
-          if (sets.isNotEmpty) {
-            value = sets.fold<double>(0.0, (acc, s) {
-              final w = (s['weight_kg'] as num?)?.toDouble() ?? 0.0;
-              return w > acc ? w : acc;
-            });
-          } else {
-            value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-          }
+          value = WorkoutReadService.bestPerSetWeight(log);
           break;
         case 'bodyweight_reps':
-          // Best per-set REPS (not cumulative). Iterate sets[]; fallback
-          // to top-level reps_completed only when sets[] is missing AND
-          // set_number == 1 (legitimate single-set legacy row).
-          if (sets.isNotEmpty) {
-            value = sets.fold<double>(0.0, (acc, s) {
-              final r = (s['reps'] as num?)?.toDouble() ?? 0.0;
-              return r > acc ? r : acc;
-            });
-          } else {
-            final setCount = (log['set_number'] as num?)?.toInt() ??
-                (log['sets_completed'] as num?)?.toInt() ??
-                1;
-            final totalReps = (log['reps_completed'] as num?)?.toDouble() ?? 0;
-            // Only trust top-level for true single-set logs. Multi-set
-            // legacy rows without sets[] are unrecoverable — skip rather
-            // than show the cumulative as "best per-set".
-            value = setCount == 1 ? totalReps : 0;
-          }
+          value = WorkoutReadService.bestPerSetReps(log).toDouble();
           break;
         case 'timed':
-          // Best per-set DURATION (not cumulative). Same per-set MAX
-          // pattern as bodyweight_reps. Per-set duration field name is
-          // `duration_sec` (canonical) or `duration_seconds` (restore
-          // path legacy alias).
-          if (sets.isNotEmpty) {
-            value = sets.fold<double>(0.0, (acc, s) {
-              final d = (s['duration_sec'] as num?)?.toDouble() ??
-                  (s['duration_seconds'] as num?)?.toDouble() ??
-                  0.0;
-              return d > acc ? d : acc;
-            });
-          } else {
-            final setCount = (log['set_number'] as num?)?.toInt() ??
-                (log['sets_completed'] as num?)?.toInt() ??
-                1;
-            final totalDur =
-                (log['duration_seconds'] as num?)?.toDouble() ?? 0;
-            value = setCount == 1 ? totalDur : 0;
-          }
+          value = WorkoutReadService.bestPerSetDuration(log).toDouble();
           break;
         case 'cardio':
           // Cardio: cumulative distance IS the meaningful metric.

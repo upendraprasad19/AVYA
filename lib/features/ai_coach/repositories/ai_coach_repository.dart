@@ -71,6 +71,41 @@ class AiCoachRepository {
         'detected_experience': progress['detected_experience_level'] ??
             UserRepository.instance.detectedExperience ?? 'beginner',
       },
+
+      // ── Top-level aliases for cron Edge Function readers ──────────
+      //
+      // audit-2026-05-17 OI-07-FOLLOWUP — closes 11 orphan-reader bugs
+      // surfaced by `docs/snapshot_contract.yaml`. Cron functions
+      // (morning-alert, streak-guardian, protein-gap-alert) read these
+      // fields at the top level of `user_daily_snapshots.snapshot_json`.
+      // Pre-fix the writer emitted them only nested
+      // (`snapshot.progress.*`, `snapshot.profile.*`, etc.) or not at
+      // all. Symptom: morning-alert milestone templates + streak-
+      // guardian PR shoutouts rendered GENERIC copy because every
+      // personalisation field read null. Silently degrading — readers
+      // null-checked + fell through to defaults, so the bug was
+      // observability-blind until the OI-07 manifest sweep.
+      //
+      // Adding ~120 bytes per snapshot. Drops first in _compactContext
+      // if over budget (these are duplicative with the nested forms).
+      //
+      // closes-diagnose: 2026-05-17-orphan-reader-aliases-7faa3b
+      'current_streak_weeks': progress['current_streak_weeks'] ?? 0,
+      'current_streak_days':
+          ((progress['current_streak_weeks'] as num?)?.toInt() ?? 0) * 7,
+      'total_workouts_done': progress['total_workouts_done'] ?? 0,
+      'current_weight_kg': profile['current_weight_kg'] ?? 0,
+      'target_weight_kg': profile['target_weight_kg'] ?? 0,
+      'today_workout_name': _topLevelTodayWorkoutName(),
+      'recent_pr_exercise': _topLevelRecentPrField('exercise_name'),
+      'recent_pr_weight': _topLevelRecentPrField('weight_kg'),
+      'yesterday_calories': _topLevelYesterdayCalories(),
+      'daily_calorie_target': (profile['tdee'] as num?)?.toInt() ?? 0,
+      'daily_targets': {
+        'protein': (profile['protein_g_target'] as num?)?.toDouble() ??
+            (profile['protein_target_g'] as num?)?.toDouble() ??
+            0,
+      },
       'this_week_workouts': _getThisWeekWorkouts(),
       'today_nutrition': _getTodayNutrition(),
       'today_steps': _getTodaySteps(),
@@ -1427,6 +1462,58 @@ class AiCoachRepository {
   Map<String, dynamic>? _getTodayWorkout() {
     final today = istDateStr(DateTime.now());
     return _buildWorkoutSnapshotForDate(today);
+  }
+
+  /// audit-2026-05-17 OI-07-FOLLOWUP — top-level aliases for cron
+  /// Edge Function readers. Closes 11 orphan-reader bugs surfaced by
+  /// `docs/snapshot_contract.yaml`. Each helper returns the shape the
+  /// cron reader expects (top-level scalar or null). All are null-safe;
+  /// the cron readers already had defensive null-checks but now they
+  /// actually get data.
+
+  String? _topLevelTodayWorkoutName() {
+    final tw = _getTodayWorkout();
+    if (tw == null) return null;
+    final name = tw['workout_name'] as String?;
+    if (name != null && name.isNotEmpty) return name;
+    return tw['type'] as String?;
+  }
+
+  /// Returns a top-level scalar from the user's most recent PR. [field]
+  /// is one of `exercise_name`, `weight_kg`, `reps`, etc. — passed
+  /// straight through to the PR map shape produced by
+  /// [_getPRTimelineSummary] (`recent_prs` list, last 5).
+  dynamic _topLevelRecentPrField(String field) {
+    final summary = _getPRTimelineSummary();
+    final recent = summary['recent_prs'];
+    if (recent is! List || recent.isEmpty) return null;
+    final first = recent.first;
+    if (first is! Map) return null;
+    // The PR shape uses different field names in the nested map than
+    // some cron readers expect. Map for compatibility.
+    if (field == 'exercise_name') {
+      return first['exercise_name'] ?? first['exercise'] ?? first['name'];
+    }
+    if (field == 'weight_kg') {
+      return first['weight_kg'] ?? first['weight'] ?? first['bestValue'];
+    }
+    return first[field];
+  }
+
+  /// Yesterday's calorie total for cron-reader convenience. Reads
+  /// nutritionBox `nlog_*` rows where `date == yesterday IST`.
+  int _topLevelYesterdayCalories() {
+    final yesterdayStr =
+        istDateStr(DateTime.now().subtract(const Duration(days: 1)));
+    double total = 0;
+    for (final raw in _hive.nutritionBox.values) {
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if (log['date'] == yesterdayStr) {
+        total += (log['total_calories'] as num?)?.toDouble() ?? 0;
+      }
+    }
+    return total.round();
   }
 
   /// Symmetric to [_getTodayWorkout] for yesterday's IST date. Pre-Bug-a13a01

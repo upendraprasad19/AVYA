@@ -1,0 +1,675 @@
+# Snapshot contract — AiCoachRepository.buildAiContext -> Edge Function readers.
+#
+# This file is the explicit manifest of every key emitted by the client-side
+# `AiCoachRepository.buildAiContext()` method and every Edge Function that
+# reads each key off the JSON snapshot.
+#
+# Two distinct consumption paths exist; both feed off the SAME JSON blob:
+#   (A) Direct request-body path — client passes the snapshot inline to
+#       `ai-proxy` / `ai-media-proxy` as `snapshot_json`. Both functions
+#       JSON.stringify the whole blob into the Gemini system prompt; they do
+#       NOT read individual fields. Every key is therefore implicitly
+#       consumed by both functions (recorded as `prompt_passthrough: true`).
+#   (B) Persisted-snapshot path — client also POSTs the same blob to
+#       `daily-snapshot`, which UPSERTs it into
+#       `user_daily_snapshots.snapshot_json` (Postgres jsonb). Cron-driven
+#       Edge Functions (morning-alert, streak-guardian, etc.) then read
+#       INDIVIDUAL fields off that column. These per-key reads are the only
+#       contract that risks silent writer/reader drift; they are enumerated
+#       below as `readers: [...]`.
+#
+# Enforced by `scripts/check_snapshot_contract.dart` (OI-03, separate batch).
+# Self-consistency pinned by
+# `test/contracts/snapshot_contract_self_consistency_test.dart`.
+#
+# IMPORTANT: several keys read by cron functions (`current_streak_weeks`,
+# `today_workout_name`, `recent_pr_exercise`, `yesterday_calories`, etc.) are
+# NOT emitted by today's buildAiContext. They are documented at the bottom
+# under `orphan_readers:` as a debt list — the canonical writer either needs
+# to start emitting them or the reader needs to be removed. OI-03's gate
+# will surface these as failures the moment it goes live.
+#
+# Verification audit performed 2026-05-17. Every reader citation was
+# manually verified against the actual Edge Function code at the cited line
+# per feedback_audit_findings_require_live_verification.md.
+
+writer:
+  file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+  method: buildAiContext
+  line: 34
+  return_map_start_line: 46
+
+# All ai-proxy / ai-media-proxy consumption is whole-blob stringification.
+# Recorded once here to keep per-key entries short.
+prompt_passthrough_consumers:
+  - { fn: ai-proxy, file: supabase/functions/ai-proxy/index.ts, line: 716 }
+  - { fn: ai-media-proxy, file: supabase/functions/ai-media-proxy/index.ts, line: 488 }
+
+# ── Top-level keys emitted by buildAiContext ────────────────────────────
+keys:
+  - key: is_first_ever_message
+    type: scalar
+    writer_line: 47
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Triggers Captain Manual first-message system-prompt prefix.
+      Consumed only by Gemini via prompt_passthrough; no Edge Function
+      per-key reader.
+
+  - key: profile
+    type: map
+    writer_line: 48
+    shape:
+      - name: string
+      - age: int (calculated from date_of_birth)
+      - gender: string
+      - height_cm: int
+      - current_weight_kg: num
+      - target_weight_kg: num
+      - primary_goal: string
+      - fitness_experience: string
+      - equipment_access: string
+      - activity_level: string
+      - diet_preference: string
+      - injuries: string|list
+      - bmr: num
+      - tdee: num
+      - city: string (optional)
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      No Edge Function reads `snapshot.profile.*` keys directly today.
+      morning-alert and streak-guardian read top-level `current_weight_kg`
+      / `target_weight_kg` (orphan readers — see bottom).
+
+  - key: progress
+    type: map
+    writer_line: 66
+    shape:
+      - current_phase: int
+      - current_week: int
+      - total_workouts_done: int
+      - current_streak_weeks: int
+      - detected_experience: string
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Top-level orphan readers exist for `current_streak_weeks` +
+      `total_workouts_done` (morning-alert lines 112, 115). Same drift
+      class as profile.* readers.
+
+  - key: this_week_workouts
+    type: map
+    writer_line: 74
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {completed_this_week, planned_this_week, completed_today,
+      today_exercises[]}. Consumed only via prompt_passthrough.
+
+  - key: today_nutrition
+    type: map
+    writer_line: 75
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {calories_logged, protein_g, carbs_g, fat_g, fiber_g,
+      fiber_target_g, water_ml, urine_status?}. prompt_passthrough only.
+
+  - key: today_steps
+    type: scalar
+    writer_line: 76
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 32 }
+    notes: |
+      Verified: morning-alert reads `snap.today_steps` as int. The
+      reader is in `generateDataDrivenAlert` for the "yesterday: N steps"
+      template. Direct top-level field — matches writer.
+
+  - key: step_history_7d
+    type: list
+    writer_line: 77
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      List<{date, steps}>. First to drop in _compactContext trimSteps.
+
+  - key: latest_weight
+    type: map
+    writer_line: 78
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {current_kg, previous_kg, date}.
+
+  - key: personal_records
+    type: map
+    writer_line: 79
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Map<exercise_name, max_weight>. Dropped in _compactContext step 6.
+
+  - key: coaching_notes
+    type: list
+    writer_line: 80
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      List<String>. Reader on the cloud side is via the
+      `coach_memory.coach_notes` upward sync (F3-1.1) — NOT a snapshot_json
+      read. The snapshot key is consumed only via prompt_passthrough.
+
+  - key: coach_memory
+    type: map
+    writer_line: 81
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Full CoachMemory.toJson() blob. Null when private_mode is on.
+
+  - key: fitness_summary
+    type: scalar
+    writer_line: 83
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Bidirectional: WRITTEN by rolling-context into
+      user_daily_snapshots.snapshot_json.fitness_summary (line 246-274).
+      Client READS it from Hive coachBox (SyncService restores it down).
+      The snapshot key is one-way for ai-proxy prompt passthrough only.
+      Dropped last in _compactContext.
+
+  - key: motivational_style
+    type: scalar
+    writer_line: 84
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      'encouraging' default. Read by client for AI persona.
+
+  - key: coach_notices
+    type: list
+    writer_line: 85
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      List<String>. Max 5. Dropped in _compactContext step 7.
+
+  - key: custom_exercises
+    type: list
+    writer_line: 93
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      List<{id, name, muscle_group, equipment}>. Used by AI coach tools
+      (swap_exercise, scheduleTemplate). Phase A.9.
+
+  - key: saved_templates
+    type: list
+    writer_line: 94
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      List<{id, name, days_count, exercise_count}>. Same Phase A.9 batch
+      as custom_exercises.
+
+  - key: meals_today
+    type: list
+    writer_line: 100
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Per-slot {slot, items[], total_kcal, total_protein_g}. Drift fix
+      APK Test #8 / Theme D — reads nlog_* by key prefix. Kept across
+      _compactContext (only per-turn meal log).
+
+  - key: nutrition_trend_7d
+    type: list
+    writer_line: 101
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      7-element daily totals, newest-first. Dropped in _compactContext
+      step 4.
+
+  - key: data_window_days
+    type: scalar
+    writer_line: 107
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Spread from _computeDataWindowGrounding. APK Test #4 / A3
+      anti-fabrication grounding. Captain Manual §8 reads these to refuse
+      history-beyond-window claims.
+
+  - key: first_workout_date
+    type: scalar
+    writer_line: 107
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Spread from _computeDataWindowGrounding. Null for fresh users.
+
+  - key: workout_logs_count
+    type: scalar
+    writer_line: 107
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Spread from _computeDataWindowGrounding.
+
+  - key: nutrition_logs_count_7d
+    type: scalar
+    writer_line: 108
+    readers: []
+    prompt_passthrough: true
+
+  - key: sleep_logs_count_7d
+    type: scalar
+    writer_line: 109
+    readers: []
+    prompt_passthrough: true
+
+  - key: today_workout
+    type: map
+    writer_line: 117
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {type, status, exercises[]}. Bug a13a01 fix — reads LOGGED rows
+      from exlog_*, not the planned schedule entry.
+
+  - key: yesterday_workout
+    type: map
+    writer_line: 118
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Symmetric to today_workout. Same Bug a13a01 contract.
+
+  - key: week_lookahead
+    type: list
+    writer_line: 119
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      7-day forecast — REST entries for days without schedule.
+
+  - key: current_plan_summary
+    type: map
+    writer_line: 126
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {phase, week, days_per_week, weekly_sessions[]}. APK Test #4 / A5.
+
+  - key: sleep_7d
+    type: list
+    writer_line: 132
+    readers: []
+    prompt_passthrough: true
+
+  - key: water_7d
+    type: list
+    writer_line: 133
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Dropped in _compactContext step 2.
+
+  - key: streak_freezes_available
+    type: scalar
+    writer_line: 134
+    readers: []
+    prompt_passthrough: true
+
+  - key: streak_freezes_refill_date
+    type: scalar
+    writer_line: 135
+    readers: []
+    prompt_passthrough: true
+
+  - key: subscription
+    type: map
+    writer_line: 136
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {tier, expires_at, plan, auto_renew}. Identity-bearing — excluded
+      from _compactContext trim path.
+
+  - key: current_rank
+    type: map
+    writer_line: 137
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {code, display, earned_at, total_workouts}. Identity-bearing —
+      excluded from trim.
+
+  - key: next_rank
+    type: map
+    writer_line: 138
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {code, display, requirements, current_state, remaining,
+      binding_constraint}. Null at terminal rank.
+
+  - key: eta_next_promotion
+    type: map
+    writer_line: 139
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {at_current_cadence, at_plan_cadence}. Null at terminal rank.
+
+  - key: cadence
+    type: map
+    writer_line: 140
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {workouts_per_week_4w, plan_target}.
+
+  - key: active_workout
+    type: map
+    writer_line: 153
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      ActiveWorkoutPersistence.readState(). Null when no active workout.
+      Auto-clears stale entries >2h on read.
+
+  - key: committed_at
+    type: scalar
+    writer_line: 202
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Spread from _getInductionAndMusterKeys. APK Test #4 / A8 induction
+      keys. Identity-bearing — excluded from trim.
+
+  - key: committed_to_lt_cdr
+    type: scalar
+    writer_line: 204
+    readers: []
+    prompt_passthrough: true
+
+  - key: days_since_commitment
+    type: scalar
+    writer_line: 205
+    readers: []
+    prompt_passthrough: true
+
+  - key: why_now
+    type: scalar
+    writer_line: 206
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q1 answer. May be null (question dropped in Test #15.4 / B2
+      — old data round-trips).
+
+  - key: definition_of_winning
+    type: scalar
+    writer_line: 207
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q2 answer. Same status as why_now — may be null.
+
+  - key: known_injuries
+    type: list
+    writer_line: 209
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q3. Bridged to profile.injuries via InductionService.
+
+  - key: typical_wake_time
+    type: scalar
+    writer_line: 210
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q4. Bridged to profile.wake_up_time.
+
+  - key: preferred_workout_time
+    type: scalar
+    writer_line: 211
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q5. Bridged to profile.preferred_workout_time (migration
+      063).
+
+  - key: body_part_priorities
+    type: list
+    writer_line: 213
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Muster Q5 (renumbered). Bridged first-element to
+      profile.physique_focus.
+
+  - key: pr_timeline_summary
+    type: map
+    writer_line: 180
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      {total_prs, recent_prs[]}. Closes audit P1 G-10.
+
+  - key: goal_changed_at
+    type: scalar
+    writer_line: 181
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      ISO timestamp. Null when goal never changed.
+
+  - key: body_measurements
+    type: map
+    writer_line: 182
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Latest cm per type (chest/waist/hips/arms).
+
+  - key: onboarding_completed_at
+    type: scalar
+    writer_line: 183
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      ISO timestamp. Migration 036.
+
+  - key: phase_transitions
+    type: list
+    writer_line: 184
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Last 3 phase change events from progress.phase_history. Write side
+      is planned (not yet shipped) — read side is null-safe.
+
+  - key: recent_meal_deletes
+    type: list
+    writer_line: 185
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      Last 5 food-log deletions from nutritionBox.recent_deletes.
+
+# ── Persisted-snapshot fields written by other Edge Functions ──────────
+#
+# These keys are NOT emitted by buildAiContext but ARE keys read off
+# user_daily_snapshots.snapshot_json. They are written by OTHER Edge
+# Functions and are part of the cross-system contract — documented here
+# for completeness so OI-03's gate doesn't false-flag them.
+extra_server_written_keys:
+  - key: notification_preferences
+    written_by: client (legacy path — not visible in current
+      buildAiContext) OR a future write path
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 509 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 132 }
+      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 196 }
+      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 79 }
+      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 52 }
+      - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 197 }
+    status: orphan_writer
+    notes: |
+      5 readers but buildAiContext does NOT emit this key today.
+      Likely a debt item — either the writer was retired (Test #11
+      delete-account cleanup?) or readers were added speculatively.
+      OI-03's gate will surface this as a failure for next-batch
+      remediation.
+
+  - key: fitness_summary
+    written_by: rolling-context (nightly cron) -> upserts into
+      snapshot_json.fitness_summary
+    readers: []
+    notes: |
+      Also emitted by buildAiContext (line 83) — bidirectional, see
+      key entry above.
+
+  - key: future_prediction
+    written_by: future-prediction Edge Function
+    readers:
+      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 257 }
+    notes: |
+      Self-read (function caches its own output for re-display).
+
+  - key: beat_my_coach
+    written_by: beat-my-coach Edge Function
+    readers:
+      - { fn: beat-my-coach, file: supabase/functions/beat-my-coach/index.ts, line: 176 }
+    notes: |
+      Self-read (function caches its own output).
+
+  - key: morning_alert
+    written_by: morning-alert Edge Function (self)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 505 }
+    notes: |
+      Self-read (function stores its template alert for later display).
+
+# ── Orphan readers (cron functions reading keys the writer doesn't emit) ──
+#
+# This is a debt list — every entry here is a cross-system contract that
+# will silently degrade because the writer-side (buildAiContext) does NOT
+# emit these keys. Most readers fall back to null safely; some (e.g.
+# morning-alert milestone templates) render generic copy instead of
+# personalized copy when these are null.
+#
+# OI-03's gate must NOT fail on these (they're documented + intentional
+# debt) but SHOULD warn so the list doesn't grow.
+orphan_readers:
+  - key: current_streak_weeks
+    expected_shape: int (top-level)
+    actual_writer_path: snapshot.progress.current_streak_weeks (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 112 }
+    drift_class: nesting_mismatch
+    proposed_fix: |
+      Either (a) writer emits top-level alias, OR (b) reader walks the
+      nested path. Deferred to next batch.
+
+  - key: current_streak_days
+    expected_shape: int (top-level)
+    actual_writer_path: NOT EMITTED by buildAiContext
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 113 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 150 }
+    drift_class: missing_writer
+    proposed_fix: |
+      Either compute as streak_weeks * 7 (current fallback in reader)
+      or add to writer. Reader fallback is acceptable today.
+
+  - key: today_workout_name
+    expected_shape: string (top-level)
+    actual_writer_path: snapshot.today_workout.type (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 114 }
+    drift_class: nesting_mismatch
+
+  - key: total_workouts_done
+    expected_shape: int (top-level)
+    actual_writer_path: snapshot.progress.total_workouts_done (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 115 }
+    drift_class: nesting_mismatch
+
+  - key: recent_pr_exercise
+    expected_shape: string (top-level)
+    actual_writer_path: snapshot.pr_timeline_summary.recent_prs[0].exercise (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 116 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 151 }
+    drift_class: nesting_mismatch
+
+  - key: recent_pr_weight
+    expected_shape: num (top-level)
+    actual_writer_path: snapshot.pr_timeline_summary.recent_prs[0].weight (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 117 }
+    drift_class: nesting_mismatch
+
+  - key: current_weight_kg
+    expected_shape: num (top-level)
+    actual_writer_path: snapshot.profile.current_weight_kg (nested) AND
+      snapshot.latest_weight.current_kg (nested, different unit
+      convention)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 118 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 152 }
+    drift_class: nesting_mismatch
+
+  - key: target_weight_kg
+    expected_shape: num (top-level)
+    actual_writer_path: snapshot.profile.target_weight_kg (nested)
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 119 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 153 }
+    drift_class: nesting_mismatch
+
+  - key: yesterday_calories
+    expected_shape: int (top-level)
+    actual_writer_path: NOT EMITTED — only today's calories are in
+      snapshot.today_nutrition.calories_logged
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 120 }
+    drift_class: missing_writer
+
+  - key: daily_calorie_target
+    expected_shape: int (top-level)
+    actual_writer_path: NOT EMITTED — profile.tdee exists but isn't
+      this exact concept
+    readers:
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 121 }
+    drift_class: missing_writer
+
+  - key: daily_targets.protein
+    expected_shape: num (nested map)
+    actual_writer_path: NOT EMITTED
+    readers:
+      - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 174 }
+    drift_class: missing_writer
+    notes: |
+      Reader explicitly notes "not currently populated by the snapshot
+      writer — kept for forward compat" (index.ts:131-132). Intentional
+      defensive fallback; primary source is `user_profile.protein_g_target`.
+
+# ── Summary stats (for self-consistency test) ──────────────────────────
+summary:
+  total_keys: 48
+  keys_with_at_least_one_reader: 1
+  keys_prompt_passthrough_only: 47
+  edge_functions_audited: 13
+  orphan_readers: 11
+  intentionally_orphan: 0
+  verification_audit_date: 2026-05-17
