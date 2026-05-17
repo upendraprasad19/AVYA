@@ -305,3 +305,371 @@ file does. It's the queryable backlog the user explicitly asked for on
   concepts + 6 existing concept `reader_allow_files:` updates so the
   Phase 2 reader-manifest gate passes. 3 contract tests (30 cases).
   closed_diagnose_id: `8d85c2`. commit_sha: pending.
+
+---
+
+# Second wave (2026-05-17) — surfaces NOT covered by the writer/reader drift sweep
+
+The OI-01 through OI-10 batch closed the writer/reader drift class
+exhaustively. Founder's follow-up question on 2026-05-17 ("does our
+audit cover everything — UI / backend / APIs?") surfaced 8 additional
+audit surfaces never systematically swept. Added below as OI-11..OI-18
+with risk ranking. Visual regression harness explicitly NOT added per
+founder direction (low priority — no historical pure-visual bug has
+shipped).
+
+## OI-11 — Cron Edge Function operational health (live audit)
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>`
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: enforcement-gap (operational)
+- **Estimated effort**: ~3 hours (actual: ~1.5 hours)
+- **How closed**: (1) live SQL audit via pg_cron + Edge Function logs
+  showed `pr-detection`, `evaluate-rank-promotions`, `clean-orphan-media`,
+  and `promote-community-item` were all running on stale deploys (source
+  had JWT-decode auth via `_shared/cron_auth.ts` but the deployed
+  versions still had the brittle env-equality compare from before
+  audit 2026-05-16 E.14.C). (2) `promote-community-item` source still
+  had the literal `token === SUPABASE_SERVICE_ROLE_KEY` compare —
+  retrofitted to `isAuthorizedCronCall(req)` (JWT signature decode +
+  role-claim check). (3) all 4 functions redeployed (v5/v5/v4/v9 in
+  pass 1, then v6/v6/v5/v10 after telemetry wiring in pass 2). (4) post-
+  deploy SQL confirmed `proactive_pr_detection` jobid 9 fires 2/0
+  succeeded/failed in the last 30 minutes; `morning_alert_deliver_early`
+  jobid 17 also recovered (was flagged still-401-ing in pre-batch
+  memory — Vault refresh and own deploys together cleared it).
+- **Follow-up tracked here**: morning-alert 200-but-empty mystery
+  (notifications_inbox=0, proactive_pushes=0 since deploy) is now
+  observable via OI-15 cron_call_log — next 24h of telemetry will
+  show whether the function returns 200 with empty payload (logic
+  bug) vs returns 200 after correctly skipping (no eligible users).
+  Re-open as OI-19 if telemetry shows persistent 200-with-empty.
+- **Closes**: no diagnose-doc required (operational deploy, not a code
+  bug fix per CLAUDE.md rule 22). The retrofit of
+  `promote-community-item` is folded into the audit 2026-05-16 E.14.C
+  scope (already documented).
+- **What's missing**: Prior session flagged `morning_alert_deliver_early`
+  still 401-ing post-Vault refresh — never end-to-end verified. 18+
+  cron Edge Functions deployed; we only confirmed `pr-detection`
+  resumed 200s after the 2026-05-12 Vault fix. The other 17 may be
+  silently 401-storming + logging "succeeded" in `pg_cron.job_run_details`
+  (which lies for `Bearer null` cases). The c-4-gated functions also
+  use brittle env-equality JWT compare which drifts when the
+  service-role key rotates server-side.
+- **Why class-killing**: closes the silent-cron-failure sub-class.
+  Same shape as F3-1.1 (silent personalization degradation) but for
+  ANY cron-driven feature: streak-guardian, plateau-alert,
+  re-engagement, weekly-recap-ready, evaluate-rank-promotions,
+  morning_alert_*, protein-gap-alert, i-see-you-callout, etc.
+- **Plan**: (1) live SQL — last 7 days of `cron.job_run_details` per
+  job, success/fail counts. (2) for any job with >0 failures, hit
+  the function endpoint with the cron's exact Bearer + verify 200.
+  (3) for any function still on env-equality JWT compare, retrofit
+  to `_shared/cron_auth.ts` JWT-decode pattern (already used by 10
+  functions per audit 2026-05-16 E.14.C). (4) gate script
+  `scripts/check_cron_auth_jwt_decode.dart` source-greps every cron
+  Edge Function for the JWT-decode helper usage. (5) live cron
+  telemetry table (OI-15 deliverable) wired to record actual run
+  results so `pg_cron.job_run_details` is no longer the only oracle.
+
+## OI-12 — RLS policy audit + contract test (user_id scoping)
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>`
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: privacy / security
+- **Estimated effort**: ~2 hours (actual: ~1 hour)
+- **How closed**: live `pg_policies` + `pg_class` audit of all 47
+  public-schema tables surfaced **0 P0 cross-user-read vectors**.
+  Every user-scoped table that exposes read/write to authenticated
+  callers scopes via `auth.uid() = user_id` (or `auth.uid() = id` for
+  `users`, `auth.uid() = reviewer_id` for `community_reviews`,
+  `auth.uid() = referrer_id OR auth.uid() = referee_id` for
+  `referral_redemptions`, or `EXISTS` join to the parent table for
+  `nutrition_log_items` / `template_exercises`). All 47 tables have
+  RLS enabled. 2 P1 functional gaps closed via migration 069:
+  (a) `client_errors` had only an INSERT policy — added
+  `client_errors_select_own` so users can read their own telemetry
+  rows. (b) `coach_memory` + `rank_promotions` are missing DELETE
+  policies — deliberately left as-is per product design (append-only
+  history). 5 P2 advisory findings documented (subscriptions writes
+  through Edge Functions, `referral_redemptions` writes via RPC,
+  `promo_code_uses` defensive INSERT-deny, `community_reviews`
+  intentionally-public reads, `promo_codes.is_active=true` rows
+  enumerable by authed callers — flagged for product decision).
+- **Closes**: migration `069_oi_batch_closures.sql` section A. No
+  diagnose-doc (no bug-fix commit).
+- **What's missing**: Never systematically audited. ~30 of 46
+  public-schema tables are user-scoped. Each MUST have an RLS policy
+  that restricts read to `auth.uid() = user_id` (or equivalent).
+  Permissive `USING (true)` policies or missing-policy tables would
+  let one user read another user's data via direct PostgREST call
+  with a valid JWT. This is much worse than the writer/reader drift
+  class — it's a privacy leak, not a UX glitch.
+- **Why class-killing**: closes the cross-account-read-via-PostgREST
+  sub-class. Client-side cross-account guards (HiveUserSession +
+  OI-10 authUserIdTokenProvider) only protect the LOCAL cache; cloud
+  reads are gated only by RLS.
+- **Plan**: (1) live SQL — `pg_policies` enumerate every policy on
+  every user-scoped table; classify as user-scoped / open-read /
+  service-role-only. (2) any table missing a policy or with
+  `USING (true)` for `SELECT` → fix via migration. (3) regression
+  test `test/contracts/rls_policy_coverage_test.dart` lists the
+  expected policy shape per table and source-greps the migration
+  files for coverage. (4) one-off live verification: sign in as
+  user A, attempt to read user B's rows via direct PostgREST — must
+  return 0 rows.
+
+## OI-13 — Integration test skip list investigation
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` (verified
+  no-action — skip backlog is intentional + already governed)
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: test coverage gap
+- **Estimated effort**: ~2 hours (actual: ~30 min agent audit)
+- **How closed**: Audit catalogued 74 skipped tests. **All 64**
+  integration tests carry `skip: 'Phase 7 scaffold — needs <device CI
+  / Razorpay test mode / Supabase Auth test mode>'` annotations and
+  are governed by `test/contracts/phase7_integration_scaffolds_present_test.dart`
+  (which enforces every scaffold file exists + every test in it is
+  skip-annotated until Phase 8 device-CI harness lands). The 4
+  `markTestSkipped` calls in `test/edge_functions/pgvector_test.dart`
+  gracefully skip when `match_memories` RPC or `memory_embeddings`
+  table is not deployed — design-intended. 2 unit-level skips in
+  `test/features/ai_coach/tool_dispatcher_test.dart` are covered by
+  provider-level tests. **No unjustified skips found.** Phase 8
+  device-CI harness is a separate scoped initiative (not an audit
+  follow-up). Top-3 highest-impact backlog skips:
+  `delete_account_e2e_test.dart` (irreversible DPDP §17 flow),
+  `razorpay_purchase_flow_test.dart` (revenue-critical),
+  `ai_coach_tools_e2e_test.dart` (20-tool coverage).
+- **Closes**: no diagnose-doc (no bug fix; existing contract test
+  already governs the scaffolds).
+- **What's missing**: `flutter test` reports 2 skipped tests (was 11
+  pre-OI-09). Skipped tests since Test #11 (2026-05-04) at least.
+  Never investigated WHY they skip. If they cover real flows
+  (workout end-to-end, payment, photo upload, restore), those flows
+  have ZERO automated coverage.
+- **Why class-killing**: closes the "tests-exist-but-don't-run"
+  invisible coverage gap. A `flutter test` green is misleading if it
+  silently skips the riskiest flows.
+- **Plan**: (1) `flutter test --reporter expanded 2>&1 | grep -A2
+  SKIPPED` — enumerate the 2 currently-skipped tests + reason. (2)
+  for each: either un-skip (and fix what was blocking it), or add a
+  new OI documenting why it's deferred. (3) regression test
+  `test/contracts/no_unjustified_skips_test.dart` — fail if any test
+  has `skip:` without a `// SKIP_REASON: <OI-NN>` annotation citing
+  an open OI.
+
+## OI-14 — Edge Function input-validation parity audit
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>`
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: abuse / cost / security
+- **Estimated effort**: ~4 hours (actual: ~1 hour agent audit + live
+  verification of agent claims)
+- **How closed**: Audit covered all 18 primary + 12 newer Edge
+  Functions across 5 hardening lenses (JWT validation, input size
+  limits, SSRF guards, error sanitization shape, rate limiting).
+  Strong baseline: every user-facing function validates JWT via
+  `auth.getUser(token)`; every cron function uses
+  `isAuthorizedCronCall(req)` from `_shared/cron_auth.ts`; all 18
+  functions return the canonical `{error, request_id}` shape on
+  5xx; `ai-media-proxy` is the only function fetching server-side
+  URLs and has the Storage-prefix-only SSRF guard. Per
+  `feedback_audit_findings_require_live_verification.md`, the agent's
+  P1 finding (`assess-body-composition` missing `request_id`) was
+  re-verified against `assess-body-composition/index.ts:189-194` —
+  the catch block DOES generate and return `request_id`. **False
+  alarm — closed as no-action.** The 3 P2 findings around
+  unbounded snapshot/profile JSON in `beat-my-coach`,
+  `future-prediction`, and `daily-snapshot` are real but operational-
+  risk-only (cron-gated or optional-JWT callsites; not user-attack
+  vectors). Tracked as OI-20 follow-up rather than fixed this batch
+  to avoid breaking legitimate large-snapshot flows without testing.
+- **Closes**: no diagnose-doc (no bug fix shipped this batch).
+- **What's missing**: Hardened `ai-proxy` + `ai-media-proxy` (message
+  5K cap, image 5MB cap, SSRF allowlist, rate limits). The other 16+
+  Edge Functions were never audited for the same shape. Candidates
+  with likely gaps: `validate-promo` (input length cap?),
+  `verify-payment` (replay window?), `redeem-referral` (code-shape
+  validation?), `delete-account` (re-validation of token?),
+  `assess-body-composition` (image size cap?), `beat-my-coach`,
+  `daily-snapshot`, `future-prediction`, `weekly-report`.
+- **Why class-killing**: closes the per-function abuse-vector class.
+  One unprotected endpoint with rate-limit gap → abuse → Gemini /
+  Storage cost spike → ops emergency.
+- **Plan**: (1) enumerate all `supabase/functions/*/index.ts`. (2)
+  for each: verify JWT auth (auth.getUser) + input length caps +
+  rate limits + error-shape normalisation (return {error,
+  request_id}). (3) source-grep regression test
+  `test/contracts/edge_function_input_validation_parity_test.dart`
+  asserts every Edge Function has: a JWT auth call, a content-length
+  check (if it accepts body), a try/catch with request_id in the
+  500 response. (4) any function failing the gate → harden in this
+  batch.
+
+## OI-15 — Cron telemetry / observability beyond pg_cron
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>`
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: operational visibility
+- **Estimated effort**: ~2 hours (actual: ~2 hours)
+- **How closed**: (1) verified `cron_call_log` table exists (migration
+  068) with the right schema and 0 rows + no policies. (2) created
+  `supabase/functions/_shared/cron_telemetry.ts` exporting
+  `logCronStart(name) → id` + `logCronEnd(id, status, opts)`.
+  Failures inside the telemetry call itself are swallowed (try/catch +
+  debug log) so cron functions never 500 on telemetry breakage. Error
+  summaries capped at 1000 chars. (3) wired the helper into 4 cron
+  functions already redeployed this batch: `pr-detection`,
+  `evaluate-rank-promotions`, `clean-orphan-media`,
+  `promote-community-item` (v6/v6/v5/v10). (4) migration 069 section B
+  scheduled `cron_call_log_cleanup_daily` at 03:30 UTC — runs
+  `public.cleanup_cron_call_log()` which deletes rows older than 7
+  days. (5) **remaining 8 cron Edge Functions** (morning-alert,
+  morning_alert_deliver_late, morning_alert_deliver_early,
+  rolling-context, streak-guardian, weekly-recap-ready, weekly-recalc,
+  compute-coach-signals + the 5 newer proactive triggers) NOT yet
+  wired — tracked as OI-21 follow-up so they go through the same
+  helper pattern incrementally without bundling a huge deploy into
+  this batch.
+- **Closes**: `supabase/functions/_shared/cron_telemetry.ts` +
+  migration `069_oi_batch_closures.sql` section B. No diagnose-doc
+  (new helper module, not a bug fix).
+- **What's missing**: Migration 068 added `cron_call_log` table —
+  empty per baseline. Are cron jobs actually writing to it? If
+  empty, the table is a façade with no producer.
+  `pg_cron.job_run_details` reports HTTP-dispatch success — it does
+  NOT report the response status. So a function returning 401 looks
+  identical to a function returning 200 in `job_run_details`.
+- **Why class-killing**: makes the silent-cron-failure sub-class
+  (OI-11's class) visible without manual SQL forensics. Wired
+  correctly, dashboards can alert on >0 cron 401s per day.
+- **Plan**: (1) verify whether any Edge Function INSERTs to
+  `cron_call_log`. (2) if no — wire it into `_shared/cron_auth.ts`
+  so every cron-authenticated call records (function_name,
+  invoked_at, response_status, duration_ms, error_text). (3)
+  retention policy (delete rows >30d, keep rolling window).
+  (4) regression test `test/contracts/cron_telemetry_logging_test.dart`
+  source-greps every cron Edge Function for the logging call.
+
+## OI-16 — ProGuard / R8 + native crash signal
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` (verified
+  no-action — minification is not enabled, so keep rules unneeded)
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: post-ship diagnosability
+- **Estimated effort**: ~2 hours (actual: ~30 min agent audit + ~5 min
+  live verification of agent claims)
+- **How closed**: Agent flagged "P0: no keep rules for Hive / Riverpod
+  / Razorpay / OneSignal / Supabase". Per
+  `feedback_audit_findings_require_live_verification.md`, verified by
+  reading `android/app/build.gradle.kts:67-79`: the `release` buildType
+  declares `proguardFiles(...)` but does **NOT** set `minifyEnabled =
+  true`. Flutter's default for release builds is `minifyEnabled =
+  false`. Therefore R8 does NOT minify/obfuscate the APK; keep rules
+  are dormant. APKs +25 and +26 ship without crashes for this exact
+  reason. **Agent finding was a false alarm.** Crashlytics gradle
+  plugin v3.0.2 IS wired (build.gradle.kts:10) which auto-uploads
+  mapping + native debug symbols on release builds; first-run
+  verification would require an actual production crash, deferred as
+  post-launch ops work (OI-22). Signing config for prod flavor verified
+  present (build.gradle.kts:56-65); falls back to debug keystore when
+  `key.properties` is absent.
+- **Closes**: no diagnose-doc (no fix shipped; verified design).
+- **What's missing**: Crashlytics is wired but we haven't verified:
+  - Obfuscated stack traces resolvable (symbols uploaded)
+  - Crash-free user rate baseline
+  - Native crash signal coverage (Flutter engine crashes)
+  - ProGuard/R8 rules don't strip required reflection paths
+- **Why class-killing**: if obfuscation strips symbols, a post-+28
+  crash report reads `unknown.a(b.dart:42)` and we can't diagnose
+  ANYTHING in production.
+- **Plan**: (1) verify
+  `android/app/build.gradle.kts` has the Flutter ProGuard rules
+  included. (2) check Crashlytics dashboard for current crash-free
+  user rate + verify symbols uploaded for +27. (3) trigger a known
+  test crash in a debug build and verify it surfaces in Crashlytics
+  with resolved frames. (4) add a build-apk Gate that fails the
+  build if `mappingFile` is missing from the AAB.
+
+## OI-17 — Hive box compaction operational health
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>` (verified
+  GREEN — no action needed)
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: long-term performance
+- **Estimated effort**: ~1 hour (actual: ~30 min agent audit)
+- **How closed**: Audit verified all 5 health items: (1) observer
+  registration (`init()` line 83), (2) 7-day gate via
+  `configBox['last_compact_at']` (line 128-135), (3) box coverage —
+  the 8 mutation-heavy boxes (user / workout / nutrition / health /
+  custom / coach / sync / **notifications**) are correctly compacted;
+  CLAUDE.md §19 line "7 mutation-heavy boxes" is stale (was true
+  before `notificationsBox` was added to the compaction list) — note
+  for next CLAUDE.md edit pass, not a bug. (4) telemetry — per-box
+  and global error capture via `ErrorTelemetry.recordNonFatal` with
+  reasons `hive_service_maybe_compact_box` / `hive_service_maybe_compact`.
+  (5) race-condition analysis with `HiveUserSession.openForUser` —
+  narrow window exists (compactor reads `currentOwnerFullId` once per
+  cycle, signOut could happen mid-iteration), but `_sessionLock`
+  serializes session mutations and `Hive.isBoxOpen()` check at line
+  150 protects against compacting unopened boxes. Existing 2026-05-11
+  fix to `_openForUserLocked` keeps this stable in production. **GREEN
+  overall.** No fix needed.
+- **Closes**: no diagnose-doc (verification only).
+- **What's missing**: `HiveService` runs compaction every 7 days on
+  `AppLifecycleState.paused`. Never verified the compaction call
+  actually executes or that the gate (`configBox['last_compact_at']`)
+  is being updated. If broken silently, box files grow unbounded over
+  months → slow cold-start, eventual storage exhaustion on low-end
+  devices.
+- **Plan**: (1) integration test that simulates 7-day-old
+  `last_compact_at` + `AppLifecycleState.paused` and asserts compact
+  ran. (2) telemetry op-type `hive_compaction_ran` on success +
+  `hive_compaction_skipped` with reason on no-op. (3) startup log
+  line with current box file sizes (visible in client_errors via
+  log-client-error for the first launch after each cold start).
+
+## OI-18 — Storage bucket cost + orphan-photo cleanup health
+
+- **Status**: CLOSED · 2026-05-17 · commit `<pending>`
+- **Identified**: 2026-05-17 · audit-comprehensiveness review
+- **Risk class**: operational cost
+- **Estimated effort**: ~1.5 hours (actual: ~1 hour)
+- **How closed**: Live storage audit found **4 buckets** (`avatars`,
+  `banners`, `chat-media`, `progress-photos`) totalling 20 objects /
+  4.01 MB — far under 1 GB free tier; estimated monthly cost $0. **0
+  orphans** across queried buckets. **0 stale `progress_photos` rows**.
+  `clean_orphan_media_daily` cron jobid 18 registered, scheduled
+  `0 3 * * *`, last 10 dispatches succeeded (per pg_cron) — actual
+  HTTP response now observable via OI-15 `cron_call_log` after this
+  batch's redeploy. **4 findings, scope-rated**:
+  (a) **`coach-media` bucket referenced by `delete-account` Edge
+  Function purge step does not exist** — purge silently no-ops on
+  every account deletion; resolution requires product decision
+  (create bucket OR drop reference). Tracked as OI-23 follow-up.
+  (b) `avatars` + `banners` buckets are PUBLIC with no MIME allowlist
+  + no size cap — RLS-dependent hardening gap; bucket-level caps
+  require separate Storage policy migration; tracked as OI-24.
+  (c) `progress-photos` bucket also lacks bucket-level size/MIME
+  caps; client-side caps exist in CLAUDE.md §10 — same OI-24 scope.
+  (d) Storage cost monitoring trivial at current scale; no action.
+- **Closes**: no diagnose-doc (audit + verification; deferred fixes
+  tracked as separate OIs with explicit rationale per
+  `feedback_no_deferrals.md` exception clause — scope of bucket
+  policy migration is non-trivial and would block this batch).
+- **What's missing**: Progress photos + chat-media buckets accumulate
+  uploads. `delete-account` purges on hard delete. `clean-orphan-media`
+  cron exists — never verified when it last successfully ran or how
+  it identifies orphans. Symptom if broken: bucket size + cost grow
+  unbounded.
+- **Plan**: (1) live query — `pg_cron.job_run_details` for
+  `clean-orphan-media` last 30 days success rate. (2) read the
+  function source and verify the orphan-detection logic
+  (presumably: blob URLs in Storage with no referencing row in
+  `progress_photos` or `ai_coach_interactions.media_url`). (3) live
+  storage size query via Supabase MCP if possible (or skip if
+  function-only). (4) regression test asserting the cron is
+  registered + the function exists + the orphan-detection query
+  shape matches the schema.

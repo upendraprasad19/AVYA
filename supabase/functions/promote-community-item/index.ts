@@ -21,6 +21,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -53,14 +55,19 @@ serve(async (req: Request) => {
   }
   const token = authHeader.slice("Bearer ".length);
 
-  // ── Caller-identity gate (C-5) ───────────────────────────────────────
+  // ── Caller-identity gate (C-5 + 2026-05-17 OI-11 retrofit) ──────────
   // Three accepted paths:
-  //   1. Service-role key (cron / dashboard / MCP) — literal match
+  //   1. Service-role JWT (cron / dashboard / MCP) — verified via
+  //      `isAuthorizedCronCall` which decodes the JWT signature against
+  //      SUPABASE_JWT_SECRET and requires `role === 'service_role'`.
+  //      Pre-fix this was a brittle `token === SUPABASE_SERVICE_ROLE_KEY`
+  //      literal compare — broke silently when Vault JWT and env-injected
+  //      key drifted, producing the 401-storm class (OI-11 root cause).
   //   2. Authenticated admin JWT — user.id ∈ ADMIN_USER_IDS
   // Everything else is rejected. Anon JWT is rejected via path 2 because
   // anon JWT has no user_id claim → auth.getUser returns null.
 
-  const isServiceRole = (token === SUPABASE_SERVICE_ROLE_KEY);
+  const isServiceRole = await isAuthorizedCronCall(req);
 
   if (!isServiceRole) {
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -81,6 +88,8 @@ serve(async (req: Request) => {
     }
   }
 
+  const logId = await logCronStart("promote-community-item");
+
   try {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -90,12 +99,17 @@ serve(async (req: Request) => {
     // ── Promote exercises ────────────────────────────────────────
     const exercisePromotions = await promoteExercises(admin);
 
+    await logCronEnd(logId, "success", { httpStatus: 200 });
     return ok({
       ok: true,
       foods_promoted: foodPromotions,
       exercises_promoted: exercisePromotions,
     });
   } catch (err) {
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      errorSummary: String(err),
+    });
     return serverError("promote-community-item", err);
   }
 });

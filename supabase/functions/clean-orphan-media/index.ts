@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { isAuthorizedCronCall } from '../_shared/cron_auth.ts';
+import { logCronStart, logCronEnd } from '../_shared/cron_telemetry.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -37,6 +38,7 @@ serve(async (req: Request) => {
   }
 
   const requestId = crypto.randomUUID().split('-')[0];
+  const logId = await logCronStart('clean-orphan-media');
   const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
@@ -47,6 +49,11 @@ serve(async (req: Request) => {
 
     if (error) {
       console.error(`[clean-orphan-media] request_id=${requestId} rpc_error`, error);
+      await logCronEnd(logId, 'failed', {
+        httpStatus: 500,
+        requestId,
+        errorSummary: String(error),
+      });
       return new Response(
         JSON.stringify({ error: 'Internal server error', request_id: requestId }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -65,12 +72,18 @@ serve(async (req: Request) => {
     }
 
     console.log(`[clean-orphan-media] request_id=${requestId} scanned=${scanned} deleted=${deleted}`);
+    await logCronEnd(logId, 'success', { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({ scanned, deleted, request_id: requestId }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error(`[clean-orphan-media] request_id=${requestId}`, err);
+    await logCronEnd(logId, 'failed', {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: 'Internal server error', request_id: requestId }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
