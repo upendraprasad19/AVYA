@@ -151,7 +151,11 @@ class _Reader {
 ///     readers:
 ///       - { fn: <fn>, file: <path>, line: <int> }
 List<_Key> _extractKeys(String yaml) {
-  final lines = yaml.split('\n');
+  // 2026-05-17 fix: strip `\r` after split so regex `.+$` matches
+  // correctly on CRLF-terminated files. Pre-fix the gate exited 2
+  // ("No keys parsed") on any clone with CRLF line endings (Windows
+  // default + Git autocrlf on checkout).
+  final lines = yaml.split('\n').map((l) => l.endsWith('\r') ? l.substring(0, l.length - 1) : l).toList();
   // Find start of `keys:` block (top-level, not nested in orphan_readers).
   var inKeys = false;
   var inReaders = false;
