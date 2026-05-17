@@ -9,12 +9,17 @@
 // Special cases:
 //   - If backups/apk_sizes.json doesn't exist → create it as {} and exit 0.
 //   - If APK file doesn't exist → exit 0 (script run before build).
+//     UNLESS --release is passed: missing APK is then FATAL (exit 1)
+//     so release pipelines don't silently green-check (OI-33,
+//     audit-2026-05-17 Hermes F8).
 //   - If --record flag is passed: records the current APK size into
 //     backups/apk_sizes.json under the current pubspec.yaml version.
 //
 // Usage:
-//   dart run scripts/check_apk_size_within_bounds.dart            # check only
-//   dart run scripts/check_apk_size_within_bounds.dart --record   # check + record
+//   dart run scripts/check_apk_size_within_bounds.dart                # check only (skip OK)
+//   dart run scripts/check_apk_size_within_bounds.dart --release      # check only (missing APK = FAIL)
+//   dart run scripts/check_apk_size_within_bounds.dart --record       # check + record
+//   dart run scripts/check_apk_size_within_bounds.dart --release --record
 
 import 'dart:convert';
 import 'dart:io';
@@ -25,6 +30,11 @@ void main(List<String> args) async {
       '$projectRoot/build/app/outputs/flutter-apk/app-prod-release.apk';
   final sizesPath = '$projectRoot/backups/apk_sizes.json';
   final shouldRecord = args.contains('--record');
+  // OI-33 — release mode: missing APK is FAIL instead of SKIP. Wire
+  // this from the /build-apk skill's gate invocation step (after the
+  // flutter build apk call) so a build that produced no artifact is
+  // caught loud-and-early instead of silent-green.
+  final releaseMode = args.contains('--release');
 
   // ── 1. Initialize sizes file if missing ───────────────────────────────────
 
@@ -42,6 +52,14 @@ void main(List<String> args) async {
 
   final apkFile = File(apkPath);
   if (!apkFile.existsSync()) {
+    if (releaseMode) {
+      // OI-33 — silent-skip is a release-pipeline foot-gun. Fail loud.
+      stderr.writeln(
+          '[Gate 13] FAIL — --release flag set but APK not found at $apkPath.');
+      stderr.writeln(
+          '  Either run flutter build apk first, or drop --release for a dry-run check.');
+      exit(1);
+    }
     stdout.writeln(
         '[Gate 13] SKIP — APK not found at $apkPath (run after build). Exit 0.');
     exit(0);

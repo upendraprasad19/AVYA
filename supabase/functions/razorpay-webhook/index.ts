@@ -291,6 +291,14 @@ serve(async (req: Request) => {
     const razorpayPaymentId = paymentEntity.id;
     const razorpaySignature = signature;
 
+    // OI-26 (audit-2026-05-17 Hermes F1) — `supabaseClient` MUST be declared
+    // BEFORE the H-19 idempotency pre-SELECT below. Pre-fix the const lived
+    // at the user-id-validation block ~130 lines down, leaving the SELECT in
+    // temporal dead zone → ReferenceError on every webhook invocation that
+    // wasn't an early-return (HMAC fail / age fail). Razorpay retried for
+    // 24h; users paying never unlocked PRO. closes-diagnose: see below.
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
     // H-19 (audit-2026-05-11) — idempotency pre-SELECT moved BEFORE
     // auto-capture. Pre-fix the order was capture-then-pre-SELECT, so
     // a replayed `payment.authorized` for an already-captured payment
@@ -427,8 +435,6 @@ serve(async (req: Request) => {
         },
       );
     }
-
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // ── Derive plan from amount (primary — CLAUDE.md §16 rule 1) ───────────
     // Plan is determined from the actual payment amount, NOT from

@@ -43,7 +43,15 @@ serve(async (req: Request) => {
 
   try {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: candidates, error } = await supabaseClient.rpc('find_orphan_coach_media', {
+    // OI-30 (audit-2026-05-17 Hermes F5) — switched to chat-media. Migration
+    // 070 designates `coach-media` as long-term consented retention (user
+    // explicitly saved the photo for future reference); `chat-media` is the
+    // transient analysis bucket with documented 30-day TTL for free users.
+    // Pre-fix this RPC + the storage.remove below targeted `coach-media`,
+    // which would silently delete consented saves. Migration 071 renamed
+    // the RPC + flipped the bucket filter; the old function is dropped to
+    // make any stale caller fail loudly.
+    const { data: candidates, error } = await supabaseClient.rpc('find_orphan_chat_media', {
       p_cutoff: cutoff,
     });
 
@@ -67,7 +75,7 @@ serve(async (req: Request) => {
       // Re-check isPro at delete time — user may have upgraded mid-window.
       const isPro = await rechecksIsPro(supabaseClient, obj.user_id);
       if (isPro) continue;
-      await supabaseClient.storage.from('coach-media').remove([obj.path]);
+      await supabaseClient.storage.from('chat-media').remove([obj.path]);
       deleted++;
     }
 

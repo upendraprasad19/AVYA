@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,10 +91,22 @@ serve(async (req: Request) => {
     });
   }
 
+  // OI-31 (audit-2026-05-17 Hermes F6) — cron-only function. Public POST
+  // pre-fix could trigger expensive Gemini summarization fan-out across
+  // every user with >50 messages — both a cost vector AND a DoS vector
+  // (one POST burns Gemini quota for the whole user base).
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] rolling-context unauthorized; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   const logId = await logCronStart("rolling-context");
 
   try {
-    // This is a cron job — uses service role key, no JWT validation needed
+    // Auth verified above (OI-31). Service role key is safe to use here.
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Find users with >50 messages in ai_coach_interactions

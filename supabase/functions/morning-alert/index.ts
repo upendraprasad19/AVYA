@@ -7,6 +7,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { istDayOfWeek } from "../_shared/ist_date.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -570,6 +571,18 @@ serve(async (req: Request) => {
       status: 405,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // OI-31 (audit-2026-05-17 Hermes F6) — cron-only function. Blast radius
+  // is high: a public POST could trigger AI-generation + push notification
+  // fan-out to every user in the morning quarter window. Helper verifies
+  // JWT signature + role-claim === 'service_role'.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] morning-alert unauthorized; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   const logId = await logCronStart("morning-alert");

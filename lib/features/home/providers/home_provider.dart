@@ -5,11 +5,13 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
-import 'package:icanbefitter/core/services/streak_progress_service.dart';
+// OI-38 (2026-05-17) — streak_progress_service + ist_date imports
+// dropped. _refillIfNewWeek() moved to StreakProgressService.refillIfNewWeek()
+// and is now invoked from DayRolloverObserver / splash, not from
+// StreakFreezeNotifier.build().
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
-import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -254,55 +256,15 @@ final streakProvider =
 class StreakFreezeNotifier extends Notifier<int> {
   @override
   int build() {
+    // OI-38 (audit-2026-05-17 Hermes C3) — build is now READ-ONLY.
+    // Pre-fix `_refillIfNewWeek()` fired inside build, a Riverpod
+    // write-on-read anti-pattern. Refill orchestration moved to
+    // `StreakProgressService.refillIfNewWeek()` and invoked from
+    // `DayRolloverObserver._doRolloverWithRef` (every rollover; idempotent
+    // for non-Monday calls) + splash post-restore (first launch).
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    _refillIfNewWeek();
     final progress = UserRepository.instance.getProgress();
     return (progress?['streak_freezes_available'] as int?) ?? 1;
-  }
-
-  /// Refills streak freezes weekly with LADDER semantics. Runs on any app
-  /// launch — checks if the most recent Monday has passed since last refill.
-  ///
-  /// Ladder rules (APK Test #14 / Bug D.1):
-  ///   - free user max = 1; PRO user max = 3
-  ///   - on each Monday: `available = min(available + 1, max)`
-  ///   - never over-fills past max; never decreases here (use elsewhere)
-  ///   - idempotent: same Monday twice = no-op (gated by lastRefill compare)
-  ///
-  /// Pre-Test-#14 behavior was reset-to-max every Monday: a PRO user who
-  /// burned all 3 freezes in week 1 got back to 3 next Monday with no
-  /// memory of usage. Founder direction (2026-05-10) flipped this to a
-  /// ladder so freezes feel earned and saved rather than guaranteed.
-  ///
-  /// closes-diagnose: 2026-05-10-freeze-ladder
-  void _refillIfNewWeek() {
-    // APK Test #12.6 IST sweep — see feedback_use_ist_throughout.md
-    // mondayOfIst returns naive-IST DateTime; format components directly
-    // to avoid double-shift through istDateStr.
-    final thisMonday = mondayOfIst(DateTime.now());
-    final progress = UserRepository.instance.getProgress() ?? {};
-    final lastRefill = progress['streak_freezes_last_refill'] as String?;
-    final y = thisMonday.year.toString().padLeft(4, '0');
-    final m = thisMonday.month.toString().padLeft(2, '0');
-    final d = thisMonday.day.toString().padLeft(2, '0');
-    final thisMondayStr = '$y-$m-$d';
-
-    // Already refilled for this week's Monday — idempotent guard.
-    if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) return;
-
-    final isPro = SubscriptionService.instance.isPro();
-    final maxFreezes = isPro ? 3 : 1;
-
-    // C-15 (audit-2026-05-11) — refill routed through
-    // StreakProgressService (the sole writer for streak_freezes_*).
-    // Pre-fix, refill + consume both read-modify-wrote these keys
-    // from two independent code paths — easy for a future change to
-    // introduce drift / async interleave. Cross-device race
-    // protected by migration 056's update_streak_progress RPC.
-    StreakProgressService.instance.commitRefill(
-      maxFreezes: maxFreezes,
-      thisMondayStr: thisMondayStr,
-    );
   }
 }
 

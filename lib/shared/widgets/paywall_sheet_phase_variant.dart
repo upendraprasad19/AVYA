@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 
 /// Phase-specific paywall bottom sheet.
 ///
 /// Shown when a free user taps a locked phase card or the lock icon on
 /// weeks 5-12 in the week selector. Emphasises the phase-unlock value prop
 /// rather than a generic features list.
+///
+/// **OI-40 (audit-2026-05-17 Hermes C6):** This is a "soft pitch" sheet
+/// with no purchase logic of its own. The UPGRADE TO PRO CTA escalates
+/// to the canonical `showPaywallSheet` (the SOLE purchase entry point).
+/// Pre-fix the CTA just `Navigator.pop()`'d with a TODO — leaving free
+/// users stuck. Now there's exactly one purchase pipeline, but two
+/// surface variants for context-appropriate pitch.
 void showPaywallSheetPhaseVariant(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -114,10 +122,12 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
             height: 52,
             child: ElevatedButton(
               onPressed: () {
+                // OI-40 — escalate to the canonical paywall sheet so the
+                // user actually reaches a purchase pipeline. Pre-fix this
+                // popped without ever calling SubscriptionService.startPurchase
+                // — a free user trying to unlock Phases 2-12 hit a dead end.
                 Navigator.of(context).pop();
-                // Pricing / checkout navigation is handled by the
-                // existing PRO upgrade flow (Profile → Subscription).
-                // TODO: wire to direct checkout route once available.
+                showPaywallSheet(context, feature: 'Phases 2-12');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,

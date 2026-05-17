@@ -32,6 +32,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'sync_service.dart';
+import 'subscription_service.dart';
+import '../utils/ist_date.dart';
 import '../../shared/repositories/user_repository.dart';
 
 /// Sole writer for `user_progress.streak_freezes_available`,
@@ -101,5 +103,30 @@ class StreakProgressService {
         '[StreakProgressService] consume: available=$freezesAvailableAfterConsume '
         'usedDates=${usedDatesAfterConsume.length}');
     return freezesAvailableAfterConsume;
+  }
+
+  /// OI-38 (audit-2026-05-17 Hermes C3) — refill orchestrator. Pre-fix the
+  /// equivalent logic lived inside `StreakFreezeNotifier.build()` —
+  /// write-on-read Riverpod anti-pattern. Now lives here; callers are
+  /// `DayRolloverObserver._doRolloverWithRef` (every rollover) +
+  /// splash post-restore (first launch). Idempotent — same Monday twice
+  /// is a no-op. Returns the new available count, or null if no refill
+  /// happened (already done this week).
+  int? refillIfNewWeek() {
+    final thisMonday = mondayOfIst(DateTime.now());
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final lastRefill = progress['streak_freezes_last_refill'] as String?;
+    final y = thisMonday.year.toString().padLeft(4, '0');
+    final m = thisMonday.month.toString().padLeft(2, '0');
+    final d = thisMonday.day.toString().padLeft(2, '0');
+    final thisMondayStr = '$y-$m-$d';
+
+    if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) {
+      return null;
+    }
+
+    final isPro = SubscriptionService.instance.isPro();
+    final maxFreezes = isPro ? 3 : 1;
+    return commitRefill(maxFreezes: maxFreezes, thisMondayStr: thisMondayStr);
   }
 }

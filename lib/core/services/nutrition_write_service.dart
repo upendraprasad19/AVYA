@@ -264,9 +264,17 @@ class NutritionWriteService {
   }
 
   /// Soft-deletes with undo (matches DeleteNutritionLogNotifier pattern).
+  ///
+  /// When `writeAuditLog: true` (default), also appends a `recent_deletes`
+  /// entry to nutritionBox capped at 10 — used by AI coach to acknowledge
+  /// corrections like "you removed your lunch Biryani entry" without the
+  /// user re-explaining. OI-36 (audit-2026-05-17 Hermes C1) folded this
+  /// behavior INTO the WriteService so DeleteNutritionLogNotifier can
+  /// delegate fully instead of writing recent_deletes directly.
   Future<WriteResult> deleteLog({
     required String logKey,
     bool allowUndo = true,
+    bool writeAuditLog = true,
   }) async {
     final box = HiveService.instance.nutritionBox;
     final raw = box.get(logKey);
@@ -280,6 +288,42 @@ class NutritionWriteService {
     } else {
       _lastDeletedPayload = null;
       _lastDeletedKey = null;
+    }
+
+    // OI-36 — write recent_deletes audit log BEFORE the delete so the
+    // entry is still readable. Only meaningful when the deleted row is a
+    // food log (has name + meal_type + date fields); skipped for
+    // non-meal nutritionBox keys (water logs, etc.) so we don't pollute
+    // the coach's correction history with non-food deletions.
+    if (writeAuditLog && raw is Map) {
+      final hasFoodMeta = (raw['food_name'] != null ||
+              raw['name'] != null) &&
+          raw['meal_type'] != null;
+      if (hasFoodMeta) {
+        try {
+          final deletes = (box.get('recent_deletes') as List?)
+                  ?.whereType<Map>()
+                  .toList() ??
+              <Map>[];
+          deletes.insert(0, {
+            'food_name': raw['food_name'] ?? raw['name'] ?? '',
+            'meal_type': raw['meal_type'] ?? '',
+            'calories': raw['total_calories'] ?? raw['calories'] ?? 0,
+            'deleted_at': DateTime.now().toIso8601String(),
+            'logged_date': raw['date'] ?? '',
+          });
+          while (deletes.length > 10) {
+            deletes.removeLast();
+          }
+          await box.put('recent_deletes', deletes);
+        } catch (e, st) {
+          debugPrint(
+              '[NutritionWriteService] recent_deletes audit failed (non-fatal): $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'nutrition_write_service_audit_log'));
+          // Non-fatal — the delete itself still proceeds.
+        }
+      }
     }
 
     try {

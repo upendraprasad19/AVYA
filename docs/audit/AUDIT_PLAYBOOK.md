@@ -2,6 +2,10 @@
 
 > **When to use this file:** at the start of any multi-pass audit (live DB, schema drift, telemetry, sync, security). Captures the process discipline that the 2026-05-12 dual-pass audit (Master + Codex) refined.
 
+## Lens registry
+
+**Before dispatching agents, pick the lens set from [LENS_REGISTRY.md](LENS_REGISTRY.md).** That file is the canonical 41-lens checklist with charter, trigger, and precedent for each. Modes: `--all` (quarterly), `--security` (pre-launch), `--p0-blockers` (emergency triage).
+
 ## The shape
 
 1. **Run TWO independent passes** (different framing, different agent teams).

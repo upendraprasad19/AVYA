@@ -179,4 +179,54 @@ class WorkoutReadService {
     }
     return out;
   }
+
+  /// OI-39 (audit-2026-05-17 Hermes C5) — cross-date `exlog_*` lookup by
+  /// exercise name. Replaces the inline `workoutBox.values` scans that
+  /// previously lived in `train_provider._getLastPerformance` +
+  /// `exerciseHistoryProvider` (and that would have re-diverged on next
+  /// edit if not consolidated).
+  ///
+  /// Returns logs chronologically sorted (oldest first). Name match is
+  /// exact case-insensitive first, then fuzzy contains ONLY when BOTH
+  /// names are ≥6 chars (prevents "Press" matching "Leg Press").
+  ///
+  /// Each returned map is a defensive copy.
+  List<Map<String, dynamic>> logsForExercise(String exerciseName) {
+    final box = HiveService.instance.workoutBox;
+    final nameLower = exerciseName.toLowerCase();
+    final entries = <MapEntry<DateTime, Map<String, dynamic>>>[];
+
+    for (final entry in box.toMap().entries) {
+      final keyStr = entry.key.toString();
+      // OI-39 — restrict to canonical `exlog_*` rows so we don't pick up
+      // schedule entries / templates / streaks. Pre-OI-39 the provider
+      // filtered on `type == 'exercise_log'` which depended on the writer
+      // stamping that string; safer to gate by key prefix here.
+      if (!keyStr.startsWith('exlog_')) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+
+      final logName = (log['exercise_name'] as String? ?? '').toLowerCase();
+      if (logName.isEmpty) continue;
+      // Exact match first; fuzzy contains only when both names are long
+      // enough to avoid false positives.
+      if (logName != nameLower) {
+        if (nameLower.length < 6 || logName.length < 6) continue;
+        if (!logName.contains(nameLower) && !nameLower.contains(logName)) {
+          continue;
+        }
+      }
+
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+
+      entries.add(MapEntry(date, log));
+    }
+
+    entries.sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => e.value).toList();
+  }
 }
