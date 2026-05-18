@@ -26,6 +26,12 @@ telemetry_op_types:
 cross_account_guard: true
 forbidden_patterns_checked:
   - { pattern: '0xFF00D4FF', absent: true }
+touched_layers_checked:
+  - { tier: 1, name: client_code, status: verified, evidence: "test/contracts/scheduled_workout_status_contract_test.dart green" }
+impact_analysis:
+  callers_audited: []
+  callers_updated_in_this_batch: []
+  callers_unchanged: []
 proposed_fix: route both readers through todayScheduleHelper
 regression_test_planned: [test/contracts/calendar_strip_today_card_same_source_test.dart]
 ---

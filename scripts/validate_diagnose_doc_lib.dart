@@ -12,6 +12,8 @@ const requiredFields = <String>[
   'cloud_columns', 'contract_test_path', 'ist_handling',
   'provider_invalidations', 'telemetry_op_types', 'cross_account_guard',
   'forbidden_patterns_checked', 'proposed_fix', 'regression_test_planned',
+  'touched_layers_checked',
+  'impact_analysis',
 ];
 
 const placeholderPatterns = <String>[
@@ -88,6 +90,23 @@ ValidationResult validateDiagnoseDoc(
         'file:line does not resolve — $relPath line $line outside [1, $lineCount]',
       );
     }
+  }
+
+  // Section: touched_layers_checked must have non-empty body + at least one
+  // entry with verified or fixed_in_this_batch status.
+  final touchedMatch = RegExp(
+    r'^touched_layers_checked:\s*\n((?:\s+-\s.*\n?)+)',
+    multiLine: true,
+  ).firstMatch(fm);
+  if (touchedMatch == null) {
+    return ValidationResult.fail(
+        'touched_layers_checked field is missing or empty');
+  }
+  final touchedBody = touchedMatch.group(1)!;
+  if (!touchedBody.contains(RegExp(r'status:\s*(verified|fixed_in_this_batch)'))) {
+    return ValidationResult.fail(
+        'touched_layers_checked needs at least one entry with status '
+        'verified or fixed_in_this_batch');
   }
 
   return const ValidationResult.ok();
