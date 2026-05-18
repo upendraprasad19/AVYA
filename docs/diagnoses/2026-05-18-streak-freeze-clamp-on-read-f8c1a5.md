@@ -41,6 +41,24 @@ telemetry_op_types:
 cross_account_guard: StreakFreezeNotifier.build watches authUserIdTokenProvider at line 265.
 forbidden_patterns_checked:
   - "Reading streak_freezes_available without clamping against the tier cap from streakFreezeMaxProvider / SubscriptionService.isPro()"
+touched_layers_checked:
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "StreakFreezeNotifier.build clamps available against tier cap on read" }
+  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "one-shot migrator clamps userBox['progress']['streak_freezes_available'] and clears last_refill" }
+  - { tier: 5, name: cloud_sync_outbound, status: verified, evidence: "syncFreezes path writes clamped value going forward" }
+  - { tier: 6, name: cloud_sync_restore, status: verified, evidence: "restoreFromCloudForUser surface clamped on read by Tier 1 fix; cloud column unchanged" }
+  - { tier: 9, name: provider_invalidation, status: verified, evidence: "streakFreezeProvider / streakFreezeMaxProvider invalidation list unchanged" }
+  - { tier: 11, name: ist_correctness, status: verified, evidence: "mondayOfIst boundary preserved at streak_progress_service.dart:116" }
+impact_analysis:
+  callers_audited:
+    - lib/features/home/providers/home_provider.dart (StreakFreezeNotifier.build)
+    - lib/features/home/providers/home_provider.dart (streakFreezeMaxProvider)
+    - lib/core/services/streak_progress_service.dart (commitRefill, commitConsume, refillIfNewWeek)
+    - lib/core/services/sync/sync_health.dart (cloud restore writer)
+  callers_updated_in_this_batch:
+    - lib/features/home/providers/home_provider.dart (StreakFreezeNotifier.build clamps on read)
+    - lib/core/services/<streak_freeze_migrator>.dart (new one-shot Hive repair)
+  callers_unchanged:
+    - lib/core/services/streak_progress_service.dart (commitRefill already clamps on write)
 proposed_fix: |
   Four-layer defense (each independently valuable):
 

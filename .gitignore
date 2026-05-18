@@ -93,3 +93,7 @@ assets/*.pdf
 assets/calisthenics feature.md
 assets/New folder/
 assets/naval pics/
+
+# Per-session baseline files (capture_baseline.dart / compare_baseline.dart)
+baseline.json
+baseline-lints.json

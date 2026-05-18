@@ -33,6 +33,19 @@ telemetry_op_types:
 cross_account_guard: "n/a — UI-only, no per-user storage touched by this path"
 forbidden_patterns_checked:
   - "ScaffoldMessenger.of(ctx).showSnackBar inside a child modal route without first popping intermediate sheets"
+touched_layers_checked:
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "active_workout_screen.dart onAdd handler pops swap sheet before opening create sheet" }
+  - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "UI lifecycle bug, no Hive write" }
+  - { tier: 9, name: provider_invalidation, status: verified, evidence: "todayWorkoutProvider/currentPlanProvider/calendarWeekProvider invalidations unchanged after fix" }
+  - { tier: 12, name: client_server_contract, status: not_applicable, evidence: "no Edge Function or cloud table touched" }
+impact_analysis:
+  callers_audited:
+    - lib/features/train/widgets/exercise_swap_sheet.dart (onAdd/onSelect handlers)
+    - lib/features/train/screens/active_workout_screen.dart (_openCreateAndAutoSwap)
+  callers_updated_in_this_batch:
+    - lib/features/train/screens/active_workout_screen.dart (onAdd path now pops swap sheet first)
+  callers_unchanged:
+    - lib/features/train/widgets/exercise_swap_sheet.dart (picker path already correct)
 proposed_fix: |
   The outer ExerciseSwapSheet at active_workout_screen.dart line 705 stays
   mounted when the user taps "+ ADD EXERCISE" — the onAdd handler at line

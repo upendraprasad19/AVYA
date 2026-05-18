@@ -46,6 +46,25 @@ telemetry_op_types:
 cross_account_guard: ai-proxy validates JWT via auth.getUser(token); ai-media-proxy enforces user-scope on Storage URLs per OI-28 (audit-2026-05-17 Phase B).
 forbidden_patterns_checked:
   - "Sequential await on multiple read-only Supabase SELECTs inside a tool handler bounded by a tight wall-clock budget"
+touched_layers_checked:
+  - { tier: 1, name: client_code, status: verified, evidence: "ai_service.dart _extractError + chat_bubble.dart _buildPhotoFailedTile already render typed HttpError shape from Test #16.1" }
+  - { tier: 7, name: edge_function_handler, status: fixed_in_this_batch, evidence: "getProgressSummary.ts parallelises 5 read-only SELECTs with Promise.all to stay under 3500 ms tool budget" }
+  - { tier: 8, name: edge_function_error_shape, status: fixed_in_this_batch, evidence: "ai-media-proxy HttpError mapping pinned by contract test" }
+  - { tier: 10, name: telemetry, status: verified, evidence: "telemetry op types enumerated for both success and the 4 failure classes" }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "tool_calls cloud column unchanged; client retryColdStart wraps invocation as before" }
+impact_analysis:
+  callers_audited:
+    - supabase/functions/_shared/tools/progress/getProgressSummary.ts
+    - supabase/functions/_shared/tool-loop.ts
+    - supabase/functions/ai-media-proxy/index.ts
+    - lib/core/services/ai_service.dart (chat / chatWithMedia)
+    - lib/features/ai_coach/widgets/chat_bubble.dart (_buildPhotoFailedTile)
+  callers_updated_in_this_batch:
+    - supabase/functions/_shared/tools/progress/getProgressSummary.ts (parallel SELECTs)
+    - supabase/functions/ai-media-proxy/index.ts (HttpError mapping audit)
+  callers_unchanged:
+    - lib/core/services/supabase_service.dart (retryColdStart already wraps Edge Function calls)
+    - lib/features/ai_coach/widgets/chat_bubble.dart (Test #16.1 already added failed tile)
 proposed_fix: |
   Two independent fixes, one per failure.
 

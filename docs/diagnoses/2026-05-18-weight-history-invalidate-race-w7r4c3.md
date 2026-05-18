@@ -37,6 +37,23 @@ cross_account_guard: WeightHistoryNotifier.build watches authUserIdTokenProvider
 forbidden_patterns_checked:
   - "Void-returning Notifier method that fire-and-forgets an async write before caller invalidates the reader provider"
   - "Hand-rolled YYYY-MM-DD from device-local DateTime.now() in any reader of a weight_<istDate> Hive key"
+touched_layers_checked:
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "WeightLogNotifier.logWeight returns Future awaited by WeightLogSheet._save before invalidate" }
+  - { tier: 2, name: hive_local_state, status: verified, evidence: "HealthWriteService.logWeight writes weight_<istDate> correctly" }
+  - { tier: 5, name: cloud_sync_outbound, status: verified, evidence: "syncWeightNow + pushSnapshot + syncProfileNow fan-out unchanged" }
+  - { tier: 9, name: provider_invalidation, status: fixed_in_this_batch, evidence: "weightHistoryProvider invalidation now occurs strictly after Hive box.put resolves" }
+  - { tier: 11, name: ist_correctness, status: verified, evidence: "writer at health_write_service.dart:122 uses istDateStr; reader at home_provider.dart:774 noted as separate adjacent drift" }
+impact_analysis:
+  callers_audited:
+    - lib/features/home/widgets/weight_log_sheet.dart (_save invalidate site)
+    - lib/features/home/providers/home_provider.dart (WeightLogNotifier.logWeight)
+    - lib/features/home/providers/home_provider.dart (WeightHistoryNotifier.build)
+    - lib/features/home/providers/home_provider.dart (TodayWeightLoggedNotifier.build)
+  callers_updated_in_this_batch:
+    - lib/features/home/providers/home_provider.dart (WeightLogNotifier.logWeight returns Future)
+    - lib/features/home/widgets/weight_log_sheet.dart (_save awaits logWeight before invalidate)
+  callers_unchanged:
+    - lib/core/services/health_write_service.dart (writer correct, no change required)
 proposed_fix: |
   Root cause is a writer-completes-after-reader-rebuilds race:
 
