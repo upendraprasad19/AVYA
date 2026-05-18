@@ -10,11 +10,25 @@ status: scaffold
 > This file is auto-loaded by Claude Code when working under `lib/features/home/`.
 > Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
 
-<!-- MIGRATION IN PROGRESS — content from CLAUDE.md will be moved here in Milestone 2 -->
+## Home Screen Layout (Priority Order)
 
-## Single-source-of-truth contracts
+```
+1. Header (name + greeting + avatar + streak counter)
+2. Weekly calendar strip (7 days, color-coded by completion)
+3. Quick actions: Log Workout | Log Meal | Hydration | Sleep
+4. Today's workout card → Start Workout (or DONE + View Card + stats if completed)
+5. Nutrition snapshot (calories + protein vs target)
+6. AI Coach insight (computed from local schedule data — next workout, consistency tips)
+7. Weight sparkline (last 7 entries)
+8. PR snapshot (dynamic — top 4 exercises by volume when key lifts empty)
+9. Recent logged foods
+10. Step counter (Health Connect)
+```
 
-(populated in Milestone 2)
+**Today's Workout Card — Completed State:**
+- Shows: DONE badge (green) + "View Card >" (gold) + best lift + total volume
+- "View Card" opens `WorkoutReceiptSheet` with receipt reconstructed from Hive exercise logs
+- Calendar day detail sheet also shows "View Workout Card" button for completed days
 
 ## Common pitfalls
 

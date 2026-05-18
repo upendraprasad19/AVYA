@@ -14,7 +14,16 @@ status: scaffold
 
 ## Single-source-of-truth contracts
 
-(populated in Milestone 2)
+### Logging types (drives Active Workout UI)
+
+| logging_type | UI Shows |
+|---|---|
+| `weight_reps` | Weight (kg) + Reps + Sets |
+| `bodyweight_reps` | Reps + Sets (no weight input) |
+| `weighted_bodyweight` | Added Weight + Reps + Sets |
+| `timed` | Sets + Duration (seconds) + rest timer |
+| `cardio` | Duration (min) + Distance (km) |
+| `distance` | Distance + load |
 
 ## Common pitfalls
 

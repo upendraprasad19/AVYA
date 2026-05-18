@@ -151,3 +151,92 @@ supabase/
   tasks/                                 # Build pipeline phase files
     BUILD_ORDER.md                       # Phase dependency graph
 ```
+
+---
+
+## Quick orientation (current — from CLAUDE.md §5)
+
+> See `docs/naming_conventions.md` for naming rules + reserved domain glossary. **Read this before introducing new feature names.**
+
+```
+lib/
+  core/{theme, router, constants, services, utils, copy}/   # singletons, GoRouter, theme tokens, BMR
+      utils/exercise_display.dart    # Experience-aware exercise labels
+      copy/wardroom_copy.dart        # Single source for literal Wardroom handoff strings
+                                     #   (eyebrows, CTA labels, onboarding copy, notifications)
+  features/{auth, onboarding, home, train, nutrition, ai_coach, profile}/
+    each: screens/, widgets/, providers/, repositories/, models/
+      onboarding/screens/
+        welcome_screen.dart          # Stepped flow entry — / onboarding (NEW default)
+        goal_screen.dart             # /onboarding/goal (NEW)
+        stats_screen.dart            # /onboarding/stats (NEW)
+        plan_screen.dart             # /onboarding/plan — "REPORT FOR DUTY" CTA (NEW)
+        onboarding_chat_screen.dart  # LEGACY — now only at /onboarding/chat for rollback
+      profile/screens/
+        settings_screen.dart         # Wardroom refresh (PR AC)
+        notifications_screen.dart    # Wardroom notifications inbox (PR AF)
+      profile/providers/profile_completeness_provider.dart  # Tier 1/2 weighted calculation
+      profile/widgets/profile_completeness_card.dart  # Progress bar + missing fields
+      profile/widgets/slim_achievements_card.dart     # Single-line badges row
+      profile/screens/submissions_screen.dart         # Tabbed MY SUBMISSIONS / COMMUNITY
+                                                      #   REVIEW. Canonical route:
+                                                      #   /profile/submissions (S1, APK
+                                                      #   test #1 batch 2026-04-24).
+      profile/screens/my_submissions_screen.dart      # LEGACY — kept only so old
+                                                      #   deep-links to /profile/my-
+                                                      #   submissions keep working. Do
+                                                      #   not add new entry points;
+                                                      #   route new callers at
+                                                      #   /profile/submissions instead.
+  shared/
+    widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
+      wardroom/   # 36 exports (up from 28) — see "Wardroom primitives" in §9.
+                  # Barrel: wardroom.dart. New since PR R (2026-04-18..20):
+                  #   ward_seal_badge.dart            — WardSealBadge + WardSealVariant
+                  #   ward_dispatch_header.dart       — WardDispatchHeader (double gold rule eyebrow)
+                  #   ward_insight_quote.dart         — WardInsightQuote + InsightSegment
+                  #   ward_glass_grid.dart            — WardGlassGrid (8-cell hydration)
+                  #   ward_achievement_strip.dart     — WardAchievementStrip (earned/locked circles)
+                  #   ward_phase_dots.dart            — WardPhaseDots (12-phase row)
+                  #   ward_phase_block.dart           — WardPhaseBlock (roman numeral + START chip)
+                  #   ward_stat_tile.dart             — WardStatTile (mono label + Fraunces numeric)
+                  #   ward_radio_row.dart             — WardRadioRow (gold left-border)
+                  #   ward_toggle.dart                — WardToggle (pill, 150ms crossfade)
+                  #   ward_unit_toggle.dart           — WardUnitToggle (KG/LBS pill)
+                  #   ward_session_row.dart           — WardSessionRow + WardSessionTable
+                  #   ward_category_sidebar.dart      — WardCategorySidebar (rotated mono label)
+    repositories/  user, exercise, food, plan_generator (NEVER modify without approval)
+      plan_generator.dart (re-export shim)
+      plan_engine/             # V4 modular pipeline
+        models.dart            # MuscleSlot, MuscleSlotDay, CSpec (legacy)
+        split_resolver.dart    # Trainer-wisdom splits → MuscleSlotDay[]
+        volume_filter.dart     # Stage 1.5: slots.take(targetCount(exp, daysPerWeek))
+        exercise_selector.dart # 5-attempt cascading fallback
+        plan_generator.dart    # Pipeline orchestrator (generateV4)
+        periodization_engine.dart # DUP + exercise-specific rep_range
+        sequencing_engine.dart # CNS ordering
+        superset_engine.dart   # Pairing
+        cardio_finisher.dart   # Cardio append
+        warmup_cooldown_selector.dart # Warmup/cooldown inject
+
+assets/data/{exercise_library, food_database}.json    # bundled, seeded into Hive on first launch
+supabase/{migrations, functions}/                     # SQL + Edge Functions (TS)
+```
+
+## Single-source-of-truth files
+
+**Don't fork these:**
+
+- `lib/features/train/widgets/workout_receipt_card.dart` — `WorkoutReceiptData.fromExerciseLogs()` (the only receipt builder)
+- `lib/features/train/widgets/edit_workout_log_sheet.dart` — the only completed-workout edit surface (4 entry points route through it)
+- `lib/core/services/day_rollover_service.dart` — `runRolloverNow()` (canonical "today" provider invalidation list)
+- `lib/core/services/subscription_service.dart` — `isPro()` + `gate()` (never read `configBox.get('isPro')` directly)
+- `lib/core/services/ai_service.dart` — `_compactContext()` (the only snapshot trimmer)
+- `lib/shared/repositories/plan_generator.dart` — workout plan generation (CLAUDE rule #14: untouchable without explicit approval)
+- `lib/shared/repositories/plan_engine/volume_filter.dart` — Stage 1.5 target-count trimming (`targetCount(experience, daysPerWeek)`)
+- `lib/core/utils/exercise_display.dart` — Experience-level exercise label formatting
+- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart V4 pipeline tracer. Run this when plan generator output looks wrong; emits `test/plan_generator/v4_diagnostic_output.md`. Mirrors `exercise_repository.queryV4` + `exercise_selector._cascadeFill`; any change to either production file requires an equivalent update to the mirror.
+- `lib/features/nutrition/providers/diet_plan_provider.dart` — ONE reader of `configBox['saved_diet_plan']`. Returns `Map<String, PlannedSlot>` keyed by slot (breakfast/lunch/dinner/snack). Consumed by `TodaysMealsCard` to render "FROM YOUR DIET PLAN" hints on empty slots. `diet_plan_screen._savePlan` invalidates this provider after writing the plan (PR AH.5).
+- `lib/features/profile/providers/weekly_report_data_provider.dart` — ONE source for Weekly Report 4-up sparklines. Reads last-7-days series from `healthBox` (weight, forward-filled), `nutritionBox` (calories + protein, zero-filled), `workoutBox` (0/1 per day). Consumed only by `WeeklyReportCard` (PR AH.8). Invalidate after any mutation if you want real-time refresh; the card is not watched elsewhere.
+- `docs/sot_registry.yaml` — canonical machine-readable registry of every single-source-of-truth concept (writers + readers + regression tests + class constraints). Cross-referenced by every fix involving a writer/reader contract. Keep in sync when this bullet list, the Source-of-Truth Rules, the Hive field-name contract, the Sync fan-out contract, or the Restore-completeness sync sub-section change.
+- `lib/core/services/sync_service.dart` — `SyncService` singleton. Split into 8 part files under `lib/core/services/sync/` via Dart `part`/`part of` + extensions (refactor `refactor/sync-service-part-split`, 2026-05-13). Root file (~1339 lines) keeps: class declaration, singleton, instance fields, static helpers (`_deterministicId`, `_looksLikeUuid`, `_nlogKeyForRestore`, `_customEntityId`, `_hasValue`, `_hasNumber`, `_currentPlatform`, `_currentClientVersion`), cross-domain orchestrators (`checkAndSync`, `pushSnapshot`, `weeklyFullSync`, `restoreFromCloud*`, `pullRecentCrossChannelLogs`), and **infrastructure helpers heavily called by every domain part file** (`_reportSyncFailure`, `_safeRestoreOp`, `_ensureSessionOpen`, `_setTimestamp`, `_getTimestamp`, `_executeUserProfileUpsert`, `drainTelemetryQueue`, `initQueue`, etc.) — these must stay on the class body because Dart extensions cannot dispatch to methods defined on other extensions of the same type. Domain part files: `sync_workout.dart` (~1574), `sync_nutrition.dart` (~428), `sync_health.dart` (~400), `sync_profile.dart` (~349), `sync_community.dart` (~492), `sync_coach.dart` (~217), `sync_restore_completeness.dart` (~284), `sync_realtime.dart` (~121). Public API surface pinned by `test/contracts/sync_service_public_api_snapshot_test.dart`. Fan-out + restore-completeness contracts pinned by `sync_fanout_contract_test.dart` + `restore_completeness_writes_test.dart` (both broadened to scan root + all part files via `test/contracts/_sync_service_source.dart` helper).
