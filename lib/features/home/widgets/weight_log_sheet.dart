@@ -81,13 +81,18 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     final parsed = double.tryParse(_controller.text);
     if (parsed != null && parsed >= 20 && parsed <= 300) {
       _weight = parsed;
     }
 
-    ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
+    // Bug w7r4c3 (APK Test #16.2) — await the HealthWriteService put
+    // before invalidating, otherwise the provider rebuilds reading
+    // stale Hive and the entries-count footer stays at the prior value
+    // while the chart picks up the new dot on a later rebuild.
+    await ref.read(weightLogNotifierProvider.notifier).logWeight(_weight);
+    if (!mounted) return;
     ref.invalidate(weightHistoryProvider);
     ref.invalidate(todayWeightLoggedProvider);
     ref.invalidate(userProfileProvider);

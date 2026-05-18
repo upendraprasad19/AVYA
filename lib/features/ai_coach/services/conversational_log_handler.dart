@@ -32,7 +32,7 @@ class ConversationalLogHandler {
         case LogActionType.water:
           return await _logWater(action.data);
         case LogActionType.weight:
-          return _logWeight(action.data);
+          return await _logWeight(action.data);
         case LogActionType.food:
           return await _logFood(action.data);
         case LogActionType.sleep:
@@ -56,10 +56,17 @@ class ConversationalLogHandler {
 
   // ── Weight ──────────────────────────────────────────────────────
 
-  bool _logWeight(Map<String, dynamic> data) {
+  // Bug w7r4c3 (APK Test #16.2) — await the awaitable WeightLogNotifier
+  // and invalidate the reader providers AFTER the Hive put resolves so
+  // the AI coach response reads the freshly-written value rather than
+  // a stale snapshot from the prior rebuild tick. Mirrors the
+  // WeightLogSheet._save fix.
+  Future<bool> _logWeight(Map<String, dynamic> data) async {
     final kg = (data['weight_kg'] as num?)?.toDouble();
     if (kg == null || kg < 20 || kg > 300) return false;
-    ref.read(weightLogNotifierProvider.notifier).logWeight(kg);
+    await ref.read(weightLogNotifierProvider.notifier).logWeight(kg);
+    ref.invalidate(weightHistoryProvider);
+    ref.invalidate(todayWeightLoggedProvider);
     return true;
   }
 
