@@ -145,8 +145,15 @@ extension SyncServiceRestoreCompleteness on SyncService {
           : <String, dynamic>{};
 
       // APK Test #14 / Bug D.2 — fallback bumped 2 -> 1 (cf. line 4332).
-      existingMap['streak_freezes_available'] =
-          res['streak_freezes_available'] ?? 1;
+      // Bug f8c1a5 (APK Test #16.2) Layer 3 — clamp incoming cloud value
+      // at the absolute tier max (3) so a legacy unclamped value cannot
+      // round-trip into Hive. The read-side clamp in
+      // StreakFreezeNotifier.build narrows further for free-tier users;
+      // the one-shot StreakFreezeClampMigrator repairs any historical
+      // Hive state from before this layer was added.
+      final int rawAvailable =
+          (res['streak_freezes_available'] as int?) ?? 1;
+      existingMap['streak_freezes_available'] = rawAvailable.clamp(0, 3);
 
       final usedRaw = res['streak_freezes_used_dates'];
       existingMap['streak_freeze_used_dates'] = (usedRaw is List)

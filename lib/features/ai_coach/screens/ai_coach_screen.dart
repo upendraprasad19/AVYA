@@ -1668,9 +1668,28 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
       setState(() => _uploadProgress = 0.7);
 
-      // Get the public URL
-      final publicUrl =
-          supabase.client.storage.from('chat-media').getPublicUrl(storagePath);
+      // Bug t1m5b0 (APK Test #16.2) — `chat-media` is a PRIVATE bucket
+      // (storage.buckets.public = false, confirmed 2026-05-18). The
+      // pre-fix call `getPublicUrl(storagePath)` returned a URL of shape
+      // `${SUPABASE_URL}/storage/v1/object/public/chat-media/<path>`,
+      // which Supabase Storage rejects with HTTP 400 "Bad Request"
+      // because /public/... is only valid for buckets where public=true.
+      // ai-media-proxy's service-role fetch hit that 400 on every
+      // attempt; the typed HttpError mapped it to `error_type=storage`
+      // and the client surfaced "PHOTO FAILED · Tap to retry" with no
+      // path to recovery (the 500/1500/3000 ms retry backoff couldn't
+      // help — the URL was permanently bad).
+      //
+      // Fix: createSignedUrl(path, ttlSeconds) returns a URL of shape
+      // `.../storage/v1/object/sign/chat-media/<path>?token=<jwt>`
+      // which Storage accepts for private buckets. ai-media-proxy's
+      // parseStorageUrl already handles the `sign/<bucket>/<path>?token=...`
+      // shape (supabase/functions/ai-media-proxy/index.ts:178). 600s TTL
+      // is plenty — the Edge Function fetches the URL within seconds of
+      // receiving the request; we keep buffer for retry budgets.
+      final publicUrl = await supabase.client.storage
+          .from('chat-media')
+          .createSignedUrl(storagePath, 600);
 
       setState(() => _uploadProgress = 1.0);
 

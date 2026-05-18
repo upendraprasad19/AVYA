@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
@@ -438,6 +439,19 @@ class AuthNotifier extends Notifier<AuthState2> {
       debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
       // Non-fatal — readers will see legacy configBox values until next
       // launch. Cross-account guard would still clear them if needed.
+    }
+
+    // Bug f8c1a5 (APK Test #16.2) Layer 2 — one-shot clamp of any
+    // corrupted streak_freezes_available value in userBox['progress']
+    // down to the tier cap, plus clear of streak_freezes_last_refill so
+    // a fresh refill can run. Idempotent, gated by migrationBox flag.
+    // Read-side clamp in StreakFreezeNotifier.build is Layer 1 and is
+    // already in effect; this migrator is the durable Hive repair.
+    try {
+      await StreakFreezeClampMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] streak freeze clamp failed: $e');
+      // Non-fatal — read-side clamp still hides the corrupted display.
     }
 
     // APK Test #15.4 / B2 backfill — one-shot mirror of pre-bridge muster

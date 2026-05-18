@@ -747,6 +747,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           // exercise is auto-swapped into the slot, with an UNDO
           // snackbar for recoverability.
           if (addEx.name == '__ADD_MODE__') {
+            // Bug s1n4c0 (APK Test #16.2) — pop the outer swap sheet BEFORE
+            // opening CreateCustomExerciseSheet. Pre-fix, the swap sheet
+            // stayed mounted while the create sheet opened on top, so when
+            // create.onCreated fired ScaffoldMessenger.showSnackBar at
+            // _openCreateAndAutoSwap, the snackbar was hosted against a
+            // context shadowed by the still-active swap modal route. The
+            // 5s dismiss timer never fired on Android and the user had to
+            // restart the app to clear the toast. Mirrors the picker-path
+            // pop at the onSelect handler above.
+            Navigator.of(ctx).pop();
             _openCreateAndAutoSwap(context, ref, exerciseIndex);
           }
         },

@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -264,7 +265,19 @@ class StreakFreezeNotifier extends Notifier<int> {
     // for non-Monday calls) + splash post-restore (first launch).
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final progress = UserRepository.instance.getProgress();
-    return (progress?['streak_freezes_available'] as int?) ?? 1;
+    final stored = (progress?['streak_freezes_available'] as int?) ?? 1;
+    // Bug f8c1a5 (APK Test #16.2) — clamp on read defends against
+    // corrupted Hive state (cloud-restored unclamped value from a legacy
+    // path, or any future write that bypasses StreakProgressService).
+    // Without this clamp a stored 8 with PRO cap=3 rendered "8/3" on
+    // the streak badge until the next Monday refill — which itself was
+    // gated out by the idempotency check when streak_freezes_last_refill
+    // was already set. The one-shot StreakFreezeClampMigrator normalises
+    // Hive at next launch; this read-side clamp makes the current
+    // session's UX correct immediately. Pinned by
+    // test/contracts/streak_freeze_value_clamped_on_read_test.dart.
+    final cap = SubscriptionService.instance.isPro() ? 3 : 1;
+    return stored.clamp(0, cap);
   }
 }
 
@@ -732,23 +745,32 @@ class WeightLogNotifier extends Notifier<void> {
   @override
   void build() {}
 
-  void logWeight(double weightKg) {
+  Future<void> logWeight(double weightKg) async {
     // audit-2026-05-16 task E.7 — routes through HealthWriteService so
     // the `weight_<istDate>` key is IST-anchored and the syncWeightNow
     // + pushSnapshot fan-out lives in a single canonical place. The
     // companion profile mutation stays here (the service is scoped to
     // healthBox writes).
-    unawaited(HealthWriteService.instance.logWeight(
+    //
+    // Bug w7r4c3 (APK Test #16.2) — must be Future<void> + awaitable.
+    // HealthWriteService.logWeight does `await _acquireLock` BEFORE
+    // `box.put`, so the Hive write is strictly async. If the caller
+    // (WeightLogSheet._save / ConversationalLogHandler._logWeight)
+    // fires `ref.invalidate(weightHistoryProvider)` synchronously after
+    // this method returns, the provider rebuilds reading stale Hive
+    // BEFORE the put microtask runs and the entries-count footer shows
+    // a stale value. The await below collapses the race.
+    await HealthWriteService.instance.logWeight(
       date: DateTime.now(),
       weightKg: weightKg,
       source: WriteSource.manual,
-    ));
+    );
     // Also update profile current_weight_kg
     final userBox = HiveService.instance.userBox;
     final profile =
         Map<String, dynamic>.from(userBox.get('profile') as Map? ?? {});
     profile['current_weight_kg'] = weightKg;
-    userBox.put('profile', profile);
+    await userBox.put('profile', profile);
     BadgeService.instance.checkAll();
 
     // Re-sync the profile row since current_weight_kg changed (the
@@ -770,9 +792,13 @@ class TodayWeightLoggedNotifier extends Notifier<bool> {
   bool build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final healthBox = HiveService.instance.healthBox;
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    // Bug w7r4c3 (APK Test #16.2) — read the IST date string to match the
+    // writer's key formula at health_write_service.dart:122. Pre-fix this
+    // used device-local YYYY-MM-DD; at IST 00:00-05:30 the local UTC date
+    // is the prior day, so a freshly-written today-IST weight returned
+    // false here and the "log weight" pill on Home would not flip to its
+    // done state until ~05:30 IST. Pinned by test/contracts/today_weight_logged_ist_test.dart.
+    final todayStr = istDateStr(DateTime.now());
     return healthBox.get('weight_$todayStr') != null;
   }
 
