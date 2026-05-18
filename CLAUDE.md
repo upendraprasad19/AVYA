@@ -150,7 +150,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | **DB host** | `db.dedsavbjuwgarrhphgnl.supabase.co` |
 | **Confirmed by** | Querying actual tables — `users`, `exercise_library`, `food_database`, `workout_logs`, `ai_coach_interactions`, `subscriptions` etc. all present |
 
-**The OTHER project** (`krcrkntuwutvnmdnkfqf`, named "icanbefitter") is a **different app entirely** (blog/content platform — `posts`, `members`, `media` tables). Never touch it.
+**The OTHER project** (`krcrkntuwutvnmdnkfqf`, named "icanbefitter" is for icanbefitter.com website) is a **different app entirely** (blog/content platform — `posts`, `members`, `media` tables). Never touch it.
 
 **Rule: Before ANY Supabase operation, confirm project_id = `dedsavbjuwgarrhphgnl`.**
 
