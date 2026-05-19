@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -165,6 +166,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // any provider that lists exlog keys (home/train/calendar all key off
     // exercise_log_index_<date>). Idempotent — guarded by configBox.
     bool migratorDidRun = false;
+    // A3 — migrators run BEFORE /home navigation, so their cost extends
+    // RestoringScreen's perceived duration beyond restore_completed. Wrap
+    // with Stopwatch + emit telemetry so post-mortem can include them in
+    // the long-pole hunt.
+    final swExlog = Stopwatch()..start();
     try {
       // Track whether the migrator actually had work to do this launch
       // so we know to ship canonical keys back up to cloud.
@@ -176,6 +182,12 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     } catch (e) {
       debugPrint('[RestoringScreen] ExlogKeyMigrator failed (non-fatal): $e');
     }
+    swExlog.stop();
+    unawaited(ErrorTelemetry.logEvent(
+      'restoring_screen_migrator_done',
+      message: 'migrator=exlog ms=${swExlog.elapsedMilliseconds} '
+          'did_run=$migratorDidRun',
+    ));
 
     // APK Test #16.1 / Agent A — once the migrator has consolidated
     // legacy + rogue exlog keys into canonical UUID v5 keys, fire a
@@ -189,11 +201,22 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
 
     // Migrate nutrition logs from `nlog_<timestamp>` to deterministic
     // `nlog_<istDateStr>_<mealType>_<hash(items)>` keys. Same guard + safety net.
+    final swNlog = Stopwatch()..start();
+    bool nlogRan = false;
     try {
+      final wasNlogDone =
+          HiveService.instance.configBox.get('nlog_key_migration_v7') == true;
       await NlogKeyMigrator.runIfNeeded();
+      nlogRan = !wasNlogDone;
     } catch (e) {
       debugPrint('[RestoringScreen] NlogKeyMigrator failed (non-fatal): $e');
     }
+    swNlog.stop();
+    unawaited(ErrorTelemetry.logEvent(
+      'restoring_screen_migrator_done',
+      message: 'migrator=nlog ms=${swNlog.elapsedMilliseconds} '
+          'did_run=$nlogRan',
+    ));
   }
 
   /// Looks at the user_profile row and returns the earliest missing onboarding
@@ -281,10 +304,16 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
               const SizedBox(height: 24),
               Container(width: 80, height: 1, color: AppColors.accent),
               const SizedBox(height: 32),
-              Text(
-                'Pulling your dispatch.',
-                style: AppTypography.titleL.copyWith(fontSize: 22),
-                textAlign: TextAlign.center,
+              // A4 — dynamic progress text driven by SyncService restore steps.
+              // Falls back to the legacy "Pulling your dispatch." label until
+              // the first step boundary updates the notifier.
+              ValueListenableBuilder<String>(
+                valueListenable: SyncService.instance.restoreProgressLabel,
+                builder: (context, label, _) => Text(
+                  label,
+                  style: AppTypography.titleL.copyWith(fontSize: 22),
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 8),
               Text(

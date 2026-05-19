@@ -31,6 +31,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'error_telemetry.dart';
 import 'sync_service.dart';
 import 'subscription_service.dart';
 import '../utils/ist_date.dart';
@@ -73,6 +74,14 @@ class StreakProgressService {
     debugPrint(
         '[StreakProgressService] refill: $currentAvailable → $newAvailable '
         '(max=$maxFreezes, monday=$thisMondayStr)');
+    // B1 telemetry — diagnostic event so we can post-mortem from
+    // client_errors whether refill actually landed and what the count
+    // bumped from/to. LOW-priority op_type (rate-limited).
+    unawaited(ErrorTelemetry.logEvent(
+      'streak_freeze_refill_done',
+      message: 'before=$currentAvailable after=$newAvailable '
+          'max=$maxFreezes monday=$thisMondayStr',
+    ));
     return newAvailable;
   }
 
@@ -91,6 +100,14 @@ class StreakProgressService {
   int commitConsume({
     required int freezesAvailableAfterConsume,
     required List<String> usedDatesAfterConsume,
+    // B2 telemetry — caller passes the pre-consume freeze count + the
+    // list of dates the walk-back newly flagged + the walk start date.
+    // Optional with safe defaults so existing callers keep compiling;
+    // the canonical caller (WorkoutRepository._calculateStreak) passes
+    // all three.
+    int? freezesAvailableBeforeConsume,
+    List<String>? newlyConsumedDates,
+    String? walkStartDate,
   }) {
     UserRepository.instance.updateProgress({
       'streak_freezes_available': freezesAvailableAfterConsume,
@@ -101,7 +118,18 @@ class StreakProgressService {
     unawaited(SyncService.instance.syncFreezes());
     debugPrint(
         '[StreakProgressService] consume: available=$freezesAvailableAfterConsume '
-        'usedDates=${usedDatesAfterConsume.length}');
+        'usedDates=${usedDatesAfterConsume.length} '
+        'newly=${newlyConsumedDates?.join(",") ?? "?"}');
+    // B2 telemetry — record which date(s) the walk-back penalised. If
+    // founder reports a spurious banner, this telemetry tells us
+    // exactly which Hive row the walk-back disagreed with.
+    unawaited(ErrorTelemetry.logEvent(
+      'streak_freeze_consume_done',
+      message: 'before=${freezesAvailableBeforeConsume ?? -1} '
+          'after=$freezesAvailableAfterConsume '
+          'newly=${newlyConsumedDates?.join(",") ?? ""} '
+          'walk_start=${walkStartDate ?? ""}',
+    ));
     return freezesAvailableAfterConsume;
   }
 
@@ -121,7 +149,18 @@ class StreakProgressService {
     final d = thisMonday.day.toString().padLeft(2, '0');
     final thisMondayStr = '$y-$m-$d';
 
-    if (lastRefill != null && lastRefill.compareTo(thisMondayStr) >= 0) {
+    final bool willRefill =
+        lastRefill == null || lastRefill.compareTo(thisMondayStr) < 0;
+    // B1 telemetry — fire on every refill check so we can see from
+    // client_errors whether refill was attempted, what the gate saw,
+    // and which side won.
+    unawaited(ErrorTelemetry.logEvent(
+      'streak_freeze_refill_check',
+      message: 'monday=$thisMondayStr lastRefill=${lastRefill ?? "null"} '
+          'willRefill=$willRefill',
+    ));
+
+    if (!willRefill) {
       return null;
     }
 

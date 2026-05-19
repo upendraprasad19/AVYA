@@ -516,6 +516,7 @@ concepts:
     reader_allow_files:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d for migrator timing telemetry" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -606,6 +607,7 @@ concepts:
     reader_allow_files:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
     regression_test: test/contracts/food_log_notifier_to_nutrition_log_items_test.dart
     hive:
       box: nutritionBox
@@ -1283,6 +1285,7 @@ concepts:
         fields_read: [created_at, food_name, total_calories]
     reader_allow_files:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -2402,6 +2405,23 @@ concepts:
       streak_freezes_available / streak_freeze_used_dates /
       streak_freezes_last_refill. calculateCurrentStreak() must be
       called fresh — never trust a cached streak number for rank gates.
+
+      Bug 2026-05-19 / diagnose 9c4a17 — refill timing-drift contract.
+      The writer (StreakProgressService.commitRefill via refillIfNewWeek)
+      bumps local Hive available + last_refill stamp AND schedules a
+      fire-and-forget syncFreezes(); the cloud-side reader
+      (SyncService._restoreFreezes) MUST max-merge on last_refill (lexical
+      compareTo on YYYY-MM-DD) before overwriting available. Blind
+      overwrite races the not-yet-propagated fire-and-forget cloud write
+      and silently loses the Monday +1. Splash._restoreSub listener
+      re-invokes refillIfNewWeek post-restore as defence-in-depth.
+
+      streak_freeze_just_used is a session-scoped UI flag, not durable
+      state — its writer is commitConsume and its sole consumer is
+      home_screen._checkStreakFreezeUsed which clears it after firing the
+      SnackBar. Splash cold-start (splash_screen._runDeferredInit) MUST
+      clear it on every launch to prevent leak from a prior session that
+      set the flag but never reached the home read.
 
   - concept: sleep_logs
     domain: health

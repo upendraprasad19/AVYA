@@ -307,6 +307,14 @@ class SyncService {
       StreamController<void>.broadcast();
   Stream<void> get onRestoreComplete => _restoreCompleteController.stream;
 
+  /// Bug 2026-05-19 (A4 progress text) — current label shown on
+  /// RestoringScreen while `restoreFromCloudForUser` is running. Updated
+  /// at the start of each step so the user gets a signal that progress
+  /// is happening during long restores (>15s threshold for the existing
+  /// CONTINUE escape CTA). RestoringScreen binds via ValueListenableBuilder.
+  final ValueNotifier<String> restoreProgressLabel =
+      ValueNotifier<String>('Pulling your dispatch.');
+
   /// Returns a Future that completes when the current health sync pass
   /// finishes writing to Hive. Returns an already-completed future when
   /// no sync is in progress or health sync is disabled.
@@ -820,11 +828,19 @@ class SyncService {
     unawaited(ErrorTelemetry.logEvent('restore_started',
         message: 'userId=${userId.substring(0, 8)}'));
 
+    // Bug 2026-05-19 (A2 telemetry) — bracket every step with a Stopwatch
+    // so the next post-mortem can pinpoint which step (and via A1 inside,
+    // which op) is the actual long pole behind the >15s RestoringScreen.
+    final swTotal = Stopwatch()..start();
+    // A4 — reset progress label for this restore pass.
+    restoreProgressLabel.value = 'Pulling your dispatch.';
     try {
       const since = '2020-01-01T00:00:00Z';
 
       // Step A — profile + lightweight data
       if (_restoreCancelled) return RestoreResult.cancelled();
+      restoreProgressLabel.value = 'Loading profile & plan';
+      final swA = Stopwatch()..start();
       await Future.wait(
         [
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
@@ -846,9 +862,14 @@ class SyncService {
         ],
         eagerError: false,
       );
+      swA.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=A ms=${swA.elapsedMilliseconds}'));
 
       // Step B — bulk history
       if (_restoreCancelled) return RestoreResult.cancelled();
+      restoreProgressLabel.value = 'Catching up your history';
+      final swB = Stopwatch()..start();
       await Future.wait(
         [
           _safeRestoreOp('workout_logs', _restoreWorkoutLogs(userId, since)),
@@ -868,12 +889,17 @@ class SyncService {
         ],
         eagerError: false,
       );
+      swB.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=B ms=${swB.elapsedMilliseconds}'));
 
       // Step C — restore-completeness surfaces (Theme A pull side).
       // These are smaller/faster operations run sequentially after bulk
       // history so a cancellation between steps doesn't leave Hive
       // in a partially-populated state.
       if (_restoreCancelled) return RestoreResult.cancelled();
+      restoreProgressLabel.value = 'Finishing up';
+      final swC = Stopwatch()..start();
       await _safeRestoreOp('freezes', _restoreFreezes(userId));
       if (_restoreCancelled) return RestoreResult.cancelled();
       await _safeRestoreOp('notifications_inbox', _restoreNotificationsInbox(userId));
@@ -888,12 +914,16 @@ class SyncService {
       if (_restoreCancelled) return RestoreResult.cancelled();
       await _safeRestoreOp(
           'referral_redemptions', _restoreReferralRedemptions(userId));
+      swC.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=C ms=${swC.elapsedMilliseconds}'));
 
       // A3 — Subscription refresh folded into restore as the atomic last
       // step so it's never skipped when the post-auth flow changes.
       // Fire-and-forget posture: failure keeps cached local PRO state
       // (consistent with existing refreshFromSupabase semantics).
       if (_restoreCancelled) return RestoreResult.cancelled();
+      final swSub = Stopwatch()..start();
       try {
         await SubscriptionService.instance.refreshFromSupabase();
       } catch (e, st) {
@@ -905,22 +935,29 @@ class SyncService {
         unawaited(_reportSyncFailure(
             opType: 'subscription_refresh_on_restore', error: e));
       }
+      swSub.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=sub ms=${swSub.elapsedMilliseconds}'));
 
       if (_restoreCancelled) return RestoreResult.cancelled();
+      swTotal.stop();
       // APK Test #12.8 — restore completion event. Counts every full
       // success path. If client_errors shows restore_started without a
       // matching restore_completed, the user had a silent abort
       // somewhere in steps A-C.
       unawaited(ErrorTelemetry.logEvent('restore_completed',
-          message: 'userId=${userId.substring(0, 8)} status=success'));
+          message: 'userId=${userId.substring(0, 8)} status=success '
+              'total_ms=${swTotal.elapsedMilliseconds}'));
       return RestoreResult.success();
     } catch (e) {
+      swTotal.stop();
       debugPrint('[SyncService.restoreFromCloudForUser] $e');
       try {
         await _reportSyncFailure(opType: 'restore_from_cloud_for_user', error: e);
       } catch (_) {}
       unawaited(ErrorTelemetry.logEvent('restore_completed',
-          message: 'userId=${userId.substring(0, 8)} status=failed'));
+          message: 'userId=${userId.substring(0, 8)} status=failed '
+              'total_ms=${swTotal.elapsedMilliseconds}'));
       return RestoreResult.failed(e);
     }
   }
@@ -1141,10 +1178,20 @@ class SyncService {
   /// always completes normally so that `eagerError: false` propagation still
   /// works correctly (any remaining tasks in the wait list continue).
   Future<void> _safeRestoreOp(String label, Future<void> task) async {
+    // Bug 2026-05-19 (A1 telemetry) — wrap with Stopwatch so client_errors
+    // can answer "which restore op is the long pole." LOW-priority op_type
+    // emitted on success; failure path keeps the pre-existing error report.
+    final sw = Stopwatch()..start();
     try {
       await task;
+      sw.stop();
+      unawaited(ErrorTelemetry.logEvent(
+        'restore_op_done',
+        message: 'op=$label ms=${sw.elapsedMilliseconds}',
+      ));
     } catch (e, st) {
-      debugPrint('[sync/restore] $label failed: $e');
+      sw.stop();
+      debugPrint('[sync/restore] $label failed: $e (${sw.elapsedMilliseconds}ms)');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_service_safe_restore_op'));

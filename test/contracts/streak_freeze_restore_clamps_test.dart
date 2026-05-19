@@ -22,7 +22,13 @@ void main() {
     final methodIdx = src.indexOf('_restoreFreezes(');
     expect(methodIdx, isNonNegative,
         reason: '_restoreFreezes method moved or renamed — re-baseline.');
-    final scoped = src.substring(methodIdx, methodIdx + 2200);
+    // Window widened from 2200 → 4000 chars in batch 2026-05-19 / diagnose
+    // 9c4a17 — the max-merge fix's explanatory comment block grew the
+    // method body past the old window. Contract preserved: clamp(0, 3)
+    // still writes streak_freezes_available; just lives in the cloudWins
+    // branch instead of unconditionally.
+    final scoped = src.substring(
+        methodIdx, (methodIdx + 4000).clamp(0, src.length));
 
     // Strip comments.
     final stripped = scoped

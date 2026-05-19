@@ -144,26 +144,42 @@ extension SyncServiceRestoreCompleteness on SyncService {
           ? Map<String, dynamic>.from(existing)
           : <String, dynamic>{};
 
-      // APK Test #14 / Bug D.2 — fallback bumped 2 -> 1 (cf. line 4332).
-      // Bug f8c1a5 (APK Test #16.2) Layer 3 — clamp incoming cloud value
-      // at the absolute tier max (3) so a legacy unclamped value cannot
-      // round-trip into Hive. The read-side clamp in
-      // StreakFreezeNotifier.build narrows further for free-tier users;
-      // the one-shot StreakFreezeClampMigrator repairs any historical
-      // Hive state from before this layer was added.
-      final int rawAvailable =
+      // Bug 9c4a17 (2026-05-19) — max-merge on (available, last_refill)
+      // by lexical compare of last_refill. Pre-fix blind overwrite raced
+      // the fire-and-forget syncFreezes from splash's refillIfNewWeek and
+      // silently lost the Monday +1. See diagnose-doc for full trace.
+      // Clamp(0, 3) preserved per f8c1a5 layer-3.
+      final int cloudAvailable =
           (res['streak_freezes_available'] as int?) ?? 1;
-      existingMap['streak_freezes_available'] = rawAvailable.clamp(0, 3);
+      final cloudLastRefillRaw = res['streak_freezes_last_refill'];
+      final String? cloudLastRefill =
+          cloudLastRefillRaw == null ? null : cloudLastRefillRaw.toString();
+      final String? localLastRefill =
+          existingMap['streak_freezes_last_refill'] as String?;
 
+      final bool cloudWins = localLastRefill == null ||
+          (cloudLastRefill != null &&
+              cloudLastRefill.compareTo(localLastRefill) >= 0);
+
+      if (cloudWins) {
+        existingMap['streak_freezes_available'] = cloudAvailable.clamp(0, 3);
+        if (cloudLastRefill != null) {
+          existingMap['streak_freezes_last_refill'] = cloudLastRefill;
+        }
+      } else {
+        // Local refill is fresher than cloud — keep local available +
+        // last_refill. Schedule a syncFreezes so cloud catches up to the
+        // refill that hadn't propagated when this restore observed cloud.
+        unawaited(SyncService.instance.syncFreezes());
+      }
+
+      // used_dates is consume-only state; take cloud as authoritative
+      // because consume is multi-device sensitive (consume on device B
+      // should sync down to device A).
       final usedRaw = res['streak_freezes_used_dates'];
       existingMap['streak_freeze_used_dates'] = (usedRaw is List)
           ? usedRaw.map((e) => e.toString()).toList()
           : <String>[];
-
-      final lastRefill = res['streak_freezes_last_refill'];
-      if (lastRefill != null) {
-        existingMap['streak_freezes_last_refill'] = lastRefill.toString();
-      }
 
       await box.put('progress', existingMap);
     } catch (e, st) {
