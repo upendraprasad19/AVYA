@@ -551,14 +551,17 @@ class UsageWeeksNotifier extends Notifier<int> {
   @override
   int build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final configBox = HiveService.instance.configBox;
-    final firstLaunchRaw = configBox.get('first_launch_date') as String?;
-    if (firstLaunchRaw == null) return 0;
-
-    final firstLaunch = DateTime.tryParse(firstLaunchRaw);
-    if (firstLaunch == null) return 0;
-
-    return DateTime.now().difference(firstLaunch).inDays ~/ 7;
+    // Bug 2026-05-20 (diagnose c2a91f) — pre-fix read configBox['first_launch_date']
+    // which was never written anywhere in the codebase, so usageWeeks was
+    // always 0 → Weekly Report card permanently locked at "Available after
+    // Week 1". Switch to the canonical Supabase signup timestamp, already
+    // used at 5 other callsites (rank_service, referral_eligibility,
+    // service_record_section, rank_ladder_screen). Survives reinstalls.
+    final createdAtIso = SupabaseService.instance.currentUser?.createdAt;
+    if (createdAtIso == null) return 0;
+    final createdAt = DateTime.tryParse(createdAtIso);
+    if (createdAt == null) return 0;
+    return DateTime.now().difference(createdAt).inDays ~/ 7;
   }
 }
 

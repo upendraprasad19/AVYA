@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -23,11 +24,14 @@ class WeightSparkline extends StatefulWidget {
 }
 
 class _WeightSparklineState extends State<WeightSparkline> {
-  // Handoff (`daily.jsx`): chip set is 7D / 30D / 90D only.
-  // Legacy 1y / All chips removed to match the spec; historical data
-  // is still reachable via the Weekly Report and the weight log screen.
+  // Chip set revised 2026-05-20 (diagnose b3f7a2) — founder asked
+  // "what if user wants to see more than 90 days?" so we re-added an
+  // `ALL` chip on the dashboard plus a `View full history →` footer
+  // link to the Reports screen. The 90D cap from the original
+  // `daily.jsx` handoff was design-driven, not technical; data has
+  // always been available since cloud restore pulls back to 2020.
   String _selectedRange = '7d';
-  static const _ranges = ['7d', '30d', '90d'];
+  static const _ranges = ['7d', '30d', '90d', 'all'];
 
   List<WeightEntry> get _filteredEntries {
     if (widget.entries.isEmpty) return [];
@@ -36,6 +40,12 @@ class _WeightSparklineState extends State<WeightSparkline> {
       '7d' => now.subtract(const Duration(days: 7)),
       '30d' => now.subtract(const Duration(days: 30)),
       '90d' => now.subtract(const Duration(days: 90)),
+      // `all` — use a sentinel far before any plausible weigh-in so
+      // the cutoffStr compare at line 51 always passes. We do NOT
+      // short-circuit and return widget.entries directly because the
+      // IST-cutoff logic below is still useful (any other branch can
+      // be added without revisiting the early-return).
+      'all' => DateTime(1970),
       _ => now.subtract(const Duration(days: 7)),
     };
     // audit-2026-05-16 reader-side — entry `date` field is IST-formatted
@@ -298,6 +308,29 @@ class _WeightSparklineState extends State<WeightSparkline> {
                 ),
               ),
             ],
+          ),
+
+          // Obs 4 (2026-05-20 / diagnose <id>) — escape hatch to the
+          // Reports screen, which has finer-grained chips (1Y/6M/3M/1M/1W)
+          // + a 180-day projection callout. Founder asked "what about >90d?"
+          // and picked the hybrid: ALL chip on dashboard + this link.
+          const SizedBox(height: 8),
+          Center(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.go('/profile/reports'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                child: Text(
+                  'View full history →',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.accent,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
