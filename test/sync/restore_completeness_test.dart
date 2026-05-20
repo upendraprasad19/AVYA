@@ -15,7 +15,12 @@ import '../contracts/_sync_service_source.dart';
 
 /// Extract the body of a private method by finding its `Future<void>` definition
 /// and grabbing up to [maxChars] characters from that point.
-String _methodBody(String src, String methodName, {int maxChars = 2000}) {
+///
+/// Default raised 2000 → 4000 chars in batch 2026-05-19 / diagnose 9c4a17
+/// after the max-merge fix grew `_restoreFreezes` body past 2000 chars
+/// while preserving all required contract markers (`try {`, `catch (e`,
+/// `'user_progress'`).
+String _methodBody(String src, String methodName, {int maxChars = 4000}) {
   final sig = 'Future<void> $methodName(';
   final start = src.indexOf(sig);
   if (start == -1) return '';

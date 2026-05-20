@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -60,11 +62,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // for PRs (recomputed from logs), today's workout, stats grid, etc.
     _restoreSub = SyncService.instance.onRestoreComplete.listen((_) {
       if (!mounted) return;
+      // Bug 2026-05-19 (Monday +1 race) — re-apply the weekly refill
+      // AFTER cloud restore lands. Splash-time refill in _runDeferredInit
+      // (via runRolloverNow → refillIfNewWeek) writes local then schedules
+      // fire-and-forget syncFreezes(); the subsequent _restoreFreezes used
+      // to clobber that with stale cloud state. The restore-side max-merge
+      // closes the race in the common case; this re-call is defence-in-
+      // depth for the edge where local last_refill was somehow lost.
+      // Idempotent — no-ops if last_refill is already this week.
+      try {
+        StreakProgressService.instance.refillIfNewWeek();
+      } catch (e, st) {
+        debugPrint(
+            '[Splash] post-restore refillIfNewWeek failed (non-fatal): $e\n$st');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'splash_post_restore_refill'));
+      }
       ref.invalidate(allExercisePRsProvider);
       ref.invalidate(currentPlanProvider);
       ref.invalidate(workoutStatsProvider);
       ref.invalidate(calendarWeekProvider);
       ref.invalidate(todayWorkoutProvider);
+      ref.invalidate(streakFreezeProvider);
+      ref.invalidate(streakProvider);
     });
 
     _fadeController = AnimationController(
@@ -121,6 +141,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
     await SeedService.instance.seedIfNeeded();
+
+    // Bug 2026-05-19 (B3) — Defensive: clear stale `streak_freeze_just_used`
+    // UI flag on every cold start. The flag is a one-shot UI signal: writer
+    // is commitConsume(), sole reader is home_screen._checkStreakFreezeUsed
+    // which clears it after firing the SnackBar. If a previous session set
+    // the flag but never reached home (auth race, crash, signOut before the
+    // snackbar rendered), the flag lingers in durable Hive and surfaces as
+    // a spurious banner on the next launch. Cold-start clear is safe — any
+    // real consume that fires during this session re-sets it.
+    try {
+      final progress = UserRepository.instance.getProgress();
+      if (progress != null && progress['streak_freeze_just_used'] == true) {
+        await UserRepository.instance
+            .updateProgress({'streak_freeze_just_used': false});
+      }
+    } catch (e, st) {
+      debugPrint('[Splash] just_used clear failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'splash_just_used_clear'));
+    }
 
     // Bug #13 — Cold-launch day rollover. Invalidate every "today"-scoped
     // provider before the user lands on home so the first paint can't show

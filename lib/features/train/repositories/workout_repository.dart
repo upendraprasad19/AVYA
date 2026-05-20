@@ -209,10 +209,17 @@ class WorkoutRepository {
     final progress = UserRepository.instance.getProgress() ?? {};
     int freezesAvailable =
         (progress['streak_freezes_available'] as int?) ?? 0;
+    final int freezesAvailableBefore = freezesAvailable;
     final usedDatesRaw =
         progress['streak_freeze_used_dates'] as List? ?? <String>[];
     final usedDates = List<String>.from(usedDatesRaw);
     bool freezeConsumedThisCalc = false;
+    // Bug 2026-05-19 (B2 telemetry) — capture the dates the walk-back
+    // newly flagged as missed in THIS pass so the commitConsume telemetry
+    // can record which day the algorithm penalised. If founder reports
+    // "I didn't miss that day" we'll know exactly which Hive row to audit.
+    final List<String> newlyConsumedDates = <String>[];
+    final String walkStartDateStr = formatDateKey(today);
 
     // Perf: single pass over box.keys to build an in-memory schedule map.
     // Replaces up to 365 sequential box.get('schedule_<date>') calls (~250ms
@@ -263,6 +270,7 @@ class WorkoutRepository {
         // Missed day — consume a streak freeze if available
         freezesAvailable -= 1;
         usedDates.add(dateStr);
+        newlyConsumedDates.add(dateStr);
         freezeConsumedThisCalc = true;
         // Don't increment streak, but don't break — continue checking
         continue;
@@ -286,6 +294,9 @@ class WorkoutRepository {
       StreakProgressService.instance.commitConsume(
         freezesAvailableAfterConsume: freezesAvailable,
         usedDatesAfterConsume: usedDates,
+        freezesAvailableBeforeConsume: freezesAvailableBefore,
+        newlyConsumedDates: newlyConsumedDates,
+        walkStartDate: walkStartDateStr,
       );
     }
 
