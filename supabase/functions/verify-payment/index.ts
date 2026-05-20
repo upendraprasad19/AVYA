@@ -1,3 +1,39 @@
+/**
+ * verify-payment — client-initiated payment verification after Razorpay checkout.
+ *
+ * Trigger: HTTP POST from the Flutter client immediately after Razorpay's
+ *          WebView returns `payment.success`. The client polls this function
+ *          until it returns `verified: true` (or `failed`) — the webhook is
+ *          authoritative for subscription state, but the client also calls
+ *          here to avoid waiting on webhook propagation.
+ *
+ * Input shape:
+ *   {
+ *     razorpay_payment_id: string,
+ *     razorpay_order_id: string,
+ *     razorpay_signature: string,   // client-side HMAC; we re-verify here
+ *     plan: "monthly" | "yearly"
+ *   }
+ *
+ * Output shape:
+ *   200 { verified: true, subscription_status: "active", end_date: ISO }
+ *   200 { verified: false, status: "pending" }   // webhook hasn't fired yet
+ *   400 { error: "invalid_signature" | "amount_mismatch" | ... , request_id }
+ *   409 { error: "already_pro", request_id }     // user already PRO (idempotent)
+ *
+ * Env secrets used:
+ *   - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (signature verify + order fetch)
+ *   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (subscriptions table writes)
+ *
+ * verify_jwt: true at deploy — the calling user MUST be authenticated.
+ *
+ * Idempotency: re-calling with the same payment_id after a successful verify
+ * returns the same 200 payload. The 409 `already_pro` path exists for the case
+ * where the webhook beat the client to the DB write.
+ *
+ * Canonical plan prices in paise are duplicated below; they MUST stay in sync
+ * with `razorpay-webhook/index.ts` and `lib/core/constants/app_constants.dart`.
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";

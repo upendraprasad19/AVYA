@@ -1,7 +1,8 @@
-# Database Schema — Supabase Postgres (21 tables)
+# Database Schema — Supabase Postgres
 
-> Extracted from CLAUDE.md §7 to keep the master reference lean.
-> The authoritative schema lives in `supabase/migrations/`. This file is a quick lookup table.
+> ⚠️ **STALE — DO NOT TRUST TABLE LIST BELOW.** This file documents the 21 tables that existed in the project pre-2026-04. The actual current schema has **46 tables**. The authoritative, up-to-date schema lives in [`docs/architecture/database.md`](../architecture/database.md). Migrations under `supabase/migrations/` are the ultimate source of truth.
+>
+> Last regen: never (this snapshot is from project bootstrap). Kept around only because some older diagnose-docs link to specific sections here. Do not extend.
 
 ## Identity (4)
 

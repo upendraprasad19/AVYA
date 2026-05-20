@@ -39,6 +39,16 @@ class DriftPair {
   DriftPair(this.name, this.locations);
 }
 
+// NOTE (audit 2026-05-20 B1): Pinned-pattern set updated after Milestone-6
+// CLAUDE.md decluttering + AGENTS.md deprecation. The original patterns
+// targeted CLAUDE.md §7 "DATABASE SCHEMA (N Tables)" header + AGENTS.md
+// tech stack table — both surfaces no longer exist (§7 is now "WHERE TO
+// FIND DETAILED RULES"; AGENTS.md is an 11-line deprecation banner).
+//
+// Reduced to one canonical surface: CLAUDE.md §2 Tech Stack table.
+// `hive_compaction_box_count` removed entirely — the §19 Hive bloat row
+// was relocated in the same decluttering and no longer has a single
+// canonical pin. Re-add it if a new canonical surface emerges.
 final _pairs = <DriftPair>[
   DriftPair(
     'database_table_count',
@@ -47,28 +57,6 @@ final _pairs = <DriftPair>[
         'CLAUDE.md',
         RegExp(r'\| Database \| Supabase Postgres \((\d+) tables'),
         'CLAUDE.md §2 Tech Stack',
-      ),
-      DriftLocation(
-        'CLAUDE.md',
-        RegExp(r'## 7\. DATABASE SCHEMA \((\d+) Tables'),
-        'CLAUDE.md §7 header',
-      ),
-      DriftLocation(
-        'AGENTS.md',
-        RegExp(r'\| Database \| Supabase Postgres \((\d+) tables'),
-        'AGENTS.md tech stack',
-      ),
-    ],
-  ),
-  // OI-17 closure stated "8 boxes" — pinned here so future entries that
-  // add/remove a compactable box update CLAUDE.md.
-  DriftPair(
-    'hive_compaction_box_count',
-    [
-      DriftLocation(
-        'CLAUDE.md',
-        RegExp(r"runs `box\.compact\(\)` on \*\*(\d+)\*\* mutation-heavy boxes"),
-        'CLAUDE.md §19 Hive bloat row',
       ),
     ],
   ),

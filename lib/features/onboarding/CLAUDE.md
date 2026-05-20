@@ -135,7 +135,7 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 
 | Pitfall | How to avoid | Source |
 |---|---|---|
-| Stepped onboarding bounces back to Welcome on every tap | `GoRouter._authRedirect`'s `isOnOnboarding` check MUST use `location.startsWith('/onboarding')`, not `location == '/onboarding'`. Sub-routes (`/goal`, `/stats`, `/plan`) would otherwise be redirected back to Welcome on every navigation. Fixed in commit `17faa86`. | CLAUDE.md §19 entry 59 (relocated 2026-05-18) |
+| Stepped onboarding bounces back to Welcome on every tap | `GoRouter._authRedirect`'s `isOnOnboarding` check MUST use `location.startsWith('/onboarding')`, not `location == '/onboarding'`. Sub-routes (`/goal`, `/stats`, `/plan`) would otherwise be redirected back to Welcome on every navigation. Fixed in commit `17faa86`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 
 ## Tests pinning the rules here
 

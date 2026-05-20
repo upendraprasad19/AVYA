@@ -1,0 +1,9 @@
+{
+  "_comment": "Tech-debt audit 2026-05-20 (findings D2, D3): pin every shared Edge Function dependency once here so per-file inline pins don't drift. Gate: scripts/check_import_map_present.dart. Bump versions here, not in individual function files.",
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
+    "std/": "https://deno.land/std@0.224.0/",
+    "zod": "https://deno.land/x/zod@v3.23.8/mod.ts",
+    "jose": "https://deno.land/x/jose@v5.9.6/index.ts"
+  }
+}

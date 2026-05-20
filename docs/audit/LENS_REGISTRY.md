@@ -110,6 +110,27 @@ These don't yet have a precedent in our bug history but match patterns that *wil
 
 ---
 
+## L42-L53 — Added by tech-debt audit 2026-05-20 / Batch 1
+
+These lenses correspond to the 10 new gate scripts created during B1 of the 2026-05-20 tech-debt remediation. Each has a permanent `scripts/check_*.dart` enforcer wired into pre-commit + CI.
+
+| # | Lens | Charter | Gate script | Regression test | Precedent |
+|---|---|---|---|---|---|
+| **L42** | **Secrets in tree (defense-in-depth)** | Sensitive files (keystores, `key.properties`, `*.p12`) are matched by SOME `.gitignore` at SOME level (verified via `git check-ignore -v`); credential-shaped literals absent from tracked source. | `scripts/check_secrets_gitignored.dart` (Gate 23) | `test/contracts/secrets_not_tracked_test.dart` (lands later in B1) | I1 (audit 2026-05-20) — initial P0 flag was a false alarm; root-level `.gitignore` added as defense-in-depth. See `feedback_secrets_pattern_audit_before_first_push.md`. |
+| **L43** | **Razorpay key matches flavor** | `.env.prod` carries `rzp_live_*` only; `.env.dev` carries `rzp_test_*`. | `scripts/check_razorpay_key_flavor.dart` (Gate 24) | (gate is the test) | I14 (audit 2026-05-20) — `.env.prod` currently carries `rzp_test_` prefix; user-only blocker. |
+| **L44** | **Generated-index staleness** | `docs/diagnoses/INDEX.md` enumerates every diagnose-doc on disk by bug ID. | `scripts/check_diagnose_index_fresh.dart` (Gate 25) | (gate is the test) | Doc2 (audit 2026-05-20) — 152 diagnose-docs vs ~40 in stale INDEX; closed B1. |
+| **L45** | **Doc-citation rot** | Every `§N #M` cite across CLAUDE.md / AGENTS.md / nested CLAUDE.md resolves to a heading that exists. | `scripts/check_claude_md_citations.dart` (Gate 26) | (gate is the test) | Doc6 (audit 2026-05-20) — 44 broken `§19` cites across 12 files; swept B1. |
+| **L46** | **Import-map pinned** | `supabase/functions/import_map.json` exists + every shared dep pinned to exact version; no floating `@N` pins in any function source. | `scripts/check_import_map_present.dart` (Gate 27) | (gate is the test) | D2/D3 (audit 2026-05-20) — 4 floating `@2` pins + no import_map; created + pinned B1. |
+| **L47** | **Crypto-lib minimum version** | `jose` ≥ 5.9 across every Edge Function. | `scripts/check_jose_version.dart` (Gate 28) | (gate is the test) | D12 (audit 2026-05-20) — `jose@5.6.3` in `cron_auth.ts:54`; bumped to 5.9.6 in B1. |
+| **L48** | **Client-error spike alert** | `supabase/alerts/client_errors.yaml` declares threshold + notify channel. | `scripts/check_client_errors_alert.dart` (Gate 29) | (gate is the test) | I4 (audit 2026-05-20) — no alert; created scaffold in B1; pg_cron alerting job lands B3. |
+| **L49** | **Crashlytics alert routing** | `android/app/firebase-alerts.json` documents velocity + ANR thresholds + notify channel. | `scripts/check_crashlytics_alert_routing.dart` (Gate 30) | (gate is the test) | I9 (audit 2026-05-20) — scaffold created B1; console config TODO. |
+| **L50** | **Cron-registry parity** | Every `cron.schedule('NAME',...)` in `supabase/migrations/*.sql` listed in `docs/operations/CRON_REGISTRY.md`. | `scripts/check_cron_registry.dart` (Gate 31) | `test/contracts/cron_registry_parity_test.dart` (lands later in B1) | I5 (audit 2026-05-20) — registry created + populated B1; 6 active jobs registered. |
+| **L51** | **Pre-commit hook installed** | `.git/hooks/pre-commit` is installed and invokes `scripts/pre-commit.sh`. | `scripts/check_hooks_installed.dart` (Gate 32) | (gate is the test) | I8 (audit 2026-05-20) — opt-in install never verified; gated B1. |
+| **L52** | **Gate scripts wired** | Every `scripts/check_*.dart` is invoked from BOTH `scripts/pre-commit.sh` AND `.github/workflows/test.yml` (or appears in the allow-list for build-only / advisory gates). | `scripts/check_gate_scripts_wired.dart` (Gate 33) | (gate is the test) | I2 (audit 2026-05-20) — 25 of 27 gates were dormant; dynamic-loop wired B1. |
+| **L53** | **(reserved)** | (placeholder for the next gate added in B2) | — | — | — |
+
+---
+
 ## Last-run tracker
 
 | Date | Lenses run | Findings | Notes |
@@ -119,4 +140,5 @@ These don't yet have a precedent in our bug history but match patterns that *wil
 | 2026-05-16 | L1, L7, L8, L10, L14 (Test #16.2 batch lens-set) | 22 findings; 11 diagnose-docs | First full E.* audit. |
 | 2026-05-17 | L2, L4, L5, L6, L18, L19 (OI closures) | 8 closures + 3 deferred (OI-21/23/24) | Operational hardening. |
 | 2026-05-17 (Hermes verification) | L21-L25 + L41 (NEW) | 13 REAL, 4 FALSE_ALARM, 3 PARTIAL | Drove this registry's creation. |
-| **Next audit** | **L1-L41 (all 41)** | TBD | Should explicitly check every lens not exercised in the last 30 days. |
+| 2026-05-20–21 | L1–L52 (6-category tech-debt audit + B1 ship) | 81 findings; 0 deferrals; 10 new gates (L42–L52) | First explicit zero-deferral audit; closure YAML format introduced. |
+| **Next audit** | **L1-L52 (all 52)** | TBD | Quarterly cadence per CLAUDE.md §4.10; first scheduled 2026-08-03. |

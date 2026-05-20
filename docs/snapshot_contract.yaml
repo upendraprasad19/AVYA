@@ -121,7 +121,7 @@ keys:
     type: scalar
     writer_line: 76
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 32 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 68 }
     notes: |
       Verified: morning-alert reads `snap.today_steps` as int. The
       reader is in `generateDataDrivenAlert` for the "yesterday: N steps"

@@ -1844,7 +1844,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
         _recordingElapsed = _recordingElapsed + const Duration(seconds: 1);
       });
     });
-    // Reuse existing speech_to_text wiring per CLAUDE.md §19.
+    // Reuse existing speech_to_text wiring (see docs/diagnoses/INDEX.md).
     // _startListening() flips _isRecording = true via setState.
     _startListening();
   }

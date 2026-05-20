@@ -44,6 +44,20 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Android signing artifacts — NEVER commit
+# (Tech-debt audit 2026-05-20 I1: key.properties + release.jks were untracked
+# but NOT ignored — one accidental `git add android/` from leaking signing
+# identity + plaintext password. Gate: scripts/check_secrets_gitignored.dart.)
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+android/app/*.p12
+android/app/upload-keystore.jks
+*.jks
+*.keystore
+*.aab
+*.apk
+
 # Environment
 .env
 .env.dev

@@ -117,7 +117,7 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 | WardPhaseBlock | ward_phase_block.dart | Roman numeral circle + title/weeks/description + START chip |
 | WardSessionRow / WardSessionTable | ward_session_row.dart | Set-log row (set# / weight / reps / status) + table shell |
 | WardCategorySidebar | ward_category_sidebar.dart | Vertical 46px `bgDeep` with rotated -90° mono category label (Coach Suggested-Actions, Notifications) |
-| WardSetChips | ward_set_chips.dart | Per-set bracketed chip `Wrap` — SoT for "what was logged" rendering. Used by `WorkoutReceiptCard` + Train expanded view. APK Test #12 / Theme E primitive (CLAUDE.md §19 entry "Train expanded view + Receipt rendered exercises in different formats"). |
+| WardSetChips | ward_set_chips.dart | Per-set bracketed chip `Wrap` — SoT for "what was logged" rendering. Used by `WorkoutReceiptCard` + Train expanded view. APK Test #12 / Theme E primitive (docs/diagnoses/INDEX.md entry "Train expanded view + Receipt rendered exercises in different formats"). |
 | WardStatusStrip | ward_status_strip.dart | Composes streak / freeze / optional rank chips into one horizontal `Wrap`. Used as `WardLetterhead.trailing` slot on Daily / Train / Profile. |
 | **Badge** | | |
 | WardSealBadge | ward_seal_badge.dart | Seal glyph in 4 `WardSealVariant` (report / subscription / phase / founder) |
@@ -134,10 +134,10 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 
 | Pitfall | How to avoid | Source |
 |---|---|---|
-| Font fallback | Always use GoogleFonts.getFont('DM Sans', ...), never default font. | CLAUDE.md §19 entry 10 (relocated 2026-05-18) |
-| Hidden tap-to-edit targets | Any row that responds to tap-to-edit MUST show a visual affordance (e.g., pencil icon at 14px, `textSecondary.withValues(alpha: 0.7)`). Invisible tap targets will not be discovered. | CLAUDE.md §19 entry 37 (relocated 2026-05-18) |
-| Fraunces title emphasis not italic-gold | Don't style an entire `Text` widget italic — the non-emphasized leading/trailing words become italic too. Use `RichText` with inline `TextSpan`s carrying `fontStyle: FontStyle.italic`, `color: AppColors.accent`, `fontWeight: FontWeight.w500` on the emphasised span only. Pattern baked into `WardDispatchHeader`. | CLAUDE.md §19 entry 61 (relocated 2026-05-18) |
-| Wardroom palette drift | PRs K–Q used README hex values (rounded for print); PR R (commit `174ff21`) reconciled `colors.dart` to the JSX `const W = {}` in `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx`. The JSX is the truth. Never back-port README hex values into `colors.dart`. | CLAUDE.md §19 entry 62 (relocated 2026-05-18) |
+| Font fallback | Always use GoogleFonts.getFont('DM Sans', ...), never default font. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Hidden tap-to-edit targets | Any row that responds to tap-to-edit MUST show a visual affordance (e.g., pencil icon at 14px, `textSecondary.withValues(alpha: 0.7)`). Invisible tap targets will not be discovered. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Fraunces title emphasis not italic-gold | Don't style an entire `Text` widget italic — the non-emphasized leading/trailing words become italic too. Use `RichText` with inline `TextSpan`s carrying `fontStyle: FontStyle.italic`, `color: AppColors.accent`, `fontWeight: FontWeight.w500` on the emphasised span only. Pattern baked into `WardDispatchHeader`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Wardroom palette drift | PRs K–Q used README hex values (rounded for print); PR R (commit `174ff21`) reconciled `colors.dart` to the JSX `const W = {}` in `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx`. The JSX is the truth. Never back-port README hex values into `colors.dart`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 
 ## Tests pinning the rules here
 

@@ -1,3 +1,37 @@
+/**
+ * morning-alert — daily personalised morning push notification for PRO users.
+ *
+ * Trigger: pg_cron job (jobid varies by deploy; see `cron.job` table). Fires
+ *          per timezone bucket — currently single-bucket IST 06:30 with
+ *          subscriber-side dedup keyed on the local IST date.
+ *
+ * Input shape: invoked by cron with no body; reads its working set from DB:
+ *   - subscriptions.status = 'active' (PRO gating)
+ *   - users + user_profile (name, motivation_style, wake_up_time)
+ *   - coach_memory (preferred_name, coaching context)
+ *   - daily_snapshots (yesterday's steps/calories/etc. for "data_driven" tone)
+ *
+ * Output shape: per-user side effects —
+ *   - OneSignal push via `_shared/send_notification.ts`
+ *   - Insert into `ai_coach_interactions` for dedup + telemetry
+ *   - cron_telemetry start/end via `_shared/cron_telemetry.ts` (CLAUDE.md §4.5)
+ *
+ * Env secrets used:
+ *   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (cron-auth, DB reads, dedup writes)
+ *   - ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY (push delivery)
+ *   - GEMINI_API_KEY (tone application via `_shared/gemini.ts` MODEL_FLASH)
+ *
+ * verify_jwt: false (cron invocation). Authenticated via
+ * `isAuthorizedCronCall()` from `_shared/cron_auth.ts` — Vault-stored
+ * service_role_key must match the inbound bearer. See CLAUDE.md
+ * `supabase/functions/CLAUDE.md` for the pr-detection drift history.
+ *
+ * Idempotency: `shouldSendProactive(userId, kind, istDateKey)` blocks repeat
+ * sends within the same IST day. `markProactiveSent` writes the dedup row
+ * before the OneSignal call so retries on transient OneSignal 5xx don't
+ * double-send. Failure surface intentionally per-user — one user's error
+ * does not abort the batch.
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
