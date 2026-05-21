@@ -27,6 +27,12 @@ class AppConstants {
   static const String weeklyReportFunction = 'weekly-report';
   static const String aiMediaProxyFunction = 'ai-media-proxy';
 
+  // ── UI hints / placeholders (audit 2026-05-20 / C9) ────────────
+  /// Canonical referral code placeholder shown in input fields. Centralized
+  /// so a brand or format change updates 5 callsites at once. Match the
+  /// real referral code grammar: `AVYA-` prefix + 8 alphanumerics.
+  static const String referralCodeHint = 'AVYA-XXXXXXXX';
+
   // ── Subscription ──────────────────────────────────────────
 
   static const int monthlyPriceInr = 349;

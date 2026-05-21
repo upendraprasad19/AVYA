@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 
 class ApplyReferralSheet extends ConsumerStatefulWidget {
   const ApplyReferralSheet({super.key});
@@ -41,7 +42,7 @@ class _ApplyReferralSheetState extends ConsumerState<ApplyReferralSheet> {
       if (value.isEmpty) {
         _statusMessage = '';
       } else if (!_isValidFormat) {
-        _statusMessage = 'Codes look like AVYA-XXXXXXXX.';
+        _statusMessage = 'Codes look like ${AppConstants.referralCodeHint}.';
         _statusIsError = true;
       } else {
         _statusMessage = '';
@@ -134,7 +135,7 @@ class _ApplyReferralSheetState extends ConsumerState<ApplyReferralSheet> {
                 fontSize: 14,
               ),
               decoration: InputDecoration(
-                hintText: 'AVYA-XXXXXXXX',
+                hintText: AppConstants.referralCodeHint,
                 hintStyle: AppTypography.mono.copyWith(
                   color: AppColors.textGhost,
                   fontSize: 14,

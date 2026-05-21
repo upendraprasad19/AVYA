@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -1777,15 +1778,21 @@ class AiCoachRepository {
     return progress?['streak_freezes_last_refill'] as String?;
   }
 
-  /// Returns subscription state from configBox.
+  /// Returns subscription state — `isPro` reads route through the canonical
+  /// [SubscriptionService] (CLAUDE.md rule 19); plan / expiresAt / auto_renew
+  /// are descriptive fields not gated by the service.
   ///
   /// `tier`: 'pro' | 'free'
   /// `expires_at`: ISO string or null
   /// `plan`: 'monthly' | 'yearly' | null
   /// `auto_renew`: bool (default false)
+  ///
+  /// Audit 2026-05-20 / C6: previously called `config.get('isPro') == true`
+  /// raw — the only path that bypassed `SubscriptionService.verifyFromServer()`.
+  /// Gate 34 `scripts/check_no_raw_ispro_read.dart` enforces this routing.
   Map<String, dynamic> _getSubscriptionState() {
+    final isPro = SubscriptionService.instance.isPro();
     final config = _hive.configBox;
-    final isPro = config.get('isPro') == true;
     final expiresAtRaw = config.get('expiresAt');
     String? expiresAtIso;
     if (expiresAtRaw is String) {

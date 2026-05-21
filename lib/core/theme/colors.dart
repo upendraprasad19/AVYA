@@ -78,6 +78,16 @@ class AppColors {
   static const accentDark = Color(0xFF8A6F35);
   static const accentDeep = Color(0xFF8A6F35);
 
+  // ── Semantic tints (audit 2026-05-20 / C10) ───────────────────────────
+  /// Subtle green tint for success snackbars / banners over the dark
+  /// background. Centralized so `Color(0xFF1a2a1a)` no longer appears
+  /// inline at `profile_screen.dart:457,486`.
+  static const successTint = Color(0xFF1A2A1A);
+
+  /// Subtle red tint for error snackbars / banners. Replaces inline
+  /// `Color(0xFF2a1a1a)` at `profile_screen.dart:458,487`.
+  static const errorTint = Color(0xFF2A1A1A);
+
   // ── PRO / Monetisation ────────────────────────────────────────────────
   /// PRO emphasis. Gold is the base CTA in Wardroom, so PRO uses the
   /// amber `warn` hue to stay visually distinct.

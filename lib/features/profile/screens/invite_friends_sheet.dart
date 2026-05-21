@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet that shows the user's referral code with an EXPIRES IN N DAYS
@@ -316,7 +317,7 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
                           textCapitalization: TextCapitalization.characters,
                           maxLength: 20,
                           decoration: InputDecoration(
-                            hintText: 'AVYA-XXXX1234',
+                            hintText: AppConstants.referralCodeHint,
                             hintStyle: AppTypography.bodyM.copyWith(
                               color: AppColors.textMute,
                             ),

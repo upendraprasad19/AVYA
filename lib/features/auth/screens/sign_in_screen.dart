@@ -534,7 +534,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   maxLength: 20,
                   textCapitalization: TextCapitalization.characters,
                   decoration: InputDecoration(
-                    hintText: 'AVYA-XXXX1234',
+                    hintText: AppConstants.referralCodeHint,
                     hintStyle: AppTypography.body.copyWith(
                       color: AppColors.textMute,
                       fontSize: 15,

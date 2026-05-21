@@ -542,8 +542,19 @@ class AuthNotifier extends Notifier<AuthState2> {
       final eStr = e.toString();
       if (eStr.contains('23505')) errorType = 'users_unique_violation_23505';
       if (eStr.contains('23503')) errorType = 'users_fk_violation_23503';
-      // Posts to the `log-client-error` Edge Function (see _logClientError).
-      unawaited(_logClientError(user.id, errorType, eStr));
+      // Audit 2026-05-20 / A11: route through canonical ErrorTelemetry
+      // (was inline _logClientError that bypassed the rate-limit cooldown
+      // fixed in #16.1 D — `feedback_observability_silent_drop.md`).
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        StackTrace.current,
+        reason: errorType,
+        extra: {
+          'user_id': user.id,
+          'platform': 'android',
+          'error_message_preview': eStr.length > 1000 ? eStr.substring(0, 1000) : eStr,
+        },
+      ));
       // Non-fatal for sign-in flow, but AI chat / sync may fail until
       // resolved. Now visible in client_errors instead of only debugPrint.
     }
@@ -792,30 +803,6 @@ class AuthNotifier extends Notifier<AuthState2> {
       }, onConflict: 'user_id');
     } catch (e) {
       debugPrint('[auth_provider._syncOneSignalPlayerId] $e');
-    }
-  }
-
-  /// Posts a single error event to the `log-client-error` Edge Function.
-  /// Fire-and-forget. Catches its own errors so logging never throws.
-  Future<void> _logClientError(
-    String userId,
-    String errorType,
-    String message,
-  ) async {
-    try {
-      await _supabase.client.functions.invoke(
-        'log-client-error',
-        body: {
-          'user_id': userId,
-          'op_type': errorType,
-          'error_message': message.length > 1000
-              ? message.substring(0, 1000)
-              : message,
-          'platform': 'android',
-        },
-      );
-    } catch (_) {
-      // Swallow — error logging must never break the host flow.
     }
   }
 
