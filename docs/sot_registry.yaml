@@ -3971,3 +3971,137 @@ concepts:
       - submitted_to_library
       - approved_for_library
       - created_at
+
+  - concept: referral_redemption
+    domain: profile
+    description: |
+      Referral code redemption flow. Two read/write paths converge on
+      this concept: (a) `referral_redemptions` table read to determine
+      whether a user has already claimed their 7-day welcome trial
+      (Profile → Referral CTA visibility), and (b) `redeem-referral`
+      Edge Function invocation to atomically write the redemption row
+      + grant the trial. Both paths are wrapped by
+      [ReferralRepository] (audit 2026-05-21 / A5) to satisfy CLAUDE.md
+      rule #4 ("no Supabase from widgets / providers"). Server-side
+      atomicity is provided by the `redeem_referral_atomic` Postgres
+      function — repository is a thin transport wrapper.
+    writers:
+      - file: supabase/functions/redeem-referral/index.ts
+        line_range: 100-145
+        method: redeem_referral_atomic RPC call
+        notes: |
+          Server-side atomic write — inserts into referral_redemptions
+          + grants trial subscription. Client never writes this table
+          directly; only the Edge Function (via JWT-scoped supabase
+          client) has the INSERT path. 23505 race fallback returns 200
+          with alreadyRedeemed:true.
+      - file: lib/features/profile/repositories/referral_repository.dart
+        line_range: 75-105
+        method: ReferralRepository.redeem
+        notes: |
+          Canonical client-side transport — invokes redeem-referral
+          Edge Function. Catches transport errors + telemeters via
+          ErrorTelemetry.recordNonFatal. Wraps response into typed
+          RedemptionResult (success / errorMessage / alreadyRedeemed).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/profile/repositories/referral_repository.dart
+        line_range: 45-67
+        method: ReferralRepository.hasRedeemed
+        semantic: flag-check
+        fields_read: [id]
+        notes: |
+          Canonical reader. SELECT id FROM referral_redemptions WHERE
+          referee_id = :user_id LIMIT 1. Returns false on any error
+          (silent — eligibility CTA is non-critical).
+      - file: lib/features/profile/providers/referral_eligibility_provider.dart
+        line_range: 40-44
+        method: referralEligibilityProvider
+        semantic: pass-through
+        fields_read: [via ReferralRepository.instance.hasRedeemed(user.id)]
+        notes: Riverpod provider — caller of repository, no direct table access.
+      - file: lib/features/profile/screens/apply_referral_sheet.dart
+        line_range: 55-72
+        method: _submit
+        semantic: pass-through
+        fields_read: [via ReferralRepository.instance.redeem(code)]
+        notes: |
+          UI caller of the redeem flow. Receives typed RedemptionResult,
+          renders success / error / network-error states.
+    cloud_table: referral_redemptions
+    cloud_columns:
+      - id
+      - referee_id
+      - referrer_user_id
+      - code
+      - created_at
+    regression_test: test/contracts/referral_repository_only_test.dart
+    telemetry:
+      failure_op_types:
+        - referral_repository_has_redeemed
+        - referral_repository_redeem
+    class_constraints: |
+      No widget / provider may call `Supabase.instance.client.functions
+      .invoke('redeem-referral', ...)` or `.from('referral_redemptions')`
+      directly. Both calls MUST route through ReferralRepository.
+      Enforced by:
+        - Gate 36 (scripts/check_widget_no_direct_supabase.dart) — bans
+          Supabase calls from lib/**/screens/** + lib/**/widgets/**.
+        - test/contracts/referral_repository_only_test.dart — pins the
+          two named callers explicitly.
+
+  - concept: rank_promotion_log
+    domain: profile
+    description: |
+      Read-only access to `rank_promotions` — the server-authored
+      append-only log of rank-up events used to render the
+      RankServiceRecordSheet on the Profile tab. Rows are written
+      exclusively by the server-side rank-promotion job (no client
+      writer). Client reads MUST route through
+      [RankPromotionRepository] (audit 2026-05-21 / A5) to satisfy
+      CLAUDE.md rule #4 ("no Supabase from widgets / providers").
+    writers:
+      - file: supabase/functions/morning-alert-deliver-early/index.ts
+        line_range: 1-9999
+        method: server-side rank promotion job
+        notes: |
+          Server-only writer. Inserts a rank_promotions row when a
+          user crosses a milestone (streak / weight / consistency).
+          Listed here for SoT completeness — there is no client-side
+          writer for this table.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/profile/repositories/rank_promotion_repository.dart
+        line_range: 20-45
+        method: RankPromotionRepository.getRecent
+        semantic: list
+        fields_read: [rank_code, achieved_at]
+        notes: |
+          Canonical reader. SELECT rank_code, achieved_at FROM
+          rank_promotions WHERE user_id = :user_id ORDER BY achieved_at
+          DESC LIMIT :limit. Returns empty list on any error.
+      - file: lib/features/profile/providers/promotion_history_provider.dart
+        line_range: 30-40
+        method: promotionHistoryProvider
+        semantic: pass-through
+        fields_read: [via RankPromotionRepository.instance.getRecent(user.id)]
+        notes: Riverpod provider — caller of repository, no direct table access.
+    cloud_table: rank_promotions
+    cloud_columns:
+      - id
+      - user_id
+      - rank_code
+      - achieved_at
+      - trigger
+    regression_test: test/contracts/rank_promotion_repository_only_test.dart
+    telemetry:
+      failure_op_types:
+        - rank_promotion_repository_get_recent
+    class_constraints: |
+      No widget / provider may call `.from('rank_promotions')`
+      directly. All reads MUST route through
+      RankPromotionRepository.instance.getRecent. Enforced by:
+        - Gate 36 (scripts/check_widget_no_direct_supabase.dart) — bans
+          Supabase calls from lib/**/screens/** + lib/**/widgets/**.
+        - test/contracts/rank_promotion_repository_only_test.dart —
+          pins the named caller.

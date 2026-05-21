@@ -45,6 +45,8 @@ const _allowList = <String, String>{
       'Runs explicitly on merge commits via scripts/pre-commit.sh:48 (not auto-loop). 1 missing test for swap_undo_snackbar bug tracked separately.',
   'check_snapshot_contract.dart':
       'Requires generated snapshot manifest — runs in /build-apk skill. 1 reader-contract violation tracked separately.',
+  'check_test_runtime_budget.dart':
+      'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
 };
 
 void main(List<String> args) async {

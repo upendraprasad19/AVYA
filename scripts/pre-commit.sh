@@ -25,8 +25,24 @@ cd "$REPO_ROOT"
 echo "[pre-commit] flutter analyze..."
 flutter analyze --no-fatal-infos
 
-echo "[pre-commit] flutter test..."
-flutter test
+# Audit 2026-05-20 / I10: pre-commit splits into FAST (here) + FULL
+# (scripts/pre-push.sh). The full `flutter test` suite (~7 min) is moved
+# to pre-push so commits aren't blocked on the slow run. CI runs full
+# suite on every push regardless.
+#
+# Fast path: contract tests + analyzer + all 38 gates (~3 min).
+# Heavy: flutter test (full suite, ~7 min) → runs on pre-push instead.
+#
+# Set PRE_COMMIT_FULL=1 to force the full suite locally (e.g. before a
+# merge to main).
+if [ "${PRE_COMMIT_FULL:-0}" = "1" ]; then
+  echo "[pre-commit] PRE_COMMIT_FULL=1 → flutter test (full suite)..."
+  flutter test
+else
+  echo "[pre-commit] flutter test test/contracts/ (fast path)..."
+  flutter test test/contracts/
+  echo "[pre-commit] (full suite deferred to pre-push hook. Set PRE_COMMIT_FULL=1 to force here.)"
+fi
 
 # Regen bug index if any diagnose-doc was modified (per CLAUDE.md decluttering spec §8)
 if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
@@ -61,7 +77,8 @@ for GATE in scripts/check_*.dart; do
     check_migrations_live.dart|\
     check_onconflict_live_arbiter.dart|\
     check_regression_catalog.dart|\
-    check_snapshot_contract.dart)
+    check_snapshot_contract.dart|\
+    check_test_runtime_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other 4: require live DB / merge context / build artifact —
       # run via /build-apk skill, NOT pre-commit. See
