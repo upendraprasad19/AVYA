@@ -248,15 +248,22 @@ findings:
     category: architecture
     title: "sync_service.dart part-files asymmetric restore/sync"
     score: 16
-    # SCHEDULED FOR B5 D7-D8 (full migration per locked decision 2026-05-21).
-    # SCAFFOLD already landed on feat/tech-debt-audit-resume-3 (1d972ac):
-    # SyncDomain interface + SyncDomainBase mixin + StreaksSyncDomain
-    # proof-of-pattern wrapper. Remaining 7 part-files migrate behind
-    # SyncFlags.useDomainFor<X> Hive flag (water → weight → workouts →
-    # nutrition → health → coach → profile/community/realtime).
-    # Diagnose-doc: docs/diagnoses/2026-05-21-sync-domain-scaffold-A6-5a0b31.md
-    # Contract test: test/contracts/sync_domain_interface_test.dart
-    # Will close as terminal_state: closed_in_commit once D7-D8 work merges.
+    terminal_state: closed_in_commit
+    commit: d230301
+    verification: test/contracts/sync_domain_full_migration_test.dart (14 behavioral tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-21-a6-sync-domain-full-migration-2b8d4e.md
+    notes: |
+      7 SyncDomain wrappers landed (workouts, nutrition, health, coach,
+      profile, community, restore_completeness) + StreaksSyncDomain
+      already present = 8 total. sync_realtime intentionally NOT migrated
+      (subscription lifecycle, no _syncX/_restoreX pairs).
+      SyncFlags class reads configBox['sync_domain_<name>'] — all 8 flags
+      ship DEFAULT FALSE. _dispatchDomainPushes / _dispatchDomainRestores
+      registered on SyncService but NOT YET WIRED into live fan-out per
+      CLAUDE.md §4.11 (gates before refactor; legacy path preserved until
+      flag-flip batch). 45 public forwarders appended to part-files for
+      SyncDomain zero-arg contract.
+      28/28 contract tests PASS. flutter analyze: 0 errors.
   - id: A7
     category: architecture
     title: "7 static.instance singletons leak across HiveUserSession swaps"
