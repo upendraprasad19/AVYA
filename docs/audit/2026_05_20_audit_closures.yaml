@@ -42,6 +42,18 @@ closed_count: 65
 #   A10 (d6e472c → 5718e10): 1 (ai_coach_repository 2127→302 shim)
 #   resume-3 merge (d772e4b): 5 (A6 partial, A7, C5 clean, T15, T4 blocked)
 #   resume-4 merge (578d860): 7 (T6, T8, T11, I6, I11, C2, gate-37 multi-line fix)
+#
+# 2026-05-21 RECONCILIATION (stale-comment cleanup, no new commits):
+#   Closure entries for A1, A3, A4, A8, A9, A10, T3, T10, T15, I3, C2 were
+#   stale "# NOT YET CLOSED" comments referencing past batch plans. Each
+#   has now been populated with terminal_state: closed_in_commit pointing
+#   to the SHA that shipped the fix. Doc3/Doc10/Doc12 retain stale comment
+#   markers explicitly scheduled to B5 D2 (this batch's day-2 work).
+#   See `feedback_closure_yaml_per_finding_discipline.md` (lands D1).
+#
+# B5 SCOPE (live as of 2026-05-21; per approved plan
+# `~/.claude/plans/create-a-plan-wiggly-panda.md`):
+#   16 remaining open items + 2 new skills + APK build. See plan ⭐ section.
 
 findings:
 
@@ -55,7 +67,15 @@ findings:
     category: code
     title: "188 ad-hoc GoogleFonts.getFont('DM Sans') call sites"
     score: 15
-    # NOT YET CLOSED — Gate 37 baselines; codemod lands B2 step 13.
+    terminal_state: closed_in_commit
+    commit: f2004eb
+    verification: scripts/check_no_raw_google_fonts.dart (Gate 37, hard-fail)
+    diagnose_doc: docs/diagnoses/2026-05-21-typography-codemod-C2-1f4a8b.md
+    notes: |
+      Codemod across 175 callsites in 33 files. Net -775 lines.
+      AppTypography extended with dmSansFamily/frauncesFamily/buttonLabel.
+      Gate 37 regex fixed (multiLine + dotAll for multi-line calls)
+      then flipped from --warn-only to hard-fail.
   - id: C3
     category: code
     title: "active_workout_screen.dart 2430 lines / 4 nested classes"
@@ -134,22 +154,44 @@ findings:
     category: architecture
     title: "auth_provider.dart god-provider with direct Postgres CRUD"
     score: 24
-    # NOT YET CLOSED — AuthSessionBootstrapper extract pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: lib/core/services/auth_session_bootstrapper.dart (533 LOC extracted)
+    notes: |
+      AuthSessionBootstrapper extracted from auth_provider.dart:480-827.
+      Owns post-sign-in hydration, OneSignal player_id push, terms
+      backfill, restore orchestration. Sealed PostSignInDestination
+      Dart 3 class provides compile-checked exhaustiveness. auth_provider
+      retains Riverpod state only.
   - id: A2
     category: architecture
     title: "WorkoutScheduleService 1970-line god-service"
     score: 18
-    # NOT YET CLOSED — split is B4 scope.
+    # NOT YET CLOSED — B5 scope (D13-D17). 4-way split per locked decision.
   - id: A3
     category: architecture
     title: "Templates + custom-exercises bypass WorkoutWriteService"
     score: 36
-    # NOT YET CLOSED — pending B2 continuation step 4.
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_writeservice_only.dart (Gate 7)
+    notes: |
+      4 bypassing writers routed through WorkoutWriteService:
+      upsertTemplate + upsertCustomExercise added. SoT registry
+      gained custom_exercises_mutations concept. Gate 7 PASS.
   - id: A4
     category: architecture
     title: "userBox.put('profile') from 3 features (no ProfileWriteService)"
     score: 32
-    # IN PROGRESS — A4 subagent running on B2 continuation branch.
+    terminal_state: closed_in_commit
+    commit: c389570
+    verification: scripts/check_profile_write_service_only.dart (Gate 35) + lib/features/profile/services/profile_write_service.dart
+    notes: |
+      ProfileWriteService created (~140 LOC) with updateProfile /
+      patchProfile / updateField + skipSync param. 5 writers migrated:
+      home_provider.dart, tool_dispatcher.dart, auth_provider.dart
+      (3 sites). SoT registry updated with ProfileWriteService writer
+      entries on user_full_name concept.
   - id: A5
     category: architecture
     title: "progress_photos widget tree direct Supabase access"
@@ -167,52 +209,65 @@ findings:
     category: architecture
     title: "sync_service.dart part-files asymmetric restore/sync"
     score: 16
-    terminal_state: partial
-    diagnose_doc: docs/diagnoses/2026-05-21-sync-domain-scaffold-A6-5a0b31.md
-    contract_test: test/contracts/sync_domain_interface_test.dart
-    notes: |
-      SCAFFOLD landed on feat/tech-debt-audit-resume-3 (staged, not
-      committed). SyncDomain interface + SyncDomainBase mixin
-      (lib/core/services/sync_domain.dart, 100 lines). First proof-
-      of-pattern wrapper StreaksSyncDomain (lib/core/services/
-      sync_domains/streaks_sync_domain.dart, 67 lines) wraps the
-      existing _syncStreaks + _restoreStreaks via two new public
-      forwarders on the SyncServiceWorkout extension. Source-grep
-      exhaustiveness test now structurally enforces the matched-pair
-      invariant — every `_syncX` must have a matching `_restoreX`
-      (or sit on a documented allowlist). 4 / 4 behavioural tests
-      PASS; flutter analyze clean; scripts/check_reader_manifest_
-      complete.dart PASS. SoT registry restore_completeness concept
-      gains migration_note: block pointing at the destination
-      pattern.
-
-      REMAINING: 8 part-files (sync_workout.dart minus streaks,
-      sync_nutrition.dart, sync_health.dart, sync_coach.dart,
-      sync_profile.dart, sync_community.dart, sync_realtime.dart,
-      sync_restore_completeness.dart) still need migration. Each
-      lands as its own SyncDomain class in a follow-up batch; once
-      2+ wrappers exist, SyncService can adopt a List<SyncDomain>
-      dispatcher and the legacy fan-out sites switch over.
+    # SCHEDULED FOR B5 D7-D8 (full migration per locked decision 2026-05-21).
+    # SCAFFOLD already landed on feat/tech-debt-audit-resume-3 (1d972ac):
+    # SyncDomain interface + SyncDomainBase mixin + StreaksSyncDomain
+    # proof-of-pattern wrapper. Remaining 7 part-files migrate behind
+    # SyncFlags.useDomainFor<X> Hive flag (water → weight → workouts →
+    # nutrition → health → coach → profile/community/realtime).
+    # Diagnose-doc: docs/diagnoses/2026-05-21-sync-domain-scaffold-A6-5a0b31.md
+    # Contract test: test/contracts/sync_domain_interface_test.dart
+    # Will close as terminal_state: closed_in_commit once D7-D8 work merges.
   - id: A7
     category: architecture
     title: "7 static.instance singletons leak across HiveUserSession swaps"
     score: 14
-    # NOT YET CLOSED — Riverpod migration pending B2 continuation step 11.
+    # SCHEDULED FOR B5 D9-D10 (full migration per locked decision 2026-05-21).
+    # SCAFFOLD landed on feat/tech-debt-audit-resume-3 (58311db):
+    # SingletonLifecycleRegistry (107 LOC) with 7 services wired with
+    # reset hooks; ref.listen(authUserIdProvider, reset) pattern proven
+    # on SubscriptionService.
+    # Diagnose-doc: docs/diagnoses/2026-05-21-singleton-lifecycle-A7-7a3e1c.md
+    # Remaining 6 services migrate to Provider<T> in B5 D9-D10:
+    # SyncService, WorkoutScheduleService, UsageCounterService,
+    # AiService, RazorpayService, SeedService.
+    # Will close as terminal_state: closed_in_commit once D9-D10 merges.
   - id: A8
     category: architecture
     title: "NutritionRepository:749,768 static cloud sync"
     score: 30
-    # CLOSED in current working tree (uncommitted) — will land in B2-continuation commit.
+    terminal_state: closed_in_commit
+    commit: c389570
+    verification: scripts/check_writeservice_only.dart (Gate 7) + lib/core/services/nutrition_write_service.dart
+    notes: |
+      Static methods on NutritionRepository deleted. All cloud sync
+      routed through NutritionWriteService.upsertItem /
+      deleteItem / cloudSyncWater (existing methods at lines 113,
+      362, 645). Gate 7 PASS.
   - id: A9
     category: architecture
     title: "restoring_screen.dart:50,59,228 direct Supabase from widget"
     score: 30
-    # NOT YET CLOSED — coupled to A1 (AuthSessionBootstrapper).
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_widget_no_direct_supabase.dart (Gate 36)
+    notes: |
+      restoring_screen.dart refactored to consume from
+      AuthSessionBootstrapper. No more Supabase.instance.client
+      in lib/features/auth/screens/. Gate 36 PASS.
   - id: A10
     category: architecture
     title: "ai_coach_repository.dart 2127-line carries 4 contracts"
     score: 14
-    # NOT YET CLOSED — split pending B2 continuation step 10.
+    terminal_state: closed_in_commit
+    commit: d6e472c
+    verification: lib/features/ai_coach/services/{ai_snapshot_builder,coach_interaction_repository,coach_memory_service}.dart
+    notes: |
+      Split into 3 services: AiSnapshotBuilder (1317 LOC),
+      CoachInteractionRepository (252 LOC), CoachMemoryService
+      (202 LOC). Original ai_coach_repository.dart slimmed
+      2127 → 302 line shim. _snapshotContractKeyManifest constant
+      preserved on shim for Gate 11 source-grep.
   - id: A11
     category: architecture
     title: "Direct log-client-error invoke in auth_provider:806"
@@ -232,12 +287,19 @@ findings:
     category: test
     title: "73% of 170 contract tests are source-grep only"
     score: 18
-    # PARTIAL — feedback_source_grep_false_confidence.md codified + rule 21 amended in B1; SoT registry tagging pending B2 continuation.
+    # NOT YET CLOSED — B5 scope (D2/D3-D4). All 42 SoT entries gain
+    # behavioral_test_path or behavioral_test_required: true (closure gate enforces).
   - id: T3
     category: test
     title: "4 SoT registry concepts have zero contract test"
     score: 36
-    # NOT YET CLOSED — pending B2 continuation step 14.
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: test/contracts/sot_registry_test.dart (4 new concepts added)
+    notes: |
+      4 SoT contract tests written for sync_fanout_workout_domain,
+      sync_fanout_nutrition_domain, hive_deletion_and_session_helpers,
+      auth_hive_owner_agreement. SoT registry concepts updated.
   - id: T4
     category: test
     title: "flutter analyze clean state not asserted (--no-fatal-infos)"
@@ -313,7 +375,13 @@ findings:
     category: test
     title: "Streak freeze refill ↔ consume race: source-grep only"
     score: 32
-    # NOT YET CLOSED — fakeAsync race harness pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: test/contracts/streak_freeze_race_runtime_test.dart (behavioral, fakeAsync)
+    notes: |
+      fakeAsync race harness exercises Monday refill ↔ midnight consume
+      ordering. Closes the source-grep-only gap surfaced by Test #16.2
+      observation per feedback_source_grep_false_confidence.md.
   - id: T11
     category: test
     title: "AI coach tool loop: zero E2E coverage"
@@ -341,7 +409,13 @@ findings:
     category: test
     title: "tool_dispatcher_test.dart 2 forever-skipped tests"
     score: 20
-    # NOT YET CLOSED — pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: 9a7c9c6
+    verification: test/features/ai_coach/tool_dispatcher_test.dart (skip-reopen comments added)
+    notes: |
+      Both skipped tests now carry explicit reopening criteria pointing
+      to T1 (AI Coach E2E flow on device-CI). Audit recommendation
+      "un-skip or document reopening" satisfied via document path.
 
   # ── Dependency debt (15 — 14 actionable + D14 verified-clean) ──
   - id: D1
@@ -489,7 +563,8 @@ findings:
     category: documentation
     title: "Nested feature CLAUDE.md files are Milestone-2 scaffolds"
     score: 16
-    # NOT YET CLOSED — content migration pending B2/B3 continuation.
+    # SCHEDULED FOR B5 D2 (this batch). Content migration into 12 nested
+    # CLAUDE.md files; Gate 44 (check_nested_claude_md_content.dart) enforces.
   - id: Doc4
     category: documentation
     title: "14 of 37 Edge Functions lack header comments"
@@ -541,7 +616,8 @@ findings:
     category: documentation
     title: "supabase/migrations + functions CLAUDE.md are scaffolds"
     score: 18
-    # PARTIAL — migrations/CLAUDE.md gained content in B1; functions/CLAUDE.md still scaffold.
+    # SCHEDULED FOR B5 D2. Covered by Doc3 sweep (functions/CLAUDE.md is
+    # one of the 12 nested files in the migration scope).
   - id: Doc11
     category: documentation
     title: "docs/architecture/sync.md references 93-food pre-Test-#3 count"
@@ -554,7 +630,9 @@ findings:
     category: documentation
     title: "No reference doc enumerates 37 Edge Functions + cron + secrets"
     score: 21
-    # PARTIAL — CRON_REGISTRY.md + SECRET_INVENTORY.md cover ops surfaces; full EF catalog deferred.
+    # SCHEDULED FOR B5 D2. supabase/functions/CLAUDE.md (the existing
+    # scaffold) will be expanded into a full 37-function catalog as
+    # part of the Doc3 nested-CLAUDE.md content migration sweep.
   - id: Doc13
     category: documentation
     title: "CLAUDE.md §0 setup omits npm install"
@@ -599,7 +677,16 @@ findings:
     category: infrastructure
     title: "Edge Function deploys forward-only; no rollback"
     score: 32
-    # NOT YET CLOSED — --rollback flag pending B3.
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_edge_function_rollback_script.dart (Gate 38)
+    notes: |
+      .claude/deploy_via_api.js gained --rollback flag (re-emits payload
+      from prior git SHA + redeploys). _payload_*.json archive under
+      backups/edge_function_payloads/ (last 3 per function). Smoke step
+      ({ smoke: true } payload → 200 assert) wired post-deploy.
+      Codified as new skill .claude/skills/edge-function-deploy-rollback/SKILL.md
+      (lands D1 of B5).
   - id: I4
     category: infrastructure
     title: "No alerting on client_errors spike"

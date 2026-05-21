@@ -4,9 +4,9 @@
 // closure YAML files in `docs/audit/*_audit_closures.yaml`.
 //
 // Per `feedback_no_deferrals_tech_debt_class.md` + `feedback_audit_closure
-// _yaml_required.md`, every multi-category audit produces a closure
-// ledger enumerating every finding ID + terminal state. This validator
-// asserts the schema:
+// _yaml_required.md` + `feedback_closure_yaml_per_finding_discipline.md`,
+// every multi-category audit produces a closure ledger enumerating every
+// finding ID + terminal state. This validator asserts the schema:
 //
 //   1. Every finding has exactly one terminal state from the allowed set:
 //      closed_in_commit | upstream_blocked | verified_clean
@@ -19,10 +19,20 @@
 //   5. verified_clean entries have `evidence:` or `notes:`.
 //   6. total_findings matches `findings:` list length.
 //   7. closed_count matches the count of entries with terminal_state set.
+//   8. Stale-comment detection (B5 D1 hardening, per
+//      feedback_closure_yaml_per_finding_discipline.md): findings whose
+//      ONLY status signal is a `# NOT YET CLOSED` / `# PARTIAL` /
+//      `# IN PROGRESS` / `# CLOSED in current working tree` / similar
+//      stale-pattern comment WITHOUT a `terminal_state:` key are flagged
+//      as a WARNING (no terminal state = entry false-confidence risk).
+//      Becomes FAIL under --strict (audit-closure pre-merge gate).
 //
 // Usage:
 //   dart run scripts/validate_audit_closure.dart                # validate all
 //   dart run scripts/validate_audit_closure.dart <path>         # validate one
+//   dart run scripts/validate_audit_closure.dart --strict       # fail on any
+//                                                                 # entry without
+//                                                                 # terminal_state
 //
 // Exit 0 = pass.
 // Exit 1 = fail.
@@ -37,6 +47,7 @@ const _allowedStates = {
 
 void main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
+  final strict = args.contains('--strict');
   final files = <File>[];
 
   // Resolve target file(s).
@@ -69,12 +80,26 @@ void main(List<String> args) async {
   }
 
   final allViolations = <String>[];
+  final allWarnings = <String>[];
   for (final file in files) {
-    final fileViolations = _validate(file);
+    final fileViolations = _validate(file, strict, allWarnings);
     allViolations.addAll(fileViolations);
   }
 
   final tag = warnOnly ? '[Gate 40 WARN]' : '[Gate 40]';
+  // Print warnings (informational, never blocking outside --strict).
+  if (allWarnings.isNotEmpty) {
+    stderr.writeln('$tag WARNING: ${allWarnings.length} entry(s) without terminal_state:');
+    for (final w in allWarnings.take(20)) {
+      stderr.writeln('  - $w');
+    }
+    if (allWarnings.length > 20) {
+      stderr.writeln('  ... and ${allWarnings.length - 20} more');
+    }
+    stderr.writeln('  (Per feedback_closure_yaml_per_finding_discipline.md, '
+        'every finding should carry terminal_state on the entry itself, '
+        'not a stale # NOT YET CLOSED comment. Re-run with --strict to enforce.)');
+  }
   if (allViolations.isEmpty) {
     stdout.writeln('$tag PASS: ${files.length} closure file(s) validated.');
     exit(0);
@@ -89,10 +114,24 @@ void main(List<String> args) async {
   exit(warnOnly ? 0 : 1);
 }
 
-List<String> _validate(File file) {
+List<String> _validate(File file, bool strict, List<String> warnings) {
   final content = file.readAsStringSync();
-  final lines = content.split('\n');
+  // Normalise CRLF → LF first so trailing \r doesn't break the `$` anchor
+  // in our key:value regex. Windows checkout would otherwise see every
+  // captured value swallow the trailing CR and key.value regex fail.
+  final lines = content.replaceAll('\r\n', '\n').split('\n');
   final violations = <String>[];
+
+  // Stale-comment patterns that signal a finding's work is done or in
+  // progress but the YAML entry hasn't been formally closed via a
+  // terminal_state key. Per feedback_closure_yaml_per_finding_discipline.md.
+  final stalePatterns = [
+    RegExp(r'#\s*NOT YET CLOSED', caseSensitive: false),
+    RegExp(r'#\s*IN PROGRESS', caseSensitive: false),
+    RegExp(r'#\s*CLOSED in (current )?working tree', caseSensitive: false),
+    RegExp(r'#\s*PARTIAL', caseSensitive: false),
+    RegExp(r'#\s*SCHEDULED FOR', caseSensitive: false),
+  ];
 
   // Banned: any line containing `deferred:` outside YAML comments.
   for (var i = 0; i < lines.length; i++) {
@@ -148,6 +187,12 @@ List<String> _validate(File file) {
       currentLine = i + 1;
       continue;
     }
+    // Stale-pattern comment detection within this finding's block.
+    if (current.isNotEmpty &&
+        trimmed.trimLeft().startsWith('#') &&
+        stalePatterns.any((p) => p.hasMatch(trimmed))) {
+      current['_comments'] = '${current['_comments'] ?? ''}$trimmed\n';
+    }
     // Other lines: capture key: value pairs at any indent.
     final kvMatch = RegExp(r'^\s*(\w+):\s*(.*)$').firstMatch(line);
     if (kvMatch != null && current.isNotEmpty) {
@@ -176,8 +221,25 @@ List<String> _validate(File file) {
     final ln = f['_lineNumber'] ?? '?';
 
     if (state == null) {
-      // No terminal state — finding is still open. Allowed during work-in-
-      // progress; only block at audit closure time.
+      // No terminal state — check for stale-pattern comments in the
+      // finding's record block. If present, flag as warning (or fail
+      // under --strict).
+      final hasStaleComment = (f['_comments'] ?? '').isNotEmpty;
+      if (hasStaleComment) {
+        final msg = '${file.path}:$ln → finding $id has stale-pattern '
+            'comment but no terminal_state. Per '
+            'feedback_closure_yaml_per_finding_discipline.md, '
+            'populate terminal_state: closed_in_commit/upstream_blocked/'
+            'verified_clean on the entry.';
+        if (strict) {
+          violations.add(msg);
+        } else {
+          warnings.add('$id (line $ln)');
+        }
+      } else if (strict) {
+        violations.add('${file.path}:$ln → finding $id has no '
+            'terminal_state under --strict mode. Every finding must close.');
+      }
       continue;
     }
     closedTally++;
