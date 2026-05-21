@@ -1,0 +1,16 @@
+{
+  "_comment": "Tech-debt audit 2026-05-20 finding I9: declarative record of Firebase Crashlytics alert routing. The actual alert config lives in the Firebase Console (project AVYA, sender id 194342788570) — this file is a machine-readable mirror for audit/drift detection. Gate: scripts/check_crashlytics_alert_routing.dart.",
+  "project_id": "AVYA",
+  "sender_id": "194342788570",
+  "velocity_threshold": "1% sessions affected in 1h",
+  "anr_threshold": "0.5% sessions affected in 24h",
+  "notify": {
+    "channel": "email + onesignal_admin",
+    "recipient": "myfitnessjourney1988@gmail.com",
+    "secondary": "OneSignal admin push (external_id=founder)"
+  },
+  "dashboard_url": "https://console.firebase.google.com/project/avya/crashlytics",
+  "runbook": "docs/runbooks/crash-alerting.md",
+  "configured_in_console": false,
+  "_TODO": "Configure velocity + ANR alert thresholds in Firebase Console; flip configured_in_console to true once done. Tracked in B3 of tech-debt remediation plan."
+}

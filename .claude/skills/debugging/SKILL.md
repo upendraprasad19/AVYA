@@ -163,6 +163,35 @@ Per CLAUDE.md rules 21 + 22:
 - **Class rule:** any rate-limited sink MUST be auditable — log/return enough signal that "is this sink eating data" is answerable by a single SQL query (e.g., counting rate_limited responses vs. inserts in the same window).
 - **Prior incidents:** APK Test #16.1 / Theme D (`9d12af` — `log-client-error/index.ts:142-147`, founding incident). See `feedback_observability_silent_drop.md`.
 
+### 2.14 Plaintext secret in tracked-or-nearly-tracked source
+- **Telltale:** A `.gitignore` rule for a secret artifact (`*.jks`, `key.properties`, `*.p12`) exists at one level of the repo but not at root — OR the file is "merely untracked" rather than "actively ignored." `git ls-files` returns empty but `git add -A` from a parent dir would include it. Also: credential-shaped literals (`password: 'XYZ'`, `apiKey: 'sk_test_...'`, project-specific marker like `Avya2026`) in tracked source.
+- **Root-cause shape:** Defense-in-depth gap. Either `.gitignore` was scoped narrowly (nested only) OR a credential was inlined "temporarily" and never extracted.
+- **Fix pattern:** Add the pattern at every level it could be reached (root + nested). Don't remove the nested rule — defense in depth. Verify via `git check-ignore -v <path>` (authoritative, beats grepping `.gitignore` manually). Rotate any inlined credential AND extract to env. Gate: `scripts/check_secrets_gitignored.dart` (Gate 23).
+- **Class rule:** "I didn't `git add` it" is not the same as "it's ignored." Always use `git check-ignore -v`.
+- **Prior incidents:** Tech-debt audit 2026-05-20 finding I1 — audit subagent flagged as P0 thinking `key.properties` was unprotected; `git check-ignore -v` showed `android/.gitignore:12-14` already covered it. Root-level defense-in-depth added 2026-05-21. **This is also a methodology lesson** — `feedback_audit_findings_require_live_verification.md` applies; the verification subagent should run `git check-ignore -v`, not just `cat .gitignore`.
+
+### 2.15 Stale generated index (INDEX.md, applied_migrations.json, manifest)
+- **Telltale:** An auto-generated file has fewer entries than the filesystem says it should. `dart run scripts/build_bug_index.dart` regenerates correctly when invoked manually but the regen-on-commit hook isn't preserving the change. Bug-history grep starts returning false-negatives — "first-instance" claims silently codified.
+- **Root-cause shape:** Three sub-classes, decreasing likelihood:
+  1. Pre-commit `git add` was bypassed via `--no-verify` reflex (see `feedback_mistake_no_verify_reflex.md`).
+  2. One source file has malformed YAML frontmatter and the generator silently skips it (warns to stderr; no failure exit).
+  3. A new file doesn't follow the generator's naming convention (e.g. lacks `-<6char-id>.md` suffix).
+- **Fix pattern:** Run the regen. If count still mismatches, read stderr for "no parseable frontmatter" warnings; fix missing closing `---`. Then add Gate 25 `check_diagnose_index_fresh.dart` to pre-commit so future drift fails the commit.
+- **Prior incidents:** Tech-debt audit 2026-05-20 finding Doc2 — INDEX had 40 entries while filesystem had 152. Fixed `2026-05-15-swap-picker-custom-miss-a5d29c.md` (missing closing `---`) + renamed `2026-05-16-health-write-service.md` → `...-e7a516.md`. Closes-diagnose: audit closure YAML.
+
+### 2.16 Floating dependency pin
+- **Telltale:** `grep -rn '@supabase/supabase-js@\d"' supabase/functions/` returns matches. Sibling Edge Functions resolve the same import to different builds depending on CDN cache state. Cold-starts pick up new minor releases without a code change → silent behavior drift.
+- **Root-cause shape:** Dependency pinned at import site instead of central `import_map.json`. Different functions added at different times pick latest-stable-at-the-time. Floating `@N` shapes (no minor/patch) are the worst — any npm/esm push slides resolved version.
+- **Fix pattern:** Centralize via `supabase/functions/import_map.json` with bare-specifier aliases. Update import sites to use alias (`from "@supabase/supabase-js"`). Pin to exact `@major.minor.patch`. Gate: `scripts/check_import_map_present.dart` (Gate 27).
+- **Prior incidents:** Tech-debt audit 2026-05-20 findings D2/D3 — 4 floating `@2` pins; pinned to `@2.45.4` + introduced `import_map.json` in B1.
+
+### 2.17 Broken intra-doc pointer (§N #M cite to nonexistent section)
+- **Telltale:** Markdown table "Source" column or prose sentence cites `CLAUDE.md §N #M` where target section was renumbered, relocated, or deleted in a prior refactor. Agents chase the pointer to a dead end and either re-discover from scratch, ignore the row, or silently mis-apply the rule.
+- **Root-cause shape:** Doc-structure refactor (relocation/renumbering/decluttering — e.g. CLAUDE.md Milestone 6 commit `bab14f8`) didn't sweep the citation graph. Refactor was correct at destination; back-pointers got orphaned.
+- **Fix pattern:** Build citation index + heading set; assert every cite resolves. Gate: `scripts/check_claude_md_citations.dart` (Gate 26). For relocated entries without a clean target heading, convention is to cite `docs/diagnoses/INDEX.md` or `docs/architecture/<topic>.md` or `docs/playbook/common-pitfalls.md`.
+- **Class rule:** Any doc refactor that moves headings MUST be paired with a citation sweep + Gate 26 run.
+- **Prior incidents:** Tech-debt audit 2026-05-20 finding Doc6 — 44 broken `§19 #N` cites across 12 nested files + root CLAUDE.md:301-305. Swept to `(relocated 2026-05-18 — see docs/diagnoses/INDEX.md)` or `docs/playbook/common-pitfalls.md` in B1.
+
 ### 2.10 Provider-invalidation-after-mutation gaps
 - **Telltale:** Write succeeds; UI shows stale value until cold restart; insight card / receipt / calendar week shows pre-mutation state.
 - **Root-cause shape:** Hive write path forgets to invalidate one of the canonical provider batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`, `aiInsightProvider`, `dietPlanProvider`.
@@ -243,3 +272,4 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 - **2026-05-15** — Skill created. Seeded with 10 bug classes from Tests #6 through #15.4 + audit 2026-05-12. Diagnose-doc `2026-05-15-debugging-skill-creation-4e9515.md`.
 - **2026-05-15 (evening, post-APK-Test-#16)** — Self-evolution. (a) §2.4 expanded with mode-B 42P10 trap (5th writer/reader drift instance), live-arbiter scaffold reference, NOT-NULL-arbiter class rule. (b) §2.5 retry budget bumped to `[2000, 6000, 12000]` + 504 trigger + direct-HTTP wrapping. (c) §2.11 added — Repository `box.get(key) → Map` id-injection class (Gate 16). (d) Two new red flags in §3: onConflict-change verification + "Gate FAIL output but exit 0" trap. Closes-diagnose: `76c8f4`, `9f4ab2`, `25e91d`, `c01d57`, `a5d29c`.
 - **2026-05-16 (post-APK-Test-#16.1)** — Self-evolution. (e) §2.12 NEW — "Rogue Hive key formula bypasses canonical writer" (7th writer/reader drift instance, 3 rogue exlog formulas, Gate 17 new). (f) §2.13 NEW — "Telemetry sink silently drops past rate limit" (log-client-error 100/24h silent drop, found this batch). Closes-diagnose: `a16c1a`, `a17bc3`, `913261`, `9d12af`.
+- **2026-05-21 (Tech-debt audit 2026-05-20 / Batch 1)** — Self-evolution. §2.14 NEW — Plaintext secret in tracked-or-nearly-tracked source (I1; defense-in-depth `.gitignore` + Gate 23). §2.15 NEW — Stale generated index (Doc2; INDEX.md regen + Gate 25). §2.16 NEW — Floating dependency pin (D2/D3; `import_map.json` + Gate 27). §2.17 NEW — Broken intra-doc pointer (Doc6; citation sweep + Gate 26). Each entry cites the discovering finding ID + the new gate that prevents recurrence. Closes-diagnose: tech-debt audit closure YAML (B1).

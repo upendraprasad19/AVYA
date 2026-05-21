@@ -2,7 +2,7 @@
 // Shared accessors for the coach_memory table. Used by ai-proxy,
 // daily-snapshot, compute-coach-signals, morning-alert.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 export interface CoachMemory {
   user_id: string;

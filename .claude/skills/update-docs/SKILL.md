@@ -54,6 +54,30 @@ End of any batch that lands a commit on a feature branch. User explicitly says "
    - List touched files + skipped nodes.
    - Note any nodes flagged as "should be done in a follow-up" — those go into the retrospective's "Follow-ups deferred" section.
 
+## Extended checklist nodes (added by Tech-debt audit 2026-05-20 / B1)
+
+Beyond the 11-node knowledge-graph protocol above, every batch must also walk these tech-debt-prevention nodes:
+
+10. **Is `docs/diagnoses/INDEX.md` regenerated?** Run `dart run scripts/check_diagnose_index_fresh.dart`. If FAIL, run `dart run scripts/build_bug_index.dart` + verify any new diagnose-doc has parseable YAML frontmatter (closing `---`) + filename ending `-<6char-id>.md`.
+
+11. **Are CLAUDE.md `§N` citations live?** Run `dart run scripts/check_claude_md_citations.dart`. If FAIL, replace broken cites with `docs/diagnoses/INDEX.md` or `docs/playbook/common-pitfalls.md` per convention.
+
+12. **Is `backups/applied_migrations.json` in structured ledger form?** Each row must be `{migration, applied_at, hash, applier}`, not a bare string. Gate: `scripts/check_applied_migrations_ledger.dart` (lands in B3).
+
+13. **Is `docs/operations/SECRET_INVENTORY.md` current?** If this batch added a new local-only secret file (env var, key file, PAT), append a row.
+
+14. **Are new cron jobs registered in `CRON_REGISTRY.md`?** Gate: `scripts/check_cron_registry.dart`. Every `cron.schedule('NAME', ...)` in a new migration MUST be added to the registry in the same commit.
+
+15. **Are new gate scripts wired into pre-commit + CI?** Gate: `scripts/check_gate_scripts_wired.dart`. If you added a `scripts/check_*.dart`, the dynamic loop in `scripts/pre-commit.sh` + `.github/workflows/test.yml` picks it up automatically — but verify by running the gate.
+
+16. **Are SoT registry entries tagged with `behavioral_test_path:` (not just source-grep)?** Source-grep tests count for "presence" only; semantic drift slips through. Every new SoT entry needs a behavioral contract test too (lands in B2 sweep; this checklist node lights up after B2).
+
+17. **Were new singletons added without Riverpod scoping?** If yes, audit cross-account leak risk — `feedback_*.md` for the class (lands as `feedback_singleton_cross_account_leak.md` in B2).
+
+## Self-evolution changelog
+
+- **2026-05-21 (Tech-debt audit 2026-05-20 / B1)** — Added extended-checklist nodes 10-17. Nodes 12, 16, 17 are scaffolds — their gates land in later batches (B2/B3) of the same plan.
+
 ## Output
 
 - N nodes updated.

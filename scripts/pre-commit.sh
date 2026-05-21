@@ -42,6 +42,43 @@ fi
 # Pre-commit enforcement (scripts/check_naming_conventions.dart) is
 # out of scope for this batch — the protocol relies on agent discipline.
 
+# Run every scripts/check_*.dart gate (tech-debt audit 2026-05-20 finding I2).
+# Previously 25 of 27 gate scripts were dormant — written but never wired.
+# Allow-list (build-only or advisory) lives in scripts/check_gate_scripts_wired.dart.
+# Each script accepts a --warn-only flag during its 24h smoke window;
+# remove the flag once the gate is proven stable.
+echo "[pre-commit] Running tech-debt audit gates..."
+GATE_FAIL=0
+for GATE in scripts/check_*.dart; do
+  GATE_NAME="$(basename "$GATE")"
+  # Skip build-only / advisory gates per check_gate_scripts_wired.dart allowlist.
+  case "$GATE_NAME" in
+    check_apk_size_within_bounds.dart|\
+    check_app_version_matches_pubspec.dart|\
+    check_telemetry_pii_classification.dart|\
+    check_unawaited_has_error_sink.dart|\
+    check_razorpay_key_flavor.dart|\
+    check_migrations_live.dart|\
+    check_onconflict_live_arbiter.dart|\
+    check_regression_catalog.dart|\
+    check_snapshot_contract.dart)
+      # Razorpay gate: .env.prod is user-only / gitignored secret state.
+      # Other 4: require live DB / merge context / build artifact —
+      # run via /build-apk skill, NOT pre-commit. See
+      # scripts/check_gate_scripts_wired.dart allowlist for rationale.
+      continue
+      ;;
+  esac
+  if ! dart run "$GATE" >/dev/null 2>&1; then
+    echo "[pre-commit] GATE FAIL: $GATE_NAME — re-run for details: dart run $GATE"
+    GATE_FAIL=1
+  fi
+done
+if [ "$GATE_FAIL" -ne 0 ]; then
+  echo "[pre-commit] One or more gates failed. Fix root cause; do NOT use --no-verify."
+  exit 1
+fi
+
 # Regression catalog walk — only on merge commits (per spec §9.2)
 if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
   echo "[pre-commit] Merge commit detected — walking regression catalog..."

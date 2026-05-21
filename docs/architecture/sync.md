@@ -20,7 +20,7 @@ status: scaffold
 │                                                      │
 │  SEED DATA (bundled JSON in APK):                    │
 │    assets/data/exercise_library.json (200+ exercises)│
-│    assets/data/food_database.json (93 foods)          │
+│    assets/data/food_database.json (1431 foods)        │
 │    → Parsed into Hive on first launch                │
 │                                                      │
 │  SYNC TO SUPABASE:                                   │

@@ -51,7 +51,9 @@
  * approve per-function deploys (live Edge Function deploys are gated).
  */
 
-import { jwtVerify } from "https://deno.land/x/jose@v5.6.3/index.ts";
+// Tech-debt audit 2026-05-20 D12: bumped jose v5.6.3 → v5.9.6 (security
+// patches in 5.7.x/5.8.x/5.9.x). Gate: scripts/check_jose_version.dart.
+import { jwtVerify } from "https://deno.land/x/jose@v5.9.6/index.ts";
 
 /**
  * Returns true when the request's Authorization header carries either:

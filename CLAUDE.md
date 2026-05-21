@@ -261,7 +261,7 @@ After observations captured + before brainstorming:
 18. **Edge Function input limits:** enforce message (5K) + snapshot (10K) limits server-side on ALL AI endpoints.
 19. **Server-side subscription verification:** high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) MUST call `verifyFromServer()` in `gate()`.
 20. **No deferred test failures.** Failing tests on `main` are P0 blockers. The label "pre-existing failure" is banned. Pre-commit hook blocks any commit while `flutter test` reports failures; never `--no-verify` to "ship something else first".
-21. **Regression test required for every fix.** Test that FAILS without the fix and PASSES with it. Cite test path in commit message. Source-grep tests under `test/contracts/` count.
+21. **Regression test required for every fix.** Test that FAILS without the fix and PASSES with it. Cite test path in commit message. Source-grep tests under `test/contracts/` count for PRESENCE only — every SoT registry entry must ALSO have a `behavioral_test_path:` (Hive-write → Hive-read assertion, or fakeAsync race harness, or end-to-end flow) that fails when the runtime path is broken even if the source text remains intact. See `feedback_source_grep_false_confidence.md`.
 22. **Bug fixes require a diagnose-doc.** Every commit on `main` matching `^(fix|bug|regression)(\([^)]*\))?:` MUST reference `docs/diagnoses/<date>-<slug>-<id>.md` via `closes-diagnose: <bug-id>` in the commit body. Doc must pass `dart run scripts/validate_diagnose_doc.dart <path>`. Subagents dispatched for investigation MUST receive `docs/agent_brief_preamble.md` as prefix. Pre-commit hook + `/build-apk` Gate 10 enforce this.
 23. **No stopping mid-batch.** Multi-task instructions ("fix everything", "address each and everything") run through to completion. Valid stops only on: whole batch done / BLOCKED on user-only action / new interrupting instruction. Banned: "context tight", "responsible handoff", "fresh session pickup". Documentation per rule 22 + memory file update for any NEW pattern + CLAUDE.md update for any NEW invariant — always.
 
@@ -294,15 +294,32 @@ Before introducing any new file / symbol / Hive key / cloud column / Edge Functi
 - Every subagent investigation dispatch MUST prepend `docs/agent_brief_preamble.md` to the task-specific brief.
 - When invoking review / audit work, specify which lenses from `docs/audit/LENS_REGISTRY.md` (41 canonical lenses) are in scope. Prevents "we just look at code" audit blind spot.
 
+### 4.10 Tech-debt audit cadence (NEW — tech-debt audit 2026-05-20)
+
+- Run the 6-category tech-debt audit (Code / Architecture / Test / Dependency / Documentation / Infrastructure) at minimum once per quarter AND after any 3+-batch landing.
+- Audit produces closure YAML at `docs/audit/<YYYY_MM_DD>_audit_closures.yaml`. Every finding gets exactly one terminal state: `closed_in_commit:`, `upstream_blocked:`, or `verified_clean:`. The schema has NO `deferred:` key. Validator: `scripts/validate_audit_closure.dart` (lands B4 of 2026-05-20 plan).
+- Quarterly cadence enforced via `/schedule`: first scheduled fire 2026-08-03 (first Monday of Q3), then quarterly.
+- See `feedback_no_deferrals_tech_debt_class.md` + `feedback_audit_closure_yaml_required.md` + `feedback_operational_observability_first.md`.
+
+### 4.11 Gates before refactor (NEW — extends §4.6 feature-flag protocol)
+
+When a planned refactor touches a known bug class (writer/reader drift, restore completeness, telemetry, secret exposure, etc.):
+
+1. The regression-detection gate script (`scripts/check_*.dart`) lives + is wired into pre-commit + CI **before** the first refactor commit lands.
+2. Gate runs `--warn-only` for 24h to baseline current violations, then flips to hard-fail.
+3. Each refactor commit can detect its own partial-state drift via the gate. No commit lands without the gate green.
+
+See `feedback_gates_before_refactor.md`. This rule turns multi-day refactors into atomic-safe rolling commits.
+
 ### 4.9 Common process pitfalls
 
 | Pitfall | How to avoid | Source |
 |---|---|---|
-| Wrong import path | Use relative within features, `package:` for shared/core. | §19 #5 |
-| Gradle build hangs silently | `-Xmx` must be ≤4G on 16GB system. 8G causes OOM with no terminal output. Check `android/hs_err_*.log`. Remove stale `flutter/bin/cache/lockfile` if Flutter commands hang on lock. | §19 #49 |
-| Worktree APK build fails with "Did not find .env" | `.env` is gitignored. Before `flutter build apk` in a new worktree, copy from main: `cp "C:/Upendra/Claude Code/Fitness App/.env" <worktree>/.env`. | §19 #60 |
-| Built APK via `flutter build apk` directly | Always use the `/build-apk` skill. Direct flutter build can hang silently on this machine without the skill's pre-flight cleanup. | §19 #76 |
-| Master Audit / multi-agent surveys produce false-positive findings | Never apply a multi-agent audit finding without first reading the cited file:line AND verifying claimed cloud state via live `information_schema` query. Cite the verification SQL in the audit report. See `feedback_audit_findings_require_live_verification.md`. | §19 #148 |
+| Wrong import path | Use relative within features, `package:` for shared/core. | `docs/playbook/common-pitfalls.md` |
+| Gradle build hangs silently | `-Xmx` must be ≤4G on 16GB system. 8G causes OOM with no terminal output. Check `android/hs_err_*.log`. Remove stale `flutter/bin/cache/lockfile` if Flutter commands hang on lock. | `docs/playbook/common-pitfalls.md` |
+| Worktree APK build fails with "Did not find .env" | `.env` is gitignored. Before `flutter build apk` in a new worktree, copy from main: `cp "C:/Upendra/Claude Code/Fitness App/.env" <worktree>/.env`. | `docs/playbook/common-pitfalls.md` |
+| Built APK via `flutter build apk` directly | Always use the `/build-apk` skill. Direct flutter build can hang silently on this machine without the skill's pre-flight cleanup. | `docs/playbook/common-pitfalls.md` |
+| Master Audit / multi-agent surveys produce false-positive findings | Never apply a multi-agent audit finding without first reading the cited file:line AND verifying claimed cloud state via live `information_schema` query. Cite the verification SQL in the audit report. See `feedback_audit_findings_require_live_verification.md`. | `docs/playbook/common-pitfalls.md` |
 
 ---
 

@@ -1,3 +1,33 @@
+/**
+ * razorpay-webhook — Razorpay → Supabase payment lifecycle reconciliation.
+ *
+ * Trigger: HTTP POST from Razorpay webhook (configured in Razorpay dashboard).
+ *          NOT user-invoked. Webhook URL is the public function URL.
+ *
+ * Input shape: standard Razorpay webhook envelope —
+ *   { event: "payment.captured" | "subscription.activated" | "subscription.cancelled" | ...,
+ *     payload: { payment: {...} | subscription: {...} },
+ *     created_at: number }
+ *   Plus the `X-Razorpay-Signature` HMAC-SHA256 header signed with the
+ *   webhook secret (NOT the Razorpay key secret; separate value).
+ *
+ * Output shape: 200 `{ ok: true }` on success / processed.
+ *               400 on signature mismatch or malformed body (no PII).
+ *               5xx on transient DB / Razorpay API errors — Razorpay retries.
+ *
+ * Env secrets used:
+ *   - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (Authorization for outbound API calls)
+ *   - RAZORPAY_WEBHOOK_SECRET (HMAC verification of inbound signature)
+ *   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (DB writes to subscriptions, payment_audit_log)
+ *
+ * verify_jwt: false (Razorpay does not send JWT; we authenticate via signature).
+ *
+ * Idempotency: keyed on `razorpay_payment_id` + event type. Re-delivery of the
+ * same event is a no-op; we UPSERT into `payment_audit_log` first and bail if
+ * the row already reflects the terminal state. See diagnose-docs referenced from
+ * CLAUDE.md §4.4 rule 19 (server-side subscription verification) for the full
+ * payment hardening history (TDZ bugs OI-26/27/29, audit Hermes Phase A→D).
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";

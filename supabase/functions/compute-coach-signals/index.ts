@@ -8,7 +8,7 @@
 // round-trips. Acceptable for current scale; revisit when active user
 // count exceeds ~2000.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { upsertCoachMemory } from "../_shared/coach_memory.ts";
 
 const corsHeaders = {
