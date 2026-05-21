@@ -19,6 +19,7 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   late String writerSrc;
@@ -30,7 +31,7 @@ void main() {
             'lib/features/train/widgets/create_custom_exercise_sheet.dart')
         .readAsStringSync();
     trainScreenSrc =
-        File('lib/features/train/screens/train_screen.dart').readAsStringSync();
+        readScreenSource('train');
     syncCommunitySrc = File('lib/core/services/sync/sync_community.dart')
         .readAsStringSync();
   });

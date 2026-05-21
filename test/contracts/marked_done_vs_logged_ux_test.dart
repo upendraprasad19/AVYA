@@ -21,6 +21,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   group('OI-05 — marked-done-without-logging UX', () {
@@ -83,8 +84,7 @@ void main() {
 
     test('train_screen expanded view differentiates copy for completed days',
         () {
-      final src = File('lib/features/train/screens/train_screen.dart')
-          .readAsStringSync();
+      final src = readScreenSource('train');
       expect(
         src.contains(
             'Marked done outside the app — no exercises were logged.'),

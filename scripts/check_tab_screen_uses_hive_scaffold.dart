@@ -25,16 +25,16 @@ import 'dart:io';
 /// explicitly allow-listed.
 const _tabScreens = <String>[
   'lib/features/home/screens/home_screen.dart',
-  'lib/features/train/screens/train_screen.dart',
+  'lib/features/train/screens/train/screen.dart',
   'lib/features/nutrition/screens/nutrition_screen.dart',
-  'lib/features/ai_coach/screens/ai_coach_screen.dart',
-  'lib/features/profile/screens/profile_screen.dart',
+  'lib/features/ai_coach/screens/ai_coach/screen.dart',
+  'lib/features/profile/screens/profile/screen.dart',
 ];
 
 /// Screens whose mount shape is fundamentally different and would be
 /// worse off with the mixin. Each entry needs a one-line reason.
 const _allowList = <String, String>{
-  'lib/features/ai_coach/screens/ai_coach_screen.dart':
+  'lib/features/ai_coach/screens/ai_coach/screen.dart':
       'Chat history hydration is incremental + animated; never used the '
           '`_isLoading + microtask + _retry` skeleton pattern. No retry button — '
           'chat list shows inline `ChatErrorBubble` for transient failures.',

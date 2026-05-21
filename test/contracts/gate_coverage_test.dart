@@ -22,6 +22,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   group('Audit-2026-05-16 / E.8 + F8.1 — gate coverage + dead code', () {
@@ -29,7 +30,7 @@ void main() {
       // F8.1 fix — entry point at _pickImage in ai_coach_screen.dart now
       // routes through SubscriptionService.gate(featurePhotoAnalysis, ...).
       final src =
-          File('lib/features/ai_coach/screens/ai_coach_screen.dart').readAsStringSync();
+          readScreenSource('ai_coach');
       final hasGate =
           RegExp(r'\.gate\([^)]*featurePhotoAnalysis').hasMatch(src);
       expect(hasGate, isTrue,
@@ -111,15 +112,18 @@ void main() {
       // This test bounds the count to prevent silent regrowth.
       const featurePaths = [
         'lib/features/ai_coach/providers/ai_coach_provider.dart',
-        'lib/features/ai_coach/screens/ai_coach_screen.dart',
         'lib/features/profile/screens/edit_profile_screen.dart',
         'lib/features/profile/screens/notification_settings_screen.dart',
-        'lib/features/profile/screens/profile_screen.dart',
         'lib/features/profile/widgets/weekly_report_card.dart',
       ];
       int total = 0;
       for (final p in featurePaths) {
         final src = File(p).readAsStringSync();
+        total += RegExp(r'if\s*\(\s*isPro\b').allMatches(src).length;
+      }
+      // Split screens (audit-2026-05-20 / C4) — read folder contents.
+      for (final screen in const ['ai_coach', 'profile']) {
+        final src = readScreenSource(screen);
         total += RegExp(r'if\s*\(\s*isPro\b').allMatches(src).length;
       }
       expect(total, lessThanOrEqualTo(12),

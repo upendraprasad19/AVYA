@@ -22,6 +22,7 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   group(
@@ -116,7 +117,7 @@ void main() {
     test('train_screen handles AssignTemplateResult (not void-discards it)',
         () {
       final trainSrc =
-          File('lib/features/train/screens/train_screen.dart').readAsStringSync();
+          readScreenSource('train');
 
       // The caller must capture the return value (not discard with void await).
       // Accept any variable name that captures the result.

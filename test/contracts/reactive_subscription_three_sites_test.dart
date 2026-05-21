@@ -8,6 +8,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _src(String relPath) => File(relPath).readAsStringSync();
 
@@ -52,7 +53,7 @@ void main() {
     test(
       'H-2 — train_screen WeekSelector.onSelect reads subscriptionInfoProvider',
       () {
-        final src = _src('lib/features/train/screens/train_screen.dart');
+        final src = readScreenSource('train');
         final idx = src.indexOf('WeekSelector(');
         expect(idx, greaterThan(0));
         // Slice to the closing `),` of the WeekSelector — find the

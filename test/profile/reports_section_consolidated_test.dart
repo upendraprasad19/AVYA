@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   late String src;
 
   setUpAll(() {
-    src = File('lib/features/profile/screens/profile_screen.dart')
-        .readAsStringSync();
+    src = readScreenSource('profile');
   });
 
   test('Predictions, Progress Comparison, Progress Photos share one _buildCard', () {

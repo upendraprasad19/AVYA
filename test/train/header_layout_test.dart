@@ -1,14 +1,16 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 /// F9 · Test #9 — Train header layout invariants.
 void main() {
   late String src;
 
   setUpAll(() {
-    final f = File('lib/features/train/screens/train_screen.dart');
-    expect(f.existsSync(), isTrue, reason: 'Run from project root');
-    src = f.readAsStringSync();
+    final dir = Directory('lib/features/train/screens/train');
+    expect(dir.existsSync(), isTrue, reason: 'Run from project root');
+    src = readScreenSource('train');
   });
 
   test('title uses Fraunces h1 32sp (standardized cross-screen)', () {

@@ -20,14 +20,14 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   test(
       't1m5b0 — chat-media upload uses createSignedUrl (private bucket cannot use getPublicUrl)',
       () {
     final src =
-        File('lib/features/ai_coach/screens/ai_coach_screen.dart')
-            .readAsStringSync();
+        readScreenSource('ai_coach');
 
     // Strip block + line comments so the explanatory comment naming the
     // anti-pattern does not match (it has to mention getPublicUrl in

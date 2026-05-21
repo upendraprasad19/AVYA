@@ -21,14 +21,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-const _profilePath = 'lib/features/profile/screens/profile_screen.dart';
+import '../helpers/read_screen_source.dart';
+
 const _profileIdentityPath = 'lib/features/profile/widgets/profile_identity.dart';
 
 String _src(String relative) => File(relative).readAsStringSync();
 
 void main() {
   group('Profile layout — Plan D Test #6 D-11 invariants', () {
-    final src = _src(_profilePath);
+    final src = readScreenSource('profile');
 
     test(
         'C13a — Profile wires the rank chip via ProfileIdentity '

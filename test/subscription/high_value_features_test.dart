@@ -13,6 +13,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 void main() {
   group('SubscriptionService._highValueFeatures (Q6)', () {
     test('contains exactly 3 features (no active_workout_mode)', () {
@@ -46,9 +48,7 @@ void main() {
     });
 
     test('train_screen has no gate against active_workout_mode', () {
-      final source = File(
-        'lib/features/train/screens/train_screen.dart',
-      ).readAsStringSync();
+      final source = readScreenSource('train');
       // Pre-fix the gate was `gate(AppConstants.featureActiveWorkoutMode, ...)`.
       // Post-deletion, no callsite can reference the symbol AND no callsite
       // should hardcode the string. Match the string literal form for

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 /// Verifies that the 'notification-settings' route is registered in app_router.dart
 /// as a child of /profile, making it deep-linkable and state-restorable.
 ///
@@ -33,10 +35,9 @@ void main() {
     });
 
     test('profile_screen uses context.push for notification-settings', () {
-      final profileFile =
-          File('lib/features/profile/screens/profile_screen.dart');
-      expect(profileFile.existsSync(), isTrue);
-      final profileSource = profileFile.readAsStringSync();
+      final dir = Directory('lib/features/profile/screens/profile');
+      expect(dir.existsSync(), isTrue);
+      final profileSource = readScreenSource('profile');
       expect(
         profileSource,
         contains("'/profile/notification-settings'"),

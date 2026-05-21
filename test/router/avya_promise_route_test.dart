@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 void main() {
   late String routerSrc;
@@ -8,7 +9,7 @@ void main() {
   setUpAll(() {
     routerSrc = File('lib/core/router/app_router.dart').readAsStringSync();
     profileSrc =
-        File('lib/features/profile/screens/profile_screen.dart').readAsStringSync();
+        readScreenSource('profile');
   });
 
   test('/avya/promise route exists in router', () {

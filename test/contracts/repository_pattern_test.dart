@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// Source-scan contract test: CLAUDE.md rule #4 — repository pattern for all
 /// data access. No widget may call Supabase.instance.client.from() or invoke
@@ -39,8 +40,7 @@ void main() {
         'profile_screen.dart does not query user_custom_exercises or users table directly',
         () async {
       final source =
-          await File('lib/features/profile/screens/profile_screen.dart')
-              .readAsString();
+          await Future.value(readScreenSource('profile'));
       expect(
         source,
         isNot(contains(".from('user_custom_exercises")),

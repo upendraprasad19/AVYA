@@ -8,7 +8,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
-import 'package:icanbefitter/features/ai_coach/screens/ai_coach_screen.dart';
+import 'package:icanbefitter/features/ai_coach/screens/ai_coach/screen.dart';
 
 import '../helpers/hive_test_setup.dart';
 

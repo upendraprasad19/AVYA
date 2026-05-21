@@ -21,17 +21,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../helpers/read_screen_source.dart';
+
 // ── Paths ────────────────────────────────────────────────────────────────
 const _screenPath =
     'lib/features/profile/screens/delete_account_screen.dart';
-const _profilePath =
-    'lib/features/profile/screens/profile_screen.dart';
 const _routerPath =
     'lib/core/router/app_router.dart';
 const _repoPath =
     'lib/shared/repositories/user_repository.dart';
 
 String _src(String p) => File(p).readAsStringSync();
+String _profileSrc() => readScreenSource('profile');
 
 // ── Validation helper (mirrors _confirmValid logic) ─────────────────────
 //
@@ -266,7 +267,7 @@ void main() {
 
   // ── H1-C: profile_screen.dart migration ─────────────────────────────────
   group('H1-C — Profile screen migration', () {
-    final src = _src(_profilePath);
+    final src = _profileSrc();
 
     test('No longer contains _showDeleteAccountDialog method definition', () {
       expect(

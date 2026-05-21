@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 /// Source-of-truth contract: writer/reader pairs for `scheduled_workouts_mutations`
 /// from docs/sot_registry.yaml.
 ///
@@ -72,19 +74,21 @@ void main() {
     test('forbidden: no widget writes schedule_ keys directly', () {
       // Widgets must NOT write schedule_ keys — only WorkoutScheduleService
       // Source-grep: check that the only file writing 'workoutBox.put(\'schedule_' is the service itself
-      final widgetFiles = [
-        'lib/features/home/screens/home_screen.dart',
-        'lib/features/train/screens/train_screen.dart',
-      ];
-      for (final path in widgetFiles) {
-        final f = File(path);
-        if (!f.existsSync()) continue;
-        final src = f.readAsStringSync();
+      // Post-C4 split: train_screen.dart was replaced by a folder of part
+      // files (lib/features/train/screens/train/*); read via helper.
+      final widgetSources = <String, String>{
+        'home_screen.dart':
+            File('lib/features/home/screens/home_screen.dart').readAsStringSync(),
+        'train screen folder': readScreenSource('train'),
+      };
+      for (final entry in widgetSources.entries) {
+        final src = entry.value;
         expect(src.contains("workoutBox.put('schedule_"), isFalse,
             reason:
-                '$path must not write schedule_ keys directly; use WorkoutScheduleService');
+                '${entry.key} must not write schedule_ keys directly; use WorkoutScheduleService');
         expect(src.contains('.put(\'schedule_'), isFalse,
-            reason: '$path must route schedule writes through WorkoutScheduleService');
+            reason:
+                '${entry.key} must route schedule writes through WorkoutScheduleService');
       }
     });
 

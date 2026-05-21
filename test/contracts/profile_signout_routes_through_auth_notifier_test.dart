@@ -14,6 +14,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _src(String relPath) => File(relPath).readAsStringSync();
 
@@ -22,7 +23,7 @@ void main() {
     test(
       '_performSignOut delegates to authNotifierProvider.signOut()',
       () {
-        final src = _src('lib/features/profile/screens/profile_screen.dart');
+        final src = readScreenSource('profile');
         final idx = src.indexOf('Future<void> _performSignOut() async');
         expect(idx, greaterThan(0));
         // Slice generously — the method body is short; stop at the
@@ -51,7 +52,7 @@ void main() {
     test(
       '_performSignOut does NOT call UserRepository.clearAllData directly',
       () {
-        final src = _src('lib/features/profile/screens/profile_screen.dart');
+        final src = readScreenSource('profile');
         final idx = src.indexOf('Future<void> _performSignOut() async');
         final endA = src.indexOf('\n  /// ', idx + 10);
         final endB = src.indexOf('\n  Future<', idx + 10);

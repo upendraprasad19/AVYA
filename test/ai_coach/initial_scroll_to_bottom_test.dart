@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 /// APK Test #15 / Bug E — AI coach scrolls to bottom on first paint.
 ///
 /// Pre-Test-#15: opening the AI coach screen left scroll position at 0
@@ -27,10 +29,10 @@ void main() {
   late String src;
 
   setUpAll(() {
-    final f = File('lib/features/ai_coach/screens/ai_coach_screen.dart');
-    expect(f.existsSync(), isTrue,
-        reason: 'ai_coach_screen.dart must exist');
-    src = f.readAsStringSync();
+    final dir = Directory('lib/features/ai_coach/screens/ai_coach');
+    expect(dir.existsSync(), isTrue,
+        reason: 'ai_coach screen folder must exist');
+    src = readScreenSource('ai_coach');
   });
 
   group('AI coach initial-scroll contract', () {

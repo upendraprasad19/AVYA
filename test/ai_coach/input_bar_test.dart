@@ -1,14 +1,16 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/read_screen_source.dart';
+
 /// F12 · Test #9 — Coach input bar layout invariants.
 void main() {
   late String src;
 
   setUpAll(() {
-    final f = File('lib/features/ai_coach/screens/ai_coach_screen.dart');
-    expect(f.existsSync(), isTrue, reason: 'Run from project root');
-    src = f.readAsStringSync();
+    final dir = Directory('lib/features/ai_coach/screens/ai_coach');
+    expect(dir.existsSync(), isTrue, reason: 'Run from project root');
+    src = readScreenSource('ai_coach');
   });
 
   test('mic↔send morph driven by AnimatedSwitcher with 200ms duration', () {

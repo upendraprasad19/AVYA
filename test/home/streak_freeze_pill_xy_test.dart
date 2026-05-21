@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// APK Test #14 / Bug D.3 — streak-freeze pill shows `x/y`.
 ///
@@ -126,8 +127,7 @@ void main() {
     });
 
     test('train_screen reads streakFreezeMaxProvider', () {
-      final src = File('lib/features/train/screens/train_screen.dart')
-          .readAsStringSync();
+      final src = readScreenSource('train');
       expect(src.contains('streakFreezeMaxProvider'), isTrue,
           reason: 'train_screen must pass freezesMax via provider');
     });
