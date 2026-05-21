@@ -1,0 +1,49 @@
+# Dependabot config — tech-debt audit 2026-05-20 finding D10
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Cadence: weekly (Mondays), to keep transitive bumps from accreting like
+# the 32 stale lock-file entries surfaced in the 2026-05-20 audit (D15).
+#
+# Ignored: flutter SDK pin in pubspec.yaml — controlled deliberately in
+# CLAUDE.md §0 + build pipeline. Dependabot must not touch it.
+
+version: 2
+updates:
+  # Flutter / Dart packages (pubspec.yaml)
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "tech-debt-audit"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    ignore:
+      # Flutter SDK constraint is pinned manually
+      - dependency-name: "flutter"
+      # share_plus blocked on health → device_info_plus → win32 chain
+      # See project_share_plus_13_blocked.md
+      - dependency-name: "share_plus"
+      # analyzer major upgrades blocked on riverpod_generator
+      - dependency-name: "analyzer"
+
+  # GitHub Actions workflow files
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
