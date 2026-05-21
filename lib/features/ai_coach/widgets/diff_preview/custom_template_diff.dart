@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `create_custom_template` intent (Phase D.6).
 ///
@@ -38,11 +37,7 @@ class CustomTemplateDiff extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Empty template — no days to save.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -72,55 +67,32 @@ class CustomTemplateDiff extends StatelessWidget {
             children: [
               Text(
                 name,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
               if (description != null && description.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
                   description,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
                 ),
               ],
               const SizedBox(height: 6),
               Text(
                 '${days.length} day${days.length == 1 ? "" : "s"} \u2022 '
                 '$totalExercises exercises total',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.proGold,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.proGold),
               ),
               if (assignedDays.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
                   'Suggested weekdays: ${_formatAssignedDays(assignedDays)}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                 ),
               ],
               const SizedBox(height: 6),
               Text(
                 'Saved to your templates library — not auto-scheduled.',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textSecondary,
-                  fontSize: 10,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 10, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -189,33 +161,19 @@ class _DayExpansionTile extends StatelessWidget {
                 ),
                 child: Text(
                   'DAY ${index + 1}',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   dayName,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 ),
               ),
               Text(
                 '${exercises.length} ex',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -257,12 +215,7 @@ class _DayExpansionTile extends StatelessWidget {
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textPrimary,
-                  fontSize: 12,
-                  height: 1.3,
-                ),
+                style: AppTypography.bodySm.copyWith(color: AppColors.textPrimary, height: 1.3),
                 children: [
                   TextSpan(
                     text: name,
@@ -270,20 +223,12 @@ class _DayExpansionTile extends StatelessWidget {
                   ),
                   TextSpan(
                     text: '  $volumeLabel',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary),
                   ),
                   if (rest != null)
                     TextSpan(
                       text: '  \u2022 ${rest}s rest',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textSecondary,
-                        fontSize: 10,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 10, color: AppColors.textSecondary),
                     ),
                 ],
               ),

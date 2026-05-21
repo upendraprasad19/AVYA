@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/schedule_template_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `schedule_template` intent (Phase D.7).
 ///
@@ -72,11 +71,7 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not compute schedule: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -107,34 +102,19 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
             children: [
               Text(
                 p.groupName,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 4),
               Text(
                 '${p.totalDaysInGroup}-day template \u2022 '
                 '${p.willScheduleCount} of ${p.assignments.length} dates will be scheduled',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.proGold,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.proGold),
               ),
               if (p.skipCompletedCount > 0) ...[
                 const SizedBox(height: 4),
                 Text(
                   '${p.skipCompletedCount} completed day${p.skipCompletedCount == 1 ? '' : 's'} skipped',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                 ),
               ],
             ],
@@ -175,12 +155,7 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
             width: 56,
             child: Text(
               _dayLabel(a.date),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent),
             ),
           ),
           const SizedBox(width: 8),
@@ -190,32 +165,17 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
               children: [
                 Text(
                   a.dayName,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 ),
                 if (a.currentWorkoutName != null && a.willReplace)
                   Text(
                     'was: ${a.currentWorkoutName}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 10,
-                      fontStyle: FontStyle.italic,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 10, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                   )
                 else if (a.currentWorkoutName != null && a.willSkip)
                   Text(
                     'completed: ${a.currentWorkoutName}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 10,
-                      fontStyle: FontStyle.italic,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 10, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                   ),
               ],
             ),
@@ -228,12 +188,7 @@ class _ScheduleTemplateDiffState extends State<ScheduleTemplateDiff> {
             ),
             child: Text(
               badge,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: color),
             ),
           ),
         ],

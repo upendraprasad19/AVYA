@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Full-width banner section with gradient background.
 ///
@@ -52,12 +52,7 @@ class ProfileBanner extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     'Add Cover Photo',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -87,12 +82,7 @@ class ProfileBanner extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         'Edit',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       ),
                     ],
                   ),

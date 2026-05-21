@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/utils/card_share_service.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 // ── Challenge Data ─────────────────────────────────────────────
 
@@ -98,12 +98,7 @@ class _ChallengeCardState extends State<ChallengeCard> {
                   child: Center(
                     child: Text(
                       'Challenge a Friend',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent),
                     ),
                   ),
                 ),
@@ -123,12 +118,7 @@ class _ChallengeCardState extends State<ChallengeCard> {
                     child: Center(
                       child: Text(
                         'Accept Challenge',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
-                        ),
+                        style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                       ),
                     ),
                   ),
@@ -166,13 +156,7 @@ class _ChallengeCardState extends State<ChallengeCard> {
                 ),
                 child: Text(
                   diffLabel,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
-                    color: diffColor,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: diffColor),
                 ),
               ),
               const Spacer(),
@@ -185,13 +169,7 @@ class _ChallengeCardState extends State<ChallengeCard> {
           // Challenge name
           Text(
             widget.challenge.name,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
-              letterSpacing: 0.5,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary, letterSpacing: 0.5),
           ),
           const SizedBox(height: 14),
 
@@ -212,22 +190,12 @@ class _ChallengeCardState extends State<ChallengeCard> {
                     Expanded(
                       child: Text(
                         ex.name,
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
+                        style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                       ),
                     ),
                     Text(
                       '${ex.reps} reps',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.accent),
                     ),
                   ],
                 ),
@@ -244,34 +212,17 @@ class _ChallengeCardState extends State<ChallengeCard> {
               children: [
                 Text(
                   'COACH\'S TIME',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   widget.challenge.coachTime,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.accent,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.accent),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'CAN YOU BEAT IT?',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.0, color: AppColors.textPrimary),
                 ),
               ],
             ),
@@ -349,12 +300,7 @@ class _ChallengeResultCardState extends State<ChallengeResultCard> {
                 widget.result.didBeatCoach
                     ? 'Share Your Victory'
                     : 'Share Result',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                ),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
               ),
             ),
           ),
@@ -392,13 +338,7 @@ class _ChallengeResultCardState extends State<ChallengeResultCard> {
                 const SizedBox(width: 6),
                 Text(
                   resultText,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.0,
-                    color: resultColor,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: resultColor),
                 ),
               ],
             ),
@@ -408,12 +348,7 @@ class _ChallengeResultCardState extends State<ChallengeResultCard> {
           // Challenge name
           Text(
             r.challenge.name,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 16),
 
@@ -426,12 +361,7 @@ class _ChallengeResultCardState extends State<ChallengeResultCard> {
               ),
               Text(
                 'VS',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w900, color: AppColors.textSecondary),
               ),
               Expanded(
                 child: _timeColumn(
@@ -453,23 +383,12 @@ class _ChallengeResultCardState extends State<ChallengeResultCard> {
       children: [
         Text(
           label,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.0,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(
           time,
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-            color: timeColor,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 26, fontWeight: FontWeight.w900, color: timeColor),
         ),
       ],
     );

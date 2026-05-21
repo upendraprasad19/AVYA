@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Food name + calories + macros row used in meal sections.
 class FoodItemTile extends StatelessWidget {
@@ -45,12 +45,7 @@ class FoodItemTile extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -66,12 +61,7 @@ class FoodItemTile extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(
                           '${quantityG!.round()}g',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
-                          ),
+                          style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
                         ),
                       ],
                     ],
@@ -81,12 +71,7 @@ class FoodItemTile extends StatelessWidget {
             ),
             Text(
               '${calories.round()} kcal',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppColors.orange,
-              ),
+              style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w800, color: AppColors.orange),
             ),
           ],
         ),
@@ -97,12 +82,7 @@ class FoodItemTile extends StatelessWidget {
   Widget _macroLabel(String prefix, double value, Color color) {
     return Text(
       '$prefix ${value.round()}g',
-      style: GoogleFonts.getFont(
-        'DM Sans',
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        color: color.withValues(alpha: 0.7),
-      ),
+      style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: color.withValues(alpha: 0.7)),
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 class MuscleRecoveryData {
   final String muscle;
@@ -62,22 +62,12 @@ class MuscleRecoveryMap extends StatelessWidget {
           Expanded(
             child: Text(
               item.muscle,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.bodyM.copyWith(color: AppColors.textPrimary),
             ),
           ),
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: color),
           ),
           const SizedBox(width: 8),
           SizedBox(
@@ -85,12 +75,7 @@ class MuscleRecoveryMap extends StatelessWidget {
             child: Text(
               _formatHours(item.hoursSinceTraining),
               textAlign: TextAlign.right,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 10,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
             ),
           ),
         ],
@@ -114,13 +99,7 @@ class MuscleRecoveryMap extends StatelessWidget {
         children: [
           Text(
             'MUSCLE RECOVERY',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 1.2,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1.2),
           ),
           const SizedBox(height: 10),
           if (useGrid)

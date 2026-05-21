@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -833,21 +832,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                   children: [
                     Text(
                       'Review: ${intent.previewSummary}',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Tap APPLY to review and confirm changes.',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textDim,
-                        fontSize: 12,
-                      ),
+                      style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -914,12 +904,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
               '$label: ${intent.previewSummary}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
             ),
           ),
         ],

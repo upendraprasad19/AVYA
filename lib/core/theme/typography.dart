@@ -124,6 +124,14 @@ class AppTypography {
     letterSpacing: -1.5,
   );
 
+  /// Elevated/Outlined button labels (Wardroom mono-uppercase voice).
+  /// Fraunces 12 / w600 / +2.5. Used by [AppTheme] global button themes.
+  static TextStyle buttonLabel = _fraunces(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 2.5,
+  );
+
   /// Italic emphasis in hero headlines — gold, Fraunces italic w500.
   static TextStyle displayItalicAccent = _fraunces(
     fontSize: 44,
@@ -171,4 +179,15 @@ class AppTypography {
 
   /// Legacy `micro` → Wardroom Mono XS (JB Mono 9 / w600 / +2.0).
   static TextStyle micro = monoXs;
+
+  // ── Family seed helpers (for Theme.textTheme bootstrap only) ──────────
+  /// Family-only DM Sans style — no fontSize / fontWeight opinions, used
+  /// when seeding [TextTheme] slots that inherit Material's default sizes.
+  /// Production code should use [body] / [bodyM] / etc. instead.
+  static TextStyle dmSansFamily({Color color = AppColors.textPrimary}) =>
+      GoogleFonts.getFont('DM Sans', color: color);
+
+  /// Family-only Fraunces style — display / headline TextTheme seed.
+  static TextStyle frauncesFamily({Color color = AppColors.textPrimary}) =>
+      GoogleFonts.getFont('Fraunces', color: color);
 }

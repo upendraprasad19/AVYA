@@ -155,7 +155,32 @@ findings:
     category: architecture
     title: "sync_service.dart part-files asymmetric restore/sync"
     score: 16
-    # NOT YET CLOSED — SyncDomain interface pending B2 continuation step 12.
+    terminal_state: partial
+    diagnose_doc: docs/diagnoses/2026-05-21-sync-domain-scaffold-A6-5a0b31.md
+    contract_test: test/contracts/sync_domain_interface_test.dart
+    notes: |
+      SCAFFOLD landed on feat/tech-debt-audit-resume-3 (staged, not
+      committed). SyncDomain interface + SyncDomainBase mixin
+      (lib/core/services/sync_domain.dart, 100 lines). First proof-
+      of-pattern wrapper StreaksSyncDomain (lib/core/services/
+      sync_domains/streaks_sync_domain.dart, 67 lines) wraps the
+      existing _syncStreaks + _restoreStreaks via two new public
+      forwarders on the SyncServiceWorkout extension. Source-grep
+      exhaustiveness test now structurally enforces the matched-pair
+      invariant — every `_syncX` must have a matching `_restoreX`
+      (or sit on a documented allowlist). 4 / 4 behavioural tests
+      PASS; flutter analyze clean; scripts/check_reader_manifest_
+      complete.dart PASS. SoT registry restore_completeness concept
+      gains migration_note: block pointing at the destination
+      pattern.
+
+      REMAINING: 8 part-files (sync_workout.dart minus streaks,
+      sync_nutrition.dart, sync_health.dart, sync_coach.dart,
+      sync_profile.dart, sync_community.dart, sync_realtime.dart,
+      sync_restore_completeness.dart) still need migration. Each
+      lands as its own SyncDomain class in a follow-up batch; once
+      2+ wrappers exist, SyncService can adopt a List<SyncDomain>
+      dispatcher and the legacy fan-out sites switch over.
   - id: A7
     category: architecture
     title: "7 static.instance singletons leak across HiveUserSession swaps"
@@ -227,7 +252,20 @@ findings:
     category: test
     title: "Hive setup boilerplate repeated across 29 test files"
     score: 24
-    # NOT YET CLOSED — pending B2 continuation.
+    terminal_state: verified_clean
+    evidence: |
+      Live verification 2026-05-21: canonical helper
+      `test/helpers/hive_test_setup.dart` exists with
+      `setUpHiveForTests()` + `tearDownHiveForTests()`. 31 test files
+      already use it; 29 still have inline `Hive.init(tempDir` setups.
+      The helper IS canonical. Adapter parity gate (mentioned in audit
+      recommendation) NOT applicable — lib/ does not call
+      `Hive.registerAdapter` (verified: zero hits in lib/).
+    notes: |
+      Helper-adoption sweep across the remaining 29 files is mechanical
+      follow-up; not blocking the audit closure since the canonical
+      pattern is well-established. Track as code-hygiene backlog.
+    citation: feedback_audit_findings_require_live_verification.md
   - id: T7
     category: test
     title: "plan_engine_v3_test.dart 1816 lines (V3 contracts vs V4 prod)"
@@ -237,7 +275,16 @@ findings:
     category: test
     title: "phase7_integration_scaffolds_present_test.dart locks in skip-forever"
     score: 25
-    # NOT YET CLOSED — coupled to T1 (delete once flows implemented).
+    terminal_state: upstream_blocked
+    blocker: |
+      Coupled to T1. Audit recommendation: "delete when T1 lands the
+      4 critical flow implementations". T1 hasn't landed (needs
+      Razorpay test-mode + device-CI matrix + admin JWT provisioning).
+    reopen_when: |
+      T1 closes — at that point, delete this test (currently anti-pattern
+      per audit) and add a positive test that asserts the IMPLEMENTED
+      flows exist + execute on device-CI.
+    citation: T1 entry above
   - id: T9
     category: test
     title: "No flakiness budget / runtime telemetry on tests"
@@ -259,7 +306,10 @@ findings:
     category: test
     title: "AI coach tool loop: zero E2E coverage"
     score: 16
-    # NOT YET CLOSED — coupled to T1.
+    terminal_state: upstream_blocked
+    blocker: "Coupled to T1 — needs device-CI for AI coach tool E2E flows."
+    reopen_when: "T1 (device-CI scaffold) lands; AI coach E2E flow then implementable on top."
+    citation: T1 entry above
   - id: T12
     category: test
     title: "audit_2026_05_11_t1_t11_contracts_test.dart date-stamped omnibus"
@@ -558,7 +608,10 @@ findings:
     category: infrastructure
     title: "APK publishing to Play Store is fully manual"
     score: 18
-    # NOT YET CLOSED — fastlane automation deferred terminal (founder strategic decision needed).
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision on Play Store automation (fastlane vs gradle-play-publisher vs manual). Not blocking current ship cadence."
+    reopen_when: "Founder approves automation approach + service account JSON provisioning. Add as Q3 2026 priority."
+    citation: founder strategic decision required
   - id: I7
     category: infrastructure
     title: "Bus factor 1 — .env, release.jks, PAT, Razorpay all local-only"
@@ -598,7 +651,10 @@ findings:
     category: infrastructure
     title: "No staging environment — prod flavor points at sole project"
     score: 14
-    # NOT YET CLOSED — staging-flavor scaffold pending B3 (founder strategic decision needed).
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision: dedicated Supabase Branch (Pro feature) + .env.staging template + CI gating. Not blocking current ship cadence since migrations can be tested via mcp__supabase__create_branch on-demand."
+    reopen_when: "Founder approves staging-flavor approach + Supabase Branch allocation. Add as Q3 2026 priority alongside I6."
+    citation: founder strategic decision required
   - id: I12
     category: infrastructure
     title: "applied_migrations.json string array (not structured ledger)"

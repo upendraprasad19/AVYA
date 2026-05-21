@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-// Audit 2026-05-20 / D8: removed unused `package:http` import.
-// The full http→dio migration in ai_service.dart is deferred to a
-// dedicated batch (multi-usage refactor: http.Client / Response /
-// ClientException / post + typed retry shim _retryHttpColdStart).
+// Audit 2026-05-20 / D8: kept `package:http` import — barcode_service
+// uses `http.get` on line 52 (Open Food Facts lookup). My earlier
+// removal was incorrect (claimed unused but the import IS used).
+// Full http→dio migration deferred to a dedicated batch alongside
+// ai_service.dart's multi-usage refactor.
+import 'package:http/http.dart' as http;
 
 import 'error_telemetry.dart';
 

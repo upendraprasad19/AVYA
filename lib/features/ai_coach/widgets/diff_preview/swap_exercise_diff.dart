@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/hive_service.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Minimal diff renderer for a `swap_exercise` tool intent.
 ///
@@ -52,12 +51,7 @@ class SwapExerciseDiff extends StatelessWidget {
                 Expanded(
                   child: Text(
                     reason,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w500, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -86,24 +80,13 @@ class SwapExerciseDiff extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: isOld ? AppColors.red : AppColors.green,
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
-              letterSpacing: 0.5,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: isOld ? AppColors.red : AppColors.green, letterSpacing: 0.5),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               value,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
             ),
           ),
         ],

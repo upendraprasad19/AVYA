@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Glass icons with counter for water tracking. Goal = 8 glasses.
 class WaterTracker extends StatelessWidget {
@@ -36,22 +36,12 @@ class WaterTracker extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Water',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.bodyL.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               ),
               const Spacer(),
               Text(
                 '$count / $goal glasses',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -108,12 +98,7 @@ class WaterTracker extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 '$count',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.blue,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.blue),
               ),
               const SizedBox(width: 12),
               IconButton(

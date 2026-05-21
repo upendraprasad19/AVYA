@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import '../providers/train_provider.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Full-screen overlay rest timer modal matching the mockup:
 /// - Blurred/dark background
@@ -42,25 +42,14 @@ class RestTimerModal extends StatelessWidget {
               // Title
               Text(
                 'REST TIMER',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.8,
-                ),
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.8),
               ),
               const SizedBox(height: 5),
 
               // Next exercise
               Text(
                 'Next: ${restTimer.nextExerciseName}',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 18),
 
@@ -79,24 +68,12 @@ class RestTimerModal extends StatelessWidget {
                       children: [
                         Text(
                           '${restTimer.secondsRemaining}',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 40,
-                            fontWeight: FontWeight.w900,
-                            color: restTimer.timerColor,
-                            height: 1,
-                          ),
+                          style: AppTypography.body.copyWith(fontSize: 40, fontWeight: FontWeight.w900, color: restTimer.timerColor, height: 1),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           'seconds',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5,
-                          ),
+                          style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.5),
                         ),
                       ],
                     ),
@@ -109,13 +86,7 @@ class RestTimerModal extends StatelessWidget {
               Text(
                 'Stay loose. Sip some water.\nNext set target: keep form tight.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                  height: 1.55,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.55),
               ),
               const SizedBox(height: 18),
 
@@ -135,12 +106,7 @@ class RestTimerModal extends StatelessWidget {
                   child: Center(
                     child: Text(
                       'Skip Rest \u2192',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.accent),
                     ),
                   ),
                 ),
@@ -154,12 +120,7 @@ class RestTimerModal extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     '+ 15s more rest',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ),
               ),

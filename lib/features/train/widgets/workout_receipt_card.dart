@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -621,13 +620,7 @@ class WorkoutReceiptCard extends StatelessWidget {
                     : tagline;
                 return Text(
                   quote,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    fontStyle: FontStyle.italic,
-                    color: AppColors.textMute,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, fontStyle: FontStyle.italic, color: AppColors.textMute),
                 );
               },
             ),

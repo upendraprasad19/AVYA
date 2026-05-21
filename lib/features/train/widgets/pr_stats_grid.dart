@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// 2x2 grid of personal record stat cards.
 class PrStatsGrid extends StatelessWidget {
@@ -48,22 +48,12 @@ class _PrItem extends StatelessWidget {
         children: [
           Text(
             '$emoji $value',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: AppColors.accent,
-            ),
+            style: AppTypography.bodyL.copyWith(fontWeight: FontWeight.w900, color: AppColors.accent),
           ),
           const SizedBox(height: 1),
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 9,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 9, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
           ),
         ],
       ),

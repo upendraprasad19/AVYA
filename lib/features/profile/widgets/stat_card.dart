@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Small stat display card (e.g., "Total Workouts: 42").
 class StatCard extends StatelessWidget {
@@ -36,23 +36,12 @@ class StatCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             value,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: AppColors.textSecondary),
           ),
         ],
       ),

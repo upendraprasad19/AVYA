@@ -1,9 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Progress Photos card — PRO only.
 ///
@@ -67,23 +67,13 @@ class ProgressPhotosCard extends StatelessWidget {
                     children: [
                       Text(
                         'Progress Photos',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+                        style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       ),
                       Text(
                         photoCount > 0
                             ? '$photoCount photos \u00B7 Tap to view timeline'
                             : 'Take your first progress photo',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w400,
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -102,12 +92,7 @@ class ProgressPhotosCard extends StatelessWidget {
                       const SizedBox(width: 5),
                       Text(
                         'Capture',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black),
                       ),
                     ],
                   ),
@@ -210,33 +195,18 @@ class ProgressPhotosCard extends StatelessWidget {
                   ),
                   child: Text(
                     'PRO FEATURE',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.proGold,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.proGold),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Progress Photos',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Track your body transformation',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 10),
                 GestureDetector(
@@ -250,12 +220,7 @@ class ProgressPhotosCard extends StatelessWidget {
                     ),
                     child: Text(
                       'Upgrade to PRO',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.black),
                     ),
                   ),
                 ),

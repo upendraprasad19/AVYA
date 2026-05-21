@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/shared/models/achievement_badge.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Full-screen overlay that celebrates a newly unlocked badge.
 /// Shows each badge sequentially; auto-dismisses after 3s or on tap.
@@ -100,45 +100,26 @@ class _BadgeUnlockOverlayState extends State<BadgeUnlockOverlay>
                 children: [
                   Text(
                     'NEW ACHIEVEMENT',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      color: const Color(0xFFF59E0B),
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: const Color(0xFFF59E0B)),
                   ),
                   const SizedBox(height: 20),
                   Text(badge.emoji, style: const TextStyle(fontSize: 72)),
                   const SizedBox(height: 16),
                   Text(
                     badge.name,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFFeef2f7),
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 22, fontWeight: FontWeight.w800, color: const Color(0xFFeef2f7)),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     badge.description,
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 13,
-                      color: const Color(0xFF6b7a8d),
-                    ),
+                    style: AppTypography.bodyM.copyWith(color: const Color(0xFF6b7a8d)),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'Tap to continue',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      fontSize: 10,
-                      color: const Color(0xFF6b7a8d),
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 10, color: const Color(0xFF6b7a8d)),
                   ),
                 ],
               ),

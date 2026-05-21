@@ -1,9 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Reusable PRO locked overlay that wraps any content widget.
 ///
@@ -99,12 +99,7 @@ class ProLockedOverlay extends StatelessWidget {
                       ),
                       child: Text(
                         'PRO FEATURE',
-                        style: GoogleFonts.getFont(
-                          'DM Sans',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.proGold,
-                        ),
+                        style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.proGold),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -112,12 +107,7 @@ class ProLockedOverlay extends StatelessWidget {
                     // Feature label
                     Text(
                       featureLabel,
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                       textAlign: TextAlign.center,
                     ),
 
@@ -128,12 +118,7 @@ class ProLockedOverlay extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Text(
                           description!,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
-                          ),
+                          style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -153,12 +138,7 @@ class ProLockedOverlay extends StatelessWidget {
                         ),
                         child: Text(
                           ctaText,
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black,
-                          ),
+                          style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
                         ),
                       ),
                     ),

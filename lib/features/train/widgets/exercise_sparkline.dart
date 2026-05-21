@@ -1,8 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 class ExerciseSparkline extends StatelessWidget {
   final List<double> dataPoints;
@@ -19,12 +19,7 @@ class ExerciseSparkline extends StatelessWidget {
     if (dataPoints.length < 2) {
       return Text(
         'No history',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          fontSize: 10,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textSecondary,
-        ),
+        style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
       );
     }
 
@@ -48,12 +43,7 @@ class ExerciseSparkline extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             '${_formatWeight(first)} \u2192 ${_formatWeight(last)}',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
           ),
         ],
       ),

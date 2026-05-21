@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'food_item_tile.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Collapsible meal type section (Breakfast, Lunch, Dinner, Snacks).
 class MealSection extends StatelessWidget {
@@ -51,23 +51,13 @@ class MealSection extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.bodyL.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               ),
               const Spacer(),
               if (totalCalories > 0)
                 Text(
                   '${totalCalories.round()} kcal',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.orange,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.orange),
                 ),
             ],
           ),
@@ -104,12 +94,7 @@ class MealSection extends StatelessWidget {
                 icon: const Icon(Icons.add, size: 16),
                 label: Text(
                   'Add Food',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.accent),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.accent,

@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -209,13 +208,7 @@ class ChatBubble extends StatelessWidget {
                   children: [
                     Text(
                       '\u2022 ',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 12,
-                        color: isUser ? Colors.black : AppColors.accent,
-                        fontWeight: FontWeight.w700,
-                        height: 1.8,
-                      ),
+                      style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: isUser ? Colors.black : AppColors.accent, height: 1.8),
                     ),
                     Expanded(child: _buildRichText(item, height: 1.8)),
                   ],
@@ -228,15 +221,9 @@ class ChatBubble extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             subText!,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-              fontStyle: FontStyle.italic,
-              color: isUser
+            style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, fontStyle: FontStyle.italic, color: isUser
                   ? Colors.black.withValues(alpha: 0.7)
-                  : AppColors.textMute,
-            ),
+                  : AppColors.textMute),
           ),
         ],
 
@@ -303,13 +290,7 @@ class ChatBubble extends StatelessWidget {
   ///   ++text++ → green positive
   Widget _buildRichText(String content, {double height = 1.65}) {
     final defaultColor = isUser ? Colors.black : AppColors.textPrimary;
-    final defaultStyle = GoogleFonts.getFont(
-      'DM Sans',
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: defaultColor,
-      height: height,
-    );
+    final defaultStyle = AppTypography.bodySm.copyWith(color: defaultColor, height: height);
 
     // Simple regex for **bold/cyan**, !!warning/orange!!, ++positive/green++
     final pattern = RegExp(r'\*\*(.*?)\*\*|!!(.*?)!!|\+\+(.*?)\+\+');
@@ -434,12 +415,7 @@ class ChatBubble extends StatelessWidget {
           Text(
             'Tap to retry',
             textAlign: TextAlign.center,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 10,
-              color: AppColors.textMute,
-              fontWeight: FontWeight.w500,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textMute),
           ),
         ],
       ),
@@ -497,11 +473,7 @@ class _FullScreenImageViewer extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   'Failed to load image',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body.copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),

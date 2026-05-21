@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Subscription status card.
 ///
@@ -75,46 +75,25 @@ class SubscriptionCard extends StatelessWidget {
               ),
               child: Text(
                 'PRO',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.0,
-                  color: Colors.black,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0, color: Colors.black),
               ),
             ),
             const Spacer(),
             Text(
               '$planStr Plan',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.proGold,
-              ),
+              style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.proGold),
             ),
           ],
         ),
         const SizedBox(height: 12),
         Text(
           'You have full access to all features',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 13,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 4),
         Text(
           'Renews on $expiryStr',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 11,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-          ),
+          style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
         ),
         if (onManageTap != null) ...[
           const SizedBox(height: 12),
@@ -133,12 +112,7 @@ class SubscriptionCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   'Manage Subscription',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.proGold,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.proGold),
                 ),
               ),
             ),
@@ -162,25 +136,14 @@ class SubscriptionCard extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'Unlock PRO Features',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.bodyL.copyWith(fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Text(
           'AI coaching, progress photos, advanced plans, and more.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textSecondary,
-            height: 1.5,
-          ),
+          style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary, height: 1.5),
         ),
         const SizedBox(height: 14),
 
@@ -199,21 +162,11 @@ class SubscriptionCard extends StatelessWidget {
                   children: [
                     Text(
                       '\u20B9${AppConstants.monthlyPriceInr}',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                     ),
                     Text(
                       '/month',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -234,21 +187,11 @@ class SubscriptionCard extends StatelessWidget {
                   children: [
                     Text(
                       '\u20B9${AppConstants.yearlyPriceInr}',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
                     ),
                     Text(
                       '/year \u00B7 Save 17%',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.accent,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
                     ),
                   ],
                 ),
@@ -271,12 +214,7 @@ class SubscriptionCard extends StatelessWidget {
             child: Center(
               child: Text(
                 'Upgrade to PRO',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                ),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
               ),
             ),
           ),

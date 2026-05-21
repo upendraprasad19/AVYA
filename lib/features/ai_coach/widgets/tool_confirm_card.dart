@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../core/services/hive_service.dart';
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Inline confirmation card for an AI coach tool intent.
 ///
@@ -118,13 +117,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
               const SizedBox(width: 8),
               Text(
                 _titleForType(intent.type),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                ),
+                style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.5),
               ),
               const Spacer(),
             ],
@@ -132,12 +125,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           const SizedBox(height: 12),
           Text(
             summary,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.titleS.copyWith(color: AppColors.textPrimary),
           ),
           const SizedBox(height: 16),
           Row(
@@ -161,11 +149,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                         )
                       : Text(
                           'APPLY',
-                          style: GoogleFonts.getFont(
-                            'DM Sans',
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.6,
-                          ),
+                          style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.6),
                         ),
                 ),
               ),
@@ -179,12 +163,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                   ),
                   child: Text(
                     'DISMISS',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
+                    style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.6),
                   ),
                 ),
               ),
@@ -211,12 +190,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           Expanded(
             child: Text(
               _executedMessage(widget.intent),
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -234,12 +208,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       ),
       child: Text(
         '$label: ${_titleForType(widget.intent.type)}',
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          color: AppColors.textSecondary,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
+        style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
       ),
     );
   }
@@ -263,12 +232,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
               Expanded(
                 child: Text(
                   widget.intent.errorMessage ?? 'Failed',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
               ),
             ],
@@ -289,11 +253,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
                     )
                   : Text(
                       'Retry',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent),
                     ),
             ),
           ),

@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -114,7 +113,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(
         'Generating fresh prediction...',
-        style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+        style: AppTypography.bodyM,
       ),
       backgroundColor: AppColors.card,
       behavior: SnackBarBehavior.floating,
@@ -131,8 +130,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             'Prediction updated!',
-            style: GoogleFonts.getFont('DM Sans',
-                fontSize: 13, fontWeight: FontWeight.w600),
+            style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600),
           ),
           backgroundColor: AppColors.green,
           behavior: SnackBarBehavior.floating,
@@ -142,7 +140,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             'Could not refresh prediction. Please try again later.',
-            style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+            style: AppTypography.bodyM,
           ),
           backgroundColor: AppColors.red,
           behavior: SnackBarBehavior.floating,
@@ -438,7 +436,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     debugPrint('[ProfileScreen] Avatar upload cancelled: ${outcome.errorMessage}');
                     if (outcome.errorMessage != null && outcome.errorMessage!.isNotEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(outcome.errorMessage!, style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+                        content: Text(outcome.errorMessage!, style: AppTypography.bodyM),
                         backgroundColor: AppColors.card,
                         behavior: SnackBarBehavior.floating,
                         duration: const Duration(seconds: 3),
@@ -451,7 +449,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       outcome.result == UploadResult.success
                           ? 'Profile photo updated'
                           : 'Upload failed: ${outcome.errorMessage ?? "Unknown error"}',
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+                      style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w500),
                     ),
                     backgroundColor: outcome.result == UploadResult.success
                         ? AppColors.successTint
@@ -467,7 +465,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     debugPrint('[ProfileScreen] Banner upload cancelled: ${outcome.errorMessage}');
                     if (outcome.errorMessage != null && outcome.errorMessage!.isNotEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(outcome.errorMessage!, style: GoogleFonts.getFont('DM Sans', fontSize: 13)),
+                        content: Text(outcome.errorMessage!, style: AppTypography.bodyM),
                         backgroundColor: AppColors.card,
                         behavior: SnackBarBehavior.floating,
                         duration: const Duration(seconds: 3),
@@ -480,7 +478,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       outcome.result == UploadResult.success
                           ? 'Banner updated'
                           : 'Upload failed: ${outcome.errorMessage ?? "Unknown error"}',
-                      style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
+                      style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w500),
                     ),
                     backgroundColor: outcome.result == UploadResult.success
                         ? AppColors.successTint
@@ -1417,7 +1415,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
                   'Prediction refresh is a PRO feature. Upgrade in Profile \u2192 Subscription',
-                  style: GoogleFonts.getFont('DM Sans', fontSize: 13),
+                  style: AppTypography.bodyM,
                 ),
                 backgroundColor: AppColors.proGold,
                 behavior: SnackBarBehavior.floating,

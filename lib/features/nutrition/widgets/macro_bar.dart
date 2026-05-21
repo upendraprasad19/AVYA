@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Linear progress bar with label and value for macro tracking.
 class MacroBar extends StatelessWidget {
@@ -31,21 +31,11 @@ class MacroBar extends StatelessWidget {
           children: [
             Text(
               label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
             ),
             Text(
               '${current.round()} / ${target.round()}$unit',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
