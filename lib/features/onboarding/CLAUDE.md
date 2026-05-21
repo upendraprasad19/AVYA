@@ -2,13 +2,40 @@
 scope: onboarding
 parent: ../../../CLAUDE.md
 created: 2026-05-18
-status: scaffold
+updated: 2026-05-21
+status: active
 ---
 
 # Onboarding — Local Rules
 
 > This file is auto-loaded by Claude Code when working under `lib/features/onboarding/`.
 > Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
+
+## What lives here
+
+`lib/features/onboarding/` owns the stepped onboarding funnel (6 screens) +
+the legacy chat fallback (`/onboarding/chat`, retained for rollback). The
+final tap on Plan screen calls `OnboardingNotifier.completeOnboarding()` which
+writes the consolidated profile map to `userBox['profile']`, stamps
+`onboarding_completed_at`, and fires the initial sync fan-out.
+
+Screens: `welcome_screen.dart`, `mission_brief_screen.dart`, `identity_screen.dart`,
+`goal_screen.dart`, `stats_screen.dart`, `details_screen.dart`, `plan_screen.dart`,
+`onboarding_chat_screen.dart` (legacy).
+
+State is passed between screens via `GoRouter` `state.extra` (a
+`Map<String, dynamic>`) — **no premature provider commits**. The notifier
+runs once, on the final tap. Each screen spreads `...widget.initial` into
+its outgoing extras so every field captured upstream survives to Plan.
+
+## Single-source-of-truth contracts
+
+| Concept | Writer | Reader |
+|---|---|---|
+| `onboarding_completed_at` | `OnboardingNotifier.completeOnboarding` stamps both Hive `userBox['profile']['onboarding_completed_at']` AND fires sync to `user_profile.onboarding_completed_at` cloud column | `restoring_screen.dart` post-auth classification via `AuthSessionBootstrapper.resolveDestination`. NULL + populated Hive profile → Plan A self-heal. |
+| `user_full_name` | `identity_screen.dart` input → `OnboardingNotifier.completeOnboarding` → `users.full_name` cloud column (NOT user_profile) + `userBox['profile']['full_name']` | profile header, every screen that greets the user by name. |
+| `muster_to_profile_bridge` | Q3..Q5 muster-style answers → profile fields. APK Test #15.4 / B2 dropped Q1+Q2, made Q5 single-select. Migration 063 + bridge + backfill. | profile screen. |
+| Plan-screen preview targets | `plan_screen._computeTargets` calls canonical `BmrCalculator.calculateTargets` with every real input (weight, height, DOB-derived age, sex, activity_level, goal, pace_preference, target_weight_kg, body_fat_pct). Returns `targets.dailyCalories` + `targets.proteinGrams` verbatim. | What `completeOnboarding` writes to the profile — **no drift** between preview and saved profile (APK Test #1 fix). |
 
 ## Stepped flow (default since PR Y–AB, expanded over PR AI 2026-04-20, APK Test #1 2026-04-24, APK Test #2 2026-04-25)
 
@@ -139,4 +166,15 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/contracts/onboarding_completed_at_writer_to_reader_test.dart`
+- `test/contracts/auth_session_bootstrapper_test.dart` — pure-logic destination table.
+- `test/contracts/muster_to_profile_bridge_test.dart`
+- `test/contracts/full_name_backfill_test.dart`
+- `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`
+
+## See also
+
+- `lib/features/auth/CLAUDE.md` — post-auth `RestoringScreen` decision tree.
+- `lib/features/profile/CLAUDE.md` — Edit Profile reuses the same field map.
+- `lib/shared/repositories/plan_engine/CLAUDE.md` — Plan tap triggers initial plan generation.
+- `docs/architecture/sync.md` — onboarding sync fan-out + restore-completeness.

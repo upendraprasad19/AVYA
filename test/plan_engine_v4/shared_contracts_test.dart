@@ -1,180 +1,32 @@
+// Shared cross-archetype contract tests for Plan Engine V4.
+//
+// Relocated from `test/plan_engine_v3_test.dart` on 2026-05-21 (tech-debt
+// audit B5 / T7 split). Test bodies are byte-identical to V3.
+//
+// Scope: contracts that span all archetypes — SplitResolver intermediate
+// / advanced / all-splits / 6-day / 5-day; SequencingEngine ordering;
+// CardioFinisher goal+preference+equipment matrix; WarmupCooldownSelector
+// attachment + experience differences; SupersetPairer day-type +
+// antagonist rules; and the end-to-end Periodization → Sequencing →
+// Superset → Finisher → Warmup integration pipeline.
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/sequencing_engine.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/superset_pairer.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/cardio_finisher.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/warmup_cooldown.dart';
 
-// ══════════════════════════════════════════════════════════════════
-// TEST HELPERS — build mock data without Hive or ExerciseRepository
-// ══════════════════════════════════════════════════════════════════
-
-/// Build a PlannedExercise with sensible defaults, overridable per-field.
-PlannedExercise _exercise({
-  String name = 'Test Exercise',
-  String loggingType = 'weight_reps',
-  int sets = 3,
-  String reps = '10',
-  int restSeconds = 75,
-  String? exerciseType,
-  int? supersetGroup,
-  String? category,
-  String intensityProfile = 'hypertrophy',
-  String variant = 'A',
-  List<String>? primaryMuscles,
-  bool warmupSet = false,
-}) {
-  return PlannedExercise(
-    exerciseId: name.toLowerCase().replaceAll(' ', '_'),
-    exerciseName: name,
-    loggingType: loggingType,
-    sets: sets,
-    reps: reps,
-    restSeconds: restSeconds,
-    exerciseType: exerciseType,
-    supersetGroup: supersetGroup,
-    category: category,
-    intensityProfile: intensityProfile,
-    variant: variant,
-    primaryMuscles: primaryMuscles,
-    warmupSet: warmupSet,
-  );
-}
-
-/// Build a WorkoutDay with default name/focus and given exercises.
-WorkoutDay _workoutDay({
-  int dayNumber = 1,
-  String name = 'Push',
-  String focus = 'Chest & Triceps',
-  List<PlannedExercise>? exercises,
-  List<PlannedExercise> warmup = const [],
-  List<PlannedExercise> cooldown = const [],
-  List<PlannedExercise> finisher = const [],
-}) {
-  return WorkoutDay(
-    dayNumber: dayNumber,
-    name: name,
-    focus: focus,
-    exercises: exercises ?? [_exercise()],
-    warmup: warmup,
-    cooldown: cooldown,
-    finisher: finisher,
-  );
-}
-
-/// Build a WeekPlan with given workout days.
-WeekPlan _weekPlan({
-  int weekNumber = 1,
-  int weekInPhase = 1,
-  String weekCharacter = 'baseline',
-  String overloadNotes = 'Test week',
-  List<WorkoutDay>? workoutDays,
-}) {
-  return WeekPlan(
-    weekNumber: weekNumber,
-    weekInPhase: weekInPhase,
-    overloadNotes: overloadNotes,
-    weekCharacter: weekCharacter,
-    workoutDays: workoutDays ?? [_workoutDay()],
-  );
-}
-
-/// Build a PopulatedDay for PeriodizationEngine.apply().
-PopulatedDay _populatedDay({
-  String name = 'Push',
-  String focus = 'Chest',
-  String dayType = 'push',
-  String intensity = 'hypertrophy',
-  List<PlannedExercise>? exercisesA,
-  List<PlannedExercise>? exercisesB,
-}) {
-  final a = exercisesA ?? [
-    _exercise(name: 'Bench Press', exerciseType: 'compound'),
-    _exercise(name: 'Incline Dumbbell Press', exerciseType: 'compound'),
-    _exercise(name: 'Cable Fly', exerciseType: 'isolation'),
-  ];
-  return PopulatedDay(
-    name: name,
-    focus: focus,
-    dayType: dayType,
-    intensity: intensity,
-    exercisesA: a,
-    exercisesB: exercisesB ?? a,
-  );
-}
-
+import '_helpers.dart';
 
 void main() {
   // ════════════════════════════════════════════════════════════════
-  // 1. SPLIT RESOLVER
+  // 1. SPLIT RESOLVER — non-beginner, non-strength-archetype-specific
   // ════════════════════════════════════════════════════════════════
 
   group('SplitResolver', () {
-    group('Beginner routing', () {
-      test('beginner 3-day → 3 full body days', () {
-        final slots = SplitResolver.select(
-          'build_muscle', 3, experienceLevel: 'beginner',
-        );
-        expect(slots.length, 3);
-        for (final slot in slots) {
-          expect(slot.dayType, 'full_body');
-          expect(slot.name.toLowerCase(), contains('full body'));
-        }
-      });
-
-      test('beginner 4-day → 4 full body days', () {
-        final slots = SplitResolver.select(
-          'build_muscle', 4, experienceLevel: 'beginner',
-        );
-        expect(slots.length, 4);
-        for (final slot in slots) {
-          expect(slot.dayType, 'full_body');
-          expect(slot.name.toLowerCase(), contains('full body'));
-        }
-      });
-
-      test('beginner 5-day → NOT full body (uses regular split)', () {
-        final slots = SplitResolver.select(
-          'build_muscle', 5, experienceLevel: 'beginner',
-        );
-        expect(slots.length, 5);
-        // 5-day beginner uses intermediate splits, not all full_body
-        final dayTypes = slots.map((s) => s.dayType).toSet();
-        expect(dayTypes.contains('push') || dayTypes.contains('pull') ||
-               dayTypes.contains('legs'), isTrue,
-            reason: 'Beginner 5-day should use PPL-style split, not all full body');
-      });
-
-      test('beginner 3-day has Push/Pull/Legs specs across days', () {
-        final slots = SplitResolver.select(
-          'build_muscle', 3, experienceLevel: 'beginner',
-        );
-        // Each day should have a mix of categories
-        for (final slot in slots) {
-          final categories = slot.specsA.map((s) => s.category).toSet();
-          expect(categories.length, greaterThanOrEqualTo(2),
-              reason: '${slot.name} should have at least 2 categories');
-        }
-      });
-
-      test('beginner 4-day adds a D day with core emphasis', () {
-        final slots = SplitResolver.select(
-          'lose_fat', 4, experienceLevel: 'beginner',
-        );
-        expect(slots.length, 4);
-        final dayD = slots.last;
-        expect(dayD.name, contains('Full Body D'));
-        // Day D has a CSpec('Core', 2) meaning 2 core exercises to be picked
-        final coreSpecs = dayD.specsA.where((s) => s.category == 'Core');
-        expect(coreSpecs, isNotEmpty);
-        final totalCoreCount = coreSpecs.fold<int>(0, (sum, s) => sum + s.count);
-        expect(totalCoreCount, 2,
-            reason: 'Day D should request 2 core exercises total');
-      });
-    });
-
     group('Intermediate routing', () {
       test('intermediate 4-day build_muscle → NOT full body', () {
         final slots = SplitResolver.select(
@@ -215,18 +67,6 @@ void main() {
         expect(slots.length, 3);
         final dayTypes = slots.map((s) => s.dayType).toSet();
         expect(dayTypes, containsAll(['push', 'pull', 'legs']));
-      });
-
-      test('advanced 4-day strength → squat/bench/deadlift/OHP days', () {
-        final slots = SplitResolver.select(
-          'strength', 4, experienceLevel: 'advanced',
-        );
-        expect(slots.length, 4);
-        final names = slots.map((s) => s.name).toList();
-        expect(names, contains('Squat Day'));
-        expect(names, contains('Bench Day'));
-        expect(names, contains('Deadlift Day'));
-        expect(names, contains('OHP Day'));
       });
     });
 
@@ -286,344 +126,6 @@ void main() {
   });
 
   // ════════════════════════════════════════════════════════════════
-  // 2. PERIODIZATION ENGINE
-  // ════════════════════════════════════════════════════════════════
-
-  group('PeriodizationEngine', () {
-    group('archetypeForPhase', () {
-      test('cycles: 1=hypertrophy, 2=strength, 3=metabolic, 4=deload', () {
-        expect(PeriodizationEngine.archetypeForPhase(1), 'hypertrophy');
-        expect(PeriodizationEngine.archetypeForPhase(2), 'strength');
-        expect(PeriodizationEngine.archetypeForPhase(3), 'metabolic');
-        expect(PeriodizationEngine.archetypeForPhase(4), 'deload');
-      });
-
-      test('phase 5 repeats: hypertrophy', () {
-        expect(PeriodizationEngine.archetypeForPhase(5), 'hypertrophy');
-      });
-
-      test('phase 6 = strength, 7 = metabolic, 8 = deload', () {
-        expect(PeriodizationEngine.archetypeForPhase(6), 'strength');
-        expect(PeriodizationEngine.archetypeForPhase(7), 'metabolic');
-        expect(PeriodizationEngine.archetypeForPhase(8), 'deload');
-      });
-
-      test('phase 9 = hypertrophy again (3rd cycle)', () {
-        expect(PeriodizationEngine.archetypeForPhase(9), 'hypertrophy');
-      });
-
-      test('phase 12 = deload (end of 3rd cycle)', () {
-        expect(PeriodizationEngine.archetypeForPhase(12), 'deload');
-      });
-    });
-
-    group('cycleMultiplier', () {
-      test('phases 1-4 = 1.0', () {
-        for (int p = 1; p <= 4; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), 1.0,
-              reason: 'Phase $p should be multiplier 1.0');
-        }
-      });
-
-      test('phases 5-8 = 1.1', () {
-        for (int p = 5; p <= 8; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), closeTo(1.1, 0.001),
-              reason: 'Phase $p should be multiplier 1.1');
-        }
-      });
-
-      test('phases 9-12 = 1.2', () {
-        for (int p = 9; p <= 12; p++) {
-          expect(PeriodizationEngine.cycleMultiplier(p), closeTo(1.2, 0.001),
-              reason: 'Phase $p should be multiplier 1.2');
-        }
-      });
-    });
-
-    group('Volume wave (4-week)', () {
-      test('week 2 (overreach) has +1 set vs week 1 (baseline)', () {
-        // Use strength intensity (base 4 sets) so the 4-set minimum does not
-        // flatten both baseline and overreach to the same value.
-        final populated = [_populatedDay(intensity: 'strength')];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          effectiveExp: 'intermediate',
-        );
-        expect(weeks.length, 4);
-
-        // Strength base = 4 sets; baseline = 4, overreach = 5
-        final baselineSets = weeks[0].workoutDays[0].exercises[0].sets;
-        final overreachSets = weeks[1].workoutDays[0].exercises[0].sets;
-        expect(overreachSets, baselineSets + 1,
-            reason: 'Overreach week should have +1 set vs baseline');
-      });
-
-      test('deload week has fewer sets than baseline', () {
-        final populated = [_populatedDay()];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-
-        final baselineSets = weeks[0].workoutDays[0].exercises[0].sets;
-        final deloadSets = weeks[3].workoutDays[0].exercises[0].sets;
-        expect(deloadSets, lessThan(baselineSets),
-            reason: 'Deload week should have fewer sets than baseline');
-      });
-
-      test('week characters: baseline, overreach, peak, deload', () {
-        final populated = [_populatedDay()];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-        expect(weeks[0].weekCharacter, 'baseline');
-        expect(weeks[1].weekCharacter, 'overreach');
-        expect(weeks[2].weekCharacter, 'peak');
-        expect(weeks[3].weekCharacter, 'deload');
-      });
-
-      test('peak week has fewer reps than baseline for strength intensity', () {
-        // Strength intensity has baseReps=5, peak subtracts 2 → 3
-        final populated = [_populatedDay(intensity: 'strength')];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-
-        final baselineReps = weeks[0].workoutDays[0].exercises[0].reps;
-        final peakReps = weeks[2].workoutDays[0].exercises[0].reps;
-        expect(int.parse(peakReps), lessThan(int.parse(baselineReps)),
-            reason: 'Peak week should have fewer reps for progressive loading');
-      });
-    });
-
-    group('4-set minimum for intermediate+', () {
-      test('intermediate non-deload weeks enforce 4-set minimum', () {
-        final populated = [
-          _populatedDay(intensity: 'endurance'), // endurance base = 2 sets
-        ];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          effectiveExp: 'intermediate',
-        );
-
-        // Weeks 0-2 (non-deload) should have >= 4 sets
-        for (int w = 0; w < 3; w++) {
-          for (final ex in weeks[w].workoutDays[0].exercises) {
-            expect(ex.sets, greaterThanOrEqualTo(4),
-                reason: 'Week ${w + 1} intermediate should have >= 4 sets, got ${ex.sets}');
-          }
-        }
-      });
-
-      test('beginner does NOT get 4-set minimum', () {
-        final populated = [
-          _populatedDay(intensity: 'endurance'), // endurance base = 2 sets
-        ];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          effectiveExp: 'beginner',
-        );
-
-        // Beginner baseline with endurance profile should have base 2 sets
-        final baselineSets = weeks[0].workoutDays[0].exercises[0].sets;
-        expect(baselineSets, lessThan(4),
-            reason: 'Beginner should not get 4-set minimum');
-      });
-
-      test('deload week skips 4-set minimum even for intermediate', () {
-        final populated = [_populatedDay(intensity: 'endurance')];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 4, // deload archetype
-          is6Day: false,
-          effectiveExp: 'intermediate',
-        );
-
-        // Week 4 (deload) should reduce to < 4 sets
-        final deloadSets = weeks[3].workoutDays[0].exercises[0].sets;
-        expect(deloadSets, lessThan(4),
-            reason: 'Deload week should not enforce 4-set minimum');
-      });
-    });
-
-    group('Body focus +1 set', () {
-      test('matching muscle gets +1 set', () {
-        final populated = [
-          _populatedDay(exercisesA: [
-            _exercise(
-              name: 'Bench Press',
-              primaryMuscles: ['Chest', 'Triceps'],
-            ),
-            _exercise(
-              name: 'Lat Pulldown',
-              primaryMuscles: ['Lats', 'Biceps'],
-            ),
-          ]),
-        ];
-
-        final weeksWithFocus = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          bodyFocus: ['chest'],
-        );
-
-        final weeksWithoutFocus = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-          bodyFocus: [],
-        );
-
-        // Bench Press should get +1 set (matches chest)
-        final benchWithFocus = weeksWithFocus[0].workoutDays[0].exercises[0].sets;
-        final benchWithout = weeksWithoutFocus[0].workoutDays[0].exercises[0].sets;
-        expect(benchWithFocus, benchWithout + 1);
-
-        // Lat Pulldown should NOT get +1 set (does not match chest)
-        final latWithFocus = weeksWithFocus[0].workoutDays[0].exercises[1].sets;
-        final latWithout = weeksWithoutFocus[0].workoutDays[0].exercises[1].sets;
-        expect(latWithFocus, latWithout);
-      });
-    });
-
-    group('Suggested starting weights', () {
-      test('previousWeights stamps suggestedWeight and weightCue', () {
-        final populated = [
-          _populatedDay(exercisesA: [
-            _exercise(name: 'Bench Press'),
-          ]),
-        ];
-
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 2,
-          is6Day: false,
-          previousWeights: {'Bench Press': 62.5},
-        );
-
-        final ex = weeks[0].workoutDays[0].exercises[0];
-        expect(ex.suggestedWeight, 62.5);
-        expect(ex.weightCue, contains('62.5'));
-        expect(ex.weightCue, contains('from last phase'));
-      });
-
-      test('exercises without previousWeights get normal weightCue', () {
-        final populated = [
-          _populatedDay(exercisesA: [
-            _exercise(name: 'Cable Fly'),
-          ]),
-        ];
-
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 2,
-          is6Day: false,
-          previousWeights: {'Bench Press': 62.5}, // no Cable Fly
-        );
-
-        final ex = weeks[0].workoutDays[0].exercises[0];
-        expect(ex.suggestedWeight, isNull);
-      });
-    });
-
-    group('apply produces correct structure', () {
-      test('produces 4 WeekPlans', () {
-        final populated = [_populatedDay(), _populatedDay(name: 'Pull')];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-        expect(weeks.length, 4);
-      });
-
-      test('each WeekPlan has correct weekInPhase (1-4)', () {
-        final populated = [_populatedDay()];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-        for (int i = 0; i < 4; i++) {
-          expect(weeks[i].weekInPhase, i + 1);
-        }
-      });
-
-      test('weekNumber is global (phase-aware)', () {
-        final populated = [_populatedDay()];
-
-        final phase1Weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-        expect(phase1Weeks[0].weekNumber, 1);
-        expect(phase1Weeks[3].weekNumber, 4);
-
-        final phase3Weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 3,
-          is6Day: false,
-        );
-        expect(phase3Weeks[0].weekNumber, 9);
-        expect(phase3Weeks[3].weekNumber, 12);
-      });
-
-      test('each WeekPlan preserves day count from populated input', () {
-        final populated = [
-          _populatedDay(name: 'Push'),
-          _populatedDay(name: 'Pull'),
-          _populatedDay(name: 'Legs'),
-        ];
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-        for (final week in weeks) {
-          expect(week.workoutDays.length, 3);
-        }
-      });
-
-      test('A/B alternation in non-6-day: weeks 2,4 use variant B', () {
-        final exA = _exercise(name: 'Bench Press A', variant: 'A');
-        final exB = _exercise(name: 'Bench Press B', variant: 'B');
-        final populated = [
-          PopulatedDay(
-            name: 'Push', focus: 'Chest', dayType: 'push', intensity: 'hypertrophy',
-            exercisesA: [exA],
-            exercisesB: [exB],
-          ),
-        ];
-
-        final weeks = PeriodizationEngine.apply(
-          populated: populated,
-          phase: 1,
-          is6Day: false,
-        );
-
-        // Week 1 (idx 0) → A, Week 2 (idx 1) → B, Week 3 (idx 2) → A, Week 4 (idx 3) → B
-        expect(weeks[0].workoutDays[0].exercises[0].exerciseName, 'Bench Press A');
-        expect(weeks[1].workoutDays[0].exercises[0].exerciseName, 'Bench Press B');
-        expect(weeks[2].workoutDays[0].exercises[0].exerciseName, 'Bench Press A');
-        expect(weeks[3].workoutDays[0].exercises[0].exerciseName, 'Bench Press B');
-      });
-    });
-  });
-
-  // ════════════════════════════════════════════════════════════════
   // 3. SEQUENCING ENGINE
   // ════════════════════════════════════════════════════════════════
 
@@ -631,12 +133,12 @@ void main() {
     group('Compound before isolation', () {
       test('compounds sorted before isolations', () {
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: [
-              _exercise(name: 'Cable Fly', exerciseType: 'isolation'),
-              _exercise(name: 'Bench Press', exerciseType: 'compound'),
-              _exercise(name: 'Lateral Raise', exerciseType: 'isolation'),
-              _exercise(name: 'Incline Bench Press', exerciseType: 'compound'),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: [
+              exercise(name: 'Cable Fly', exerciseType: 'isolation'),
+              exercise(name: 'Bench Press', exerciseType: 'compound'),
+              exercise(name: 'Lateral Raise', exerciseType: 'isolation'),
+              exercise(name: 'Incline Bench Press', exerciseType: 'compound'),
             ]),
           ]),
         ];
@@ -663,12 +165,12 @@ void main() {
     group('Bilateral before unilateral within compounds', () {
       test('bilateral compounds sorted before unilateral compounds', () {
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: [
-              _exercise(name: 'Bulgarian Split Squat', exerciseType: 'compound'),
-              _exercise(name: 'Barbell Squat', exerciseType: 'compound'),
-              _exercise(name: 'Walking Lunge', exerciseType: 'compound'),
-              _exercise(name: 'Deadlift', exerciseType: 'compound'),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: [
+              exercise(name: 'Bulgarian Split Squat', exerciseType: 'compound'),
+              exercise(name: 'Barbell Squat', exerciseType: 'compound'),
+              exercise(name: 'Walking Lunge', exerciseType: 'compound'),
+              exercise(name: 'Deadlift', exerciseType: 'compound'),
             ]),
           ]),
         ];
@@ -693,11 +195,11 @@ void main() {
     group('CNS ordering within same tier', () {
       test('higher CNS demand compound exercises come first', () {
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: [
-              _exercise(name: 'Lat Pulldown', exerciseType: 'compound'),
-              _exercise(name: 'Barbell Squat', exerciseType: 'compound'),
-              _exercise(name: 'Bench Press', exerciseType: 'compound'),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: [
+              exercise(name: 'Lat Pulldown', exerciseType: 'compound'),
+              exercise(name: 'Barbell Squat', exerciseType: 'compound'),
+              exercise(name: 'Bench Press', exerciseType: 'compound'),
             ]),
           ]),
         ];
@@ -720,12 +222,12 @@ void main() {
     group('Warmup annotation', () {
       test('compound exercises get warmupSet = true', () {
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: [
-              _exercise(name: 'Bench Press', exerciseType: 'compound'),
-              _exercise(name: 'Overhead Press', exerciseType: 'compound'),
-              _exercise(name: 'Cable Fly', exerciseType: 'isolation'),
-              _exercise(name: 'Lateral Raise', exerciseType: 'isolation'),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: [
+              exercise(name: 'Bench Press', exerciseType: 'compound'),
+              exercise(name: 'Overhead Press', exerciseType: 'compound'),
+              exercise(name: 'Cable Fly', exerciseType: 'isolation'),
+              exercise(name: 'Lateral Raise', exerciseType: 'isolation'),
             ]),
           ]),
         ];
@@ -751,10 +253,10 @@ void main() {
 
     group('Edge cases', () {
       test('single exercise returns unchanged', () {
-        final single = _exercise(name: 'Bench Press', exerciseType: 'compound');
+        final single = exercise(name: 'Bench Press', exerciseType: 'compound');
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: [single]),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: [single]),
           ]),
         ];
 
@@ -766,8 +268,8 @@ void main() {
 
       test('empty list returns empty', () {
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(exercises: []),
+          weekPlan(workoutDays: [
+            workoutDay(exercises: []),
           ]),
         ];
 
@@ -776,14 +278,14 @@ void main() {
       });
 
       test('preserves warmup/cooldown/finisher through sequencing', () {
-        final warmupEx = _exercise(name: 'Arm Circles', category: 'warmup');
-        final cooldownEx = _exercise(name: 'Stretching', category: 'cooldown');
-        final finisherEx = _exercise(name: 'Burpees', category: 'finisher');
+        final warmupEx = exercise(name: 'Arm Circles', category: 'warmup');
+        final cooldownEx = exercise(name: 'Stretching', category: 'cooldown');
+        final finisherEx = exercise(name: 'Burpees', category: 'finisher');
 
         final weeks = [
-          _weekPlan(workoutDays: [
-            _workoutDay(
-              exercises: [_exercise(name: 'Bench Press', exerciseType: 'compound')],
+          weekPlan(workoutDays: [
+            workoutDay(
+              exercises: [exercise(name: 'Bench Press', exerciseType: 'compound')],
               warmup: [warmupEx],
               cooldown: [cooldownEx],
               finisher: [finisherEx],
@@ -804,13 +306,13 @@ void main() {
 
     group('Multiple weeks processed', () {
       test('all weeks get sequenced', () {
-        final weeks = List.generate(4, (i) => _weekPlan(
+        final weeks = List.generate(4, (i) => weekPlan(
           weekNumber: i + 1,
           weekInPhase: i + 1,
           workoutDays: [
-            _workoutDay(exercises: [
-              _exercise(name: 'Cable Fly', exerciseType: 'isolation'),
-              _exercise(name: 'Bench Press', exerciseType: 'compound'),
+            workoutDay(exercises: [
+              exercise(name: 'Cable Fly', exerciseType: 'isolation'),
+              exercise(name: 'Bench Press', exerciseType: 'compound'),
             ]),
           ],
         ));
@@ -835,9 +337,9 @@ void main() {
   group('CardioFinisher', () {
     group('Goal filtering', () {
       test('only attaches for lose_fat', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -850,9 +352,9 @@ void main() {
       });
 
       test('only attaches for general_fitness', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -865,9 +367,9 @@ void main() {
       });
 
       test('build_muscle goal → no finishers attached', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -882,9 +384,9 @@ void main() {
       });
 
       test('strength goal → no finishers attached', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -901,9 +403,9 @@ void main() {
 
     group('Finisher count', () {
       test('attaches to exactly 2 days per week', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3), _workoutDay(dayNumber: 4),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3), workoutDay(dayNumber: 4),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -916,8 +418,8 @@ void main() {
       });
 
       test('attaches to exactly 2 days even for 6-day weeks', () {
-        final weeks = [_weekPlan(workoutDays: List.generate(6,
-          (i) => _workoutDay(dayNumber: i + 1),
+        final weeks = [weekPlan(workoutDays: List.generate(6,
+          (i) => workoutDay(dayNumber: i + 1),
         ))];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -932,9 +434,9 @@ void main() {
 
     group('Finisher exercises', () {
       test('finisher exercises have category = finisher', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -950,9 +452,9 @@ void main() {
       });
 
       test('finisher exercises have loggingType = timed', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -970,9 +472,9 @@ void main() {
 
     group('Preference differences', () {
       test('running preference → treadmill/jogging exercises', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -990,9 +492,9 @@ void main() {
       });
 
       test('hiit preference → multiple bodyweight exercises', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1008,9 +510,9 @@ void main() {
       });
 
       test('hate_cardio preference → mini HIIT (shortest)', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1030,9 +532,9 @@ void main() {
       });
 
       test('jump_rope preference → single exercise', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1050,9 +552,9 @@ void main() {
 
     group('Equipment awareness', () {
       test('no gym → bodyweight running alternative (spot jogging)', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1068,9 +570,9 @@ void main() {
       });
 
       test('full_gym → treadmill for running preference', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1085,9 +587,9 @@ void main() {
       });
 
       test('no gym + cycling preference → high knees fallback', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1102,9 +604,9 @@ void main() {
       });
 
       test('gym + cycling preference → stationary bike', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1), _workoutDay(dayNumber: 2),
-          _workoutDay(dayNumber: 3),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1), workoutDay(dayNumber: 2),
+          workoutDay(dayNumber: 3),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1121,11 +623,11 @@ void main() {
 
     group('Preserves existing exercises', () {
       test('main exercises not modified when finisher is attached', () {
-        final originalEx = _exercise(name: 'Bench Press', sets: 4);
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, exercises: [originalEx]),
-          _workoutDay(dayNumber: 2, exercises: [originalEx]),
-          _workoutDay(dayNumber: 3, exercises: [originalEx]),
+        final originalEx = exercise(name: 'Bench Press', sets: 4);
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, exercises: [originalEx]),
+          workoutDay(dayNumber: 2, exercises: [originalEx]),
+          workoutDay(dayNumber: 3, exercises: [originalEx]),
         ])];
         final result = CardioFinisher.attach(
           weeks: weeks,
@@ -1149,10 +651,10 @@ void main() {
   group('WarmupCooldownSelector', () {
     group('Basic attachment', () {
       test('warmup attached to every workout day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
-          _workoutDay(dayNumber: 2, name: 'Pull'),
-          _workoutDay(dayNumber: 3, name: 'Legs'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
+          workoutDay(dayNumber: 2, name: 'Pull'),
+          workoutDay(dayNumber: 3, name: 'Legs'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1164,10 +666,10 @@ void main() {
       });
 
       test('cooldown attached to every workout day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
-          _workoutDay(dayNumber: 2, name: 'Pull'),
-          _workoutDay(dayNumber: 3, name: 'Legs'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
+          workoutDay(dayNumber: 2, name: 'Pull'),
+          workoutDay(dayNumber: 3, name: 'Legs'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1181,8 +683,8 @@ void main() {
 
     group('Warmup structure', () {
       test('warmup has cardio + dynamic exercises', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1199,8 +701,8 @@ void main() {
       });
 
       test('all warmup exercises have category = warmup', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Legs'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Legs'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1212,8 +714,8 @@ void main() {
 
     group('Cooldown structure', () {
       test('cooldown has slow walking + stretches', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'intermediate', ['bodyweight']);
@@ -1235,8 +737,8 @@ void main() {
       });
 
       test('stretches are 30s duration', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1251,8 +753,8 @@ void main() {
 
     group('Experience-based warmup differences', () {
       test('advanced gets different warmup exercises than beginner for push day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
 
         final beginnerResult = WarmupCooldownSelector.attach(
@@ -1273,8 +775,8 @@ void main() {
       });
 
       test('advanced gets different warmup exercises than beginner for legs day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Legs'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Legs'),
         ])];
 
         final beginnerResult = WarmupCooldownSelector.attach(
@@ -1293,8 +795,8 @@ void main() {
       });
 
       test('advanced push warmup includes Push Up', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
         final result = WarmupCooldownSelector.attach(weeks, 'advanced', ['bodyweight']);
         final warmupNames = result[0].workoutDays[0].warmup
@@ -1303,8 +805,8 @@ void main() {
       });
 
       test('beginner push warmup includes Wall Push Up', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Push'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Push'),
         ])];
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
         final warmupNames = result[0].workoutDays[0].warmup
@@ -1316,8 +818,8 @@ void main() {
     group('Equipment awareness', () {
       test('gym equipment adds additional cardio options', () {
         // With multiple days, the cardio rotation should cycle through gym options
-        final weeks = [_weekPlan(workoutDays: List.generate(5,
-          (i) => _workoutDay(dayNumber: i + 1, name: 'Day ${i + 1}'),
+        final weeks = [weekPlan(workoutDays: List.generate(5,
+          (i) => workoutDay(dayNumber: i + 1, name: 'Day ${i + 1}'),
         ))];
 
         final resultNoGym = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1336,9 +838,9 @@ void main() {
 
     group('Preserves existing data', () {
       test('main exercises preserved after warmup/cooldown attached', () {
-        final ex = _exercise(name: 'Squat', sets: 5);
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(dayNumber: 1, name: 'Legs', exercises: [ex]),
+        final ex = exercise(name: 'Squat', sets: 5);
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(dayNumber: 1, name: 'Legs', exercises: [ex]),
         ])];
 
         final result = WarmupCooldownSelector.attach(weeks, 'beginner', ['bodyweight']);
@@ -1348,9 +850,9 @@ void main() {
       });
 
       test('finisher preserved after warmup/cooldown attached', () {
-        final finisherEx = _exercise(name: 'Burpees', category: 'finisher');
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(
+        final finisherEx = exercise(name: 'Burpees', category: 'finisher');
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(
             dayNumber: 1, name: 'Push',
             finisher: [finisherEx],
           ),
@@ -1370,14 +872,14 @@ void main() {
   group('SupersetPairer', () {
     group('Antagonist pairing', () {
       test('pairs chest and back exercises', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Upper', exercises: [
-            _exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
-            _exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
-            _exercise(name: 'Cable Fly', primaryMuscles: ['Chest']),
-            _exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
-            _exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Upper', exercises: [
+            exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
+            exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
+            exercise(name: 'Cable Fly', primaryMuscles: ['Chest']),
+            exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
+            exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
+            exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
           ]),
         ])];
 
@@ -1395,12 +897,12 @@ void main() {
       });
 
       test('pairs biceps and triceps', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Shoulders + Arms', exercises: [
-            _exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
-            _exercise(name: 'Lateral Raise', primaryMuscles: ['Side Deltoid']),
-            _exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Shoulders + Arms', exercises: [
+            exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
+            exercise(name: 'Lateral Raise', primaryMuscles: ['Side Deltoid']),
+            exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
+            exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
           ]),
         ])];
 
@@ -1416,13 +918,13 @@ void main() {
       });
 
       test('pairs quads and hamstrings', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Legs', exercises: [
-            _exercise(name: 'Squat', primaryMuscles: ['Quads']),
-            _exercise(name: 'Romanian Deadlift', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Leg Extension', primaryMuscles: ['Quads']),
-            _exercise(name: 'Leg Curl', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Calf Raise', primaryMuscles: ['Calves']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Legs', exercises: [
+            exercise(name: 'Squat', primaryMuscles: ['Quads']),
+            exercise(name: 'Romanian Deadlift', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Leg Extension', primaryMuscles: ['Quads']),
+            exercise(name: 'Leg Curl', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Calf Raise', primaryMuscles: ['Calves']),
           ]),
         ])];
 
@@ -1440,12 +942,12 @@ void main() {
 
     group('First 2 exercises remain standalone', () {
       test('does NOT pair first 2 exercises', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Full Body', exercises: [
-            _exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
-            _exercise(name: 'Barbell Row', primaryMuscles: ['Back']),
-            _exercise(name: 'Cable Fly', primaryMuscles: ['Chest']),
-            _exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Full Body', exercises: [
+            exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
+            exercise(name: 'Barbell Row', primaryMuscles: ['Back']),
+            exercise(name: 'Cable Fly', primaryMuscles: ['Chest']),
+            exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
           ]),
         ])];
 
@@ -1462,12 +964,12 @@ void main() {
 
     group('Day type restrictions', () {
       test('pairs on legs day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Legs', exercises: [
-            _exercise(name: 'Squat', primaryMuscles: ['Quads']),
-            _exercise(name: 'RDL', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Leg Extension', primaryMuscles: ['Quads']),
-            _exercise(name: 'Leg Curl', primaryMuscles: ['Hamstrings']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Legs', exercises: [
+            exercise(name: 'Squat', primaryMuscles: ['Quads']),
+            exercise(name: 'RDL', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Leg Extension', primaryMuscles: ['Quads']),
+            exercise(name: 'Leg Curl', primaryMuscles: ['Hamstrings']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1477,12 +979,12 @@ void main() {
       });
 
       test('pairs on upper day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Upper', exercises: [
-            _exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
-            _exercise(name: 'Row', primaryMuscles: ['Back']),
-            _exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Tricep Pushdown', primaryMuscles: ['Triceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Upper', exercises: [
+            exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
+            exercise(name: 'Row', primaryMuscles: ['Back']),
+            exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
+            exercise(name: 'Tricep Pushdown', primaryMuscles: ['Triceps']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1492,12 +994,12 @@ void main() {
       });
 
       test('pairs on full_body day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Full Body A', exercises: [
-            _exercise(name: 'Squat', primaryMuscles: ['Quads']),
-            _exercise(name: 'Deadlift', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
-            _exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Full Body A', exercises: [
+            exercise(name: 'Squat', primaryMuscles: ['Quads']),
+            exercise(name: 'Deadlift', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
+            exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1507,12 +1009,12 @@ void main() {
       });
 
       test('pairs on shoulders_arms day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Shoulders + Arms', exercises: [
-            _exercise(name: 'OHP', primaryMuscles: ['Deltoids']),
-            _exercise(name: 'Lateral Raise', primaryMuscles: ['Side Deltoid']),
-            _exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Shoulders + Arms', exercises: [
+            exercise(name: 'OHP', primaryMuscles: ['Deltoids']),
+            exercise(name: 'Lateral Raise', primaryMuscles: ['Side Deltoid']),
+            exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
+            exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1522,12 +1024,12 @@ void main() {
       });
 
       test('does NOT pair on push day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Push', exercises: [
-            _exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
-            _exercise(name: 'Incline Press', primaryMuscles: ['Upper Chest']),
-            _exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
-            _exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Push', exercises: [
+            exercise(name: 'Bench Press', primaryMuscles: ['Chest']),
+            exercise(name: 'Incline Press', primaryMuscles: ['Upper Chest']),
+            exercise(name: 'Shoulder Press', primaryMuscles: ['Deltoids']),
+            exercise(name: 'Tricep Extension', primaryMuscles: ['Triceps']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1538,12 +1040,12 @@ void main() {
       });
 
       test('does NOT pair on pull day', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Pull', exercises: [
-            _exercise(name: 'Deadlift', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Barbell Row', primaryMuscles: ['Back']),
-            _exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
-            _exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Pull', exercises: [
+            exercise(name: 'Deadlift', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Barbell Row', primaryMuscles: ['Back']),
+            exercise(name: 'Lat Pulldown', primaryMuscles: ['Lats']),
+            exercise(name: 'Bicep Curl', primaryMuscles: ['Biceps']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1556,44 +1058,44 @@ void main() {
 
     group('inferDayType', () {
       test('infers full_body from name', () {
-        final day = _workoutDay(name: 'Full Body A');
+        final day = workoutDay(name: 'Full Body A');
         expect(SupersetPairer.inferDayType(day), 'full_body');
       });
 
       test('infers push from name', () {
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Push')), 'push');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Chest')), 'push');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Bench Day')), 'push');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Push')), 'push');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Chest')), 'push');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Bench Day')), 'push');
       });
 
       test('infers pull from name', () {
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Pull')), 'pull');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Back')), 'pull');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Pull')), 'pull');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Back')), 'pull');
       });
 
       test('infers legs from name', () {
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Legs')), 'legs');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Lower Body')), 'legs');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Squat Day')), 'legs');
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Deadlift Day')), 'legs');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Legs')), 'legs');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Lower Body')), 'legs');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Squat Day')), 'legs');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Deadlift Day')), 'legs');
       });
 
       test('infers upper from name', () {
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Upper')), 'upper');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Upper')), 'upper');
       });
 
       test('infers shoulders_arms from name', () {
-        expect(SupersetPairer.inferDayType(_workoutDay(name: 'Shoulders + Arms')), 'shoulders_arms');
+        expect(SupersetPairer.inferDayType(workoutDay(name: 'Shoulders + Arms')), 'shoulders_arms');
       });
     });
 
     group('Edge cases', () {
       test('fewer than 4 exercises → no pairing', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Full Body', exercises: [
-            _exercise(name: 'Squat', primaryMuscles: ['Quads']),
-            _exercise(name: 'Bench', primaryMuscles: ['Chest']),
-            _exercise(name: 'Row', primaryMuscles: ['Back']),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Full Body', exercises: [
+            exercise(name: 'Squat', primaryMuscles: ['Quads']),
+            exercise(name: 'Bench', primaryMuscles: ['Chest']),
+            exercise(name: 'Row', primaryMuscles: ['Back']),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1604,12 +1106,12 @@ void main() {
       });
 
       test('exercises without primaryMuscles → no pairing', () {
-        final weeks = [_weekPlan(workoutDays: [
-          _workoutDay(name: 'Full Body', exercises: [
-            _exercise(name: 'Ex1'),
-            _exercise(name: 'Ex2'),
-            _exercise(name: 'Ex3'),
-            _exercise(name: 'Ex4'),
+        final weeks = [weekPlan(workoutDays: [
+          workoutDay(name: 'Full Body', exercises: [
+            exercise(name: 'Ex1'),
+            exercise(name: 'Ex2'),
+            exercise(name: 'Ex3'),
+            exercise(name: 'Ex4'),
           ]),
         ])];
         final result = SupersetPairer.pair(weeks);
@@ -1628,9 +1130,9 @@ void main() {
   group('Integration: PeriodizationEngine.apply full structure', () {
     test('produces 4 WeekPlans with correct weekInPhase', () {
       final populated = [
-        _populatedDay(name: 'Push'),
-        _populatedDay(name: 'Pull'),
-        _populatedDay(name: 'Legs'),
+        populatedDay(name: 'Push'),
+        populatedDay(name: 'Pull'),
+        populatedDay(name: 'Legs'),
       ];
       final weeks = PeriodizationEngine.apply(
         populated: populated,
@@ -1651,37 +1153,37 @@ void main() {
         PopulatedDay(
           name: 'Upper', focus: 'Chest + Back', dayType: 'upper', intensity: 'hypertrophy',
           exercisesA: [
-            _exercise(name: 'Bench Press', exerciseType: 'compound', primaryMuscles: ['Chest']),
-            _exercise(name: 'Barbell Row', exerciseType: 'compound', primaryMuscles: ['Back']),
-            _exercise(name: 'Cable Fly', exerciseType: 'isolation', primaryMuscles: ['Chest']),
-            _exercise(name: 'Face Pull', exerciseType: 'isolation', primaryMuscles: ['Rear Deltoid']),
-            _exercise(name: 'Bicep Curl', exerciseType: 'isolation', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Tricep Extension', exerciseType: 'isolation', primaryMuscles: ['Triceps']),
+            exercise(name: 'Bench Press', exerciseType: 'compound', primaryMuscles: ['Chest']),
+            exercise(name: 'Barbell Row', exerciseType: 'compound', primaryMuscles: ['Back']),
+            exercise(name: 'Cable Fly', exerciseType: 'isolation', primaryMuscles: ['Chest']),
+            exercise(name: 'Face Pull', exerciseType: 'isolation', primaryMuscles: ['Rear Deltoid']),
+            exercise(name: 'Bicep Curl', exerciseType: 'isolation', primaryMuscles: ['Biceps']),
+            exercise(name: 'Tricep Extension', exerciseType: 'isolation', primaryMuscles: ['Triceps']),
           ],
           exercisesB: [
-            _exercise(name: 'Incline Press', exerciseType: 'compound', primaryMuscles: ['Chest']),
-            _exercise(name: 'Lat Pulldown', exerciseType: 'compound', primaryMuscles: ['Lats']),
-            _exercise(name: 'Chest Dip', exerciseType: 'compound', primaryMuscles: ['Chest']),
-            _exercise(name: 'Rear Delt Fly', exerciseType: 'isolation', primaryMuscles: ['Rear Deltoid']),
-            _exercise(name: 'Hammer Curl', exerciseType: 'isolation', primaryMuscles: ['Biceps']),
-            _exercise(name: 'Overhead Extension', exerciseType: 'isolation', primaryMuscles: ['Triceps']),
+            exercise(name: 'Incline Press', exerciseType: 'compound', primaryMuscles: ['Chest']),
+            exercise(name: 'Lat Pulldown', exerciseType: 'compound', primaryMuscles: ['Lats']),
+            exercise(name: 'Chest Dip', exerciseType: 'compound', primaryMuscles: ['Chest']),
+            exercise(name: 'Rear Delt Fly', exerciseType: 'isolation', primaryMuscles: ['Rear Deltoid']),
+            exercise(name: 'Hammer Curl', exerciseType: 'isolation', primaryMuscles: ['Biceps']),
+            exercise(name: 'Overhead Extension', exerciseType: 'isolation', primaryMuscles: ['Triceps']),
           ],
         ),
         PopulatedDay(
           name: 'Legs', focus: 'Quads + Hams', dayType: 'legs', intensity: 'strength',
           exercisesA: [
-            _exercise(name: 'Barbell Squat', exerciseType: 'compound', primaryMuscles: ['Quads']),
-            _exercise(name: 'Romanian Deadlift', exerciseType: 'compound', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Leg Extension', exerciseType: 'isolation', primaryMuscles: ['Quads']),
-            _exercise(name: 'Leg Curl', exerciseType: 'isolation', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Calf Raise', exerciseType: 'isolation', primaryMuscles: ['Calves']),
+            exercise(name: 'Barbell Squat', exerciseType: 'compound', primaryMuscles: ['Quads']),
+            exercise(name: 'Romanian Deadlift', exerciseType: 'compound', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Leg Extension', exerciseType: 'isolation', primaryMuscles: ['Quads']),
+            exercise(name: 'Leg Curl', exerciseType: 'isolation', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Calf Raise', exerciseType: 'isolation', primaryMuscles: ['Calves']),
           ],
           exercisesB: [
-            _exercise(name: 'Front Squat', exerciseType: 'compound', primaryMuscles: ['Quads']),
-            _exercise(name: 'Stiff Leg Deadlift', exerciseType: 'compound', primaryMuscles: ['Hamstrings']),
-            _exercise(name: 'Leg Press', exerciseType: 'compound', primaryMuscles: ['Quads']),
-            _exercise(name: 'Hip Thrust', exerciseType: 'compound', primaryMuscles: ['Glutes']),
-            _exercise(name: 'Seated Calf', exerciseType: 'isolation', primaryMuscles: ['Calves']),
+            exercise(name: 'Front Squat', exerciseType: 'compound', primaryMuscles: ['Quads']),
+            exercise(name: 'Stiff Leg Deadlift', exerciseType: 'compound', primaryMuscles: ['Hamstrings']),
+            exercise(name: 'Leg Press', exerciseType: 'compound', primaryMuscles: ['Quads']),
+            exercise(name: 'Hip Thrust', exerciseType: 'compound', primaryMuscles: ['Glutes']),
+            exercise(name: 'Seated Calf', exerciseType: 'isolation', primaryMuscles: ['Calves']),
           ],
         ),
       ];
@@ -1745,7 +1247,7 @@ void main() {
     });
 
     test('cycle multiplier affects sets in later phases', () {
-      final populated = [_populatedDay(intensity: 'hypertrophy')];
+      final populated = [populatedDay(intensity: 'hypertrophy')];
 
       // APK Test #12.6 — removed unused phase1Weeks / phase5Weeks
       // assignments (intermediate path; the assertions below use the
@@ -1777,7 +1279,7 @@ void main() {
     });
 
     test('overload notes differ across weeks', () {
-      final populated = [_populatedDay()];
+      final populated = [populatedDay()];
       final weeks = PeriodizationEngine.apply(
         populated: populated,
         phase: 1,
@@ -1790,8 +1292,8 @@ void main() {
     });
 
     test('6-day plan does not A/B alternate (always uses A)', () {
-      final exA = _exercise(name: 'Variant A');
-      final exB = _exercise(name: 'Variant B');
+      final exA = exercise(name: 'Variant A');
+      final exB = exercise(name: 'Variant B');
       final populated = [
         PopulatedDay(
           name: 'Push A', focus: 'Chest', dayType: 'push', intensity: 'hypertrophy',

@@ -2,7 +2,8 @@
 scope: wardroom
 parent: ../../../../CLAUDE.md
 created: 2026-05-18
-status: scaffold
+updated: 2026-05-21
+status: active
 ---
 
 # Wardroom Design System — Local Rules
@@ -141,4 +142,13 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/contracts/typography_canonical_source_test.dart` — pins DM Sans canonical source.
+- `test/contracts/rank_widget_migration_test.dart` — fails if deleted `RankChip` / `RankInsignia` are re-introduced (audit 2026-05-16 / E.11).
+- `test/widgets/wardroom/*` — primitive-level golden + interaction tests.
+- `test/contracts/wardroom_palette_jsx_source_test.dart` — pins `colors.dart` to the JSX `const W = {}` source.
+
+## See also
+
+- `lib/CLAUDE.md` — root invariant 11+12 (Wardroom palette + dark theme only).
+- `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx` — JSX source-of-truth for the palette.
+- `lib/core/theme/spacing.dart` + `lib/core/theme/colors.dart` — Dart-side constants.

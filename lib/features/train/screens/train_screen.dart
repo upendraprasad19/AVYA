@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -38,29 +39,17 @@ class TrainScreen extends ConsumerStatefulWidget {
   ConsumerState<TrainScreen> createState() => _TrainScreenState();
 }
 
-class _TrainScreenState extends ConsumerState<TrainScreen> {
-  bool _isLoading = true;
-
+class _TrainScreenState extends ConsumerState<TrainScreen>
+    with HiveTabScaffoldMixin<TrainScreen> {
   @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
-  }
-
-  void _retry() {
-    setState(() => _isLoading = true);
+  void invalidateOnRetry(WidgetRef ref) {
     ref.invalidate(currentPlanProvider);
     ref.invalidate(selectedWeekProvider);
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (isLoading) {
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: const ScreenLoadingSkeleton(cardCount: 4),
@@ -82,7 +71,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
             child: ErrorState(
               title: 'Failed to load workouts',
               subtitle: 'Tap to retry',
-              onRetry: _retry,
+              onRetry: retry,
             ),
           ),
         ),

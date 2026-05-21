@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -53,12 +54,17 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  late bool _isMetric;
-  bool _isLoading = true;
-
-  // Notification preferences (loaded from Hive configBox)
-  late Map<String, dynamic> _notifPrefs;
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with HiveTabScaffoldMixin<ProfileScreen> {
+  // Synchronous Hive reads — initialized lazily on first access via the
+  // `late` keyword. Both keys are guaranteed-present (`isMetric` defaults
+  // to true; `notification_preferences` defaults to {}); UserRepository
+  // and `_loadNotificationPreferences()` handle missing-key fallbacks.
+  // These can't go into a regular field initializer because they depend
+  // on Hive being open, which is guaranteed by `main.dart` before
+  // `runApp()`.
+  late bool _isMetric = UserRepository.instance.getUnitsMetric();
+  late Map<String, dynamic> _notifPrefs = _loadNotificationPreferences();
 
   // Bug #14 — Prediction polling moved from home_screen.dart. The Future
   // Prediction card now lives in profile, so the fire-and-forget post-
@@ -68,15 +74,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int _predictionPollCount = 0;
   static const int _maxPredictionPollAttempts = 10; // 3s × 10 = 30s
 
+  // initState is owned by HiveTabScaffoldMixin (microtask + isLoading flip).
+  // First-mount-only side effects move to `initTab()` below.
   @override
-  void initState() {
-    super.initState();
-    _isMetric = UserRepository.instance.getUnitsMetric();
-    _notifPrefs = _loadNotificationPreferences();
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-      _startPredictionPollIfNeeded();
-    });
+  Future<void> initTab() async {
+    _startPredictionPollIfNeeded();
+  }
+
+  @override
+  void invalidateOnRetry(WidgetRef ref) {
+    ref.invalidate(userProfileProvider);
+    ref.invalidate(userStatsProvider);
+    ref.invalidate(subscriptionInfoProvider);
+    ref.invalidate(biometricProvider);
+    ref.invalidate(progressPhotosProvider);
+    ref.invalidate(usageWeeksProvider);
+    ref.invalidate(firstReportViewedProvider);
   }
 
   @override
@@ -300,23 +313,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return true;
   }
 
-  void _retry() {
-    setState(() => _isLoading = true);
-    ref.invalidate(userProfileProvider);
-    ref.invalidate(userStatsProvider);
-    ref.invalidate(subscriptionInfoProvider);
-    ref.invalidate(biometricProvider);
-    ref.invalidate(progressPhotosProvider);
-    ref.invalidate(usageWeeksProvider);
-    ref.invalidate(firstReportViewedProvider);
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (isLoading) {
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: const ScreenLoadingSkeleton(cardCount: 5),
@@ -338,7 +337,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: ErrorState(
               title: 'Failed to load profile',
               subtitle: 'Tap to retry',
-              onRetry: _retry,
+              onRetry: retry,
             ),
           ),
         ),

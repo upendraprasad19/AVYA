@@ -2,7 +2,8 @@
 scope: train
 parent: ../../../CLAUDE.md
 created: 2026-05-18
-status: scaffold
+updated: 2026-05-21
+status: active
 ---
 
 # Train (Active Workout + Templates) — Local Rules
@@ -10,7 +11,28 @@ status: scaffold
 > This file is auto-loaded by Claude Code when working under `lib/features/train/`.
 > Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
 
-<!-- MIGRATION IN PROGRESS — content from CLAUDE.md will be moved here in Milestone 2 -->
+## What lives here
+
+`lib/features/train/` owns the 🏋️ Train tab — the active workout flow, phase
+plan, week selector (12 weeks / 3 phases), exercise swap, template builder, and
+the receipt + edit log sheets that complete the post-workout loop.
+
+Screens:
+
+- `train_screen.dart` — phase plan + week selector + today's workout + completed-day expanded view.
+- `active_workout_screen.dart` — live logging UI driven by `logging_type` (see below).
+- `template_builder_screen.dart` — user-built workout template (PRO).
+- `roadmap_screen.dart` — 12-week phase roadmap (added Test #2).
+- `preview_screen.dart` — locked-week real workout preview (Test #2 / Q7).
+
+Widgets: `workout_receipt_card.dart` (canonical reader for receipts),
+`workout_receipt_sheet.dart`, `edit_workout_log_sheet.dart` (single edit
+surface — 4 entry points route through it), `warmup_cooldown_section.dart`,
+`exercise_set_row.dart`, `swap_picker_sheet.dart`.
+
+Service layer: `WorkoutWriteService` (single writer for `exlog_*` + `wlog_*`
+Hive rows + cloud) + `WorkoutScheduleService` (routes scheduled-workout writes
+through the WriteService — APK Test #16.2 / E).
 
 ## Single-source-of-truth contracts
 
@@ -25,6 +47,20 @@ status: scaffold
 | `cardio` | Duration (min) + Distance (km) |
 | `distance` | Distance + load |
 
+### SoT concepts owned here
+
+| Concept | Writer | Reader |
+|---|---|---|
+| `workout_receipt_rendering` | `WorkoutWriteService.logExercise` (stamps `workout_log_id` on every `exlog_*` row — Test #12 / Task A-3) | `workout_receipt_card.dart` `WorkoutReceiptData.fromExerciseLogs` (dedupes by name, sums sets, max weight, scopes by `workout_log_id`). |
+| `exercise_logs_read_path` | `WorkoutWriteService.logExercise` | `workout_read_service.exerciseLogsForIstDate` (canonical READ — every other reader delegates here). Hive key: `exlog_${istDateStr(date)}_${exerciseName.hashCode.toUnsigned(32).toRadixString(16)}`. |
+| `workout_log_edit_surface` | `edit_workout_log_sheet.dart` `save` — rewrites Hive row in place, recomputes `volume_kg`, chronologically rescans `is_pr`, invalidates full provider batch, fires `syncWorkoutData()` + `pushSnapshot()` | 4 entry points: receipt sheet Edit button, Home View Card, calendar day detail, Train expanded view. |
+| `workout_completion_status` | `WorkoutWriteService.completeWorkout` | `train_screen` completed-day expanded view + home Today's Workout Card. |
+| `scheduled_workouts_mutations` | `WorkoutScheduleService.upsertScheduled` → routes through `WorkoutWriteService` (APK Test #16.2 / E retrofit — 9 callsites migrated) | `train_screen` week renderer. |
+| `workout_templates` | `WorkoutWriteService.saveTemplate` / `deleteTemplate` (PRO) | `template_builder_screen`, `train_screen` template picker. |
+| `exercise_personal_records` | `WorkoutWriteService.recordPersonalRecord` (also called by AI tool dispatcher — APK Test #16.2 / E 8th drift) | home `PRSnapshot`, profile `rank_ladder` (PR-derived rank promotions). |
+| `custom_exercises_mutations` | `WorkoutWriteService.upsertCustomExercise` | `swap_picker_sheet`, exercise pickers. |
+| `hive_field_name_exlog` | `WorkoutWriteService` field names: `exercise_name`, `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `is_pr`, `logging_type`, `workout_log_id`, `duration_seconds`, `distance_km` | `EditLogExerciseRow.fromLog` accepts dual names (canonical `sets[]` OR legacy `sets_detail`; per-set `duration_sec` OR `duration_seconds`) for restore back-compat. |
+
 ## Common pitfalls
 
 | Pitfall | How to avoid | Source |
@@ -32,7 +68,27 @@ status: scaffold
 | Warm-up sets counted in completedSets | `completedSets` getter filters out `warmUpSets` keys. Exercise name matching uses exact-first, fuzzy only for names >= 6 chars. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 | WarmupCooldownSection RangeError | `didUpdateWidget` resets `_checked` list when `widget.exercises.length` changes. Always guard list length on rebuild. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 | Phase 2-12 invisible to free users | Train screen previously capped the week selector at 4 weeks — free users couldn't see what they were paying for. APK Test #2 / Q7 extends the selector to 12 weeks (3 phases) with PHASE I / II (PRO) / III (PRO) headers + lock glyph on weeks 5–12 for free users. Tap any locked week → `/train/preview?phase=II&week=5&day=1` renders a real workout via `previewPlanProvider` (calls `PlanGenerator.instance.generateV4()` with the user's actual profile — goal/equipment/days/experience). State-aware banner: "Complete Phase I to unlock Phase II — your AI coach generates the next 4 weeks the moment you finish." Free users see UPGRADE TO PRO bottom CTA + cross-link to `/train/roadmap`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Receipt shows wrong exercises after a multi-session day | `WorkoutReceiptData.fromExerciseLogs` filters by `workout_log_id` when present. Legacy rows (no `workout_log_id`) always pass through. APK Test #16.1 / Agent A added `workoutBox 'date == dateKey'` fallback for rogue-restore writers. | `workout_receipt_rendering` SoT |
+| Edit log saves but volume / PR flag doesn't update | `EditWorkoutLogSheet.save` MUST: (1) rewrite the Hive map in place, (2) recompute `volume_kg = weight_kg × reps_completed`, (3) chronologically rescan `is_pr`, (4) invalidate the full provider batch, (5) fire `syncWorkoutData()` + `pushSnapshot()`. Skipping any step = stale UI. | `workout_log_edit_surface` SoT |
+| Rogue `exlog_*` key formula on restore | APK Test #16.1 — 3 restore-path writers used wrong hash formula; `ExlogKeyMigrator v8` rewrites them on next mount. Gate 17 source-grep test pins the canonical formula. | `feedback_writer_reader_field_drift_recurring.md` + `exlog_key_canonical_test.dart` |
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/contracts/exercise_logs_read_path_writer_to_reader_test.dart`
+- `test/contracts/exlog_key_canonical_test.dart`
+- `test/contracts/exlog_migrator_handles_rogue_shapes_test.dart`
+- `test/contracts/edit_log_field_normalization_test.dart`
+- `test/contracts/edit_log_id_injection_test.dart`
+- `test/contracts/edit_workout_log_sets_field_contract_test.dart`
+- `test/contracts/exercise_personal_records_writer_to_reader_test.dart`
+- `test/contracts/custom_exercise_writer_to_reader_test.dart`
+- `test/contracts/workout_completion_status_test.dart`
+- `test/contracts/workout_templates_writer_to_reader_test.dart`
+- `test/contracts/duration_seconds_aggregate_populated_test.dart`
+
+## See also
+
+- `lib/shared/repositories/plan_engine/CLAUDE.md` — plan generator V4 + cascade.
+- `lib/features/home/CLAUDE.md` — Today's Workout Card + receipt entry point.
+- `lib/core/services/CLAUDE.md` — `WorkoutWriteService` + sync fan-out.
+- `docs/reference/exercise-library.md` — exercise_library Hive box (movement patterns, suitable_for, equipment_needed).

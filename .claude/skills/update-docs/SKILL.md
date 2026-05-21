@@ -72,11 +72,24 @@ Beyond the 11-node knowledge-graph protocol above, every batch must also walk th
 
 16. **Are SoT registry entries tagged with `behavioral_test_path:` (not just source-grep)?** Source-grep tests count for "presence" only; semantic drift slips through. Every new SoT entry needs a behavioral contract test too (lands in B2 sweep; this checklist node lights up after B2).
 
-17. **Were new singletons added without Riverpod scoping?** If yes, audit cross-account leak risk — `feedback_*.md` for the class (lands as `feedback_singleton_cross_account_leak.md` in B2).
+17. **Were new singletons added without Riverpod scoping?** If yes, audit cross-account leak risk — `feedback_singleton_cross_account_leak.md` codifies. Gate `scripts/check_singleton_provider_migration.dart` (Gate 46) enforces the 7 named services are accessed via Provider not `.instance` (lands B5 D9-D10).
+
+18. **Did every closed audit finding get `terminal_state:` (not a stale comment)?** Per `feedback_closure_yaml_per_finding_discipline.md`. Gate 40 (`scripts/validate_audit_closure.dart`) warns on entries with only a stale-pattern comment + no terminal_state. Pre-merge: `dart run scripts/validate_audit_closure.dart --strict` to fail loudly.
+
+19. **Does every nested `lib/.../CLAUDE.md` carry real content (not a Milestone-2 scaffold)?** Gate 44 (`scripts/check_nested_claude_md_content.dart`) flags files under 40 lines or containing literal "Milestone-2 scaffold" string. Lands B5 D2.
+
+20. **Was a `behavioral_test_path:` recorded alongside any new `source_grep_test_path:`?** Reinforces node 16. SoT registry entries without behavioral test get `behavioral_test_required: true` + a Gate 42 WARN (lands B5 D2).
+
+21. **Are new screens under 800 lines / using sibling-folder pattern for widgets?** Gate 43 (`scripts/check_god_screen_max_lines.dart`) flags any `lib/**/screens/*_screen.dart` over 800 lines. Sibling folder pattern: `train/screens/active_workout/{screen.dart, set_card.dart, ...}` per locked C3/C4 decision.
+
+22. **Was a feedback memory added when this batch surfaced a NEW recurrence class?** (Not for one-off fixes — but if the bug class would appear in `debugging/SKILL.md` §6 / `writer-reader-drift-detector/SKILL.md` §2 as a future entry, codify the memory.)
+
+23. **Was a new project-local skill warranted by this batch?** Per §5.1 — 3+ batches share a pattern → new skill. Current count: 6 (debugging, update-docs, tech-debt-audit, dep-bump-sweep, edge-function-deploy-rollback, writer-reader-drift-detector). Next candidates if pattern recurs: secret-rotation, cron-registry-check.
 
 ## Self-evolution changelog
 
-- **2026-05-21 (Tech-debt audit 2026-05-20 / B1)** — Added extended-checklist nodes 10-17. Nodes 12, 16, 17 are scaffolds — their gates land in later batches (B2/B3) of the same plan.
+- **2026-05-21 (Tech-debt audit 2026-05-20 / B1)** — Added extended-checklist nodes 10-17.
+- **2026-05-21 (Tech-debt audit 2026-05-20 / B5 D1)** — Added nodes 18-23. Updated node 17 to point at landed `feedback_singleton_cross_account_leak.md` + Gate 46.
 
 ## Output
 

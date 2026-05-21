@@ -1,12 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-// Audit 2026-05-20 / D8: kept `package:http` import — barcode_service
-// uses `http.get` on line 52 (Open Food Facts lookup). My earlier
-// removal was incorrect (claimed unused but the import IS used).
-// Full http→dio migration deferred to a dedicated batch alongside
-// ai_service.dart's multi-usage refactor.
-import 'package:http/http.dart' as http;
 
 import 'error_telemetry.dart';
 
@@ -49,15 +44,29 @@ class BarcodeService {
   static const _baseUrl = 'https://world.openfoodfacts.net/api/v3/product';
 
   Future<BarcodeFood?> lookup(String barcode) async {
+    final dio = Dio();
     try {
       final uri = Uri.parse('$_baseUrl/$barcode.json');
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'ICANBEFITTER/1.0'})
-          .timeout(const Duration(seconds: 8));
+      final response = await dio.getUri<dynamic>(
+        uri,
+        options: Options(
+          headers: {'User-Agent': 'ICANBEFITTER/1.0'},
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+          // Tech-debt audit 2026-05-20 / D8: preserve the http-package
+          // shape (inspect statusCode after success). Dio default throws
+          // on non-2xx; without this the `statusCode != 200 → return null`
+          // branch becomes dead code (rerouted into the catch instead).
+          validateStatus: (_) => true,
+        ),
+      );
 
       if (response.statusCode != 200) return null;
 
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final raw = response.data;
+      final json = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : jsonDecode(raw is String ? raw : '$raw') as Map<String, dynamic>;
       if (json['status'] != 'success') return null;
 
       final product = json['product'] as Map<String, dynamic>? ?? {};
@@ -96,6 +105,10 @@ class BarcodeService {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'barcode_service_lookup'));
       return null;
+    } finally {
+      // D8: close the per-call Dio instance to release any pending
+      // connections. (One-off lookup pattern; no shared client.)
+      dio.close(force: true);
     }
   }
 }

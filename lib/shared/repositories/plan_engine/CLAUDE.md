@@ -2,7 +2,8 @@
 scope: plan_engine
 parent: ../../../../CLAUDE.md
 created: 2026-05-18
-status: scaffold
+updated: 2026-05-21
+status: active
 ---
 
 # Plan Engine V4 — Local Rules
@@ -99,4 +100,13 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/plan_generator/sample_plans_report.dart` — full 12-combo sweep (3×experience × 4×days) for build_muscle/full_gym. Target: 0 attempt3/universalPool/none. Emits `sample_plans_output.md` for review.
+- `test/plan_generator/v4_diagnostic_test.dart` — pure-Dart mirror of production cascade. Run when changing `exercise_repository.queryV4` or `exercise_selector._cascadeFill`.
+- `test/plan_engine_v4/` — granular pipeline-stage tests (split resolver, volume filter, exercise selector, periodization, superset pairer).
+- `test/contracts/plan_generator_inputs_test.dart` — pins the goal × equipment × daysPerWeek input contract.
+
+## See also
+
+- `lib/features/train/CLAUDE.md` — generated plan is consumed by Train screen + Active Workout.
+- `lib/features/onboarding/CLAUDE.md` — initial plan generated on Plan-screen tap.
+- `docs/reference/exercise-library.md` — exercise_library Hive box schema (movement_pattern, suitable_for, equipment_needed, is_foundational).

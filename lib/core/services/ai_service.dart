@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
@@ -58,7 +58,7 @@ class AiService {
   static AiService get instance => _instance;
 
   final SupabaseService _supabase = SupabaseService.instance;
-  http.Client? _httpClient;
+  Dio? _httpClient;
 
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
   /// hook so the cached [_httpClient] is closed + dropped when the
@@ -79,12 +79,31 @@ class AiService {
 
   /// Lazily-created HTTP client for web fallback calls.
   /// Closed by [dispose] when the app shuts down.
-  http.Client get _client => _httpClient ??= http.Client();
+  ///
+  /// Tech-debt audit 2026-05-20 / D8: migrated to Dio. See SoT entry
+  /// `dependency_canonical_http_client` (Dio is the canonical HTTP
+  /// client for the app — lib-wide single dependency).
+  Dio get _client => _httpClient ??= Dio();
 
   /// Closes the HTTP client. Call from app teardown (e.g. in main dispose).
   void dispose() {
-    _httpClient?.close();
+    _httpClient?.close(force: true);
     _httpClient = null;
+  }
+
+  /// Adapter: Dio's `response.data` may be auto-decoded (Map/List) or raw
+  /// String depending on response Content-Type. Callsites that previously
+  /// inspected `response.body` (always String pre-D8 migration) call
+  /// through this helper to get the same shape.
+  static String _bodyAsString(Response<dynamic> r) {
+    final data = r.data;
+    if (data == null) return '';
+    if (data is String) return data;
+    try {
+      return json.encode(data);
+    } catch (_) {
+      return data.toString();
+    }
   }
 
   // ── Error / size helpers ──────────────────────────────────────
@@ -302,8 +321,17 @@ class AiService {
       }
 
       return _parseResponse(response.data);
-    } on http.ClientException {
-      return _directHttpCall('ai-proxy', message, compact);
+    } on DioException catch (e) {
+      // Tech-debt audit 2026-05-20 / D8: post-http→dio migration, network-
+      // layer / CORS errors surface as DioException with connection/cancel/
+      // unknown types. Treat as the old `http.ClientException` did — fall
+      // back to direct HTTP path which has its own retry budget.
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.unknown) {
+        return _directHttpCall('ai-proxy', message, compact);
+      }
+      rethrow;
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
@@ -367,18 +395,24 @@ class AiService {
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(
-      () => _client.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'apikey': AppConstants.supabaseAnonKey,
-        },
-        body: json.encode({
+      () => _client.post<dynamic>(
+        url,
+        data: {
           'message': message,
           'context': compact,
           'snapshot_json': compact,
-        }),
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'apikey': AppConstants.supabaseAnonKey,
+          },
+          // Preserve the http-package shape: inspect statusCode after
+          // success rather than throwing on non-2xx. Required for the
+          // retry helper's 502/503/504 cold-start gate.
+          validateStatus: (_) => true,
+        ),
       ),
       functionName: functionName,
     );
@@ -386,7 +420,8 @@ class AiService {
     if (response.statusCode != 200) {
       String? serverError;
       try {
-        final decoded = json.decode(response.body);
+        final body = _bodyAsString(response);
+        final decoded = json.decode(body);
         if (decoded is Map) serverError = _extractError(decoded);
       } catch (_) {}
       throw AiServiceException(
@@ -395,15 +430,23 @@ class AiService {
       );
     }
 
-    final data = json.decode(response.body) as Map<String, dynamic>;
+    final raw = response.data;
+    final data = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : json.decode(_bodyAsString(response)) as Map<String, dynamic>;
     return _buildResponse(data);
   }
 
-  /// Bounded retry mirror for the direct `http.post` fallback paths
+  /// Bounded retry mirror for the direct `Dio.post` fallback paths
   /// (`_directHttpCall` and `_directMediaHttpCall`). Mirrors the
   /// schedule + 502/503/504 gate + telemetry op_type from
-  /// `SupabaseService.retryColdStart` but operates on `http.Response`
+  /// `SupabaseService.retryColdStart` but operates on `Response`
   /// status codes instead of `FunctionException`.
+  ///
+  /// Migrated to Dio 2026-05-21 (tech-debt audit 2026-05-20 / D8 — see
+  /// SoT `dependency_canonical_http_client`). Uses `validateStatus: (_) => true`
+  /// on every request so non-2xx responses surface as a Response (not a
+  /// throw) — preserving the inspect-after-success shape.
   ///
   /// 4xx (incl. 401/403) and 500 are NOT retried — the response is
   /// returned to the caller which decides how to surface it.
@@ -425,8 +468,8 @@ class AiService {
   /// closes-diagnose: 2026-05-16-photo-storage-retry
   static const List<int> _httpStorageRaceBackoffsMs = [500, 1500, 3000];
 
-  Future<http.Response> _retryHttpColdStart(
-    Future<http.Response> Function() invoke, {
+  Future<Response<dynamic>> _retryHttpColdStart(
+    Future<Response<dynamic>> Function() invoke, {
     required String functionName,
   }) async {
     int coldStartAttempt = 0;
@@ -437,7 +480,7 @@ class AiService {
           resp.statusCode == 503 ||
           resp.statusCode == 504;
       final isStorageRace = resp.statusCode == 400 &&
-          _isStorageRaceBody(resp.body);
+          _isStorageRaceBody(_bodyAsString(resp));
 
       if (isColdStart) {
         if (coldStartAttempt >= _httpColdStartBackoffsMs.length) return resp;
@@ -533,8 +576,14 @@ class AiService {
       }
 
       return _parseResponse(response.data);
-    } on http.ClientException {
-      return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
+    } on DioException catch (e) {
+      // D8: network-layer failure → direct HTTP fallback (parity with chat()).
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.unknown) {
+        return _directMediaHttpCall(message, mediaUrl, mediaType, compact);
+      }
+      rethrow;
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
@@ -567,20 +616,23 @@ class AiService {
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(
-      () => _client.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'apikey': AppConstants.supabaseAnonKey,
-        },
-        body: json.encode({
+      () => _client.post<dynamic>(
+        url,
+        data: {
           'message': message,
           'media_url': mediaUrl,
           'media_type': mediaType,
           'context': compact,
           'snapshot_json': compact,
-        }),
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'apikey': AppConstants.supabaseAnonKey,
+          },
+          validateStatus: (_) => true,
+        ),
       ),
       functionName: 'ai-media-proxy',
     );
@@ -588,7 +640,8 @@ class AiService {
     if (response.statusCode != 200) {
       String? serverError;
       try {
-        final decoded = json.decode(response.body);
+        final body = _bodyAsString(response);
+        final decoded = json.decode(body);
         if (decoded is Map) serverError = _extractError(decoded);
       } catch (_) {}
       throw AiServiceException(
@@ -597,7 +650,10 @@ class AiService {
       );
     }
 
-    final data = json.decode(response.body) as Map<String, dynamic>;
+    final raw = response.data;
+    final data = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : json.decode(_bodyAsString(response)) as Map<String, dynamic>;
     return _buildResponse(data);
   }
 

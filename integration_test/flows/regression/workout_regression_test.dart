@@ -4,37 +4,34 @@ import 'package:integration_test/integration_test.dart';
 import 'package:icanbefitter/core/constants/app_environment.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
-import '../helpers/hive_test_helper.dart';
+import '../../helpers/hive_test_helper.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// REGRESSION TESTS — 6 Bugs Fixed (Session 2026-04-01)
+/// REGRESSION TESTS — WORKOUT (PRs, receipt, ActiveWorkoutData, volume)
 /// ─────────────────────────────────────────────────────────────────────────────
 ///
-/// These tests MUST pass before every APK build.
-/// Run with: flutter test integration_test/flows/regression_bug_fixes_test.dart
+/// Split from `regression_bug_fixes_test.dart` (T5, audit 2026-05-20).
 ///
 /// R1  — [Bug 3b] loadAllExercisePRs: returns PRs for non-key-lift exercises
 /// R2  — [Bug 3b] loadAllExercisePRs: picks BEST value per exercise
 /// R3  — [Bug 3b] loadAllExercisePRs: skips zero-value entries
 /// R4  — [Bug 3b] loadAllExercisePRs: handles all logging types correctly
-/// R5  — [Bug 3a] markCompleted: stores durationSeconds in Hive schedule entry
-/// R6  — [Bug 3a] getScheduleForDate: reads durationSeconds back correctly
-/// R7  — [Bug 5]  stale guard: yesterday's completed_at → returns 'planned'
-/// R8  — [Bug 5]  stale guard: today's completed_at → stays 'completed'
-/// R9  — [Bug 5]  stale guard is read-only (does NOT overwrite Hive)
 /// R10 — [Bug 2]  receipt deduplication: same exercise appears only once
 /// R11 — [Bug 2]  receipt deduplication: sets are merged, max weight kept
 /// R12 — [Bug 4]  isSaved flag: ActiveWorkoutData defaults to isSaved=false
 /// R13 — [Bug 4]  isSaved flag: copyWith preserves isSaved=true
 /// R14 — [Bug 4]  reopenWorkout path: isComplete flips, isSaved stays true
 /// R15 — [Bug 1]  SetInputValues: stores weight, reps, duration, distance
+/// R15b — setInputValues survives copyWith on ActiveWorkoutData
+/// R19a — receipt volume = Σ(weight × reps) per checked set
+/// R19b — warm-up sets excluded from volume
+/// R20a — cancelWorkout resets state completely
+/// R20b — isSaved=true means add-exercise should be blocked
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -76,27 +73,6 @@ void main() {
       'date': dateStr,
       'created_at': d.toIso8601String(),
       'is_pr': false,
-    });
-  }
-
-  /// Seeds a schedule entry for a given date.
-  void seedScheduleEntry(DateTime date, {
-    String status = 'planned',
-    String? completedAt,
-    int durationSeconds = 0,
-  }) {
-    final dateStr = formatDateKey(date);
-    HiveService.instance.workoutBox.put('schedule_$dateStr', {
-      'date': dateStr,
-      'type': 'workout',
-      'workout_name': 'Test Workout',
-      'workout_focus': 'Test',
-      'exercises': <Map<String, dynamic>>[],
-      'status': status,
-      'completed_at': completedAt,
-      'duration_seconds': durationSeconds,
-      'is_swapped': false,
-      'original_date': null,
     });
   }
 
@@ -177,107 +153,6 @@ void main() {
     expect(plank?.bestValue, equals(90.0), reason: 'timed: bestValue = duration_seconds');
     expect(run?.bestValue, equals(5.2), reason: 'cardio: bestValue = distance_km when > 0');
     expect(wPullUp?.bestValue, equals(15.0), reason: 'weighted_bodyweight: bestValue = weight_kg');
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG 3a — 0 MIN shown on home screen after workout completion
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R5: markCompleted stores durationSeconds in Hive schedule entry', () async {
-    final today = DateTime.now();
-    seedScheduleEntry(today);
-
-    await WorkoutScheduleService.instance.markCompleted(today, durationSeconds: 2700);
-
-    // Read raw entry from Hive — not via getScheduleForDate (which may transform).
-    final dateStr = formatDateKey(today);
-    final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
-    expect(raw, isNotNull);
-    final map = Map<String, dynamic>.from(raw as Map);
-
-    expect(map['duration_seconds'], equals(2700),
-        reason: 'durationSeconds (2700 = 45 min) must be stored in the Hive schedule entry');
-  });
-
-  test('R6: getScheduleForDate returns durationSeconds correctly', () async {
-    final today = DateTime.now();
-    seedScheduleEntry(today);
-
-    await WorkoutScheduleService.instance.markCompleted(today, durationSeconds: 1800);
-
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(today);
-    expect(schedule, isNotNull);
-    expect(schedule!['duration_seconds'], equals(1800),
-        reason: 'getScheduleForDate must return the stored durationSeconds (1800 = 30 min)');
-    expect(schedule['status'], equals('completed'),
-        reason: 'Status must be completed after markCompleted()');
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG 5 — Stale auto-green (date rollover bug)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R7: stale guard returns planned when completed_at is from yesterday', () async {
-    final today = DateTime.now();
-    final yesterday = today.subtract(const Duration(days: 1));
-
-    // Simulate: yesterday's workout was marked complete but its schedule
-    // key is for today (bug scenario: clock crossed midnight).
-    seedScheduleEntry(
-      today,
-      status: 'completed',
-      completedAt: yesterday.toIso8601String(), // stale — different date
-    );
-
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(today);
-    expect(schedule, isNotNull);
-    expect(schedule!['status'], equals('planned'),
-        reason: 'Stale completed_at (yesterday) must be downgraded to planned');
-    expect(schedule['completed_at'], isNull,
-        reason: 'completed_at must be cleared in the returned map for stale entries');
-  });
-
-  test('R8: stale guard does NOT affect legitimately completed workouts', () async {
-    final today = DateTime.now();
-
-    // Workout completed today — not stale.
-    seedScheduleEntry(
-      today,
-      status: 'completed',
-      completedAt: today.toIso8601String(), // same date — not stale
-      durationSeconds: 2400,
-    );
-
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(today);
-    expect(schedule, isNotNull);
-    expect(schedule!['status'], equals('completed'),
-        reason: "Today's completed workout must stay 'completed' — guard must not over-correct");
-    expect(schedule['duration_seconds'], equals(2400),
-        reason: 'durationSeconds must be preserved for legitimate completions');
-  });
-
-  test('R9: stale guard is read-only — does not overwrite Hive entry', () async {
-    final today = DateTime.now();
-    final yesterday = today.subtract(const Duration(days: 1));
-
-    // Seed stale entry.
-    seedScheduleEntry(
-      today,
-      status: 'completed',
-      completedAt: yesterday.toIso8601String(),
-    );
-
-    // Trigger stale guard (read-only path — must NOT write back).
-    WorkoutScheduleService.instance.getScheduleForDate(today);
-
-    // Read the RAW Hive entry — it must still have status='completed' as originally written.
-    // The guard corrects the RETURNED map only, not the stored one.
-    final dateStr = formatDateKey(today);
-    final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
-    final rawMap = Map<String, dynamic>.from(raw as Map);
-
-    expect(rawMap['status'], equals('completed'),
-        reason: 'Raw Hive entry must remain unchanged — stale guard must not write back');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -465,170 +340,6 @@ void main() {
     expect(updated.setInputValues['0-0']?.weight, equals(60.0));
     expect(updated.setInputValues['0-0']?.reps, equals(10));
   });
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG [Session 2026-04-02] #1 — Daily goals "Workout" green but train shows planned
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R16a: custom_template with status=completed is read back as completed', () async {
-    final today = DateTime.now();
-    final dateStr = formatDateKey(today);
-
-    // Simulate a custom template workout that was completed.
-    await HiveService.instance.workoutBox.put('schedule_$dateStr', {
-      'date': dateStr,
-      'type': 'custom_template',
-      'template_id': 'tmpl_test_001',
-      'workout_name': 'Test Template Chest',
-      'workout_focus': 'Custom',
-      'exercises': <Map<String, dynamic>>[
-        {'exercise_name': 'Bench Press', 'sets': 3, 'reps': '8'},
-      ],
-      'status': 'completed',
-      'completed_at': today.toIso8601String(),
-      'is_swapped': false,
-      'duration_seconds': 1800,
-    });
-
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(today);
-    expect(schedule, isNotNull);
-    expect(schedule!['status'], equals('completed'),
-        reason: 'custom_template type must retain completed status — '
-            'home daily goals and train screen must agree');
-    expect(schedule['type'], equals('custom_template'));
-  });
-
-  test('R16b: custom_template with status=planned is NOT treated as rest', () async {
-    final today = DateTime.now();
-    final dateStr = formatDateKey(today);
-
-    await HiveService.instance.workoutBox.put('schedule_$dateStr', {
-      'date': dateStr,
-      'type': 'custom_template',
-      'template_id': 'tmpl_test_002',
-      'workout_name': 'Custom Push Day',
-      'workout_focus': 'Custom',
-      'exercises': <Map<String, dynamic>>[
-        {'exercise_name': 'Shoulder Press', 'sets': 3, 'reps': '10'},
-      ],
-      'status': 'planned',
-      'is_swapped': false,
-    });
-
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(today);
-    expect(schedule, isNotNull);
-    expect(schedule!['type'], equals('custom_template'));
-    // The isRest check in train_provider uses: type != 'workout' && type != 'custom_template'
-    // So custom_template must NOT be rest.
-    final isRest = schedule['type'] != 'workout' && schedule['type'] != 'custom_template';
-    expect(isRest, isFalse,
-        reason: 'custom_template must not be classified as rest day — '
-            'this was the root cause of train screen showing gray for templates');
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG [Session 2026-04-02] #2 — Auth isolation: clearAllData clears coachBox
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R17: clearAllData wipes coachBox (AI chat history)', () async {
-    // Seed some chat history.
-    await HiveService.instance.coachBox.put('chat_msg_001', {
-      'role': 'user',
-      'content': 'Hello coach',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-    await HiveService.instance.coachBox.put('chat_msg_002', {
-      'role': 'assistant',
-      'content': 'Hi there!',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-
-    expect(HiveService.instance.coachBox.length, equals(2),
-        reason: 'Precondition: coachBox should have 2 messages');
-
-    await UserRepository.instance.clearAllData();
-
-    expect(HiveService.instance.coachBox.length, equals(0),
-        reason: 'clearAllData must clear coachBox — prevents cross-user chat leakage');
-    expect(HiveService.instance.workoutBox.length, equals(0),
-        reason: 'clearAllData must also clear workoutBox');
-    expect(HiveService.instance.nutritionBox.length, equals(0),
-        reason: 'clearAllData must also clear nutritionBox');
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG [Session 2026-04-02] #4 — Fiber not aggregated in daily nutrition
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R18: nutrition logs with total_fiber are aggregated correctly', () async {
-    final now = DateTime.now();
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    // Seed two nutrition logs with fiber.
-    await HiveService.instance.nutritionBox.put('nlog_test_001', {
-      'id': 'nlog_test_001',
-      'date': dateStr,
-      'meal_type': 'breakfast',
-      'food_name': 'Oatmeal',
-      'total_calories': 300,
-      'total_protein': 10,
-      'total_carbs': 50,
-      'total_fat': 5,
-      'total_fiber': 8,
-      'created_at': now.toIso8601String(),
-      'source': 'manual',
-    });
-    await HiveService.instance.nutritionBox.put('nlog_test_002', {
-      'id': 'nlog_test_002',
-      'date': dateStr,
-      'meal_type': 'lunch',
-      'food_name': 'Dal + Rice',
-      'total_calories': 500,
-      'total_protein': 20,
-      'total_carbs': 70,
-      'total_fat': 10,
-      'total_fiber': 12,
-      'created_at': now.toIso8601String(),
-      'source': 'manual',
-    });
-
-    // Read back all entries for today and manually sum fiber (same logic as provider).
-    double fiberTotal = 0;
-    for (final val in HiveService.instance.nutritionBox.values) {
-      if (val is! Map) continue;
-      final log = Map<String, dynamic>.from(val);
-      if (log['date'] != dateStr) continue;
-      fiberTotal += (log['total_fiber'] as num?)?.toDouble() ?? 0;
-    }
-
-    expect(fiberTotal, equals(20.0),
-        reason: 'Fiber should sum to 8 + 12 = 20g across both logs');
-
-    // Also verify a log WITHOUT total_fiber doesn't crash the sum.
-    await HiveService.instance.nutritionBox.put('nlog_test_003', {
-      'id': 'nlog_test_003',
-      'date': dateStr,
-      'meal_type': 'snacks',
-      'food_name': 'Saved Meal (no fiber field)',
-      'total_calories': 200,
-      'total_protein': 15,
-      'total_carbs': 20,
-      'total_fat': 8,
-      // NOTE: no 'total_fiber' key — simulates saved meals that lack it
-      'created_at': now.toIso8601String(),
-      'source': 'saved_meal',
-    });
-
-    double fiberTotal2 = 0;
-    for (final val in HiveService.instance.nutritionBox.values) {
-      if (val is! Map) continue;
-      final log = Map<String, dynamic>.from(val);
-      if (log['date'] != dateStr) continue;
-      fiberTotal2 += (log['total_fiber'] as num?)?.toDouble() ?? 0;
-    }
-
-    expect(fiberTotal2, equals(20.0),
-        reason: 'Missing total_fiber field should default to 0, not crash');
-  });
 
   // ─────────────────────────────────────────────────────────────────────────────
   // BUG [Session 2026-04-02] #8 — Volume calculation: Σ(weight × reps) per set
@@ -781,130 +492,6 @@ void main() {
     expect(withExercise.isSaved, isTrue,
         reason: 'Adding exercise via copyWith must NOT reset isSaved — '
             'UI should block this action when isSaved=true');
-  });
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG [Session 2026-04-02] #1b — Timestamp in today's meals card
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R21: nutrition log stores created_at ISO8601 timestamp', () async {
-    final now = DateTime.now();
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_ts_${now.millisecondsSinceEpoch}';
-
-    await HiveService.instance.nutritionBox.put(id, {
-      'id': id,
-      'date': dateStr,
-      'meal_type': 'lunch',
-      'food_name': 'Dal Rice',
-      'total_calories': 350,
-      'total_protein': 12,
-      'total_carbs': 55,
-      'total_fat': 8,
-      'total_fiber': 6,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_text',
-    });
-
-    final stored = HiveService.instance.nutritionBox.get(id);
-    expect(stored, isNotNull);
-    final log = Map<String, dynamic>.from(stored as Map);
-
-    // Verify created_at is a parseable ISO8601 timestamp.
-    final createdAt = log['created_at'] as String?;
-    expect(createdAt, isNotNull, reason: 'created_at must be stored');
-    final parsed = DateTime.tryParse(createdAt!);
-    expect(parsed, isNotNull, reason: 'created_at must be valid ISO8601');
-    expect(parsed!.difference(now).inSeconds.abs(), lessThan(2),
-        reason: 'created_at must be close to the time of creation');
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG [Session 2026-04-02] #2b — Fiber edit round-trip via updateFoodLog
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  test('R22: updating fiber via Hive preserves the value', () async {
-    final now = DateTime.now();
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_fiber_edit_${now.millisecondsSinceEpoch}';
-
-    // Seed a log with fiber = 0.
-    await HiveService.instance.nutritionBox.put(id, {
-      'id': id,
-      'date': dateStr,
-      'meal_type': 'snacks',
-      'food_name': 'Broccoli',
-      'total_calories': 200,
-      'total_protein': 8,
-      'total_carbs': 25,
-      'total_fat': 6,
-      'total_fiber': 0,
-      'created_at': now.toIso8601String(),
-      'source': 'ai_text',
-    });
-
-    // Simulate what updateFoodLog does: update fiber to 5.
-    final existing = HiveService.instance.nutritionBox.get(id);
-    final updated = Map<String, dynamic>.from(existing as Map);
-    updated['total_fiber'] = 5;
-    await HiveService.instance.nutritionBox.put(id, updated);
-
-    // Read back.
-    final readBack = HiveService.instance.nutritionBox.get(id);
-    final log = Map<String, dynamic>.from(readBack as Map);
-
-    expect(log['total_fiber'], equals(5),
-        reason: 'Fiber must be updated to 5 after edit');
-
-    // Verify aggregation picks it up.
-    double fiberTotal = 0;
-    for (final val in HiveService.instance.nutritionBox.values) {
-      if (val is! Map) continue;
-      final l = Map<String, dynamic>.from(val);
-      if (l['date'] != dateStr) continue;
-      fiberTotal += (l['total_fiber'] as num?)?.toDouble() ?? 0;
-    }
-
-    expect(fiberTotal, equals(5.0),
-        reason: 'Daily fiber aggregation must include the updated value');
-  });
-
-  // ── R23: Barcode food log includes total_fiber ──────────────────────────
-  testWidgets('R23 – barcode food save includes total_fiber',
-      (WidgetTester tester) async {
-    final hive = HiveService.instance;
-    final now = DateTime.now();
-    final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final id = 'nlog_barcode_fiber_test';
-
-    // Simulate what barcode_scan_sheet._logFood() does after the fix:
-    // fiberPer100g = 8.0, serving = 150g → fiber = 8.0 * 150 / 100 = 12
-    const fiberPer100g = 8.0;
-    const servingG = 150.0;
-    final expectedFiber = (fiberPer100g * servingG / 100).round(); // 12
-
-    await hive.nutritionBox.put(id, {
-      'id': id,
-      'date': dateStr,
-      'meal_type': 'snacks',
-      'food_name': 'Test Barcode Item',
-      'quantity_g': servingG,
-      'total_calories': 250,
-      'total_protein': 10,
-      'total_carbs': 30,
-      'total_fat': 8,
-      'total_fiber': expectedFiber,
-      'created_at': now.toIso8601String(),
-      'source': 'barcode',
-    });
-
-    final saved = hive.nutritionBox.get(id) as Map;
-    expect(saved['total_fiber'], equals(12),
-        reason: 'Barcode food log must store total_fiber computed from fiberPer100g');
-    expect(saved['source'], equals('barcode'));
-
-    // Clean up
-    await hive.nutritionBox.delete(id);
   });
 }
 
