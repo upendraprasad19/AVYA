@@ -297,7 +297,7 @@ findings:
     title: "Integration test suite 64 Phase-7 skipped tests"
     score: 20
     terminal_state: closed_in_commit
-    commit: PENDING_T1_COMMIT
+    commit: 83bd4cb
     verification: |
       integration_test/device/{razorpay_payment,cross_device_restore,
       signup_onboarding,delete_account}_patrol_test.dart (4 flows);
