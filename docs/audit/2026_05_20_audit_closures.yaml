@@ -414,7 +414,16 @@ findings:
     category: test
     title: "Snapshot contract has 3 overlapping enforcers"
     score: 16
-    # NOT YET CLOSED — consolidation pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: 6d23a52
+    verification: test/contracts/snapshot_contract_consolidated_test.dart
+    notes: |
+      3 enforcers (gate_test, self_consistency_test, orphan_reader_aliases_test)
+      consolidated into one file with 3 named group() blocks. Header comment
+      lists original paths for git-blame traceability. ai_snapshot_builder_only_test
+      + ai_snapshot_building_writer_to_reader_test kept SEPARATE (one behavioral,
+      one writer/reader-pair contract — different concept families per agent
+      judgment per feedback_source_grep_false_confidence.md guidance).
   - id: T14
     category: test
     title: "Golden test coverage = exactly 1 file"
