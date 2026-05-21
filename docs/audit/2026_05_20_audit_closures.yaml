@@ -306,7 +306,10 @@ findings:
     category: test
     title: "AI coach tool loop: zero E2E coverage"
     score: 16
-    # NOT YET CLOSED — coupled to T1.
+    terminal_state: upstream_blocked
+    blocker: "Coupled to T1 — needs device-CI for AI coach tool E2E flows."
+    reopen_when: "T1 (device-CI scaffold) lands; AI coach E2E flow then implementable on top."
+    citation: T1 entry above
   - id: T12
     category: test
     title: "audit_2026_05_11_t1_t11_contracts_test.dart date-stamped omnibus"
@@ -605,7 +608,10 @@ findings:
     category: infrastructure
     title: "APK publishing to Play Store is fully manual"
     score: 18
-    # NOT YET CLOSED — fastlane automation deferred terminal (founder strategic decision needed).
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision on Play Store automation (fastlane vs gradle-play-publisher vs manual). Not blocking current ship cadence."
+    reopen_when: "Founder approves automation approach + service account JSON provisioning. Add as Q3 2026 priority."
+    citation: founder strategic decision required
   - id: I7
     category: infrastructure
     title: "Bus factor 1 — .env, release.jks, PAT, Razorpay all local-only"
@@ -645,7 +651,10 @@ findings:
     category: infrastructure
     title: "No staging environment — prod flavor points at sole project"
     score: 14
-    # NOT YET CLOSED — staging-flavor scaffold pending B3 (founder strategic decision needed).
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision: dedicated Supabase Branch (Pro feature) + .env.staging template + CI gating. Not blocking current ship cadence since migrations can be tested via mcp__supabase__create_branch on-demand."
+    reopen_when: "Founder approves staging-flavor approach + Supabase Branch allocation. Add as Q3 2026 priority alongside I6."
+    citation: founder strategic decision required
   - id: I12
     category: infrastructure
     title: "applied_migrations.json string array (not structured ledger)"
