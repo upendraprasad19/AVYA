@@ -5,9 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// _ensureLocalUser previously caught all errors with just debugPrint,
 /// hiding 23505/23503 violations for 48h. This test pins the requirement
-/// that errors get logged to `client_errors` so they're visible.
+/// that errors get routed to the telemetry sink so they're visible.
+///
+/// Audit 2026-05-20 / A11: previously asserted the literal string
+/// `'log-client-error'` appeared in the source — broke when the inline
+/// call was deleted in favor of `ErrorTelemetry.recordNonFatal` (which
+/// internally wraps log-client-error with the rate-limit cooldown fixed
+/// in #16.1 D). Updated to assert the canonical path. See
+/// `feedback_source_grep_false_confidence.md` for the class.
 void main() {
-  test('_ensureLocalUser logs errors to client_errors edge function', () {
+  test('_ensureLocalUser routes catch-path errors to telemetry sink', () {
     final source = File(
       'lib/features/auth/providers/auth_provider.dart',
     ).readAsStringSync();
@@ -27,14 +34,20 @@ void main() {
       (ensureStart + 10000).clamp(0, source.length),
     );
 
-    // Must call log-client-error Edge Function on catch path
+    // Must route through the canonical telemetry sink. ErrorTelemetry
+    // .recordNonFatal internally posts to log-client-error AND honors
+    // the rate-limit cooldown (silent-drop fix #16.1 D).
+    final routesThroughTelemetry =
+        body.contains('ErrorTelemetry.recordNonFatal') ||
+            body.contains('log-client-error');
     expect(
-      body.contains('log-client-error'),
+      routesThroughTelemetry,
       isTrue,
       reason:
-          '_ensureLocalUser catch blocks must call the log-client-error '
-          'Edge Function so silent FK / UNIQUE violations show up in '
-          'client_errors. Bug A hid for 48h because of silent swallow.',
+          '_ensureLocalUser catch blocks must route errors to the canonical '
+          'ErrorTelemetry sink (or inline log-client-error) so silent FK / '
+          'UNIQUE violations show up in client_errors. Bug A hid for 48h '
+          'because of silent swallow.',
     );
 
     // Must check for Postgres error codes 23505/23503 explicitly so the

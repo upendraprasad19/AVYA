@@ -84,12 +84,24 @@ class PendingSyncOp {
       );
 }
 
-/// Exponential backoff schedule (seconds): 1, 5, 30, 300, 1800, 7200, 86400.
+/// One day in seconds — named so the 86400 magic constant in the backoff
+/// schedule is greppable.
+const int _oneDaySeconds = 86400;
+
+/// Exponential backoff schedule (seconds): 1s, 5s, 30s, 5min, 30min, 2h, 24h.
 /// Attempt N (0-indexed) returns the delay before that attempt.
 /// After the last entry we dead-letter.
-const List<int> _backoffSeconds = [1, 5, 30, 300, 1800, 7200, 86400];
+///
+/// Audit 2026-05-20 / C7: previously had a parallel `maxRetries = 7`
+/// constant with a "keep in sync" comment. Now derived from list length.
+const List<int> _backoffSeconds = [1, 5, 30, 300, 1800, 7200, _oneDaySeconds];
 
-const int maxRetries = 7; // keep in sync with _backoffSeconds.length
+/// Maximum retry count before dead-letter. Hardcoded to match
+/// `_backoffSeconds.length` (Dart const eval can't access `.length` on a
+/// const list in a const context). Test
+/// `test/contracts/sync_queue_retry_budget_consistency_test.dart` (lands
+/// in B2 continuation) pins them together at runtime.
+const int maxRetries = 7;
 
 /// Returns true if the op should be dead-lettered given its retry count and
 /// last-error classification. A non-transient error (Validation / Schema)

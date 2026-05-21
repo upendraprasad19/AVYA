@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/features/auth/providers/referral_code_stash_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
@@ -249,7 +250,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   LengthLimitingTextInputFormatter(13),
                 ],
                 decoration: InputDecoration(
-                  hintText: 'Got a code? AVYA-XXXXXXXX',
+                  hintText: 'Got a code? ${AppConstants.referralCodeHint}',
                   hintStyle: AppTypography.mono.copyWith(
                     color: AppColors.textGhost,
                     fontSize: 12,

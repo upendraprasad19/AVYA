@@ -454,8 +454,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                     backgroundColor: outcome.result == UploadResult.success
-                        ? const Color(0xFF1a2a1a)
-                        : const Color(0xFF2a1a1a),
+                        ? AppColors.successTint
+                        : AppColors.errorTint,
                     behavior: SnackBarBehavior.floating,
                   ));
                 },
@@ -483,8 +483,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       style: GoogleFonts.getFont('DM Sans', fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                     backgroundColor: outcome.result == UploadResult.success
-                        ? const Color(0xFF1a2a1a)
-                        : const Color(0xFF2a1a1a),
+                        ? AppColors.successTint
+                        : AppColors.errorTint,
                     behavior: SnackBarBehavior.floating,
                   ));
                 },
