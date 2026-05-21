@@ -62,7 +62,21 @@ findings:
     category: code
     title: "5 tab-screen scaffolds copy-pasted (_isLoading + Future.microtask + _retry)"
     score: 20
-    # NOT YET CLOSED — pending B2 continuation step 13 (HiveTabScaffold extract).
+    terminal_state: closed_in_commit
+    commit: bb91eb8
+    verification: scripts/check_tab_screen_uses_hive_scaffold.dart + lib/shared/mixins/hive_tab_scaffold.dart
+    notes: |
+      HiveTabScaffoldMixin extracted (99 LOC) at lib/shared/mixins/.
+      4 of 5 tab screens migrated: home, train, nutrition, profile.
+      ai_coach_screen.dart documented in gate allow-list (chat hydration
+      is incremental + animated; never used the boilerplate pattern).
+      Mixin provides: isLoading getter, initTab() override hook,
+      invalidateOnRetry(ref) callback (not List<ProviderOrFamily> — that
+      type isn't exported from Riverpod's public API), retry() handler.
+      Gate enforces (a) named screens use mixin or are allow-listed,
+      (b) no half-migration (no leftover _isLoading field).
+      flutter analyze: 132 issues (down from 138 — removed dead code),
+      0 new errors.
   - id: C2
     category: code
     title: "188 ad-hoc GoogleFonts.getFont('DM Sans') call sites"
