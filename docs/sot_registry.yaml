@@ -2551,6 +2551,14 @@ concepts:
         line_range: 115-160
         method: _save
         notes: calls syncProfileNow after updating userBox
+      - file: lib/features/profile/services/profile_write_service.dart
+        line_range: 1-140
+        method: "updateProfile / patchProfile / updateField"
+        notes: |
+          Canonical writer scaffolded in audit 2026-05-20 / A4. All 7
+          legacy direct-userBox-put-profile sites now route through this
+          service. IST-stamped updated_at on every write. Gate 35
+          `scripts/check_profile_write_service_only.dart` enforces.
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart

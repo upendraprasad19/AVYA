@@ -9,6 +9,7 @@ import '../services/workout_write_service.dart';
 import '../services/write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
+import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 
@@ -432,10 +433,14 @@ class WorkoutScheduleService {
     // Wed-joiners to register one phantom week of "missed" Mon/Tue
     // workouts and bumped weeksSinceSignup forward incorrectly).
     if (isFirstGeneration) {
-      final profileMap = Map<String, dynamic>.from(
-          _hive.userBox.get('profile') as Map? ?? <String, dynamic>{});
-      profileMap['phase_started_at'] = today.toUtc().toIso8601String();
-      await _hive.userBox.put('profile', profileMap);
+      // Audit 2026-05-20 A4 — routed through canonical write service.
+      // updateField stamps `updated_at` + fires syncProfileNow under
+      // the service's mutex (preventing race with concurrent profile
+      // mutations during onboarding seed-and-go).
+      await ProfileWriteService.instance.updateField(
+        'phase_started_at',
+        today.toUtc().toIso8601String(),
+      );
     }
 
     // APK Test #6 obs #7 — mark pre-onboarding days in the current

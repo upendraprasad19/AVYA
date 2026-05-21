@@ -9,16 +9,15 @@ import 'package:icanbefitter/core/services/write_result.dart';
 // dropped. _refillIfNewWeek() moved to StreakProgressService.refillIfNewWeek()
 // and is now invoked from DayRolloverObserver / splash, not from
 // StreakFreezeNotifier.build().
-import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
@@ -765,20 +764,12 @@ class WeightLogNotifier extends Notifier<void> {
       weightKg: weightKg,
       source: WriteSource.manual,
     );
-    // Also update profile current_weight_kg
-    final userBox = HiveService.instance.userBox;
-    final profile =
-        Map<String, dynamic>.from(userBox.get('profile') as Map? ?? {});
-    profile['current_weight_kg'] = weightKg;
-    await userBox.put('profile', profile);
+    // Also update profile current_weight_kg via canonical write
+    // service (audit 2026-05-20 A4). ProfileWriteService.updateField
+    // handles the merge under mutex, stamps `updated_at`, and fires
+    // syncProfileNow internally — no need to call it explicitly here.
+    await ProfileWriteService.instance.updateField('current_weight_kg', weightKg);
     BadgeService.instance.checkAll();
-
-    // Re-sync the profile row since current_weight_kg changed (the
-    // HealthWriteService already handles weight_logs + pushSnapshot).
-    final userId = SupabaseService.instance.currentUser?.id;
-    if (userId != null && userId.isNotEmpty) {
-      unawaited(SyncService.instance.syncProfileNow(userId));
-    }
   }
 }
 
