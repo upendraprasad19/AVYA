@@ -77,7 +77,8 @@ for GATE in scripts/check_*.dart; do
     check_migrations_live.dart|\
     check_onconflict_live_arbiter.dart|\
     check_regression_catalog.dart|\
-    check_snapshot_contract.dart)
+    check_snapshot_contract.dart|\
+    check_test_runtime_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other 4: require live DB / merge context / build artifact —
       # run via /build-apk skill, NOT pre-commit. See

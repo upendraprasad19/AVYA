@@ -73,7 +73,8 @@ jobs:
               check_migrations_live.dart|\
               check_onconflict_live_arbiter.dart|\
               check_regression_catalog.dart|\
-              check_snapshot_contract.dart)
+              check_snapshot_contract.dart|\
+              check_test_runtime_budget.dart)
                 # Razorpay: .env.prod gitignored, CI never sees it.
                 # Other 4: require live DB / merge context / build artifact.
                 # See scripts/check_gate_scripts_wired.dart allowlist.
