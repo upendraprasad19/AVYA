@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 
@@ -50,12 +51,31 @@ class AiChatResponse {
 /// All users: single Edge Function `ai-proxy` (Gemini 2.5 Flash)
 ///   Cerebras Llama 3.3 70B (direct)
 class AiService {
-  AiService._();
+  AiService._() {
+    _registerLifecycle();
+  }
   static final AiService _instance = AiService._();
   static AiService get instance => _instance;
 
   final SupabaseService _supabase = SupabaseService.instance;
   http.Client? _httpClient;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook so the cached [_httpClient] is closed + dropped when the
+  /// user changes. The HTTP client itself is stateless across users
+  /// (no auth bound to it — the bearer token is attached per-request),
+  /// but closing it severs any in-flight inflight responses that may
+  /// still resolve into the previous user's UI state.
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('AiService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// Closes + drops the cached HTTP client so the next call lazily
+  /// rebuilds one. Delegates to the existing [dispose] method.
+  void _onUserChanged() {
+    dispose();
+  }
 
   /// Lazily-created HTTP client for web fallback calls.
   /// Closed by [dispose] when the app shuts down.

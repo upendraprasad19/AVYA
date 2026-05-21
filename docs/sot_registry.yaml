@@ -1537,6 +1537,25 @@ concepts:
       on reinstall requires (1) cloud column/table, (2) syncX()
       method on SyncService, (3) _restoreX() called from
       restoreFromCloudForUser, AND (4) contract test.
+    migration_note: |
+      Audit 2026-05-20 / A6 — the `SyncDomain` interface
+      (`lib/core/services/sync_domain.dart`) is the future home of
+      the symmetric push/restore contract. Each `_syncXxx` /
+      `_restoreXxx` private-helper pair on SyncService is migrating
+      to its own top-level `XxxSyncDomain implements SyncDomain`
+      class in `lib/core/services/sync_domains/`. The first proof
+      of pattern is `streaks_sync_domain.dart` (wraps
+      `_syncStreaks` + `_restoreStreaks` via public forwarders on
+      the `SyncServiceWorkout` extension). The interface enforces
+      the symmetric matched-pair contract at compile time once
+      migration completes; until then,
+      `test/contracts/sync_domain_interface_test.dart` source-greps
+      the SyncService sources to assert every `_syncX` has a
+      matching `_restoreX`. Existing call sites in
+      `SyncService.syncWorkoutData` /
+      `SyncService.restoreFromCloudForUser` keep calling the
+      private helpers directly — no behavioural change in this
+      scaffold batch.
 
   - concept: user_scoped_hive_keys
     domain: cross_domain
@@ -4155,3 +4174,73 @@ concepts:
           Supabase calls from lib/**/screens/** + lib/**/widgets/**.
         - test/contracts/rank_promotion_repository_only_test.dart —
           pins the named caller.
+
+  - concept: singleton_lifecycle_registry
+    domain: core_services
+    description: |
+      Process-wide callback registry that bridges static `.instance`
+      singletons (which live outside the Riverpod graph) into the
+      HiveUserSession user-swap signal.
+
+      Problem (tech-debt audit 2026-05-20 / A7, score 14): seven core
+      services are static singletons holding mutable in-memory state
+      (cached HTTP clients, completers, stream subscriptions, in-flight
+      payment callbacks, restore-progress labels). When HiveUserSession
+      flips to a new user, the singleton instance survives and its
+      stale state can leak into the new session.
+
+      Solution (narrow scaffold, NOT full Riverpod conversion): each
+      singleton calls SingletonLifecycleRegistry.register(name, hook)
+      in its private constructor; HiveUserSession invokes
+      SingletonLifecycleRegistry.notifyUserChanged() after each of the
+      three locked mutator paths (open / close / delete). Every hook
+      fires; per-singleton `_onUserChanged` resets the mutable state.
+
+      Full Riverpod migration of the seven singletons is a follow-up
+      batch — converting them in place would touch hundreds of caller
+      sites. This registry is the stepping stone.
+    writers:
+      - { file: lib/core/services/sync_service.dart, line: 82, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _realtimeSubscription / _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
+      - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
+      - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
+      - { file: lib/core/services/ai_service.dart, line: 54, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
+      - { file: lib/core/services/razorpay_service.dart, line: 26, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan." }
+      - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
+    reader_manifest_complete: true
+    readers:
+      - { file: lib/core/services/hive_user_session.dart, line: 255, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
+      - { file: lib/core/services/hive_user_session.dart, line: 387, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 424, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
+    hive:
+      box: in_memory_only
+      key_prefix: ""
+      key_formula: |
+        Not Hive-backed. Pure in-memory Map<String, void Function()>.
+        Registry state is intentionally not persisted — every cold start
+        the seven singletons re-register from their private constructors.
+    cloud:
+      table: null
+      columns: []
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    telemetry:
+      failure_op_types: [singleton_lifecycle_callback]
+    class_constraints: |
+      A7 cross-account-leak class — prevents stale in-memory state from
+      a previous user's session bleeding into the next sign-in:
+        - SyncService realtime sub firing into the new user's Riverpod tree
+        - AiService http.Client holding a tail of inflight requests
+        - RazorpayService _onSuccess callback re-entering the new user's
+          paywall closure if the previous user abandoned checkout
+        - SubscriptionService PRO pill rendering against pre-flip box
+          state for one frame
+      Enforced by:
+        - test/contracts/singleton_lifecycle_registry_test.dart — pins
+          register/notify behavior + source-greps every wired singleton
+          + asserts 3 notify call sites in HiveUserSession.
+      Follow-up: Riverpod conversion. Once each singleton is a Provider,
+      the registry hook can be replaced by
+      `ref.listen(authUserIdProvider, (_, __) => state.reset())` and
+      this registry deleted.

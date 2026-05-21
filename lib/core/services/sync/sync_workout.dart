@@ -814,6 +814,36 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
+  // ── SyncDomain scaffold accessors (audit 2026-05-20 / A6) ──
+  //
+  // Public forwarders for `_syncStreaks` / `_restoreStreaks` so the new
+  // `lib/core/services/sync_domains/streaks_sync_domain.dart` wrapper
+  // can invoke them without `part of` privilege. These two methods are
+  // the proof-of-pattern for the SyncDomain interface migration; the
+  // remaining `_syncXxx` / `_restoreXxx` pairs gain similar accessors
+  // as each part-file is migrated in follow-up batches.
+  //
+  // The private methods remain the source of truth; these are thin
+  // delegators by design (no behavioural change). The `userId` arg is
+  // resolved internally via `_ensureSessionOpen()` for the public
+  // shape SyncDomain demands (zero-arg push/restore).
+
+  /// Public delegator for [_syncStreaks]. Resolves `userId` via
+  /// `_ensureSessionOpen()`; returns silently when no session is open.
+  Future<void> pushStreaksForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncStreaks(userId);
+  }
+
+  /// Public delegator for [_restoreStreaks]. Resolves `userId` via
+  /// `_ensureSessionOpen()`; returns silently when no session is open.
+  Future<void> restoreStreaksForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreStreaks(userId);
+  }
+
   /// Pushes the current workout plan (plan JSON + schedule entries + dates)
   /// to Supabase user_progress.plan_json so it can be restored on new device.
   Future<void> _syncWorkoutPlan(String userId) async {

@@ -6,6 +6,7 @@ import 'package:synchronized/synchronized.dart';
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'singleton_lifecycle_registry.dart';
 import 'supabase_service.dart';
 
 /// Owns the per-user Hive box lifecycle. Opens namespaced boxes
@@ -245,6 +246,13 @@ class HiveUserSession {
     // → hive_session_opened → restore_started.
     unawaited(ErrorTelemetry.logEvent('hive_session_opened',
         message: 'userId=$hash boxes=${userScopedBoxRoots.length}'));
+
+    // Tech-debt audit 2026-05-20 / A7 — notify every registered singleton
+    // that the user just changed so they can reset mutable in-memory
+    // state before the next read. Runs AFTER the static owner fields +
+    // listenable have flipped so callback bodies see the new owner.
+    // closes-diagnose: 2026-05-21-singleton-lifecycle-A7-7a3e1c
+    SingletonLifecycleRegistry.notifyUserChanged();
   }
 
   /// Test #10.1 — `migrationBox` flag key for the one-shot legacy
@@ -372,6 +380,11 @@ class HiveUserSession {
     // fallback fires; we want to see the close timing).
     unawaited(ErrorTelemetry.logEvent('hive_session_closed',
         message: 'userId=${closedHash ?? "?"}'));
+
+    // Tech-debt audit 2026-05-20 / A7 — sign-out is a user change too;
+    // every registered singleton must drop cached state so the next
+    // sign-in starts from a clean slate.
+    SingletonLifecycleRegistry.notifyUserChanged();
   }
 
   /// Delete every user-scoped box file for the **current** user.
@@ -404,5 +417,10 @@ class HiveUserSession {
     _currentOwnerFullId = null;
     // APK Test #15.4 / B1 Layer B — mirror cleared state.
     currentOwnerListenable.value = null;
+
+    // Tech-debt audit 2026-05-20 / A7 — full delete is a user change
+    // (DPDP delete-account or factory-reset path); reset every
+    // registered singleton's in-memory cache too.
+    SingletonLifecycleRegistry.notifyUserChanged();
   }
 }

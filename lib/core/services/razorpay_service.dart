@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -22,7 +23,9 @@ import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart'
 /// Pricing: ₹349/month or ₹2,999/year (annual pre-selected, "Save 28%").
 /// Never hardcode prices here — sourced from AppConstants.
 class RazorpayService {
-  RazorpayService._();
+  RazorpayService._() {
+    _registerLifecycle();
+  }
   static final RazorpayService _instance = RazorpayService._();
   static RazorpayService get instance => _instance;
 
@@ -30,6 +33,24 @@ class RazorpayService {
   VoidCallback? _onSuccess;
   VoidCallback? _onFailure;
   String? _pendingPlan;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook so an abandoned checkout (user signs out mid-payment) does
+  /// not fire the previous user's [_onSuccess] / [_onFailure] callback
+  /// against the new user's UI state. The Razorpay native SDK instance
+  /// is kept (re-used on next [initialize]).
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('RazorpayService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// Drops pending checkout callbacks + plan so the previous user's
+  /// in-flight payment cannot dispatch into the new session.
+  void _onUserChanged() {
+    _onSuccess = null;
+    _onFailure = null;
+    _pendingPlan = null;
+  }
 
   /// Global navigator key for showing snackbars after checkout.
   static GlobalKey<NavigatorState>? navigatorKey;

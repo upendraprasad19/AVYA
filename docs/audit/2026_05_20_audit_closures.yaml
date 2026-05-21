@@ -58,7 +58,19 @@ findings:
     category: code
     title: "10 diff_preview/*_diff.dart implement same From/To/reason shape"
     score: 15
-    # NOT YET CLOSED — DiffPreview primitive lands B2 step 13.
+    terminal_state: verified_clean
+    evidence: |
+      Live verification 2026-05-21: only `swap_exercise_diff.dart` uses
+      the canonical `_row('From',...)/_row('To',...)` pattern (verified
+      via `grep -l "_row('From'" lib/features/ai_coach/widgets/diff_preview/`
+      returns just that 1 file). The other 9 _diff.dart files implement
+      feature-specific layouts (custom_template, hotel_workout, injury_
+      modify, pause_plan, prelog, regenerate_plan, reschedule_week,
+      schedule_template, switch_goal — each different). The audit
+      overstated the duplication; no DiffPreviewScaffold extraction
+      warranted at this time. If a 2nd From/To-shape caller emerges,
+      revisit.
+    citation: feedback_audit_findings_require_live_verification.md
   - id: C6
     category: code
     title: "ai_coach_repository.dart:1788 raw config.get('isPro')"
@@ -193,7 +205,19 @@ findings:
     category: test
     title: "flutter analyze clean state not asserted (--no-fatal-infos)"
     score: 20
-    # NOT YET CLOSED — pending B2 continuation step 14.
+    terminal_state: upstream_blocked
+    blocker: |
+      Live verification 2026-05-21: `flutter analyze lib/ --fatal-infos`
+      surfaces 57 infos in lib/ alone. ~80% are deprecation warnings
+      from `share_plus` 12.x (Share → SharePlus). These cannot be
+      fixed without bumping share_plus to 13.x — which is
+      upstream-blocked per D4 (health → device_info_plus → win32 chain).
+      Flipping --fatal-infos before D4 unblocks would break the build.
+    reopen_when: |
+      D4 unblocks (share_plus 13.x lands, health bumps device_info_plus to ^13).
+      At that point: bump share_plus, fix all SharePlus deprecation
+      callsites, then flip pre-commit to --fatal-infos.
+    citation: project_share_plus_13_blocked.md
   - id: T5
     category: test
     title: "regression_bug_fixes_test.dart 920-line dumping ground"

@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Manages PRO subscription state.
@@ -13,11 +14,36 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 /// Reads/writes Hive configBox for instant local checks (offline-first).
 /// Refreshes from Supabase on app launch when online.
 class SubscriptionService {
-  SubscriptionService._();
+  SubscriptionService._() {
+    _registerLifecycle();
+  }
   static final SubscriptionService _instance = SubscriptionService._();
   static SubscriptionService get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook. The instance carries no mutable in-memory cache (every read
+  /// goes through Hive/MigratedKey), but the static [onStateChanged]
+  /// callback fires the Riverpod invalidation chain. On a user swap we
+  /// must re-fire it so widgets re-read the new user's PRO state from
+  /// the now-flipped namespaced userBox — otherwise a previously-PRO
+  /// account's pill can linger for one frame on the new account.
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('SubscriptionService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// All entitlement state lives in MigratedKey (per-user userBox), so
+  /// there is no in-memory cache to drop. We only need to re-fire the
+  /// state-changed hook so consumers re-render with the new user.
+  void _onUserChanged() {
+    try {
+      onStateChanged?.call();
+    } catch (_) {
+      // Hook intentionally swallows — same pattern as _downgradeLocally.
+    }
+  }
 
   // ── Pricing (sourced from AppConstants) ─────────────────────
   static int get monthlyPriceInr => AppConstants.monthlyPriceInr;
