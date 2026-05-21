@@ -120,6 +120,7 @@ concepts:
       - { file: lib/core/services/sync_service.dart, reason: "orchestrator — fan-out across exlog_* + wlog_* during weeklyFullSync" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks ExlogKeyMigrator flag (config.get('exlog_key_migration_v8')) — not an exlog_* row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — exposes exerciseLogsForIstDate + per-set MAX primitives delegated to by every other reader" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — buildAiContext + helpers moved out of ai_coach_repository.dart into the dedicated snapshot builder; reads exlog_* rows for personal_records + today_workout snapshot keys" }
     regression_test: test/contracts/receipt_scoping_test.dart
     hive:
       box: workoutBox
@@ -226,6 +227,7 @@ concepts:
       - { file: lib/core/services/workout_write_service.dart, reason: "canonical writer for exlog_* rows — listed as writer above; touches its own prefix during rescan" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks migrator config flag — not an exlog_* row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* (PR / today_workout) split out of ai_coach_repository.dart" }
     regression_test: test/contracts/edit_log_field_normalization_test.dart
     hive:
       box: workoutBox
@@ -517,6 +519,7 @@ concepts:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d for migrator timing telemetry" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* (meals_today / nutrition_trend_7d) split out of ai_coach_repository.dart" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -608,6 +611,7 @@ concepts:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* split out of ai_coach_repository.dart" }
     regression_test: test/contracts/food_log_notifier_to_nutrition_log_items_test.dart
     hive:
       box: nutritionBox
@@ -632,9 +636,22 @@ concepts:
       week_lookahead, meals_today, current_rank, next_rank,
       subscription, committed_at, committed_to_lt_cdr.
     writers:
-      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 23-200
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 49-160
         method: buildAiContext
+        notes: |
+          Tech-debt audit 2026-05-20 finding A10 — moved out of
+          AiCoachRepository (now a thin shim forwarder). The shim's
+          AiCoachRepository.instance.buildAiContext() still works via
+          delegation; existing callers (main.dart, ai_coach_provider,
+          sync_service) need no changes.
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 60-70
+        method: buildAiContext (shim forwarder)
+        notes: |
+          Forwarder kept for back-compat; the snapshot contract gate
+          source-grep still anchors on this file via the static
+          `_snapshotContractKeyManifest` constant.
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/ai_service.dart
@@ -677,6 +694,8 @@ concepts:
     reader_allow_files:
       - { file: lib/core/services/sync/sync_coach.dart, reason: "syncCoachMemoryNow projects coaching_notes UP to cloud — writer-side allow" }
       - { file: lib/core/services/sync/sync_profile.dart, reason: "_restoreUserProfile projects coaching_notes via the user_profile row payload — pass-through writer" }
+      - { file: lib/features/ai_coach/services/coach_memory_service.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — extractAndAppendCoachingNotes + backfillCoachMemoryIfNeeded moved out of ai_coach_repository.dart" }
+      - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — getLatestInsight reads coaching_notes singleton for the home insight card" }
     regression_test: test/ai_coach/meals_today_snapshot_test.dart
     hive:
       box: coachBox
@@ -1193,6 +1212,7 @@ concepts:
       - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_* during weeklyFullSync" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for ExlogKeyMigrator state — not a row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* prefix (this_week_workouts, personal_records, today_workout) split out of ai_coach_repository.dart" }
     regression_test: test/contracts/workout_write_to_read_contract_test.dart
     hive:
       box: workoutBox
@@ -1286,6 +1306,7 @@ concepts:
     reader_allow_files:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* prefix split out of ai_coach_repository.dart" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -2030,6 +2051,7 @@ concepts:
       - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_*" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for migrator state — not a row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — bestPerSet primitives + exerciseLogsForIstDate delegated to by loadAllExercisePRs and train_screen" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot personal_records + PR timeline reader split out of ai_coach_repository.dart" }
     regression_test: test/contracts/load_all_exercise_prs_per_set_semantic_test.dart
     hive:
       box: workoutBox
@@ -2150,6 +2172,8 @@ concepts:
         method: _logHydration (AI chat → addWater)
         semantic: pass-through
         fields_read: [via waterIntakeProvider.notifier.addWater]
+    reader_allow_files:
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for water_ml_* (water_7d + today_nutrition) split out of ai_coach_repository.dart" }
     regression_test: test/nutrition_write_service/logWater_test.dart
     hive:
       box: healthBox
@@ -2518,6 +2542,8 @@ concepts:
         notes: |
           Reads cloud sleep_logs (NOT Hive) for the onboarding +
           per-promotion lifetime totals snapshot.
+    reader_allow_files:
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for sleep_log_* (sleep_7d + sleep_logs_count_7d) split out of ai_coach_repository.dart" }
     regression_test: test/sync/sync_gap_test.dart
     hive:
       box: healthBox
@@ -2647,6 +2673,7 @@ concepts:
       - { file: lib/features/train/providers/preview_plan_provider.dart, reason: "reads fitness_experience/days_per_week for Phase II/III preview" }
       - { file: lib/features/train/repositories/workout_repository.dart, reason: "reads goal/experience for plan generation calls" }
       - { file: lib/shared/repositories/user_repository.dart, reason: "canonical profile read path — getUserProfile(); not a full_name-specific reader" }
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — reads profile fields (days_per_week, primary_goal, height_cm, current_weight_kg, etc.) for the AI snapshot; not a full_name reader. Split out of ai_coach_repository.dart." }
     regression_test: test/sync/restore_field_canonical_test.dart
     hive:
       box: userBox
@@ -2783,10 +2810,19 @@ concepts:
       also live in ai_coach_interactions (channel field: 'chat', 'food_text_analysis',
       'scan_meal', 'cart_auditor', 'verify_payment_attempt').
     writers:
+      - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
+        line_range: 40-110
+        method: CoachInteractionRepository.saveInteraction + saveUserMessagePending
+        notes: |
+          Tech-debt audit 2026-05-20 finding A10 — canonical writer for
+          coach_<ms> rows. Moved out of AiCoachRepository (now thin
+          shim). id = 'coach_${DateTime.now().millisecondsSinceEpoch}'.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 462-540
-        method: saveInteraction
-        notes: "id = 'coach_${DateTime.now().millisecondsSinceEpoch}'"
+        line_range: 73-100
+        method: saveInteraction (shim forwarder)
+        notes: |
+          Forwarder retained for back-compat with existing callers
+          in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
         line_range: 505-520
         method: AiCoachNotifier._sendMessage
@@ -2842,6 +2878,7 @@ concepts:
       # individual coach_<ms> rows. Distinct concept; see coaching_notes.
       - { file: lib/features/ai_coach/models/coach_memory.dart, reason: "reads coach_memory singleton — not a coach_* interaction row" }
       - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads coach_memory singleton (proactive trigger state) — not a coach_* row" }
+      - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — canonical write + read surface for coach_<ms> rows (saveInteraction, saveUserMessagePending, updateInteractionWithResponse/Error, getTodayUserMessageCount, getLatestInsight, findRecentDuplicateMessageKey). Split out of ai_coach_repository.dart." }
     regression_test: test/sync/coach_uuid_format_test.dart
     hive:
       box: coachBox
@@ -2870,10 +2907,19 @@ concepts:
       coaching_notes context key. _compactContext truncates to 1000 chars.
       Cloud: coach_memory.coaching_notes column (pulled on restore).
     writers:
+      - file: lib/features/ai_coach/services/coach_memory_service.dart
+        line_range: 81-148
+        method: CoachMemoryService.extractAndAppendCoachingNotes
+        notes: |
+          Tech-debt audit 2026-05-20 finding A10 — canonical extractor
+          moved out of AiCoachRepository (now thin shim forwarder).
+          Appends to existing notes; runs nightly 11PM IST.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 686-735
-        method: extractCoachingNotes
-        notes: appends to existing notes; runs nightly 11PM IST
+        line_range: 148-160
+        method: extractCoachingNotes (shim forwarder)
+        notes: |
+          Legacy method name preserved on the shim for back-compat.
+          Forwards to CoachMemoryService.extractAndAppendCoachingNotes.
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
@@ -2913,6 +2959,10 @@ concepts:
           Pulls cloud coach_memory.coach_notes back into Hive 'coaching_notes'
           singleton on restore. Hive key preserved as 'coaching_notes' for
           back-compat with consumers.
+    reader_allow_files:
+      - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — _getCoachingNotes snapshot reader split out of ai_coach_repository.dart" }
+      - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — getLatestInsight reads coaching_notes singleton as fallback for the home insight card; split out of ai_coach_repository.dart" }
+      - { file: lib/features/ai_coach/services/coach_memory_service.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — extractAndAppendCoachingNotes reads existing notes to append (this is the canonical writer side reading its own prefix)" }
     regression_test: test/ai_coach/meals_today_snapshot_test.dart
     hive:
       box: coachBox
