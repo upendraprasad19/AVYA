@@ -4,8 +4,10 @@
 # Run once per fresh clone. Re-running is idempotent (overwrites both hooks
 # from scripts/pre-commit.sh and scripts/commit-msg.sh).
 #
-# Two hooks are installed:
-#   pre-commit  — flutter analyze + flutter test (blocks commit on failure)
+# Three hooks are installed:
+#   pre-commit  — flutter analyze + 38 gates + contract tests (FAST path)
+#                 plus full flutter test if PRE_COMMIT_FULL=1
+#   pre-push    — full flutter test (audit 2026-05-20 / I10 split)
 #   commit-msg  — bug-fix discipline gate (closes-diagnose / regression-test-skipped)
 #
 # Why two hooks? pre-commit runs BEFORE the commit message is finalized, so it
@@ -34,6 +36,7 @@ install_hook() {
 }
 
 install_hook "$REPO_ROOT/scripts/pre-commit.sh" "$REPO_ROOT/.git/hooks/pre-commit"
+install_hook "$REPO_ROOT/scripts/pre-push.sh" "$REPO_ROOT/.git/hooks/pre-push"
 install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$REPO_ROOT/.git/hooks/commit-msg"
 
-echo "[setup-hooks] verify: ls -la $REPO_ROOT/.git/hooks/{pre-commit,commit-msg}"
+echo "[setup-hooks] verify: ls -la $REPO_ROOT/.git/hooks/{pre-commit,pre-push,commit-msg}"
