@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -46,8 +47,8 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  bool _isLoading = true;
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with HiveTabScaffoldMixin<HomeScreen> {
   String? _error;
   bool _hasInitialized = false;
 
@@ -67,21 +68,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _hasInitialized = true;
   }
 
+  // initState owned by HiveTabScaffoldMixin (microtask + isLoading flip).
+  // First-mount-only side effects (streak-freeze toast, health-sync await)
+  // live in initTab() below.
   @override
-  void initState() {
-    super.initState();
-    // Brief loading shimmer on first build before Hive data is read.
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-      // Check if a streak freeze was just consumed and notify the user
-      _checkStreakFreezeUsed();
-    });
+  Future<void> initTab() async {
+    // Check if a streak freeze was just consumed and notify the user.
+    _checkStreakFreezeUsed();
     // Wait for background health sync to finish, then refresh step/weight
     // providers. This replaces the old fixed 5-second delay which was a
     // race condition — health sync could take longer than 5s or finish
     // much sooner. The future completes as soon as Health Connect data
     // has been written to Hive (or immediately if sync is disabled).
-    SyncService.instance.healthSyncDone.then((_) {
+    // Fire-and-forget — don't await; mixin flips isLoading regardless.
+    unawaited(SyncService.instance.healthSyncDone.then((_) {
       if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -90,7 +90,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ref.invalidate(todayWeightLoggedProvider);
         }
       });
-    });
+    }));
+  }
+
+  @override
+  void invalidateOnRetry(WidgetRef ref) {
+    ref.invalidate(userFirstNameProvider);
+    ref.invalidate(userInitialProvider);
+    ref.invalidate(streakProvider);
+    ref.invalidate(calendarWeekProvider);
+    ref.invalidate(todayWorkoutProvider);
+    ref.invalidate(nutritionSummaryProvider);
+    ref.invalidate(weightHistoryProvider);
+    ref.invalidate(aiInsightProvider);
+    ref.invalidate(recentFoodLogsProvider);
+    ref.invalidate(dailyQuoteProvider);
+    ref.invalidate(todayStepsProvider);
   }
 
   // Bug #14 — Prediction polling moved to ProfileScreen alongside the
@@ -124,24 +139,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _retry() {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    ref.invalidate(userFirstNameProvider);
-    ref.invalidate(userInitialProvider);
-    ref.invalidate(streakProvider);
-    ref.invalidate(calendarWeekProvider);
-    ref.invalidate(todayWorkoutProvider);
-    ref.invalidate(nutritionSummaryProvider);
-    ref.invalidate(weightHistoryProvider);
-    ref.invalidate(aiInsightProvider);
-    ref.invalidate(recentFoodLogsProvider);
-    ref.invalidate(dailyQuoteProvider);
-    ref.invalidate(todayStepsProvider);
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
+    // Wraps mixin's retry() to also clear local _error state. Retained as a
+    // named method so existing onRetry: _retry call sites don't change.
+    setState(() => _error = null);
+    retry();
   }
 
   @override
@@ -171,7 +172,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
+    if (isLoading) {
       return const ScreenLoadingSkeleton(cardCount: 5);
     }
 

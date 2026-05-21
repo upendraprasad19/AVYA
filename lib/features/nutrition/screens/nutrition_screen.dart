@@ -11,6 +11,7 @@ import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -33,27 +34,16 @@ class NutritionScreen extends ConsumerStatefulWidget {
   ConsumerState<NutritionScreen> createState() => _NutritionScreenState();
 }
 
-class _NutritionScreenState extends ConsumerState<NutritionScreen> {
-  bool _isLoading = true;
+class _NutritionScreenState extends ConsumerState<NutritionScreen>
+    with HiveTabScaffoldMixin<NutritionScreen> {
   bool _isInsightsExpanded = false;
 
   @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
-  }
-
-  void _retry() {
-    setState(() => _isLoading = true);
+  void invalidateOnRetry(WidgetRef ref) {
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(aiBreakdownProvider);
     ref.invalidate(macroTargetsProvider);
     ref.invalidate(weeklyNutritionProvider);
-    Future.microtask(() {
-      if (mounted) setState(() => _isLoading = false);
-    });
   }
 
   @override
@@ -151,7 +141,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
 
                 // -- Content --
                 Expanded(
-                  child: _isLoading
+                  child: isLoading
                       ? const ScreenLoadingSkeleton(cardCount: 4)
                       : _buildMealsTabSafe(),
                 ),
@@ -177,7 +167,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen> {
         child: ErrorState(
           title: 'Failed to load nutrition data',
           subtitle: 'Tap to retry',
-          onRetry: _retry,
+          onRetry: retry,
         ),
       );
     }
