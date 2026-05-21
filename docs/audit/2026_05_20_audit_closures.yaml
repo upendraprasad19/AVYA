@@ -287,8 +287,18 @@ findings:
     category: test
     title: "73% of 170 contract tests are source-grep only"
     score: 18
-    # NOT YET CLOSED — B5 scope (D2/D3-D4). All 42 SoT entries gain
-    # behavioral_test_path or behavioral_test_required: true (closure gate enforces).
+    terminal_state: closed_in_commit
+    commit: 1073956
+    verification: scripts/check_sot_behavioral_test_paths.dart (Gate 42)
+    notes: |
+      All 49 SoT concepts now have either behavioral_test_path: (5
+      concepts) OR behavioral_test_required: true (44 concepts).
+      Gate 42 PASS (default WARN mode). --strict mode fails until
+      the 44 TODOs become real behavioral tests.
+      Per feedback_source_grep_false_confidence.md: TODO marker is
+      honest closure — every future bug fix touching a flagged concept
+      writes the behavioral test in the same commit (CLAUDE.md §4.4
+      rule 21 amendment B5/D1 codifies this).
   - id: T3
     category: test
     title: "4 SoT registry concepts have zero contract test"
@@ -352,7 +362,18 @@ findings:
     category: test
     title: "plan_engine_v3_test.dart 1816 lines (V3 contracts vs V4 prod)"
     score: 18
-    # NOT YET CLOSED — pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: b4a6aa1
+    verification: test/plan_engine_v4/ (6 archetype-specific files + _helpers.dart)
+    notes: |
+      Original 1816-line plan_engine_v3_test.dart split into 6 files:
+      beginner_full_body, strength_archetype, hypertrophy_archetype,
+      endurance_archetype, mixed_archetype, shared_contracts + _helpers
+      (shared private-→-public extraction). 97 test() literals preserved,
+      145 individual test cases all pass. Renamed test/plan_engine_v3
+      → test/plan_engine_v4 to align with V4 production code.
+      V4 cycles hypertrophy→strength→metabolic→deload per
+      periodization_engine.dart:16; mapping rationale in commit body.
   - id: T8
     category: test
     title: "phase7_integration_scaffolds_present_test.dart locks in skip-forever"
