@@ -4394,3 +4394,108 @@ concepts:
       single-line and indented multi-line shapes — the prior single-line
       regex false-passed 175 callsites that the multi-line regex
       correctly flagged (see feedback_source_grep_false_confidence.md).
+
+  - concept: dependency_canonical_http_client
+    domain: infrastructure
+    description: |
+      `package:dio ^5.9.2` is the single canonical HTTP client used
+      everywhere under `lib/`. No file in `lib/` may `import
+      'package:http/...'` — the prior dual-client state (`http` for
+      ai_service + barcode_service; `dio` for everything else) was
+      tech debt fixed by audit 2026-05-20 finding D8 (landed
+      2026-05-21).
+
+      Translation cheatsheet:
+        http.Client                → Dio
+        http.Response              → Response<dynamic> (package:dio)
+        http.ClientException       → DioException (filter by .type)
+        client.get(uri, headers)   → dio.getUri<dynamic>(uri, options: Options(headers, validateStatus: (_) => true))
+        client.post(uri, body)     → dio.post<dynamic>(url, data: body, options: Options(validateStatus: (_) => true))
+        response.body              → _bodyAsString(r) adapter — Dio's
+                                     resp.data auto-decodes Map/List/String
+                                     by Content-Type; the adapter returns
+                                     a String for both shapes.
+
+      Every Dio request inside the retry helpers (`_retryHttpColdStart`)
+      uses `Options(validateStatus: (_) => true)` so non-2xx responses
+      surface as a Response (not a throw) — preserves the inspect-after-
+      success shape that the 502/503/504 cold-start gate + 400-body
+      storage-race gate depend on.
+    writers:
+      - file: lib/core/services/ai_service.dart
+        line_range: 1-660
+        method: AiService._client (Dio singleton) + _retryHttpColdStart + _directHttpCall + _directMediaHttpCall + _bodyAsString adapter
+        notes: Web/CORS fallback path. Singleton lifecycle reset via SingletonLifecycleRegistry on cross-account swap.
+      - file: lib/core/services/barcode_service.dart
+        line_range: 47-110
+        method: BarcodeService.lookup (per-call Dio() with finally-close)
+        notes: One-off Open Food Facts barcode lookup. Per-call Dio instance — no shared state needed for a one-shot fire-and-forget call.
+    reader_manifest_complete: true
+    reader_allow_files:
+      - { file: lib/core/services/ai_service.dart, reason: "Only producer (Dio singleton) + only consumer (every retry/fallback site) in the AI surface" }
+      - { file: lib/core/services/barcode_service.dart, reason: "Per-call Dio() for Open Food Facts; created + closed inside lookup() — never escapes the method" }
+    regression_test: scripts/check_no_http_package.dart
+    hive:
+      box: null
+      key_prefix: ""
+      key_formula: ""
+    cloud:
+      table: null
+      columns: []
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    telemetry:
+      failure_op_types:
+        - edge_function_cold_start_retry
+        - edge_function_storage_race_retry
+        - ai_service_chat_failed
+        - ai_service_chat_with_media_failed
+        - barcode_service_lookup
+    forbidden_legacy_patterns:
+      - pattern: |
+          import 'package:http/...'
+        location: anywhere under lib/
+        gate: scripts/check_no_http_package.dart (hard-fail mode)
+        regression_test: scripts/check_no_http_package.dart (gate IS the regression test — line-scans lib/**/*.dart on every commit + CI via the dynamic for-loop in scripts/pre-commit.sh + .github/workflows/test.yml)
+    class_constraints: |
+      Tech-debt audit 2026-05-20 finding D8: dual-HTTP-client tech debt.
+      Two clients (`package:http` + `package:dio`) in the same lib/ tree
+      meant: doubled dependency weight (~50KB APK delta), split error-
+      handling shapes (ClientException vs DioException — pre-fix
+      ai_service.dart had a dead `on http.ClientException` catch because
+      Supabase client throws DioException under the hood), and no SoT
+      registry pinning the canonical choice.
+
+      Migration mechanics (D8 landed 2026-05-21 in commit closes-diagnose
+      3e9d39):
+        - ai_service.dart: 4 http.* references migrated. Added
+          `_bodyAsString(Response<dynamic>) → String` adapter for body-
+          shape difference (Dio auto-decodes per Content-Type).
+        - barcode_service.dart: single http.get migrated to per-call
+          Dio() + finally-close. sendTimeout + receiveTimeout = 8s each
+          replicate the prior `http.get(...).timeout(8s)` budget.
+        - pubspec.yaml: `http: ^1.6.0` removed. http remains
+          transitively available for test/edge_functions/*.dart (test-
+          only Edge Function smoke contracts — out of scope per audit
+          brief).
+        - `validateStatus: (_) => true` on every Dio request inside the
+          retry helper so the cold-start (502/503/504) + storage-race
+          (400 + error_type:storage body) gates work identically post-
+          migration.
+
+      Out of scope (D8 closure boundary):
+        - test/edge_functions/*.dart — test-only Edge Function smoke
+          contracts. http remains transitively available; future audit
+          may migrate these to Dio-shaped contracts when the test harness
+          is next touched.
+        - supabase/functions/* — Deno stdlib `fetch`, unrelated to the
+          client-side http/dio choice. NEVER touched per audit brief.
+
+      Future extensions of this concept's gate:
+        - Centralize dio interceptors (retry, logging, JWT refresh) in a
+          shared `lib/core/services/http_client_factory.dart` if a third
+          HTTP-using service emerges. Out of scope for D8.
+        - The gate's regex pattern shape makes adding similar bans for
+          other split-dependency classes (JSON serializers, date
+          formatters) straightforward.

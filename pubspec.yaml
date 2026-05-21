@@ -59,7 +59,10 @@ dependencies:
   qr_flutter: ^4.1.0
   # Tech-debt audit 2026-05-20 / D6: bumped from ^7.0.0 → ^7.4.0.
   speech_to_text: ^7.4.0
-  http: ^1.6.0
+  # Tech-debt audit 2026-05-20 / D8: removed standalone `http` dependency
+  # 2026-05-21. Dio is the lib-wide canonical HTTP client; http remains
+  # transitively available for test/edge_functions/* smoke contracts only.
+  # SoT entry: `dependency_canonical_http_client` in docs/sot_registry.yaml.
   # flutter_dotenv removed — env vars now injected at build time via
   # --dart-define-from-file=.env (never bundled in APK).
   mobile_scanner: ^7.2.0
