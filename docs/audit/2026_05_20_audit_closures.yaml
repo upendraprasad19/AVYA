@@ -111,7 +111,20 @@ findings:
     category: code
     title: "train/profile/ai_coach screens at god-screen scale"
     score: 7
-    # NOT YET CLOSED — split lands B2 step 13.
+    terminal_state: closed_in_commit
+    commit: 6ed2d9a
+    verification: scripts/check_god_screen_max_lines.dart (Gate 43) — 3 C4 targets cleared
+    notes: |
+      3 god-screens split into sibling folders (mirror of C3 pattern):
+      - train_screen.dart (2419) → train/ folder (14 files), screen.dart 312L
+      - profile_screen.dart (2274) → profile/ folder (21 files), screen.dart 376L
+      - ai_coach_screen.dart (1906) → ai_coach/ folder (12 files), screen.dart 357L
+      All 3 screen.dart under 800-line ceiling.
+      Pattern: Dart part/part-of with extension _SectionName on _State pattern
+      to preserve private-state access without renames.
+      HiveTabScaffoldMixin preserved on train + profile; ai_coach correctly
+      kept off (allow-listed per C1).
+      Router + 17 test files updated. Gate 43 PASS for C4 targets.
   - id: C5
     category: code
     title: "10 diff_preview/*_diff.dart implement same From/To/reason shape"
