@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'singleton_lifecycle_registry.dart';
 
 // Top-level function required by compute() — runs in a background isolate.
 // Parses a JSON array string into a Map keyed by each item's 'id' field.
@@ -32,9 +33,27 @@ Map<String, dynamic> _parseJsonToIdMap(String jsonString) {
 /// one asset fails (corrupt file, disk full), the other can still succeed
 /// and the failed one retries on next launch.
 class SeedService {
-  SeedService._();
+  SeedService._() {
+    _registerLifecycle();
+  }
   static final SeedService _instance = SeedService._();
   static SeedService get instance => _instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook. SeedService reads exerciseBox + foodBox (shared, not
+  /// user-scoped) so its operation is genuinely user-agnostic — there
+  /// is no leak vector today. The hook is wired anyway for parity:
+  /// any future cache (seed-version memo, parsed manifest) gains a
+  /// canonical reset target.
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('SeedService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// No-op today (seed state is shared across users).
+  void _onUserChanged() {
+    // Intentionally empty — seed data is shared across all users.
+  }
 
   static const String _exerciseAssetPath = 'assets/data/exercise_library.json';
   static const String _foodAssetPath = 'assets/data/food_database.json';

@@ -4,6 +4,7 @@ import '../services/error_telemetry.dart';
 import '../services/hive_service.dart';
 import '../services/migrated_key.dart';
 import '../services/seed_service.dart';
+import '../services/singleton_lifecycle_registry.dart';
 import '../services/sync_service.dart';
 import '../services/workout_write_service.dart';
 import '../services/write_result.dart';
@@ -173,11 +174,30 @@ enum AssignTemplateRejectionReason {
 /// (calendar dates). It writes `scheduled_workouts` into Hive workoutBox
 /// so both Dashboard calendar and Workout screen read from the same source.
 class WorkoutScheduleService {
-  WorkoutScheduleService._();
+  WorkoutScheduleService._() {
+    _registerLifecycle();
+  }
   static final WorkoutScheduleService _instance = WorkoutScheduleService._();
   static WorkoutScheduleService get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook. All schedule state lives in per-user workoutBox via
+  /// MigratedKey (`current_plan`, `schedule_*`, `displaced_*`,
+  /// `swaps_this_week`, etc.). No in-memory caches to drop — the
+  /// callback exists for symmetry + observability (future caches added
+  /// to this service will gain a reset target).
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register(
+        'WorkoutScheduleService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// No-op today; reserves a single sink for future in-memory caches.
+  void _onUserChanged() {
+    // Intentionally empty — all state lives in workoutBox / userBox.
+  }
 
   // ── Keys ────────────────────────────────────────────────────────
 

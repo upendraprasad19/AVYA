@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/result.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
@@ -78,9 +79,54 @@ int _coerceInt(dynamic value, {required int fallback}) {
 }
 
 class SyncService {
-  SyncService._();
+  SyncService._() {
+    _registerLifecycle();
+  }
   static final SyncService _instance = SyncService._();
   static SyncService get instance => _instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook so the singleton's in-memory state (queue init flag,
+  /// realtime sub, restore-cancelled flag, health-sync completer,
+  /// restore-progress label) is dropped when [HiveUserSession] flips
+  /// to a new user. Public API unchanged — callers do not move.
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('SyncService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// Resets in-memory state that would otherwise leak across a user
+  /// swap. Hive-backed timestamps (`last_snapshot_sync` etc.) live in
+  /// `syncBox` (shared) so they are intentionally NOT reset here —
+  /// the namespacing already scopes them by ownership at read time.
+  void _onUserChanged() {
+    // Drop realtime subscription so the next user does not receive
+    // the previous user's broadcast events.
+    try {
+      _realtimeSubscription?.cancel();
+    } catch (_) {
+      // Subscription may already be cancelled; ignore.
+    }
+    _realtimeSubscription = null;
+
+    // Complete any in-flight health-sync waiter so callers awaiting
+    // the previous user's pass do not hang on the new user's session.
+    final completer = _healthSyncCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+    _healthSyncCompleter = null;
+
+    // Reset restore-progress label to the cold-start default so the
+    // next RestoringScreen mount does not flash stale copy from the
+    // previous user's restore.
+    restoreProgressLabel.value = 'Pulling your dispatch.';
+
+    // Clear the inflight-cancellation flag. The previous user's
+    // restore loop has already short-circuited; a fresh restore for
+    // the new user must start from `false`.
+    _restoreCancelled = false;
+  }
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;

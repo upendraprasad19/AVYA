@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Tracks daily and monthly usage counters for gated features.
@@ -9,9 +10,27 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 /// counters. Call [checkAndResetCounters] on app launch to reset stale
 /// counters by IST date.
 class UsageCounterService {
-  UsageCounterService._();
+  UsageCounterService._() {
+    _registerLifecycle();
+  }
   static final UsageCounterService _instance = UsageCounterService._();
   static UsageCounterService get instance => _instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook. All counters live in per-user userBox via MigratedKey, so
+  /// there is no in-memory cache. The callback is wired for symmetry +
+  /// future-proofing (a memoised limit table or rate-limit clock would
+  /// have a natural reset point here).
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register(
+        'UsageCounterService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// No-op today; all state is Hive-backed and already user-scoped.
+  void _onUserChanged() {
+    // Intentionally empty.
+  }
 
   // ── Hive Keys ───────────────────────────────────────────────────
 
