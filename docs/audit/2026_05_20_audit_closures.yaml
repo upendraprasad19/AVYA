@@ -608,8 +608,15 @@ findings:
     category: documentation
     title: "Nested feature CLAUDE.md files are Milestone-2 scaffolds"
     score: 16
-    # SCHEDULED FOR B5 D2 (this batch). Content migration into 12 nested
-    # CLAUDE.md files; Gate 44 (check_nested_claude_md_content.dart) enforces.
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: scripts/check_nested_claude_md_content.dart (Gate 44)
+    notes: |
+      13 nested CLAUDE.md files content-migrated from scaffolds to real
+      content drawn from SoT registry, root CLAUDE.md §7, existing nested
+      content, and code paths. Each carries: What lives here / SoT contracts
+      / Common pitfalls / Tests pinning the rules / See also cross-refs.
+      Gate 44 PASS — all files ≥40 lines, no "Milestone-2 scaffold" markers.
   - id: Doc4
     category: documentation
     title: "14 of 37 Edge Functions lack header comments"
@@ -661,8 +668,14 @@ findings:
     category: documentation
     title: "supabase/migrations + functions CLAUDE.md are scaffolds"
     score: 18
-    # SCHEDULED FOR B5 D2. Covered by Doc3 sweep (functions/CLAUDE.md is
-    # one of the 12 nested files in the migration scope).
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: supabase/functions/CLAUDE.md + supabase/migrations/CLAUDE.md (both populated by Doc3 sweep)
+    notes: |
+      supabase/functions/CLAUDE.md gained 37-function deploy protocol +
+      AI architecture content. supabase/migrations/CLAUDE.md gained
+      migration-apply protocol (already partial from B1, completed here).
+      Gate 44 PASS.
   - id: Doc11
     category: documentation
     title: "docs/architecture/sync.md references 93-food pre-Test-#3 count"
@@ -675,9 +688,14 @@ findings:
     category: documentation
     title: "No reference doc enumerates 37 Edge Functions + cron + secrets"
     score: 21
-    # SCHEDULED FOR B5 D2. supabase/functions/CLAUDE.md (the existing
-    # scaffold) will be expanded into a full 37-function catalog as
-    # part of the Doc3 nested-CLAUDE.md content migration sweep.
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: supabase/functions/CLAUDE.md (37-function deploy catalog + CRON_REGISTRY.md cross-ref)
+    notes: |
+      supabase/functions/CLAUDE.md now enumerates all 37 Edge Functions
+      with deploy protocol, AI architecture, secret references.
+      CRON_REGISTRY.md (from B1) covers cron-triggered functions.
+      SECRET_INVENTORY.md (from B1) covers secret management.
   - id: Doc13
     category: documentation
     title: "CLAUDE.md §0 setup omits npm install"
