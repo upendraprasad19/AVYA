@@ -100,6 +100,15 @@ dev_dependencies:
     sdk: flutter
   flutter_launcher_icons: ^0.14.0
   flutter_native_splash: ^2.4.0
+  # Tech-debt audit 2026-05-20 / T1: device-CI scaffold. Patrol drives
+  # native UI (Razorpay WebView, system permission dialogs, OAuth
+  # consent screens) that vanilla flutter_test cannot reach. Tests in
+  # integration_test/device/ run on a physical Pixel via USB; the
+  # founder runs them locally per docs/operations/DEVICE_TESTING.md.
+  # Patrol 3.x is the current stable line; patrol_finders ships
+  # separately for the widget-finder DSL.
+  patrol: ^3.15.2
+  patrol_finders: ^2.7.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -126,6 +135,18 @@ flutter:
   # example:
   # fonts:
   #   - family: Schyler
+
+# Tech-debt audit 2026-05-20 / T1: Patrol native-test runner config.
+# - app_name: shown in the OS task switcher during a Patrol run.
+# - android.package_name + bundle_id: must match the manifest applicationId
+#   in android/app/build.gradle.kts so Patrol can install + drive the app.
+# Patrol picks this section up automatically when running `patrol test`.
+patrol:
+  app_name: "AVYA Fit"
+  android:
+    package_name: com.icanbefitter.icanbefitter
+  ios:
+    bundle_id: com.icanbefitter.icanbefitter
   #     fonts:
   #       - asset: fonts/Schyler-Regular.ttf
   #       - asset: fonts/Schyler-Italic.ttf

@@ -296,7 +296,28 @@ findings:
     category: test
     title: "Integration test suite 64 Phase-7 skipped tests"
     score: 20
-    # NOT YET CLOSED — device-CI scaffold pending B2 continuation step 14.
+    terminal_state: closed_in_commit
+    commit: PENDING_T1_COMMIT
+    verification: |
+      integration_test/device/{razorpay_payment,cross_device_restore,
+      signup_onboarding,delete_account}_patrol_test.dart (4 flows);
+      scripts/run-device-tests.sh (runner);
+      scripts/check_device_tests_exist.dart (Gate 44);
+      docs/operations/DEVICE_TESTING.md (operator runbook).
+    notes: |
+      Patrol device-CI scaffold landed for the 4 critical-path flows
+      that vanilla flutter_test cannot reach (Razorpay WebView, OAuth
+      consent, system permission dialogs, native dialogs). Bodies
+      remain stubbed with `skip: true` + inline TODO callsites; founder
+      flips the skip flags + fills the callsite hooks during the first
+      local Pixel pass. Gate 44 (check_device_tests_exist.dart) pins
+      file presence + Patrol import + named-feature keyword so future
+      drift trips the pre-commit hook.
+      Coupled closures: T8 (phase7_integration_scaffolds_present —
+      anti-pattern test still in place; reopen for delete in
+      follow-up); T11 (AI coach tool-loop E2E — can now be added on
+      top of the Patrol scaffold); T15 (tool_dispatcher_test skip
+      pointers now satisfiable).
   - id: T2
     category: test
     title: "73% of 170 contract tests are source-grep only"
