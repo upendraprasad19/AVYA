@@ -29,7 +29,19 @@ total_findings: 81
 # 1 closed in 4d912d3 (T9 test runtime budget Gate 41)
 # SE-3 codified in 1ce354a (quarterly tech-debt audit runbook)
 # A10 ai_coach_repository split in flight on feat/tech-debt-audit-resume-2
-closed_count: 52
+closed_count: 65
+# Per-batch breakdown:
+#   B1 (00aad86 → 2717f08): 21
+#   B2-partial (4a30bf1 → ed26a28): 5 (C6, C7, C9, C10, A11)
+#   B2-continuation (c389570 → d143ada): 2 (A4, A8)
+#   B3-partial (d413891 → 1ba49e7): 4 (D5, D6, D10, D15-partial)
+#   B2/B3 mega (ec01b46 → f01e34b): 14 (A1, A9, A3, T3, T10, I3, D1, D11,
+#     D8-partial, I13, I15, Doc14, C8 + refactor-aware test updates)
+#   resume-2 merge (69a5e73): 5 (A5, I10, T9, I12, D7)
+#   B4 skill scaffold (7749c11): 1 (tech-debt-audit skill)
+#   A10 (d6e472c → 5718e10): 1 (ai_coach_repository 2127→302 shim)
+#   resume-3 merge (d772e4b): 5 (A6 partial, A7, C5 clean, T15, T4 blocked)
+#   resume-4 merge (578d860): 7 (T6, T8, T11, I6, I11, C2, gate-37 multi-line fix)
 
 findings:
 
