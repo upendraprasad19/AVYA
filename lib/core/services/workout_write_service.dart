@@ -793,6 +793,108 @@ class WorkoutWriteService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  //  Template + custom-exercise writers (audit 2026-05-20 / A3)
+  // ─────────────────────────────────────────────────────────────
+  //
+  // Previously written directly via `hive.workoutBox.put(id, ...)` or
+  // `customBox.put(key, ...)` from train_provider.dart + workout_repository
+  // .dart. Each direct put bypassed canonical sync-fanout + telemetry-pair
+  // discipline. Recurring writer/reader drift class — see
+  // `feedback_writer_reader_field_drift_recurring.md`.
+
+  /// Upsert a workout template at workoutBox key `<templateId>`.
+  /// Stamps `updated_at` IST timestamp; triggers sync fan-out.
+  Future<WriteResult> upsertTemplate({
+    required String templateId,
+    required Map<String, dynamic> template,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final c = await _acquireLock('template::$templateId');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final stamped = <String, dynamic>{
+        ...template,
+        'id': templateId,
+        'type': 'template',
+        'source': source.code,
+        'updated_at': DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)).toIso8601String(),
+      };
+      // Preserve created_at on update; only stamp on insert.
+      if (!stamped.containsKey('created_at')) {
+        stamped['created_at'] = stamped['updated_at'];
+      }
+      await box.put(templateId, stamped);
+
+      // C-11 (audit-2026-05-11) — template is part of workout-domain fan-out.
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.upsertTemplate] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_template_invalidation'));
+        }
+      }
+      return WriteResult.ok(templateId);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.upsertTemplate] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_template'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('template::$templateId', c);
+    }
+  }
+
+  /// Upsert a user-created custom exercise at customBox key.
+  /// Triggers `syncCustomItemsNow` + snapshot push.
+  Future<WriteResult> upsertCustomExercise({
+    required String key,
+    required Map<String, dynamic> exercise,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final c = await _acquireLock('custom_exercise::$key');
+    try {
+      final customBox = HiveService.instance.customBox;
+      final stamped = <String, dynamic>{
+        ...exercise,
+        'source': source.code,
+        'updated_at': DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)).toIso8601String(),
+      };
+      if (!stamped.containsKey('created_at')) {
+        stamped['created_at'] = stamped['updated_at'];
+      }
+      await customBox.put(key, stamped);
+
+      unawaited(SyncService.instance.syncCustomItemsNow());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.upsertCustomExercise] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_custom_exercise_invalidation'));
+        }
+      }
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.upsertCustomExercise] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_custom_exercise'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('custom_exercise::$key', c);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   //  Helpers (used by methods implemented in later tasks)
   // ─────────────────────────────────────────────────────────────
 

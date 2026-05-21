@@ -199,21 +199,37 @@ void main() {
   });
 
   // ── T-7 ────────────────────────────────────────────────────────
+  //
+  // Audit 2026-05-20 / A1: onesignal_player_id write logic relocated from
+  // auth_provider.dart into AuthSessionBootstrapper.pushOneSignalPlayerId
+  // (lib/core/services/auth_session_bootstrapper.dart). Source-grep
+  // checks both files for the canonical writer. Per
+  // `feedback_source_grep_false_confidence.md`, this is presence-only;
+  // behavioral test lives at
+  // `test/contracts/auth_session_bootstrapper_test.dart`.
   group('T-7 onesignal_player_id write contract', () {
-    test('auth_provider writes pushSubscription.id to user_progress', () {
-      final src =
+    test('auth-stack writes pushSubscription.id to user_progress', () {
+      final authSrc =
           _src('lib/features/auth/providers/auth_provider.dart');
-      expect(
-        src.contains('OneSignal.User.pushSubscription.id') ||
-            src.contains('pushSubscription.id'),
-        isTrue,
-        reason: 'auth_provider must read OneSignal.User.pushSubscription.id '
-            'after OneSignal.login() and upsert to '
-            'user_progress.onesignal_player_id. Without this, '
-            'delete-account.push-unsub has no player_id to act on.',
-      );
-      expect(src.contains('onesignal_player_id'), isTrue,
-          reason: 'auth_provider must reference onesignal_player_id column.');
+      final bootstrapperSrc = _src(
+          'lib/core/services/auth_session_bootstrapper.dart');
+      final hasPushId = authSrc.contains('OneSignal.User.pushSubscription.id') ||
+          authSrc.contains('pushSubscription.id') ||
+          bootstrapperSrc.contains('OneSignal.User.pushSubscription.id') ||
+          bootstrapperSrc.contains('pushSubscription.id');
+      expect(hasPushId, isTrue,
+          reason:
+              'auth_provider OR auth_session_bootstrapper must read '
+              'OneSignal.User.pushSubscription.id after OneSignal.login() and '
+              'upsert to user_progress.onesignal_player_id. Without this, '
+              'delete-account.push-unsub has no player_id to act on.');
+
+      final hasColumn = authSrc.contains('onesignal_player_id') ||
+          bootstrapperSrc.contains('onesignal_player_id');
+      expect(hasColumn, isTrue,
+          reason:
+              'auth_provider OR auth_session_bootstrapper must reference '
+              'onesignal_player_id column.');
     });
   });
 

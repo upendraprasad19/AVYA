@@ -1,7 +1,7 @@
 // Deno unit tests for ceremony_text.ts formatter.
 // Run: deno test supabase/functions/_shared/ceremony_text_test.ts
 
-import { assertEquals } from "https://deno.land/std@0.177.0/testing/asserts.ts";
+import { assertEquals } from "https://deno.land/std@0.224.0/testing/asserts.ts";
 import { formatPromotionCeremony, rankAddressFor, rankDisplayFor } from "./ceremony_text.ts";
 
 Deno.test("rankAddressFor — known codes", () => {

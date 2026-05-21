@@ -1392,6 +1392,7 @@ concepts:
         semantic: pass-through
         fields_read: [delegates to syncWorkoutData]
     regression_test: test/contracts/sync_fanout_contract_test.dart
+    behavioral_test_path: test/contracts/sync_fanout_workout_domain_behavioral_test.dart
     sync_methods:
       - _syncWorkoutLogs
       - _syncExerciseLogs
@@ -1429,6 +1430,7 @@ concepts:
     reader_manifest_complete: true
     readers: []
     regression_test: test/contracts/sync_fanout_contract_test.dart
+    behavioral_test_path: test/contracts/sync_fanout_nutrition_domain_behavioral_test.dart
     sync_methods:
       - _syncNutritionLogs
       - _syncWaterLogs
@@ -1556,10 +1558,15 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 400-715
+        line_range: 360-480
         method: _ensureLocalUser / signOut hooks
         semantic: flag-check
         fields_read: [onboarding_completed]
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 145-450
+        method: AuthSessionBootstrapper.hydrateFromCloud + resolveDestination
+        semantic: flag-check
+        fields_read: [onboarding_completed, onboarding_completed_at]
       - file: lib/features/auth/screens/restoring_screen.dart
         line_range: 86-95
         method: RestoringScreen onboarding self-heal
@@ -1877,6 +1884,14 @@ concepts:
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 920-960
         method: createCustomTemplate tool
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 800-870
+        method: upsertTemplate
+        notes: |
+          Canonical writer scaffolded 2026-05-21 / audit A3. Routes
+          previously-direct workoutBox.put(tmpl_*) from train_provider
+          (saveTemplate + updateTemplate) through a locked + sync-fanned-
+          out + telemetry-paired service method.
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
@@ -2386,6 +2401,10 @@ concepts:
           Reads WorkoutRepository.instance.currentStreak() directly so
           home + record sheet always agree (drift bug fixed in #12.7).
     regression_test: test/sync/streaks_source_field_test.dart
+    behavioral_test_path: test/contracts/streak_freeze_refill_race_behavioral_test.dart
+    additional_tests:
+      - test/contracts/streak_freeze_refill_race_test.dart
+      - test/contracts/streak_progress_service_concurrency_test.dart
     hive:
       box: healthBox
       key_prefix: "streaks"
@@ -2619,6 +2638,7 @@ concepts:
       - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads profile.id + goal for tool intent confirmation" }
       - { file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart, reason: "reads current goal for switch-goal diff preview" }
       - { file: lib/features/auth/providers/auth_provider.dart, reason: "_ensureLocalUser reads existing profile to merge new auth fields" }
+      - { file: lib/core/services/auth_session_bootstrapper.dart, reason: "audit 2026-05-20 A1 — owns post-sign-in cloud→Hive merge; reads existing profile for the cloud-vs-Hive precedence decision, not full_name specifically" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "reads existing Hive profile to drive new-vs-returning decision" }
       - { file: lib/features/home/widgets/weight_log_sheet.dart, reason: "reads current_weight_kg for weight-log sheet seed" }
       - { file: lib/features/nutrition/repositories/nutrition_repository.dart, reason: "reads goal/pace for projection subtitle" }
@@ -2660,19 +2680,39 @@ concepts:
       - file: lib/shared/repositories/user_repository.dart
         line_range: 106-115
         method: setOnboardingCompleted
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 1-450
+        method: AuthSessionBootstrapper.hydrateFromCloud
+        notes: |
+          Audit 2026-05-20 / A1 — owns the post-sign-in user_profile
+          read + Hive-merge + onboarding_completed flag write. Replaces
+          the inline block at auth_provider._ensureLocalUser (was
+          lines 477-770).
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 56-110
-        method: RestoringScreen._init (post-auth gate)
+        line_range: 49-117
+        method: RestoringScreen._kickoffRestore (post-auth gate)
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at]
         notes: |
-          Canonical post-auth decision tree. SELECTs cloud
-          user_profile.onboarding_completed_at. NULL + populated Hive
-          profile triggers Plan A self-heal (re-stamp NOW()). NULL +
-          empty Hive routes to resume-onboarding. NOT NULL routes to
-          /home (15s timeout safety).
+          Canonical post-auth decision tree. Audit 2026-05-20 / A9 —
+          delegates the Supabase SELECT to
+          AuthSessionBootstrapper.resolveDestination; widget itself
+          carries no Postgres calls. NULL + populated Hive profile
+          triggers Plan A self-heal (re-stamp NOW()). NULL + empty
+          Hive routes to resume-onboarding. NOT NULL routes to /home
+          (15s timeout safety).
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 95-145
+        method: AuthSessionBootstrapper.resolveDestination
+        semantic: flag-check
+        fields_read: [user_id, onboarding_completed_at, full_name, primary_goal, current_weight_kg, fitness_experience]
+        notes: |
+          New canonical reader (audit 2026-05-20 / A1 + A9). Owns the
+          three-way classification (GoHome / ResumeOnboarding(step) /
+          StartMissionBrief). Pure decision logic exposed via
+          @visibleForTesting classifyDestination(row).
       - file: lib/core/router/app_router.dart
         line_range: 549-560
         method: _authRedirect (onboarding gate)
@@ -2690,14 +2730,17 @@ concepts:
           Phase anchor = earliest of onboarding_completed_at +
           first_workout_date. Reads from userBox['profile'] map.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 400-715
+        line_range: 360-480
         method: _ensureLocalUser (mid-onboarding resume)
         semantic: flag-check
         fields_read: [onboarding_completed]
         notes: |
-          Belt-and-suspenders re-check after restore. Also fetches
-          users.onboarding_completed for edge cases where Hive flag
-          got cleared but cloud carries truth.
+          Belt-and-suspenders re-check after restore. Audit 2026-05-20
+          / A1 — cloud read now lives in AuthSessionBootstrapper;
+          this method orchestrates cross-account guard + delegates
+          hydration. users.onboarding_completed fetch (for edge cases
+          where Hive flag got cleared but cloud carries truth) is now
+          inside AuthSessionBootstrapper.hydrateFromCloud.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 680-700
         method: OnboardingNotifier.completeOnboarding
@@ -2977,7 +3020,7 @@ concepts:
           + subscription_refresh_* + subscription_verify_non_200 +
           subscription_refresh_grace_skip events.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 121-720
+        line_range: 105-550
         method: auth lifecycle events
         semantic: pass-through
         fields_read: []
@@ -3110,7 +3153,7 @@ concepts:
           UI entry to deleteAllFilesForCurrentUser. After Edge Function
           succeeds, wipes Hive, signs out, and routes to /sign-in.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 121-720
+        line_range: 105-550
         method: signOut + _ensureLocalUser lifecycle
         semantic: pass-through
         fields_read: []
@@ -3153,6 +3196,7 @@ concepts:
           Calls NutritionWriteService.deleteLog; stashes the log first
           for undo support (food_log_delete_with_undo concept).
     regression_test: test/contracts/restore_completeness_writes_test.dart
+    behavioral_test_path: test/contracts/hive_deletion_and_session_helpers_behavioral_test.dart
     class_constraints: |
       All delete paths must fire SyncService.syncWorkoutData() or
       syncNutritionData() + pushSnapshot() fire-and-forget after
@@ -3415,6 +3459,7 @@ concepts:
       - hive_session_opened (Layer B owner change)
       - hive_session_closed (Layer B owner cleared)
     regression_test: test/contracts/auth_invalidation_timing_test.dart
+    behavioral_test_path: test/contracts/auth_hive_owner_agreement_behavioral_test.dart
     additional_tests:
       - test/contracts/wrap_user_scoped_box_disagreement_test.dart
       - test/contracts/auth_invalidation_contract_test.dart
@@ -3856,3 +3901,73 @@ concepts:
       Date keys MUST be computed via `istDateStr(date)` to agree with
       `HealthWriteService`. Any divergence in IST handling between
       writer + reader is a writer/reader drift instance.
+
+  - concept: custom_exercises_mutations
+    domain: workout
+    description: |
+      User-created custom exercises stored at customBox key
+      `custom_exercise_<id>` (Hive) and cloud table
+      `user_custom_exercises`. Concept established by diagnose-doc
+      `2026-05-15-swap-picker-custom-miss-a5d29c.md` (7th writer/reader
+      drift instance).
+    writers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1460-1515
+        method: createCustomExercise
+        notes: |
+          Hive-side: routes through WorkoutWriteService.upsertCustomExercise
+          (audit 2026-05-21 / A3). Was a direct customBox.put before A3.
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 855-905
+        method: upsertCustomExercise
+        notes: |
+          Canonical writer (audit 2026-05-21 / A3). Locks per-key,
+          fans out to syncCustomItemsNow + pushSnapshot, telemetry pair.
+      - file: lib/core/services/sync/sync_community.dart
+        line_range: 290-360
+        method: _restoreCustomExercises
+        notes: cloud → Hive restore at sign-in
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        line_range: 315-340
+        method: getCustomExercises
+        semantic: filter
+        fields_read: [name, category, logging_type, type]
+        notes: |
+          Accepts entries with EITHER `type == 'exercise'` OR custom_exercise_
+          key prefix (post-fix for the type-stamp gap a5d29c).
+      - file: lib/features/train/widgets/exercise_swap_sheet.dart
+        line_range: 60-85
+        method: _loadExercises
+        semantic: display
+        fields_read: [name, category, primary_muscles]
+      - file: lib/features/train/screens/active_workout_screen.dart
+        line_range: 1900-1930
+        method: _showExercisePickerSheet
+        semantic: display
+        fields_read: [name, category]
+      - file: lib/features/train/screens/template_builder_screen.dart
+        line_range: 510-525
+        method: _customExercises
+        semantic: display
+        fields_read: [name, category]
+    hive_key_prefix: custom_exercise_
+    hive_key_formula: "'custom_exercise_${cloudRow.id}'"
+    sync_methods: [_syncCustomItems]
+    restore_methods: [_restoreCustomExercises]
+    cloud_table: user_custom_exercises
+    cloud_columns:
+      - id
+      - user_id
+      - name
+      - category
+      - logging_type
+      - default_sets
+      - default_reps
+      - default_duration_seconds
+      - primary_muscles
+      - equipment_needed
+      - submitted_to_library
+      - approved_for_library
+      - created_at

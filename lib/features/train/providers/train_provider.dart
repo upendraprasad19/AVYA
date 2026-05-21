@@ -1198,7 +1198,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     }
 
     entryMap['exercises'] = storedExercises;
-    hive.workoutBox.put(scheduleKey, entryMap);
+    // Audit 2026-05-20 / A3: route through WorkoutWriteService.upsertScheduled
+    // (was direct workoutBox.put). Service handles IST stamping + sync fanout
+    // + telemetry pair.
+    unawaited(WorkoutWriteService.instance.upsertScheduled(
+      date: workoutDate,
+      entry: entryMap,
+      source: WriteSource.activeWorkout,
+    ));
   }
 
   Future<void> completeWorkout() async {
@@ -1614,41 +1621,40 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
   }
 
   Future<void> saveTemplate(Map<String, dynamic> template) async {
-    final hive = HiveService.instance;
-    final id =
-        template['id'] ?? 'tmpl_${DateTime.now().millisecondsSinceEpoch}';
-    template['id'] = id;
-    template['type'] = 'template';
-    template['created_at'] = DateTime.now().toIso8601String();
-    await hive.workoutBox.put(id, template);
+    // Audit 2026-05-20 / A3: routes through WorkoutWriteService.upsertTemplate
+    // (was direct workoutBox.put). Service handles ID stamping, sync fan-out,
+    // telemetry pair, and invalidation.
+    final id = (template['id'] as String?) ??
+        'tmpl_${DateTime.now().millisecondsSinceEpoch}';
+    await WorkoutWriteService.instance.upsertTemplate(
+      templateId: id,
+      template: template,
+      source: WriteSource.manual,
+    );
     ref.invalidateSelf();
-    // C-11 (audit-2026-05-11) — fire-and-forget cloud sync.
-    // workoutBox `tmpl_*` is part of the workout-domain fan-out per
-    // CLAUDE.md §15; without these calls a newly-created template
-    // never reaches `workout_templates`/`template_exercises` until
-    // the next weekly full sync. AI coach sees stale template list.
-    unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 
   Future<void> updateTemplate(
       String templateId, Map<String, dynamic> template) async {
+    // Audit 2026-05-20 / A3: routes through WorkoutWriteService.upsertTemplate.
     final hive = HiveService.instance;
     final existing = hive.workoutBox.get(templateId);
     if (existing == null) return;
-    final updated = Map<String, dynamic>.from(existing as Map);
-    updated['name'] = template['name'];
-    updated['exercises'] = template['exercises'];
-    updated['exercise_count'] = template['exercise_count'];
+    final merged = Map<String, dynamic>.from(existing as Map)
+      ..addAll({
+        'name': template['name'],
+        'exercises': template['exercises'],
+        'exercise_count': template['exercise_count'],
+      });
     if (template.containsKey('assigned_days')) {
-      updated['assigned_days'] = template['assigned_days'];
+      merged['assigned_days'] = template['assigned_days'];
     }
-    updated['updated_at'] = DateTime.now().toIso8601String();
-    await hive.workoutBox.put(templateId, updated);
+    await WorkoutWriteService.instance.upsertTemplate(
+      templateId: templateId,
+      template: merged,
+      source: WriteSource.manual,
+    );
     ref.invalidateSelf();
-    // C-11 (audit-2026-05-11) — see saveTemplate above for rationale.
-    unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 
   /// Delete a saved template AND clean up its future schedule entries.

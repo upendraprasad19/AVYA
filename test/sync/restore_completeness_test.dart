@@ -32,10 +32,14 @@ void main() {
   late String syncSrc;
   late String authSrc;
 
+  late String bootstrapperSrc;
   setUpAll(() async {
     syncSrc = await loadSyncServiceSource().readAsString();
     authSrc = await File(
       'lib/features/auth/providers/auth_provider.dart',
+    ).readAsString();
+    bootstrapperSrc = await File(
+      'lib/core/services/auth_session_bootstrapper.dart',
     ).readAsString();
   });
 
@@ -91,13 +95,21 @@ void main() {
       );
     });
 
-    test('auth_provider still calls refreshFromSupabase as fast-path fallback', () {
-      expect(
-        authSrc,
-        contains('SubscriptionService.instance.refreshFromSupabase'),
-        reason: 'auth_provider fast-path subscription refresh must remain for '
-            'sign-in flows that bypass RestoringScreen (silent re-auth, etc.)',
-      );
+    test('auth-stack calls refreshFromSupabase as fast-path fallback', () {
+      // Audit 2026-05-20 / A1: this call relocated to AuthSessionBootstrapper
+      // .hydrateFromCloud. The fast-path subscription refresh now lives there
+      // OR in the bootstrapper-coupled auth_provider flow. Per
+      // feedback_source_grep_false_confidence, check both surfaces.
+      final hasRefresh = authSrc
+              .contains('SubscriptionService.instance.refreshFromSupabase') ||
+          bootstrapperSrc
+              .contains('SubscriptionService.instance.refreshFromSupabase');
+      expect(hasRefresh, isTrue,
+          reason:
+              'auth_provider OR auth_session_bootstrapper must call '
+              'SubscriptionService.instance.refreshFromSupabase as fast-path '
+              'subscription refresh for sign-in flows that bypass '
+              'RestoringScreen (silent re-auth, etc.).');
     });
   });
 
