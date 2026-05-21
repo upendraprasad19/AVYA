@@ -2,13 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -47,87 +48,84 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   }
 
   Future<void> _kickoffRestore() async {
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
+    // Audit 2026-05-20 / A9 — UI no longer talks to Supabase directly.
+    // Routing decision (home / resume-onboarding / mission-brief) is
+    // delegated to AuthSessionBootstrapper.resolveDestination.
+    final user = SupabaseService.instance.currentUser;
     if (user == null) {
       if (mounted) context.go('/');
       return;
     }
 
-    // Parallel: profile lookup + start restore in background
-    final profileFuture = supabase
-        .from('user_profile')
-        .select('user_id, onboarding_completed_at')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+    // Parallel: destination resolution + start restore in background.
+    final destinationFuture =
+        AuthSessionBootstrapper.instance.resolveDestination(user.id);
     final restoreFuture = SyncService.instance.restoreFromCloudForUser();
 
-    final profile = await profileFuture;
+    final destination = await destinationFuture;
 
-    if (profile == null) {
-      // Brand-new user with no profile row — cancel restore, go to Mission Brief
-      SyncService.instance.cancelInflightRestore();
-      if (mounted) context.go('/onboarding/mission-brief');
-      return;
-    }
+    switch (destination) {
+      case StartMissionBrief():
+        // Brand-new user with no profile row — cancel restore, go to Mission Brief.
+        SyncService.instance.cancelInflightRestore();
+        if (mounted) context.go('/onboarding/mission-brief');
+        return;
 
-    if (profile['onboarding_completed_at'] == null) {
-      // Plan A reconciliation (relocated from splash_screen during the
-      // Test #4 → Test #5 merge). OBS-3 root cause: returning user has a
-      // populated user_profile row (goal/experience/weight all set) but
-      // onboarding_completed_at was never stamped on the cloud. Without
-      // this, RestoringScreen would route them back through onboarding
-      // every cold start. Self-heal-stamp instead.
-      final hiveProfile = HiveService.instance.userBox.get('profile');
-      final hiveProfileMap = hiveProfile is Map ? hiveProfile : null;
-      final hasCorePlanFields = hiveProfileMap != null &&
-          hiveProfileMap['primary_goal'] != null &&
-          hiveProfileMap['fitness_experience'] != null &&
-          hiveProfileMap['current_weight_kg'] != null;
-      // audit-2026-05-16 reader-side / F3-2.1 — onboarding_completed
-      // moved to userBox via MigratedKey (Test #11.1, UserConfigMigrator
-      // v2). Reading from configBox directly returns the legacy/empty
-      // value for any device that's run the migration → fresh-install
-      // self-heal misclassifies onboarded users as new. Use MigratedKey
-      // so we read whichever store the migration left the value in.
-      // closes-diagnose: 2026-05-16-onboarding-triplicate-storage
-      final flagOnboarded =
-          MigratedKey.readWithDefault<bool>('onboarding_completed', false);
+      case ResumeOnboarding(:final firstMissingStep):
+        // Plan A reconciliation (relocated from splash_screen during the
+        // Test #4 → Test #5 merge). OBS-3 root cause: returning user has a
+        // populated user_profile row (goal/experience/weight all set) but
+        // onboarding_completed_at was never stamped on the cloud. Without
+        // this, RestoringScreen would route them back through onboarding
+        // every cold start. Self-heal-stamp instead.
+        final hiveProfile = HiveService.instance.userBox.get('profile');
+        final hiveProfileMap = hiveProfile is Map ? hiveProfile : null;
+        final hasCorePlanFields = hiveProfileMap != null &&
+            hiveProfileMap['primary_goal'] != null &&
+            hiveProfileMap['fitness_experience'] != null &&
+            hiveProfileMap['current_weight_kg'] != null;
+        // audit-2026-05-16 reader-side / F3-2.1 — onboarding_completed
+        // moved to userBox via MigratedKey (Test #11.1, UserConfigMigrator
+        // v2). Reading from configBox directly returns the legacy/empty
+        // value for any device that's run the migration → fresh-install
+        // self-heal misclassifies onboarded users as new. Use MigratedKey
+        // so we read whichever store the migration left the value in.
+        // closes-diagnose: 2026-05-16-onboarding-triplicate-storage
+        final flagOnboarded =
+            MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
-      if (flagOnboarded || hasCorePlanFields) {
-        debugPrint(
-          '[RestoringScreen] self-heal: cloud onboarding_completed_at is '
-          'NULL but Hive profile is populated — stamping now.',
-        );
-        // Fire-and-forget — non-fatal if it fails; next launch retries.
-        unawaited(_stampOnboardingCompletedAt(user.id).catchError((e) {
-          debugPrint('[RestoringScreen] self-heal stamp failed: $e');
-        }));
-        // Treat as fully onboarded — await restore + go home.
+        if (flagOnboarded || hasCorePlanFields) {
+          debugPrint(
+            '[RestoringScreen] self-heal: cloud onboarding_completed_at is '
+            'NULL but Hive profile is populated — stamping now.',
+          );
+          // Fire-and-forget — non-fatal if it fails; next launch retries.
+          unawaited(_stampOnboardingCompletedAt(user.id).catchError((e) {
+            debugPrint('[RestoringScreen] self-heal stamp failed: $e');
+          }));
+          // Treat as fully onboarded — await restore + go home.
+          await restoreFuture;
+          if (!mounted) return;
+          await _ensureOwnershipBeforeHome(user.id);
+          if (!mounted) return;
+          context.go('/home');
+          return;
+        }
+
+        // Mid-onboarding user — cancel restore, jump to first missing step.
+        SyncService.instance.cancelInflightRestore();
+        if (mounted) context.go('/onboarding/$firstMissingStep');
+        return;
+
+      case GoHome():
+        // Fully onboarded user — await restore then go home.
         await restoreFuture;
         if (!mounted) return;
         await _ensureOwnershipBeforeHome(user.id);
         if (!mounted) return;
         context.go('/home');
         return;
-      }
-
-      // Mid-onboarding user — cancel restore, jump to first missing step
-      SyncService.instance.cancelInflightRestore();
-      if (mounted) {
-        final route = await _resolveOnboardingResumeRoute(user.id);
-        if (mounted) context.go(route);
-      }
-      return;
     }
-
-    // Fully onboarded user — await restore then go home
-    await restoreFuture;
-    if (!mounted) return;
-    await _ensureOwnershipBeforeHome(user.id);
-    if (!mounted) return;
-    context.go('/home');
   }
 
   /// B5 + Plan A: Ownership guard — before navigating to /home, verify
@@ -217,28 +215,6 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       message: 'migrator=nlog ms=${swNlog.elapsedMilliseconds} '
           'did_run=$nlogRan',
     ));
-  }
-
-  /// Looks at the user_profile row and returns the earliest missing onboarding
-  /// step so the user can pick up where they left off.
-  Future<String> _resolveOnboardingResumeRoute(String userId) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final profile = await supabase
-          .from('user_profile')
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      if (profile == null) return '/onboarding/mission-brief';
-      if (profile['full_name'] == null) return '/onboarding/identity';
-      if (profile['primary_goal'] == null) return '/onboarding/goal';
-      if (profile['current_weight_kg'] == null) return '/onboarding/stats';
-      if (profile['fitness_experience'] == null) return '/onboarding/details';
-      return '/onboarding/plan';
-    } catch (_) {
-      return '/onboarding';
-    }
   }
 
   /// Plan A self-heal — stamps `onboarding_completed_at = NOW()` on both

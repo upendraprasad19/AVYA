@@ -6,7 +6,7 @@
 // Source: APK Test #4 Plan C / C5.
 // Mirror: see rank_engine.ts + ceremony_text.ts for display names and gate definitions.
 
-import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
+import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
 import type { ToolContext, ToolDefinition } from "../types.ts";
 import { LADDER, GATES } from "../../rank_engine.ts";
 import { rankDisplayFor, rankAddressFor } from "../../ceremony_text.ts";

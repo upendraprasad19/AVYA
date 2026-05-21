@@ -807,7 +807,7 @@ class WorkoutScheduleService {
     final data = _hive.workoutBox.get(_planKey);
     if (data == null) return null;
     // Return the raw map — callers can extract what they need
-    return null; // TODO: deserialize Phase from map when needed
+    return null; // TODO(plan-engine): deserialize Phase from map when first reader appears (currently no callers consume the Phase object — only the raw map shape is read elsewhere). Tagged 2026-05-21 / C8.
   }
 
   /// Get plan metadata (raw map).

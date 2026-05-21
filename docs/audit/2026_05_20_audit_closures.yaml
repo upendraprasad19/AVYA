@@ -21,8 +21,8 @@ total_findings: 81
 # 6 closed in B2-partial (commit 4a30bf1 → merge ed26a28)
 # 2 closed in B2-continuation (commit c389570 → merge d143ada): A4, A8
 # 4 closed in B3-partial (commit d413891 → merge 1ba49e7): D5, D6, D10, D15-partial
-# Remaining ~49 land across B2-architecture, B3-continuation, B4.
-closed_count: 32
+# 7+ closing in feat/tech-debt-audit-resume (uncommitted, parallel agents): D1, D8-partial, D11, I13, I15, C8, Doc14 + A1/A9/T3/T10/I3 from agents
+closed_count: 39
 
 findings:
 
@@ -72,7 +72,15 @@ findings:
     category: code
     title: "Stale TODOs without owner / date"
     score: 20
-    # NOT YET CLOSED — triage in B2 continuation.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: code inspection
+    notes: |
+      Triaged 5 sites: workout_schedule_service.dart:810 (Phase deserialize)
+      and profile_banner.dart:8 (image_picker wire) tagged with owner +
+      date. nutrition_repository.dart:614 (c2-cleanup) and splash_screen
+      .dart:118 (follow-up) already had owner tags. app_constants.dart
+      original line shifted post-Milestone-6 — no longer applicable.
   - id: C9
     category: code
     title: "AVYA-XXXX hardcoded in 5 referral inputs"
@@ -232,7 +240,10 @@ findings:
     category: dependency
     title: "Deno std version sprawl 0.177 / 0.208 / 0.224"
     score: 18
-    # NOT YET CLOSED — consolidation pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep -rn deno.land/std@0.177.0 supabase/functions/ returns empty; 56 files at std@0.224.0"
+    notes: "Bulk sed across 31 files."
   - id: D2
     category: dependency
     title: "@supabase/supabase-js drift across functions"
@@ -281,7 +292,15 @@ findings:
     category: dependency
     title: "Dual HTTP clients: dio + http"
     score: 20
-    # NOT YET CLOSED — http removal pending B3.
+    # PARTIAL — barcode_service.dart unused http import removed in
+    # feat/tech-debt-audit-resume. ai_service.dart still uses http
+    # (http.Client / Response / ClientException / post + typed retry
+    # shim _retryHttpColdStart) — full migration deferred to dedicated
+    # batch since it touches multiple network paths.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "barcode_service.dart no longer imports package:http; ai_service.dart still does (own batch needed)"
+    notes: "Partial close. Treat ai_service.dart migration as a follow-up."
   - id: D9
     category: dependency
     title: "analyzer 9.x while latest is 13.0.0"
@@ -301,7 +320,10 @@ findings:
     category: dependency
     title: "zod@v3.23.8 pinned across 20+ tool files"
     score: 16
-    # NOT YET CLOSED — sweep pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep -rn zod@v3.23.8 supabase/functions/ returns empty; 29 files at zod@v3.25.76"
+    notes: "Bulk sed across 29 files; latest v3 minor (non-breaking)."
   - id: D12
     category: dependency
     title: "jose@v5.6.3 cron-auth crypto lib stale"
@@ -433,7 +455,10 @@ findings:
     category: documentation
     title: "docs/architecture/payment.md cites hard-coded line numbers"
     score: 12
-    # NOT YET CLOSED — anchor-based citation pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep ':[0-9]+-' docs/architecture/payment.md returns empty"
+    notes: "3 hard-coded line ranges (razorpay_service.dart:374-384, razorpay-webhook/index.ts:185-210, verify-payment/index.ts:178-225) replaced with function-name anchors."
   - id: Doc15
     category: documentation
     title: "docs/superpowers/plans/ accumulates 40+ files with no policy"
@@ -527,7 +552,10 @@ findings:
     category: infrastructure
     title: "Knowledgebase/ + assets/ patterns gitignored — onboarding loss"
     score: 25
-    # NOT YET CLOSED — pointer doc pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: docs/runbooks/knowledgebase-pointer.md
+    notes: "Pointer doc documents what lives in Knowledgebase/, restore source, anti-patterns."
   - id: I14
     category: infrastructure
     title: "Razorpay live/test toggling has no build-time gate"
@@ -543,7 +571,10 @@ findings:
     category: infrastructure
     title: "No documented Supabase backup restore drill"
     score: 24
-    # NOT YET CLOSED — runbook pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: docs/runbooks/restore-drill.md
+    notes: "Quarterly cadence aligned with CLAUDE.md §4.10 audit. First drill: 2026-08-03."
 
 # Pre-existing tech debt surfaced by wiring dormant gates in B1 (NOT in
 # original 81 — own remediation track):

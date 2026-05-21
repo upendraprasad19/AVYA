@@ -8,7 +8,7 @@
  * stored in the user_daily_snapshots.snapshot_json field.
  */
 
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";

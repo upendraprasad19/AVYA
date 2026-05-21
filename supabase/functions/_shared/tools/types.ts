@@ -1,4 +1,4 @@
-import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
+import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
 
 /** A tool either reads (server-execute, returns data to model) or writes (emits typed intent for client to confirm + execute). */
 export type ToolKind = "read" | "write";

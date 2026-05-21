@@ -5,7 +5,9 @@ import 'package:icanbefitter/core/theme/colors.dart';
 /// Full-width banner section with gradient background.
 ///
 /// Shows "Add Cover Photo" when no banner image is set.
-/// Tapping opens image picker (TODO: wire to image_picker).
+/// Tapping opens image picker (TODO(profile-ui): wire to image_picker —
+/// tagged 2026-05-21 / C8. Currently a no-op tap; product-blocking only
+/// when banner-upload feature graduates from PRO-staged-rollout to GA).
 class ProfileBanner extends StatelessWidget {
   final VoidCallback onTapBanner;
   final VoidCallback onTapEdit;

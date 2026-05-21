@@ -1503,12 +1503,14 @@ class WorkoutRepository {
       'created_at': DateTime.now().toIso8601String(),
     };
 
-    await customBox.put(key, exercise);
-
-    // Fire-and-forget: push the new row to user_custom_exercises AND
-    // refresh the AI snapshot so the coach can see it on the next turn.
-    unawaited(SyncService.instance.syncCustomItemsNow());
-    unawaited(SyncService.instance.pushSnapshot());
+    // Audit 2026-05-20 / A3: route through WorkoutWriteService
+    // .upsertCustomExercise (was direct customBox.put + duplicated sync
+    // fanout). Service handles lock, telemetry pair, sync fan-out.
+    await WorkoutWriteService.instance.upsertCustomExercise(
+      key: key,
+      exercise: exercise,
+      source: WriteSource.manual,
+    );
 
     return id;
   }

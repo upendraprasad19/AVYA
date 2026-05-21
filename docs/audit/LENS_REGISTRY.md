@@ -127,7 +127,7 @@ These lenses correspond to the 10 new gate scripts created during B1 of the 2026
 | **L50** | **Cron-registry parity** | Every `cron.schedule('NAME',...)` in `supabase/migrations/*.sql` listed in `docs/operations/CRON_REGISTRY.md`. | `scripts/check_cron_registry.dart` (Gate 31) | `test/contracts/cron_registry_parity_test.dart` (lands later in B1) | I5 (audit 2026-05-20) — registry created + populated B1; 6 active jobs registered. |
 | **L51** | **Pre-commit hook installed** | `.git/hooks/pre-commit` is installed and invokes `scripts/pre-commit.sh`. | `scripts/check_hooks_installed.dart` (Gate 32) | (gate is the test) | I8 (audit 2026-05-20) — opt-in install never verified; gated B1. |
 | **L52** | **Gate scripts wired** | Every `scripts/check_*.dart` is invoked from BOTH `scripts/pre-commit.sh` AND `.github/workflows/test.yml` (or appears in the allow-list for build-only / advisory gates). | `scripts/check_gate_scripts_wired.dart` (Gate 33) | (gate is the test) | I2 (audit 2026-05-20) — 25 of 27 gates were dormant; dynamic-loop wired B1. |
-| **L53** | **(reserved)** | (placeholder for the next gate added in B2) | — | — | — |
+| **L53** | **Edge Function deploy reversibility** | Every Edge Function deploy is reversible in one command (no `git checkout` under pressure). Deployer supports `--rollback <fn> <sha-or-previous>`, archives last 3 payloads under `backups/edge_function_payloads/<fn>/`, runs a post-deploy smoke check against the live function URL. | `scripts/check_edge_function_rollback_script.dart` (Gate 38) | `docs/runbooks/edge-function-rollback.md` | I3 (audit 2026-05-20) — deploys were forward-only; MTTR for a bad deploy was unbounded (`git checkout <SHA>` + re-emit + redeploy under pressure). Closed B3 with git-SHA rollback path, post-deploy smoke step, and 3-deep payload archive. |
 
 ---
 
@@ -141,4 +141,4 @@ These lenses correspond to the 10 new gate scripts created during B1 of the 2026
 | 2026-05-17 | L2, L4, L5, L6, L18, L19 (OI closures) | 8 closures + 3 deferred (OI-21/23/24) | Operational hardening. |
 | 2026-05-17 (Hermes verification) | L21-L25 + L41 (NEW) | 13 REAL, 4 FALSE_ALARM, 3 PARTIAL | Drove this registry's creation. |
 | 2026-05-20–21 | L1–L52 (6-category tech-debt audit + B1 ship) | 81 findings; 0 deferrals; 10 new gates (L42–L52) | First explicit zero-deferral audit; closure YAML format introduced. |
-| **Next audit** | **L1-L52 (all 52)** | TBD | Quarterly cadence per CLAUDE.md §4.10; first scheduled 2026-08-03. |
+| **Next audit** | **L1-L53 (all 53)** | TBD | Quarterly cadence per CLAUDE.md §4.10; first scheduled 2026-08-03. |

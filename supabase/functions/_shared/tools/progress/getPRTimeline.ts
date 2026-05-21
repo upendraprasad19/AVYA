@@ -5,7 +5,7 @@
 //
 // Source: APK Test #4 Plan C / C7.
 
-import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
+import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
 import type { ToolContext, ToolDefinition } from "../types.ts";
 
 const schema = z.object({

@@ -137,38 +137,55 @@ void main() {
   });
 
   // ── Source assertions: cloud restore ─────────────────────────
-  group('auth_provider: cloud terms restore', () {
-    late String src;
+  //
+  // Audit 2026-05-20 / A1: cloud-terms-restore logic relocated from
+  // auth_provider.dart into AuthSessionBootstrapper.hydrateFromCloud
+  // (lib/core/services/auth_session_bootstrapper.dart). The source-grep
+  // assertions now look in BOTH files — auth_provider for any remaining
+  // surface, AuthSessionBootstrapper for the canonical writer. Per
+  // `feedback_source_grep_false_confidence.md`, this is presence-only;
+  // the behavioral test lives at
+  // `test/contracts/auth_session_bootstrapper_test.dart`.
+  group('cloud terms restore (auth_provider OR bootstrapper)', () {
+    late String authSrc;
+    late String bootstrapperSrc;
     setUpAll(() {
-      src = _src('lib/features/auth/providers/auth_provider.dart');
+      authSrc = _src('lib/features/auth/providers/auth_provider.dart');
+      bootstrapperSrc = _src(
+          'lib/core/services/auth_session_bootstrapper.dart');
     });
 
     test('queries terms_accepted_at from users table', () {
-      expect(src, contains('terms_accepted_at'),
+      final inAuth = authSrc.contains('terms_accepted_at');
+      final inBootstrapper = bootstrapperSrc.contains('terms_accepted_at');
+      expect(inAuth || inBootstrapper, isTrue,
           reason:
-              'auth_provider must read terms_accepted_at from Supabase users table');
+              'terms_accepted_at must be read from Supabase users table in '
+              'auth_provider OR auth_session_bootstrapper.');
     });
 
     test('queries terms_version from users table', () {
-      expect(src, contains('terms_version'),
+      final inAuth = authSrc.contains('terms_version');
+      final inBootstrapper = bootstrapperSrc.contains('terms_version');
+      expect(inAuth || inBootstrapper, isTrue,
           reason:
-              'auth_provider must read terms_version from Supabase users table');
+              'terms_version must be read from Supabase users table.');
     });
 
     test('writes terms_accepted_at to Hive on restore', () {
-      expect(
-        src,
-        contains("userBox.put('terms_accepted_at'"),
-        reason: 'Must write cloud terms timestamp to Hive on restore',
-      );
+      final pattern = "userBox.put('terms_accepted_at'";
+      final inAuth = authSrc.contains(pattern);
+      final inBootstrapper = bootstrapperSrc.contains(pattern);
+      expect(inAuth || inBootstrapper, isTrue,
+          reason: 'Must write cloud terms timestamp to Hive on restore.');
     });
 
     test('writes terms_version to Hive on restore', () {
-      expect(
-        src,
-        contains("userBox.put('terms_version'"),
-        reason: 'Must write cloud terms version to Hive on restore',
-      );
+      final pattern = "userBox.put('terms_version'";
+      final inAuth = authSrc.contains(pattern);
+      final inBootstrapper = bootstrapperSrc.contains(pattern);
+      expect(inAuth || inBootstrapper, isTrue,
+          reason: 'Must write cloud terms version to Hive on restore.');
     });
   });
 

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+// Audit 2026-05-20 / D8: removed unused `package:http` import.
+// The full http→dio migration in ai_service.dart is deferred to a
+// dedicated batch (multi-usage refactor: http.Client / Response /
+// ClientException / post + typed retry shim _retryHttpColdStart).
 
 import 'error_telemetry.dart';
 

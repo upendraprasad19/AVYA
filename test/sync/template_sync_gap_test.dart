@@ -33,48 +33,60 @@ String _methodBody(String src, String signature) {
 void main() {
   const path = 'lib/features/train/providers/train_provider.dart';
 
+  // Audit 2026-05-20 / A3: TemplatesNotifier.saveTemplate + updateTemplate
+  // routed through WorkoutWriteService.upsertTemplate (which itself fires
+  // syncWorkoutData + pushSnapshot in the canonical body). Per
+  // feedback_source_grep_false_confidence, tests accept EITHER the legacy
+  // direct call OR the canonical WriteService route.
   group('C-11 TemplatesNotifier sync fan-out', () {
-    test('saveTemplate fires syncWorkoutData + pushSnapshot', () {
+    test('saveTemplate fires syncWorkoutData via WriteService or directly', () {
       final body =
           _methodBody(_src(path), 'Future<void> saveTemplate(');
       expect(body, isNotEmpty,
           reason: 'saveTemplate must exist on TemplatesNotifier');
-      expect(
-        body,
-        contains('unawaited(SyncService.instance.syncWorkoutData())'),
-        reason:
-            'saveTemplate must call syncWorkoutData so new tmpl_* rows '
-            'reach workout_templates / template_exercises cloud tables '
-            'immediately (CLAUDE.md §15 Sync fan-out contract).',
-      );
-      expect(
-        body,
-        contains('unawaited(SyncService.instance.pushSnapshot())'),
-        reason:
-            'saveTemplate must call pushSnapshot so AI coach context '
-            'reflects the new template without waiting for cold-start.',
-      );
+      final routedThroughWriteService =
+          body.contains('WorkoutWriteService.instance.upsertTemplate');
+      final firesSyncWorkoutData = body
+              .contains('unawaited(SyncService.instance.syncWorkoutData())') ||
+          routedThroughWriteService;
+      expect(firesSyncWorkoutData, isTrue,
+          reason:
+              'saveTemplate must EITHER directly call syncWorkoutData OR '
+              'route through WorkoutWriteService.upsertTemplate (which '
+              'fires syncWorkoutData internally). CLAUDE.md §15 Sync '
+              'fan-out contract.');
+
+      final firesPushSnapshot = body
+              .contains('unawaited(SyncService.instance.pushSnapshot())') ||
+          routedThroughWriteService;
+      expect(firesPushSnapshot, isTrue,
+          reason:
+              'saveTemplate must EITHER call pushSnapshot directly OR '
+              'route through WorkoutWriteService.upsertTemplate.');
     });
 
-    test('updateTemplate fires syncWorkoutData + pushSnapshot', () {
+    test('updateTemplate fires syncWorkoutData via WriteService or directly', () {
       final body =
           _methodBody(_src(path), 'Future<void> updateTemplate(');
       expect(body, isNotEmpty,
           reason: 'updateTemplate must exist on TemplatesNotifier');
-      expect(
-        body,
-        contains('unawaited(SyncService.instance.syncWorkoutData())'),
-        reason:
-            'updateTemplate must call syncWorkoutData so edited '
-            'tmpl_* rows reach cloud immediately.',
-      );
-      expect(
-        body,
-        contains('unawaited(SyncService.instance.pushSnapshot())'),
-        reason:
-            'updateTemplate must call pushSnapshot so AI coach picks '
-            'up the rename / new exercise list.',
-      );
+      final routedThroughWriteService =
+          body.contains('WorkoutWriteService.instance.upsertTemplate');
+      final firesSyncWorkoutData = body
+              .contains('unawaited(SyncService.instance.syncWorkoutData())') ||
+          routedThroughWriteService;
+      expect(firesSyncWorkoutData, isTrue,
+          reason:
+              'updateTemplate must EITHER directly call syncWorkoutData OR '
+              'route through WorkoutWriteService.upsertTemplate.');
+
+      final firesPushSnapshot = body
+              .contains('unawaited(SyncService.instance.pushSnapshot())') ||
+          routedThroughWriteService;
+      expect(firesPushSnapshot, isTrue,
+          reason:
+              'updateTemplate must EITHER call pushSnapshot directly OR '
+              'route through WorkoutWriteService.upsertTemplate.');
     });
 
     test('deleteTemplate fires syncWorkoutData + pushSnapshot', () {
