@@ -321,7 +321,15 @@ findings:
     category: test
     title: "regression_bug_fixes_test.dart 920-line dumping ground"
     score: 24
-    # NOT YET CLOSED — split pending B2 continuation step 14.
+    terminal_state: closed_in_commit
+    commit: 79411e7
+    verification: integration_test/flows/regression/ (4 per-feature files)
+    notes: |
+      920-line dumping ground split into 4 per-feature files:
+      workout_regression_test.dart (15 tests), schedule_regression_test.dart
+      (7 tests), auth_regression_test.dart (1 test), nutrition_regression_test.dart
+      (4 tests). Total 27 tests preserved byte-identical (pure relocation,
+      no behavior change). Original file deleted. flutter analyze clean.
   - id: T6
     category: test
     title: "Hive setup boilerplate repeated across 29 test files"
@@ -394,7 +402,14 @@ findings:
     category: test
     title: "audit_2026_05_11_t1_t11_contracts_test.dart date-stamped omnibus"
     score: 16
-    # NOT YET CLOSED — split pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: 4f0bca8
+    verification: test/contracts/{delete_account_safety,razorpay_webhook_replay_window,razorpay_webhook_promo_double_burn_guard,ai_media_proxy_ssrf_allowlist,is_pro_null_expiry_guard,gate_high_value_server_verify,onesignal_player_id_write_contract,food_text_analysis_daily_cap,compact_context_byte_ceiling,plan_generator_targetcount_cascade,subscriptions_rls_lockdown}_test.dart
+    notes: |
+      Date-stamped omnibus split 1:1 into 11 per-concept files named
+      after the SoT concept each defends. T-1..T-11 → concept-named
+      files. Behavior preserved byte-identical. Future audits merge
+      concepts instead of creating parallel date-stamped omnibuses.
   - id: T13
     category: test
     title: "Snapshot contract has 3 overlapping enforcers"
