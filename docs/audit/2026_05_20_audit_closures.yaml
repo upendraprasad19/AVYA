@@ -21,8 +21,10 @@ total_findings: 81
 # 6 closed in B2-partial (commit 4a30bf1 → merge ed26a28)
 # 2 closed in B2-continuation (commit c389570 → merge d143ada): A4, A8
 # 4 closed in B3-partial (commit d413891 → merge 1ba49e7): D5, D6, D10, D15-partial
-# 7+ closing in feat/tech-debt-audit-resume (uncommitted, parallel agents): D1, D8-partial, D11, I13, I15, C8, Doc14 + A1/A9/T3/T10/I3 from agents
-closed_count: 39
+# 14 closed in B2/B3 mega-batch (commit ec01b46 → merge f01e34b): A1, A9, A3,
+#   T3, T10, I3, D1, D11, D8-partial, I13, I15, Doc14, C8, refactor-aware test updates
+# 2 closing in feat/tech-debt-audit-resume-2 (uncommitted): I12, D7, plus A5 from agent
+closed_count: 48
 
 findings:
 
@@ -287,7 +289,10 @@ findings:
     category: dependency
     title: "Single-callsite qr_flutter + flutter_svg"
     score: 8
-    # NOT YET CLOSED — audit/rationale pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume-2 (uncommitted)"
+    verification: pubspec.yaml inline rationale comments
+    notes: "Both kept — small bundle cost, core to the features that use them (shareable card, captain-cap visual). Revisit if those features get cut."
   - id: D8
     category: dependency
     title: "Dual HTTP clients: dio + http"
@@ -547,7 +552,15 @@ findings:
     category: infrastructure
     title: "applied_migrations.json string array (not structured ledger)"
     score: 20
-    # NOT YET CLOSED — schema migration pending B3.
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume-2 (uncommitted)"
+    verification: scripts/check_applied_migrations_ledger.dart (Gate 39)
+    notes: |
+      Schema migrated from `["001", "002", ...]` to `[{migration, applied_at,
+      hash, applier}, ...]`. applied_at sourced from first-commit timestamp
+      per migration file (`git log --diff-filter=A`). hash is sha256 of
+      the .sql file content. 75 records converted. One-shot script:
+      `scripts/migrate_applied_migrations_ledger.dart` (idempotent).
   - id: I13
     category: infrastructure
     title: "Knowledgebase/ + assets/ patterns gitignored — onboarding loss"

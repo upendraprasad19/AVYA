@@ -53,6 +53,9 @@ dependencies:
   pdf: ^3.12.0
   share_plus: ^12.0.2
   path_provider: ^2.1.0
+  # Tech-debt audit 2026-05-20 / D7: single-callsite (shared/widgets/
+  # shareable_card.dart). Keep — small bundle cost, no maintenance burden,
+  # core to the shareable-card feature. Revisit if shareable cards get cut.
   qr_flutter: ^4.1.0
   # Tech-debt audit 2026-05-20 / D6: bumped from ^7.0.0 → ^7.4.0.
   speech_to_text: ^7.4.0
