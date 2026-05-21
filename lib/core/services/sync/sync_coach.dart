@@ -267,4 +267,32 @@ extension SyncServiceCoach on SyncService {
       ));
     }
   }
+
+  // ── SyncDomain public forwarders for coach helpers (A6 migration) ──
+
+  static const String _kSyncDomainRestoreSinceCoach = '2020-01-01T00:00:00Z';
+
+  Future<void> pushCoachInteractionsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncCoachInteractions(userId);
+  }
+
+  Future<void> restoreCoachInteractionsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreCoachInteractions(userId, since ?? _kSyncDomainRestoreSinceCoach);
+  }
+
+  Future<void> pushCoachMemoryForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await syncCoachMemoryNow(userId);
+  }
+
+  Future<void> restoreCoachMemoryForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreCoachMemory(userId);
+  }
 }

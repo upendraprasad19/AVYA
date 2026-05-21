@@ -1553,24 +1553,49 @@ concepts:
       method on SyncService, (3) _restoreX() called from
       restoreFromCloudForUser, AND (4) contract test.
     migration_note: |
-      Audit 2026-05-20 / A6 — the `SyncDomain` interface
-      (`lib/core/services/sync_domain.dart`) is the future home of
-      the symmetric push/restore contract. Each `_syncXxx` /
-      `_restoreXxx` private-helper pair on SyncService is migrating
-      to its own top-level `XxxSyncDomain implements SyncDomain`
-      class in `lib/core/services/sync_domains/`. The first proof
-      of pattern is `streaks_sync_domain.dart` (wraps
-      `_syncStreaks` + `_restoreStreaks` via public forwarders on
-      the `SyncServiceWorkout` extension). The interface enforces
-      the symmetric matched-pair contract at compile time once
-      migration completes; until then,
-      `test/contracts/sync_domain_interface_test.dart` source-greps
-      the SyncService sources to assert every `_syncX` has a
-      matching `_restoreX`. Existing call sites in
-      `SyncService.syncWorkoutData` /
-      `SyncService.restoreFromCloudForUser` keep calling the
-      private helpers directly — no behavioural change in this
-      scaffold batch.
+      Audit 2026-05-20 / A6 — FULL WRAPPER LANDING (B5 D7-D8 batch,
+      2026-05-21). The `SyncDomain` interface
+      (`lib/core/services/sync_domain.dart`) now hosts EIGHT
+      wrapper classes under `lib/core/services/sync_domains/`:
+        - workouts_sync_domain.dart        (workout logs / exercise
+                                             logs / schedule completions
+                                             / plan / templates /
+                                             scheduled workouts)
+        - streaks_sync_domain.dart         (proof-of-pattern, landed
+                                             in the scaffold batch)
+        - nutrition_sync_domain.dart       (nutrition logs / water
+                                             logs / saved meals)
+        - health_sync_domain.dart          (weight / measurements /
+                                             sleep / steps / urine
+                                             color — push-only)
+        - coach_sync_domain.dart           (coach interactions +
+                                             coach memory)
+        - profile_sync_domain.dart         (user profile / progress /
+                                             preferences)
+        - community_sync_domain.dart       (custom items orchestrator
+                                             — exercises + foods)
+        - restore_completeness_sync_domain.dart (freezes / inbox /
+                                             saved diet plan / rank
+                                             promotions / referrals)
+      Each wrapper delegates to the existing private `_syncX` /
+      `_restoreX` helpers via public forwarders on the corresponding
+      `SyncServiceX` extension (`pushXForSyncDomain` /
+      `restoreXForSyncDomain`). The wrappers ship DUAL-PATH-READY:
+      `SyncService._domains` is a registered List<SyncDomain> and
+      `_dispatchDomainPushes` / `_dispatchDomainRestores` iterate it
+      under `SyncFlags.useDomainFor(<name>)` gates, all of which
+      default FALSE. Legacy fan-out in `SyncService.syncWorkoutData`
+      / `weeklyFullSync` / `restoreFromCloudForUser` keeps calling
+      the private helpers directly — NO RUNTIME BEHAVIOUR CHANGE
+      in this batch. The follow-up batch flips flags per domain
+      after 24h smoke and deletes the matching legacy
+      `_safeRestoreOp(...)` line in the same commit (CLAUDE.md
+      §4.11 gates-before-refactor). The matched-pair contract is
+      enforced by `test/contracts/sync_domain_interface_test.dart`
+      (source-grep exhaustiveness over `_syncX` / `_restoreX`) +
+      `test/contracts/sync_domain_full_migration_test.dart`
+      (behavioural verification of the 8 wrappers + dispatcher
+      no-op safety + SyncFlags default-FALSE invariant).
 
   - concept: user_scoped_hive_keys
     domain: cross_domain

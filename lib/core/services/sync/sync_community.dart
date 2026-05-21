@@ -508,4 +508,17 @@ extension SyncServiceCommunity on SyncService {
       } catch (_) {}
     }
   }
+
+  // ── SyncDomain public forwarders for community helpers (A6 migration) ──
+
+  Future<void> pushCustomItemsForSyncDomain() async {
+    await _syncCustomItems();
+  }
+
+  Future<void> restoreCustomItemsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreCustomExercises(userId);
+    await _restoreCustomFoods(userId);
+  }
 }

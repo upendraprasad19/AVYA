@@ -1694,4 +1694,93 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
+  // ── SyncDomain public forwarders for workout helpers (A6 migration) ──
+  //
+  // One pair per `_syncX(userId)` / `_restoreX(userId[, since])` private
+  // helper that maps to a [SyncDomain] wrapper class under
+  // `lib/core/services/sync_domains/`. Each forwarder is a thin
+  // delegator: it resolves `userId` via `_ensureSessionOpen()` (so the
+  // zero-arg [SyncDomain.push] / [SyncDomain.restore] contract holds)
+  // and then calls the existing private helper. No behavioural change.
+  //
+  // The legacy fan-out (syncWorkoutData / restoreFromCloudForUser) keeps
+  // calling the private helpers directly until [SyncFlags] flips for
+  // the corresponding domain. See `lib/core/services/sync_flags.dart`.
+
+  /// Default `since` for cloud→local pulls. Matches the literal at
+  /// every `restoreFromCloud*` call site so the wrapper path can be
+  /// flipped in without changing the cloud query semantics.
+  static const String _kSyncDomainRestoreSince = '2020-01-01T00:00:00Z';
+
+  Future<void> pushWorkoutLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncWorkoutLogs(userId);
+  }
+
+  Future<void> restoreWorkoutLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreWorkoutLogs(userId, since ?? _kSyncDomainRestoreSince);
+  }
+
+  Future<void> pushExerciseLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncExerciseLogs(userId);
+  }
+
+  Future<void> restoreExerciseLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreExerciseLogs(userId, since ?? _kSyncDomainRestoreSince);
+  }
+
+  Future<void> pushScheduleCompletionsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncScheduleCompletions(userId);
+  }
+
+  Future<void> restoreScheduleCompletionsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreScheduleCompletions(userId, since ?? _kSyncDomainRestoreSince);
+  }
+
+  Future<void> pushWorkoutPlanForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncWorkoutPlan(userId);
+  }
+
+  Future<void> restoreWorkoutPlanForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreWorkoutPlan(userId);
+  }
+
+  Future<void> pushWorkoutTemplatesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncWorkoutTemplates(userId);
+  }
+
+  Future<void> restoreWorkoutTemplatesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreWorkoutTemplates(userId);
+  }
+
+  Future<void> pushScheduledWorkoutsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncScheduledWorkouts(userId);
+  }
+
+  Future<void> restoreScheduledWorkoutsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreScheduledWorkouts(userId, since ?? _kSyncDomainRestoreSince);
+  }
 }

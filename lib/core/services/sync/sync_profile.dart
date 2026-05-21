@@ -351,4 +351,42 @@ extension SyncServiceProfile on SyncService {
       } catch (_) {}
     }
   }
+
+  // ── SyncDomain public forwarders for profile helpers (A6 migration) ──
+
+  Future<void> pushUserProfileForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncUserProfile(userId);
+  }
+
+  Future<void> restoreUserProfileForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreUserProfile(userId);
+  }
+
+  Future<void> pushUserProgressForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncUserProgress(userId);
+  }
+
+  Future<void> restoreUserProgressForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreUserProgress(userId);
+  }
+
+  Future<void> pushUserPreferencesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncUserPreferences(userId);
+  }
+
+  Future<void> restoreUserPreferencesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreUserPreferences(userId);
+  }
 }

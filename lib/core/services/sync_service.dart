@@ -12,7 +12,17 @@ import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/coach_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/community_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/health_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/nutrition_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/profile_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/restore_completeness_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -130,6 +140,92 @@ class SyncService {
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
+
+  /// Tech-debt audit 2026-05-20 / A6 — registered [SyncDomain] wrappers
+  /// for the 8 part-files. Each wrapper delegates to the existing
+  /// `_syncX` / `_restoreX` private helpers via public forwarders on
+  /// the corresponding `SyncServiceX` extension.
+  ///
+  /// THIS LIST IS NOT YET ACTIVE IN THE FAN-OUT. The legacy fan-out in
+  /// `syncWorkoutData` / `weeklyFullSync` / `restoreFromCloudForUser`
+  /// continues to call the private helpers directly. Each domain
+  /// migrates to dispatch through this list on its own follow-up
+  /// commit, gated behind `SyncFlags.useDomainFor(domain.name)`
+  /// (default FALSE).
+  ///
+  /// Ordering matches the canonical fan-out so future dispatch loops
+  /// preserve the documented ordering quirks (templates before
+  /// schedules per APK Test #14 / Bug B.1; workout_plan before
+  /// scheduled_workouts per Test #12.9).
+  late final List<SyncDomain> _domains = [
+    WorkoutsSyncDomain(syncService: this),
+    StreaksSyncDomain(syncService: this),
+    NutritionSyncDomain(syncService: this),
+    HealthSyncDomain(syncService: this),
+    CoachSyncDomain(syncService: this),
+    ProfileSyncDomain(syncService: this),
+    CommunitySyncDomain(syncService: this),
+    RestoreCompletenessSyncDomain(syncService: this),
+  ];
+
+  /// A6 — exposed for the behavioural contract test
+  /// (`test/contracts/sync_domain_full_migration_test.dart`). Returns
+  /// the registered domain list; production callers do NOT iterate
+  /// over this until per-domain [SyncFlags] are flipped.
+  List<SyncDomain> get registeredDomainsForTests => _domains;
+
+  /// A6 — internal dispatcher (NOT YET WIRED into the fan-out).
+  ///
+  /// Iterates `_domains` and calls `domain.push()` (or `restore()`)
+  /// ONLY for domains whose [SyncFlags] gate has been flipped TRUE.
+  /// Domains with the gate FALSE are skipped — the legacy `_syncX` /
+  /// `_restoreX` calls in the existing fan-out cover them.
+  ///
+  /// This wrapper-landing batch (B5 D7-D8 of audit 2026-05-20) does
+  /// NOT call these dispatchers from any fan-out site. The follow-up
+  /// batch that flips the first flag is responsible for:
+  ///   (a) inserting `await _dispatchDomainPushes()` /
+  ///       `_dispatchDomainRestores()` at the appropriate fan-out
+  ///       sites (after legacy parallel waits, before timestamp
+  ///       update), AND
+  ///   (b) deleting the legacy `_safeRestoreOp(...)` calls for the
+  ///       domains being flipped — otherwise that domain double-syncs.
+  ///
+  /// Currently exercised by the contract test
+  /// (`test/contracts/sync_domain_full_migration_test.dart`) under a
+  /// transient flag flip with no signed-in user to assert short-circuit
+  /// safety.
+  @visibleForTesting
+  Future<void> dispatchDomainPushesForTests() => _dispatchDomainPushes();
+
+  @visibleForTesting
+  Future<void> dispatchDomainRestoresForTests() => _dispatchDomainRestores();
+
+  Future<void> _dispatchDomainPushes() async {
+    for (final domain in _domains) {
+      if (!SyncFlags.useDomainFor(domain.name)) continue;
+      try {
+        await domain.push();
+      } catch (e, st) {
+        debugPrint('[SyncService._dispatchDomainPushes] ${domain.name}: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_domain_push_${domain.name}'));
+      }
+    }
+  }
+
+  Future<void> _dispatchDomainRestores() async {
+    for (final domain in _domains) {
+      if (!SyncFlags.useDomainFor(domain.name)) continue;
+      try {
+        await domain.restore();
+      } catch (e, st) {
+        debugPrint('[SyncService._dispatchDomainRestores] ${domain.name}: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_domain_restore_${domain.name}'));
+      }
+    }
+  }
 
   /// APK Test #12.7 — class fix for the "HiveUserSession not opened"
   /// silent-sync regression. Call this at the top of every public sync

@@ -403,4 +403,63 @@ extension SyncServiceHealth on SyncService {
       } catch (_) {}
     }
   }
+
+  // ── SyncDomain public forwarders for health helpers (A6 migration) ──
+  // See lib/core/services/sync_flags.dart for the per-domain flag gate.
+
+  static const String _kSyncDomainRestoreSinceHealth = '2020-01-01T00:00:00Z';
+
+  Future<void> pushWeightLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncWeightLogs(userId);
+  }
+
+  Future<void> restoreWeightLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreWeightLogs(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  Future<void> pushMeasurementsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncMeasurements(userId);
+  }
+
+  Future<void> restoreMeasurementsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreMeasurements(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  Future<void> pushSleepLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncSleepLogs(userId);
+  }
+
+  Future<void> restoreSleepLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreSleepLogs(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  Future<void> pushStepsLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncStepsLogs(userId);
+  }
+
+  Future<void> restoreStepsLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreStepsLogs(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  Future<void> pushUrineColorLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncUrineColorLogs(userId);
+  }
 }

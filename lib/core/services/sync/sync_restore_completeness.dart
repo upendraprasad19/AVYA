@@ -396,4 +396,42 @@ extension SyncServiceRestoreCompleteness on SyncService {
       } catch (_) {}
     }
   }
+
+  // ── SyncDomain public forwarders for restore-completeness helpers (A6) ──
+
+  Future<void> restoreFreezesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreFreezes(userId);
+  }
+
+  Future<void> restoreNotificationsInboxForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreNotificationsInbox(userId);
+  }
+
+  Future<void> restoreSavedDietPlanForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreSavedDietPlan(userId);
+  }
+
+  Future<void> restoreRankPromotionsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreRankPromotions(userId);
+  }
+
+  Future<void> restoreReferralCodesForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreReferralCodes(userId);
+  }
+
+  Future<void> restoreReferralRedemptionsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreReferralRedemptions(userId);
+  }
 }

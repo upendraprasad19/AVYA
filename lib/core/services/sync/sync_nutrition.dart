@@ -451,4 +451,45 @@ extension SyncServiceNutrition on SyncService {
       } catch (_) {}
     }
   }
+
+  // ── SyncDomain public forwarders for nutrition helpers (A6 migration) ──
+  // See lib/core/services/sync_flags.dart for the per-domain flag gate.
+
+  static const String _kSyncDomainRestoreSinceNutrition = '2020-01-01T00:00:00Z';
+
+  Future<void> pushNutritionLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncNutritionLogs(userId);
+  }
+
+  Future<void> restoreNutritionLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreNutritionLogs(userId, since ?? _kSyncDomainRestoreSinceNutrition);
+  }
+
+  Future<void> pushWaterLogsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncWaterLogs(userId);
+  }
+
+  Future<void> restoreWaterLogsForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreWaterLogs(userId, since ?? _kSyncDomainRestoreSinceNutrition);
+  }
+
+  Future<void> pushSavedMealsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncSavedMeals(userId);
+  }
+
+  Future<void> restoreSavedMealsForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreSavedMeals(userId);
+  }
 }
