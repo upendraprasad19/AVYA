@@ -484,7 +484,17 @@ findings:
     category: test
     title: "Golden test coverage = exactly 1 file"
     score: 12
-    # NOT YET CLOSED — 5 new goldens pending B2 continuation.
+    terminal_state: closed_in_commit
+    commit: c3e8499
+    verification: test/goldens/wardroom/ — 5 test files, 13 golden PNGs, 15 tests PASS
+    notes: |
+      5 Wardroom primitives covered: WardCard, WardRankInsignia, WardSetChips,
+      WardDashedBorder, WardRankPill (substitution for WardPill — closest
+      matching primitive per audit brief). 13 PNG goldens covering variants
+      (card hero/standard/inset, insignia sd1/ls/lt, set-chips weight-reps/
+      bodyweight/fallback, dashed default/thick, pill lt/sd1).
+      Warmup test cases prime GoogleFonts failure cache so test font
+      fallback works deterministically.
   - id: T15
     category: test
     title: "tool_dispatcher_test.dart 2 forever-skipped tests"
