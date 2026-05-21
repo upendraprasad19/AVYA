@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/profile/repositories/rank_promotion_repository.dart';
 
 /// Theme B · APK Test #8 — single rank promotion record fetched from
 /// the `rank_promotions` table. Consumed only by
@@ -27,23 +28,13 @@ class PromotionRecord {
 /// Returns an empty list on any failure (silent — same fire-and-forget
 /// posture used elsewhere in this codebase) or when the user is not
 /// signed in. The sheet's empty-state handles both branches identically.
+///
+/// Audit A5 (2026-05-21): direct `.from('rank_promotions')` query
+/// moved into [RankPromotionRepository.getRecent] per CLAUDE.md rule #4.
 final promotionHistoryProvider =
     FutureProvider<List<PromotionRecord>>((ref) async {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final user = SupabaseService.instance.currentUser;
   if (user == null) return const [];
-  try {
-    final rows = await SupabaseService.instance.client
-        .from('rank_promotions')
-        .select('rank_code, achieved_at')
-        .eq('user_id', user.id)
-        .order('achieved_at', ascending: false)
-        .limit(5);
-    return (rows as List)
-        .cast<Map<String, dynamic>>()
-        .map(PromotionRecord.fromMap)
-        .toList();
-  } catch (_) {
-    return const [];
-  }
+  return RankPromotionRepository.instance.getRecent(user.id);
 });

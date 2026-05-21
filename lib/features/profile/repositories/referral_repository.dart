@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
@@ -54,13 +56,14 @@ class ReferralRepository {
           .maybeSingle();
       return row != null;
     } catch (e, stack) {
-      // Non-fatal — assume not redeemed if query fails.
-      ErrorTelemetry.recordNonFatal(
+      // Non-fatal — assume not redeemed if query fails. Fire-and-forget
+      // telemetry (ErrorTelemetry.recordNonFatal is safe to drop).
+      unawaited(ErrorTelemetry.recordNonFatal(
         e,
         stack,
         reason: 'referral_repository_has_redeemed',
         extra: {'user_id': userId},
-      );
+      ));
       return false;
     }
   }
@@ -100,12 +103,12 @@ class ReferralRepository {
           'Could not apply that code. Please try again.';
       return RedemptionResult.failure(errorMsg);
     } catch (e, stack) {
-      ErrorTelemetry.recordNonFatal(
+      unawaited(ErrorTelemetry.recordNonFatal(
         e,
         stack,
         reason: 'referral_repository_redeem',
         extra: {'code_format': code.length.toString()},
-      );
+      ));
       return const RedemptionResult.failure(
           'Network error. Try again in a moment.');
     }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/features/profile/repositories/referral_repository.dart';
 
 class ApplyReferralSheet extends ConsumerStatefulWidget {
   const ApplyReferralSheet({super.key});
@@ -57,30 +57,25 @@ class _ApplyReferralSheetState extends ConsumerState<ApplyReferralSheet> {
       _statusMessage = '';
     });
 
-    try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'redeem-referral',
-        body: {'code': _controller.text.trim()},
-      );
-      final body = response.data as Map?;
-      if (response.status == 200) {
-        await SubscriptionService.instance.verifyFromServer();
-        if (mounted) Navigator.of(context).pop(true);
-      } else {
+    // Audit A5 (2026-05-21): direct `Supabase.instance.client.functions
+    // .invoke('redeem-referral', ...)` routed through ReferralRepository.
+    // Repository handles error telemetry + transport-layer fallback msg.
+    final result = await ReferralRepository.instance.redeem(
+      _controller.text.trim(),
+    );
+    if (result.success) {
+      await SubscriptionService.instance.verifyFromServer();
+      if (mounted) Navigator.of(context).pop(true);
+    } else {
+      if (mounted) {
         setState(() {
-          _statusMessage = (body?['error'] as String?) ??
+          _statusMessage = result.errorMessage ??
               'Could not apply that code. Please try again.';
           _statusIsError = true;
         });
       }
-    } catch (e) {
-      setState(() {
-        _statusMessage = 'Network error. Try again in a moment.';
-        _statusIsError = true;
-      });
-    } finally {
-      if (mounted) setState(() => _submitting = false);
     }
+    if (mounted) setState(() => _submitting = false);
   }
 
   @override

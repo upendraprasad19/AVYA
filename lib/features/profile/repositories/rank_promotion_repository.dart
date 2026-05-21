@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/profile/providers/promotion_history_provider.dart'
@@ -39,12 +41,12 @@ class RankPromotionRepository {
           .map(PromotionRecord.fromMap)
           .toList();
     } catch (e, stack) {
-      ErrorTelemetry.recordNonFatal(
+      unawaited(ErrorTelemetry.recordNonFatal(
         e,
         stack,
         reason: 'rank_promotion_repository_get_recent',
         extra: {'user_id': userId, 'limit': limit.toString()},
-      );
+      ));
       return const [];
     }
   }
