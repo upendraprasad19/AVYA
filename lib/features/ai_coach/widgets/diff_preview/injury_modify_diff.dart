@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/injury_swap_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `modify_workout_for_injury` intent.
 ///
@@ -57,11 +56,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not compute changes: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -78,11 +73,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to record the injury anyway.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.textSecondary,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
@@ -100,12 +91,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
             '${_swaps!.length} change${_swaps!.length == 1 ? '' : 's'} across ${byDate.length} day${byDate.length == 1 ? '' : 's'}',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
         ),
         ...byDate.entries.map((entry) {
@@ -121,12 +107,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
               children: [
                 Text(
                   entry.key,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent),
                 ),
                 const SizedBox(height: 8),
                 ...entry.value.map(
@@ -143,11 +124,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
                         Expanded(
                           child: Text(
                             '${s.fromName}  \u2192  ${s.toName}',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                            ),
+                            style: AppTypography.bodyM.copyWith(color: AppColors.textPrimary),
                           ),
                         ),
                       ],

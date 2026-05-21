@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// 2x2 grid showing baseline stats: Age/Gender, Height/Weight,
 /// Activity Level, Body Fat.
@@ -79,23 +79,12 @@ class _BaselineCell extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 8,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 8, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 2),
           Text(
             value,
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
           ),
         ],
       ),

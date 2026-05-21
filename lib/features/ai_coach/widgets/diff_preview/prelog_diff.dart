@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `prelog` intent (Phase C.4).
 ///
@@ -36,11 +35,7 @@ class PrelogDiff extends StatelessWidget {
           failed.isEmpty
               ? 'No meals to pre-log.'
               : 'All ${failed.length} meals failed to parse. Try simpler descriptions.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.textSecondary,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
@@ -87,12 +82,7 @@ class PrelogDiff extends StatelessWidget {
             children: [
               Text(
                 dayLabel,
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent),
               ),
               const SizedBox(width: 8),
               Container(
@@ -104,12 +94,7 @@ class PrelogDiff extends StatelessWidget {
                 ),
                 child: Text(
                   '${dayTotal.toInt()} kcal \u00b7 ${dayProtein.toStringAsFixed(0)}g P',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
                 ),
               ),
             ],
@@ -141,12 +126,7 @@ class PrelogDiff extends StatelessWidget {
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textPrimary,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
+                style: AppTypography.bodySm.copyWith(color: AppColors.textPrimary, height: 1.4),
                 children: [
                   TextSpan(
                     text: m['food_name'] as String? ?? 'Meal',
@@ -155,20 +135,12 @@ class PrelogDiff extends StatelessWidget {
                   if (mealType != null && mealType.isNotEmpty)
                     TextSpan(
                       text: ' ($mealType)',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary),
                     ),
                   TextSpan(
                     text:
                         '\n${m['total_calories'] ?? 0} kcal \u00b7 P${m['total_protein_g'] ?? 0}g C${m['total_carbs_g'] ?? 0}g F${m['total_fat_g'] ?? 0}g',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -197,12 +169,7 @@ class PrelogDiff extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 '${failed.length} failed to parse',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.red,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.red),
               ),
             ],
           ),
@@ -211,11 +178,7 @@ class PrelogDiff extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2, left: 20),
                 child: Text(
                   '\u2022 "${f['original_description']}"',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 10, color: AppColors.textSecondary),
                 ),
               )),
         ],

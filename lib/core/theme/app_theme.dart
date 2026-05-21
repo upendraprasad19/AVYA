@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'colors.dart';
 import 'spacing.dart';
+import 'typography.dart';
 
 /// Wardroom ThemeData — wired to the navy / parchment / Campaign-Gold
 /// tokens in [AppColors], the 3-font system in [AppTypography], and the
@@ -63,12 +63,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.sharp),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        textStyle: GoogleFonts.getFont(
-          'Fraunces',
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 2.5,
-        ),
+        textStyle: AppTypography.buttonLabel,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -79,12 +74,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.sharp),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        textStyle: GoogleFonts.getFont(
-          'Fraunces',
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 2.5,
-        ),
+        textStyle: AppTypography.buttonLabel,
       ),
     ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
@@ -103,9 +93,9 @@ class AppTheme {
   /// .textTheme.headlineMedium` etc. now inherit the new serif voice.
   static TextTheme _buildTextTheme() {
     TextStyle fraunces({Color color = AppColors.textPrimary}) =>
-        GoogleFonts.getFont('Fraunces', color: color);
+        AppTypography.frauncesFamily(color: color);
     TextStyle dmSans({Color color = AppColors.textPrimary}) =>
-        GoogleFonts.getFont('DM Sans', color: color);
+        AppTypography.dmSansFamily(color: color);
 
     return TextTheme(
       displayLarge: fraunces(),

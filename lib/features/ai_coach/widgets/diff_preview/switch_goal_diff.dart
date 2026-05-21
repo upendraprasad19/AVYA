@@ -1,13 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/services/hive_service.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/regenerate_plan_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `switch_goal` intent (Phase D.5).
 ///
@@ -83,11 +82,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not compute switch: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -126,13 +121,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
             children: [
               Text(
                 'GOAL CHANGE',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.proGold,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.proGold, letterSpacing: 0.5),
               ),
               const SizedBox(height: 6),
               Row(
@@ -140,13 +129,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
                   Expanded(
                     child: Text(
                       _humanGoal(_currentGoal ?? 'unknown'),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.lineThrough,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w600, color: AppColors.textSecondary, decoration: TextDecoration.lineThrough),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -157,12 +140,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
                   Expanded(
                     child: Text(
                       _humanGoal(newGoal),
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -173,12 +151,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
               Text(
                 'Profile will be updated and the next ${_plan!.totalWeeks} '
                 'week${_plan!.totalWeeks == 1 ? '' : 's'} regenerated.',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
               ),
             ],
           ),
@@ -189,13 +162,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
           padding: const EdgeInsets.only(bottom: 6),
           child: Text(
             'NEW WEEK 1',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary, letterSpacing: 0.5),
           ),
         ),
 
@@ -208,12 +175,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
             child: Text(
               '+ ${_plan!.additionalDaysCount} more workouts across '
               'weeks 2-${_plan!.totalWeeks}',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic),
             ),
           ),
         ],
@@ -241,24 +203,13 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
             children: [
               Text(
                 _dayLabel(day.date),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.accent,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.5),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   day.workoutName,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -274,12 +225,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'Already completed — keeping the original workout.',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                ),
+                style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
               ),
             )
           else ...[
@@ -289,11 +235,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
                   child: Text(
                     '\u2022 ${ex.name}  ${ex.sets} \u00d7 '
                     '${ex.repsOrDuration}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
+                    style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary),
                   ),
                 )),
           ],
@@ -311,13 +253,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
       ),
       child: Text(
         label,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.5,
-        ),
+        style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5),
       ),
     );
   }

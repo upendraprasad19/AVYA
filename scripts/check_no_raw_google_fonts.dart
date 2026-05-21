@@ -18,12 +18,10 @@
 import 'dart:io';
 
 void main(List<String> args) async {
-  // Force warn-only until C2 codemod completes (175 multi-line callsites
-  // detected 2026-05-21 by the multi-line regex fix). Without the codemod
-  // landing, hard-fail mode would block every commit. Flip back to
-  // `args.contains('--warn-only')` once Gate 37 reports < 5 callsites.
-  // ignore: unused_local_variable
-  final warnOnly = true || args.contains('--warn-only');
+  // Hard-fail mode (audit 2026-05-21, finding C2 codemod landed). All 175
+  // multi-line callsites rewritten to AppTypography.<scale>.copyWith(...).
+  // Use `--warn-only` for diagnostic sweeps only.
+  final warnOnly = args.contains('--warn-only');
   final libDir = Directory('lib');
   if (!libDir.existsSync()) {
     stdout.writeln('[Gate 37] SKIP: lib/ not present.');

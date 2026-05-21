@@ -4244,3 +4244,109 @@ concepts:
       the registry hook can be replaced by
       `ref.listen(authUserIdProvider, (_, __) => state.reset())` and
       this registry deleted.
+
+  - concept: typography_canonical_source
+    domain: design_system
+    description: |
+      `AppTypography` (lib/core/theme/typography.dart) is the single
+      source-of-truth for every text style in the app. All
+      `GoogleFonts.getFont('DM Sans', ...)` / `GoogleFonts.getFont('Fraunces', ...)`
+      / `GoogleFonts.getFont('JetBrains Mono', ...)` invocations live ONLY
+      inside `typography.dart`. Production code reads
+      `AppTypography.<scale>` (e.g. `AppTypography.body`,
+      `AppTypography.bodyM`, `AppTypography.mono`, `AppTypography.h1`,
+      `AppTypography.buttonLabel`) and applies overrides via `.copyWith()`.
+      Codified by tech-debt audit 2026-05-20 finding C2 codemod (landed
+      2026-05-21 on `feat/tech-debt-audit-resume-4` — 175 ad-hoc DM Sans
+      callsites rewritten across 32 files).
+    writers:
+      - file: lib/core/theme/typography.dart
+        line_range: 1-200
+        method: AppTypography (all static fields + family helpers)
+        notes: Wardroom 3-font system (Fraunces / DM Sans / JetBrains Mono). The ONLY file allowed to call GoogleFonts.getFont() directly.
+    reader_manifest_complete: true
+    reader_allow_files:
+      - { file: lib/core/theme/app_theme.dart, reason: "Theme.textTheme bootstrap — uses AppTypography.dmSansFamily / frauncesFamily / buttonLabel" }
+      - { file: lib/features/ai_coach/screens/ai_coach_screen.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/chat_bubble.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/custom_template_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/hotel_workout_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/injury_modify_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/pause_plan_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/prelog_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/regenerate_plan_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/reschedule_week_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/schedule_template_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/swap_exercise_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/tool_confirm_card.dart, reason: "post-codemod reader" }
+      - { file: lib/features/ai_coach/widgets/tool_confirm_sheet.dart, reason: "post-codemod reader" }
+      - { file: lib/features/nutrition/widgets/food_item_tile.dart, reason: "post-codemod reader" }
+      - { file: lib/features/nutrition/widgets/macro_bar.dart, reason: "post-codemod reader" }
+      - { file: lib/features/nutrition/widgets/meal_section.dart, reason: "post-codemod reader" }
+      - { file: lib/features/nutrition/widgets/water_tracker.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/screens/profile_screen.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/baseline_grid.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/menu_item.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/progress_photos_card.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/stat_card.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/widgets/subscription_card.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/challenge_card.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/exercise_sparkline.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/muscle_recovery_map.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/pr_stats_grid.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/rest_timer_modal.dart, reason: "post-codemod reader" }
+      - { file: lib/features/train/widgets/workout_receipt_card.dart, reason: "post-codemod reader" }
+      - { file: lib/shared/widgets/badge_unlock_overlay.dart, reason: "post-codemod reader" }
+      - { file: lib/shared/widgets/pro_locked_overlay.dart, reason: "post-codemod reader" }
+      - { file: lib/shared/widgets/wardroom/**, reason: "Wardroom design primitives may use family helpers + scale constants — out of scope for codemod (define the scales themselves)" }
+    regression_test: test/contracts/no_raw_google_fonts_test.dart
+    hive:
+      box: null
+      key_prefix: ""
+      key_formula: ""
+    cloud:
+      table: null
+      columns: []
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    telemetry:
+      failure_op_types: []
+    forbidden_legacy_patterns:
+      - pattern: |
+          GoogleFonts.getFont(
+            'DM Sans',
+            ...
+          )
+        location: anywhere outside lib/core/theme/typography.dart
+        gate: scripts/check_no_raw_google_fonts.dart (Gate 37, hard-fail mode)
+        regression_test: test/contracts/no_raw_google_fonts_test.dart
+    class_constraints: |
+      Tech-debt audit 2026-05-20 finding C2 (score 15): 175 ad-hoc
+      `GoogleFonts.getFont('DM Sans', fontSize:..., fontWeight:..., color:..., ...)`
+      callsites across 32 feature files defeated:
+        - Font caching (every getFont call re-resolves the font asset)
+        - Theme-level overrides (AppTypography is the single tunable surface)
+        - Palette / scale changes (188-site sweep needed for any tweak)
+      Codemod landed 2026-05-21 (`feat/tech-debt-audit-resume-4`).
+      Mapping policy (DM Sans → AppTypography scale, by (size, weight)):
+        12 / w400 → bodySm
+        13 / w400 → bodyM
+        14 / w400 → body
+        15 / w400 → bodyL
+        15 / w600 → titleS
+        other    → AppTypography.body.copyWith(fontSize: X, fontWeight: Y, ...)
+      Family-seed helpers (`dmSansFamily()`, `frauncesFamily()`) added
+      to AppTypography for the ThemeData.textTheme bootstrap path
+      (`lib/core/theme/app_theme.dart`). `buttonLabel` constant added
+      for the global ElevatedButton/OutlinedButton textStyle (Fraunces
+      12 / w600 / +2.5).
+      Gate 37 (`scripts/check_no_raw_google_fonts.dart`) now hard-fails
+      on any direct `GoogleFonts.getFont('DM Sans'...)` invocation
+      outside `lib/core/theme/typography.dart`. Multi-line aware regex
+      (Dart `RegExp(multiLine: true, dotAll: true)`) catches both
+      single-line and indented multi-line shapes — the prior single-line
+      regex false-passed 175 callsites that the multi-line regex
+      correctly flagged (see feedback_source_grep_false_confidence.md).

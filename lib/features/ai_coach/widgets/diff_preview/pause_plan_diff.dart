@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/pause_plan_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `pause_plan` intent (Phase D.4).
 ///
@@ -65,11 +64,7 @@ class _PausePlanDiffState extends State<PausePlanDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not compute pause: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -101,22 +96,13 @@ class _PausePlanDiffState extends State<PausePlanDiff> {
               Text(
                 '${_plan!.willPauseCount} workout'
                 '${_plan!.willPauseCount == 1 ? "" : "s"} will be paused',
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.proGold,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.proGold),
               ),
               if (reason != null && reason.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
                   'Reason: $reason',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
                 ),
               ],
               if (_plan!.skipCompletedCount > 0 ||
@@ -126,12 +112,7 @@ class _PausePlanDiffState extends State<PausePlanDiff> {
                   '${_plan!.skipCompletedCount} completed + '
                   '${_plan!.skipNoScheduleCount} unscheduled days '
                   'will be skipped',
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
+                  style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                 ),
               ],
             ],
@@ -173,22 +154,13 @@ class _PausePlanDiffState extends State<PausePlanDiff> {
         children: [
           Text(
             _dayLabel(day.date),
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.accent,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
+            style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               day.workoutName ?? '\u2014 No workout scheduled',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 12,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textPrimary),
             ),
           ),
           Container(
@@ -199,12 +171,7 @@ class _PausePlanDiffState extends State<PausePlanDiff> {
             ),
             child: Text(
               badge,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: badgeColor,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: badgeColor),
             ),
           ),
         ],

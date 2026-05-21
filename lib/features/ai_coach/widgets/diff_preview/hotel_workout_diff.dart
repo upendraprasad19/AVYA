@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/hotel_workout_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `generate_hotel_workout` intent.
 ///
@@ -67,11 +66,7 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not generate plan: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -86,11 +81,7 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'No days to plan.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.textSecondary,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
@@ -106,12 +97,7 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
             '$newCount new \u00b7 $replaceCount replace \u00b7 $skipCount skip',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
         ),
         ..._plan!.map(_buildDayCard),
@@ -139,24 +125,13 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
             children: [
               Text(
                 _dayLabel(day.date),
-                style: GoogleFonts.getFont(
-                  'DM Sans',
-                  color: AppColors.accent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
+                style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.5),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   day.workoutName,
-                  style: GoogleFonts.getFont(
-                    'DM Sans',
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -171,23 +146,14 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
           if (day.willSkip)
             Text(
               'Already completed — keeping the original workout.',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
+              style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic),
             )
           else
             ...day.exercises.map((ex) => Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     '\u2022 ${ex.name}  ${ex.sets} \u00d7 ${ex.repsOrDuration}',
-                    style: GoogleFonts.getFont(
-                      'DM Sans',
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
+                    style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
                   ),
                 )),
         ],
@@ -204,13 +170,7 @@ class _HotelWorkoutDiffState extends State<HotelWorkoutDiff> {
       ),
       child: Text(
         label,
-        style: GoogleFonts.getFont(
-          'DM Sans',
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.5,
-        ),
+        style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5),
       ),
     );
   }

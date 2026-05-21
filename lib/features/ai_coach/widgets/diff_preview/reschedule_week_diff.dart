@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/reschedule_week_planner.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Diff preview for a `reschedule_week` intent.
 ///
@@ -62,11 +61,7 @@ class _RescheduleWeekDiffState extends State<RescheduleWeekDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'Could not compute reshuffle: $_error',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.red,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.red),
         ),
       );
     }
@@ -81,11 +76,7 @@ class _RescheduleWeekDiffState extends State<RescheduleWeekDiff> {
         padding: const EdgeInsets.all(16),
         child: Text(
           'No scheduled workouts in this week — nothing to move.',
-          style: GoogleFonts.getFont(
-            'DM Sans',
-            color: AppColors.textSecondary,
-            fontSize: 13,
-          ),
+          style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
         ),
       );
     }
@@ -104,12 +95,7 @@ class _RescheduleWeekDiffState extends State<RescheduleWeekDiff> {
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
             '$keepCount keep \u00b7 $moveCount move \u00b7 $dropCount drop',
-            style: GoogleFonts.getFont(
-              'DM Sans',
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
         ),
         ..._moves!.map(_buildMoveRow),
@@ -164,24 +150,14 @@ class _RescheduleWeekDiffState extends State<RescheduleWeekDiff> {
             ),
             child: Text(
               label,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 10, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               detail,
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 13,
-              ),
+              style: AppTypography.bodyM.copyWith(color: AppColors.textPrimary),
             ),
           ),
         ],

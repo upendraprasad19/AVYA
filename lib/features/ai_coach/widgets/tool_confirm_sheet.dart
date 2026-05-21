@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Bottom sheet modal for `destructive` confirmation class tool intents.
 ///
@@ -98,12 +97,7 @@ class _ToolConfirmSheetState extends ConsumerState<ToolConfirmSheet> {
               widget.intent.previewSummary.isNotEmpty
                   ? widget.intent.previewSummary
                   : 'Confirm action',
-              style: GoogleFonts.getFont(
-                'DM Sans',
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 16),
             Flexible(child: SingleChildScrollView(child: widget.diffPreview)),
@@ -119,11 +113,7 @@ class _ToolConfirmSheetState extends ConsumerState<ToolConfirmSheet> {
                     ),
                     child: Text(
                       'Cancel',
-                      style: GoogleFonts.getFont(
-                        'DM Sans',
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                     ),
                   ),
                 ),
@@ -147,10 +137,7 @@ class _ToolConfirmSheetState extends ConsumerState<ToolConfirmSheet> {
                           )
                         : Text(
                             'Confirm',
-                            style: GoogleFonts.getFont(
-                              'DM Sans',
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: AppTypography.body.copyWith(fontWeight: FontWeight.w800),
                           ),
                   ),
                 ),
