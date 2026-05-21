@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// Verifies that the null-safety guards introduced in fix/crash-safety are
 /// present in the source files. Two styles of test:
@@ -68,8 +69,11 @@ void main() {
     });
 
     test('active_workout_screen.dart guards exercise_type .first with isNotEmpty', () {
+      // C3 — file split. The picker `_showExercisePickerSheet` was moved
+      // to active_workout/swap_sheets.dart, which is where the exercise_type
+      // isNotEmpty guard now lives.
       final src = _src(
-          'lib/features/train/screens/active_workout_screen.dart');
+          'lib/features/train/screens/active_workout/swap_sheets.dart');
       // The fix wraps the .first call inside an isNotEmpty conditional block.
       final isNotEmptyIdx = src.indexOf(
           "(exerciseData['exercise_type'] as List).isNotEmpty");
@@ -86,13 +90,13 @@ void main() {
 
   group('Task 3 – todayDay! force-unwrap removed', () {
     test('train_screen.dart has no todayDay! force-unwrap', () {
-      final src = _src('lib/features/train/screens/train_screen.dart');
+      final src = readScreenSource('train');
       expect(src, isNot(contains('todayDay!')),
           reason: 'todayDay! force-unwrap must be replaced with null check');
     });
 
     test('train_screen.dart uses null-safe isDoneToday && todayDay != null', () {
-      final src = _src('lib/features/train/screens/train_screen.dart');
+      final src = readScreenSource('train');
       expect(src, contains('isDoneToday && todayDay != null'));
     });
   });

@@ -24,8 +24,10 @@ void main() {
   test(
       's1n4c0 — onAdd "__ADD_MODE__" handler pops outer swap sheet before opening create sheet',
       () {
+    // C3 (tech-debt audit 2026-05-20) — file split; swap-sheet/onAdd handler
+    // now lives in active_workout/swap_sheets.dart.
     final src = File(
-            'lib/features/train/screens/active_workout_screen.dart')
+            'lib/features/train/screens/active_workout/swap_sheets.dart')
         .readAsStringSync();
 
     // Strip block + line comments so the test does not match the

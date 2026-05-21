@@ -26,8 +26,11 @@ void main() {
   late String migrationSrc;
 
   setUpAll(() {
+    // C3 (tech-debt audit 2026-05-20) — file split into siblings under
+    // lib/features/train/screens/active_workout/. The reps validation
+    // logic now lives in exercise_card.dart.
     activeWorkoutSrc =
-        File('lib/features/train/screens/active_workout_screen.dart')
+        File('lib/features/train/screens/active_workout/exercise_card.dart')
             .readAsStringSync();
     migrationSrc = File(
             'supabase/migrations/060_workout_log_exercises_realistic_bounds.sql')

@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('active_workout_screen didUpdateWidget set count handling (F8)', () {
     test('does not call _disposeControllers + _initControllers full rebuild', () {
+      // C3 (tech-debt audit 2026-05-20) — _ExerciseCard moved to
+      // active_workout/exercise_card.dart.
       final source = File(
-        'lib/features/train/screens/active_workout_screen.dart',
+        'lib/features/train/screens/active_workout/exercise_card.dart',
       ).readAsStringSync();
 
       // Find the didUpdateWidget body for _ExerciseCardState (not _WarmupCooldownSection).
@@ -56,8 +58,10 @@ void main() {
     });
 
     test('uses append/shrink loop for controller list mutations', () {
+      // C3 (tech-debt audit 2026-05-20) — _ExerciseCard moved to
+      // active_workout/exercise_card.dart.
       final source = File(
-        'lib/features/train/screens/active_workout_screen.dart',
+        'lib/features/train/screens/active_workout/exercise_card.dart',
       ).readAsStringSync();
 
       // Confirm the new pattern is in place: a for loop appending or
@@ -74,8 +78,10 @@ void main() {
     });
 
     test('all four controller lists are grown/shrunk in the same loop', () {
+      // C3 (tech-debt audit 2026-05-20) — _ExerciseCard moved to
+      // active_workout/exercise_card.dart.
       final source = File(
-        'lib/features/train/screens/active_workout_screen.dart',
+        'lib/features/train/screens/active_workout/exercise_card.dart',
       ).readAsStringSync();
 
       // All four controller lists (_weightControllers, _repsControllers,

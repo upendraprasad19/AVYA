@@ -16,7 +16,7 @@ import 'package:icanbefitter/features/onboarding/screens/details_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/plan_screen.dart';
 import 'package:icanbefitter/features/home/screens/home_screen.dart';
 import 'package:icanbefitter/features/train/screens/train_screen.dart';
-import 'package:icanbefitter/features/train/screens/active_workout_screen.dart';
+import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
 import 'package:icanbefitter/features/train/screens/graduation_screen.dart';
 import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
