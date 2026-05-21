@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
 /// Result of [UserRepository.clearAllData]. Test #10.1 — surfaces
@@ -46,15 +47,21 @@ class UserRepository {
   }
 
   /// Saves/updates the user profile.
+  ///
+  /// Routes through [ProfileWriteService] per audit 2026-05-20 A4 so
+  /// the canonical write chokepoint stamps `updated_at` and fires
+  /// `SyncService.syncProfileNow` for upstream propagation.
   Future<void> saveProfile(Map<String, dynamic> profile) async {
-    await _hive.userBox.put('profile', profile);
+    await ProfileWriteService.instance.updateProfile(profile);
   }
 
   /// Updates individual profile fields without overwriting others.
+  ///
+  /// Routes through [ProfileWriteService.patchProfile] so the merge
+  /// happens under the service's mutex (preventing read-modify-write
+  /// races with concurrent goal/weight writers).
   Future<void> updateProfileFields(Map<String, dynamic> fields) async {
-    final current = getProfile() ?? {};
-    current.addAll(fields);
-    await saveProfile(current);
+    await ProfileWriteService.instance.patchProfile(fields);
   }
 
   // ── Progress ────────────────────────────────────────────────

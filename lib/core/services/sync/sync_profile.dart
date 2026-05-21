@@ -267,7 +267,11 @@ extension SyncServiceProfile on SyncService {
         // the `users` row was found.
         'id': userId,
       };
-      await _hive.userBox.put('profile', merged);
+      // Audit 2026-05-20 A4 — restore-class write routed through
+      // canonical service with skipSync: true. The data we just merged
+      // came FROM cloud; re-pushing it would create a redundant
+      // upsert loop on every restore.
+      await ProfileWriteService.instance.updateProfile(merged, skipSync: true);
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProfile] $e');
       // audit-2026-05-11 H-42 — telemetry pair.

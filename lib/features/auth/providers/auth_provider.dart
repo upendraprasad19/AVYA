@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 // ── Auth State Stream ───────────────────────────────────────────
@@ -612,7 +613,10 @@ class AuthNotifier extends Notifier<AuthState2> {
         };
         merged['id'] = user.id;
         merged['email'] = user.email;
-        await userBox.put('profile', merged);
+        // Restore-class: cloud → Hive hydration. Skip sync fan-out
+        // since the source IS cloud — pushing back would create a
+        // redundant upsert loop. Audit 2026-05-20 A4.
+        await ProfileWriteService.instance.updateProfile(merged, skipSync: true);
         await MigratedKey.write('onboarding_completed', true);
 
         // Also pull progress (same merge semantics — rare to have local
@@ -749,12 +753,20 @@ class AuthNotifier extends Notifier<AuthState2> {
 
     // Create minimal local profile if nothing was restored and Hive is still
     // empty (genuine new user, or offline with no prior local data).
+    //
+    // Audit 2026-05-20 A4 — routed through canonical write service.
+    // skipSync: true because the user_profile cloud row is created
+    // by the onboarding sync path; the minimal stub here doesn't yet
+    // have the foreign-key fields the upsert would need.
     if (userBox.get('profile') == null) {
-      await userBox.put('profile', {
-        'id': user.id,
-        'email': user.email,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      await ProfileWriteService.instance.updateProfile(
+        {
+          'id': user.id,
+          'email': user.email,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+        skipSync: true,
+      );
     }
 
     // Last-ditch gap closer: if cloud still has no user_profile row, push

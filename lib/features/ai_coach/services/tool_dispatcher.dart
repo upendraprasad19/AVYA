@@ -25,6 +25,7 @@ import '../../home/providers/home_provider.dart'
 import '../../nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
 import '../../nutrition/repositories/nutrition_repository.dart';
+import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
@@ -885,20 +886,22 @@ class ToolDispatcher {
       );
     }
 
-    // 1. Profile write.
+    // 1. Profile write — routed through canonical service
+    //    (audit 2026-05-20 A4). patchProfile merges under the
+    //    service's mutex so a concurrent home-screen weight write
+    //    can't race-clobber the goal change.
     final userBox = HiveService.instance.userBox;
     final rawProfile = userBox.get('profile');
     if (rawProfile is! Map) {
       return const ToolExecutionResult.failure('Profile not found.');
     }
-    final updatedProfile = Map<String, dynamic>.from(rawProfile);
-    final oldGoal = updatedProfile['primary_goal']?.toString();
-    updatedProfile['primary_goal'] = newGoal;
-    updatedProfile['goal_changed_at'] =
-        DateTime.now().toIso8601String();
-    updatedProfile['goal_changed_via'] = 'ai_coach';
-    updatedProfile['previous_goal'] = oldGoal;
-    await userBox.put('profile', updatedProfile);
+    final oldGoal = (rawProfile['primary_goal'])?.toString();
+    await ProfileWriteService.instance.patchProfile({
+      'primary_goal': newGoal,
+      'goal_changed_at': DateTime.now().toIso8601String(),
+      'goal_changed_via': 'ai_coach',
+      'previous_goal': oldGoal,
+    });
 
     // 2. Schedule writes (same shape as regenerate_plan_block).
     final wbox = HiveService.instance.workoutBox;

@@ -1233,9 +1233,15 @@ class CustomFoodNotifier extends Notifier<void> {
     // the next plan generation (indices are rebuilt lazily on next call).
     DietPlanGenerator.instance.clearCache();
 
-    // Sync (Plan D Task 1): single-item upsert + full custom-items
-    // projection (mirror of Train) + AI snapshot.
-    unawaited(NutritionRepository.syncCustomFoodToSupabase(data: food));
+    // Sync (Plan D Task 1): batch sync covers single-item upsert.
+    //
+    // Audit 2026-05-20 / A8: removed the parallel
+    // `NutritionRepository.syncCustomFoodToSupabase(...)` call here.
+    // It was a fire-and-forget INSERT into `user_custom_foods` that
+    // duplicated `syncCustomItemsNow()` (which performs the same upsert
+    // through the canonical telemetry-aware sync path). The static
+    // method swallowed errors via `debugPrint` and bypassed the
+    // rate-limit-aware `ErrorTelemetry` sink (silent-drop class).
     unawaited(SyncService.instance.syncCustomItemsNow());
     unawaited(SyncService.instance.pushSnapshot());
   }
