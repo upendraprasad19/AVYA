@@ -19,8 +19,10 @@ audit_name: tech_debt_six_category_v1
 total_findings: 81
 # 21 closed in B1 (commit 00aad86 → merge 2717f08)
 # 6 closed in B2-partial (commit 4a30bf1 → merge ed26a28)
-# Remaining ~54 land across B2-continuation, B3, B4.
-closed_count: 27
+# 2 closed in B2-continuation (commit c389570 → merge d143ada): A4, A8
+# 4 closed in B3-partial (commit d413891 → merge 1ba49e7): D5, D6, D10, D15-partial
+# Remaining ~49 land across B2-architecture, B3-continuation, B4.
+closed_count: 32
 
 findings:
 
@@ -258,12 +260,18 @@ findings:
     category: dependency
     title: "firebase_core / firebase_crashlytics minor lag"
     score: 20
-    # NOT YET CLOSED — bump pending B3 dep sweep.
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: pubspec.yaml inspection
+    notes: "firebase_core 4.7.0 → 4.9.0; firebase_crashlytics 5.2.0 → 5.2.2 (NDK symbol-upload race fix)."
   - id: D6
     category: dependency
     title: "speech_to_text minor lag"
     score: 20
-    # NOT YET CLOSED — bump pending B3.
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: pubspec.yaml inspection
+    notes: "7.0.0 → 7.4.0."
   - id: D7
     category: dependency
     title: "Single-callsite qr_flutter + flutter_svg"
@@ -285,7 +293,10 @@ findings:
     category: dependency
     title: "No Renovate / Dependabot"
     score: 25
-    # NOT YET CLOSED — .github/dependabot.yml pending B3.
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: .github/dependabot.yml
+    notes: "Weekly schedule for pub + github-actions. Ignored: flutter (manual pin), share_plus + analyzer (upstream-blocked)."
   - id: D11
     category: dependency
     title: "zod@v3.23.8 pinned across 20+ tool files"
@@ -316,7 +327,13 @@ findings:
     category: dependency
     title: "Stale lock file vs pubspec — 32 upgradable transitives"
     score: 20
-    # NOT YET CLOSED — lock-file refresh pending B3.
+    # PARTIAL — flutter pub upgrade in commit d413891 reduced stale
+    # transitives from 56 to 47. Remaining 47 tracked by Dependabot (D10
+    # closure). Treat as closed_in_commit + tracked-by-bot.
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: "flutter pub outdated (47 stale, all minor)"
+    notes: "Initial bulk refresh done; ongoing transitive bumps now Dependabot-driven (D10)."
 
   # ── Documentation debt (15) ────────────────────────────────────
   - id: Doc1
