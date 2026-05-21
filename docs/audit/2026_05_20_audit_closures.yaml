@@ -94,7 +94,19 @@ findings:
     category: code
     title: "active_workout_screen.dart 2430 lines / 4 nested classes"
     score: 14
-    # NOT YET CLOSED — split lands B2 step 13.
+    terminal_state: closed_in_commit
+    commit: 7d89b76
+    verification: scripts/check_god_screen_max_lines.dart (Gate 43) + lib/features/train/screens/active_workout/
+    notes: |
+      2408 lines → 9-file sibling-folder split. screen.dart = 456 lines
+      (well under 800 ceiling). Files: screen, exercise_card, exercise_picker_sheet,
+      finish_dialog, warmup_cooldown_section, swap_sheets, completion_sheet,
+      header, overload_indicator. Used Dart part/part-of so private widgets
+      keep underscore visibility without renames.
+      Callers updated: app_router.dart + 4 test files.
+      All 32 impacted tests pass (rep validation + swap undo + null guard +
+      set add/append).
+      Gate 43 PASS for active_workout/screen.dart (456 < 800).
   - id: C4
     category: code
     title: "train/profile/ai_coach screens at god-screen scale"
