@@ -2,7 +2,8 @@
 scope: nutrition
 parent: ../../../CLAUDE.md
 created: 2026-05-18
-status: scaffold
+updated: 2026-05-21
+status: active
 ---
 
 # Nutrition — Local Rules
@@ -10,11 +11,34 @@ status: scaffold
 > This file is auto-loaded by Claude Code when working under `lib/features/nutrition/`.
 > Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
 
-<!-- MIGRATION IN PROGRESS — content from CLAUDE.md will be moved here in Milestone 2 -->
+## What lives here
+
+`lib/features/nutrition/` owns the 🥗 Nutrition tab + Diet Plan flow.
+
+Screens / sections:
+
+- `nutrition_screen.dart` — top targets + today's macros + 2-tab Log Food (AI text + Scan meal) + saved meals + water + today's meals card (from saved diet plan).
+- `food_search_sheet.dart` — 5K-food search (Hive `food_database` box) + per-serving math + save to meal slot.
+- `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `food-text-analysis` Edge Function → AI breakdown card.
+- `scan_meal_section.dart` — photo capture → `food-scan-analysis` (Gemini Flash Lite) → editable result via `_ScanResultEditor`.
+- `cart_auditor_section.dart` — paste / photograph grocery cart → AI macro/cost audit.
+- `diet_plan_screen.dart` — generated diet plan + PDF export.
+- `water_section.dart` — `WardGlassGrid` 8-cell tracker.
+
+Service layer: `lib/core/services/nutrition_write_service.dart` (single writer
+for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`.
 
 ## Single-source-of-truth contracts
 
-(populated in Milestone 2)
+| Concept | Writer | Reader |
+|---|---|---|
+| `nutrition_total_calories` | `nutrition_write_service.dart` `logMeal` | `nutrition_read_service.dart` + home `TodayMacrosCard` + nutrition screen. **Hive key:** `nlog_${istDateStr(date)}_${hashCode}` (`hive_field_name_nlog` SoT). |
+| `food_log_delete_with_undo` | `nutrition_write_service.dart` `deleteWithUndo` (soft-delete with 5s timer + restore-on-tap) | `food_log_list_section.dart`. |
+| `saved_meals` | `nutrition_write_service.dart` `saveMeal` | `saved_meals_section.dart` quick-log. |
+| `water_logs` | `health_write_service.dart` `logWater` (water is a health/nutrition cross-feature concept) | `water_section.dart` `WardGlassGrid`. |
+| `water_target` | `water_target_service.dart` (Hive `configBox['water_target_ml']`) | `waterTargetProvider`. |
+| `diet_plan_saved_loaded` | `diet_plan_screen.dart` `_savePlan` → `configBox['saved_diet_plan']` + `ref.invalidate(dietPlanProvider)` | `TodaysMealsCard` renders "FROM YOUR DIET PLAN" hints on empty slots. |
+| `food_text_analysis` daily cap | server-side trigger `trg_food_text_rate_limit` (migration 024) — 50/day free, 200/day PRO. Insert-first pattern: `ai-proxy` inserts placeholder row BEFORE Gemini. | client error mapping returns 429 → "limit reached". |
 
 ## Common pitfalls
 
@@ -28,4 +52,19 @@ status: scaffold
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/contracts/nutrition_total_calories_writer_to_reader_test.dart`
+- `test/contracts/food_log_delete_with_undo_writer_to_reader_test.dart`
+- `test/contracts/food_log_notifier_to_nutrition_log_items_test.dart`
+- `test/contracts/food_log_id_and_name_test.dart`
+- `test/contracts/food_text_analysis_daily_cap_test.dart`
+- `test/contracts/diet_plan_saved_loaded_writer_to_reader_test.dart`
+- `test/contracts/saved_meals_writer_to_reader_test.dart`
+- `test/contracts/water_logs_writer_to_reader_test.dart`
+
+## See also
+
+- `lib/features/ai_coach/CLAUDE.md` — AI breakdown card + tool dispatcher routing.
+- `lib/core/services/CLAUDE.md` — `NutritionWriteService` + sync fan-out + counters.
+- `supabase/functions/CLAUDE.md` — `food-text-analysis`, `food-scan-analysis`, `cart-auditor` Edge Functions.
+- `docs/architecture/business-rules.md` — calorie/protein formulas.
+- `docs/reference/food-database.md` — Hive food_database box (5K rows).

@@ -47,7 +47,34 @@ Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/appli
 
 ## Single-source-of-truth contracts
 
-(populated in Milestone 2 — when canonical writer→DB-target table mappings are extracted from the diagnose-doc history)
+Migrations themselves are not SoT-bearing objects, but each migration **lands a
+schema change that becomes part of an existing SoT concept**. The full
+writer→DB-target table mapping lives in `docs/sot_registry.yaml` (each entry's
+`cloud:` block lists the canonical `table:` + `columns:`).
+
+Selected canonical table → concept mappings ("when you touch this table, which
+SoT concept's columns must stay in sync"):
+
+| Table | SoT concept(s) | Canonical writer |
+|---|---|---|
+| `workout_log_exercises` | `workout_receipt_rendering`, `exercise_logs_read_path` | `WorkoutWriteService.logExercise` |
+| `workout_logs` | `workout_completion_status` | `WorkoutWriteService.completeWorkout` |
+| `scheduled_workouts` | `scheduled_workouts_mutations` | `WorkoutScheduleService.upsertScheduled` → `WorkoutWriteService` |
+| `nutrition_logs` + `nutrition_log_items` | `nutrition_total_calories`, `food_log_delete_with_undo` | `NutritionWriteService.logMeal` |
+| `water_logs` / `weight_logs` / `sleep_logs` | `water_logs` / `weight_logs` / `sleep_logs` | `HealthWriteService` |
+| `users` | `user_full_name` | onboarding `completeOnboarding` + `users` upsert |
+| `user_profile` | `onboarding_completed_at` + most profile fields | `ProfileWriteService` + onboarding |
+| `subscriptions` | `subscription_state`, `subscription_payment_grace_window` | `verify-payment` Edge Function + `razorpay-webhook` |
+| `ai_coach_interactions` | `coach_interactions`, `food_text_analysis_daily_cap` | `ai-proxy` Edge Function + `ai_coach_repository` |
+| `coach_memory` | `coach_memory_coach_notes_upward_sync` | `ai_coach_repository` upward sync |
+| `rank_promotion_log` | `rank_promotion_log` | server-side `evaluate-rank-promotions` cron |
+| `client_errors` | `log_client_error_payload` | client `ErrorTelemetry.recordNonFatal` → `log-client-error` Edge Function |
+
+When adding a column, drop a column, or change a constraint:
+1. Confirm the migration header tags (above) — `Destructive?` + `Rollback strategy` + `Linked diagnose-doc`.
+2. Update the matching SoT registry entry's `cloud.columns` list in the **same git commit**.
+3. Update `backups/applied_migrations.json` in the same commit.
+4. Update any contract test under `test/contracts/` whose `behavioral_test_path` exercises the column.
 
 ## Common pitfalls
 
@@ -58,4 +85,15 @@ Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/appli
 
 ## Tests pinning the rules here
 
-(populated in Milestone 6)
+- `test/contracts/applied_migrations_parity_test.dart` — every `mcp__supabase__apply_migration` call must be reflected in `backups/applied_migrations.json`.
+- `test/contracts/dead_columns_dropped_test.dart` — flags columns dropped via migration but still referenced in code.
+- `test/contracts/migration_header_contract_test.dart` — fails if any migration file is missing the four-line header.
+- `test/contracts/onconflict_live_arbiter_test.dart` — partial UNIQUE index + ON CONFLICT live INSERT contract (migration 064 / APK Test #16).
+- `scripts/check_onconflict_live_arbiter.dart` — permanent gate from APK Test #16.
+
+## See also
+
+- `docs/architecture/database.md` — full 46-table schema.
+- `docs/sot_registry.yaml` — per-concept `cloud.table` + `cloud.columns`.
+- `backups/applied_migrations.json` — manifest of applied migrations.
+- Root CLAUDE.md §4.5 — `feedback_migration_apply_record_pair.md` enforcement.
