@@ -54,7 +54,8 @@ dependencies:
   share_plus: ^12.0.2
   path_provider: ^2.1.0
   qr_flutter: ^4.1.0
-  speech_to_text: ^7.0.0
+  # Tech-debt audit 2026-05-20 / D6: bumped from ^7.0.0 → ^7.4.0.
+  speech_to_text: ^7.4.0
   http: ^1.6.0
   # flutter_dotenv removed — env vars now injected at build time via
   # --dart-define-from-file=.env (never bundled in APK).
@@ -63,8 +64,10 @@ dependencies:
   onesignal_flutter: ^5.5.4
   # Crashlytics — added 2026-04-18 for beta distribution (audit Q3).
   # Firebase project (AVYA) already has google-services.json wired.
-  firebase_core: ^4.7.0
-  firebase_crashlytics: ^5.2.0
+  # Tech-debt audit 2026-05-20 / D5: bumped 4.7.0 → 4.9.0 and 5.2.0 → 5.2.2
+  # (NDK symbol-upload race fix in 5.2.2).
+  firebase_core: ^4.9.0
+  firebase_crashlytics: ^5.2.2
   # intl_phone_field — country-aware phone input for sign-in (India default,
   # 10-digit validation, auto-strips leading 0, emits full E.164 for Supabase
   # auth.signInWithOtp).
