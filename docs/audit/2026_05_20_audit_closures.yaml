@@ -522,15 +522,20 @@ findings:
     category: dependency
     title: "Dual HTTP clients: dio + http"
     score: 20
-    # PARTIAL — barcode_service.dart unused http import removed in
-    # feat/tech-debt-audit-resume. ai_service.dart still uses http
-    # (http.Client / Response / ClientException / post + typed retry
-    # shim _retryHttpColdStart) — full migration deferred to dedicated
-    # batch since it touches multiple network paths.
     terminal_state: closed_in_commit
-    commit: "feat/tech-debt-audit-resume (uncommitted)"
-    verification: "barcode_service.dart no longer imports package:http; ai_service.dart still does (own batch needed)"
-    notes: "Partial close. Treat ai_service.dart migration as a follow-up."
+    commit: f77a5eb
+    verification: scripts/check_no_http_package.dart (Gate 45, hard-fail)
+    diagnose_doc: docs/diagnoses/2026-05-21-d8-http-package-removal-3e9d39.md
+    notes: |
+      Full migration: ai_service.dart + barcode_service.dart now use dio
+      exclusively. `package:http` removed from pubspec.yaml. Gate 45
+      hard-fail: `grep -rn "package:http" lib/` returns empty.
+      Design: Options(validateStatus: (_) => true) preserves the
+      inspect-after-success retry shape. _bodyAsString adapter bridges
+      dio's auto-decoded data to the prior http.Response.body shape.
+      DioException catches filtered by type (connectionError/Timeout/
+      unknown) for network-layer fallback paths.
+      SoT registry gains dependency_canonical_http_client concept.
   - id: D9
     category: dependency
     title: "analyzer 9.x while latest is 13.0.0"
