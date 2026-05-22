@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
@@ -677,6 +678,11 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       return;
     }
 
+    // Theme I (diagnose <id>) — stopwatch must be declared BEFORE the try
+    // block because the catch block references it for the
+    // food_ai_call_failed ms field. Variables declared inside try{} are
+    // not in scope inside catch{} in Dart.
+    final stopwatch = Stopwatch()..start();
     try {
       // F11 — refresh subscription cache to avoid stale-PRO/free state after restore.
       // Cheap (~50ms hit if cache miss); resolves the most-likely cause of
@@ -689,15 +695,35 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
         // authoritative gate.
       }
 
+      // Theme I (diagnose <id>) — instrument the food-AI call. Pre-fix
+      // founder hit a silent "AI is temporarily unavailable" toast 2026-
+      // 05-21 and we had ZERO per-call telemetry to tell us whether it
+      // was a cold-start 502/503/504 (retried + still failed), a 500
+      // (no retry budget), a Gemini timeout, or something else. Three
+      // events cover the lifecycle:
+      //   - food_ai_call_initiated (BEFORE call, with text length)
+      //   - food_ai_call_succeeded (on 2xx, with ms latency)
+      //   - food_ai_call_failed    (on throw, with status + error_class + ms)
+      unawaited(ErrorTelemetry.logEvent('food_ai_call_initiated',
+          message: 'fn=food_text_analysis text_len=${text.length}'));
+
       final response = await SupabaseService.instance.callFunction(
         AppConstants.aiProxyFunction,
         body: {
           'type': 'food_text_analysis',
           'text': text,
         },
+        // Theme I — opt into 500-retry. ai-proxy returns 500 on transient
+        // Gemini upstream timeouts; retry budget [2000, 6000, 12000] ms
+        // catches those without changing global retry behavior for other
+        // Edge Functions where a 500 is a caller bug.
+        retryOn500: true,
       );
 
       if (response.status == 200 && response.data != null) {
+        unawaited(ErrorTelemetry.logEvent('food_ai_call_succeeded',
+            message:
+                'fn=food_text_analysis ms=${stopwatch.elapsedMilliseconds} status=${response.status}'));
         final data = response.data is String
             ? jsonDecode(response.data as String) as Map<String, dynamic>
             : response.data as Map<String, dynamic>;
@@ -743,12 +769,23 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       unawaited(ErrorTelemetry.logEvent('nutrition_ai_text_analyse_failed',
           message: clippedFull));
 
+      // Theme I (diagnose <id>) — extract HTTP status for typed telemetry
+      // + better user-facing toast. FunctionException carries .status.
+      final int? httpStatus = e is FunctionException ? e.status as int? : null;
+      unawaited(ErrorTelemetry.logEvent('food_ai_call_failed',
+          message:
+              'fn=food_text_analysis ms=${stopwatch.elapsedMilliseconds} '
+              'status=${httpStatus ?? 'n/a'} error_class=${e.runtimeType}'));
+
       final msg = e.toString().toLowerCase();
       final isAuthError = msg.contains('401') || msg.contains('token') ||
                           msg.contains('unauthorized') || msg.contains('jwt') ||
                           msg.contains('no active session') || msg.contains('session expired');
+      // Theme I — include 500 in the service-error set (matches the new
+      // retryOn500=true behavior; if all retries exhausted, surface as
+      // service error rather than caller bug).
       final isServiceError = msg.contains('503') || msg.contains('502') ||
-                             msg.contains('504') ||
+                             msg.contains('504') || msg.contains('500') ||
                              msg.contains('unavailable') || msg.contains('non-2xx') ||
                              msg.contains('food ai') || msg.contains('food analysis failed');
       // Layer 4 — increment circuit breaker counter on service errors
@@ -784,6 +821,14 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       unawaited(ErrorTelemetry.logEvent(
           'nutrition_ai_text_analyse_apology_shown',
           message: clippedFull));
+      // Theme I (diagnose <id>) — surface the underlying HTTP status in the
+      // service-error toast so the user can distinguish "Gemini upstream
+      // hiccup, retry will probably work" from "regional outage, take a
+      // break". Falls back to the generic "temporarily unavailable" copy
+      // when no status was captured (e.g. network DNS failure).
+      final serviceErrorMsg = httpStatus != null
+          ? 'The AI is offline ($httpStatus). Please try again in a minute.'
+          : 'The AI is temporarily unavailable. Please try again in a minute.';
       final errorMsg = isRateLimitError
           ? 'Daily food analysis limit reached. Try again tomorrow or upgrade to PRO.'
           : isAuthError
@@ -793,7 +838,7 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
                   : isSnapshotTooLarge
                       ? 'Your nutrition data is unusually large. Please try a shorter question.'
                       : isServiceError
-                          ? 'The AI is temporarily unavailable. Please try again in a minute.'
+                          ? serviceErrorMsg
                           : 'Could not analyse that. Please try a clearer description.';
       state = AiBreakdownData(
         mealName: text,
