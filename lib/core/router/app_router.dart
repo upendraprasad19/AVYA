@@ -19,6 +19,7 @@ import 'package:icanbefitter/features/train/screens/train/screen.dart';
 import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
 import 'package:icanbefitter/features/train/screens/template_builder_screen.dart';
 import 'package:icanbefitter/features/train/screens/graduation_screen.dart';
+import 'package:icanbefitter/features/train/screens/phase_history_screen.dart';
 import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
 import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
@@ -339,6 +340,17 @@ class AppRouter {
                     name: 'phaseRoadmap',
                     builder: (context, state) =>
                         const PhaseRoadmapScreen(),
+                  ),
+                  // Theme H-followup (diagnose 2026-05-22 5cb912) —
+                  // founder's "scroll back to see completed phases"
+                  // wish. Reads schedule_* + workout_logs from Hive,
+                  // groups by phase boundaries, surfaces stats per
+                  // completed phase.
+                  GoRoute(
+                    path: 'history',
+                    name: 'phaseHistory',
+                    builder: (context, state) =>
+                        const PhaseHistoryScreen(),
                   ),
                   GoRoute(
                     path: 'preview',

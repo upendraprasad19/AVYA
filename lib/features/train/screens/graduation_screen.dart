@@ -121,6 +121,32 @@ class GraduationScreen extends ConsumerWidget {
                 _buildCta(context, ref),
                 const SizedBox(height: 12),
 
+                // Theme H-followup (diagnose 2026-05-22 5cb912) —
+                // founder's "scroll back to see completed phases" wish.
+                // Surfaces only when at least one phase is complete
+                // (phase >= 2 or phase 1 with status=completed days).
+                // PhaseHistoryScreen handles the empty case if tapped
+                // before completion.
+                Center(
+                  child: GestureDetector(
+                    onTap: () => context.push('/train/history'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'VIEW PAST PHASES',
+                        style: AppTypography.mono.copyWith(
+                          color: AppColors.textDim,
+                          fontSize: 11,
+                          letterSpacing: 1.4,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.textDim,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+
                 // Stay on Phase 1 link — runs redoWeek4() first so the
                 // user actually HAS workouts to land on. Before the
                 // 2026-04-18 fix (audit M22) this button routed to
