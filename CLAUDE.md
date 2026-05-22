@@ -415,5 +415,10 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry (41 lenses) | `docs/audit/LENS_REGISTRY.md` |
+| Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |
+| Device-CI runner + 4 critical Patrol flows | `docs/operations/DEVICE_TESTING.md` + `scripts/run-device-tests.sh` |
+| Cron registry | `docs/operations/CRON_REGISTRY.md` (Gate 31) |
+| Secret inventory | `docs/operations/SECRET_INVENTORY.md` |
+| Fresh clone onboarding | `docs/onboarding/FRESH_CLONE.md` |
 | Subagent brief preamble | `docs/agent_brief_preamble.md` |
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
