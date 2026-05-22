@@ -1732,54 +1732,54 @@ final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
   final totalWorkouts = (progress['total_workouts_done'] as int?) ?? 0;
   final streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
 
-  // Calculate total sets and PRs from workout box
+  // Bug 2026-05-22 / diagnose <id> — 10th writer/reader drift instance.
+  // Pre-fix this provider iterated workoutBox.values, filtered by
+  // log['type'] == 'exercise_log' (a field WorkoutWriteService never
+  // writes), and read log['sets_completed'] (legacy field name; the
+  // canonical writer field has been `set_number` since Test #6 per
+  // hive_field_name_exlog SoT). Result: totalSets = 0 for every user
+  // on every phase unlock since #6. The `is_pr` per-log flag is
+  // similarly stale — `allExercisePRsProvider` is the canonical
+  // single source for the PR set (per lib/features/home/CLAUDE.md +
+  // exercise_personal_records SoT).
+  //
+  // Fix: aggregate sets by iterating `exlog_*` keys directly (the
+  // same shape `loadAllExercisePRs` uses) reading `set_number` with
+  // `sets_completed` fallback for legacy rows. Delegate PR count +
+  // top PRs to allExercisePRsProvider.
   int totalSets = 0;
-  int prCount = 0;
-  final prMap = <String, double>{}; // exerciseName -> best weight
-
-  for (final raw in hive.workoutBox.values) {
+  final entries = hive.workoutBox.toMap();
+  for (final entry in entries.entries) {
+    final keyStr = entry.key.toString();
+    if (!keyStr.startsWith('exlog_')) continue;
+    final raw = entry.value;
     if (raw is! Map) continue;
     final log = Map<String, dynamic>.from(raw);
-
-    if (log['type'] == 'exercise_log') {
-      final sets = (log['sets_completed'] as int?) ?? 0;
-      totalSets += sets;
-
-      final isPr = (log['is_pr'] as bool?) ?? false;
-      if (isPr) prCount++;
-
-      final name = log['exercise_name'] as String? ?? '';
-      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      if (name.isNotEmpty && weight > 0) {
-        final best = prMap[name] ?? 0;
-        if (weight > best) prMap[name] = weight;
-      }
-    }
-
-    if (log['type'] == 'workout_log') {
-      final s = (log['sets_completed'] as int?) ?? 0;
-      if (s > 0 && totalSets == 0) totalSets += s;
-    }
+    final n = (log['set_number'] as int?) ??
+        (log['sets_completed'] as int?) ??
+        0;
+    if (n > 0) totalSets += n;
   }
 
-  // Build top PRs list sorted by weight descending
-  final topPrs = prMap.entries
-      .map((e) => PrRecord(
-            exerciseName: e.key,
-            value: '${e.value.toStringAsFixed(1)}kg',
+  final allPrs = ref.watch(allExercisePRsProvider);
+
+  // Top PRs sorted by bestValue descending. We don't filter by
+  // logging_type — graduation display shows mixed types and
+  // ExercisePR.formattedValue already renders the right unit
+  // (kg / reps / seconds / km).
+  final topPrs = (allPrs.toList()..sort((a, b) => b.bestValue.compareTo(a.bestValue)))
+      .take(3)
+      .map((pr) => PrRecord(
+            exerciseName: pr.exerciseName,
+            value: pr.formattedValue,
           ))
-      .toList()
-    ..sort((a, b) {
-      final aW = double.tryParse(a.value.replaceAll('kg', '')) ?? 0;
-      final bW = double.tryParse(b.value.replaceAll('kg', '')) ?? 0;
-      return bW.compareTo(aW);
-    });
+      .toList();
 
   return GraduationStatsData(
     totalWorkouts: totalWorkouts,
     streakWeeks: streakWeeks,
     totalSets: totalSets,
-    personalRecords: prCount,
+    personalRecords: allPrs.length,
     topPrs: topPrs,
   );
 });
