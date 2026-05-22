@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/app_events_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -58,7 +58,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
     setState(() => _redoing = true);
     AppEventsService.instance.log('phase_1_day_29_redo_week_4_tapped');
     try {
-      await WorkoutScheduleService.instance.redoWeek4();
+      await ref.read(workoutScheduleWriteServiceProvider).redoWeek4();
       AppEventsService.instance.log('phase_1_cycle_repeat_started');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -36,9 +36,13 @@ import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/template_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_write_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 // ignore_for_file: deprecated_member_use_from_same_package
@@ -89,16 +93,50 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService.instance;
 });
 
-/// Provider for [WorkoutScheduleService] — phase plan, schedule writes,
-/// exercise swap, day shorten / pause / template assignment.
+/// @deprecated Re-export shim Provider. Prefer the 4 split providers
+/// below: [workoutScheduleReadServiceProvider],
+/// [workoutScheduleWriteServiceProvider], [swapServiceProvider],
+/// [templateServiceProvider].
 ///
-/// Reset behavior: no-op today (all state lives in workoutBox / userBox).
-/// A2 (tech-debt audit follow-up) will split this service into 4 sibling
-/// services; this provider becomes the transitional bridge.
+/// A2 (tech-debt audit 2026-05-20, B5 D13-D17) split the original
+/// WorkoutScheduleService into 4 services. This Provider remains as a
+/// shim so existing callers continue to work; @Deprecated lint surfaces
+/// callsites for follow-up migration.
+@Deprecated('Use the 4 split providers — Read / Write / Swap / Template')
 final workoutScheduleServiceProvider =
     Provider<WorkoutScheduleService>((ref) {
   _wireResetHook(ref, 'WorkoutScheduleService');
   return WorkoutScheduleService.instance;
+});
+
+/// Provider for [WorkoutScheduleReadService] — plan generation
+/// orchestration + calendar/week queries.
+final workoutScheduleReadServiceProvider =
+    Provider<WorkoutScheduleReadService>((ref) {
+  _wireResetHook(ref, 'WorkoutScheduleReadService');
+  return WorkoutScheduleReadService.instance;
+});
+
+/// Provider for [WorkoutScheduleWriteService] — markCompleted /
+/// markSkipped / pauseRange / redoWeek4 / copyWeek.
+final workoutScheduleWriteServiceProvider =
+    Provider<WorkoutScheduleWriteService>((ref) {
+  _wireResetHook(ref, 'WorkoutScheduleWriteService');
+  return WorkoutScheduleWriteService.instance;
+});
+
+/// Provider for [SwapService] — swap days / swap exercise / shorten /
+/// travel mode + swap counters.
+final swapServiceProvider = Provider<SwapService>((ref) {
+  _wireResetHook(ref, 'SwapService');
+  return SwapService.instance;
+});
+
+/// Provider for [TemplateService] — assignTemplateToDate /
+/// unscheduleTemplateFromDate / cleanSyncTemplateSchedule.
+final templateServiceProvider = Provider<TemplateService>((ref) {
+  _wireResetHook(ref, 'TemplateService');
+  return TemplateService.instance;
 });
 
 /// Provider for [UsageCounterService] — daily increment-at-API-call

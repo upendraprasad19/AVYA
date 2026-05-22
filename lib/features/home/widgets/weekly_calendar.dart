@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../providers/home_provider.dart';
 
@@ -40,7 +40,7 @@ class WeeklyCalendar extends ConsumerWidget {
     final days = List.generate(7, (i) => weekStart.add(Duration(days: i)));
     final labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-    final service = WorkoutScheduleService.instance;
+    final service = ref.read(workoutScheduleReadServiceProvider);
     final schedules = <Map<String, dynamic>?>[];
     for (final day in days) {
       schedules.add(service.getScheduleForDate(day));

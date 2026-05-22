@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -38,7 +38,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
     // PHASE II / III lock chips re-render the moment payment confirms.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
-    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
+    final planStart =
+        ref.read(workoutScheduleReadServiceProvider).getPlanStartDate();
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

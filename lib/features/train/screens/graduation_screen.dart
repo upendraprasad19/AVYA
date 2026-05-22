@@ -11,7 +11,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -117,7 +117,7 @@ class GraduationScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // CTA — Continue Your Journey
-                _buildCta(context),
+                _buildCta(context, ref),
                 const SizedBox(height: 12),
 
                 // Stay on Phase 1 link — runs redoWeek4() first so the
@@ -129,7 +129,9 @@ class GraduationScreen extends ConsumerWidget {
                   child: GestureDetector(
                     onTap: () async {
                       try {
-                        await WorkoutScheduleService.instance.redoWeek4();
+                        await ref
+                            .read(workoutScheduleWriteServiceProvider)
+                            .redoWeek4();
                       } catch (_) {}
                       if (context.mounted) context.go('/train');
                     },
@@ -410,7 +412,7 @@ class GraduationScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCta(BuildContext context) {
+  Widget _buildCta(BuildContext context, WidgetRef ref) {
     return WardButton(
       label: 'GENERATE NEXT PHASE',
       leading: const Icon(Icons.rocket_launch,
@@ -435,7 +437,9 @@ class GraduationScreen extends ConsumerWidget {
               final preferredDays =
                   savedDays is List ? savedDays.cast<int>() : null;
 
-              await WorkoutScheduleService.instance.generateAndSchedule(
+              await ref
+                  .read(workoutScheduleReadServiceProvider)
+                  .generateAndSchedule(
                 goal: profile['primary_goal'] as String? ?? 'general_fitness',
                 equipment:
                     profile['equipment_access'] as String? ?? 'basic_gym',

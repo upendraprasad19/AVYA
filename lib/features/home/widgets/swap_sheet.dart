@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Bottom sheet that allows swapping a workout day with another day
@@ -45,8 +45,6 @@ class SwapSheet extends ConsumerStatefulWidget {
 }
 
 class _SwapSheetState extends ConsumerState<SwapSheet> {
-  final _scheduleService = WorkoutScheduleService.instance;
-
   DateTime? _selectedTarget;
   String? _errorText;
   bool _isSwapping = false;
@@ -78,9 +76,10 @@ class _SwapSheetState extends ConsumerState<SwapSheet> {
     _weekStart = DateTime(src.year, src.month, src.day)
         .subtract(Duration(days: src.weekday - 1));
     _weekDays = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
+    final readSvc = ref.read(workoutScheduleReadServiceProvider);
     _schedules =
-        _weekDays.map((d) => _scheduleService.getScheduleForDate(d)).toList();
-    _sourceSchedule = _scheduleService.getScheduleForDate(widget.sourceDate);
+        _weekDays.map((d) => readSvc.getScheduleForDate(d)).toList();
+    _sourceSchedule = readSvc.getScheduleForDate(widget.sourceDate);
   }
 
   String _workoutLabel(Map<String, dynamic>? schedule) {
@@ -125,11 +124,11 @@ class _SwapSheetState extends ConsumerState<SwapSheet> {
     // confirmation, not at sheet-open time. Reactive to mid-session
     // upgrades.
     final isPro = ref.read(subscriptionInfoProvider).isPro;
-    final result = await _scheduleService.swapDays(
-      widget.sourceDate,
-      _selectedTarget!,
-      isPro: isPro,
-    );
+    final result = await ref.read(swapServiceProvider).swapDays(
+          widget.sourceDate,
+          _selectedTarget!,
+          isPro: isPro,
+        );
 
     if (result != null) {
       if (!mounted) return;

@@ -4524,3 +4524,142 @@ concepts:
         - The gate's regex pattern shape makes adding similar bans for
           other split-dependency classes (JSON serializers, date
           formatters) straightforward.
+
+  # ── Tech-debt audit 2026-05-20 / A2 (B5 D13-D17) ──────────────────
+  # The original `WorkoutScheduleService` was a 1970-line god class
+  # carrying 4 responsibilities. A2 split it into 4 services. These
+  # entries register the new owners so future writer/reader audits land
+  # on the right file.
+
+  - concept: workout_schedule_read_path
+    domain: workout
+    behavioral_test_required: true
+    description: |
+      Plan generation orchestration + calendar/week/phase reads. Owns:
+      generateAndSchedule, generateAndScheduleFromDate,
+      autoGenerateNextPhaseIfNeeded, getScheduleForDate, getWeek,
+      getCurrentWeekNumber, getCurrentDayInPhase, isPhaseExpired,
+      getPlanStartDate, getPlanEndDate, getCurrentPlan,
+      getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 32-577
+        method: WorkoutScheduleReadService
+    reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 35-45
+        method: build → getPlanStartDate
+        semantic: latest
+        fields_read: [plan_start_date]
+      - file: lib/features/home/widgets/weekly_calendar.dart
+        line_range: 30-50
+        method: build → getScheduleForDate
+        semantic: latest
+        fields_read: [schedule_<date>.* via getScheduleForDate]
+      - file: lib/features/train/screens/phase_roadmap_screen.dart
+        line_range: 40-50
+        method: build → getCurrentWeekNumber
+        semantic: latest
+        fields_read: [computed week-1-to-4 from plan_start_date]
+    forbidden_legacy_patterns:
+      - { pattern: "WorkoutScheduleService\\.instance\\.(generate|getSchedule|getWeek|getPlan|hasPlan|isPhaseExpired)", reason: "Use workoutScheduleReadServiceProvider after A2 split — @Deprecated lint surfaces remaining callers." }
+    class_constraints: |
+      Read-only with respect to Hive (plan generation writes via
+      WorkoutWriteService.upsertScheduled — those writes are sequenced
+      from here as orchestration, not data ownership). No swap counters,
+      no template state, no schedule completion writes. See SwapService /
+      TemplateService / WorkoutScheduleWriteService for those domains.
+    contract_test_path: test/contracts/workout_schedule_split_invariant_test.dart
+
+  - concept: workout_schedule_write_path
+    domain: workout
+    behavioral_test_required: true
+    description: |
+      Schedule mutations not tied to swap or template:
+      markCompleted, markSkipped, pauseRange, redoWeek4, copyWeek.
+      Every Hive write routes through WorkoutWriteService.upsertScheduled.
+    writers:
+      - file: lib/core/services/workout_schedule_write_service.dart
+        line_range: 36-234
+        method: WorkoutScheduleWriteService
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/train/widgets/plan_expired_card.dart
+        line_range: 56-90
+        method: _handleRedoWeek4 → redoWeek4
+        semantic: latest
+        fields_read: [schedule_<date>.* (via redoWeek4 copy loop)]
+      - file: lib/features/train/screens/graduation_screen.dart
+        line_range: 125-140
+        method: KEEP TRAINING PHASE 1 button → redoWeek4
+        semantic: latest
+        fields_read: [schedule_<date>.* via redoWeek4]
+    forbidden_legacy_patterns:
+      - { pattern: "WorkoutScheduleService\\.instance\\.(markCompleted|markSkipped|pauseRange|redoWeek4|copyWeek)", reason: "Use workoutScheduleWriteServiceProvider after A2 split." }
+    class_constraints: |
+      All Hive writes MUST route through WorkoutWriteService.upsertScheduled
+      with WriteSource.schedSwap. The service does NOT own swap counters
+      or template state.
+    contract_test_path: test/contracts/workout_schedule_split_invariant_test.dart
+
+  - concept: swap_counters
+    domain: workout
+    behavioral_test_required: true
+    description: |
+      Swap engine + travel mode + week-scoped swap counter. Owns:
+      swapDays (whole-day swap, increments counter), swapExerciseInDay
+      (single-exercise swap via library lookup), shortenDay (trim
+      accessory work), activateTravelMode + isTravelDay. Counter keys:
+      swap_week_start (Monday-of-week YYYY-MM-DD), swaps_this_week (int).
+      Per-week limit: 1 free / 3 PRO.
+    writers:
+      - file: lib/core/services/swap_service.dart
+        line_range: 79-549
+        method: SwapService
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/home/widgets/swap_sheet.dart
+        line_range: 40-150
+        method: _onConfirm → swapDays
+        semantic: latest
+        fields_read: [schedule_<date>.exercises, swap_week_start, swaps_this_week]
+    forbidden_legacy_patterns:
+      - { pattern: "WorkoutScheduleService\\.instance\\.(swapDays|swapExerciseInDay|shortenDay|activateTravelMode|isTravelDay)", reason: "Use swapServiceProvider after A2 split." }
+    hive_storage:
+      box: workoutBox
+      keys: ["swap_week_start", "swaps_this_week", "travel_start", "travel_end"]
+    class_constraints: |
+      Counter resets when `swap_week_start` doesn't match
+      monday-of-current-week. Travel mode capped at 7 days. swapDays
+      refuses if it would create 3+ consecutive rest days.
+    contract_test_path: test/contracts/workout_schedule_split_invariant_test.dart
+
+  - concept: template_scheduling
+    domain: workout
+    behavioral_test_required: true
+    description: |
+      Custom template assignment to specific dates. Owns:
+      assignTemplateToDate (backs up displaced day to displaced_<date>),
+      unscheduleTemplateFromDate (restores displaced backup),
+      cleanSyncTemplateSchedule (wipes all future non-completed
+      instances of a template), plus the public LoggingTypeResolver
+      utility used by SwapService.swapExerciseInDay.
+    writers:
+      - file: lib/core/services/template_service.dart
+        line_range: 52-384
+        method: TemplateService
+    reader_manifest_complete: false
+    readers: []  # current callers reach via shim; migration tracked under @Deprecated
+    forbidden_legacy_patterns:
+      - { pattern: "WorkoutScheduleService\\.instance\\.(assignTemplateToDate|unscheduleTemplateFromDate|cleanSyncTemplateSchedule)", reason: "Use templateServiceProvider after A2 split." }
+    hive_storage:
+      box: workoutBox
+      keys: ["schedule_<date>", "displaced_<date>", "tmpl_<id>"]
+    class_constraints: |
+      assignTemplateToDate refuses on `completed` status (history is
+      sacred). Backup writes to displaced_<date> only for
+      non-template-over-template displacements (prevents chained
+      backups). LoggingTypeResolver is the shared lookup utility — also
+      consumed by SwapService.
+    contract_test_path: test/contracts/workout_schedule_split_invariant_test.dart
