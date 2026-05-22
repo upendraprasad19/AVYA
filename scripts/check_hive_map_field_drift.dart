@@ -1,0 +1,265 @@
+// scripts/check_hive_map_field_drift.dart
+//
+// Gate 19 — Hive Map field-key drift detector (Theme G, closes-diagnose
+// 2026-05-22 ec4d27 sibling + the durable mitigation for the 10th
+// writer/reader drift caught this batch).
+//
+// THE CLASS WE'RE CATCHING
+// ------------------------
+// Writer puts a literal map into Hive under a key prefixed `concept_*`:
+//
+//   await box.put('exlog_${date}_$hash', {
+//     'exercise_name': name,
+//     'set_number': sets.length,
+//     'weight_kg': weight,
+//     ...
+//   });
+//
+// Reader later does `map['field_name']` on a value pulled out of the
+// same prefix:
+//
+//   for (final raw in box.values) {
+//     if (raw is! Map) continue;
+//     final log = Map<String, dynamic>.from(raw);
+//     final sets = log['sets_completed'] as int?;   // ← BUG
+//   }
+//
+// The writer field is `set_number`. The reader field is `sets_completed`.
+// Both pass type checks. Source-grep tests for each side pass. The bug
+// is silent. 10 instances of this class since APK Test #6.
+//
+// WHAT THIS GATE DOES (v1, regex-based)
+// -------------------------------------
+// For each KNOWN concept prefix (canonical writers identified in the
+// SoT registry), maintain an expected EMIT set of field names. Scan
+// the codebase for `['field_name']` accesses on variables that LOOK
+// LIKE they came from the corresponding Hive map (i.e. variable
+// names matching `log` / `entry` / `raw` / `m` / `record` / `value`
+// followed by `Map<String, dynamic>.from(...)` patterns).
+//
+// Any read field NOT in the expected EMIT set for the corresponding
+// prefix is flagged as a DRIFT CANDIDATE.
+//
+// BASELINE
+// --------
+// `backups/gate19_drift_baseline.txt` grandfathers all candidates
+// present on landing-day commit. NEW occurrences (not in baseline)
+// hard-fail. Per-file granularity. Refresh the baseline with
+// `--update-baseline` after closing a true drift in a separate commit.
+//
+// PER-CONCEPT EMIT FIELD MAP
+// --------------------------
+// Source of truth is THIS FILE for v1 (we maintain it by hand pinning
+// only canonical writers). The SoT registry `hive.emit_fields` schema
+// extension proposed in the Theme G spec is a follow-up — landing the
+// detector + baseline first lets us catch regressions immediately
+// while the schema work proceeds independently.
+
+import 'dart:io';
+
+const _expectedEmitFields = <String, Set<String>>{
+  // exlog_* writer: WorkoutWriteService.logExercise
+  // (lib/core/services/workout_write_service.dart:166)
+  'exlog': {
+    'exercise_name', 'date', 'set_number', 'reps_completed', 'weight_kg',
+    'volume_kg', 'is_pr', 'logging_type', 'workout_log_id',
+    'duration_seconds', 'distance_km', 'sets', 'warm_up_sets',
+    'source', 'updated_at_ms', 'created_at', 'id', 'notes',
+    // Legacy fields accepted in dual-name fallback (Test #6 transition):
+    'sets_completed', 'sets_detail',
+    // EditLogExerciseRow.fromLog accepts these:
+    'duration_sec', 'volume',
+    // Restore writers stamp these:
+    'is_swapped', 'original_date',
+  },
+  // nlog_* writer: NutritionWriteService.logMeal
+  'nlog': {
+    'food_name', 'meal_type', 'date', 'calories', 'protein_g',
+    'carbs_g', 'fat_g', 'fiber_g', 'servings', 'serving_unit',
+    'logged_at_ms', 'source', 'is_pr', 'id', 'cloud_id',
+    'updated_at_ms', 'created_at', 'notes',
+    // saveMealPreset writes:
+    'meal_name', 'items',
+    // Cart auditor + scan meal output:
+    'image_url', 'analysis_type',
+    // Conversational tool dispatcher:
+    'kcal',
+    // Restore-path legacy field names (Test #6 dual-name fallback):
+    'name', 'calories_kcal',
+  },
+  // schedule_* writer: WorkoutScheduleService → WorkoutWriteService.upsertScheduled
+  'schedule': {
+    'date', 'week', 'day_of_week', 'type', 'workout_day_index',
+    'workout_name', 'workout_focus', 'exercises', 'warmup',
+    'cooldown', 'finisher', 'week_character', 'status',
+    'completed_at', 'is_swapped', 'original_date', 'source',
+    'updated_at_ms', 'workout_log_id', 'id',
+    // Per-exercise nested map fields (inside `exercises`):
+    'name', 'sets', 'reps', 'rest_sec', 'logging_type', 'order',
+    'movement_pattern', 'suitable_for', 'equipment_needed',
+  },
+  // wlog_* writer: WorkoutWriteService.completeWorkout (workout summary row)
+  'wlog': {
+    'date', 'completed_at', 'started_at', 'workout_name',
+    'workout_focus', 'workout_log_id', 'sets_completed',
+    'total_volume_kg', 'duration_minutes', 'exercises', 'id',
+    'updated_at_ms', 'created_at', 'source',
+    // Legacy alternate names:
+    'set_number', 'total_sets',
+  },
+};
+
+/// File paths to scan (relative to repo root). Limited to high-risk
+/// reader surfaces — providers + repositories + screens + services.
+const _readerScanPaths = <String>[
+  'lib/features',
+  'lib/shared/repositories',
+  'lib/core/services',
+];
+
+/// Files to skip (writers themselves + canonical aggregators that
+/// legitimately use the full emit set as part of their writer contract).
+const _skipFiles = <String>[
+  'lib/core/services/workout_write_service.dart',
+  'lib/core/services/nutrition_write_service.dart',
+  'lib/core/services/health_write_service.dart',
+  'lib/core/services/workout_schedule_write_service.dart',
+];
+
+void main(List<String> args) {
+  final updateBaseline = args.contains('--update-baseline');
+  final warnOnly = args.contains('--warn-only');
+
+  final baselineFile = File('backups/gate19_drift_baseline.txt');
+  final baseline = <String>{};
+  if (baselineFile.existsSync()) {
+    baseline.addAll(baselineFile
+        .readAsLinesSync()
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty && !l.startsWith('#')));
+  }
+
+  final candidates = <String>{};
+
+  for (final scanRoot in _readerScanPaths) {
+    final dir = Directory(scanRoot);
+    if (!dir.existsSync()) continue;
+    final dartFiles = dir
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .where((f) {
+      final normalized = f.path.replaceAll('\\', '/');
+      return !_skipFiles.any((s) => normalized.endsWith(s));
+    });
+
+    for (final file in dartFiles) {
+      final content = file.readAsStringSync();
+      // Strip line + block comments so the comment containing the
+      // pre-fix pattern doesn't flag.
+      final stripped = content
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+
+      for (final entry in _expectedEmitFields.entries) {
+        final prefix = entry.key;
+        final expected = entry.value;
+        // Heuristic for "this file reads from the `prefix_*` Hive map":
+        //   - Contains a `keyStr.startsWith('${prefix}_')` predicate
+        //     (the canonical exlog walk-back pattern from
+        //     loadAllExercisePRs / graduation_provider), OR
+        //   - Contains a `box.get('${prefix}_...')` literal that maps
+        //     to the same prefix.
+        final looksLikePrefixReader =
+            RegExp("startsWith\\('${prefix}_'\\)").hasMatch(stripped) ||
+                RegExp("box\\.get\\('${prefix}_").hasMatch(stripped) ||
+                RegExp("'${prefix}_'").hasMatch(stripped);
+        if (!looksLikePrefixReader) continue;
+
+        // Extract every `['field']` literal access in the file.
+        final accessPattern = RegExp(r"\['([a-z_][a-z0-9_]*)'\]");
+        final reads = accessPattern.allMatches(stripped).map((m) =>
+            m.group(1)!).toSet();
+
+        // Drift candidates = reads MINUS expected set.
+        for (final read in reads) {
+          if (expected.contains(read)) continue;
+          // Skip common non-Hive accesses that often look like map reads
+          // (provider state, JSON request bodies, response data, etc.)
+          // — heuristically these are short fields we already vetted.
+          if (_alwaysOk.contains(read)) continue;
+          final candidate =
+              '${file.path.replaceAll('\\', '/')} :: ${prefix}_* :: $read';
+          candidates.add(candidate);
+        }
+      }
+    }
+  }
+
+  if (updateBaseline) {
+    baselineFile.parent.createSync(recursive: true);
+    final sorted = candidates.toList()..sort();
+    baselineFile.writeAsStringSync(
+      '# Gate 19 — Hive Map field-key drift baseline\n'
+      '# Auto-generated by scripts/check_hive_map_field_drift.dart --update-baseline.\n'
+      '# Grandfathered entries below — NEW occurrences hard-fail the gate.\n'
+      '# Refresh after closing a true drift in a separate commit.\n'
+      '#\n'
+      '# Format: <file_path> :: <prefix>_* :: <field_name>\n'
+      '\n${sorted.join('\n')}\n',
+    );
+    stdout.writeln(
+        '[Gate 19] BASELINE UPDATED: ${sorted.length} drift candidates recorded.');
+    exit(0);
+  }
+
+  // Diff against baseline.
+  final novel = candidates.where((c) => !baseline.contains(c)).toList()
+    ..sort();
+  if (novel.isEmpty) {
+    stdout.writeln('[Gate 19] PASS: '
+        '${candidates.length} drift candidates (all in baseline).');
+    exit(0);
+  }
+
+  stderr.writeln('[Gate 19] FAIL: ${novel.length} NEW drift candidate(s):');
+  for (final n in novel.take(20)) {
+    stderr.writeln('  - $n');
+  }
+  if (novel.length > 20) {
+    stderr.writeln('  ... and ${novel.length - 20} more');
+  }
+  stderr.writeln(
+      '\n  Each line is a `[\'field_name\']` access in a file that reads a '
+      'Hive map with the prefix, where `field_name` is NOT in the\n'
+      '  canonical writer\'s emit set. Either:\n'
+      '    (a) The field IS in the writer\'s emit set — extend \n'
+      '        `_expectedEmitFields` in scripts/check_hive_map_field_drift.dart.\n'
+      '    (b) The field is legitimately unrelated to the Hive map — add \n'
+      '        to `_alwaysOk` set, OR explicitly clone the map and rename \n'
+      '        the variable to avoid heuristic match.\n'
+      '    (c) THIS IS REAL DRIFT — fix the reader to use the canonical \n'
+      '        field name (or extend the writer\'s emit set).\n'
+      '\n  After closing a true drift, run with --update-baseline.\n'
+      '\n  See lib/features/train/CLAUDE.md `feedback_writer_reader_field_'
+      'drift_recurring.md` for the bug class history.');
+
+  exit(warnOnly ? 0 : 1);
+}
+
+/// Fields that are common across many non-Hive contexts (provider state,
+/// JSON request bodies, response bodies). These get suppressed so the
+/// gate noise stays low. NOT a license to drift — extend with care.
+const _alwaysOk = <String>{
+  // Provider state + UI render:
+  'value', 'label', 'icon', 'title', 'subtitle', 'message', 'error',
+  'isLoading', 'error_class', 'status', 'data', 'items', 'result',
+  // JSON request/response bodies for Edge Functions:
+  'text', 'image', 'image_url', 'type', 'meal_name', 'analysis_type',
+  'kcal', 'protein', 'carbs', 'fat', 'fiber', 'quantity', 'name',
+  'meal_type',
+  // Common non-Hive map shapes:
+  'id', 'created_at', 'updated_at', 'user_id', 'date',
+  // Subscription / billing:
+  'plan', 'expires_at', 'is_pro',
+};
