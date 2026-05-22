@@ -1,10 +1,19 @@
 // Contract test — Monday +1 refill restore race (2026-05-19).
 //
-// Pins the two-layer fix for the splash-time refill vs cloud restore race:
+// Pins the two-layer fix for the refill vs cloud restore race:
 //   B0a — `_restoreFreezes` uses max-merge on (available, last_refill),
 //         not blind overwrite of cloud → local.
-//   B0b — `splash_screen.dart` re-invokes `refillIfNewWeek()` from the
-//         existing `onRestoreComplete` listener as defence-in-depth.
+//   B0b — `restoring_screen.dart` invokes `refillIfNewWeek()` from inside
+//         `_ensureOwnershipBeforeHome` post-openForUser as defence-in-depth.
+//
+// Relocation note (2026-05-22 / diagnose dc52a4):
+//   The B0b refill call + B3 just_used clear ORIGINALLY lived in
+//   splash_screen.dart `_runDeferredInit` and were re-invoked via an
+//   `onRestoreComplete` listener. That placement hit a pre-openForUser
+//   race: splash touched `userBox` BEFORE HiveUserSession.openForUser ran
+//   inside restoreFromCloudForUser → `streak_freeze_refill_check` died
+//   with "HiveUserSession not opened" on every cold start since at least
+//   2026-05-06. Both calls relocated into restoring_screen post-openForUser.
 //
 // Source-grep with comment-stripping per
 // `feedback_source_grep_strip_comments_first.md` — the fix's explanatory
@@ -71,8 +80,8 @@ void main() {
     });
   });
 
-  group('B0b — splash re-invokes refillIfNewWeek on onRestoreComplete', () {
-    final src = File('lib/features/auth/screens/splash_screen.dart')
+  group('B0b — restoring_screen invokes refillIfNewWeek post-openForUser', () {
+    final src = File('lib/features/auth/screens/restoring_screen.dart')
         .readAsStringSync();
     final stripped = _stripComments(src);
 
@@ -81,50 +90,59 @@ void main() {
         stripped.contains(
             "import 'package:icanbefitter/core/services/streak_progress_service.dart'"),
         isTrue,
-        reason: 'splash must import StreakProgressService for the post-restore '
-            'refill re-invocation.',
+        reason: 'restoring_screen must import StreakProgressService for the '
+            'post-openForUser refill invocation (diagnose dc52a4).',
       );
     });
 
-    test('onRestoreComplete listener calls refillIfNewWeek', () {
+    test('_ensureOwnershipBeforeHome calls refillIfNewWeek', () {
       expect(
-        RegExp(r'onRestoreComplete\.listen[\s\S]*?'
-                r'StreakProgressService\.instance\.refillIfNewWeek\(\)')
-            .hasMatch(stripped),
+        stripped.contains(
+            'StreakProgressService.instance.refillIfNewWeek()'),
         isTrue,
-        reason: 'splash._restoreSub listener must invoke '
-            'StreakProgressService.instance.refillIfNewWeek() so the '
-            'weekly refill is re-applied after cloud restore lands.',
+        reason: 'restoring_screen must call '
+            'StreakProgressService.instance.refillIfNewWeek() inside '
+            '_ensureOwnershipBeforeHome so the weekly refill runs AFTER '
+            'HiveUserSession.openForUser. Pre-fix this lived in splash and '
+            'died with "HiveUserSession not opened" on every cold start.',
       );
     });
 
-    test('listener invalidates streakFreezeProvider for badge refresh', () {
+    test('refill call is wrapped in try/catch with telemetry', () {
+      // The refill MUST be defensive — failures are non-fatal because the
+      // user must still reach home. Pre-fix the splash listener swallowed
+      // errors silently with no telemetry; the post-fix shape records
+      // non-fatal so we can detect regressions.
       expect(
-        RegExp(r'onRestoreComplete\.listen[\s\S]*?'
-                r'ref\.invalidate\(streakFreezeProvider\)')
+        RegExp(r'refillIfNewWeek\(\)[\s\S]{0,400}?'
+                r'recordNonFatal\([^)]*reason:\s*'
+                r"'restoring_post_restore_refill'")
             .hasMatch(stripped),
         isTrue,
-        reason: 'after re-refill the streakFreezeProvider badge must be '
-            'invalidated so the 0/3 badge updates without a manual reload.',
+        reason: 'refillIfNewWeek call must be wrapped in try/catch with '
+            'ErrorTelemetry.recordNonFatal(reason: '
+            "'restoring_post_restore_refill') so we get telemetry on "
+            'silent failure (the pre-fix splash listener had none).',
       );
     });
   });
 
-  group('B3 — splash cold-start clears stale streak_freeze_just_used', () {
-    final src = File('lib/features/auth/screens/splash_screen.dart')
+  group('B3 — restoring_screen clears stale streak_freeze_just_used', () {
+    final src = File('lib/features/auth/screens/restoring_screen.dart')
         .readAsStringSync();
     final stripped = _stripComments(src);
 
     test('cold-start path writes streak_freeze_just_used: false', () {
-      // The clear is a defensive UI-flag reset. After comment-strip the only
-      // remaining occurrence of the literal key with value `: false` must be
-      // the clear. Pre-fix the file had no such write at all.
+      // The clear is a defensive UI-flag reset. Relocated from splash to
+      // restoring_screen 2026-05-22 / diagnose dc52a4 — must run AFTER
+      // HiveUserSession.openForUser to avoid the pre-openForUser race that
+      // killed the clear on every cold start.
       expect(
         RegExp(r"'streak_freeze_just_used'\s*:\s*false").hasMatch(stripped),
         isTrue,
-        reason: 'splash._runDeferredInit must clear the stale '
-            'streak_freeze_just_used Hive flag on cold start to prevent '
-            'banner-leak from prior sessions.',
+        reason: 'restoring_screen._ensureOwnershipBeforeHome must clear the '
+            'stale streak_freeze_just_used Hive flag after openForUser '
+            'returns. Pre-fix this lived in splash and silently failed.',
       );
     });
   });
