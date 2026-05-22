@@ -38,13 +38,31 @@ class RestoringScreen extends ConsumerStatefulWidget {
 }
 
 class _RestoringScreenState extends ConsumerState<RestoringScreen> {
+  bool _showSoftHint = false;
   bool _showTimeoutCta = false;
+  Timer? _softHintTimer;
   Timer? _timeoutTimer;
+
+  // Theme D (diagnose 2026-05-22 4a3b08) — threshold bumped from 15s to
+  // 30s based on +30 APK telemetry showing the founder's restore total
+  // is 35.9s every cold start (Step A 23.8s alone exceeded the old 15s
+  // gate, hitting every user every launch). Two-stage UX: a soft "Almost
+  // there…" hint surfaces at 15s for users who got an old-vs-new mental
+  // model of "should this take a few seconds?", and the actual escape-
+  // hatch CONTINUE button surfaces at 30s. Background-restore (A5) is
+  // a bigger refactor needing per-provider "loading" handling; this
+  // batch ships the threshold fix and leaves A5 for the operational-
+  // observability work.
+  static const Duration _softHintAfter = Duration(seconds: 15);
+  static const Duration _ctaAfter = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
-    _timeoutTimer = Timer(const Duration(seconds: 15), () {
+    _softHintTimer = Timer(_softHintAfter, () {
+      if (mounted) setState(() => _showSoftHint = true);
+    });
+    _timeoutTimer = Timer(_ctaAfter, () {
       if (mounted) setState(() => _showTimeoutCta = true);
     });
     _kickoffRestore();
@@ -297,12 +315,14 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   }
 
   void _onContinueAnyway() {
+    _softHintTimer?.cancel();
     _timeoutTimer?.cancel();
     if (mounted) context.go('/home');
   }
 
   @override
   void dispose() {
+    _softHintTimer?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
   }
@@ -369,6 +389,22 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
               const SizedBox(height: 32),
               const _AnimatedDots(key: ValueKey('restoring-dots')),
               const Spacer(),
+              // Theme D — soft hint between 15s and 30s (informational
+              // only; restore still progressing). 36s total restore is
+              // the founder's measured median per APK +30 telemetry, so
+              // most users will see this for ~15s.
+              if (_showSoftHint && !_showTimeoutCta)
+                Padding(
+                  key: const ValueKey('restoring-soft-hint'),
+                  padding: const EdgeInsets.only(bottom: 32),
+                  child: Text(
+                    'Almost there…',
+                    style: AppTypography.bodyM.copyWith(
+                      color: AppColors.textDim,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               if (_showTimeoutCta)
                 Padding(
                   key: const ValueKey('restoring-timeout-cta'),
