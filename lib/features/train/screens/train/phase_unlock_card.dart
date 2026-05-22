@@ -5,8 +5,23 @@ extension _PhaseUnlockCard on _TrainScreenState {
 
   Widget _buildPhaseUnlockCard(
       BuildContext context, CurrentPlanData plan, WidgetRef ref) {
-    // Only show if user has reached week 4
-    if (plan.currentWeek < 4) return const SizedBox.shrink();
+    // Theme E (diagnose 2026-05-22 0e7714) — surface only from Thursday
+    // of Phase Week 4 onwards. Founder's stated expectation 2026-05-21:
+    // "should open up on thursday of the last week". Pre-fix gate was
+    // `plan.currentWeek < 4` which surfaced from Monday of Week 4 —
+    // too early. Locked Thursday gives users a 4-day runway (Thu, Fri,
+    // Sat, Sun) to complete and tap unlock.
+    //
+    // LOCAL weekday on purpose — `weekday` rollover at local midnight
+    // matches when the user perceives "Thursday begins". Applying the
+    // IST shift would cause Indian users to see the CTA appear at
+    // 05:30 local for no good reason (and Indians outside IST would
+    // see it shift further). Different from date-key math (which is
+    // IST per CLAUDE.md §4.5) — UI presence is a perceptual concern.
+    if (plan.currentWeek != 4 ||
+        DateTime.now().weekday < DateTime.thursday) {
+      return const SizedBox.shrink();
+    }
 
     // Check completion rate for Phase 1 graduation
     final completionRate = _computePhaseCompletionRate(plan);
