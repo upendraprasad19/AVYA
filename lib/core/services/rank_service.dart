@@ -161,6 +161,21 @@ class RankService {
         } catch (_) {
           // ProviderScope may be disposing — invalidation is best-effort.
         }
+
+        // Theme B (diagnose 2026-05-22 9aa2c1) — stamp pending celebration.
+        // Home screen reads + clears this on next mount/resume and pushes
+        // PromotionCelebrationScreen (existing widget, pre-fix had zero
+        // call sites). NOT synced to cloud — client-side celebration state.
+        try {
+          await UserRepository.instance
+              .setPendingPromotionRankCode(qualified.code);
+          unawaited(ErrorTelemetry.logEvent('rank_promotion_pending_stamped',
+              message: 'rank_code=${qualified.code} prev_code=$currentCode'));
+        } catch (e, st) {
+          debugPrint('[RankService] pending promotion stamp failed: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'rank_service_pending_promotion_stamp'));
+        }
       }
     } catch (e, st) {
       // H-42 (audit-2026-05-11) — fire-and-forget contract; errors

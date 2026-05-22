@@ -79,6 +79,28 @@ class UserRepository {
     await _hive.userBox.put('progress', progress);
   }
 
+  // ── Pending Promotion (Theme B, diagnose 2026-05-22 9aa2c1) ────
+  //
+  // One-shot top-level Hive key stamped by RankService when a rank
+  // change is detected. Home screen reads + clears on mount/resume
+  // and pushes PromotionCelebrationScreen. NOT synced to cloud (no
+  // corresponding column in user_progress) — purely client-side
+  // celebration state. Survives hot restart because it's durable Hive.
+
+  static const String _pendingPromotionKey = 'pending_promotion_rank_code';
+
+  String? getPendingPromotionRankCode() {
+    return _hive.userBox.get(_pendingPromotionKey) as String?;
+  }
+
+  Future<void> setPendingPromotionRankCode(String rankCode) async {
+    await _hive.userBox.put(_pendingPromotionKey, rankCode);
+  }
+
+  Future<void> clearPendingPromotionRankCode() async {
+    await _hive.userBox.delete(_pendingPromotionKey);
+  }
+
   /// Updates individual progress fields without overwriting others.
   ///
   /// Bug 2026-05-22 (Theme F-NEW, diagnose ec4d27) — pre-fix, this method
