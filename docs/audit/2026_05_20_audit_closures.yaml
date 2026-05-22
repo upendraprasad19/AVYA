@@ -29,7 +29,7 @@ total_findings: 81
 # 1 closed in 4d912d3 (T9 test runtime budget Gate 41)
 # SE-3 codified in 1ce354a (quarterly tech-debt audit runbook)
 # A10 ai_coach_repository split in flight on feat/tech-debt-audit-resume-2
-closed_count: 65
+closed_count: 81
 # Per-batch breakdown:
 #   B1 (00aad86 → 2717f08): 21
 #   B2-partial (4a30bf1 → ed26a28): 5 (C6, C7, C9, C10, A11)
@@ -47,13 +47,21 @@ closed_count: 65
 #   Closure entries for A1, A3, A4, A8, A9, A10, T3, T10, T15, I3, C2 were
 #   stale "# NOT YET CLOSED" comments referencing past batch plans. Each
 #   has now been populated with terminal_state: closed_in_commit pointing
-#   to the SHA that shipped the fix. Doc3/Doc10/Doc12 retain stale comment
-#   markers explicitly scheduled to B5 D2 (this batch's day-2 work).
-#   See `feedback_closure_yaml_per_finding_discipline.md` (lands D1).
+#   to the SHA that shipped the fix.
+#   See `feedback_closure_yaml_per_finding_discipline.md`.
 #
-# B5 SCOPE (live as of 2026-05-21; per approved plan
-# `~/.claude/plans/create-a-plan-wiggly-panda.md`):
-#   16 remaining open items + 2 new skills + APK build. See plan ⭐ section.
+# 2026-05-21/22 — B5 FINAL CLOSURE (16 items + APK):
+#   D1 (08feed6 → 7890edd → b18e459): T5, T7, T12, T13, T2 (5)
+#   D2 (1073956 → 3763464 → a2a531a → 4f68a9a): Doc3, Doc10, Doc12, D8, C1 (5)
+#   D5-D6 (83bd4cb): T1 (1)
+#   D3-D4 (c3e8499): T14 (1)
+#   D11 (7d89b76): C3 (1)
+#   D12 (6ed2d9a): C4 (1)
+#   D7-D8 (d230301): A6 (1)
+#   D9-D10 (3e2bbcc): A7 (1)
+#   D13-D17 (5e2b74b): A2 (1) — 5-day refactor landed in one commit
+#
+# 🎉 81/81 ALL FINDINGS CLOSED. Gate 40 --strict PASS. Ready for APK.
 
 findings:
 
@@ -206,7 +214,20 @@ findings:
     category: architecture
     title: "WorkoutScheduleService 1970-line god-service"
     score: 18
-    # NOT YET CLOSED — B5 scope (D13-D17). 4-way split per locked decision.
+    terminal_state: closed_in_commit
+    commit: 5e2b74b
+    verification: scripts/check_workout_schedule_split.dart (Gate 47) + test/contracts/workout_schedule_split_invariant_test.dart (8 tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-22-a2-workout-schedule-4way-split-d882ca.md
+    notes: |
+      1970-line service split into 4: WorkoutScheduleReadService (577 LOC),
+      WorkoutScheduleWriteService (234 LOC), SwapService (549 LOC),
+      TemplateService (384 LOC). WorkoutScheduleService now @Deprecated
+      264-line re-export shim. 4 new Providers + 1 shim Provider in
+      service_providers.dart. 6 caller migrations as proof-of-pattern;
+      16 remaining callsites surface @Deprecated lint for follow-up.
+      4 new SoT concepts: workout_schedule_read_path, workout_schedule_write_path,
+      swap_counters, template_scheduling. Gate 47 PASS, Gate 46 PASS,
+      Gate 33 PASS (53 gates wired). 8 regression tests PASS.
   - id: A3
     category: architecture
     title: "Templates + custom-exercises bypass WorkoutWriteService"
