@@ -437,15 +437,22 @@ class GraduationScreen extends ConsumerWidget {
               final preferredDays =
                   savedDays is List ? savedDays.cast<int>() : null;
 
-              await ref
-                  .read(workoutScheduleReadServiceProvider)
-                  .generateAndSchedule(
+              // Theme H fix (diagnose <id>) — was `DateTime.now()` which
+              // normalizeToMonday-ed to THIS WEEK's Monday, overwriting the
+              // current Phase 1 W4 entries (founder hit this 2026-05-21
+              // tapping unlock on Wed → Phase 2 W1 clobbered Phase 1 W4).
+              // nextPhaseStartDate computes max(today, currentPhaseEnd + 1
+              // day) Monday-normalized so the new phase always starts the
+              // Monday AFTER the just-completed phase ends.
+              final scheduleSvc = ref.read(workoutScheduleReadServiceProvider);
+              final startDate = scheduleSvc.nextPhaseStartDate();
+              await scheduleSvc.generateAndSchedule(
                 goal: profile['primary_goal'] as String? ?? 'general_fitness',
                 equipment:
                     profile['equipment_access'] as String? ?? 'basic_gym',
                 daysPerWeek:
                     (profile['days_per_week'] as num?)?.toInt() ?? 4,
-                startDate: DateTime.now(),
+                startDate: startDate,
                 phase: nextPhase,
                 experienceLevel:
                     profile['fitness_experience'] as String? ?? 'beginner',

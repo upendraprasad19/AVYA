@@ -391,12 +391,15 @@ class WorkoutScheduleReadService {
     if (!isPhaseExpired()) return false;
     if (currentPhase >= 12) return false;
 
-    final today = DateTime.now();
+    // Theme H fix (diagnose <id>) — was `DateTime.now()` directly. Now
+    // computes max(today, currentPhaseEnd + 1) Monday-normalized so the
+    // new phase doesn't overwrite the just-completed phase's final week.
+    final startDate = nextPhaseStartDate();
     await generateAndSchedule(
       goal: goal,
       equipment: equipment,
       daysPerWeek: daysPerWeek,
-      startDate: today,
+      startDate: startDate,
       experienceLevel: experienceLevel,
       phase: currentPhase + 1,
       preferredDays: preferredDays,
@@ -547,6 +550,39 @@ class WorkoutScheduleReadService {
 
   /// Normalise a date to Monday of its week.
   DateTime normalizeToMonday(DateTime date) => _normalizeToMonday(date);
+
+  /// Computes the start date for a NEW phase.
+  ///
+  /// Bug 2026-05-22 (Theme H, obs 11) — graduation_screen + autoGenerateNext
+  /// previously passed `DateTime.now()` directly into [generateAndSchedule],
+  /// which normalizeToMonday-ed it to THIS week's Monday. For a user mid-
+  /// Phase-1-Week-4 tapping unlock on Wed, that overwrote Phase 1 W4
+  /// (Mon-Sun of current week) with a fresh Phase 2 W1 — visibly corrupting
+  /// the completed-history view.
+  ///
+  /// Correct semantic: new phase starts the MONDAY AFTER the current phase
+  /// ends. Reads `plan_end_date` (already stored by every [generateAndSchedule]
+  /// call at line 104) and returns `(plan_end + 1 day)` Monday-normalized.
+  /// Falls back to `max(today, today)` if `plan_end_date` is missing
+  /// (defensive — every code path that calls this should have generated
+  /// a phase first).
+  ///
+  /// The `max(today, currentPhaseEnd + 1)` guard handles the edge case
+  /// where a user lets Phase 1 expire (e.g. inactivity) — start the new
+  /// phase from THIS Monday, not retroactively from the historical end.
+  DateTime nextPhaseStartDate({DateTime? now}) {
+    final today = now ?? DateTime.now();
+    final endStr = MigratedKey.read<String>(_planEndKey);
+    if (endStr != null) {
+      final end = DateTime.tryParse(endStr);
+      if (end != null) {
+        final candidate = end.add(const Duration(days: 1));
+        final useDate = candidate.isAfter(today) ? candidate : today;
+        return _normalizeToMonday(useDate);
+      }
+    }
+    return _normalizeToMonday(today);
+  }
 
   /// Format date as YYYY-MM-DD.
   String dateKey(DateTime date) => _dateKey(date);
