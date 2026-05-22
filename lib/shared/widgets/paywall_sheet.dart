@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
-import 'package:icanbefitter/core/services/razorpay_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Shows the single, reusable paywall bottom sheet.
@@ -33,16 +33,16 @@ void showPaywallSheet(BuildContext context, {required String feature}) {
   );
 }
 
-class PaywallSheet extends StatefulWidget {
+class PaywallSheet extends ConsumerStatefulWidget {
   final String feature;
 
   const PaywallSheet({super.key, required this.feature});
 
   @override
-  State<PaywallSheet> createState() => _PaywallSheetState();
+  ConsumerState<PaywallSheet> createState() => _PaywallSheetState();
 }
 
-class _PaywallSheetState extends State<PaywallSheet> {
+class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   String _selectedPlan = 'yearly';
   bool _isProcessing = false;
 
@@ -221,7 +221,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
     // openCheckout is now async (waits for server-side order creation).
     // Fire-and-forget — the paywall sheet is dismissed above, and Razorpay
     // SDK callbacks fire from its own channel (not this future).
-    unawaited(RazorpayService.instance.openCheckout(
+    // A7 / B5 D9-D10 — canonical provider path.
+    unawaited(ref.read(razorpayServiceProvider).openCheckout(
       plan: _selectedPlan,
       promoCode: _promoApplied ? _promoController.text.trim() : null,
       discountPct: _promoApplied ? _promoDiscountPct : null,
@@ -242,10 +243,11 @@ class _PaywallSheetState extends State<PaywallSheet> {
     setState(() => _isProcessing = true);
 
     try {
-      await SubscriptionService.instance.refreshFromSupabase();
+      // A7 / B5 D9-D10 — canonical provider path.
+      await ref.read(subscriptionServiceProvider).refreshFromSupabase();
       if (!mounted) return;
       Navigator.of(context).pop();
-      final isPro = SubscriptionService.instance.isPro();
+      final isPro = ref.read(subscriptionServiceProvider).isPro();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

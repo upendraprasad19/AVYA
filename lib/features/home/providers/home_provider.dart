@@ -14,7 +14,7 @@ import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
@@ -76,7 +76,8 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
     final now = DateTime.now();
     final todayDate = DateTime(now.year, now.month, now.day);
     final weekStart = todayDate.subtract(Duration(days: now.weekday - 1));
-    final service = WorkoutScheduleService.instance;
+    // A7 / B5 D9-D10 — canonical provider path.
+    final service = ref.read(workoutScheduleServiceProvider);
 
     final result = <CalendarDayData>[];
     for (int i = 0; i < 7; i++) {
@@ -275,7 +276,10 @@ class StreakFreezeNotifier extends Notifier<int> {
     // Hive at next launch; this read-side clamp makes the current
     // session's UX correct immediately. Pinned by
     // test/contracts/streak_freeze_value_clamped_on_read_test.dart.
-    final cap = SubscriptionService.instance.isPro() ? 3 : 1;
+    // A7 / B5 D9-D10 — migrated from SubscriptionService.instance to the
+    // canonical provider so cross-account swaps trigger a reset via
+    // ref.listen(authUserIdTokenProvider, …) inside subscriptionServiceProvider.
+    final cap = ref.read(subscriptionServiceProvider).isPro() ? 3 : 1;
     return stored.clamp(0, cap);
   }
 }
@@ -288,7 +292,8 @@ final streakFreezeProvider =
 /// the `available/max` ladder format. APK Test #14 / Bug D.3.
 final streakFreezeMaxProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  return SubscriptionService.instance.isPro() ? 3 : 1;
+  // A7 / B5 D9-D10 — see comment in StreakFreezeNotifier above.
+  return ref.read(subscriptionServiceProvider).isPro() ? 3 : 1;
 });
 
 // ── Streak Warning Eligibility (Bug #12) ─────────────────────────
@@ -412,7 +417,10 @@ class TodayWorkoutNotifier extends Notifier<Map<String, dynamic>?> {
   Map<String, dynamic>? build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // Read today's schedule from WorkoutScheduleService (single source of truth)
-    return WorkoutScheduleService.instance.getScheduleForDate(DateTime.now());
+    // A7 / B5 D9-D10 — canonical provider path.
+    return ref
+        .read(workoutScheduleServiceProvider)
+        .getScheduleForDate(DateTime.now());
   }
 }
 
@@ -548,7 +556,9 @@ class AiInsightNotifier extends Notifier<String?> {
 
   /// Build insight from today's workout schedule in Hive.
   String _computeScheduleInsight(DateTime now) {
-    final schedule = WorkoutScheduleService.instance.getScheduleForDate(now);
+    // A7 / B5 D9-D10 — canonical provider path.
+    final schedule =
+        ref.read(workoutScheduleServiceProvider).getScheduleForDate(now);
     if (schedule != null) {
       final type = schedule['type'] as String? ?? 'rest';
       final status = schedule['status'] as String? ?? 'planned';

@@ -37,6 +37,14 @@ class SeedService {
     _registerLifecycle();
   }
   static final SeedService _instance = SeedService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(seedServiceProvider)` over `.instance`. SeedService
+  /// reads shared boxes (exerciseBox / foodBox), so the reset hook is
+  /// a no-op today — the Provider exists for parity + future-proofing
+  /// (a seed-version cache would gain a natural reset target here).
+  @Deprecated(
+      'Use ref.read(seedServiceProvider) — singleton path will be removed after full migration')
   static SeedService get instance => _instance;
 
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset

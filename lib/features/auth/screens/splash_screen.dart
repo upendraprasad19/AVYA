@@ -8,17 +8,14 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
-import 'package:icanbefitter/core/services/seed_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/scheduled_workouts_resync_migrator.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
@@ -60,7 +57,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // profile all refreshed from cloud), invalidate the home + train
     // providers so the UI reflects the new data immediately — critical
     // for PRs (recomputed from logs), today's workout, stats grid, etc.
-    _restoreSub = SyncService.instance.onRestoreComplete.listen((_) {
+    // A7 / B5 D9-D10 — canonical provider path.
+    _restoreSub = ref.read(syncServiceProvider).onRestoreComplete.listen((_) {
       if (!mounted) return;
       // Bug 2026-05-19 (Monday +1 race) — re-apply the weekly refill
       // AFTER cloud restore lands. Splash-time refill in _runDeferredInit
@@ -140,7 +138,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Seed exercise + food databases on first launch only.
     // compute() keeps JSON parsing off the main thread.
-    await SeedService.instance.seedIfNeeded();
+    // A7 / B5 D9-D10 — canonical provider path.
+    await ref.read(seedServiceProvider).seedIfNeeded();
 
     // Bug 2026-05-19 (B3) — Defensive: clear stale `streak_freeze_just_used`
     // UI flag on every cold start. The flag is a one-shot UI signal: writer
@@ -187,7 +186,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Refresh AI coach context immediately so the next coach query reflects
     // today's state (covers Bug #6 — "no workout planned today" hallucination
     // when snapshot was last pushed yesterday).
-    unawaited(SyncService.instance.pushSnapshot());
+    // A7 / B5 D9-D10 — canonical provider path.
+    unawaited(ref.read(syncServiceProvider).pushSnapshot());
 
     // APK Test #14 / Bug B.3 — one-shot resync of any local
     // 'completed' schedule rows that diverged from cloud during the
@@ -200,7 +200,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Trigger background sync check (weekly full sync, cross-channel pull).
     // Fire-and-forget — checkAndSync() has its own try-catch.
-    unawaited(SyncService.instance.checkAndSync());
+    // A7 / B5 D9-D10 — canonical provider path.
+    unawaited(ref.read(syncServiceProvider).checkAndSync());
     // APK Test #3 / Obs 1: catch-up promotions for users who passed a
     // milestone while the app was uninstalled / signed out.
     unawaited(RankService.instance.evaluateAndPromote());
@@ -208,7 +209,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // F1 · Refresh subscription state on every app launch so PRO survives
     // logout/login and cross-device sessions without requiring a PRO-feature
     // tap to trigger verifyFromServer().
-    unawaited(SubscriptionService.instance.refreshFromSupabase());
+    // A7 / B5 D9-D10 — canonical provider path.
+    unawaited(ref.read(subscriptionServiceProvider).refreshFromSupabase());
 
     // Audit H9 · PRO auto-generate next Phase on expiry.
     //
@@ -257,8 +259,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       final uid = await HiveUserSession.ensureOpenedForCurrentSession();
       if (uid == null) return;
 
-      if (!SubscriptionService.instance.isPro()) return;
-      if (!WorkoutScheduleService.instance.isPhaseExpired()) return;
+      // A7 / B5 D9-D10 — canonical provider path.
+      if (!ref.read(subscriptionServiceProvider).isPro()) return;
+      if (!ref.read(workoutScheduleServiceProvider).isPhaseExpired()) return;
 
       final profile = UserRepository.instance.getProfile() ?? {};
       final progress = UserRepository.instance.getProgress() ?? {};
@@ -274,7 +277,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           : const <String>[];
       final sessionDuration = (profile['session_duration_minutes'] as num?)?.toInt();
 
-      final generated = await WorkoutScheduleService.instance
+      // A7 / B5 D9-D10 — canonical provider path.
+      final generated = await ref
+          .read(workoutScheduleServiceProvider)
           .autoGenerateNextPhaseIfNeeded(
         goal: goal,
         equipment: equipment,
@@ -294,7 +299,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         updated['phase_started_at'] = DateTime.now().toIso8601String();
         await UserRepository.instance.saveProgress(updated);
         // Fire-and-forget snapshot push so AI coach sees the new Phase.
-        unawaited(SyncService.instance.pushSnapshot());
+        // A7 / B5 D9-D10 — canonical provider path.
+        unawaited(ref.read(syncServiceProvider).pushSnapshot());
       }
     } catch (e) {
       debugPrint('[splash._autoGenerateNextPhaseForPro] $e');

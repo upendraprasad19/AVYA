@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -60,14 +61,17 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // Parallel: destination resolution + start restore in background.
     final destinationFuture =
         AuthSessionBootstrapper.instance.resolveDestination(user.id);
-    final restoreFuture = SyncService.instance.restoreFromCloudForUser();
+    // A7 / B5 D9-D10 — canonical provider path.
+    final restoreFuture =
+        ref.read(syncServiceProvider).restoreFromCloudForUser();
 
     final destination = await destinationFuture;
 
     switch (destination) {
       case StartMissionBrief():
         // Brand-new user with no profile row — cancel restore, go to Mission Brief.
-        SyncService.instance.cancelInflightRestore();
+        // A7 / B5 D9-D10 — canonical provider path.
+        ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/mission-brief');
         return;
 
@@ -113,7 +117,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         }
 
         // Mid-onboarding user — cancel restore, jump to first missing step.
-        SyncService.instance.cancelInflightRestore();
+        // A7 / B5 D9-D10 — canonical provider path.
+        ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/$firstMissingStep');
         return;
 
@@ -152,7 +157,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       // Re-attempt restore for the correct user. Non-fatal if it fails —
       // user lands on home with empty local state which will fill on next sync.
       try {
-        await SyncService.instance.restoreFromCloudForUser();
+        // A7 / B5 D9-D10 — canonical provider path.
+        await ref.read(syncServiceProvider).restoreFromCloudForUser();
       } catch (e) {
         debugPrint('[RestoringScreen] re-restore after ownership fix failed: $e');
       }
@@ -194,7 +200,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // tables key by natural columns so this just heals any divergence
     // introduced by pre-fix `_restoreExerciseLogs` rounds).
     if (migratorDidRun) {
-      unawaited(SyncService.instance.syncWorkoutData());
+      // A7 / B5 D9-D10 — canonical provider path.
+      unawaited(ref.read(syncServiceProvider).syncWorkoutData());
     }
 
     // Migrate nutrition logs from `nlog_<timestamp>` to deterministic

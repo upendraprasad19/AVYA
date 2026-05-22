@@ -18,6 +18,16 @@ class SubscriptionService {
     _registerLifecycle();
   }
   static final SubscriptionService _instance = SubscriptionService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(subscriptionServiceProvider)` over `.instance`. The
+  /// singleton path is preserved for non-Riverpod contexts (main.dart
+  /// bootstrap, static helpers); the Provider exposes the same
+  /// instance with `ref.listen(authUserIdTokenProvider, …)` wiring so
+  /// the SingletonLifecycleRegistry reset fires through Riverpod's
+  /// lifecycle. Full removal lands in a follow-up batch (CLAUDE.md §4.11).
+  @Deprecated(
+      'Use ref.read(subscriptionServiceProvider) — singleton path will be removed after full migration')
   static SubscriptionService get instance => _instance;
 
   final HiveService _hive = HiveService.instance;

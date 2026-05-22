@@ -178,6 +178,14 @@ class WorkoutScheduleService {
     _registerLifecycle();
   }
   static final WorkoutScheduleService _instance = WorkoutScheduleService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(workoutScheduleServiceProvider)` over `.instance`.
+  /// Note: A2 will split this service into 4 (plan-anchor / scheduling
+  /// / swap-engine / templates); this provider is the bridge — A2
+  /// will replace it with 4 split providers.
+  @Deprecated(
+      'Use ref.read(workoutScheduleServiceProvider) — singleton path will be removed after full migration')
   static WorkoutScheduleService get instance => _instance;
 
   final HiveService _hive = HiveService.instance;

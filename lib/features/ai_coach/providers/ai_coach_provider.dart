@@ -6,12 +6,11 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../repositories/ai_coach_repository.dart';
@@ -336,7 +335,8 @@ class TrialInfoNotifier extends Notifier<TrialInfoData> {
   TrialInfoData build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     // PRO users are never trial-limited
-    if (SubscriptionService.instance.isPro()) {
+    // A7 / B5 D9-D10 — canonical provider path.
+    if (ref.read(subscriptionServiceProvider).isPro()) {
       return const TrialInfoData(
         daysRemaining: 0,
         isTrialActive: false,
@@ -438,7 +438,7 @@ class SendMessageNotifier extends Notifier<bool> {
     try {
       final context = repo.buildAiContext();
 
-      final aiResponse = await AiService.instance.chatWithMedia(
+      final aiResponse = await ref.read(aiServiceProvider).chatWithMedia(
         captionForLog,
         mediaUrl,
         mediaType,
@@ -563,7 +563,8 @@ class SendMessageNotifier extends Notifier<bool> {
     // below. The actual model + rate-limit enforcement now lives inside the
     // single `ai-proxy` Edge Function — no client-side routing between
     // chat / chatPro / reason any more.
-    final isPro = SubscriptionService.instance.isPro();
+    // A7 / B5 D9-D10 — canonical provider path.
+    final isPro = ref.read(subscriptionServiceProvider).isPro();
 
     // Free user limit check — silent return; UI already shows the limit.
     if (!isPro && currentLimit >= AppConstants.freeAiMessagesPerDay) return;
@@ -635,7 +636,7 @@ class SendMessageNotifier extends Notifier<bool> {
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
       // 2026-04-18 onward. Free/PRO differentiation is the 15/day server-side
       // cap + trial window — the client no longer picks a backend.
-      final aiResponse = await AiService.instance.chat(message, context);
+      final aiResponse = await ref.read(aiServiceProvider).chat(message, context);
 
       // Replace loading with actual response
       chatNotifier.replaceLastMessage(ChatMessage(
@@ -697,8 +698,9 @@ class SendMessageNotifier extends Notifier<bool> {
           final retryContext = repo.buildAiContext();
           final retryEnriched = repo.enrichContextForQuery(message, retryContext);
 
+          // A7 / B5 D9-D10 — canonical provider path.
           final retryResponse =
-              await AiService.instance.chat(message, retryEnriched);
+              await ref.read(aiServiceProvider).chat(message, retryEnriched);
 
           // Retry succeeded — update UI and return
           chatNotifier.replaceLastMessage(ChatMessage(
@@ -1005,7 +1007,8 @@ class PredictionNotifier extends Notifier<PredictionData> {
         predDateRaw != null ? DateTime.tryParse(predDateRaw) : null;
     final isStale = MigratedKey.read<bool>('prediction_stale') == true;
 
-    final isPro = SubscriptionService.instance.isPro();
+    // A7 / B5 D9-D10 — canonical provider path.
+    final isPro = ref.read(subscriptionServiceProvider).isPro();
 
     bool canRefresh = false;
     if (isPro && predDate != null) {

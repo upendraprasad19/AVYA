@@ -93,6 +93,17 @@ class SyncService {
     _registerLifecycle();
   }
   static final SyncService _instance = SyncService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(syncServiceProvider)` over `.instance`. The singleton
+  /// path is preserved for non-Riverpod contexts (main.dart bootstrap,
+  /// migrators); the Provider exposes the same instance with
+  /// `ref.listen(authUserIdTokenProvider, …)` wiring so the
+  /// SingletonLifecycleRegistry reset fires through Riverpod's
+  /// lifecycle. A6 (commit d230301) wired SyncDomain wrappers; the
+  /// provider simply exposes this singleton — internals unchanged.
+  @Deprecated(
+      'Use ref.read(syncServiceProvider) — singleton path will be removed after full migration')
   static SyncService get instance => _instance;
 
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset

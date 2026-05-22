@@ -55,6 +55,14 @@ class AiService {
     _registerLifecycle();
   }
   static final AiService _instance = AiService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(aiServiceProvider)` over `.instance`. The Provider
+  /// exposes the same instance and wires
+  /// `ref.listen(authUserIdTokenProvider, …)` so the cached Dio
+  /// client is closed + dropped on user swap.
+  @Deprecated(
+      'Use ref.read(aiServiceProvider) — singleton path will be removed after full migration')
   static AiService get instance => _instance;
 
   final SupabaseService _supabase = SupabaseService.instance;

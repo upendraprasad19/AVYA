@@ -14,6 +14,13 @@ class UsageCounterService {
     _registerLifecycle();
   }
   static final UsageCounterService _instance = UsageCounterService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(usageCounterServiceProvider)` over `.instance`. The
+  /// singleton is preserved for non-Riverpod contexts (main.dart
+  /// counter-reset boot).
+  @Deprecated(
+      'Use ref.read(usageCounterServiceProvider) — singleton path will be removed after full migration')
   static UsageCounterService get instance => _instance;
 
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset

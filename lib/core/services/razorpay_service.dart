@@ -27,6 +27,13 @@ class RazorpayService {
     _registerLifecycle();
   }
   static final RazorpayService _instance = RazorpayService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(razorpayServiceProvider)` over `.instance`. The
+  /// singleton path is preserved for non-Riverpod contexts
+  /// (main.dart bootstrap).
+  @Deprecated(
+      'Use ref.read(razorpayServiceProvider) — singleton path will be removed after full migration')
   static RazorpayService get instance => _instance;
 
   Razorpay? _razorpay;

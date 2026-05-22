@@ -9,11 +9,10 @@ import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/nutrition_write_source.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
@@ -683,7 +682,8 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       // Cheap (~50ms hit if cache miss); resolves the most-likely cause of
       // rate-limit trigger firing on a user who's actually under their daily cap.
       try {
-        await SubscriptionService.instance.verifyFromServer();
+        // A7 / B5 D9-D10 — canonical provider path.
+        await ref.read(subscriptionServiceProvider).verifyFromServer();
       } catch (_) {
         // Non-fatal — continue with cached state. Server-side trigger is the
         // authoritative gate.
@@ -1307,9 +1307,10 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
         // the user may dismiss without saving but quota was spent. Client
         // counter must stay in sync with the server's abuse cap so the
         // "X remaining" UI is accurate regardless of save behaviour.
-        unawaited(UsageCounterService.instance.increment(
+        // A7 / B5 D9-D10 — canonical provider path.
+        unawaited(ref.read(usageCounterServiceProvider).increment(
           AppConstants.featureScanMealPro,
-          SubscriptionService.instance.isPro(),
+          ref.read(subscriptionServiceProvider).isPro(),
         ));
         return;
       }
@@ -1387,10 +1388,11 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
           result: data,
         );
         // Increment quota only on actual success — not on failure/error
-        await UsageCounterService.instance.increment(
-          AppConstants.featureCartAuditorPro,
-          SubscriptionService.instance.isPro(),
-        );
+        // A7 / B5 D9-D10 — canonical provider path.
+        await ref.read(usageCounterServiceProvider).increment(
+              AppConstants.featureCartAuditorPro,
+              ref.read(subscriptionServiceProvider).isPro(),
+            );
         return;
       }
 
@@ -1442,24 +1444,30 @@ final cartAuditorProvider =
 /// Returns remaining AI text log count for display.
 final aiTextLogRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  final isPro = SubscriptionService.instance.isPro();
-  return UsageCounterService.instance
+  // A7 / B5 D9-D10 — canonical provider path.
+  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  return ref
+      .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureAiTextLogPro, isPro);
 });
 
 /// Returns remaining scan meal count for display.
 final scanMealRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  final isPro = SubscriptionService.instance.isPro();
-  return UsageCounterService.instance
+  // A7 / B5 D9-D10 — canonical provider path.
+  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  return ref
+      .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureScanMealPro, isPro);
 });
 
 /// Returns remaining cart auditor count for display.
 final cartAuditorRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  final isPro = SubscriptionService.instance.isPro();
-  return UsageCounterService.instance
+  // A7 / B5 D9-D10 — canonical provider path.
+  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  return ref
+      .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureCartAuditorPro, isPro);
 });
 
