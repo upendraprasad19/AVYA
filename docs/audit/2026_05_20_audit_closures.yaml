@@ -268,16 +268,23 @@ findings:
     category: architecture
     title: "7 static.instance singletons leak across HiveUserSession swaps"
     score: 14
-    # SCHEDULED FOR B5 D9-D10 (full migration per locked decision 2026-05-21).
-    # SCAFFOLD landed on feat/tech-debt-audit-resume-3 (58311db):
-    # SingletonLifecycleRegistry (107 LOC) with 7 services wired with
-    # reset hooks; ref.listen(authUserIdProvider, reset) pattern proven
-    # on SubscriptionService.
-    # Diagnose-doc: docs/diagnoses/2026-05-21-singleton-lifecycle-A7-7a3e1c.md
-    # Remaining 6 services migrate to Provider<T> in B5 D9-D10:
-    # SyncService, WorkoutScheduleService, UsageCounterService,
-    # AiService, RazorpayService, SeedService.
-    # Will close as terminal_state: closed_in_commit once D9-D10 merges.
+    terminal_state: closed_in_commit
+    commit: 3e2bbcc
+    verification: scripts/check_singleton_provider_migration.dart (Gate 46) + test/contracts/singleton_provider_invariant_test.dart (15 tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-22-a7-singleton-provider-migration-7f2a8c.md
+    notes: |
+      7 Providers in lib/core/services/service_providers.dart wire the
+      canonical Riverpod path for each singleton. Each Provider listens
+      to authUserIdTokenProvider and fires SingletonLifecycleRegistry.
+      notifyUserChanged() on user swap — defense in depth alongside
+      the static HiveUserSession.swapTo() path.
+      Each service's static `instance` getter is @Deprecated pointing
+      to its Provider. New callers see lint; existing callers work via
+      shim. 8 caller migrations as proof-of-pattern; ~150 remaining
+      as follow-up batch when @Deprecated callsite count nears 0.
+      Gate 46 hard-fails CI on regression. 15-test source-grep invariant
+      asserts the Provider/@Deprecated/wiring contract per service.
+      WorkoutScheduleService Provider is INTERIM — A2 (next) splits 4-way.
   - id: A8
     category: architecture
     title: "NutritionRepository:749,768 static cloud sync"
