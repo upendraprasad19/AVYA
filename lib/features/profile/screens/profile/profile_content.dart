@@ -1,5 +1,10 @@
 part of 'screen.dart';
 
+// Bug 2026-05-22 / pre-batch lint sweep — extension on State subclass
+// calls @protected setState. Analyzer's protected-member rule doesn't
+// model "extension on same State", so file-level ignore. Runtime fine.
+// ignore_for_file: invalid_use_of_protected_member
+
 extension _ProfileContent on _ProfileScreenState {
 
   Widget _buildProfileContent(BuildContext context) {

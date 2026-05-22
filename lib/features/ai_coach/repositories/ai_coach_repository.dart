@@ -30,6 +30,7 @@
 // closes-finding: tech-debt-audit-2026-05-20-A10
 
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:meta/meta.dart';
 import '../services/ai_snapshot_builder.dart';
 import '../services/coach_memory_service.dart';
 import '../services/pattern_detector.dart';
@@ -124,6 +125,26 @@ class AiCoachRepository {
         aiResponse: aiResponse,
         modelUsed: modelUsed,
       );
+
+  /// Bug 2026-05-22 / diagnose b4a09c — A10 refactor (commit d6e472c,
+  /// 2026-05-21) extracted snapshot logic into `AiSnapshotBuilder` but
+  /// did not forward these two `@visibleForTesting` seams. Existing
+  /// tests at `test/ai_coach/meals_today_snapshot_test.dart` +
+  /// `nutrition_trend_7d_snapshot_test.dart` were left calling deleted
+  /// methods, blocking the pre-commit hook on every new commit. These
+  /// forwarders match the shim pattern documented at line 51
+  /// (`snapshotBuilder` getter) and the dedup forwarder at line 100.
+  @visibleForTesting
+  List<Map<String, dynamic>> mealsTodayForTest() {
+    // ignore: invalid_use_of_visible_for_testing_member
+    return AiSnapshotBuilder.instance.mealsTodayForTest();
+  }
+
+  @visibleForTesting
+  List<Map<String, dynamic>> nutritionTrend7dForTest() {
+    // ignore: invalid_use_of_visible_for_testing_member
+    return AiSnapshotBuilder.instance.nutritionTrend7dForTest();
+  }
 
   Future<void> updateInteractionWithError(
     String key, {

@@ -1,5 +1,14 @@
 part of 'screen.dart';
 
+// Bug 2026-05-22 / pre-batch lint sweep (Theme B fold) — A11 extracted
+// chat-screen helpers into part-file extensions on _AiCoachScreenState.
+// `setState` is a @protected member of State; extension methods can't
+// call it under the analyzer's default rules even when the extension is
+// on the same State subclass. The runtime semantics are fine — this is
+// purely an analyzer rule that doesn't model "extension on State".
+// File-level ignore matches the same pattern recording_body.dart needs.
+// ignore_for_file: invalid_use_of_protected_member
+
 extension _MediaPicker on _AiCoachScreenState {
 
   /// Shows a bottom sheet with Camera and Gallery options.

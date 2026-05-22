@@ -152,7 +152,9 @@ List<String> _validate(File file, bool strict, List<String> warnings) {
     return violations;
   }
 
+  // ignore: unused_local_variable
   var totalCount = -1;
+  // ignore: unused_local_variable
   var declaredClosed = -1;
   for (final line in lines) {
     final tm = RegExp(r'^total_findings:\s*(\d+)').firstMatch(line);
@@ -214,6 +216,7 @@ List<String> _validate(File file, bool strict, List<String> warnings) {
   }
 
   // Validate each finding.
+  // ignore: unused_local_variable
   var closedTally = 0;
   for (final f in findings) {
     final id = f['id'] ?? '<unknown>';
