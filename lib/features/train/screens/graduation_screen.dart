@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -292,14 +293,75 @@ class GraduationScreen extends ConsumerWidget {
   }
 
   Widget _buildPhase2Preview() {
-    // Blurred Phase 2 preview — show day names, blur exercise names
-    final phase2Days = [
-      'Day 1: Upper Power',
-      'Day 2: Lower Power',
-      'Day 3: Rest & Mobility',
-      'Day 4: Upper Hypertrophy',
-      'Day 5: Lower Hypertrophy',
-    ];
+    // Theme J (diagnose 2026-05-23 14e8a5) — pre-fix this was hardcoded to
+    // '5 DAYS/WEEK · WEEKS 5-8 · POWER + HYPERTROPHY' + a static 5-day
+    // template (Day 1: Upper Power, …). For a 4-day-per-week user, the
+    // preview misrepresents what they're about to unlock — the actual
+    // generateAndSchedule call at line 533 uses their real days_per_week
+    // and generates a different split. Fix: dry-run PlanGenerator.generateV4
+    // with the user's actual profile + next phase number, then render the
+    // returned WeekPlan.workoutDays. Pure call (no Hive writes, no side
+    // effects); same code path previewPlanProvider uses.
+    final profile = UserRepository.instance.getProfile() ?? {};
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final currentPhase = (progress['current_phase'] as int?) ?? 1;
+    final nextPhase = currentPhase >= 12
+        ? 9 + ((currentPhase - 8) % 4)
+        : currentPhase + 1;
+    final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
+    final goal =
+        profile['primary_goal'] as String? ?? 'general_fitness';
+    final equipment =
+        profile['equipment_access'] as String? ?? 'basic_gym';
+    final experienceLevel =
+        profile['fitness_experience'] as String? ?? 'intermediate';
+    final injuries = (profile['injuries'] as List?)
+            ?.whereType<String>()
+            .where((s) => s != 'none')
+            .toList() ??
+        const <String>[];
+
+    // Phase title + focus line. Phase 2 (Progressive Overload) was the
+    // canonical pre-fix copy; later phases extend the same pattern.
+    final phaseLabel = 'PHASE $nextPhase';
+    final weekRange =
+        'WEEKS ${(nextPhase - 1) * 4 + 1}-${nextPhase * 4}';
+
+    // Try the real plan generator; fall back to a single summary line
+    // if the call throws (defensive — never block graduation render).
+    List<_PreviewDay>? previewDays;
+    String? phaseTitle;
+    String? focus;
+    try {
+      final phase = PlanGenerator.instance.generateV4(
+        goal: goal,
+        equipment: equipment,
+        daysPerWeek: daysPerWeek,
+        phase: nextPhase,
+        experienceLevel: experienceLevel,
+        injuries: injuries,
+      );
+      phaseTitle = _phaseDisplayName(nextPhase);
+      focus = _phaseFocus(nextPhase);
+      final firstWeek = phase.weekPlans.isNotEmpty
+          ? phase.weekPlans.first
+          : null;
+      final days = firstWeek?.workoutDays ?? phase.workouts;
+      previewDays = days
+          .take(5)
+          .map((d) => _PreviewDay(
+                title: d.name,
+                exercises: d.exercises
+                    .take(3)
+                    .map((e) => e.exerciseName)
+                    .join(', '),
+              ))
+          .toList();
+    } catch (e, st) {
+      debugPrint('[GraduationScreen._buildPhase2Preview] $e\n$st');
+      unawaited(ErrorTelemetry.logEvent('graduation_phase2_preview_failed',
+          message: 'phase=$nextPhase err=${e.toString().substring(0, e.toString().length.clamp(0, 200))}'));
+    }
 
     return WardCard(
       child: Column(
@@ -307,17 +369,20 @@ class GraduationScreen extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const WardChip(label: 'PHASE 2', tone: WardChipTone.gold),
+              WardChip(label: phaseLabel, tone: WardChipTone.gold),
               const SizedBox(width: 8),
-              Text(
-                'Progressive Overload',
-                style: AppTypography.h3,
+              Expanded(
+                child: Text(
+                  phaseTitle ?? 'Progressive Overload',
+                  style: AppTypography.h3,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            '5 DAYS/WEEK · WEEKS 5-8 · POWER + HYPERTROPHY',
+            '$daysPerWeek DAYS/WEEK · $weekRange · '
+            '${focus ?? "Power + Hypertrophy".toUpperCase()}',
             style: AppTypography.monoXs.copyWith(
               color: AppColors.textDim,
               letterSpacing: 1.5,
@@ -325,8 +390,13 @@ class GraduationScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
 
-          // Day names visible, exercise names blurred
-          ...phase2Days.map((day) => Padding(
+          // Day names visible (actual generator output), exercise names blurred.
+          // Local non-nullable alias so List.generate closure captures a
+          // promoted type (Dart flow analysis doesn't promote across
+          // closure boundaries).
+          if (previewDays != null && previewDays.isNotEmpty) ...[
+            for (final entry in previewDays.asMap().entries)
+              Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
@@ -340,17 +410,18 @@ class GraduationScreen extends ConsumerWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      day,
+                      'Day ${entry.key + 1}: ${entry.value.title}',
                       style: AppTypography.h3.copyWith(fontSize: 13),
                     ),
                     const SizedBox(width: 8),
-                    // Blurred exercise placeholder
                     Expanded(
                       child: ImageFiltered(
                         imageFilter:
                             ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                         child: Text(
-                          'Bench Press, Rows, OHP...',
+                          entry.value.exercises.isNotEmpty
+                              ? entry.value.exercises
+                              : 'Exercises personalised to you...',
                           style: AppTypography.bodySm.copyWith(
                             color: AppColors.textDim,
                           ),
@@ -360,7 +431,18 @@ class GraduationScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-              )),
+              ),
+          ]
+          else
+            // Defensive fallback when generateV4 throws — single
+            // descriptive line keeps the surface meaningful.
+            Text(
+              '$daysPerWeek workout days personalised to your goal + equipment',
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
         ],
       ),
     );
@@ -590,4 +672,53 @@ class _GenerateNextPhaseButtonState
       if (mounted) setState(() => _isGenerating = false);
     }
   }
+}
+
+/// Theme J — preview day cell used by graduation phase 2 card. Holds the
+/// generated workout-day name + a comma-joined string of the first 3
+/// exercises (rendered behind a blur to tease without revealing).
+class _PreviewDay {
+  final String title;
+  final String exercises;
+  const _PreviewDay({required this.title, required this.exercises});
+}
+
+/// Display name per phase. Mirrors the canonical plan-generator copy.
+/// Falls back to `'Phase $n'` if the phase number is outside 1-12.
+String _phaseDisplayName(int phase) {
+  const names = {
+    1: 'Foundation',
+    2: 'Progressive Overload',
+    3: 'Intensification',
+    4: 'Power Build',
+    5: 'Hypertrophy Peak',
+    6: 'Strength Cycle',
+    7: 'Conditioning Push',
+    8: 'Power Hypertrophy',
+    9: 'Specialisation',
+    10: 'Strength Peak',
+    11: 'Conditioning Peak',
+    12: 'Mastery',
+  };
+  return names[phase] ?? 'Phase $phase';
+}
+
+/// Per-phase focus subtitle. Used in the meta line. Uppercased at the
+/// callsite.
+String _phaseFocus(int phase) {
+  const focus = {
+    1: 'Foundation + technique',
+    2: 'Power + hypertrophy',
+    3: 'Volume + intensification',
+    4: 'Power build',
+    5: 'Hypertrophy peak',
+    6: 'Strength cycle',
+    7: 'Conditioning + power',
+    8: 'Power + hypertrophy',
+    9: 'Specialisation',
+    10: 'Strength peak',
+    11: 'Conditioning peak',
+    12: 'Mastery',
+  };
+  return (focus[phase] ?? 'Progressive overload').toUpperCase();
 }
