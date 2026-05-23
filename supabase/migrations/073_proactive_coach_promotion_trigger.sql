@@ -1,3 +1,8 @@
+-- Intent: Add trg_dispatch_proactive_coach_promotion AFTER INSERT trigger on public.rank_promotions that fires private.dispatch_proactive_coach_promotion() → pg_net.http_post to /functions/v1/proactive-coach-promotion (server-side proactive coach congrats + OneSignal push).
+-- Destructive?: no   -- only ADDs a SECURITY DEFINER function in private schema + a new trigger. Existing rank_promotions inserts proceed unchanged; trigger swallows all exceptions.
+-- Rollback strategy: inline   -- end-of-file commented-out reverse DDL drops the trigger + function.
+-- Linked diagnose-doc: 8b1f33
+
 -- 073_proactive_coach_promotion_trigger.sql
 --
 -- Theme C (closes-diagnose 2026-05-22 8b1f33).
@@ -116,3 +121,9 @@ COMMENT ON FUNCTION private.dispatch_proactive_coach_promotion() IS
 
 COMMENT ON TRIGGER trg_dispatch_proactive_coach_promotion ON public.rank_promotions IS
   'Theme C / 073 — async dispatch to AI coach + OneSignal push.';
+
+-- ── Rollback DDL (commented; uncomment + run as a new migration to revert) ──
+--
+-- DROP TRIGGER IF EXISTS trg_dispatch_proactive_coach_promotion
+--   ON public.rank_promotions;
+-- DROP FUNCTION IF EXISTS private.dispatch_proactive_coach_promotion();
