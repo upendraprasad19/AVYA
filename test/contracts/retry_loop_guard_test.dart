@@ -216,12 +216,18 @@ void main() {
               'risk for 4xx.');
     });
 
-    test('retry path is gated on 502 OR 503 OR 504 status (not unconditional)',
+    test('retry path is gated on 502/503/504 + opt-in 500 via retryOn500 (Theme I)',
         () {
       // Test #15.5 / c01d57 — widened the cold-start trigger set from
       // {502, 503} to {502, 503, 504} since cold-start gateway timeouts
-      // can surface as either 502 (gave up) or 504 (timed out). 500 is
-      // NOT retryable — it's a server runtime error, not a boot delay.
+      // can surface as either 502 (gave up) or 504 (timed out).
+      //
+      // Theme I (closes-diagnose 599d49, 2026-05-22) — extended the
+      // predicate to ALSO retry 500 when the caller opts in via
+      // `retryOn500: true` (ai-proxy returns 500 on transient Gemini
+      // upstream timeouts which ARE retry-worthy). Default-false
+      // preserves the global "500 means caller bug" semantic for every
+      // other Edge Function.
       final source = allSources.entries
           .firstWhere((e) => e.key.contains('supabase_service.dart'))
           .value;
@@ -236,12 +242,25 @@ void main() {
               'Retry gate must cover 502, 503, AND 504 cold-start statuses. '
               'closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57');
 
-      // 500 must NOT be in the gate (would re-introduce broken-call
-      // retry for server runtime errors).
-      expect(source.contains('e.status == 500'), isFalse,
-          reason:
-              '500 is a server runtime error, not a cold-start. Must not '
-              'be in the retry-trigger set.');
+      // 500 retry must be OPT-IN — guarded by retryOn500 flag.
+      expect(
+        RegExp(r'retryOn500\s*&&\s*e\.status\s*==\s*500').hasMatch(source),
+        isTrue,
+        reason: 'Theme I — 500 retry must appear ONLY behind the retryOn500 '
+            'guard. Pattern `(retryOn500 && e.status == 500)` must exist.',
+      );
+      // Forbidden: an UNCONDITIONAL `e.status == 500` predicate (no
+      // retryOn500 prefix). Strip the conditional form first, then
+      // assert no bare `e.status == 500` remains.
+      final stripped = source.replaceAll(
+          RegExp(r'retryOn500\s*&&\s*e\.status\s*==\s*500'), '');
+      expect(
+        stripped.contains('e.status == 500'),
+        isFalse,
+        reason:
+            'No UNCONDITIONAL `e.status == 500` predicate may exist — 500 '
+            'retry must always be behind the retryOn500 opt-in guard.',
+      );
     });
   });
 

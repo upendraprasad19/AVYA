@@ -43,10 +43,19 @@ void main() {
       );
     });
 
-    test('retry triggers ONLY on 502 + 503 + 504 (cold-start signatures)', () {
+    test('retry triggers on 502/503/504 (cold-start) + opt-in 500 (Theme I)',
+        () {
       // Bug c01d57 (2026-05-15): widened from {502, 503} to add 504
       // since cold-start gateway timeouts can surface as either 502
       // (gateway gave up) or 504 (gateway timed out).
+      //
+      // Theme I (closes-diagnose 599d49, 2026-05-22): extended the
+      // predicate to ALSO retry 500 when the caller opts in via
+      // `retryOn500: true` (ai-proxy returns 500 on transient Gemini
+      // upstream timeouts which ARE retry-worthy). 500 retry stays
+      // off by default for every other Edge Function where 500 is a
+      // caller bug (log-client-error validation, ai-media-proxy
+      // bucket misconfig).
       final hasGate = src.contains(
               'e.status == 502 || e.status == 503 || e.status == 504') ||
           src.contains(
@@ -54,13 +63,32 @@ void main() {
       expect(hasGate, isTrue,
           reason:
               'Retry must be gated on FunctionException.status of 502, 503, '
-              'OR 504. Other status codes (401 auth, 400 validation, 500 '
-              'runtime error) must NOT retry.');
-      // 500 must stay OUT of the retry-trigger set.
-      expect(src.contains('e.status == 500'), isFalse,
-          reason:
-              '500 is a server runtime error, not a cold-start. Must not be '
-              'in the retry-trigger set.');
+              'OR 504. Other status codes (401 auth, 400 validation) must '
+              'NOT retry. 500 retry is opt-in via retryOn500 — see Theme I.');
+      // 500 must be OPT-IN only — guarded by retryOn500 flag. The bare
+      // `e.status == 500` predicate (without retryOn500 &&) is forbidden;
+      // it would auto-retry every server runtime error.
+      expect(
+        RegExp(r'retryOn500\s*&&\s*e\.status\s*==\s*500').hasMatch(src),
+        isTrue,
+        reason: 'Theme I — 500 retry must appear ONLY behind the retryOn500 '
+            'guard. Pattern `(retryOn500 && e.status == 500)` must exist.',
+      );
+      // Forbidden: an unconditional `e.status == 500` predicate (no
+      // retryOn500 prefix). The conditional form passes this check
+      // because `e.status == 500` is preceded by `retryOn500 && `.
+      // We assert by stripping all `retryOn500 && e.status == 500`
+      // occurrences first, then checking no bare `e.status == 500`
+      // remains.
+      final stripped =
+          src.replaceAll(RegExp(r'retryOn500\s*&&\s*e\.status\s*==\s*500'), '');
+      expect(
+        stripped.contains('e.status == 500'),
+        isFalse,
+        reason:
+            'No UNCONDITIONAL `e.status == 500` predicate may exist — 500 '
+            'retry must always be behind the retryOn500 opt-in guard.',
+      );
     });
 
     test('backoff schedule is the pinned [2000, 6000, 12000] ms list', () {
