@@ -432,6 +432,13 @@
     "applier": "founder"
   },
   {
+    "migration": "073",
+    "applied_at": "2026-05-24T09:42:55+05:30",
+    "hash": "sha256:fa80272b9206aa149886aafcf68a0932de6cd9da845c04e0bed112ec35cbe059",
+    "applier": "claude-via-mcp",
+    "diagnose": "8b1f33"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",
