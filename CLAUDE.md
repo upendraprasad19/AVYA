@@ -214,7 +214,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 │  Zero latency. Works fully offline.                  │
 │                                                      │
 │  SEED DATA (bundled JSON in APK):                    │
-│    assets/data/exercise_library.json (200+ exercises)│
+│    assets/data/exercise_library.json (258 — see §17)  │
 │    assets/data/food_database.json (93 foods)          │
 │    → Parsed into Hive on first launch                │
 │                                                      │
@@ -298,7 +298,7 @@ lib/
                                                       #   /profile/submissions instead.
   shared/
     widgets/    paywall_sheet, pro_badge, streak_warning_banner, loading_skeleton
-      wardroom/   # 36 exports (up from 28) — see "Wardroom primitives" in §9.
+      wardroom/   # 34 exports (down from 36 — RankChip + RankInsignia deleted audit-2026-05-16 / E.11) — see "Wardroom primitives" in §9.
                   # Barrel: wardroom.dart. New since PR R (2026-04-18..20):
                   #   ward_seal_badge.dart            — WardSealBadge + WardSealVariant
                   #   ward_dispatch_header.dart       — WardDispatchHeader (double gold rule eyebrow)
@@ -377,9 +377,9 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 
 ---
 
-## 7. DATABASE SCHEMA (46 Tables — Supabase Postgres)
+## 7. DATABASE SCHEMA (47 Tables — Supabase Postgres)
 
-> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`. Count verified live on prod 2026-05-11 (`information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`).
+> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`. Count verified live on prod 2026-05-24 (`information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`).
 
 | Domain | Tables |
 |---|---|
@@ -389,7 +389,7 @@ supabase/{migrations, functions}/                     # SQL + Edge Functions (TS
 | Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` |
 | Visual (1) | `progress_photos` |
 | AI (4) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory`, `memory_embeddings` |
-| Telemetry (1) | `client_errors` |
+| Telemetry (2) | `client_errors`, `cron_call_log` (per-cron-invocation telemetry; 7-day retention via `cleanup_cron_call_log()` scheduled `cron_call_log_cleanup_daily` 03:30 UTC — migration 069) |
 | Monetisation (7) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes`, `referral_redemptions` |
 | Community (1) | `community_reviews` |
 | Ranking (3) | `rank_ladder` (reference — 11 ranks), `rank_promotions` (events, UNIQUE `(user_id, rank_code)`), `user_stat_snapshots` (onboarding + per-promotion lifetime totals) |
@@ -506,9 +506,9 @@ Radius:    pill 100 / card-L 22 / card-M 16 / card-S 14 / row 12
 - **Streak badge:** `accentSoft` bg, `accent` w900 text, `accent`-20% border
 - **Progress bar:** `input` track, `accent` fill, height 6, radius 3
 
-### Wardroom primitives (36 exports)
+### Wardroom primitives (34 exports)
 
-Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts ≥ primitives when a file ships a primitive + a variant or helper (e.g. `ward_ring.dart` exports both `WardRing` and `WardMultiRing`). Grouped by role:
+Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 34 export lines. Counts ≥ primitives when a file ships a primitive + a variant or helper (e.g. `ward_ring.dart` exports both `WardRing` and `WardMultiRing`). Grouped by role:
 
 | Primitive | File | Purpose |
 |-----------|------|---------|
@@ -663,6 +663,8 @@ Every chat turn now embeds the user's message via `getEmbedding(text, "RETRIEVAL
 ### Tool-calling (since ai-proxy v44, 2026-04-20) — 24 AI coach tools
 
 `ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 24 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts`. Tier filtering: free users see 11 FREE tools, PRO sees all 24. (Pre-2026-05-16 audit, this doc claimed 20 tools / 6 FREE / 20 PRO — drift from registry growth across Tests #12–#16. Verified live by audit Agent 5 + cross-checked against `_shared/tools/registry.ts:35-73`.)
+
+> Counts in the table below are registry-level (entries in `ALL_TOOLS` in `_shared/tools/registry.ts`). Filesystem counts under `supabase/functions/_shared/tools/<family>/` may differ by 1 because each family directory includes an `index.ts` barrel file that is not itself a tool.
 
 | Family | Tools |
 |---|---|
@@ -1275,7 +1277,7 @@ Step 1 copy explicitly states: subscription cancelled with no refund, Razorpay p
 
 ## 17. EXERCISE LIBRARY
 
-250 exercises seeded in bundled JSON. Categories:
+258 exercises seeded in bundled JSON (canonical count — see §4 SEED DATA cross-link). Categories:
 - Push (~35), Pull (~35), Legs (~40), Core (~25)
 - Cardio (~20), Flexibility (~30), Calisthenics (~10)
 - Indian Traditional (5): Dand, Baithak, Surya Namaskar, Malkhamb, Hindu Warrior Flow
@@ -1308,6 +1310,8 @@ Community growth: User adds custom food → Hive + Supabase. Admin approves → 
 ---
 
 ## 19. COMMON BUGS TO AVOID
+
+> **Note on Edge Function version numbers cited below:** version stamps in §19 batch retrospectives (e.g. `ai-proxy v66`, `morning-alert v21`, `ai-media-proxy v18`, `delete-account v3`) are point-in-time deploy markers from each batch's ship date. Live function versions advance over time via re-deploys, hotfixes, and audit-driven redeployments — treat any `function-name vN` reference in this section as **historical context**, not a live-state claim. For current values, query `mcp__supabase__get_edge_function` against project `dedsavbjuwgarrhphgnl`. This annotation absolves the version-stamp class of references in §19 from being re-flagged as drift by future `sync-claude-md` runs.
 
 | Bug | How to Avoid |
 |---|---|
