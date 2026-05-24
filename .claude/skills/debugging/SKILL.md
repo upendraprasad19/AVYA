@@ -199,6 +199,29 @@ Per CLAUDE.md rules 21 + 22:
 - **Fix pattern:** Pin the batch in `EditWorkoutLogSheet.save` (workout SoT) / equivalent for nutrition. Any new mutation path must invalidate the full canonical set. Source-grep regression test asserts presence.
 - **Prior incidents:** Test #2 F5 (`aiInsightProvider`), edit-profile regen, `project_apk_test_2_batch.md`.
 
+### 2.18 Source-grep contract test stale after refactor — caught only at `flutter test`
+- **Telltale:** `flutter test` red after a refactor that preserves behaviour via a shim/forwarder file. Failures cluster on test files reading the now-thin-shim via `File('lib/.../<old_filename>.dart').readAsStringSync()` or `firstWhere((e) => e.key.contains('<old_filename>.dart'))`. The matched substring lands on the shim's "THIN SHIM" comment, not on the assertion's target pattern. Behaviour is preserved by the shim's forwarders; the test is just looking in the wrong place. Failures grow proportional to how many tests pinned the old file path (53 of 2354 in the canonical incident).
+- **Root-cause shape:** A B5-style multi-file split refactor moves a class body into N split files + leaves an old-name shim that re-exports + forwards. Tests written when the file was a monofile grep that file path by literal string. The grep still succeeds at finding A file; it lands on the shim's documentation block instead of the code that used to live there.
+- **Fix pattern:** Each affected test's `setUpAll` concatenates the shim + the N new home files. Existing `contains(...)` / `firstMatch(...)` assertions pass without changing what they test for. Example:
+  ```dart
+  // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart
+  // (2127 LOC) into a thin shim that forwards to AiSnapshotBuilder /
+  // CoachInteractionRepository / CoachMemoryService. Concat shim +
+  // new homes so source-grep contract still resolves.
+  final paths = const [
+    'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+    'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+    'lib/features/ai_coach/services/coach_memory_service.dart',
+    'lib/features/ai_coach/repositories/coach_interaction_repository.dart',
+  ];
+  aiRepoSrc = paths
+      .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+      .join('\n\n');
+  ```
+- **Class enforcement:** Gate 42 (`scripts/check_sot_behavioral_test_paths.dart`) — WARN-only until the 48-of-54 SoT-concept backlog of missing `behavioral_test_path:` lands. Flipping to FAIL closes this class permanently — a behavioural test reads via the canonical surface, not by file path, so refactor-driven moves don't affect it.
+- **Class rule (NEW 2026-05-24):** Any source-grep contract test added today MUST also have a paired `behavioral_test_path:` in `docs/sot_registry.yaml`. Adding 1 source-grep test creates 1 future post-refactor recovery touch-point. The discipline asymmetry favours behavioural tests.
+- **Prior incidents:** APK Test #16.2 +31 / 2026-05-24 / closes-diagnose `2b705b` — 53 stale source-grep tests caught zero actual bugs (all false positives), blocked pre-commit hook for hours; recovery cost ~3 hours of mechanical setUpAll re-pointing across 21 test files + `docs/sot_registry.yaml` bulk fix (49 stale `file:line_range` entries). One real Edge Function bug (proactive-coach-promotion `user_profile.full_name` query) surfaced as a side-effect of Gate 18 firing during the recovery — validating the gate-as-continuous-audit model. See `project_apk_test_16_2_recovery_2b705b.md` + `feedback_source_grep_false_confidence.md`.
+
 ---
 
 ## 3. Red flags — if you're thinking X, STOP

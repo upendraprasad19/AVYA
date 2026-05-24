@@ -229,7 +229,8 @@ After observations captured + before brainstorming:
 
 - Multi-bug batches: fix ALL in same batch. No "lower priority" tagging.
 - No "context tight" / "responsible handoff" as a stopping excuse — context management is the agent's job (use TodoWrite, dispatch focused subagents, compact when needed).
-- Refs: `feedback_no_deferrals.md`, `feedback_no_deferrals_recurrence.md`, `feedback_no_stop_until_done.md`.
+- **The ban is on the SEMANTIC, not the literal string.** Re-wrapping a deferral as `dedicated batch` / `test-maintenance batch` / `cleanup batch` / `next-batch baseline` / `documented baseline for next batch` is the SAME violation as `defer` / `follow-up batch`. When the menu you write would force founder to ratify a deferral to pick any option, the menu is malformed — re-design it. Codified 2026-05-24 as 7th instance per `feedback_mistake_dedicated_batch_is_defer.md` after founder caught the recovery batch's first plan attempting to ship APK +31 with 50 test failures rolled to a "dedicated test-maintenance batch".
+- Refs: `feedback_no_deferrals.md`, `feedback_no_deferrals_recurrence.md`, `feedback_no_stop_until_done.md`, `feedback_mistake_dedicated_batch_is_defer.md`.
 
 ### 4.3 Build / commit / push gates
 
