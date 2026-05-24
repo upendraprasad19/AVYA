@@ -48,6 +48,64 @@ void main() {
         // Getters that look like methods (counted as public API surface):
         'healthSyncDone',
         'onRestoreComplete',
+        // Tech-debt audit 2026-05-20 / A6 added SyncDomain wrappers
+        // (per-domain push + restore atomic entrypoints) so feature
+        // owners can fire single-domain sync without going through
+        // checkAndSync. Each `pushXForSyncDomain` / `restoreXForSyncDomain`
+        // mirrors an internal _syncX / _restoreX helper with the
+        // SyncFlags guard wrapped. Plus 2 test-only dispatchers used
+        // by the SyncDomain integration tests.
+        'dispatchDomainPushesForTests',
+        'dispatchDomainRestoresForTests',
+        // Push wrappers — one per domain (28 currently).
+        'pushCoachInteractionsForSyncDomain',
+        'pushCoachMemoryForSyncDomain',
+        'pushCustomItemsForSyncDomain',
+        'pushExerciseLogsForSyncDomain',
+        'pushMeasurementsForSyncDomain',
+        'pushNutritionLogsForSyncDomain',
+        'pushSavedMealsForSyncDomain',
+        'pushScheduleCompletionsForSyncDomain',
+        'pushScheduledWorkoutsForSyncDomain',
+        'pushSleepLogsForSyncDomain',
+        'pushStepsLogsForSyncDomain',
+        'pushStreaksForSyncDomain',
+        'pushUrineColorLogsForSyncDomain',
+        'pushUserPreferencesForSyncDomain',
+        'pushUserProfileForSyncDomain',
+        'pushUserProgressForSyncDomain',
+        'pushWaterLogsForSyncDomain',
+        'pushWeightLogsForSyncDomain',
+        'pushWorkoutLogsForSyncDomain',
+        'pushWorkoutPlanForSyncDomain',
+        'pushWorkoutTemplatesForSyncDomain',
+        // Restore wrappers — one per domain.
+        'restoreCoachInteractionsForSyncDomain',
+        'restoreCoachMemoryForSyncDomain',
+        'restoreCustomItemsForSyncDomain',
+        'restoreExerciseLogsForSyncDomain',
+        'restoreFreezesForSyncDomain',
+        'restoreMeasurementsForSyncDomain',
+        'restoreNotificationsInboxForSyncDomain',
+        'restoreNutritionLogsForSyncDomain',
+        'restoreRankPromotionsForSyncDomain',
+        'restoreReferralCodesForSyncDomain',
+        'restoreReferralRedemptionsForSyncDomain',
+        'restoreSavedDietPlanForSyncDomain',
+        'restoreSavedMealsForSyncDomain',
+        'restoreScheduleCompletionsForSyncDomain',
+        'restoreScheduledWorkoutsForSyncDomain',
+        'restoreSleepLogsForSyncDomain',
+        'restoreStepsLogsForSyncDomain',
+        'restoreStreaksForSyncDomain',
+        'restoreUserPreferencesForSyncDomain',
+        'restoreUserProfileForSyncDomain',
+        'restoreUserProgressForSyncDomain',
+        'restoreWaterLogsForSyncDomain',
+        'restoreWeightLogsForSyncDomain',
+        'restoreWorkoutLogsForSyncDomain',
+        'restoreWorkoutPlanForSyncDomain',
+        'restoreWorkoutTemplatesForSyncDomain',
       };
 
       final files = <File>[

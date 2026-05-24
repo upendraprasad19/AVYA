@@ -94,12 +94,25 @@ void main() {
       // The increment should appear within a reasonable range after scanImage.
       // Use 2000 chars to safely cover the full method body.
       final scanImageBody = source.substring(scanImageIdx, scanImageIdx + 2000);
+      // Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) migrated
+      // UsageCounterService from a singleton accessor to a Riverpod
+      // provider. ScanMealNotifier.scanImage now reads via
+      // `ref.read(usageCounterServiceProvider).increment(...)` instead
+      // of `UsageCounterService.instance.increment(...)`. Accept either
+      // shape — both express "increment at the API-call site".
+      final hasSingletonForm =
+          scanImageBody.contains('UsageCounterService.instance.increment');
+      final hasProviderForm = RegExp(
+              r'ref\.read\(\s*usageCounterServiceProvider\s*\)\.increment')
+          .hasMatch(scanImageBody);
       expect(
-        scanImageBody,
-        contains('UsageCounterService.instance.increment'),
+        hasSingletonForm || hasProviderForm,
+        isTrue,
         reason:
             'Scan counter must increment inside ScanMealNotifier.scanImage() '
-            'on the API-success path (Test #11 M1).',
+            'on the API-success path (Test #11 M1). Accepts either '
+            '`UsageCounterService.instance.increment` (legacy singleton) or '
+            '`ref.read(usageCounterServiceProvider).increment` (post-A7).',
       );
       expect(
         scanImageBody,
@@ -123,12 +136,19 @@ void main() {
 
       final analyseCartBody =
           source.substring(analyseCartIdx, analyseCartIdx + 1000);
+      // Same A7 migration as scanImage — accept both singleton + provider forms.
+      final hasSingletonForm =
+          analyseCartBody.contains('UsageCounterService.instance.increment');
+      final hasProviderForm = RegExp(
+              r'ref\.read\(\s*usageCounterServiceProvider\s*\)\.increment')
+          .hasMatch(analyseCartBody);
       expect(
-        analyseCartBody,
-        contains('UsageCounterService.instance.increment'),
+        hasSingletonForm || hasProviderForm,
+        isTrue,
         reason:
             'Cart auditor counter must increment inside CartAuditorNotifier.analyseCart() '
-            'on the API-success path (Test #11 M2).',
+            'on the API-success path (Test #11 M2). Accepts either singleton '
+            'or provider form post-A7.',
       );
       expect(
         analyseCartBody,

@@ -31,7 +31,14 @@ void main() {
     expect(classIdx, isNonNegative,
         reason:
             'StreakFreezeNotifier class moved or renamed — re-baseline this test.');
-    final scoped = src.substring(classIdx, classIdx + 1500);
+    // Bumped 1500 → 2500 because B5 audit / A7 + f8c1a5 closure dropped
+    // an extra ~700 chars of explanatory comment block inside the build()
+    // body (documenting the provider-vs-singleton migration). The
+    // `stored.clamp(0, cap)` line lives at offset ~1700 — beyond the
+    // old window. Stripping comments before scoping would be more
+    // robust but inverts the assertion semantic (we want to assert the
+    // clamp is in the actual class body, not in a comment elsewhere).
+    final scoped = src.substring(classIdx, classIdx + 2500);
 
     // Strip comments inside scoped block.
     final stripped = scoped
@@ -48,13 +55,24 @@ void main() {
           'Without this, a corrupted Hive value (e.g. legacy unclamped 8) renders as '
           '"8/3" on the streak badge.',
     );
+    // Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) migrated
+    // SubscriptionService from a singleton accessor to a Riverpod
+    // provider. StreakFreezeNotifier.build now reads via
+    // `ref.read(subscriptionServiceProvider).isPro() ? 3 : 1` instead
+    // of `SubscriptionService.instance.isPro() ? 3 : 1`. Accept either
+    // form — both express "tier-derived cap, 3 for PRO else 1".
+    final singletonForm = RegExp(
+        r'SubscriptionService\.instance\.isPro\(\)\s*\?\s*3\s*:\s*1');
+    final providerForm = RegExp(
+        r'ref\.read\(\s*subscriptionServiceProvider\s*\)\.isPro\(\)\s*\?\s*3\s*:\s*1');
     expect(
-      stripped.contains(RegExp(
-          r'SubscriptionService\.instance\.isPro\(\)\s*\?\s*3\s*:\s*1')),
+      singletonForm.hasMatch(stripped) || providerForm.hasMatch(stripped),
       isTrue,
       reason:
           'StreakFreezeNotifier.build must compute the cap from the live tier — '
-          '3 for PRO, 1 for free.',
+          '3 for PRO, 1 for free. Accepts either `SubscriptionService.instance` '
+          '(legacy singleton) or `ref.read(subscriptionServiceProvider)` '
+          '(post-A7 canonical provider).',
     );
   });
 }

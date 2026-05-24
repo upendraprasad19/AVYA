@@ -259,23 +259,51 @@ void main() {
     });
   });
 
-  group('sync gap — ai_coach_repository extractAndSaveCoachingNotes', () {
+  group('sync gap — coach_memory_service.extractAndAppendCoachingNotes', () {
     test('fires pushSnapshot after coachBox put', () {
-      final src = _src(
-          'lib/features/ai_coach/repositories/ai_coach_repository.dart');
-      final coachPutIdx = src.indexOf("_hive.coachBox.put('coaching_notes'");
+      // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart
+      // (2127 LOC) into shim + 3 services. The coaching_notes WRITER
+      // (extractCoachingNotes / extractAndAppendCoachingNotes) moved
+      // into coach_memory_service.dart. The `coachBox.put('coaching_notes', ...)`
+      // is at coach_memory_service.dart:139. Read both shim + new home.
+      final paths = const [
+        'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+        'lib/features/ai_coach/services/coach_memory_service.dart',
+      ];
+      final src = paths.map((p) => _src(p)).join('\n\n');
+      final coachPutIdx = src.indexOf("coachBox.put('coaching_notes'");
+      expect(coachPutIdx, isNot(-1),
+          reason: 'coaching_notes write must exist in coach_memory_service '
+              "(post-A10 split). Looked for `coachBox.put('coaching_notes'`.");
       final pushIdx =
           src.indexOf('unawaited(SyncService.instance.pushSnapshot())', coachPutIdx);
-      expect(coachPutIdx, isNot(-1));
-      expect(pushIdx, isNot(-1));
+      expect(pushIdx, isNot(-1),
+          reason: 'pushSnapshot must fire after the coaching_notes write so '
+              'the AI snapshot includes the freshly extracted notes.');
       expect(pushIdx > coachPutIdx, isTrue);
     });
   });
 
   group('sync gap — splash_screen checkAndSync wrapped with unawaited', () {
     test('checkAndSync is wrapped with unawaited', () {
+      // Tech-debt audit 2026-05-20 / A7 wrapped SyncService in a
+      // Riverpod provider. Splash now calls
+      // `unawaited(ref.read(syncServiceProvider).checkAndSync())` instead
+      // of `unawaited(SyncService.instance.checkAndSync())`. Accept
+      // either shape — both are valid "fire-and-forget checkAndSync"
+      // calls. The invariant is "checkAndSync is not awaited", not the
+      // particular accessor used.
       final src = _src('lib/features/auth/screens/splash_screen.dart');
-      expect(src, contains('unawaited(SyncService.instance.checkAndSync())'));
+      final hasSingletonForm = src
+          .contains('unawaited(SyncService.instance.checkAndSync())');
+      final hasProviderForm = RegExp(
+              r'unawaited\(\s*ref\.read\(\s*syncServiceProvider\s*\)\.checkAndSync\(\s*\)\s*\)')
+          .hasMatch(src);
+      expect(hasSingletonForm || hasProviderForm, isTrue,
+          reason: 'splash_screen must fire checkAndSync as fire-and-forget '
+              '(unawaited(...)) via either SyncService.instance.checkAndSync() '
+              '(legacy) or ref.read(syncServiceProvider).checkAndSync() '
+              '(post-A7). Without unawaited, splash blocks on cloud round-trip.');
     });
   });
 }

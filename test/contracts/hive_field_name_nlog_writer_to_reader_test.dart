@@ -24,9 +24,18 @@ void main() {
         .readAsStringSync();
     syncSource =
         loadSyncServiceSource().readAsStringSync();
-    aiRepoSource =
-        File('lib/features/ai_coach/repositories/ai_coach_repository.dart')
-            .readAsStringSync();
+    // Tech-debt audit 2026-05-20 A10 — see exlog twin test for full note.
+    // AI snapshot reader moved from ai_coach_repository.dart into
+    // AiSnapshotBuilder; concat the shim + its 3 new homes.
+    aiRepoSource = [
+      'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+      'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+      'lib/features/ai_coach/services/coach_memory_service.dart',
+      'lib/features/ai_coach/repositories/coach_interaction_repository.dart',
+    ]
+        .map((p) =>
+            File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
   });
 
   group('hive_field_name_nlog contract — writer fields', () {

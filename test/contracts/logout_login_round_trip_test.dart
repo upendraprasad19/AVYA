@@ -86,9 +86,20 @@ void main() {
     late String source;
 
     setUpAll(() {
-      final f = File(
-          'lib/core/services/workout_schedule_service.dart');
-      source = f.readAsStringSync();
+      // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+      // into 4 services + shim. The getScheduleForDate stale-guard
+      // moved into workout_schedule_read_service.dart. Concat all so
+      // the no-double-shift assertion still finds the helper.
+      const schedPaths = [
+        'lib/core/services/workout_schedule_service.dart',
+        'lib/core/services/workout_schedule_write_service.dart',
+        'lib/core/services/workout_schedule_read_service.dart',
+        'lib/core/services/swap_service.dart',
+        'lib/core/services/template_service.dart',
+      ];
+      source = schedPaths
+          .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+          .join('\n\n');
     });
 
     test('stale-guard calls _dateKey(completedDate) without .toLocal()', () {

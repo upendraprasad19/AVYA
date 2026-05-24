@@ -21,11 +21,25 @@ void main() {
   late String aiSvcSrc;
 
   setUpAll(() {
-    final af =
-        File('lib/features/ai_coach/repositories/ai_coach_repository.dart');
-    expect(af.existsSync(), isTrue,
-        reason: 'ai_coach_repository.dart must exist');
-    aiRepoSrc = af.readAsStringSync();
+    // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart into
+    // a shim that forwards to AiSnapshotBuilder + CoachMemoryService +
+    // CoachInteractionRepository. The coaching_notes WRITER lives in
+    // CoachMemoryService (`extractAndAppendCoachingNotes` at line 80 +
+    // `coachBox.put('coaching_notes', {...})` at line 139), and the
+    // READER `_getCoachingNotes` lives in AiSnapshotBuilder at line 752.
+    // Concat shim + both new homes so the contract continues to assert
+    // writer/reader presence regardless of which file owns it.
+    final aiRepoPaths = const [
+      'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+      'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+      'lib/features/ai_coach/services/coach_memory_service.dart',
+    ];
+    aiRepoSrc = aiRepoPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
+    expect(aiRepoSrc.isNotEmpty, isTrue,
+        reason: 'At least one ai_coach repo/service file must exist '
+            '(shim or split).');
 
     final asf = File('lib/core/services/ai_service.dart');
     expect(asf.existsSync(), isTrue, reason: 'ai_service.dart must exist');

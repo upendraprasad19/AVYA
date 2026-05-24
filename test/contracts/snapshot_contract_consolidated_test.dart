@@ -238,8 +238,19 @@ void main() {
     late String src;
 
     setUpAll(() {
-      src = File('lib/features/ai_coach/repositories/ai_coach_repository.dart')
-          .readAsStringSync();
+      // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart
+      // into a thin shim that forwards to AiSnapshotBuilder. The top-
+      // level alias emission lives in AiSnapshotBuilder now. Concat
+      // shim + builder so the assertions keep firing against either
+      // pre- or post-refactor source layout.
+      final paths = const [
+        'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+        'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+      ];
+      src = paths
+          .map((p) =>
+              File(p).existsSync() ? File(p).readAsStringSync() : '')
+          .join('\n\n');
     });
 
     test('writer emits current_streak_weeks at top level', () {

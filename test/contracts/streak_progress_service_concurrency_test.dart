@@ -145,6 +145,10 @@ void main() {
           // Pattern matches the regex but it's a read-then-emit
           // surface, not a write.
           'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+          // Tech-debt audit 2026-05-20 / A10 split the AI snapshot
+          // reader out of ai_coach_repository.dart into a dedicated
+          // service. The read-then-emit pattern moved with it.
+          'lib/features/ai_coach/services/ai_snapshot_builder.dart',
         };
         // refactor/sync-service-part-split (2026-05-13) — every part
         // file under `lib/core/services/sync/` is library-equivalent

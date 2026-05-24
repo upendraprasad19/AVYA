@@ -30,9 +30,21 @@ void main() {
   setUpAll(() {
     syncSrc =
         loadSyncServiceSource().readAsStringSync();
-    scheduleSrc =
-        File('lib/core/services/workout_schedule_service.dart')
-            .readAsStringSync();
+    // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+    // into Read/Write/Swap/Template services. `_normalizeExercises`
+    // (defensive sets-int coercion for legacy String values) moved into
+    // template_service.dart (line ~281). Concat shim + splits so the
+    // defensive coercion pattern continues to resolve.
+    const schedPaths = [
+      'lib/core/services/workout_schedule_service.dart',
+      'lib/core/services/workout_schedule_write_service.dart',
+      'lib/core/services/workout_schedule_read_service.dart',
+      'lib/core/services/swap_service.dart',
+      'lib/core/services/template_service.dart',
+    ];
+    scheduleSrc = schedPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
   });
 
   group('Writer 1 — _restoreWorkoutTemplates', () {

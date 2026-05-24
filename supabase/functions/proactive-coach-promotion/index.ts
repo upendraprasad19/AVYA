@@ -117,15 +117,23 @@ async function loadUserContext(
   admin: ReturnType<typeof createClient>,
   user_id: string,
 ): Promise<UserContext> {
-  const [profileRes, progressRes] = await Promise.all([
-    admin.from("user_profile").select("full_name, primary_goal")
+  // Schema split: `full_name` lives on the `users` table (migration 001
+  // / line 28 — `users.full_name text`). `primary_goal` lives on
+  // `user_profile`. Querying `user_profile.full_name` returns
+  // PostgrestError 42703 (column not found) — caught by Gate 18's
+  // `check_reader_manifest_complete.dart` forbidden-pattern
+  // `from.*user_profile.*select.*full_name`. Must hit both tables.
+  const [userRes, profileRes, progressRes] = await Promise.all([
+    admin.from("users").select("full_name")
+      .eq("id", user_id).maybeSingle(),
+    admin.from("user_profile").select("primary_goal")
       .eq("user_id", user_id).maybeSingle(),
     admin.from("user_progress")
       .select("current_streak_weeks, total_workouts_done")
       .eq("user_id", user_id).maybeSingle(),
   ]);
   return {
-    full_name: profileRes.data?.full_name ?? null,
+    full_name: userRes.data?.full_name ?? null,
     primary_goal: profileRes.data?.primary_goal ?? null,
     current_streak_weeks: progressRes.data?.current_streak_weeks ?? 0,
     total_workouts_done: progressRes.data?.total_workouts_done ?? 0,

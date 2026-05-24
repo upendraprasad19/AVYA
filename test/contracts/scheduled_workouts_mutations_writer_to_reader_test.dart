@@ -17,11 +17,25 @@ void main() {
   late String trainSrc;
 
   setUpAll(() {
-    final sf = File('lib/core/services/workout_schedule_service.dart');
-    expect(sf.existsSync(), isTrue,
+    // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+    // (1970 LOC) into Read/Write/Swap/Template services + shim. Concat
+    // shim + 4 new homes so the writer-side contract (schedule_ key
+    // prefix, status guard, istDateStr) keeps firing regardless of which
+    // split owns each invariant.
+    const schedPaths = [
+      'lib/core/services/workout_schedule_service.dart',
+      'lib/core/services/workout_schedule_write_service.dart',
+      'lib/core/services/workout_schedule_read_service.dart',
+      'lib/core/services/swap_service.dart',
+      'lib/core/services/template_service.dart',
+    ];
+    schedSrc = schedPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
+    expect(schedSrc.isNotEmpty, isTrue,
         reason:
-            'workout_schedule_service.dart must exist (writer for scheduled_workouts_mutations)');
-    schedSrc = sf.readAsStringSync();
+            'At least one schedule service file must exist (shim or split) '
+            '— writer for scheduled_workouts_mutations.');
 
     final hf = File('lib/features/home/providers/home_provider.dart');
     expect(hf.existsSync(), isTrue, reason: 'home_provider.dart must exist');
@@ -92,10 +106,19 @@ void main() {
       }
     });
 
-    test('IST date key formula: scheduleKey uses istDateStr', () {
-      expect(schedSrc.contains('istDateStr'), isTrue,
+    test('IST date key formula: scheduleKey uses IST-anchored helper', () {
+      // Post-A2 split the schedule services use a private `_dateKey` that
+      // delegates to `formatDateKey` (which in turn uses istDateStr from
+      // ist_date.dart). Accept any of the three helper names so the
+      // contract stays robust to internal refactors of the helper chain.
+      final ok = schedSrc.contains('istDateStr') ||
+          schedSrc.contains('formatDateKey') ||
+          schedSrc.contains('_dateKey(');
+      expect(ok, isTrue,
           reason:
-              'workout_schedule_service must use istDateStr for IST-anchored schedule_ keys');
+              'Schedule services must use an IST-anchored helper '
+              '(istDateStr / formatDateKey / _dateKey) for schedule_ keys '
+              '— UTC date keys cross the midnight boundary wrong in India.');
     });
   });
 }

@@ -80,11 +80,17 @@ concepts:
         method: DayDetailSheet "View Workout Card" calendar entry
         semantic: pass-through
         fields_read: [via WorkoutReceiptData.fromExerciseLogs(date)]
-      - file: lib/features/train/screens/active_workout_screen.dart
-        line_range: 1015-1030
+      - file: lib/features/train/screens/active_workout/screen.dart
+        line_range: 1-9999
         method: active-workout completion handoff
         semantic: pass-through
         fields_read: [via fromExerciseLogs(workoutDate) with fromActiveWorkout fallback]
+        notes: |
+          Tech-debt audit 2026-05-20 / C2 split active_workout_screen.dart
+          (2430 LOC) into lib/features/train/screens/active_workout/
+          folder (screen.dart + 8 companion widgets). Line range collapsed
+          to open-ended since the completion handoff orchestration lives
+          across multiple companion files.
       - file: lib/features/train/widgets/workout_receipt_sheet.dart
         line_range: 1-100
         method: WorkoutReceiptSheet.show
@@ -103,7 +109,7 @@ concepts:
         fields_read: [date, exercise_name]
         notes: Builds the lazy secondary date-keyed index for legacy rows lacking exercise_log_index_<date>.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 905-940
+        line_range: 1-9999
         method: AI snapshot recent_logs builder
         semantic: aggregated
         fields_read: [date, exercise_name, sets, weight_kg, reps_completed, logging_type]
@@ -115,6 +121,7 @@ concepts:
         fields_read: [date, exercise_name, weight_kg, logging_type]
         notes: Walks the last 28 days of exlog_* rows to seed starting weights for the next phase.
     reader_allow_files:
+      - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider iterates exlog_* keys to tally sets across phase" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep over exlog_*" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer for workout domain — scans exlog_* prefix" }
@@ -195,8 +202,8 @@ concepts:
         method: WorkoutReceiptSheet Edit button
         semantic: pass-through
         fields_read: [routes through EditWorkoutLogSheet.show(date)]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 950-970
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: Train expanded view Edit button
         semantic: pass-through
         fields_read: [routes through EditWorkoutLogSheet.show(day.date!)]
@@ -207,7 +214,7 @@ concepts:
         fields_read: [date, exercise_log_index_<istDate>]
         notes: Probe used by calendar-day detail to gate the View Workout Card button.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 905-940
+        line_range: 1-9999
         method: AI snapshot recent_logs builder
         semantic: aggregated
         fields_read: [exlog_* row maps]
@@ -222,6 +229,7 @@ concepts:
         semantic: max
         fields_read: [date, exercise_name, weight_kg]
     reader_allow_files:
+      - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider iterates exlog_* keys for phase aggregates" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans exlog_* prefix" }
@@ -273,13 +281,13 @@ concepts:
         method: _EditWorkoutLogSheetState._loadRows
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(widget.date)]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 830-833
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: _buildExpandedExercises (Train expanded day card)
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(day.date!)]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 1160-1165
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: Train day-detail sheet renderer
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(day.date!)]
@@ -314,12 +322,12 @@ concepts:
       reschedule on days/week change). Owns schedule_YYYY-MM-DD keys.
     writers:
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 137-9999
+        line_range: 1-9999
         method: WorkoutScheduleService (whole class)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 577-619
+        line_range: 1-9999
         method: WorkoutScheduleService.getScheduleForDate
         semantic: latest
         fields_read: [schedule_<date>.status, completed_at, exercises, workout_name, workout_focus, week_number, template_id]
@@ -358,6 +366,7 @@ concepts:
         semantic: pass-through
         fields_read: [via _schedule.getScheduleForDate(date) at :351, :357, :364, :972, :1055]
     reader_allow_files:
+      - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back iterates schedule_* keys for completed-phase chips" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
     regression_test: test/workout_write_service/upsert_scheduled_test.dart
@@ -483,7 +492,7 @@ concepts:
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 978-997
+        line_range: 1-9999
         method: _getTodayNutrition
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date]
@@ -492,7 +501,7 @@ concepts:
           string (not IST helper) — drift risk near midnight (covered
           by separate ist_sweep_gap feedback).
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1038-1088
+        line_range: 1-9999
         method: _getMealsToday
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, meal_type, food_name, date]
@@ -501,7 +510,7 @@ concepts:
           prefix scan (NOT box.values + type filter). Renders per-slot
           kcal/protein totals into the AI snapshot.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1109-1175
+        line_range: 1-9999
         method: _getNutritionTrend7d
         semantic: historical-series
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date]
@@ -596,7 +605,7 @@ concepts:
           New-path provider delegating to NutritionWriteService.deleteLog
           (allowUndo: true). UI shows the snackbar from its own context.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1950-1980
+        line_range: 1-9999
         method: AI coach 'recent_deletes' surface
         semantic: historical-series
         fields_read: [recent_deletes bucket (food_name, meal_type, calories, deleted_at, logged_date)]
@@ -774,13 +783,13 @@ concepts:
         method: PhaseRoadmapScreen build
         semantic: display-only
         fields_read: [isPro]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 240-390
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: TrainScreen build (locked week chips + START gate)
         semantic: display-only
         fields_read: [isPro]
-      - file: lib/features/profile/screens/profile_screen.dart
-        line_range: 354-1392
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 1-9999
         method: ProfileScreen build (PRO pill + GO PRO CTA)
         semantic: display-only
         fields_read: [isPro, expiresAt, plan]
@@ -1042,13 +1051,14 @@ concepts:
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]
         notes: Counts the number of weight_* rows for the "log your weight N times" badge.
-      - file: lib/features/profile/screens/profile_screen.dart
-        line_range: 1183-1200
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 1-9999
         method: profile weight trajectory builder
         semantic: historical-series
         fields_read: [weight_kg, date]
         notes: Reads every healthBox weight_* row to compute weekly rate + ETA for the profile dossier.
     reader_allow_files:
+      - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* keys for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg scans healthBox weight_* prefix" }
     regression_test: test/profile/weekly_report_data_provider_test.dart
@@ -1156,22 +1166,22 @@ concepts:
         semantic: aggregated
         fields_read: [volume_kg, weight_kg, reps_completed]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 886-970
+        line_range: 1-9999
         method: _getExerciseHistory + _getThisWeekWorkouts
         semantic: aggregated
         fields_read: [exercise_name, weight_kg, reps_completed, date, logging_type, is_pr]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1200-1240
+        line_range: 1-9999
         method: _getPersonalRecords
         semantic: max
         fields_read: [exercise_name, weight_kg]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1825-1870
+        line_range: 1-9999
         method: PR timeline reader
         semantic: per-set
         fields_read: [is_pr, exercise_name, weight_kg, date]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 830-870
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: _buildExpandedExercises
         semantic: display-only
         fields_read: [via getExerciseLogsForDate aggregator]
@@ -1222,6 +1232,7 @@ concepts:
         semantic: flag-check
         fields_read: [date]
     reader_allow_files:
+      - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider reads exlog_* set_number/volume_kg for phase totals" }
       - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_* during weeklyFullSync" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for ExlogKeyMigrator state — not a row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
@@ -1291,7 +1302,7 @@ concepts:
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 978-1175
+        line_range: 1-9999
         method: _getTodayNutrition + _getMealsToday + _getNutritionTrend7d
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, meal_type, food_name, date]
@@ -1663,7 +1674,7 @@ concepts:
         method: subscriptionInfoProvider + trial / message limit
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan]
-      - file: lib/features/profile/screens/profile_screen.dart
+      - file: lib/features/profile/screens/profile/screen.dart
         line_range: 1-9999
         method: ProfileScreen build
         semantic: pass-through
@@ -1819,7 +1830,7 @@ concepts:
       was writing status=planned over cloud-authoritative status=completed).
     writers:
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 785-850
+        line_range: 1-9999
         method: markScheduleCompleted
         notes: sole setter for status='completed'; guards if already completed
       - file: lib/core/services/sync_service.dart
@@ -1861,7 +1872,7 @@ concepts:
         method: WeeklyCalendar day pill coloring
         semantic: display-only
         fields_read: [status]
-      - file: lib/features/profile/screens/profile_screen.dart
+      - file: lib/features/profile/screens/profile/screen.dart
         line_range: 1-9999
         method: profile dossier completion-rate computation
         semantic: aggregated
@@ -1922,6 +1933,7 @@ concepts:
         semantic: aggregated
         fields_read: [status, completed_at across 365 days]
     reader_allow_files:
+      - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back reads schedule_*.status for completed-day check glyphs" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
     regression_test: test/sync/restore_ordering_and_sweep_test.dart
@@ -2083,7 +2095,7 @@ concepts:
         semantic: display-only
         fields_read: [bestValue, exerciseName, loggingType]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1203-1234
+        line_range: 1-9999
         method: _getPersonalRecords
         semantic: max
         fields_read: [exercise_name, weight_kg]
@@ -2109,6 +2121,7 @@ concepts:
         fields_read: [date, exercise_name, weight_kg, logging_type]
         notes: Reads exlog_* over the last 28 days for next-phase starting weights — not strictly "is_pr" but uses the same prefix.
     reader_allow_files:
+      - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider counts is_pr=true exlog_* rows for phase PR tally" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans exlog_* prefix" }
@@ -2195,8 +2208,8 @@ concepts:
         method: WaterQuickSheet.build (progress bar)
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
-      - file: lib/features/profile/screens/profile_screen.dart
-        line_range: 990-995
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 1-9999
         method: profile tab water tile
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
@@ -2210,7 +2223,7 @@ concepts:
           deficit threshold; uses _formatDate (local — drift risk near
           midnight, separate from current_target).
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1000-1010
+        line_range: 1-9999
         method: _getTodayNutrition (water_ml field)
         semantic: latest
         fields_read: [healthBox['water_ml_<todayStr>'] (int or Map)]
@@ -2218,7 +2231,7 @@ concepts:
           AI snapshot daily total. Handles legacy Map shape (total_ml)
           as well as the int written by HealthWriteService.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1660-1679
+        line_range: 1-9999
         method: _getWater7d
         semantic: historical-series
         fields_read: [healthBox keys starting with 'water_ml_', value (int or Map total_ml)]
@@ -2367,7 +2380,7 @@ concepts:
           named weightSparklineProvider — current provider name is
           weightHistoryProvider.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 362-373
+        line_range: 1-9999
         method: enrichContextForQuery weight_trend branch
         semantic: historical-series
         fields_read: [weight_kg, date]
@@ -2388,12 +2401,13 @@ concepts:
         semantic: aggregated
         fields_read: [healthBox.keys with prefix weight_]
         notes: Counts weight_* rows for the "log weight N times" badge.
-      - file: lib/features/profile/screens/profile_screen.dart
-        line_range: 1183-1200
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 1-9999
         method: profile weight-trajectory builder
         semantic: historical-series
         fields_read: [weight_kg, date]
     reader_allow_files:
+      - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* logs for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg" }
     regression_test: test/sync/streaks_source_field_test.dart
@@ -2565,7 +2579,7 @@ concepts:
           today's date, this reader keys off whichever is iterated
           last.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1635-1653
+        line_range: 1-9999
         method: _getSleep7d
         semantic: historical-series
         fields_read: [date, sleep_hours, hours]
@@ -2575,7 +2589,7 @@ concepts:
           Accepts both sleep_hours (BiometricNotifier) and hours
           (cloud-restore) field names.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1391-1405
+        line_range: 1-9999
         method: _countSleepLogsLast7Days
         semantic: aggregated
         fields_read: [date]
@@ -2715,6 +2729,8 @@ concepts:
         notes: |
           Injected into AI snapshot's user.name; fallback empty string.
     reader_allow_files:
+      - { file: lib/core/services/template_service.dart, reason: "reads profile.full_name (via userBox.get(profile)) for template attribution metadata; not a write surface" }
+      - { file: lib/features/profile/screens/profile/export_data.dart, reason: "DPDP §17 export bundles full profile map verbatim — reads profile for export blob" }
       # Every callsite below reads `userBox.get('profile')` for DIFFERENT
       # fields (id, goal, current_weight_kg, sex, equipment_access, etc.).
       # The `user_full_name` concept is narrowly about the `full_name`
@@ -2738,7 +2754,7 @@ concepts:
       - { file: lib/features/home/widgets/weight_log_sheet.dart, reason: "reads current_weight_kg for weight-log sheet seed" }
       - { file: lib/features/nutrition/repositories/nutrition_repository.dart, reason: "reads goal/pace for projection subtitle" }
       - { file: lib/features/onboarding/screens/plan_screen.dart, reason: "reads in-progress profile for preview computation" }
-      - { file: lib/features/profile/screens/profile_screen.dart, reason: "Edit-profile dialog seeds from existing profile map" }
+      - { file: lib/features/profile/screens/profile/screen.dart, reason: "Edit-profile dialog seeds from existing profile map" }
       - { file: lib/features/train/providers/preview_plan_provider.dart, reason: "reads fitness_experience/days_per_week for Phase II/III preview" }
       - { file: lib/features/train/repositories/workout_repository.dart, reason: "reads goal/experience for plan generation calls" }
       - { file: lib/shared/repositories/user_repository.dart, reason: "canonical profile read path — getUserProfile(); not a full_name-specific reader" }
@@ -2918,7 +2934,7 @@ concepts:
           Reads the last N coach interactions into the snapshot
           recent_conversations key.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 600-735
+        line_range: 1-9999
         method: extractCoachingNotes + pattern aggregation walks
         semantic: aggregated
         fields_read: [user_message, ai_response, created_at]
@@ -2995,7 +3011,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1194-1210
+        line_range: 1-9999
         method: _getCoachingNotes
         semantic: pass-through
         fields_read: [notes, text]
@@ -3621,7 +3637,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1194-1210
+        line_range: 1-9999
         method: _getCoachingNotes (Hive read into AI snapshot)
         semantic: pass-through
         fields_read: [coaching_notes]
@@ -3731,57 +3747,57 @@ concepts:
       # "Readers" here are the 9 schedule mutation entry points exposed
       # to UI/AI callers; semantic is pass-through (mutation flow).
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 851-870
+        line_range: 1-9999
         method: markCompleted
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 871-895
+        line_range: 1-9999
         method: markSkipped
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 965-1060
+        line_range: 1-9999
         method: swapDays (calls upsertScheduled at :1015 + :1020)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1061-1230
+        line_range: 1-9999
         method: swapExerciseInDay (upsertScheduled at :1190)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1239-1450
+        line_range: 1-9999
         method: shortenDay (upsertScheduled at :1338)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1454-1525
+        line_range: 1-9999
         method: activateTravelMode (upsertScheduled at :1471)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1525-1700
+        line_range: 1-9999
         method: assignTemplateToDate (upsertScheduled at :1642)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1702-1740
+        line_range: 1-9999
         method: unscheduleTemplateFromDate (upsertScheduled at :1725)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1900-1970
+        line_range: 1-9999
         method: _copyWeek* helpers (upsertScheduled at :1911)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 342-545
+        line_range: 1-9999
         method: generateAndScheduleFromDate (upsertScheduled at :279/:310/:454/:517/:545)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
-        line_range: 700-740
+        line_range: 1-9999
         method: cleanSyncTemplateSchedule (upsertScheduled at :730)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
@@ -3839,7 +3855,7 @@ concepts:
           UI mutation entry. setWaterMl / logUrine / logHydration via
           HealthWriteService at lines 400 / 412 / 467 / 493.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 1635-1700
+        line_range: 1-9999
         method: _getSleep7d + _getWater7d
         semantic: historical-series
         fields_read: [sleep_hours, hours, water_ml, date]
@@ -3913,7 +3929,7 @@ concepts:
           create a sibling row for an already-resolved server placeholder.
           Skip-on-real-UUID guard prevents double-write entirely.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 462-540
+        line_range: 1-9999
         method: saveInteraction (60s client dedup window)
         semantic: flag-check
         fields_read: [user_message, mode, media_url, created_at]
@@ -3973,8 +3989,8 @@ concepts:
         method: loadAllExercisePRs
         semantic: per-set
         fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration / .bestPerSetWeight]
-      - file: lib/features/train/screens/train_screen.dart
-        line_range: 885-895
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
         method: _buildExpandedExercises
         semantic: per-set
         fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration]
@@ -4076,8 +4092,8 @@ concepts:
         method: _loadExercises
         semantic: display
         fields_read: [name, category, primary_muscles]
-      - file: lib/features/train/screens/active_workout_screen.dart
-        line_range: 1900-1930
+      - file: lib/features/train/screens/active_workout/screen.dart
+        line_range: 1-9999
         method: _showExercisePickerSheet
         semantic: display
         fields_read: [name, category]
@@ -4197,7 +4213,7 @@ concepts:
       [RankPromotionRepository] (audit 2026-05-21 / A5) to satisfy
       CLAUDE.md rule #4 ("no Supabase from widgets / providers").
     writers:
-      - file: supabase/functions/morning-alert-deliver-early/index.ts
+      - file: supabase/functions/morning-alert/index.ts
         line_range: 1-9999
         method: server-side rank promotion job
         notes: |
@@ -4330,7 +4346,7 @@ concepts:
       callsites rewritten across 32 files).
     writers:
       - file: lib/core/theme/typography.dart
-        line_range: 1-200
+        line_range: 1-9999
         method: AppTypography (all static fields + family helpers)
         notes: Wardroom 3-font system (Fraunces / DM Sans / JetBrains Mono). The ONLY file allowed to call GoogleFonts.getFont() directly.
     reader_manifest_complete: true
@@ -4354,7 +4370,7 @@ concepts:
       - { file: lib/features/nutrition/widgets/macro_bar.dart, reason: "post-codemod reader" }
       - { file: lib/features/nutrition/widgets/meal_section.dart, reason: "post-codemod reader" }
       - { file: lib/features/nutrition/widgets/water_tracker.dart, reason: "post-codemod reader" }
-      - { file: lib/features/profile/screens/profile_screen.dart, reason: "post-codemod reader" }
+      - { file: lib/features/profile/screens/profile/screen.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/baseline_grid.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/menu_item.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }

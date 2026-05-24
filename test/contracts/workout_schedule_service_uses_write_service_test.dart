@@ -36,67 +36,91 @@ void main() {
     late String src;
 
     setUpAll(() {
-      final file = File('lib/core/services/workout_schedule_service.dart');
-      expect(file.existsSync(), isTrue);
-      src = file.readAsStringSync();
+      // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+      // (1970 LOC) into 4 services + shim. The "schedule mutations
+      // route through WorkoutWriteService" invariant is now distributed
+      // across all 5 files; concat them so the bounded direct-put count
+      // and upsertScheduled-callsite count assertions still hold at the
+      // schedule-services-as-a-whole level (which is what the contract
+      // really cares about).
+      const schedPaths = [
+        'lib/core/services/workout_schedule_service.dart',
+        'lib/core/services/workout_schedule_write_service.dart',
+        'lib/core/services/workout_schedule_read_service.dart',
+        'lib/core/services/swap_service.dart',
+        'lib/core/services/template_service.dart',
+      ];
+      src = schedPaths
+          .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+          .join('\n\n');
+      expect(src.isNotEmpty, isTrue);
     });
 
-    test('file imports WorkoutWriteService + SyncService', () {
-      expect(src.contains("'../services/workout_write_service.dart'"), isTrue,
-          reason: 'workout_write_service.dart must be imported');
-      expect(src.contains("'../services/sync_service.dart'"), isTrue,
+    test('schedule services import WorkoutWriteService + SyncService', () {
+      // Post-A2 split — the imports moved into the split files. The
+      // shim file no longer needs them. Check that SOMEWHERE in the
+      // 5-file union the imports exist.
+      expect(src.contains('workout_write_service.dart'), isTrue,
           reason:
-              'sync_service.dart must be imported for non-schedule fan-out '
-              '(plan-key writes + template metadata).');
+              'workout_write_service.dart must be imported by at least one '
+              'schedule service (shim, write, read, swap, or template).');
+      expect(src.contains('sync_service.dart'), isTrue,
+          reason:
+              'sync_service.dart must be imported by at least one schedule '
+              'service for non-schedule fan-out (plan-key writes + '
+              'template metadata).');
     });
 
     test('direct workoutBox.put count is bounded to known non-schedule sites', () {
-      // Whitelist: 2 plan-key writes (generateInitialPlan + generateAndScheduleFromDate),
-      // 1 displaced-backup write (assignTemplateToDate internal rollback),
-      // 1 template-metadata write (last_used_at sort hint).
-      // Total: 4 direct puts. Any new direct put requires updating the
-      // whitelist AND adding explicit `unawaited(SyncService.instance...)`
-      // fan-out at the callsite.
+      // Post-A2 split, the 4 direct puts redistributed:
+      //   - read_service.dart: 2 × `_planKey` (generateInitialPlan +
+      //     generateAndScheduleFromDate).
+      //   - template_service.dart: 1 × displacedKey (assignTemplateToDate
+      //     rollback) + 1 × templateId (last_used_at sort hint).
+      // Total still 4. Any NEW direct put across the 5 files requires
+      // updating this whitelist AND adding explicit
+      // `unawaited(SyncService.instance...)` fan-out at the callsite.
       final puts = RegExp(r'\b(?:_hive\.)?workoutBox\.put\(').allMatches(src);
       expect(puts.length, equals(4),
           reason:
-              'WorkoutScheduleService must have exactly 4 direct workoutBox.put '
-              "callsites: 2 _planKey + 1 displacedKey + 1 templateId. Adding a "
-              'NEW direct put means the new site MUST route through '
+              'Schedule services must have exactly 4 direct workoutBox.put '
+              'callsites across the 5-file split: 2 _planKey + 1 '
+              'displacedKey + 1 templateId. Adding a NEW direct put means '
+              'the new site MUST route through '
               'WorkoutWriteService.upsertScheduled (preferred) OR add '
               'explicit `unawaited(SyncService.instance.syncWorkoutData())` '
               'fan-out at the callsite. Found ${puts.length} direct puts.');
     });
 
     test('all schedule mutations route through WorkoutWriteService.upsertScheduled', () {
-      // Schedule-mutating methods (markCompleted, markSkipped, swap, shorten,
-      // travel, copy week, assign template, restore displaced) must call
-      // WorkoutWriteService.instance.upsertScheduled. Expect 9 callsites.
+      // Post-A2 split — upsertScheduled callsites redistributed across
+      // read/write/swap/template services. The contract is on the
+      // aggregate: ≥9 callsites collectively (markCompleted,
+      // markSkipped, activateTravelMode × N, swapExerciseInDay,
+      // shortenDay, copyWeek source+dest × 2, assignTemplateToDate,
+      // unscheduleTemplateFromDate).
       final upsertCalls =
           RegExp(r'WorkoutWriteService\.instance\.upsertScheduled\(')
               .allMatches(src);
       expect(upsertCalls.length, greaterThanOrEqualTo(9),
           reason:
               'Expected ≥9 WorkoutWriteService.upsertScheduled callsites '
-              '(markCompleted, markSkipped, activateTravelMode × N days, '
-              'swapExerciseInDay, shortenDay, copyWeek source + dest × 2, '
-              'assignTemplateToDate, unscheduleTemplateFromDate). Found '
+              'aggregated across the 5 schedule services. Found '
               '${upsertCalls.length}.');
     });
 
     test('non-schedule direct puts (plan + template) have explicit fan-out adjacent', () {
-      // Anti-regression: the 3 non-schedule direct puts MUST be followed
-      // within ~5 lines by an explicit `unawaited(SyncService.instance...)`.
-      // We approximate "adjacent" by checking that the file contains at
-      // least 3 fan-out invocations.
+      // Same invariant; post-A2 split the unawaited calls live in the
+      // file owning each direct put (read_service for plan, template_
+      // service for template metadata). Aggregate must still have ≥3.
       final fanOutCalls = RegExp(
               r'unawaited\(\s*SyncService\.instance\.(syncWorkoutData|pushSnapshot)\(')
           .allMatches(src);
       expect(fanOutCalls.length, greaterThanOrEqualTo(3),
           reason:
               'Expected ≥3 explicit `unawaited(SyncService.instance.*)` '
-              'fan-out calls for the 3 non-schedule direct puts. Found '
-              '${fanOutCalls.length}.');
+              'fan-out calls aggregated across the schedule services. '
+              'Found ${fanOutCalls.length}.');
     });
   });
 }

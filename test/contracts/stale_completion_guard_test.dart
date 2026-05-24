@@ -25,10 +25,23 @@ void main() {
   late String schedSvcSrc;
 
   setUpAll(() {
-    final f = File('lib/core/services/workout_schedule_service.dart');
-    expect(f.existsSync(), isTrue,
-        reason: 'workout_schedule_service.dart must exist');
-    schedSvcSrc = f.readAsStringSync();
+    // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+    // (1970 LOC) into Read/Write/Swap/Template services + shim. The
+    // stale-completion guard inside getScheduleForDate moved into
+    // workout_schedule_read_service.dart. Concat shim + splits so the
+    // contract still finds the predicate + defensive-copy shape.
+    const schedPaths = [
+      'lib/core/services/workout_schedule_service.dart',
+      'lib/core/services/workout_schedule_write_service.dart',
+      'lib/core/services/workout_schedule_read_service.dart',
+      'lib/core/services/swap_service.dart',
+      'lib/core/services/template_service.dart',
+    ];
+    schedSvcSrc = schedPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
+    expect(schedSvcSrc.isNotEmpty, isTrue,
+        reason: 'At least one schedule service file must exist (shim or split).');
   });
 
   group('stale-completion guard predicate', () {
@@ -111,21 +124,26 @@ void main() {
 }
 
 /// Extracts the ~50-line window around the stale-completion guard so the
-/// last two source-grep tests scope precisely to that block. Uses the
-/// "Guard against stale completion" comment which is unique to the
-/// `getScheduleForDate` guard (line 536), distinguishing it from the
-/// 3 other `if (map['status'] == 'completed')` occurrences in the file.
+/// last two source-grep tests scope precisely to that block.
+///
+/// Post-A2 split (2026-05-20) the explanatory comment marker disappeared
+/// during the move into workout_schedule_read_service.dart. Anchor on
+/// the unique predicate `compareTo(requestedDateStr) < 0` instead — that
+/// expression appears nowhere else in the schedule services and is the
+/// distinguishing feature of THIS guard vs the 3 other
+/// `if (map['status'] == 'completed')` occurrences.
 String _extractGuardWindow(String src) {
-  const marker = '// Guard against stale completion';
-  final start = src.indexOf(marker);
-  if (start < 0) {
-    fail('Could not locate stale-completion guard marker in source. '
-        'Did the predicate get refactored? Update this test.');
+  const anchor = 'compareTo(requestedDateStr) < 0';
+  final anchorIdx = src.indexOf(anchor);
+  if (anchorIdx < 0) {
+    fail('Could not locate stale-completion guard predicate '
+        '"compareTo(requestedDateStr) < 0" in source. Did the predicate '
+        'get refactored? Update this test.');
   }
-  // Window must be large enough to encompass the full guard block, including
-  // the new comment (Test #14) before the predicate plus the downgrade body.
-  // Empirically ~3500 chars covers the block with comfortable margin. Without
-  // this margin the defensive-copy check would scan the comment-only prefix.
-  final end = (start + 3500).clamp(0, src.length);
+  // Slice ~400 chars BEFORE the anchor (to include the completed-status
+  // gate + completedAt parse) and ~600 chars AFTER (to cover the
+  // defensive-copy + return + closing braces).
+  final start = (anchorIdx - 400).clamp(0, src.length);
+  final end = (anchorIdx + 600).clamp(0, src.length);
   return src.substring(start, end);
 }

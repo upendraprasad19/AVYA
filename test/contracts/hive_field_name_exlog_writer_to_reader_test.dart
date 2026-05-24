@@ -28,9 +28,21 @@ void main() {
             .readAsStringSync();
     syncSource =
         loadSyncServiceSource().readAsStringSync();
-    aiRepoSource =
-        File('lib/features/ai_coach/repositories/ai_coach_repository.dart')
-            .readAsStringSync();
+    // Tech-debt audit 2026-05-20 A10 split ai_coach_repository.dart (2127
+    // LOC) into a thin shim that forwards to AiSnapshotBuilder /
+    // CoachInteractionRepository / CoachMemoryService. The snapshot
+    // reads moved into AiSnapshotBuilder. Concatenate all four so this
+    // contract continues to assert "AI snapshot reader uses field X"
+    // regardless of which file the read lives in post-refactor.
+    aiRepoSource = [
+      'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+      'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+      'lib/features/ai_coach/services/coach_memory_service.dart',
+      'lib/features/ai_coach/repositories/coach_interaction_repository.dart',
+    ]
+        .map((p) =>
+            File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
   });
 
   group('hive_field_name_exlog contract — writer fields', () {

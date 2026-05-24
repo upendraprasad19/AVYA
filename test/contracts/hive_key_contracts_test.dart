@@ -52,6 +52,58 @@ void main() {
     return [root, ...parts].join('\n\n');
   }
 
+  /// Tech-debt audit 2026-05-20 / A10 split `ai_coach_repository.dart`
+  /// (2127 LOC) into a thin shim that forwards to AiSnapshotBuilder,
+  /// CoachInteractionRepository, CoachMemoryService. Every snapshot read
+  /// pattern (water_ml_, step_, log['type'] == 'workout', ...) moved to
+  /// AiSnapshotBuilder. Concatenate all four so contract greps that
+  /// historically targeted ai_coach_repository.dart still resolve.
+  String aiCoachReaderUnion() {
+    final wanted = const [
+      'ai_coach_repository.dart',
+      'ai_snapshot_builder.dart',
+      'coach_memory_service.dart',
+      'coach_interaction_repository.dart',
+    ];
+    final buffer = StringBuffer();
+    for (final pat in wanted) {
+      for (final entry in allSources.entries) {
+        if (entry.key.contains(pat)) buffer
+          ..writeln(entry.value)
+          ..writeln();
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// Tech-debt audit 2026-05-20 / A2 split `workout_schedule_service.dart`
+  /// (1970 LOC) into Read / Write / Swap / Template services + shim.
+  /// Concatenate all so contract greps that historically targeted
+  /// workout_schedule_service.dart still resolve.
+  String workoutScheduleUnion() {
+    final wanted = const [
+      'workout_schedule_service.dart',
+      'workout_schedule_write_service.dart',
+      'workout_schedule_read_service.dart',
+      'swap_service.dart',
+      'template_service.dart',
+    ];
+    final buffer = StringBuffer();
+    for (final pat in wanted) {
+      for (final entry in allSources.entries) {
+        // Anchor to /core/services/ so we don't accidentally pick up
+        // tests or unrelated swap helpers in other directories.
+        if (entry.key.replaceAll(r'\', '/').contains('/core/services/') &&
+            entry.key.endsWith(pat)) {
+          buffer
+            ..writeln(entry.value)
+            ..writeln();
+        }
+      }
+    }
+    return buffer.toString();
+  }
+
   // ── Weight Keys ────────────────────────────────────────────────
 
   group('Contract: weight key format', () {
@@ -131,9 +183,7 @@ void main() {
     });
 
     test('AI context reader uses "water_ml_\$todayStr" key', () {
-      final aiRepoSource = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
-          .value;
+      final aiRepoSource = aiCoachReaderUnion();
 
       expect(aiRepoSource, contains("'water_ml_\$todayStr'"),
           reason: 'AI context must read with water_ml_ prefix');
@@ -148,9 +198,7 @@ void main() {
     });
 
     test('AI context reader handles int water value (not just Map)', () {
-      final aiRepoSource = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
-          .value;
+      final aiRepoSource = aiCoachReaderUnion();
 
       // Writer (WaterIntakeNotifier) stores a plain int.
       // Reader must handle `int` first, then fall back to `Map`.
@@ -234,10 +282,7 @@ void main() {
 
   group('Contract: workout schedule type values', () {
     test('schedule writer uses type "workout" for workout days', () {
-      final scheduleSource = allSources.entries
-          .firstWhere(
-              (e) => e.key.contains('workout_schedule_service.dart'))
-          .value;
+      final scheduleSource = workoutScheduleUnion();
 
       // Verify the schedule service writes type: 'workout' (not 'scheduled')
       expect(scheduleSource, contains("'type': 'workout'"),
@@ -246,10 +291,7 @@ void main() {
     });
 
     test('schedule writer uses type "rest" for rest days', () {
-      final scheduleSource = allSources.entries
-          .firstWhere(
-              (e) => e.key.contains('workout_schedule_service.dart'))
-          .value;
+      final scheduleSource = workoutScheduleUnion();
 
       expect(scheduleSource, contains("'type': 'rest'"),
           reason:
@@ -257,9 +299,7 @@ void main() {
     });
 
     test('AI context reader checks type "workout" (not "scheduled")', () {
-      final aiRepoSource = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
-          .value;
+      final aiRepoSource = aiCoachReaderUnion();
 
       // Must check for 'workout' to count planned workouts
       expect(aiRepoSource, contains("log['type'] == 'workout'"),
@@ -326,10 +366,9 @@ void main() {
       expect(healthSyncSource, contains("'step_\$todayStr'"),
           reason: 'HealthSyncService must write step data with step_\$todayStr');
 
-      // Reader: ai_coach_repository reads step_$dateStr
-      final aiRepoSource = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_repository.dart'))
-          .value;
+      // Reader: post-A10 split, reader lives in AiSnapshotBuilder (with
+      // shim forwarding from ai_coach_repository.dart for back-compat).
+      final aiRepoSource = aiCoachReaderUnion();
       expect(aiRepoSource, contains("'step_\$dateStr'"),
           reason: 'AI repo must read step data with step_\$dateStr key');
     });

@@ -31,8 +31,23 @@ void main() {
     late String scheduleSvc;
 
     setUpAll(() {
-      scheduleSvc = File('lib/core/services/workout_schedule_service.dart')
-          .readAsStringSync();
+      // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+      // into Read/Write/Swap/Template services + shim. The sealed
+      // AssignTemplateResult / Ok / Rejected / RejectionReason types and
+      // the `assignTemplateToDate` method moved to template_service.dart;
+      // shim re-exports them for back-compat. Concat shim + splits so
+      // both the type-declaration assertions and the method-body slice
+      // continue to resolve.
+      const schedPaths = [
+        'lib/core/services/workout_schedule_service.dart',
+        'lib/core/services/workout_schedule_write_service.dart',
+        'lib/core/services/workout_schedule_read_service.dart',
+        'lib/core/services/swap_service.dart',
+        'lib/core/services/template_service.dart',
+      ];
+      scheduleSvc = schedPaths
+          .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+          .join('\n\n');
     });
 
     test('sealed AssignTemplateResult class and subclasses are declared', () {

@@ -330,9 +330,19 @@ void main() {
 
   group('Guard: AI coach screen has send debounce', () {
     test('_doSend checks a local sending flag before proceeding', () {
+      // Tech-debt audit 2026-05-20 / C1 split ai_coach_screen.dart into
+      // a folder of widgets (ai_coach/screen.dart + input_bar.dart +
+      // chat_area.dart + …). The send-debounce logic lives in
+      // input_bar.dart + screen.dart. Concat the whole ai_coach/ folder
+      // so the debounce-pattern assertions still resolve.
       final source = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_screen.dart'))
-          .value;
+          .where((e) {
+            final k = e.key.replaceAll(r'\', '/');
+            return k.contains('/features/ai_coach/screens/ai_coach/') ||
+                k.endsWith('ai_coach_screen.dart');
+          })
+          .map((e) => e.value)
+          .join('\n\n');
 
       // Must have a local sending flag (synchronous, not async provider state)
       expect(source, contains('_localSending'),
@@ -342,9 +352,19 @@ void main() {
     });
 
     test('_doSend returns early if _localSending is true', () {
+      // Tech-debt audit 2026-05-20 / C1 split ai_coach_screen.dart into
+      // a folder of widgets (ai_coach/screen.dart + input_bar.dart +
+      // chat_area.dart + …). The send-debounce logic lives in
+      // input_bar.dart + screen.dart. Concat the whole ai_coach/ folder
+      // so the debounce-pattern assertions still resolve.
       final source = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_screen.dart'))
-          .value;
+          .where((e) {
+            final k = e.key.replaceAll(r'\', '/');
+            return k.contains('/features/ai_coach/screens/ai_coach/') ||
+                k.endsWith('ai_coach_screen.dart');
+          })
+          .map((e) => e.value)
+          .join('\n\n');
 
       // The method must check the flag before doing anything
       // Pattern: if (_localSending) return;
@@ -353,9 +373,19 @@ void main() {
     });
 
     test('text field is cleared before async send (not after)', () {
+      // Tech-debt audit 2026-05-20 / C1 split ai_coach_screen.dart into
+      // a folder of widgets (ai_coach/screen.dart + input_bar.dart +
+      // chat_area.dart + …). The send-debounce logic lives in
+      // input_bar.dart + screen.dart. Concat the whole ai_coach/ folder
+      // so the debounce-pattern assertions still resolve.
       final source = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_screen.dart'))
-          .value;
+          .where((e) {
+            final k = e.key.replaceAll(r'\', '/');
+            return k.contains('/features/ai_coach/screens/ai_coach/') ||
+                k.endsWith('ai_coach_screen.dart');
+          })
+          .map((e) => e.value)
+          .join('\n\n');
 
       // Find _doSend method
       final doSendStart = source.indexOf('void _doSend(');
@@ -376,9 +406,19 @@ void main() {
     });
 
     test('_localSending is reset in whenComplete callback', () {
+      // Tech-debt audit 2026-05-20 / C1 split ai_coach_screen.dart into
+      // a folder of widgets (ai_coach/screen.dart + input_bar.dart +
+      // chat_area.dart + …). The send-debounce logic lives in
+      // input_bar.dart + screen.dart. Concat the whole ai_coach/ folder
+      // so the debounce-pattern assertions still resolve.
       final source = allSources.entries
-          .firstWhere((e) => e.key.contains('ai_coach_screen.dart'))
-          .value;
+          .where((e) {
+            final k = e.key.replaceAll(r'\', '/');
+            return k.contains('/features/ai_coach/screens/ai_coach/') ||
+                k.endsWith('ai_coach_screen.dart');
+          })
+          .map((e) => e.value)
+          .join('\n\n');
 
       // Must reset the flag when the future completes
       expect(source, contains('whenComplete'),

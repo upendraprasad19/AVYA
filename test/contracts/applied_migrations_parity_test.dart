@@ -30,8 +30,15 @@ void main() {
     expect(jsonFile.existsSync(), isTrue,
         reason: 'backups/applied_migrations.json must exist');
 
-    final applied = (jsonDecode(jsonFile.readAsStringSync()) as List)
-        .cast<String>()
+    // Schema migration (2026-05-XX): applied_migrations.json used to be
+    // a JSON array of bare version strings. It now stores a list of
+    // entry objects (`{migration, applied_at, hash, applier, ...}`) so
+    // we can audit who applied what + recompute hashes on drift. Read
+    // the `migration` field per entry if present; fall back to the bare
+    // string shape for back-compat with older snapshots.
+    final raw = jsonDecode(jsonFile.readAsStringSync()) as List;
+    final applied = raw
+        .map((e) => e is String ? e : (e as Map)['migration'] as String)
         .toSet();
 
     // Extract version from filename for both shapes:

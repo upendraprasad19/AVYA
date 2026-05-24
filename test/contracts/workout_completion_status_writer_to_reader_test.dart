@@ -21,10 +21,22 @@ void main() {
   late String aiRepoSrc;
 
   setUpAll(() {
-    final sf = File('lib/core/services/workout_schedule_service.dart');
-    expect(sf.existsSync(), isTrue,
-        reason: 'workout_schedule_service.dart must exist (primary writer)');
-    schedSvcSrc = sf.readAsStringSync();
+    // Tech-debt audit 2026-05-20 / A2 split workout_schedule_service.dart
+    // (1970 LOC) into Read/Write/Swap/Template services + shim. Concat
+    // shim + 4 new homes so status-completed write-once gate assertions
+    // still resolve regardless of which split owns the gate.
+    final schedPaths = const [
+      'lib/core/services/workout_schedule_service.dart',
+      'lib/core/services/workout_schedule_write_service.dart',
+      'lib/core/services/workout_schedule_read_service.dart',
+      'lib/core/services/swap_service.dart',
+      'lib/core/services/template_service.dart',
+    ];
+    schedSvcSrc = schedPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
+    expect(schedSvcSrc.isNotEmpty, isTrue,
+        reason: 'At least one schedule service file must exist (shim or split).');
 
     final ssf = loadSyncServiceSource();
     expect(ssf.existsSync(), isTrue,
@@ -39,11 +51,22 @@ void main() {
     expect(tf.existsSync(), isTrue, reason: 'train_provider.dart must exist');
     trainProvSrc = tf.readAsStringSync();
 
-    final af =
-        File('lib/features/ai_coach/repositories/ai_coach_repository.dart');
-    expect(af.existsSync(), isTrue,
-        reason: 'ai_coach_repository.dart must exist');
-    aiRepoSrc = af.readAsStringSync();
+    // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart
+    // (2127 LOC) into shim + AiSnapshotBuilder + CoachInteractionRepository
+    // + CoachMemoryService. _getThisWeekWorkouts reader moved into
+    // AiSnapshotBuilder. Concat all four so reader-presence assertions
+    // continue to resolve.
+    final aiPaths = const [
+      'lib/features/ai_coach/repositories/ai_coach_repository.dart',
+      'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+      'lib/features/ai_coach/services/coach_memory_service.dart',
+      'lib/features/ai_coach/repositories/coach_interaction_repository.dart',
+    ];
+    aiRepoSrc = aiPaths
+        .map((p) => File(p).existsSync() ? File(p).readAsStringSync() : '')
+        .join('\n\n');
+    expect(aiRepoSrc.isNotEmpty, isTrue,
+        reason: 'At least one ai_coach reader file must exist.');
   });
 
   group('workout_completion_status writer↔reader source contract', () {
