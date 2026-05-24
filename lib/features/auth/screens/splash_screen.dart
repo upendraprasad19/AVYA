@@ -6,10 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
-import 'package:icanbefitter/core/services/day_rollover_service.dart';
-import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
-import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -19,9 +16,7 @@ import 'package:icanbefitter/core/services/scheduled_workouts_resync_migrator.da
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
-import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/services/notification_inbox_service.dart';
-import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 /// Full-screen splash with AVYA logo, tagline, and a 3-dot loading animation.
@@ -47,43 +42,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late final Animation<double> _taglineFade;
   late final AnimationController _dotController;
 
-  StreamSubscription<void>? _restoreSub;
-
   @override
   void initState() {
     super.initState();
 
-    // F5 · When SyncService finishes a restore pass (logs, templates,
-    // profile all refreshed from cloud), invalidate the home + train
-    // providers so the UI reflects the new data immediately — critical
-    // for PRs (recomputed from logs), today's workout, stats grid, etc.
-    // A7 / B5 D9-D10 — canonical provider path.
-    _restoreSub = ref.read(syncServiceProvider).onRestoreComplete.listen((_) {
-      if (!mounted) return;
-      // Bug 2026-05-19 (Monday +1 race) — re-apply the weekly refill
-      // AFTER cloud restore lands. Splash-time refill in _runDeferredInit
-      // (via runRolloverNow → refillIfNewWeek) writes local then schedules
-      // fire-and-forget syncFreezes(); the subsequent _restoreFreezes used
-      // to clobber that with stale cloud state. The restore-side max-merge
-      // closes the race in the common case; this re-call is defence-in-
-      // depth for the edge where local last_refill was somehow lost.
-      // Idempotent — no-ops if last_refill is already this week.
-      try {
-        StreakProgressService.instance.refillIfNewWeek();
-      } catch (e, st) {
-        debugPrint(
-            '[Splash] post-restore refillIfNewWeek failed (non-fatal): $e\n$st');
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'splash_post_restore_refill'));
-      }
-      ref.invalidate(allExercisePRsProvider);
-      ref.invalidate(currentPlanProvider);
-      ref.invalidate(workoutStatsProvider);
-      ref.invalidate(calendarWeekProvider);
-      ref.invalidate(todayWorkoutProvider);
-      ref.invalidate(streakFreezeProvider);
-      ref.invalidate(streakProvider);
-    });
+    // Bug 2026-05-22 (diagnose dc52a4) — the previous `onRestoreComplete`
+    // listener lived here and was DEAD CODE: splash disposes when it
+    // navigates to /restoring (within ~3s) — long before the
+    // restoreFromCloudForUser future emits (~36s in the founder's
+    // case). The listener's StreamSubscription.cancel() in dispose()
+    // tore down the listener before it could fire. The
+    // refillIfNewWeek + provider-invalidations moved to
+    // RestoringScreen._ensureOwnershipBeforeHome where they actually
+    // run AFTER HiveUserSession.openForUser has opened the user-scoped
+    // boxes.
 
     _fadeController = AnimationController(
       vsync: this,
@@ -141,35 +113,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // A7 / B5 D9-D10 — canonical provider path.
     await ref.read(seedServiceProvider).seedIfNeeded();
 
-    // Bug 2026-05-19 (B3) — Defensive: clear stale `streak_freeze_just_used`
-    // UI flag on every cold start. The flag is a one-shot UI signal: writer
-    // is commitConsume(), sole reader is home_screen._checkStreakFreezeUsed
-    // which clears it after firing the SnackBar. If a previous session set
-    // the flag but never reached home (auth race, crash, signOut before the
-    // snackbar rendered), the flag lingers in durable Hive and surfaces as
-    // a spurious banner on the next launch. Cold-start clear is safe — any
-    // real consume that fires during this session re-sets it.
-    try {
-      final progress = UserRepository.instance.getProgress();
-      if (progress != null && progress['streak_freeze_just_used'] == true) {
-        await UserRepository.instance
-            .updateProgress({'streak_freeze_just_used': false});
-      }
-    } catch (e, st) {
-      debugPrint('[Splash] just_used clear failed (non-fatal): $e\n$st');
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'splash_just_used_clear'));
-    }
-
-    // Bug #13 — Cold-launch day rollover. Invalidate every "today"-scoped
-    // provider before the user lands on home so the first paint can't show
-    // yesterday's workout / water count / weight badge / AI insight. The
-    // resume-time observer in DayRolloverObserver still uses its gated
-    // `_checkAndRollover` path, so this won't double-invalidate when the
-    // user backgrounds and resumes within the same day.
-    if (mounted) {
-      await DayRolloverObserver.instance.runRolloverNow(ref);
-    }
+    // Bug 2026-05-22 (diagnose dc52a4) — the just_used clear AND the
+    // DayRolloverObserver.runRolloverNow(ref) call previously lived here.
+    // Both touched userBox via GuardedBox, which throws "HiveUserSession
+    // not opened" at this point in cold start. The C-6 (audit-2026-05-11)
+    // comment at lines 127-134 above already documented this constraint
+    // but the code drifted. Both calls moved to
+    // RestoringScreen._ensureOwnershipBeforeHome where HiveUserSession is
+    // open. day_rollover_streak_freeze_refill telemetry had been failing
+    // on every trigger since at least 2026-05-06 — universally for every
+    // user, every cold start.
 
     // Sync health data (steps, weight) from Health Connect / HealthKit into
     // Hive BEFORE navigating to home. This ensures the first paint shows
@@ -327,7 +280,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
-    _restoreSub?.cancel();
     _fadeController.dispose();
     _dotController.dispose();
     super.dispose();

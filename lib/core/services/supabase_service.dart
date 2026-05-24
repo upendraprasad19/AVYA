@@ -214,6 +214,7 @@ class SupabaseService {
     String name, {
     Map<String, String>? headers,
     Map<String, dynamic>? body,
+    bool retryOn500 = false,
   }) async {
     // Proactive token refresh — avoids sending an expired JWT
     final token = await ensureFreshToken();
@@ -253,6 +254,7 @@ class SupabaseService {
     return retryColdStart(
       () => client.functions.invoke(name, headers: headers, body: body),
       functionName: name,
+      retryOn500: retryOn500,
     );
   }
 
@@ -272,6 +274,7 @@ class SupabaseService {
     required String functionName,
     List<int> backoffsMs = _coldStartBackoffsMs,
     List<int> storageRaceBackoffsMs = _storageRaceBackoffsMs,
+    bool retryOn500 = false,
   }) async {
     int coldStartAttempt = 0;
     int storageRaceAttempt = 0;
@@ -279,8 +282,16 @@ class SupabaseService {
       try {
         return await invoke();
       } on FunctionException catch (e) {
+        // Theme I (diagnose <id>) — ai-proxy returns 500 on transient
+        // Gemini upstream timeouts. The default retry-trigger set is
+        // 502/503/504 (gateway-side cold-start signals). 500 is opt-in
+        // per-caller via [retryOn500] so we extend the retry budget for
+        // ai-proxy without changing behavior for other Edge Functions
+        // where a 500 IS a caller bug (validation, malformed body) that
+        // shouldn't retry.
         final isColdStart =
-            e.status == 502 || e.status == 503 || e.status == 504;
+            e.status == 502 || e.status == 503 || e.status == 504 ||
+            (retryOn500 && e.status == 500);
         // audit-2026-05-16 / Obs 6 — Storage 404 upload-CDN race.
         // ai-media-proxy v17 maps Storage 404 to 400 with the typed
         // body `{"error_type": "storage", ...}`. CDN propagation

@@ -20,34 +20,36 @@ import 'package:flutter_test/flutter_test.dart';
 ///      (canonical today-card provider is in the invalidation set).
 ///   4. app.dart calls DayRolloverObserver.instance.init(ref)
 ///      (long-lived ref is established before any screen mounts).
-///   5. splash_screen.dart calls DayRolloverObserver.instance.runRolloverNow(ref)
-///      (cold-start path still fires for the immediate first-launch invalidation).
+///   5. restoring_screen.dart calls DayRolloverObserver.instance.runRolloverNow(ref)
+///      (cold-start path still fires for the immediate first-launch invalidation;
+///      relocated from splash_screen.dart 2026-05-22 / diagnose dc52a4 to run
+///      AFTER HiveUserSession.openForUser inside _ensureOwnershipBeforeHome).
 ///   6. The invalidation set in _doRolloverWithRef includes all required
 ///      today-bearing providers from the sot_registry.yaml entry.
 void main() {
   late String rolloverSrc;
   late String appSrc;
-  late String splashSrc;
+  late String restoringSrc;
 
   setUpAll(() {
     final rolloverFile =
         File('lib/core/services/day_rollover_service.dart');
     final appFile = File('lib/app.dart');
-    final splashFile =
-        File('lib/features/auth/screens/splash_screen.dart');
+    final restoringFile =
+        File('lib/features/auth/screens/restoring_screen.dart');
 
     expect(rolloverFile.existsSync(), isTrue,
         reason:
             'lib/core/services/day_rollover_service.dart not found — run from project root');
     expect(appFile.existsSync(), isTrue,
         reason: 'lib/app.dart not found — run from project root');
-    expect(splashFile.existsSync(), isTrue,
+    expect(restoringFile.existsSync(), isTrue,
         reason:
-            'lib/features/auth/screens/splash_screen.dart not found — run from project root');
+            'lib/features/auth/screens/restoring_screen.dart not found — run from project root');
 
     rolloverSrc = rolloverFile.readAsStringSync();
     appSrc = appFile.readAsStringSync();
-    splashSrc = splashFile.readAsStringSync();
+    restoringSrc = restoringFile.readAsStringSync();
   });
 
   // ── Test 1: raw overwrite `_ref = ref` must NOT exist in runRolloverNow ──
@@ -144,19 +146,29 @@ void main() {
             'mounts. Without this, resume-time rollovers have no ref to invalidate on.');
   });
 
-  // ── Test 6: splash_screen.dart still calls runRolloverNow for cold starts ──
+  // ── Test 6: restoring_screen.dart calls runRolloverNow for cold starts ──
+  //
+  // Relocated from splash_screen.dart 2026-05-22 / diagnose dc52a4. The
+  // call must run AFTER HiveUserSession.openForUser (which happens inside
+  // restoreFromCloudForUser → _ensureOwnershipBeforeHome) because
+  // runRolloverNow's invalidation cascade reads user-scoped Hive boxes —
+  // touching `userBox` before openForUser hit the pre-openForUser race that
+  // made `day_rollover_streak_freeze_refill` fail on every cold start.
 
   test(
-      'splash_screen.dart calls DayRolloverObserver.instance.runRolloverNow for cold-start',
+      'restoring_screen.dart calls DayRolloverObserver.instance.runRolloverNow for cold-start',
       () {
     expect(
-        splashSrc.contains(
+        restoringSrc.contains(
             'DayRolloverObserver.instance.runRolloverNow(ref)'),
         isTrue,
         reason:
-            'splash_screen.dart must call runRolloverNow(ref) on cold launch so '
-            'first-paint providers are fresh even when the date rolled over while '
-            'the app was fully killed overnight.');
+            'restoring_screen.dart must call runRolloverNow(ref) inside '
+            '_ensureOwnershipBeforeHome so first-paint providers are fresh '
+            'even when the date rolled over while the app was killed. '
+            'Lives in restoring_screen (not splash) per diagnose dc52a4 — '
+            'must run after HiveUserSession.openForUser to avoid the '
+            'streak_freeze_refill_check race.');
   });
 
   // ── Test 7: _doRolloverWithRef is called from runRolloverNow (not _doRollover) ──

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
+import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -10,6 +11,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -36,13 +38,31 @@ class RestoringScreen extends ConsumerStatefulWidget {
 }
 
 class _RestoringScreenState extends ConsumerState<RestoringScreen> {
+  bool _showSoftHint = false;
   bool _showTimeoutCta = false;
+  Timer? _softHintTimer;
   Timer? _timeoutTimer;
+
+  // Theme D (diagnose 2026-05-22 4a3b08) — threshold bumped from 15s to
+  // 30s based on +30 APK telemetry showing the founder's restore total
+  // is 35.9s every cold start (Step A 23.8s alone exceeded the old 15s
+  // gate, hitting every user every launch). Two-stage UX: a soft "Almost
+  // there…" hint surfaces at 15s for users who got an old-vs-new mental
+  // model of "should this take a few seconds?", and the actual escape-
+  // hatch CONTINUE button surfaces at 30s. Background-restore (A5) is
+  // a bigger refactor needing per-provider "loading" handling; this
+  // batch ships the threshold fix and leaves A5 for the operational-
+  // observability work.
+  static const Duration _softHintAfter = Duration(seconds: 15);
+  static const Duration _ctaAfter = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
-    _timeoutTimer = Timer(const Duration(seconds: 15), () {
+    _softHintTimer = Timer(_softHintAfter, () {
+      if (mounted) setState(() => _showSoftHint = true);
+    });
+    _timeoutTimer = Timer(_ctaAfter, () {
       if (mounted) setState(() => _showTimeoutCta = true);
     });
     _kickoffRestore();
@@ -222,6 +242,64 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       message: 'migrator=nlog ms=${swNlog.elapsedMilliseconds} '
           'did_run=$nlogRan',
     ));
+
+    // Bug 2026-05-22 / diagnose dc52a4 — three pieces of post-auth bootstrap
+    // that used to live in splash_screen._runDeferredInit. They touch the
+    // user-scoped GuardedBox (`userBox`) and so MUST run AFTER
+    // HiveUserSession.openForUser, which happened above as part of
+    // restoreFromCloudForUser → _ensureOwnershipBeforeHome. Splash hit a
+    // pre-openForUser race that made `day_rollover_streak_freeze_refill`
+    // fail on every cold start since at least 2026-05-06 — universally,
+    // every user, every launch. Moving here finally lets the rollover +
+    // weekly refill actually execute.
+
+    // (1) Cold-start clear of the session-scoped `streak_freeze_just_used`
+    // UI flag. Set by commitConsume(), read+cleared by
+    // home_screen._checkStreakFreezeUsed. If a prior session set the flag
+    // but never reached the home read (auth race, crash, signOut before
+    // snackbar fired), the flag lingers in durable Hive and surfaces as a
+    // spurious banner. Real consumes this session re-set it.
+    try {
+      final progress = UserRepository.instance.getProgress();
+      if (progress != null && progress['streak_freeze_just_used'] == true) {
+        await UserRepository.instance
+            .updateProgress({'streak_freeze_just_used': false});
+      }
+    } catch (e, st) {
+      debugPrint('[RestoringScreen] just_used clear failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restoring_just_used_clear'));
+    }
+
+    // (2) Day rollover — invalidate every "today"-scoped provider before
+    // landing on /home so first paint can't show yesterday's data.
+    // DayRolloverObserver.runRolloverNow is the canonical cold-start
+    // path; the resume-time observer (via _checkAndRollover) handles
+    // foreground-resume separately.
+    if (mounted) {
+      try {
+        await DayRolloverObserver.instance.runRolloverNow(ref);
+      } catch (e, st) {
+        debugPrint('[RestoringScreen] runRolloverNow failed (non-fatal): $e\n$st');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'restoring_run_rollover_now'));
+      }
+    }
+
+    // (3) Post-restore weekly refill — defence-in-depth for the obs 1+2
+    // race fix. `_restoreFreezes` does a max-merge on (available,
+    // last_refill); this re-call is the belt-and-braces in case local
+    // last_refill got reset between splash + restore. Idempotent — no-op
+    // if last_refill is already this week. Telemetry on the inside of
+    // refillIfNewWeek will tell us whether it fires.
+    try {
+      StreakProgressService.instance.refillIfNewWeek();
+    } catch (e, st) {
+      debugPrint(
+          '[RestoringScreen] post-restore refillIfNewWeek failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restoring_post_restore_refill'));
+    }
   }
 
   /// Plan A self-heal — stamps `onboarding_completed_at = NOW()` on both
@@ -237,12 +315,14 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   }
 
   void _onContinueAnyway() {
+    _softHintTimer?.cancel();
     _timeoutTimer?.cancel();
     if (mounted) context.go('/home');
   }
 
   @override
   void dispose() {
+    _softHintTimer?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
   }
@@ -309,6 +389,22 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
               const SizedBox(height: 32),
               const _AnimatedDots(key: ValueKey('restoring-dots')),
               const Spacer(),
+              // Theme D — soft hint between 15s and 30s (informational
+              // only; restore still progressing). 36s total restore is
+              // the founder's measured median per APK +30 telemetry, so
+              // most users will see this for ~15s.
+              if (_showSoftHint && !_showTimeoutCta)
+                Padding(
+                  key: const ValueKey('restoring-soft-hint'),
+                  padding: const EdgeInsets.only(bottom: 32),
+                  child: Text(
+                    'Almost there…',
+                    style: AppTypography.bodyM.copyWith(
+                      color: AppColors.textDim,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               if (_showTimeoutCta)
                 Padding(
                   key: const ValueKey('restoring-timeout-cta'),

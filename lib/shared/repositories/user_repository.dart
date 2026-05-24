@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
@@ -78,7 +79,41 @@ class UserRepository {
     await _hive.userBox.put('progress', progress);
   }
 
+  // ── Pending Promotion (Theme B, diagnose 2026-05-22 9aa2c1) ────
+  //
+  // One-shot top-level Hive key stamped by RankService when a rank
+  // change is detected. Home screen reads + clears on mount/resume
+  // and pushes PromotionCelebrationScreen. NOT synced to cloud (no
+  // corresponding column in user_progress) — purely client-side
+  // celebration state. Survives hot restart because it's durable Hive.
+
+  static const String _pendingPromotionKey = 'pending_promotion_rank_code';
+
+  String? getPendingPromotionRankCode() {
+    return _hive.userBox.get(_pendingPromotionKey) as String?;
+  }
+
+  Future<void> setPendingPromotionRankCode(String rankCode) async {
+    await _hive.userBox.put(_pendingPromotionKey, rankCode);
+  }
+
+  Future<void> clearPendingPromotionRankCode() async {
+    await _hive.userBox.delete(_pendingPromotionKey);
+  }
+
   /// Updates individual progress fields without overwriting others.
+  ///
+  /// Bug 2026-05-22 (Theme F-NEW, diagnose ec4d27) — pre-fix, this method
+  /// wrote to Hive but did NOT fire syncProgressNow. The only callsite
+  /// that pushed user_progress to cloud was train_provider.dart:1485
+  /// (post-workout-completion). Every other mutation (phase unlock,
+  /// edit profile, etc.) accumulated in Hive without reaching cloud.
+  /// Founder's cloud user_progress.updated_at was 20+ days stale despite
+  /// active app use.
+  ///
+  /// Fix: fire-and-forget `unawaited(syncProgressNow())` after the Hive
+  /// write — matches the canonical WriteService pattern from
+  /// lib/core/services/CLAUDE.md (Hive first → invalidate → sync).
   Future<void> updateProgress(Map<String, dynamic> fields) async {
     final current = getProgress() ?? {
       'current_phase': 1,
@@ -88,6 +123,9 @@ class UserRepository {
     };
     current.addAll(fields);
     await saveProgress(current);
+    // Fire-and-forget cloud sync — never block the UI. SyncService
+    // captures failures via recordNonFatal + _reportSyncFailure.
+    unawaited(SyncService.instance.syncProgressNow());
   }
 
   // ── Preferences ─────────────────────────────────────────────

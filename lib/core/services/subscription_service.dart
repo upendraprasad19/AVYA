@@ -370,22 +370,59 @@ class SubscriptionService {
       } catch (_) {
         // Never let telemetry break the gate path.
       }
+      // ignore: discarded_futures
+      ErrorTelemetry.logEvent('subscription_gate_routed',
+          message: 'feature=$feature exit=onFree reason=not_pro_local');
       onFree();
       return;
     }
 
-    // High-value features: verify server-side (async, cached 5 min)
+    // High-value features: verify server-side (async, cached 5 min).
+    //
+    // Bug 2026-05-22 / diagnose 7b3eaf — pre-fix had no .catchError on
+    // verifyFromServer().then(...) and no timeout. If verify threw
+    // (network blip, JWT expired, Edge function down) NEITHER onPro NOR
+    // onFree fired — button taps vanished silently. Founder hit this on
+    // GENERATE NEXT PHASE (2026-05-21). Telemetry showed zero
+    // train_graduation_generate_phase_2_failed events, zero cloud
+    // writes. Fix: 10s timeout + .catchError, both fall back to onPro
+    // since local isPro() already returned true (we trust local over
+    // server when server fails). Telemetry on every exit so future
+    // silent-disappear bugs are one-query debuggable.
     if (_highValueFeatures.contains(feature)) {
-      verifyFromServer().then((verified) {
+      verifyFromServer()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_gate_routed',
+            message: 'feature=$feature exit=onPro reason=verify_timeout');
+        return true;
+      }).then((verified) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_gate_routed',
+            message: verified
+                ? 'feature=$feature exit=onPro reason=verify_pro'
+                : 'feature=$feature exit=onFree reason=verify_failed');
         if (verified) {
           onPro();
         } else {
           onFree();
         }
+      }).catchError((Object e, StackTrace st) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('subscription_gate_routed',
+            message: 'feature=$feature exit=onPro reason=verify_threw '
+                'error=${e.runtimeType}');
+        // ignore: discarded_futures
+        ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'subscription_gate_verify_failed');
+        onPro();
       });
       return;
     }
 
+    // ignore: discarded_futures
+    ErrorTelemetry.logEvent('subscription_gate_routed',
+        message: 'feature=$feature exit=onPro reason=local_pro');
     onPro();
   }
 

@@ -39,6 +39,7 @@ import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/profile/screens/promotion_celebration_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -48,9 +49,33 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with HiveTabScaffoldMixin<HomeScreen> {
+    with HiveTabScaffoldMixin<HomeScreen>, WidgetsBindingObserver {
   String? _error;
   bool _hasInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Theme B (diagnose 2026-05-22 9aa2c1) — pending promotion may have
+    // been stamped while the app was paused (e.g. background sync ran
+    // RankService.evaluateAndPromote). Check on resume so the celebration
+    // surfaces the next time the user returns to the app.
+    if (state == AppLifecycleState.resumed) {
+      _maybeShowPendingPromotion();
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -75,6 +100,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Future<void> initTab() async {
     // Check if a streak freeze was just consumed and notify the user.
     _checkStreakFreezeUsed();
+    // Theme B — check pending promotion celebration on first mount.
+    _maybeShowPendingPromotion();
     // Wait for background health sync to finish, then refresh step/weight
     // providers. This replaces the old fixed 5-second delay which was a
     // race condition — health sync could take longer than 5s or finish
@@ -110,6 +137,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // Bug #14 — Prediction polling moved to ProfileScreen alongside the
   // Future Prediction card. Home no longer renders the prediction.
+
+  /// Theme B (diagnose 2026-05-22 9aa2c1) — pending promotion celebration.
+  ///
+  /// RankService.evaluateAndPromote stamps userBox['pending_promotion_rank_code']
+  /// (a top-level Hive key, NOT inside the progress map) whenever a real
+  /// rank change is detected and persisted to cloud. This handler reads
+  /// + clears the slot and pushes the pre-existing
+  /// PromotionCelebrationScreen as a full-screen modal route. Survives
+  /// hot restart because the slot is durable Hive. Idempotent — only one
+  /// modal per stamp because clearPendingPromotionRankCode fires
+  /// immediately after read.
+  void _maybeShowPendingPromotion() {
+    if (!mounted) return;
+    final rankCode = UserRepository.instance.getPendingPromotionRankCode();
+    if (rankCode == null) return;
+    // Clear the slot BEFORE pushing the modal — guards against re-fire
+    // if the user backgrounds the app mid-celebration (didChangeApp
+    // LifecycleState fires again on resume).
+    unawaited(UserRepository.instance.clearPendingPromotionRankCode());
+    unawaited(ErrorTelemetry.logEvent('rank_promotion_celebration_shown',
+        message: 'rank_code=$rankCode'));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) =>
+            PromotionCelebrationScreen(newRankCode: rankCode),
+      ));
+    });
+  }
 
   void _checkStreakFreezeUsed() {
     final progress = UserRepository.instance.getProgress();

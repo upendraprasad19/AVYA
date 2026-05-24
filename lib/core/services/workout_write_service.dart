@@ -418,6 +418,34 @@ class WorkoutWriteService {
       final box = HiveService.instance.workoutBox;
       final key = scheduleKey(date);
 
+      // Theme H fix (diagnose <id>) — refuse to overwrite a completed day
+      // from planGenerator. Pre-fix: phase regeneration that normalize-to-
+      // Monday'd onto a date with an already-completed workout silently
+      // clobbered the completed entry (no `status`, no `completed_at`).
+      // Founder hit this 2026-05-21 — Phase 2 W1 generation overwrote
+      // Phase 1 W4 entries the founder had completed.
+      //
+      // Scope to planGenerator only — every other source has a legitimate
+      // reason to write to a completed day:
+      //   - activeWorkout / editSheet — user is editing or re-logging.
+      //   - aiCoach / manual — user explicitly invoked.
+      //   - schedSwap — reschedule keeps the completed status intact via
+      //     a separate path (rescheduleDay).
+      //   - restore — cloud restore must be able to replay history.
+      final existingRaw = box.get(key);
+      final existingMap = existingRaw is Map
+          ? Map<String, dynamic>.from(existingRaw)
+          : null;
+      if (existingMap != null &&
+          existingMap['status'] == 'completed' &&
+          source == WriteSource.planGenerator) {
+        unawaited(ErrorTelemetry.logEvent(
+            'upsert_scheduled_skipped_completed_day',
+            message: 'date=$dateStr source=${source.code} key=$key'));
+        return WriteResult.fail(
+            'refusing to overwrite completed day from planGenerator');
+      }
+
       final stamped = <String, dynamic>{
         ...entry,
         'date': dateStr,
