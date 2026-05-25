@@ -891,7 +891,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       // For weight_reps the writer's top-level `weight_kg` is already
       // MAX, so it's safe to use directly.
-      final totalDuration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+      //
+      // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService` does NOT emit
+      // a top-level `duration_seconds` on exlog rows; per-set duration
+      // lives at `sets[].duration_sec`. Cardio totals are also derived
+      // by the canonical helper (sum/max across sets) so the same call
+      // works for both `timed` (max per set) and `cardio` (the helper
+      // returns max-per-set, sufficient for the line 908 summary).
+      final totalDuration = WorkoutReadService.bestPerSetDuration(log);
 
       String detail;
       if (loggingType == 'timed') {
@@ -1278,7 +1285,12 @@ class _TrainScreenState extends ConsumerState<TrainScreen> {
                               .reduce((a, b) => a > b ? a : b);
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-                          final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+                          // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService`
+                          // does NOT emit a top-level `duration_seconds` on
+                          // exlog rows; per-set duration lives at
+                          // `sets[].duration_sec`. Use the canonical helper.
+                          final duration =
+                              WorkoutReadService.bestPerSetDuration(log);
                           // APK Test #12.4 / Task #1b — reverted defensive
                           // re-inference. Migrator v2 fixes the type+data
                           // pair correctly at splash; reader trusts stored

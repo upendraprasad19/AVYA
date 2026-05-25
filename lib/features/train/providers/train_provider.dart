@@ -1234,21 +1234,28 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       if (w > (bestWeightMap[name] ?? 0)) bestWeightMap[name] = w;
       // Per-set best reps: prefer stored best, fallback to estimated average
       final bestSetReps = (log['best_single_set_reps'] as int?);
+      // Drift-fix 2026-05-24 / T16 orphan — WorkoutWriteService.logExercise
+      // emits canonical `set_number`; legacy `sets_completed` lingers on
+      // older rows only. Dual-name read with canonical-first preference
+      // (same pattern as line 86 + ExerciseSet.fromMap duration_sec/_seconds).
       final r = bestSetReps ??
           (((log['reps_completed'] as int?) ?? 0) > 0 &&
-                  ((log['sets_completed'] as int?) ?? 1) > 0
+                  (((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 1) > 0
               ? ((log['reps_completed'] as int?) ?? 0) ~/
-                  ((log['sets_completed'] as int?) ?? 1)
+                  (((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 1)
               : 0);
       if (r > (bestRepsMap[name] ?? 0)) bestRepsMap[name] = r;
-      // Per-set best duration: prefer stored best, fallback to estimated average
-      final bestSetDur = (log['best_single_set_duration'] as int?);
-      final d = bestSetDur ??
-          (((log['duration_seconds'] as int?) ?? 0) > 0 &&
-                  ((log['sets_completed'] as int?) ?? 1) > 0
-              ? ((log['duration_seconds'] as int?) ?? 0) ~/
-                  ((log['sets_completed'] as int?) ?? 1)
-              : 0);
+      // Per-set best duration: canonical helper reads `sets[].duration_sec`
+      // first, falls back to top-level `duration_seconds` for single-set
+      // legacy rows only.
+      //
+      // Drift-fix 2026-05-24 / T6 — pre-fix this read fictional
+      // `best_single_set_duration` (writer never emits) with a fallback
+      // to top-level `duration_seconds` (also never emitted on exlog
+      // rows). Both were dead reads silently returning 0 for every
+      // modern row. Same class as the PR-cumulative bug fixed in
+      // loadAllExercisePRs (closes-diagnose 2026-05-16-pr-cumulative-bug).
+      final d = WorkoutReadService.bestPerSetDuration(log);
       if (d > (bestDurationMap[name] ?? 0)) bestDurationMap[name] = d;
     }
 
@@ -1736,7 +1743,9 @@ final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
     final log = Map<String, dynamic>.from(raw);
 
     if (log['type'] == 'exercise_log') {
-      final sets = (log['sets_completed'] as int?) ?? 0;
+      // Drift-fix 2026-05-24 / T16 orphan — canonical `set_number` per
+      // WorkoutWriteService.logExercise; legacy `sets_completed` fallback.
+      final sets = ((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 0;
       totalSets += sets;
 
       final isPr = (log['is_pr'] as bool?) ?? false;
@@ -1751,7 +1760,11 @@ final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
     }
 
     if (log['type'] == 'workout_log') {
-      final s = (log['sets_completed'] as int?) ?? 0;
+      // Drift-fix 2026-05-24 / T16 orphan — dual-name read for symmetry
+      // with exlog branch. workout_log writer (workout_repository.dart)
+      // still emits `sets_completed`; canonical fallthrough is a no-op
+      // here but keeps the contract uniform.
+      final s = ((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 0;
       if (s > 0 && totalSets == 0) totalSets += s;
     }
   }

@@ -157,11 +157,17 @@ extension SyncServiceNutrition on SyncService {
             final itemCloudId = SyncService._deterministicId('${key}_item_$i');
             try {
               // Per-item projection — schema-matched. nutrition_log_items
-              // currently has columns: id, log_id, food_id, food_name,
-              // quantity_g, calories, protein, carbs, fat, created_at.
-              // `fiber` is not yet a column on this table (a future
-              // migration will add it for parity with nutrition_logs);
-              // we deliberately skip it here so the upsert doesn't 400.
+              // columns (post-migration 068): id, log_id, food_id,
+              // food_name, quantity_g, calories, protein, carbs, fat,
+              // fiber, created_at.
+              //
+              // Drift-fix batch 2026-05-24:
+              //   T3 / F3 — dropped dead fallback reads on `food_name`
+              //     and `serving_g`; FoodItem.toMap() (the canonical
+              //     writer) only emits `name` + `quantity_g`.
+              //   T4 / F4 — added `fiber` projection alongside
+              //     migration 068.
+              //
               // Plan C-4 (Test #6): close obs #23 by making sure every
               // Hive nlog_* row produces N nutrition_log_items rows on
               // sync — verified in test/nutrition_write_service/
@@ -169,13 +175,14 @@ extension SyncServiceNutrition on SyncService {
               await _supabase.client.from('nutrition_log_items').upsert({
                 'id': itemCloudId,
                 'log_id': logCloudId,
-                'food_name': item['name'] ?? item['food_name'] ?? '',
-                if (item['serving_g'] != null || item['quantity_g'] != null)
-                  'quantity_g': item['serving_g'] ?? item['quantity_g'],
+                'food_name': item['name'] ?? '',
+                if (item['quantity_g'] != null)
+                  'quantity_g': item['quantity_g'],
                 if (item['calories'] != null) 'calories': item['calories'],
                 if (item['protein'] != null) 'protein': item['protein'],
                 if (item['carbs'] != null) 'carbs': item['carbs'],
                 if (item['fat'] != null) 'fat': item['fat'],
+                'fiber': item['fiber'] ?? 0,
               }, onConflict: 'id');
             } catch (itemErr, st) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');

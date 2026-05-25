@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -938,7 +939,13 @@ class EditLogExerciseRow {
     final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
     final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
     final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-    final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+    // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService` does NOT emit
+    // a top-level `duration_seconds` on exlog rows; per-set duration
+    // lives at `sets[].duration_sec`. The canonical helper reads
+    // `sets[]` first and falls back to top-level for single-set
+    // legacy rows (the exact same semantic this aggregate fallback
+    // wants).
+    final duration = WorkoutReadService.bestPerSetDuration(log);
     final distance = (log['distance_km'] as num?)?.toDouble() ?? 0;
 
     String fmtDouble(double v) =>

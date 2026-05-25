@@ -1,0 +1,162 @@
+# Drift-fix batch closure tally — 2026-05-24
+# Source spec: docs/superpowers/specs/2026-05-24-drift-fix-batch-design.md
+# Source findings: docs/audit/2026-05-24-drift-scan-workout.md + docs/audit/2026-05-24-drift-scan-nutrition.md
+# Plan: docs/superpowers/plans/2026-05-24-drift-fix-batch.md
+# Diagnose-doc: docs/diagnoses/2026-05-24-drift-fix-batch-524d12.md
+batch: 2026-05-24-drift-fix
+total_findings: 10
+closed_count: 10
+
+findings:
+  - id: nutrition-F1
+    severity: P0
+    title: NutritionWriteService.computeLogKey not IST-anchored
+    terminal_state: closed_in_commit
+    test_path: test/contracts/nutrition_write_service_ist_anchored_test.dart
+    notes: |
+      Original drift scan flagged 2 sites (lines 88 + 740). In-batch sweep
+      (per feedback_ist_sweep_gap) caught a 3rd same-class site at line 401
+      (logWater). All 3 fixed; added permanent source-grep regression test
+      guarding the whole file against future hand-rolled date assemblies.
+
+  - id: nutrition-F2
+    severity: P1
+    title: Gate 23 — nlog_* canonical writer enforcement
+    terminal_state: closed_in_commit
+    test_path: test/contracts/nlog_key_canonical_test.dart
+    build_gate: scripts/check_nlog_key_canonical.dart
+    notes: |
+      Mirrors Gate 17 (exlog_* canonical writer enforcement). Allowlists
+      3 files: nutrition_write_service.dart (canonical), sync_service.dart
+      (_nlogKeyForRestore mirror), nlog_key_migrator.dart (migration mirror).
+
+  - id: nutrition-F3
+    severity: P2
+    title: Drop dead fallback reads (food_name, serving_g) in sync_nutrition per-item projection
+    terminal_state: closed_in_commit
+    test_path: test/contracts/nutrition_write_to_read_contract_test.dart  # existing — pins canonical shape
+
+  - id: nutrition-F4
+    severity: P2
+    title: Add nutrition_log_items.fiber column + per-item projection
+    terminal_state: closed_in_commit
+    migration: supabase/migrations/068_drift_fix_batch.sql
+    test_path: test/contracts/nutrition_log_items_fiber_projection_test.dart
+
+  - id: workout-F1
+    severity: P1
+    title: AI snapshot PR-set reps semantic (was reporting SUM)
+    terminal_state: closed_in_commit
+    test_path: test/ai_coach/pr_snapshot_uses_pr_set_reps_test.dart
+    notes: |
+      Founder-locked semantic: PR-set reps (find set whose weight_kg matches
+      PR weight, report THAT set's reps). Falls through to reps_completed
+      for legacy rows without sets[].
+
+  - id: workout-F2
+    severity: P1
+    title: Drop top-level duration_seconds reads (writer never emits)
+    terminal_state: closed_in_commit
+    test_path: test/contracts/no_top_level_duration_seconds_reads_test.dart
+    notes: |
+      Original drift scan flagged 2 files (workout_receipt_card.dart +
+      train_screen.dart). In-batch sweep caught 4 more sites across
+      edit_workout_log_sheet.dart, train_provider.dart, workout_repository.dart.
+      Total: 6 sites across 5 files routed through WorkoutReadService.bestPerSetDuration.
+
+  - id: workout-F3
+    severity: P2
+    title: "Drop dead `notes: log['id']` stuffing in workout_logs sync"
+    terminal_state: closed_in_commit
+    test_path: test/contracts/cloud_workout_logs_no_notes_stuffing_test.dart
+
+  - id: workout-F4
+    severity: P2
+    title: Rename workout_logs.exercise_name to workout_name (column was session label, not per-exercise)
+    terminal_state: closed_in_commit
+    migration: supabase/migrations/068_drift_fix_batch.sql
+    test_path: test/contracts/cloud_workout_logs_uses_workout_name_test.dart
+    notes: |
+      Atomic rename per founder choice (sole tester, controls all installs).
+      Preflight confirmed uniqueness was a standalone UNIQUE INDEX (not table
+      constraint) — migration uses DROP INDEX/RENAME COLUMN/CREATE UNIQUE INDEX
+      pattern. weekly-report Edge Function (sole affected reader) updated +
+      redeployed to v21.
+
+  - id: workout-F5
+    severity: P2
+    title: Delete legacy logSetWithPrRescan method (zero callers — verified preflight)
+    terminal_state: closed_in_commit
+    test_path: test/contracts/no_legacy_log_set_with_pr_rescan_declaration_test.dart
+    notes: |
+      Method itself + cascading dead code (3 confirmed-orphan helpers/class:
+      _invalidateExlogDateIndex, _recomputePrFlagsForExercise, _PrScanEntry)
+      deleted. _exlogDateIndex field + _ensureExlogDateIndex helper KEPT —
+      preflight initially listed them as candidates but extension subagent
+      verified _ensureExlogDateIndex is actively called from
+      getExerciseLogsForDate legacy fallback (line 521). Net deletion: ~277 lines.
+
+  - id: orphan-T16-train-provider-sets-completed
+    severity: P2
+    title: train_provider.dart reads legacy sets_completed; canonical writer emits set_number
+    terminal_state: closed_in_commit
+    test_path: test/contracts/train_provider_reads_set_number_dual_name_test.dart
+    notes: |
+      Surfaced by T16 drift-detector re-run as orphan pre-existing
+      finding. Same writer/reader-field-drift bug class as the other 9.
+      Closed via dual-name read at every callsite + source-grep
+      regression test. WorkoutWriteService.logExercise mainline emits
+      canonical `set_number`; legacy `sets_completed` rows still readable
+      via fallthrough. 4 sites updated (lines 1239, 1241, 1742, 1757).
+      Line 1757 reads from workout_log rows whose writer
+      (workout_repository.dart:411) still emits sets_completed — dual-name
+      pattern applied for symmetry (canonical fallthrough is a no-op).
+
+deploys:
+  edge_functions:
+    - name: weekly-report
+      version_before: 20
+      version_after: 21
+      ezbr_sha256: ec4c002321e78fdf4d2348f31f3ce2dec0dcd4c9eeb5f3072736ba952d8114df
+      reason: SELECT against workout_logs updated to use workout_name (F4 cascade)
+
+build_gates_added:
+  - name: Gate 23 — nlog_* canonical writer enforcement
+    script: scripts/check_nlog_key_canonical.dart
+    contract_test: test/contracts/nlog_key_canonical_test.dart
+
+migrations_applied:
+  - version: 20260525010726
+    name: 068_drift_fix_batch
+    source_file: supabase/migrations/068_drift_fix_batch.sql
+    applied_migrations_entry: "068b_drift_fix_batch"
+    schema_changes:
+      - DROP INDEX uniq_workout_logs_user_date_name
+      - ALTER TABLE workout_logs RENAME COLUMN exercise_name TO workout_name
+      - CREATE UNIQUE INDEX uniq_workout_logs_user_date_workout_name (user_id, date, workout_name)
+      - ALTER TABLE nutrition_log_items ADD COLUMN fiber NUMERIC DEFAULT 0
+
+scope_extensions_during_execution:
+  - source: nutrition-F1 in-batch sweep
+    finding: Third same-class IST drift site at logWater (line 401)
+    rationale: feedback_no_deferrals + feedback_ist_sweep_gap
+  - source: workout-F2 in-batch sweep
+    finding: 4 additional sites across edit_workout_log_sheet.dart, train_provider.dart, workout_repository.dart
+    rationale: feedback_no_deferrals + completeness on file-class fix
+  - source: workout-F5 cascading cleanup
+    finding: 3 orphaned helpers/class (_invalidateExlogDateIndex, _recomputePrFlagsForExercise, _PrScanEntry)
+    rationale: feedback_no_deferrals + same-batch dead-code purge
+
+sot_registry_updates:
+  - concept: hive_field_name_nlog
+    changes: |
+      Added behavioral_test_path: test/contracts/nutrition_write_service_ist_anchored_test.dart;
+      added build_gate: scripts/check_nlog_key_canonical.dart;
+      extended class_constraints with IST-anchoring + Gate 23 reference.
+  - concept: workout_templates
+    changes: |
+      Pre-existing stale line ranges fixed (caused by prior batches refactoring
+      saveTemplate out of workout_repository.dart into train_provider.dart
+      TemplatesNotifier). Writer entry repointed at train_provider.dart:1619.
+      Stale createMultiDayTemplate duplicate-name guard reader entry removed
+      (method no longer exists in current codebase).

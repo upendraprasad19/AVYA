@@ -365,7 +365,16 @@ class WorkoutReceiptData {
       final setsDetailLen = setsDetailRaw is List ? setsDetailRaw.length : 0;
       final sets = [setNum, setsCompletedField, setsArrLen, setsDetailLen]
           .reduce((a, b) => a > b ? a : b);
-      final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+      // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService` does NOT emit
+      // a top-level `duration_seconds` on exlog rows. The receipt's
+      // semantic for "total time held" is the SUM across per-set
+      // entries, which gets computed below as `perSetDurationSum`.
+      // The pre-fix top-level read was dead — always 0 for modern rows,
+      // so the `duration > 0 ? duration : perSetDurationSum` ternary
+      // (line ~417 below) silently always took the sum branch anyway.
+      // Setting `duration = 0` here keeps the sum path canonical and
+      // removes the dead read without changing receipt rendering.
+      const int duration = 0;
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
 
