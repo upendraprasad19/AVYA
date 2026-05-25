@@ -107,8 +107,8 @@ dev_dependencies:
   # founder runs them locally per docs/operations/DEVICE_TESTING.md.
   # Patrol 3.x is the current stable line; patrol_finders ships
   # separately for the widget-finder DSL.
-  patrol: ^3.15.2
-  patrol_finders: ^2.7.0
+  patrol: ^4.6.0
+  patrol_finders: ^3.4.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
