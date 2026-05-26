@@ -124,7 +124,7 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                               .reduce((a, b) => a > b ? a : b);
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-                          final duration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+                          final duration = WorkoutReadService.bestPerSetDuration(log);
                           // APK Test #12.4 / Task #1b — reverted defensive
                           // re-inference. Migrator v2 fixes the type+data
                           // pair correctly at splash; reader trusts stored

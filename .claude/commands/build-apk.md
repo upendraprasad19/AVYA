@@ -176,6 +176,22 @@ In `lib/**/*_repository.dart`, every `box.get(key)` that returns a Map shape mus
 
 Baseline file `backups/id_injection_on_get_baseline.txt` for grandfathered patterns. NEW violations hard-fail.
 
+### Gate 17 — `exlog_*` canonical writer enforcement
+
+```bash
+dart run scripts/check_exlog_key_canonical.dart
+```
+
+Source-grep fails the build if any file outside the canonical `WorkoutWriteService.exlogKey` (+ documented restore mirror + ExlogKeyMigrator allowlist) constructs an `exlog_*` Hive key directly. Codifies APK Test #16.1 / Theme A — three rogue writer formulas were silently producing non-canonical keys (`String.hashCode` non-determinism + per-call `ms` keys) → visible duplicates + receipt no-op. See CLAUDE.md §19 entry "exlog_* Hive key duplicates".
+
+### Gate 23 — `nlog_*` canonical writer enforcement
+
+```bash
+dart run scripts/check_nlog_key_canonical.dart
+```
+
+Source-grep fails the build if any file outside the canonical `NutritionWriteService` (+ documented restore mirror + migration mirror) constructs an `nlog_*` Hive key directly. Mirrors Gate 17 (`check_exlog_key_canonical.dart`) for the nutrition domain. Shipped 2026-05-24 (drift-fix batch / F2) after audit found a Nutrition IST writer drift in the same writer/reader bug class.
+
 ---
 
 ## Build step
@@ -247,8 +263,8 @@ MD5: <hash>
 
 If `$ARGUMENTS` contains the literal string `--emergency-bypass`:
 
-1. Skip gates: 6, 7, 8, 9, 10, 11, 12, 13, 14
-2. Keep gates: 1 (must be on main), 2 (versionCode), 3 (.env), 4 (analyze), 5 (flutter test)
+1. Skip gates: 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 23
+2. Keep gates: 1 (must be on main), 2 (versionCode), 3 (.env), 4 (analyze), 5 (flutter test), 15 (telemetry), 16 (id injection)
 3. After build, rename APK:
    ```bash
    mv build/app/outputs/flutter-apk/app-prod-release.apk \
@@ -259,7 +275,7 @@ If `$ARGUMENTS` contains the literal string `--emergency-bypass`:
    ## <timestamp>
    - **Reason:** <reason from next arg after --emergency-bypass, or "not provided">
    - **versionCode:** <N>
-   - **Gates skipped:** 6, 7, 8, 9, 10, 11, 12, 13, 14
+   - **Gates skipped:** 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 23
    - **Post-mortem due by:** <today + 7 days>
    - **APK:** app-prod-release-EMERGENCY.apk
    ```

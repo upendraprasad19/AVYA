@@ -66,7 +66,7 @@ extension _ExpandedExercises on _TrainScreenState {
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       // For weight_reps the writer's top-level `weight_kg` is already
       // MAX, so it's safe to use directly.
-      final totalDuration = (log['duration_seconds'] as num?)?.toInt() ?? 0;
+      final totalDuration = WorkoutReadService.bestPerSetDuration(log);
 
       String detail;
       if (loggingType == 'timed') {

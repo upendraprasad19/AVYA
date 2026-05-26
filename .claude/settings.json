@@ -1,0 +1,6 @@
+{
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "55",
+    "MAX_THINKING_TOKENS": "10000"
+  }
+}

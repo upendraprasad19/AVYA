@@ -28,6 +28,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 import '../models/coach_memory.dart';
@@ -1199,7 +1200,13 @@ class AiSnapshotBuilder {
         byExercise[name] = {
           'exercise': name,
           'weight': (log['weight_kg'] as num?)?.toDouble() ?? 0,
-          'reps': (log['reps_completed'] as num?)?.toInt() ?? 0,
+          // Drift-fix batch 2026-05-24 / F1 workout (P1):
+          // reps_completed is SUM across sets per WriteService contract.
+          // Use prSetRepsForExlog to find reps at the PR weight (heaviest
+          // set), with legacy fallthrough. See AiCoachRepository helper.
+          'reps':
+              AiCoachRepository.prSetRepsForExlog(Map<String, dynamic>.from(log)) ??
+                  0,
           'set_date': dateStr,
         };
       }

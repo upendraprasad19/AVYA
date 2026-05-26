@@ -164,7 +164,7 @@ serve(async (req: Request) => {
     // 4b. Workout-level summary from workout_logs (duration, rpe, workout_name)
     const { data: workoutSummaries, error: summaryError } = await supabase
       .from("workout_logs")
-      .select("date, exercise_name, duration_seconds, rpe")
+      .select("date, workout_name, duration_seconds, rpe")
       .eq("user_id", targetUserId)
       .gte("date", sevenDaysAgoStr)
       .lte("date", todayStr)

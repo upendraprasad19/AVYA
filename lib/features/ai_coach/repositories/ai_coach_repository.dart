@@ -223,6 +223,39 @@ class AiCoachRepository {
     return prompts.take(4).toList();
   }
 
+  /// Drift-fix batch 2026-05-24 / F1 workout (P1).
+  ///
+  /// Returns the reps achieved at the PR weight (the heaviest set in
+  /// the log), NOT the SUM across sets. Falls through to
+  /// `reps_completed` for legacy rows without a `sets[]` array.
+  ///
+  /// Why: per CLAUDE.md §15 Hive field-name contract, `reps_completed`
+  /// is SUM across sets (writer-side semantic). The AI coach PR
+  /// snapshot used to surface this as "PR: 100kg x 28 reps" for a
+  /// 4-set pyramid — nonsense lifting semantics.
+  ///
+  /// Static + pure helper — usable from `AiSnapshotBuilder` (where the
+  /// PR projection now lives post-A10 split) without an instance.
+  static int? prSetRepsForExlog(Map<String, dynamic> log) {
+    final sets = (log['sets'] as List?) ?? const [];
+    if (sets.isNotEmpty) {
+      final prWeight = (log['weight_kg'] as num?)?.toDouble();
+      if (prWeight != null) {
+        for (final s in sets) {
+          if (s is! Map) continue;
+          final w = (s['weight_kg'] as num?)?.toDouble();
+          if (w == prWeight) {
+            final r = (s['reps'] as num?)?.toInt();
+            if (r != null) return r;
+          }
+        }
+      }
+    }
+    // Fall through: legacy rows without sets[] OR no set matched PR
+    // weight (degenerate data) OR empty sets[] array.
+    return (log['reps_completed'] as num?)?.toInt();
+  }
+
   /// F14 · Test #9 — returns the user's lifetime count of free
   /// image analyses on the AI coach. Server enforces the 5-cap; this is
   /// purely for "X of 5 free analyses left" display in the chat UI.

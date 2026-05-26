@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../constants/app_constants.dart';
+import '../utils/ist_date.dart';
 import '../../features/home/providers/home_provider.dart'
     show aiInsightProvider, nutritionSummaryProvider, recentFoodLogsProvider;
 import '../../features/nutrition/providers/nutrition_provider.dart'
@@ -84,8 +85,7 @@ class NutritionWriteService {
     final totalFat = items.fold<double>(0, (a, i) => a + i.fat).round();
     final totalFiber = items.fold<double>(0, (a, i) => a + i.fiber).round();
 
-    final dateStr =
-        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(date);
 
     final payload = <String, dynamic>{
       // APK Test #12.6 / Obs 7 — `id` field is what `_showEditMacrosSheet`
@@ -397,8 +397,7 @@ class NutritionWriteService {
     if (ml <= 0) {
       return WriteResult.fail('logWater: ml must be > 0');
     }
-    final dateStr =
-        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(date);
     final key = 'water_$dateStr';
 
     final box = HiveService.instance.nutritionBox;
@@ -736,8 +735,7 @@ class NutritionWriteService {
     required String mealType,
     required List<FoodItem> items,
   }) {
-    final dateStr =
-        '${istDate.year.toString().padLeft(4, '0')}-${istDate.month.toString().padLeft(2, '0')}-${istDate.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(istDate);
     final itemsHash = _stableItemsHash(items);
     return 'nlog_${dateStr}_${mealType}_$itemsHash';
   }

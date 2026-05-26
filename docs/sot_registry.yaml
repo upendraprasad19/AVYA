@@ -1333,6 +1333,8 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* prefix split out of ai_coach_repository.dart" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
+    behavioral_test_path: test/contracts/nutrition_write_service_ist_anchored_test.dart
+    build_gate: scripts/check_nlog_key_canonical.dart
     hive:
       box: nutritionBox
       key_prefix: "nlog_"
@@ -1353,6 +1355,11 @@ concepts:
       total_protein, total_carbs, total_fat, total_fiber, items[]
       (per-item: name, quantity_g, calories, protein, carbs, fat,
       fiber), source, logged_at, created_at.
+      Key formula MUST be IST-anchored via istDateStr(date) — verified
+      behaviorally by nutrition_write_service_ist_anchored_test.dart.
+      Source-grep enforcement: scripts/check_nlog_key_canonical.dart
+      (Gate 23) fails the build if any non-canonical writer constructs
+      an nlog_* key directly. Shipped 2026-05-24 drift-fix batch / F2.
 
   - concept: sync_fanout_workout_domain
     domain: workout
@@ -1971,9 +1978,10 @@ concepts:
       (replaced fragile DELETE-then-INSERT pattern in
       _syncWorkoutTemplates).
     writers:
-      - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1415-1560
-        method: saveTemplate (single-day) + createMultiDayTemplate
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1619-1635
+        method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
+          land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
         line_range: 367-380
         method: _buildTemplate
@@ -2018,14 +2026,6 @@ concepts:
           AI snapshot uses `type == 'template'` filter NOT key prefix
           (templates are identified by type field per the writer
           contract — saveTemplate / createMultiDayTemplate stamp it).
-      - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1625-1640
-        method: createMultiDayTemplate duplicate-name guard
-        semantic: aggregated
-        fields_read: [type, group_id]
-        notes: |
-          Pre-write scan to refuse `CreateTemplateException('duplicate_name')`
-          when an AI re-run would create a parallel set of tmpl_* rows.
       - file: lib/core/services/sync/sync_workout.dart
         line_range: 938-1110
         method: _syncWorkoutTemplates (cloud projection)
@@ -4062,7 +4062,7 @@ concepts:
       drift instance).
     writers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1460-1515
+        line_range: 1184-1265
         method: createCustomExercise
         notes: |
           Hive-side: routes through WorkoutWriteService.upsertCustomExercise
