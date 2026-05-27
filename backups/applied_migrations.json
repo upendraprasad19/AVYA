@@ -454,6 +454,14 @@
     "diagnose": "ada3fb"
   },
   {
+    "migration": "075",
+    "applied_at": "2026-05-27T19:00:00+05:30",
+    "hash": "sha256:7c7f1016224ecc1ec56551dccbc64b77e3d94e571a6a160c2679b5af4b60f840",
+    "applier": "claude-via-mcp",
+    "diagnose": "3a7b9f",
+    "slug": "heal_current_rank_from_peak"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",

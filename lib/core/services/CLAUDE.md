@@ -52,6 +52,7 @@ concept. Selected mappings (full list in `docs/sot_registry.yaml`):
 | `auth_hive_owner_agreement` | `hive_user_session.dart` + `wrapUserScopedBox` | every WriteService + every Hive-touching Riverpod provider |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` | `splash_screen` + `home_screen` mount |
 | `singleton_lifecycle_registry` | `singleton_lifecycle_registry.dart` | hot-restart cleanup |
+| `rank_monotonic_current_code` | `rank_service.dart` `evaluateAndPromote` (guarded by `shouldPromote(currentCode, qualified)` helper — monotonic-only writer; same pattern mirrored in `evaluate-rank-promotions` Edge Function cron) | `rank_service.dart` `getCurrentRank` (Hive `userBox['profile']`) → Profile rank chip + Home pending promotion |
 
 The WriteService pattern enforces three steps every write:
 
@@ -75,6 +76,7 @@ distinguish "Hive succeeded" from "cloud succeeded".
 | Hive `path_provider` MissingPluginException in unit tests | `HiveService.init()` calls `Hive.initFlutter()` which uses `getApplicationDocumentsDirectory` from path_provider — fails in pure unit tests with `MissingPluginException(No implementation found for method getApplicationDocumentsDirectory on channel plugins.flutter.io/path_provider)`. Fix in tests that need Hive boxes (e.g., `test/ai_coach/meals_today_snapshot_test.dart`): add `TestWidgetsFlutterBinding.ensureInitialized()` + mock the channel via `TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(MethodChannel('plugins.flutter.io/path_provider'), (call) async => tempDir.path)` BEFORE calling `Hive.init(tempDir.path)` and `HiveService.instance.init()`. Required pattern for any Hive-touching unit test. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 | Increment a usage counter at save time | Counters MUST increment at the API-call site, not at the save site. Pre-Test-#11 free-tier users saw "50 remaining" while the Postgres trigger had counted every Edge Function call. Counter callsites: `food_logger_section._analyse`, `ScanMealNotifier.scanImage`, `cart_auditor_section.analyseCart`, `tool_dispatcher._executeLogMealByText`. | (relocated 2026-05-18 — see `lib/features/nutrition/CLAUDE.md`) |
 | Restore writer keyed differently from production writer | Test #12.8 root cause — 6 of 16 `_restoreXxx` methods used legacy keys. Always test restore→read round-trip in `test/contracts/restore_completeness_test.dart`. | `feedback_writer_reader_field_drift_recurring.md` |
+| Writer unconditionally overwrites a "lifetime / peak / earned" field with a recomputed current-state value | Lifetime monotonic fields (rank, lifetime workout count, longest streak, peak weight, deployments_complete, badge unlock state) MUST have an only-increment writer guard. Pattern: extract pure helper (`shouldPromote(...)`-style) for behavioral test coverage; mirror to every parallel writer (client + every server cron). Diagnose 3a7b9f (2026-05-27): rank demoted SD1 → SD2 after streak loss + weekly-recalc total_workouts_done overwrite. Debugging skill section 2.19. | `feedback_monotonic_field_recompute_demotion.md` |
 
 ## Tests pinning the rules here
 

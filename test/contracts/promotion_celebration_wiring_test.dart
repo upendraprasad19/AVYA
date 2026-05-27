@@ -107,9 +107,17 @@ void main() {
       );
     });
 
-    test('stamp is guarded by currentCode != qualified.code branch', () {
+    test('stamp is guarded by shouldPromote() only-promote branch', () {
       // The stamp must be physically inside the changed-branch. Match
       // the call (multi-line-tolerant) then walk backwards.
+      //
+      // Diagnose 3a7b9f (2026-05-27): pre-fix the guard was
+      // `if (currentCode != qualified.code)` which fired on ANY change
+      // including demotion. Post-fix the guard is
+      // `if (shouldPromote(currentCode, qualified))` — only fires when
+      // qualified.ordinal > currentOrdinal. The promotion celebration
+      // stamp must live inside the new guard so it only fires on
+      // legitimate upward promotions, never on a (now-prevented) demotion.
       final stampMatch =
           RegExp(r'UserRepository\.instance\s*\.\s*setPendingPromotionRankCode')
               .firstMatch(stripped);
@@ -117,12 +125,14 @@ void main() {
       final stampIdx = stampMatch!.start;
       final pre = stripped.substring(0, stampIdx);
       expect(
-        pre.contains('currentCode != qualified.code'),
+        RegExp(r'if\s*\(\s*shouldPromote\s*\(\s*currentCode\s*,\s*qualified\s*\)\s*\)')
+            .hasMatch(pre),
         isTrue,
         reason:
-            'the stamp must live INSIDE the `if (currentCode != qualified.code)` '
+            'the stamp must live INSIDE the `if (shouldPromote(currentCode, qualified))` '
             'branch — outside, it would fire on every evaluation, '
-            'producing duplicate celebrations.',
+            'producing duplicate celebrations. Pre-3a7b9f guard was '
+            '`currentCode != qualified.code`; updated to only-promote semantic.',
       );
     });
 

@@ -263,24 +263,51 @@ serve(async (req: Request) => {
     let errors = 0;
     const nowIso = new Date().toISOString();
 
+    // Diagnose 3a7b9f (2026-05-27, c2 audit finding): `total_workouts_done`
+    // is a LIFETIME monotonic counter incremented by client at workout
+    // completion (train_provider.dart:1420). Pre-fix this cron overwrote
+    // it with the count of distinct dates from the LAST 4 WEEKS of
+    // workout_log_exercises (recompute window at line 174-176 + line 251).
+    // For any user who trained more than 4 weeks ago, the recalc would
+    // silently DECREASE their lifetime counter every Sunday. Defense:
+    // pre-fetch existing values and apply GREATEST in the upsert payload.
+    // Same monotonic-field-recompute class as the rank demotion fix.
+    const existingProgress = new Map<string, number>();
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const chunk = userIds.slice(i, i + BATCH_SIZE);
+      const { data: rows } = await supabaseClient
+        .from("user_progress")
+        .select("user_id, total_workouts_done")
+        .in("user_id", chunk);
+      for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
+        existingProgress.set(
+          row.user_id as string,
+          (row.total_workouts_done as number | null) ?? 0,
+        );
+      }
+    }
+
     for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
       const chunk = userIds.slice(i, i + BATCH_SIZE);
 
       const results = await Promise.all(
-        chunk.map((userId) =>
-          supabaseClient
+        chunk.map((userId) => {
+          const recomputed = workoutCounts.get(userId) || 0;
+          const existing = existingProgress.get(userId) || 0;
+          const monotonicTotal = Math.max(recomputed, existing);
+          return supabaseClient
             .from("user_progress")
             .upsert(
               {
                 user_id: userId,
                 detected_experience_level: levels.get(userId),
                 experience_last_calculated: nowIso,
-                total_workouts_done: workoutCounts.get(userId) || 0,
+                total_workouts_done: monotonicTotal,
               },
               { onConflict: "user_id" },
             )
-            .then((res) => ({ userId, error: res.error }))
-        ),
+            .then((res) => ({ userId, error: res.error }));
+        }),
       );
 
       for (const result of results) {

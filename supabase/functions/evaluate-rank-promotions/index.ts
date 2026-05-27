@@ -224,11 +224,30 @@ serve(async (req: Request) => {
         }
       }
 
-      // Sync denormalized current rank.
-      await supabase.from("user_profile").update({
-        current_rank_code: winner.code,
-        current_rank_achieved_at: now.toISOString(),
-      }).eq("user_id", userId);
+      // Sync denormalized current rank — only ever PROMOTE, never demote.
+      //
+      // Diagnose 3a7b9f (2026-05-27): pre-fix the cron unconditionally
+      // overwrote `current_rank_code` with `winner.code` (the currently-
+      // qualifying ceiling). When a user broke a sailor-track streak gate
+      // (e.g. SD1 → streakAtLeast: 7), `winner.code` recomputed to SD2 and
+      // the user was silently demoted. Rank is permanent: `rank_promotions`
+      // is the append-only event log; `user_profile.current_rank_code` is
+      // its denormalization and must monotonically increase.
+      const { data: currentRow } = await supabase
+        .from("user_profile")
+        .select("current_rank_code")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const currentCode = (currentRow?.current_rank_code as string | null) ?? null;
+      const currentOrdinal = currentCode === null
+        ? -1
+        : (LADDER.find((r) => r.code === currentCode)?.ordinal ?? -1);
+      if (winner.ordinal > currentOrdinal) {
+        await supabase.from("user_profile").update({
+          current_rank_code: winner.code,
+          current_rank_achieved_at: now.toISOString(),
+        }).eq("user_id", userId);
+      }
 
       evaluated += 1;
     }

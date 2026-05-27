@@ -4258,6 +4258,88 @@ concepts:
         - test/contracts/rank_promotion_repository_only_test.dart —
           pins the named caller.
 
+  - concept: rank_monotonic_current_code
+    domain: profile
+    behavioral_test_required: false  # Behavioural test ships in same batch.
+    behavioral_test_path: test/contracts/rank_no_demotion_behavioral_test.dart
+    description: |
+      `user_profile.current_rank_code` + `current_rank_achieved_at` are
+      denormalizations of the highest-ordinal row in `rank_promotions`
+      per user. Per spec § rank-permanence: once earned, a rank is
+      never revoked by recompute. Writers (client + server cron) MUST
+      only update the denormalization UPWARD; any code path that would
+      lower it is a P0 monotonic-field-recompute bug (debugging skill
+      §2.19, diagnose 3a7b9f 2026-05-27).
+
+      Pre-fix the client `evaluateAndPromote` checked
+      `currentCode != qualified.code` and unconditionally overwrote;
+      the server cron `evaluate-rank-promotions` had the same bug at
+      its denorm-sync block. When a user broke a sailor-track streak
+      gate (e.g. SD1 requires streak >= 7), `_qualifiedRankCode`
+      recomputed to SD2 and the user was silently demoted. Migration
+      075 healed `user_profile.current_rank_code` from
+      `rank_promotions` max-ordinal (with the matching historical
+      `achieved_at`).
+    writers:
+      - file: lib/core/services/rank_service.dart
+        line_range: 138-194
+        method: RankService.evaluateAndPromote
+        notes: |
+          Wraps the cloud user_profile.update + local Hive
+          updateProfileFields + onStateChanged invocation + pending
+          promotion stamp inside `if (shouldPromote(currentCode,
+          qualified))`. Helper at line 61 is the canonical comparator
+          and the unit under behavioral test.
+      - file: supabase/functions/evaluate-rank-promotions/index.ts
+        line_range: 227-251
+        method: evaluate-rank-promotions cron sync block
+        notes: |
+          Mirrors the client guard server-side. Reads existing
+          current_rank_code, looks up its ordinal via LADDER, only
+          issues the .update() when winner.ordinal > currentOrdinal.
+          Deployed as v7 2026-05-27.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/rank_service.dart
+        line_range: 215-225
+        method: RankService.getCurrentRank
+        semantic: read
+        fields_read: [current_rank_code, current_rank_achieved_at]
+        notes: |
+          Reads UserRepository.getProfile() (Hive userBox['profile'])
+          and renders the RankInfo for Profile + Home rank widgets.
+      - file: lib/core/services/rank_service.dart
+        line_range: 138-145
+        method: evaluateAndPromote (self-read for guard)
+        semantic: read
+        fields_read: [current_rank_code]
+        notes: Reads cloud user_profile to derive currentOrdinal before guard.
+    cloud_table: user_profile
+    cloud_columns:
+      - current_rank_code
+      - current_rank_achieved_at
+    hive:
+      box: userBox
+      key: profile
+      fields: [current_rank_code, current_rank_achieved_at]
+    regression_test: test/contracts/rank_no_demotion_behavioral_test.dart
+    telemetry:
+      failure_op_types:
+        - rank_service_evaluate_and_promote
+        - rank_service_local_profile_update
+        - rank_service_pending_promotion_stamp
+    class_constraints: |
+      Any future writer to user_profile.current_rank_code MUST route
+      through `RankService.shouldPromote(currentCode, qualified)` or
+      an equivalent ordinal-compare guard. Direct
+      `.update({current_rank_code: ...})` without the guard
+      regresses diagnose 3a7b9f.
+
+      Same monotonic-field-recompute class applies to:
+        - user_progress.total_workouts_done — closed in same batch via
+          GREATEST(existing, recomputed) in
+          supabase/functions/weekly-recalc/index.ts:266-298 (v16).
+
   - concept: singleton_lifecycle_registry
     domain: core_services
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO

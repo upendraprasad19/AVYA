@@ -50,6 +50,21 @@ class RankService {
   /// local Hive profile + UI showed the stale rank until next sync.
   static void Function()? onStateChanged;
 
+  /// Diagnose 3a7b9f (2026-05-27): rank is permanent. Returns true ONLY
+  /// when [qualified] is strictly higher in the ladder than [currentCode].
+  /// Pre-fix the cloud + Hive denormalizations were unconditionally
+  /// overwritten with the currently-qualifying ceiling (which drops when
+  /// the user breaks a sailor-track streak gate). Extracted as a pure
+  /// function so the no-demotion contract can be exercised directly by
+  /// `test/contracts/rank_no_demotion_behavioral_test.dart` without
+  /// requiring a live Supabase round-trip.
+  static bool shouldPromote(String? currentCode, RankLadderEntry qualified) {
+    final currentOrdinal = currentCode == null
+        ? -1
+        : (rankByCode(currentCode)?.ordinal ?? -1);
+    return qualified.ordinal > currentOrdinal;
+  }
+
   // ── Public API ─────────────────────────────────────────────────
 
   Future<void> evaluateAndPromote() async {
@@ -130,7 +145,16 @@ class RankService {
       final currentCode = currentDenorm == null
           ? null
           : (currentDenorm)['current_rank_code'] as String?;
-      if (currentCode != qualified.code) {
+      // Diagnose 3a7b9f (2026-05-27): rank is permanent — never demote on
+      // recompute. `qualified` is the currently-qualifying ceiling and can
+      // drop when the user breaks a sailor-track streak gate (e.g. SD1
+      // requires streak >= 7). Pre-fix `currentCode != qualified.code`
+      // unconditionally overwrote, so streak loss demoted SD1 → SD2.
+      // Source of truth for "highest ever achieved" is rank_promotions;
+      // user_profile.current_rank_code is its denormalization and must
+      // only move UP. Helper extracted as `shouldPromote` for behavioral
+      // test coverage.
+      if (shouldPromote(currentCode, qualified)) {
         final achievedAtIso = DateTime.now().toIso8601String();
         await supa.from('user_profile').update({
           'current_rank_code': qualified.code,
