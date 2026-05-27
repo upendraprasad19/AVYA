@@ -126,7 +126,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | State Management | Riverpod (with code generation) |
 | Local Storage | Hive (offline-first, primary for all reads/writes) |
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
-| Database | Supabase Postgres (46 tables — backup + AI + community) |
+| Database | Supabase Postgres (47 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
 | AI Coach (all tiers) | Single Edge Function `ai-proxy` → Gemini 2.5 Flash. Free: 30-day trial 15 msg/day. PRO: unlimited. Server-side gate. |
 | Food AI | Gemini 2.5 Flash (text analysis) + Gemini 2.5 Flash Lite (scan meal, cart auditor) |
@@ -197,7 +197,7 @@ The user has **two Supabase accounts** with different logins. These are NOT the 
 |-----|--------|-------------|
 | 🏠 Home | Dashboard | Streak, weekly calendar, quick actions, today's workout, nutrition snapshot, weight sparkline, PR snapshot |
 | 🏋️ Train | Workouts | Phase plan, week selector, active workout mode, exercise swap, template builder, copy week |
-| 🥗 Nutrition | Food Logging | BMR/TDEE, 2-tab Log Food (AI + Scan), food search (5K DB), AI analysis (PRO), saved meals, water tracking, diet plan generator + PDF export |
+| 🥗 Nutrition | Food Logging | BMR/TDEE, 2-tab Log Food (AI + Scan), food search (~1.4K DB), AI analysis (PRO), saved meals, water tracking, diet plan generator + PDF export |
 | 💬 AI Coach | Chat | In-app chat, Telegram toggle, quick prompt chips, reasoning tab (PRO), photo/video upload (PRO) |
 | 👤 Profile | Settings | Bio stats, goal card, edit profile, health sync, reports, subscription, logout |
 
@@ -293,7 +293,7 @@ Before introducing any new file / symbol / Hive key / cloud column / Edge Functi
 ### 4.8 Subagent brief preamble + audit lens registry
 
 - Every subagent investigation dispatch MUST prepend `docs/agent_brief_preamble.md` to the task-specific brief.
-- When invoking review / audit work, specify which lenses from `docs/audit/LENS_REGISTRY.md` (41 canonical lenses) are in scope. Prevents "we just look at code" audit blind spot.
+- When invoking review / audit work, specify which lenses from `docs/audit/LENS_REGISTRY.md` (53 canonical lenses) are in scope. Prevents "we just look at code" audit blind spot.
 
 ### 4.10 Tech-debt audit cadence (NEW — tech-debt audit 2026-05-20)
 
@@ -404,7 +404,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Migration apply protocol | `supabase/migrations/CLAUDE.md` |
 | AI architecture (model matrix, tools, triggers, semantic retrieval) | `docs/architecture/ai.md` |
 | Sync schedule, SoT rules, Hive field-name contracts, restore-completeness | `docs/architecture/sync.md` |
-| Database schema (46 tables) | `docs/architecture/database.md` |
+| Database schema (47 tables) | `docs/architecture/database.md` |
 | Subscription gate pattern | `docs/architecture/subscription.md` |
 | Payment flow + DPDP delete-account | `docs/architecture/payment.md` |
 | Business rules (free/PRO matrix, calorie calc) | `docs/architecture/business-rules.md` |
@@ -415,7 +415,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Bug history index | `docs/diagnoses/INDEX.md` (auto-generated; regenerated on commit) |
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
 | Naming conventions | `docs/naming_conventions.md` |
-| Audit lens registry (41 lenses) | `docs/audit/LENS_REGISTRY.md` |
+| Audit lens registry (53 lenses) | `docs/audit/LENS_REGISTRY.md` |
 | Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |
 | Device-CI runner + 4 critical Patrol flows | `docs/operations/DEVICE_TESTING.md` + `scripts/run-device-tests.sh` |
 | Cron registry | `docs/operations/CRON_REGISTRY.md` (Gate 31) |

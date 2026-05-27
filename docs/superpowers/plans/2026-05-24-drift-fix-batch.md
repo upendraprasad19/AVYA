@@ -1327,14 +1327,14 @@ Do NOT commit yet. Continue to Task 9 (live migration apply).
 ## Task 9: Apply migration 068 to prod + record in backups/
 
 **Files:**
-- Create: `supabase/migrations/068_drift_fix_batch.sql`
+- Create: `supabase/migrations/068b_drift_fix_batch.sql`
 - Modify: `backups/applied_migrations.json`
 
 **This task touches prod. Read carefully before executing.**
 
 - [ ] **Step 1: Write the migration SQL file**
 
-Create `supabase/migrations/068_drift_fix_batch.sql`. Use the EXACT constraint name from Task 0 Step 1 (replace `<EXACT_CONSTRAINT_NAME>` below):
+Create `supabase/migrations/068b_drift_fix_batch.sql`. Use the EXACT constraint name from Task 0 Step 1 (replace `<EXACT_CONSTRAINT_NAME>` below):
 
 ```sql
 -- Migration 068 — drift-fix batch (2026-05-24)
@@ -1381,7 +1381,7 @@ COMMIT;
 
 - [ ] **Step 2: FOUNDER GATE — present the migration SQL to the founder**
 
-STOP. Output the exact contents of `068_drift_fix_batch.sql` to the founder, including the substituted constraint name. Wait for explicit "apply" or "ok" before continuing to Step 3.
+STOP. Output the exact contents of `068b_drift_fix_batch.sql` to the founder, including the substituted constraint name. Wait for explicit "apply" or "ok" before continuing to Step 3.
 
 Rationale: this touches production schema. Per [[feedback_no_setup_confirmations]] routine steps don't need confirmation, but live schema changes DO.
 
@@ -1391,7 +1391,7 @@ After founder approval, run:
 ```
 mcp__ba7b5e8e__apply_migration(
   project_id: "dedsavbjuwgarrhphgnl",
-  name: "068_drift_fix_batch",
+  name: "068b_drift_fix_batch",
   query: <full SQL content from Step 1>
 )
 ```
@@ -1430,7 +1430,7 @@ cat backups/applied_migrations.json | tail -30
 Append a new entry (adjust JSON shape to match existing entries):
 ```json
 {
-  "version": "068_drift_fix_batch",
+  "version": "068b_drift_fix_batch",
   "applied_at": "2026-05-24T<ISO_TIMESTAMP>Z",
   "applied_via": "mcp__ba7b5e8e__apply_migration",
   "summary": "Rename workout_logs.exercise_name → workout_name; add nutrition_log_items.fiber (drift-fix F4)"
@@ -1440,7 +1440,7 @@ Append a new entry (adjust JSON shape to match existing entries):
 - [ ] **Step 6: Stage the migration files**
 
 ```bash
-git add supabase/migrations/068_drift_fix_batch.sql backups/applied_migrations.json
+git add supabase/migrations/068b_drift_fix_batch.sql backups/applied_migrations.json
 ```
 
 Do NOT commit yet.
@@ -1785,7 +1785,7 @@ findings:
     severity: P2
     title: Add nutrition_log_items.fiber column + projection
     terminal_state: closed_in_commit
-    migration: supabase/migrations/068_drift_fix_batch.sql
+    migration: supabase/migrations/068b_drift_fix_batch.sql
     test_path: test/contracts/nutrition_log_items_fiber_projection_test.dart
 
   - id: workout-F1
@@ -1810,7 +1810,7 @@ findings:
     severity: P2
     title: Rename workout_logs.exercise_name → workout_name (column was session label, not per-exercise)
     terminal_state: closed_in_commit
-    migration: supabase/migrations/068_drift_fix_batch.sql
+    migration: supabase/migrations/068b_drift_fix_batch.sql
     test_path: test/contracts/cloud_workout_logs_uses_workout_name_test.dart
 
   - id: workout-F5

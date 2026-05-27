@@ -69,7 +69,7 @@ final dateKey = '${istDate.year}-${istDate.month.toString().padLeft(2, '0')}-${i
 
 #### F4 P2 — Add `nutrition_log_items.fiber` column
 
-**Migration:** `068_drift_fix_batch.sql` (combined with F4 workout — see below).
+**Migration:** `068b_drift_fix_batch.sql` (combined with F4 workout — see below).
 **SQL fragment:**
 ```sql
 ALTER TABLE public.nutrition_log_items
@@ -137,7 +137,7 @@ prSetReps ??= (log['reps_completed'] as num?)?.toInt();
 
 #### F4 P2 — Rename cloud `workout_logs.exercise_name` → `workout_name`
 
-**Migration:** `068_drift_fix_batch.sql` (atomic rename per founder choice — sole tester, controls all installs).
+**Migration:** `068b_drift_fix_batch.sql` (atomic rename per founder choice — sole tester, controls all installs).
 **SQL fragment:**
 ```sql
 ALTER TABLE public.workout_logs RENAME COLUMN exercise_name TO workout_name;
@@ -169,7 +169,7 @@ ALTER TABLE public.workout_logs ADD CONSTRAINT workout_logs_user_id_date_workout
 
 ## Migration 068 — combined
 
-**File:** `supabase/migrations/068_drift_fix_batch.sql`.
+**File:** `supabase/migrations/068b_drift_fix_batch.sql`.
 **Content:**
 ```sql
 -- Migration 068 — drift-fix batch (2026-05-24)
@@ -200,7 +200,7 @@ COMMIT;
 ```
 
 **Apply via:** `mcp__ba7b5e8e__apply_migration` (per CLAUDE.md §2a — MCP only for fitness app project).
-**Backup:** Both `supabase/migrations/068_drift_fix_batch.sql` (source) AND `backups/applied_migrations.json` entry (live-applied marker) updated in the same commit per [[feedback_migration_apply_record_pair.md]].
+**Backup:** Both `supabase/migrations/068b_drift_fix_batch.sql` (source) AND `backups/applied_migrations.json` entry (live-applied marker) updated in the same commit per [[feedback_migration_apply_record_pair.md]].
 
 ---
 
@@ -273,7 +273,7 @@ findings:
 - **Rule 21 (regression test required):** 8 of 9 findings ship behavioral or source-grep tests (F3 nutrition covered by existing test). ✅
 - **Rule 22 (diagnose-doc required for `fix:` commits):** Single mega-commit will be `fix(drift): close 9 drift-fix-batch findings (closes-diagnose: 524d12)`. Diagnose doc at `docs/diagnoses/2026-05-24-drift-fix-batch-524d12.md` summarizes the 9-finding closure as one logical event.
 - **Pre-commit hook:** Passes `flutter analyze` + `flutter test`. ~8 min.
-- **Migration pair-update:** `supabase/migrations/068_drift_fix_batch.sql` + `backups/applied_migrations.json` in same commit. ✅
+- **Migration pair-update:** `supabase/migrations/068b_drift_fix_batch.sql` + `backups/applied_migrations.json` in same commit. ✅
 - **No `--no-verify`:** Standard pre-commit run, no bypass. ✅
 
 ---

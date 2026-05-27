@@ -51,6 +51,12 @@ void main(List<String> args) async {
   // Citation pattern: §N or §N.M (allow trailing punctuation/text).
   final citeRegex = RegExp(r'§(\d+(?:\.\d+)?)');
 
+  // External-statute pattern: skip `§N` when preceded on the same line by a
+  // statute/act token (e.g., `DPDP §17` refers to India's DPDP Act §17, not
+  // CLAUDE.md §17). Add new statutes as the codebase cites them.
+  final externalStatuteRegex =
+      RegExp(r'\b(?:DPDP|GDPR|HIPAA|CCPA|PCI[- ]?DSS)(?:\s+Act)?\s+$');
+
   final broken = <String>[];
   for (final file in files) {
     final lines = file.readAsLinesSync();
@@ -59,9 +65,11 @@ void main(List<String> args) async {
       if (RegExp(r'^#{2,4}\s').hasMatch(lines[i])) continue;
       for (final m in citeRegex.allMatches(lines[i])) {
         final sec = m.group(1)!;
-        if (!knownSections.contains(sec)) {
-          broken.add('${file.path}:${i + 1} → §$sec (not in CLAUDE.md known sections: ${knownSections.toList()..sort()})');
-        }
+        if (knownSections.contains(sec)) continue;
+        // Check the text immediately before this `§` for an external-statute token.
+        final preceding = lines[i].substring(0, m.start);
+        if (externalStatuteRegex.hasMatch(preceding)) continue;
+        broken.add('${file.path}:${i + 1} → §$sec (not in CLAUDE.md known sections: ${knownSections.toList()..sort()})');
       }
     }
   }

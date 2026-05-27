@@ -76,6 +76,16 @@ When adding a column, drop a column, or change a constraint:
 3. Update `backups/applied_migrations.json` in the same commit.
 4. Update any contract test under `test/contracts/` whose `behavioral_test_path` exercises the column.
 
+## Filename scheme history
+
+Three migration filename schemes coexist in `supabase/migrations/`. This is bookkeeping debt, not active drift — every applied migration has been verified against live cloud schema. See `README_RECONCILIATION_2026-05-11.md` for the full mismatch table.
+
+| Scheme | Pattern | Origin | Status |
+|---|---|---|---|
+| Sequential numeric | `0NN_<slug>.sql` (e.g., `068b_drift_fix_batch.sql`) | Default — used for every new migration since 2026-03. Number-collision convention: suffix with letter (`050b`, `068b`) per the `050b` precedent. | Active — use this for every new migration. |
+| Timestamp-prefixed | `YYYYMMDD…_<slug>.sql` (e.g., `20260328000001_video_renders.sql`) | Three early migrations created via `supabase migration new` before the numeric convention was codified. | Frozen — do not re-introduce. |
+| Cloud internal version | 14-digit `YYYYMMDDHHMMSS` returned by `mcp__list_migrations` | Supabase Dashboard SQL editor rewrites the source filename to a timestamp when applying — see README_RECONCILIATION §A. | Cloud-only. The actual DDL applied matches the source file verbatim. |
+
 ## Common pitfalls
 
 | Pitfall | How to avoid | Source |
@@ -93,7 +103,7 @@ When adding a column, drop a column, or change a constraint:
 
 ## See also
 
-- `docs/architecture/database.md` — full 46-table schema.
+- `docs/architecture/database.md` — full 47-table schema.
 - `docs/sot_registry.yaml` — per-concept `cloud.table` + `cloud.columns`.
 - `backups/applied_migrations.json` — manifest of applied migrations.
 - Root CLAUDE.md §4.5 — `feedback_migration_apply_record_pair.md` enforcement.

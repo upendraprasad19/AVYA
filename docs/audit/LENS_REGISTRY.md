@@ -2,13 +2,13 @@
 
 > **Sibling to `AUDIT_PLAYBOOK.md`.** Playbook is process discipline (two passes, dedup, live verification). This file is the **what-to-look-for checklist** — every comprehensive audit dispatches at least one subagent per lens.
 >
-> **History:** lenses L1-L13 were inferred from default 5-domain audits + 2026-05-12 Master+Codex dual-pass. L14-L26 were surfaced by external "Hermes" cross-check on 2026-05-11 (`feedback_audit_methodology_lenses.md` R1+R2). L27-L34 were surfaced by Hermes audit on 2026-05-17 + reasoning over Tests #11-#16 bug patterns. Memory file is authoritative; this file is the dispatch checklist.
+> **History:** lenses L1-L20 are the default-charter set (5-domain audits + 2026-05-12 Master+Codex dual-pass). L21-L25 were surfaced by Hermes audit 2026-05-17 (TDZ/schema-parity/auth-defense-in-depth). L26-L33 were surfaced by external "Hermes" cross-check on 2026-05-11 (`feedback_audit_methodology_lenses.md` R1+R2). L34-L41 were added prophylactically for next audit. L42-L53 were added during the 2026-05-20 tech-debt audit / B1 (each backed by a permanent `scripts/check_*.dart` gate). Memory file is authoritative; this file is the dispatch checklist. **Total: 53 lenses.**
 
 ---
 
 ## How to use
 
-1. Pick the lens set: `--all` (33 lenses) for quarterly comprehensive; `--security` (L2/L21/L23/L29) for pre-launch; `--p0-blockers` (L1/L21/L22/L23) for emergency triage.
+1. Pick the lens set: `--all` (53 lenses) for quarterly comprehensive; `--security` (L2/L21/L23/L29) for pre-launch; `--p0-blockers` (L1/L21/L22/L23) for emergency triage.
 2. For each selected lens, dispatch one subagent with the **charter template** below.
 3. Aggregate findings in `docs/audit/<date>/findings-by-lens.md` keyed by lens number.
 4. Apply `AUDIT_PLAYBOOK.md` verification + dedup discipline before acting.

@@ -187,7 +187,7 @@ mega-commit. Future refactor batches still follow the gate-first ordering.
 
 ## Migration 068
 
-Version: `20260525010726`. Source: `supabase/migrations/068_drift_fix_batch.sql`.
+Version: `20260525010726`. Source: `supabase/migrations/068b_drift_fix_batch.sql` (renamed from `068_drift_fix_batch.sql` on 2026-05-27 per `050b` precedent in `README_RECONCILIATION_2026-05-11.md` §E to resolve numeric-prefix collision with `068_cron_call_log.sql`).
 Recorded in `backups/applied_migrations.json` as `068b_drift_fix_batch`.
 
 Schema changes:

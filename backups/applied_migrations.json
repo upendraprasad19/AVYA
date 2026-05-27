@@ -408,11 +408,12 @@
     "applier": "founder"
   },
   {
-    "migration": "068b_drift_fix_batch",
+    "migration": "068b",
     "applied_at": "2026-05-25T01:07:26+05:30",
     "hash": "sha256:4b8818868d0c8ebf58112f78064cd1b7ee1eb75d91bfe1a7047c47d4ac02ed89",
     "applier": "claude-via-mcp",
-    "diagnose": "524d12"
+    "diagnose": "524d12",
+    "slug": "drift_fix_batch"
   },
   {
     "migration": "069",
@@ -444,6 +445,13 @@
     "hash": "sha256:fa80272b9206aa149886aafcf68a0932de6cd9da845c04e0bed112ec35cbe059",
     "applier": "claude-via-mcp",
     "diagnose": "8b1f33"
+  },
+  {
+    "migration": "074",
+    "applied_at": "2026-05-27T00:00:00+05:30",
+    "hash": "sha256:8dc62e5b0c358c0ba6111ef837f8388c859ea8ccb53530f2f76156514f5ac04e",
+    "applier": "claude-via-management-api",
+    "diagnose": "ada3fb"
   },
   {
     "migration": "20260328000001",

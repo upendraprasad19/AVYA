@@ -40,7 +40,7 @@ findings:
     severity: P2
     title: Add nutrition_log_items.fiber column + per-item projection
     terminal_state: closed_in_commit
-    migration: supabase/migrations/068_drift_fix_batch.sql
+    migration: supabase/migrations/068b_drift_fix_batch.sql
     test_path: test/contracts/nutrition_log_items_fiber_projection_test.dart
 
   - id: workout-F1
@@ -74,7 +74,7 @@ findings:
     severity: P2
     title: Rename workout_logs.exercise_name to workout_name (column was session label, not per-exercise)
     terminal_state: closed_in_commit
-    migration: supabase/migrations/068_drift_fix_batch.sql
+    migration: supabase/migrations/068b_drift_fix_batch.sql
     test_path: test/contracts/cloud_workout_logs_uses_workout_name_test.dart
     notes: |
       Atomic rename per founder choice (sole tester, controls all installs).
@@ -127,8 +127,8 @@ build_gates_added:
 
 migrations_applied:
   - version: 20260525010726
-    name: 068_drift_fix_batch
-    source_file: supabase/migrations/068_drift_fix_batch.sql
+    name: 068b_drift_fix_batch
+    source_file: supabase/migrations/068b_drift_fix_batch.sql
     applied_migrations_entry: "068b_drift_fix_batch"
     schema_changes:
       - DROP INDEX uniq_workout_logs_user_date_name

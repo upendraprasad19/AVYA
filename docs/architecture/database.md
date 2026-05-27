@@ -6,12 +6,12 @@ status: scaffold
 
 # Database Schema — Reference
 
-> 46-table inventory + FK direction quirks + UNIQUE/CHECK constraints + column notes.
+> 47-table inventory + FK direction quirks + UNIQUE/CHECK constraints + column notes.
 > Fetch via Read when working on schema or sync.
 
-## 46 Tables — Supabase Postgres
+## 47 Tables — Supabase Postgres
 
-> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`. Count verified live on prod 2026-05-11 (`information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`).
+> Full DDL → `docs/reference/database-schema.md`. Authoritative source of truth: `supabase/migrations/`. Count verified live on prod 2026-05-27 (`information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`).
 
 | Domain | Tables |
 |---|---|
@@ -21,13 +21,24 @@ status: scaffold
 | Health (6) | `weight_logs`, `body_measurements`, `streaks`, `water_logs`, `sleep_logs`, `daily_steps` |
 | Visual (1) | `progress_photos` |
 | AI (4) | `user_daily_snapshots`, `ai_coach_interactions` (incl. `tool_calls` JSONB column from migration 029), `coach_memory`, `memory_embeddings` |
-| Telemetry (1) | `client_errors` |
+| Telemetry (2) | `client_errors`, `cron_call_log` (migration 068 — per-cron-invocation start/end + status + duration; populated by `_shared/cron_telemetry.ts` helper) |
 | Monetisation (7) | `subscriptions`, `promo_codes`, `promo_code_uses`, `food_corrections`, `telegram_connections`, `referral_codes`, `referral_redemptions` |
 | Community (1) | `community_reviews` |
 | Ranking (3) | `rank_ladder` (reference — 11 ranks), `rank_promotions` (events, UNIQUE `(user_id, rank_code)`), `user_stat_snapshots` (onboarding + per-promotion lifetime totals) |
 | Notifications (1) | `notifications_inbox` |
 | DPDP / Audit (1) | `account_deletion_log` (no FK, survives `auth.users` cascade — DPDP §17 erasure record; RLS enabled with ZERO policies by design — service-role-only writes via `delete-account` Edge Function; verified intentional 2026-05-12 audit P1-H) |
 | Deferred / Inactive (2) | `daily_quotes` (Test #9 morning-quote experiment, not wired), `video_renders` (Remotion/Lambda render queue, video-share feature deferred) |
+
+## SoT model: base library + community-promoted growth
+
+Two pairs of tables follow a **base seed + user-contributed growth** model. The base seed lives in cloud (migration-shipped from `assets/data/*.json`) AND in bundled Hive boxes (for offline-first reads). User-contributed entries go to `user_custom_*` tables and grow over time. Selected entries get **promoted** to the canonical library via `supabase/functions/promote-community-item` (admin-triggered), so the cloud library accretes high-quality submissions.
+
+| Base library (canonical) | User-custom (growth source) | Bundled seed | Promotion writer |
+|---|---|---|---|
+| `food_database` (1,431 rows as of 2026-05-27) | `user_custom_foods` | migration 030 (93 base) + 041 (v2 expand) | `promote-community-item` Edge Function |
+| `exercise_library` (seeded migration 074, 2026-05-27) | `user_custom_exercises` | `assets/data/exercise_library.json` (~17K-line JSON) | `promote-community-item` Edge Function |
+
+Cloud `exercise_library` was empty until migration 074 — `beat-my-coach` Edge Function had been silently returning zero bodyweight-exercise candidates. Closed 2026-05-27 (diagnose `2026-05-27-exercise-library-cloud-empty-*`).
 
 **FK direction quirk — `referral_codes` is the ONLY table with an FK to `auth.users(id)`.** Every other user-scoped table FKs to `public.users(id)` because those tables are populated only after the onboarding sync path has inserted the user into `public.users`. Referral-code generation fires on-demand from Profile → Invite Friends, which can happen BEFORE `public.users` has the user's row (fresh sign-up, onboarding not yet completed). Migration 035 (2026-04-24) repointed the FK to `auth.users` + added `UNIQUE(user_id)` after silent FK violations on new-account testers produced the "Failed to generate referral code" toast. Do not "normalize" this FK back to `public.users` without understanding that timing dependency.
 
