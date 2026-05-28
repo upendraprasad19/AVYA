@@ -1,0 +1,66 @@
+# Alert thresholds — Phase 1 placeholders.
+#
+# These values are DELIBERATELY LOW so alerts fire during the baseline
+# observation week (2026-05-28 → 2026-06-03). Phase 2 (scheduled
+# 2026-06-03) replaces them with p95 + 50% headroom values derived
+# from the observed data.
+#
+# Until Phase 2 lands, expect occasional false-positive alerts. That's
+# the trade — false positives during baseline tells us we're wired up
+# correctly. Silence during baseline would be a worse signal.
+#
+# Owner: founder. Tuning is a deliberate scheduled action, not a
+# reactive twiddle.
+#
+# Source of truth: this file is documentation. The actual thresholds
+# are embedded in the SQL of supabase/migrations/076_alert_detection_crons.sql.
+# Any change here must be paired with a follow-up migration that updates
+# the cron job bodies (or a cron.unschedule + re-schedule pattern).
+# See feedback_migration_apply_record_pair.md.
+
+phase: 1
+ships_date: 2026-05-28
+phase_2_date: 2026-06-03
+tuning_method: "p95 + 50% headroom from baseline week's data"
+
+thresholds:
+
+  client_errors_spike:
+    description: "client_errors rows logged within a 1-hour window"
+    info_at:     20    # /hour
+    warn_at:     50
+    critical_at: 100
+    window_minutes: 60
+    cron_cadence:   "*/15 * * * *"
+    dedup_window_hours: 1
+
+  edge_function_health:
+    description: "non-2xx response rate across cron_call_log over 30min"
+    info_at:     0.05  # 5%
+    warn_at:     0.10
+    critical_at: 0.20
+    window_minutes:    30
+    min_call_count:    5    # don't fire on a single-call denominator
+    cron_cadence:      "*/15 * * * *"
+    dedup_window_hours: 1
+
+  payment_flow_health:
+    description: "subscriptions success rate over 24h"
+    info_at:     0.99  # below this is info
+    warn_at:     0.99
+    critical_at: 0.95
+    window_hours:      24
+    min_attempt_count: 3
+    cron_cadence:      "7 * * * *"
+    dedup_window_hours: 6
+
+# Notes on suppression / acknowledgement
+# --------------------------------------
+# Every cron job dedup-checks for an unacknowledged alert from the same
+# source within `dedup_window_hours` before inserting. This prevents
+# alert storms.
+#
+# Founder acknowledges via natural-language triage on session start
+# (the SessionStart hook surfaces unacknowledged alerts). Agent
+# updates the row via service-role MCP call:
+#   UPDATE alerts SET acknowledged=true, acknowledged_at=now() WHERE id=...

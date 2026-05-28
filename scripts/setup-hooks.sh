@@ -38,5 +38,6 @@ install_hook() {
 install_hook "$REPO_ROOT/scripts/pre-commit.sh" "$REPO_ROOT/.git/hooks/pre-commit"
 install_hook "$REPO_ROOT/scripts/pre-push.sh" "$REPO_ROOT/.git/hooks/pre-push"
 install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$REPO_ROOT/.git/hooks/commit-msg"
+install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$REPO_ROOT/.git/hooks/prepare-commit-msg"
 
-echo "[setup-hooks] verify: ls -la $REPO_ROOT/.git/hooks/{pre-commit,pre-push,commit-msg}"
+echo "[setup-hooks] verify: ls -la $REPO_ROOT/.git/hooks/{pre-commit,pre-push,commit-msg,prepare-commit-msg}"

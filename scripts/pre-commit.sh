@@ -54,6 +54,36 @@ if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
   git add docs/diagnoses/INDEX.md
 fi
 
+# Regen ADR index if any ADR file was modified (six industry-gap closure 2026-05-28).
+if git diff --cached --name-only | grep -qE '^docs/adr/[0-9]{4}-.*\.md$'; then
+  echo "[pre-commit] ADR docs touched — regenerating INDEX.md..."
+  if ! dart run scripts/build_adr_index.dart; then
+    echo "[pre-commit] FAIL: build_adr_index.dart errored."
+    exit 1
+  fi
+  git add docs/adr/INDEX.md
+fi
+
+# Regen incident index if any incident file was modified.
+if git diff --cached --name-only | grep -qE '^docs/incidents/[0-9]{4}-.*\.md$'; then
+  echo "[pre-commit] Incident docs touched — regenerating INDEX.md..."
+  if ! dart run scripts/build_incident_index.dart; then
+    echo "[pre-commit] FAIL: build_incident_index.dart errored."
+    exit 1
+  fi
+  git add docs/incidents/INDEX.md
+fi
+
+# Regen handbook index if any handbook file was modified.
+if git diff --cached --name-only | grep -qE '^docs/handbook/.+\.md$'; then
+  echo "[pre-commit] Handbook touched — regenerating INDEX.md..."
+  if ! dart run scripts/build_handbook_index.dart; then
+    echo "[pre-commit] FAIL: build_handbook_index.dart errored."
+    exit 1
+  fi
+  git add docs/handbook/INDEX.md
+fi
+
 # Naming convention discipline is documented in root CLAUDE.md §3.7.
 # Pre-commit enforcement (scripts/check_naming_conventions.dart) is
 # out of scope for this batch — the protocol relies on agent discipline.

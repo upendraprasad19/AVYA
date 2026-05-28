@@ -2,5 +2,17 @@
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "55",
     "MAX_THINKING_TOKENS": "10000"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run scripts/check_alerts.dart"
+          }
+        ]
+      }
+    ]
   }
 }

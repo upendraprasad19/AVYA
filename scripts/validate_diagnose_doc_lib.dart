@@ -16,6 +16,18 @@ const requiredFields = <String>[
   'impact_analysis',
 ];
 
+/// Fields required for diagnose-docs dated on or after this cutoff (inclusive).
+/// Pre-existing docs are grandfathered — they don't need these fields and
+/// won't fail validation if absent.
+const _blastRadiusEnforcementDate = '2026-05-28';
+const _newRequiredFieldsSince = <String>[
+  'blast_radius',
+];
+
+const _validBlastRadius = <String>[
+  'feature', 'account', 'platform', 'catastrophic',
+];
+
 const placeholderPatterns = <String>[
   'TBD', 'TODO', '<...>', '???', 'tbd', 'todo',
 ];
@@ -56,6 +68,36 @@ ValidationResult validateDiagnoseDoc(
   for (final field in requiredFields) {
     if (!RegExp('^$field:', multiLine: true).hasMatch(fm)) {
       return ValidationResult.fail('missing required field: $field');
+    }
+  }
+
+  // 1b. Newer fields enforced only for docs dated ≥ enforcement cutoff.
+  final dateMatch =
+      RegExp(r'^date:\s*(\d{4}-\d{2}-\d{2})', multiLine: true).firstMatch(fm);
+  if (dateMatch != null) {
+    final docDate = dateMatch.group(1)!;
+    if (docDate.compareTo(_blastRadiusEnforcementDate) >= 0) {
+      for (final field in _newRequiredFieldsSince) {
+        if (!RegExp('^$field:', multiLine: true).hasMatch(fm)) {
+          return ValidationResult.fail(
+            'missing required field (new since $_blastRadiusEnforcementDate): $field',
+          );
+        }
+      }
+      // Cross-validate blast_radius value if present.
+      final brMatch = RegExp(
+        r'^blast_radius:\s*([a-z]+)',
+        multiLine: true,
+      ).firstMatch(fm);
+      if (brMatch != null) {
+        final value = brMatch.group(1)!;
+        if (!_validBlastRadius.contains(value)) {
+          return ValidationResult.fail(
+            'invalid blast_radius value: "$value" '
+            '(must be one of: ${_validBlastRadius.join(" | ")})',
+          );
+        }
+      }
     }
   }
 

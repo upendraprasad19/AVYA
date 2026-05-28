@@ -462,6 +462,14 @@
     "slug": "heal_current_rank_from_peak"
   },
   {
+    "migration": "076",
+    "applied_at": "2026-05-27T22:00:00+05:30",
+    "hash": "sha256:32e42e09cf164c5b8649d6d9dc6ed8d191aafc63321bdfca6116ed396c1ab3cb",
+    "applier": "claude-via-mcp",
+    "diagnose": "n/a",
+    "slug": "alert_detection_crons"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",

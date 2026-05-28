@@ -86,10 +86,17 @@ Beyond the 11-node knowledge-graph protocol above, every batch must also walk th
 
 23. **Was a new project-local skill warranted by this batch?** Per §5.1 — 3+ batches share a pattern → new skill. Current count: 6 (debugging, update-docs, tech-debt-audit, dep-bump-sweep, edge-function-deploy-rollback, writer-reader-drift-detector). Next candidates if pattern recurs: secret-rotation, cron-registry-check.
 
+24. **Did this batch make an architectural decision worth an ADR?** Per `docs/adr/README.md` (added in 2026-05-28 six-industry-gap closure batch). If yes → invoke `/adr` to scaffold the next-numbered ADR with MADR-lite frontmatter. Test: "if someone proposed reverting this decision 6 months from now, would I have to re-do the analysis?" — yes → ADR.
+
+25. **Did any new durable rule emerge this batch?** Per `docs/handbook/README.md` (added in 2026-05-28 six-industry-gap closure batch). If yes, promote from memory `feedback_*.md` to `docs/handbook/<category>/<topic>.md`. Memory dir's role going forward is scratch + retros only.
+
+26. **Is the batch's max blast-radius ≥ `account`?** Per `docs/blast_radius.yaml` (added in 2026-05-28 batch). If yes, **propose invoking `/hermes-pass`** before commit. The Hermes deep-pass dispatches parallel Opus subagents per `LENS_REGISTRY.md` lens and consolidates findings into `docs/audit/<date>-hermes-<batch>.md`. Skip the prompt for `feature`-tier batches; mandatory for any `catastrophic`-tier commit.
+
 ## Self-evolution changelog
 
 - **2026-05-21 (Tech-debt audit 2026-05-20 / B1)** — Added extended-checklist nodes 10-17.
 - **2026-05-21 (Tech-debt audit 2026-05-20 / B5 D1)** — Added nodes 18-23. Updated node 17 to point at landed `feedback_singleton_cross_account_leak.md` + Gate 46.
+- **2026-05-28 (six-industry-gap closure batch)** — Added nodes 24 (ADR), 25 (handbook port), 26 (Hermes-pass auto-suggest). Wires this skill to `/adr` and `/hermes-pass` skills and `docs/blast_radius.yaml`.
 
 ## Output
 

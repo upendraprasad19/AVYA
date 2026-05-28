@@ -1,0 +1,117 @@
+# Blast-radius registry
+#
+# Track 2 of the 2026-05-28 six-industry-gap closure batch.
+# Maps file paths to blast-radius tiers. Tier dictates review + gating discipline.
+#
+# Each commit's max touched-path tier determines:
+#   - the auto-prepended `Blast-radius:` line in the commit body (via .githooks/prepare-commit-msg)
+#   - whether code-review B pass is required (account+)
+#   - whether code-review acceptance file is required (catastrophic only)
+#   - the per-fix discipline declared in `requires:` per tier
+#
+# Default tier for unmatched paths: `feature`.
+# Glob matching: shell-style (* matches one segment; ** matches any depth).
+# Globs are evaluated in declaration order; FIRST match wins.
+
+tiers:
+  feature:
+    description: "One feature degraded for some users; no data integrity risk."
+    requires: [regression_test]
+  account:
+    description: "User's own data integrity at risk (one account at a time)."
+    requires: [regression_test, behavioral_test_path, code_review_b_pass]
+  platform:
+    description: "Multi-user data integrity, sync, or cross-account."
+    requires: [regression_test, behavioral_test_path, code_review_b_pass, feature_flag]
+  catastrophic:
+    description: "Payment, auth, DPDP, data-loss, RLS, or any path whose failure can compound across the user base."
+    requires:
+      - regression_test
+      - behavioral_test_path
+      - code_review_b_pass
+      - feature_flag
+      - rollback_documented
+      - hermes_pass
+
+default_tier: feature
+
+# Catastrophic globs — listed FIRST so they win over more general rules.
+paths:
+  # ----- catastrophic -----
+  - { glob: "supabase/functions/razorpay-webhook/**", tier: catastrophic }
+  - { glob: "supabase/functions/verify-payment/**", tier: catastrophic }
+  - { glob: "supabase/functions/delete-account/**", tier: catastrophic }
+  - { glob: "supabase/functions/admin-*/**", tier: catastrophic }
+  - { glob: "supabase/functions/_shared/cron_auth.ts", tier: catastrophic }
+  - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
+  - { glob: "supabase/migrations/*rls*.sql", tier: catastrophic }
+  - { glob: "supabase/migrations/*security_definer*.sql", tier: catastrophic }
+  - { glob: "supabase/migrations/*subscriptions_rls*.sql", tier: catastrophic }
+  - { glob: "android/app/google-services.json", tier: catastrophic }
+  - { glob: ".env*", tier: catastrophic }
+
+  # ----- platform -----
+  - { glob: "supabase/functions/ai-proxy/**", tier: platform }
+  - { glob: "supabase/functions/streak-guardian/**", tier: platform }
+  - { glob: "supabase/functions/weekly-recalc/**", tier: platform }
+  - { glob: "supabase/functions/evaluate-rank-promotions/**", tier: platform }
+  - { glob: "supabase/functions/daily-snapshot/**", tier: platform }
+  - { glob: "supabase/functions/morning-alert/**", tier: platform }
+  - { glob: "supabase/functions/proactive-coach-promotion/**", tier: platform }
+  - { glob: "supabase/functions/_shared/**", tier: platform }
+  - { glob: "supabase/migrations/**", tier: platform }
+  - { glob: "lib/core/services/sync/**", tier: platform }
+  - { glob: "lib/core/services/hive_user_session.dart", tier: platform }
+  - { glob: "lib/core/services/hive_service.dart", tier: platform }
+  - { glob: "lib/shared/repositories/plan_engine/**", tier: platform }
+  - { glob: "CLAUDE.md", tier: platform }
+
+  # ----- account -----
+  - { glob: "lib/features/auth/**", tier: account }
+  - { glob: "lib/features/ai_coach/**", tier: account }
+  - { glob: "lib/core/services/health_write_service.dart", tier: account }
+  - { glob: "lib/core/services/nutrition_write_service.dart", tier: account }
+  - { glob: "lib/core/services/workout_write_service.dart", tier: account }
+  - { glob: "lib/core/services/profile_write_service.dart", tier: account }
+  - { glob: "lib/core/services/workout_schedule_service.dart", tier: account }
+  - { glob: "lib/core/services/subscription_service.dart", tier: account }
+  - { glob: "lib/core/services/error_telemetry.dart", tier: account }
+  - { glob: "lib/features/onboarding/**", tier: account }
+  - { glob: "supabase/functions/log-client-error/**", tier: account }
+  - { glob: "supabase/functions/validate-promo/**", tier: account }
+  - { glob: "supabase/functions/redeem-referral/**", tier: account }
+  - { glob: "supabase/functions/verify-subscription/**", tier: account }
+  - { glob: "supabase/functions/beat-my-coach/**", tier: account }
+
+  # ----- feature (explicit overrides over default) -----
+  - { glob: "lib/features/profile/**", tier: feature }
+  - { glob: "lib/features/train/**", tier: feature }
+  - { glob: "lib/features/nutrition/**", tier: feature }
+  - { glob: "lib/features/home/**", tier: feature }
+  - { glob: "lib/shared/widgets/**", tier: feature }
+  - { glob: "docs/**", tier: feature }
+  - { glob: "scripts/**", tier: feature }
+  - { glob: "test/**", tier: feature }
+  - { glob: "integration_test/**", tier: feature }
+  - { glob: "assets/**", tier: feature }
+  - { glob: ".claude/**", tier: feature }
+  - { glob: ".github/**", tier: feature }
+  - { glob: "backups/**", tier: feature }
+
+  # ----- catch-all fallbacks (lowest specificity; declared last) -----
+  # Any other service file under lib/core/services/ is account-tier by default.
+  # If a new service is clearly platform-scoped, add an explicit rule ABOVE this line.
+  - { glob: "lib/core/services/**", tier: account }
+  # Any other Edge Function is platform-tier by default.
+  - { glob: "supabase/functions/**", tier: platform }
+  # Anywhere else in lib/ (features/onboarding sub-paths, lib/shared/repositories, lib/core/utils, etc.) is account.
+  - { glob: "lib/core/**", tier: account }
+  - { glob: "lib/shared/**", tier: feature }
+  - { glob: "lib/features/**", tier: feature }
+  # Android / iOS native code touches the platform — bump to account.
+  - { glob: "android/**", tier: account }
+  - { glob: "ios/**", tier: account }
+  # Top-level config (pubspec.yaml, analysis_options.yaml, etc.) — platform.
+  - { glob: "pubspec.yaml", tier: platform }
+  - { glob: "pubspec.lock", tier: platform }
+  - { glob: "analysis_options.yaml", tier: platform }

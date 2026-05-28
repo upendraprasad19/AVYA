@@ -417,6 +417,11 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry (53 lenses) | `docs/audit/LENS_REGISTRY.md` |
 | Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |
+| Blast-radius registry (4 tiers: feature/account/platform/catastrophic) | `docs/blast_radius.yaml` + `scripts/blast_radius_from_diff.dart` + `scripts/check_blast_radius_coverage.dart` |
+| ADR registry (architectural decisions, MADR-lite) | `docs/adr/` (auto-generated `INDEX.md`; `/adr` scaffolds) |
+| Handbook (durable working rules, portable) | `docs/handbook/` (auto-generated `INDEX.md`; bug-classes / process / conventions / audit / testing) |
+| Incident playbook (post-mortems) | `docs/incidents/` + `alerts/_thresholds.yaml` + `/incident` skill (Phase 1 placeholder thresholds — Phase 2 tuning 2026-06-03) |
+| Code review skills (B-pass per-commit, E-pass end-of-batch) | `.claude/skills/code-review/SKILL.md` + `.claude/skills/hermes-pass/SKILL.md` + `docs/reviews/` |
 | Device-CI runner + 4 critical Patrol flows | `docs/operations/DEVICE_TESTING.md` + `scripts/run-device-tests.sh` |
 | Cron registry | `docs/operations/CRON_REGISTRY.md` (Gate 31) |
 | Secret inventory | `docs/operations/SECRET_INVENTORY.md` |
