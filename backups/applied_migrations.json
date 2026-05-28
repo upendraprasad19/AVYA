@@ -470,6 +470,14 @@
     "slug": "alert_detection_crons"
   },
   {
+    "migration": "077",
+    "applied_at": "2026-05-28T08:00:00+05:30",
+    "hash": "sha256:0a272255282ebb0741122865affcc05df3531698dd62857705d00b645294aeff",
+    "applier": "claude-via-mcp",
+    "diagnose": "b1f4e2",
+    "slug": "fix_alert_edge_function_health_columns"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",
