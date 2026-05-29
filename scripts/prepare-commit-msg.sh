@@ -33,7 +33,14 @@ if grep -qE '^Blast-radius:' "$COMMIT_MSG_FILE" 2>/dev/null; then
 fi
 
 # Compute the tier.
-TIER_LINE=$(dart run scripts/blast_radius_from_diff.dart 2>/dev/null | grep -E '^Blast-radius:' || true)
+# NOTE: `dart run` prepends a "Running build hooks..." preamble to stdout with
+# no trailing newline (Dart SDK native-build-hooks message), which pollutes the
+# helper's output line. So we extract the tier token with -oE (match anywhere
+# on the line) rather than an anchored ^Blast-radius: grep, which the preamble
+# defeats. Found during 2026-05-28 cross-check (diagnose b1f4e2 sibling).
+TIER_LINE=$(dart run scripts/blast_radius_from_diff.dart 2>/dev/null \
+  | grep -oE 'Blast-radius: (feature|account|platform|catastrophic)' \
+  | tail -1 || true)
 if [ -z "$TIER_LINE" ]; then
   # No staged changes (e.g. `git commit --allow-empty`); leave message untouched.
   exit 0
