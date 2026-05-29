@@ -33,6 +33,24 @@ const allowedClasses = <String>{
   'NutritionWriteService',
   'HealthWriteService',
   'WorkoutScheduleService', // E.6 transitional — refactor target
+  // Tech-debt audit 2026-05-20 / A2 (B5 D13-D17, closes-diagnose d882ca) split
+  // the 1970-LOC `WorkoutScheduleService` into three canonical owners. Each
+  // remains a sole writer for its slice of the workout-schedule domain:
+  //   - TemplateService            — assignTemplateToDate / unschedule /
+  //                                   cleanSyncTemplateSchedule. Owns the
+  //                                   `schedule_<date>` rows for template-
+  //                                   scheduled days.
+  //   - WorkoutScheduleReadService — plan-generation orchestration +
+  //                                   calendar queries. Owns the
+  //                                   `current_plan` summary blob and
+  //                                   `phase_started_at` write on first plan
+  //                                   generation.
+  // Both are referenced by the train_provider + screens via the
+  // workoutScheduleReadServiceProvider singleton-deprecation path; their
+  // writes participate in the same syncWorkoutData fan-out + telemetry pair
+  // as WorkoutScheduleService did pre-split.
+  'TemplateService',
+  'WorkoutScheduleReadService',
   'HiveService',
   'SyncService',
   'UserConfigMigrator',
@@ -78,6 +96,14 @@ const knownViolations = <String>{
   // writer for `active_workout_session`; pending registry addition.
   'lib/features/train/services/active_workout_persistence.dart:ActiveWorkoutPersistence:workoutBox.put',
   'lib/features/train/services/active_workout_persistence.dart:ActiveWorkoutPersistence:workoutBox.delete',
+  // 2026-05-27 (gate-cleanup batch, closes-diagnose `<gate-cleanup>`):
+  // WarmupCooldownSection writes a per-day checkbox state cache at key
+  // `warmup_checks_<ist-date>_<exercise-slug>` to survive scroll / reopen.
+  // The key prefix `warmup_checks_` is intentionally NOT in the SoT
+  // registry — it's pure widget UI state, not a domain mutation. The
+  // matching read at `_loadChecks` lives in the same widget. Forcing this
+  // through a WriteService would over-engineer a localStorage cache.
+  'lib/features/train/screens/active_workout/warmup_cooldown_section.dart:<top-level>:workoutBox.put',
 };
 
 final boxAccessRegex = RegExp(

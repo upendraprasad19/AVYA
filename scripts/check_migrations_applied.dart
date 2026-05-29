@@ -67,8 +67,23 @@ void main(List<String> args) async {
 
   late List<String> appliedMigrations;
   try {
-    final raw = jsonDecode(snapshotFile.readAsStringSync());
-    appliedMigrations = (raw as List<dynamic>).cast<String>();
+    final raw = jsonDecode(snapshotFile.readAsStringSync()) as List<dynamic>;
+    // Schema changed 2026-05-11: entries went from bare String to object
+    // `{"migration": "<id>", "applied_at": "...", "hash": "...", ...}`.
+    // Support both shapes — extract the migration id whatever the shape.
+    appliedMigrations = raw.map((entry) {
+      if (entry is String) return entry;
+      if (entry is Map) {
+        final id = entry['migration'];
+        if (id is String) return id;
+        throw FormatException(
+          'applied_migrations.json entry missing string `migration` field: $entry',
+        );
+      }
+      throw FormatException(
+        'applied_migrations.json entry has unexpected type ${entry.runtimeType}: $entry',
+      );
+    }).toList();
   } catch (e) {
     stderr.writeln(
         '[Gate 14] ERROR — could not parse backups/applied_migrations.json: $e');

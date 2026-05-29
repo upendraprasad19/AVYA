@@ -25,11 +25,26 @@ void main(List<String> args) async {
 
   final registryContent = registryFile.readAsStringSync();
 
-  // ── 1. Find all concepts that have a hive.key_prefix ────────────────────
+  // ── 1. Find all concepts that have a non-empty hive key prefix ──────────
   // Parse concept blocks: look for "- concept: <name>" followed eventually
-  // by "key_prefix:".
+  // by a `key_prefix:` line whose value is non-empty (i.e. ignore concepts
+  // that explicitly declare `key_prefix: ""` to mean "not Hive-backed" —
+  // e.g. `singleton_lifecycle_registry`, `typography_canonical_source`,
+  // `dependency_canonical_http_client`).
+  //
+  // Match either:
+  //   hive_key_prefix: foo_         (top-level shorthand — custom_exercises_mutations)
+  //   key_prefix: foo_              (nested under `hive:` block)
+  // Reject when the value is empty string ("" or '') or just whitespace.
 
   final conceptsWithHive = <String>[];
+  // Match `key_prefix:` or `hive_key_prefix:` followed by a value.
+  // Capture the value (with surrounding quotes if present) so we can
+  // distinguish empty (`""` / `''` / nothing) from real prefixes
+  // (`"exlog_"`, `custom_exercise_`, etc.).
+  final keyPrefixRegex = RegExp(
+    r'(?:hive_key_prefix|key_prefix):[ \t]*([^\n]*)',
+  );
 
   // Split into concept blocks by "  - concept:"
   final conceptBlocks = registryContent.split(RegExp(r'\n  - concept:\s*'));
@@ -40,9 +55,19 @@ void main(List<String> args) async {
     if (nameMatch == null) continue;
     final conceptName = nameMatch.group(1)!.trim();
 
-    // Does this block have a key_prefix?
-    if (block.contains('key_prefix:')) {
+    // Does this block have a NON-EMPTY key_prefix? Concepts that declare
+    // `key_prefix: ""` (e.g. typography_canonical_source,
+    // singleton_lifecycle_registry, dependency_canonical_http_client)
+    // are not Hive-backed and must not be required to ship a
+    // writer-to-reader contract test.
+    for (final m in keyPrefixRegex.allMatches(block)) {
+      final raw = m.group(1)!.trim();
+      // Strip trailing inline comment.
+      final value = raw.split('#').first.trim();
+      // Treat `""`, `''`, and empty as "not Hive-backed".
+      if (value.isEmpty || value == '""' || value == "''") continue;
       conceptsWithHive.add(conceptName);
+      break; // first non-empty hit per concept is sufficient
     }
   }
 
