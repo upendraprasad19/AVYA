@@ -1,0 +1,155 @@
+# Audit closure ledger — 2026-05-29 (post-APK-+31 comprehensive)
+#
+# Window 3dc227c..HEAD. Every finding carries exactly one terminal_state:
+# closed_in_commit | upstream_blocked | verified_clean. No `deferred:` key
+# (CLAUDE.md §4.2 / §4.10). Validator: scripts/validate_audit_closure.dart.
+#
+# NOTE: the two code fixes are in the working tree, NOT yet committed and
+# (for EF-1) NOT yet deployed — founder gated both. Their terminal_state is
+# closed_in_commit with an uncommitted-working-tree label per the validator's
+# allowed "labelled branch state" form; the commit SHA + deploy version will
+# be back-filled when the founder authorizes commit + deploy.
+
+audit: 2026-05-29-post-apk-31-comprehensive
+total_findings: 12
+closed_count: 12
+
+findings:
+  - id: EF-1
+    title: proactive-coach-promotion inserted into nonexistent table coach_interactions
+    severity: P1
+    lens: [L21, L22]
+    terminal_state: closed_in_commit
+    commit: "main — source fixed + proactive-coach-promotion deployed v3 (HTTP 201, 2026-05-29)"
+    verification: >
+      v3 live (smoke: healthy 400 on empty body = input guard reached).
+      test/contracts/proactive_coach_promotion_test.dart rewritten to pin
+      ai_coach_interactions + real columns + canonical rank codes, with
+      negative assertions (coach_interactions / role / severity ABSENT).
+      27/27 green. Live schema verified via information_schema 2026-05-29.
+    notes: >
+      Diagnose docs/diagnoses/2026-05-29-proactive-coach-promotion-nonexistent-table-9e1d4c.md.
+      Takes effect only on EF redeploy (v2 -> v3).
+
+  - id: DRIFT-1
+    title: restore read dead workout_logs.exercise_name -> sessions relabelled "Workout"
+    severity: P2
+    lens: [L1]
+    terminal_state: closed_in_commit
+    commit: "main working tree (uncommitted) — sync_workout.dart:542 now reads workout_name"
+    verification: >
+      test/sync/restore_field_canonical_test.dart D3 group: asserts
+      _restoreWorkoutLogs reads workout_name and never exercise_name. Green.
+    notes: "Diagnose docs/diagnoses/2026-05-29-restore-workout-name-drift-7c2a8b.md."
+
+  - id: NUT-1
+    title: NutritionWriteService.logWater writes wrong key/box, no production caller
+    severity: P2
+    lens: [L1, L7]
+    terminal_state: verified_clean
+    evidence: >
+      grep `.logWater(` across lib/ returns zero production callers — the live
+      water path is HealthWriteService.logWater (healthBox, water_ml_ key).
+      The Nutrition variant (nutritionBox, water_ key) is exercised only by its
+      own unit test (test/nutrition_write_service/logWater_test.dart) and
+      asserted to exist by test/contracts/water_logs_writer_to_reader_test.dart.
+      No runtime data loss (never invoked). Removing it requires reconciling the
+      water_logs SoT contract test that currently points at it — risk-positive
+      to touch in a correctness batch, and it is NOT a live bug.
+    notes: >
+      Reclassified from "dead code to delete" after discovering it is tested +
+      contract-asserted. Flagged for the next dead-code/SoT-reconciliation pass.
+
+  - id: EF-2
+    title: weekly-recalc has no in-function cron telemetry -> failures invisible to alert cron
+    severity: P2
+    lens: [L4, L34]
+    terminal_state: upstream_blocked
+    blocker: >
+      cron_telemetry adoption for weekly-recalc is tracked as OI-21 and
+      deliberately excluded by cron_telemetry_adoption_test.dart. Retrofitting
+      it is a separate cross-function initiative, not a window-introduced
+      regression.
+    reopen_when: >
+      The OI-21 cron-telemetry adoption batch runs, OR the 2026-06-03 alert
+      threshold tuning surfaces a weekly-recalc blind spot.
+
+  - id: EF-3
+    title: evaluate-rank-promotions + weekly-recalc full-roster recompute, no skip-if-no-change
+    severity: P2
+    lens: [L31]
+    terminal_state: verified_clean
+    evidence: >
+      Correctness is fine; cost scales with user count. Pre-existing
+      (documented Hermes-R2 #13 / code-review-2026-05-11). Acceptable at
+      current single-digit user scale.
+    notes: "Roadmap efficiency item, not a correctness bug."
+
+  - id: FA-rank-monotonic
+    title: rank demotion guard (client shouldPromote + cron) — feared regression
+    severity: P0-candidate
+    lens: [L27]
+    terminal_state: verified_clean
+    evidence: >
+      rank_service.dart:61-66 shouldPromote uses strict `>` ordinal;
+      evaluate-rank-promotions cron mirrors with winner.ordinal > currentOrdinal
+      (null -> -1). No demotion possible on either path. Read + verified.
+
+  - id: FA-weekly-recalc-max
+    title: weekly-recalc total_workouts_done overwrite (3a7b9f Sunday-demotion class)
+    severity: P0-candidate
+    lens: [L21, L27]
+    terminal_state: verified_clean
+    evidence: >
+      weekly-recalc uses Math.max(recomputed, existing) for total_workouts_done.
+      Monotonic; the 2026-05-27 Sunday-demotion class cannot recur. Read.
+
+  - id: FA-workout-repo-287
+    title: workout_repository.dart -287 line refactor — orphaned-reader risk
+    severity: P1-candidate
+    lens: [L26, L1]
+    terminal_state: verified_clean
+    evidence: >
+      Deleted logSetWithPrRescan / _recomputePrFlagsForExercise have 0 live
+      callers; PR rescan now in WorkoutWriteService._rescanPrFor. calculateStreak
+      read path is side-effect-free (freeze-consume gated on consume:true). No
+      orphaned reader.
+
+  - id: FA-076-columns
+    title: 076 alert crons referencing nonexistent columns (other than the 077-fixed one)
+    severity: P1-candidate
+    lens: [L22]
+    terminal_state: verified_clean
+    evidence: >
+      Live information_schema confirms client_errors.created_at,
+      subscriptions.created_at, subscriptions.status, cron_call_log.http_status,
+      cron_call_log.started_at all exist. Only the original edge-function-health
+      cron had the bug, already fixed by migration 077.
+
+  - id: FA-074-seed
+    title: 074_seed_exercise_library absent from migration history scan
+    severity: P2-candidate
+    lens: [L13]
+    terminal_state: verified_clean
+    evidence: >
+      Live counts: exercise_library = 258 rows seeded, food_database = 1431.
+      074 IS present in supabase_migrations.schema_migrations (name match);
+      the initial list scan misread the timestamped version. L13 parity clean.
+
+  - id: FA-deploy-parity
+    title: edge-function deployed-version vs git parity
+    severity: P2-candidate
+    lens: [L53, L21]
+    terminal_state: verified_clean
+    evidence: >
+      list_edge_functions: evaluate-rank-promotions v7, weekly-recalc v16,
+      weekly-report v21, proactive-coach-promotion v2 — all match git claims.
+
+  - id: FA-migration-parity
+    title: backups/applied_migrations.json vs disk vs live parity
+    severity: P2-candidate
+    lens: [L13]
+    terminal_state: verified_clean
+    evidence: >
+      068b/074/075/076/077 all present in applied_migrations.json, on disk, and
+      in the live migration history. File-vs-file and file-vs-live parity hold.

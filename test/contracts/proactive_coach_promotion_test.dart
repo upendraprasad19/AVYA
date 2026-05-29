@@ -5,7 +5,18 @@
 // Pins the source-level shape of:
 //   - Migration 073 (Postgres trigger that fires the Edge Function)
 //   - Edge Function `proactive-coach-promotion` (writes to
-//     coach_interactions + sends OneSignal push)
+//     ai_coach_interactions + sends OneSignal push)
+//
+// 2026-05-29 audit EF-1 (closes-diagnose 9e1d4c): this test PREVIOUSLY
+// enshrined the bug — it asserted the function inserts into
+// `coach_interactions` with role/metadata, a table+columns that do not
+// exist in the live DB. A pure source-grep test that never verified the
+// table is real = `feedback_source_grep_false_confidence.md`. Live schema
+// verified during the audit: the chat table is `ai_coach_interactions`
+// with columns user_message (NOT NULL) / ai_response / channel /
+// model_used / tool_calls. Assertions below now pin the CORRECT contract
+// AND add NEGATIVE assertions (the nonexistent table/columns must be
+// ABSENT) that would have caught EF-1.
 //
 // Source-grep with comment-stripping per
 // `feedback_source_grep_strip_comments_first.md`.
@@ -127,41 +138,104 @@ void main() {
       );
     });
 
-    test('writes to coach_interactions with role=assistant + channel=in_app',
+    test('inserts into ai_coach_interactions (the real chat table)', () {
+      expect(
+        RegExp(r'from\("ai_coach_interactions"\)').hasMatch(src),
+        isTrue,
+        reason: 'must insert into ai_coach_interactions — the canonical '
+            'chat table verified live 2026-05-29.',
+      );
+    });
+
+    test('does NOT reference the nonexistent coach_interactions table', () {
+      // EF-1 regression guard: the bug was inserting into a table that
+      // does not exist. `ai_coach_interactions` legitimately contains the
+      // substring "coach_interactions", so assert the bare table name is
+      // never the `.from(...)` target.
+      expect(
+        RegExp(r'from\("coach_interactions"\)').hasMatch(src),
+        isFalse,
+        reason: 'coach_interactions does not exist in the live DB — '
+            'inserting into it returns 500 before the OneSignal push '
+            '(audit EF-1).',
+      );
+    });
+
+    test('maps to real ai_coach_interactions columns (not role/metadata)',
         () {
       expect(
-        src.contains('coach_interactions'),
+        RegExp(r'ai_response:').hasMatch(src),
         isTrue,
-        reason: 'must insert into coach_interactions so the message '
-            'surfaces in the AI Coach chat history.',
-      );
-      expect(
-        RegExp(r'role:\s*"assistant"').hasMatch(src),
-        isTrue,
-        reason: 'role must be "assistant" (proactive message from the '
-            'coach side of the conversation).',
+        reason: 'congrats text goes in ai_response (the assistant turn).',
       );
       expect(
         RegExp(r'channel:\s*"in_app"').hasMatch(src),
         isTrue,
-        reason: 'channel must be "in_app" (not telegram — this is the '
-            'AVYA in-app coach surface).',
+        reason: 'channel must be "in_app" (the AVYA in-app coach surface).',
+      );
+      // user_message is NOT NULL on ai_coach_interactions — a proactive
+      // turn has no user prompt, so it must be present (empty string).
+      expect(
+        RegExp(r'user_message:').hasMatch(src),
+        isTrue,
+        reason: 'user_message column is NOT NULL — must be supplied.',
+      );
+      // Negative: role/content/metadata are columns that do NOT exist.
+      expect(
+        RegExp(r'\brole:\s*"assistant"').hasMatch(src),
+        isFalse,
+        reason: 'ai_coach_interactions has no `role` column (audit EF-1).',
+      );
+      expect(
+        RegExp(r'\bmetadata:').hasMatch(src),
+        isFalse,
+        reason: 'ai_coach_interactions has no `metadata` column — the '
+            'proactive tag lives in tool_calls jsonb instead (audit EF-1).',
       );
     });
 
-    test('metadata.kind = proactive_promotion + carries rank_code', () {
+    test('tags proactive_promotion + rank_code in tool_calls jsonb', () {
       expect(
         RegExp(r'kind:\s*"proactive_promotion"').hasMatch(src),
         isTrue,
-        reason: 'metadata.kind must be "proactive_promotion" so the '
+        reason: 'tool_calls.kind must be "proactive_promotion" so the '
             'client + future filters can distinguish proactive messages '
             'from user-initiated chat turns.',
       );
       expect(
         src.contains('rank_code'),
         isTrue,
-        reason: 'metadata must carry rank_code for downstream filtering.',
+        reason: 'tool_calls must carry rank_code for downstream filtering.',
       );
+    });
+
+    test('telemetry uses real client_errors columns (error_message), '
+        'not message/severity', () {
+      expect(
+        RegExp(r'error_message:').hasMatch(src),
+        isTrue,
+        reason: 'client_errors has error_message, not message (audit EF-1 '
+            'compounding bug: the failure telemetry also silently failed).',
+      );
+      expect(
+        RegExp(r'\bseverity:').hasMatch(src),
+        isFalse,
+        reason: 'client_errors has no `severity` column.',
+      );
+    });
+
+    test('RANK_LABELS uses canonical ladder codes (matches '
+        'rank_ladder_data.dart)', () {
+      // Canonical codes per kRankLadder: SD2,SD1,LS,PO,CPO,MCPO,SubLt,Lt,
+      // LtCdr,Cdr,Capt. The buggy map used PO2/PO1/ENS/LTJG/LCDR/CDR/CAPT.
+      for (final code in ['LS:', 'PO:', 'MCPO:', 'SubLt:', 'LtCdr:']) {
+        expect(src.contains(code), isTrue,
+            reason: 'RANK_LABELS missing canonical code $code (audit EF-1).');
+      }
+      for (final ghost in ['PO2:', 'PO1:', 'ENS:', 'LTJG:']) {
+        expect(src.contains(ghost), isFalse,
+            reason: 'RANK_LABELS uses nonexistent code $ghost (audit EF-1).');
+      }
     });
 
     test('sends OneSignal push with deep_link to /ai-coach', () {

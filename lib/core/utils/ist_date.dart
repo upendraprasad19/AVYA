@@ -7,11 +7,58 @@ library;
 
 const Duration _istOffset = Duration(hours: 5, minutes: 30);
 
+// ── Test / dev-only clock override ───────────────────────────────────
+//
+// The dev panel (kDebugMode-gated) and the headless year-sim harness need
+// to fast-forward "now" to exercise multi-month progression (rank
+// promotions, phase rollovers) without waiting real time. The override
+// replaces the WALL clock (the thing that plays the role of
+// `DateTime.now()`), NOT `istNow()` — day-key call sites do
+// `istDateStr(DateTime.now())`, and feeding an already-IST value back into
+// `istDateStr` would double-apply the offset (the Test #11.1 double-shift
+// bug). Production (release) builds can NEVER override: the setter is a
+// no-op when compiled with `dart.vm.product`.
+const bool _isReleaseBuild = bool.fromEnvironment('dart.vm.product');
+
+DateTime Function()? _clockOverride;
+
+/// Replace the wall clock read by [istNow] / [istTodayStr]. DEBUG/TEST
+/// ONLY — a no-op in release builds. [clock] returns the desired "device
+/// now" (it is converted to IST as usual). Call [resetTestClock] to
+/// restore the real system clock.
+void setTestClock(DateTime Function() clock) {
+  if (_isReleaseBuild) return;
+  _clockOverride = clock;
+}
+
+/// Freeze "now" at [fixedNow] (convenience over [setTestClock]).
+void setTestClockTo(DateTime fixedNow) => setTestClock(() => fixedNow);
+
+/// Restore the real system clock. Always safe to call.
+void resetTestClock() {
+  _clockOverride = null;
+}
+
+/// Whether a test/dev clock override is currently active.
+bool get isTestClockActive => _clockOverride != null;
+
+/// The current wall-clock instant (device-local semantics), honoring any
+/// active test override. Internal seam — prefer [istNow] / [istTodayStr].
+DateTime _wallNow() {
+  final o = _clockOverride;
+  return o != null ? o() : DateTime.now();
+}
+
 /// Current IST instant (returned as a "naive" DateTime in IST wall
 /// clock — `isUtc` is false but the components ARE IST values).
 DateTime istNow() {
-  return DateTime.now().toUtc().add(_istOffset);
+  return _wallNow().toUtc().add(_istOffset);
 }
+
+/// IST date string (`YYYY-MM-DD`) for "today", honoring the test clock.
+/// Day-key call sites should prefer this over `istDateStr(DateTime.now())`
+/// so the dev panel / year-sim can fast-forward the calendar in one place.
+String istTodayStr() => istDateStr(_wallNow());
 
 /// Returns the IST wall-clock equivalent of [t].
 ///

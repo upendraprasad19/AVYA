@@ -497,7 +497,13 @@ class SyncService {
       // the home screen. All other sync tasks (restore, full sync,
       // snapshot push) are slower and can follow afterward.
       _healthSyncCompleter = Completer<void>();
-      if (HealthSyncService.isEnabled()) {
+      // Audit 2026-05-29 B2 — defensive web guard. The `health` plugin has
+      // no web implementation; calling Health()/syncToHive on web throws
+      // MissingPluginException. isEnabled() returns false on web today (no
+      // permission ever granted), but guard explicitly so a future code
+      // path that enables it can't crash the web build. Mirrors the
+      // splash_screen `!kIsWeb && HealthSyncService.isEnabled()` guard.
+      if (!kIsWeb && HealthSyncService.isEnabled()) {
         try {
           await HealthSyncService.instance.syncToHive();
           debugPrint('[SyncService.checkAndSync] Health sync completed '

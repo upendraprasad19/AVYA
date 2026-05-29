@@ -534,7 +534,12 @@ extension SyncServiceWorkout on SyncService {
         await _hive.workoutBox.put(logId, {
           'id': logId,
           'type': 'workout_log',
-          'workout_name': map['exercise_name'] ?? 'Workout',
+          // Drift-fix 2026-05-29 (closes-diagnose 7c2a8b): migration 068b
+          // renamed workout_logs.exercise_name → workout_name. The write
+          // side (line ~133) already emits workout_name; this restore reader
+          // still read the dead `exercise_name` key, so every restored
+          // session relabelled to the literal "Workout". Read workout_name.
+          'workout_name': map['workout_name'] ?? 'Workout',
           'date': dateStr,
           'completed_at': loggedAt,
           'sets_completed': map['sets_completed'],

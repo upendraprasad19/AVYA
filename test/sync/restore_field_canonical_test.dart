@@ -98,6 +98,47 @@ void main() {
     });
   });
 
+  // ── D3 — restore reads canonical workout_logs.workout_name ───────
+  // Audit 2026-05-29 DRIFT-1 (closes-diagnose 7c2a8b): migration 068b
+  // renamed workout_logs.exercise_name → workout_name. _restoreWorkoutLogs
+  // still read map['exercise_name'] (absent on every post-rename cloud
+  // row), so restore relabelled every session to the literal "Workout".
+
+  group('D3 — restore reads canonical workout_logs.workout_name', () {
+    late String src;
+
+    setUpAll(() {
+      src = loadSyncServiceSource().readAsStringSync();
+    });
+
+    String restoreWorkoutLogsBody(String s) {
+      final start = s.indexOf('Future<void> _restoreWorkoutLogs(');
+      expect(start, greaterThan(0),
+          reason: '_restoreWorkoutLogs function must exist');
+      final end = s.indexOf('Future<void> _restoreExerciseLogs(', start);
+      expect(end, greaterThan(start));
+      return s.substring(start, end);
+    }
+
+    test('_restoreWorkoutLogs reads cloud workout_name', () {
+      expect(
+        restoreWorkoutLogsBody(src).contains("map['workout_name']"),
+        isTrue,
+        reason: 'DRIFT-1: restore must read the renamed workout_name column.',
+      );
+    });
+
+    test('_restoreWorkoutLogs must NOT read dead exercise_name', () {
+      expect(
+        restoreWorkoutLogsBody(src).contains("map['exercise_name']"),
+        isFalse,
+        reason: 'DRIFT-1: exercise_name was renamed to workout_name by '
+            'migration 068b — reading it yields null on every restored row, '
+            'relabelling each session to the literal "Workout".',
+      );
+    });
+  });
+
   // ── D1 — WorkoutRepository delegation shims ──────────────────────
 
   group('D1 — WorkoutRepository.logExercise delegates to WorkoutWriteService',

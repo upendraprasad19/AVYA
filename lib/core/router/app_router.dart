@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -41,6 +42,7 @@ import 'package:icanbefitter/features/profile/screens/delete_account_screen.dart
 import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
+import 'package:icanbefitter/features/dev/dev_panel_screen.dart';
 
 /// GoRouter configuration with auth redirect logic.
 ///
@@ -287,6 +289,16 @@ class AppRouter {
         builder: (context, state) => const MusterScreen(),
       ),
 
+      // ── Dev panel (DEBUG ONLY) — time-travel + rank inspection ───────────
+      // Registered only in debug builds; never reachable in release.
+      // Audit 2026-05-29 Phase B3.
+      if (kDebugMode)
+        GoRoute(
+          path: '/dev',
+          name: 'devPanel',
+          builder: (context, state) => const DevPanelScreen(),
+        ),
+
       // ── Main shell with 5 tabs ────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -511,6 +523,10 @@ class AppRouter {
     final isOnCoachInduction =
         state.matchedLocation.startsWith('/coach/induction') ||
         state.matchedLocation.startsWith('/coach/muster');
+
+    // Dev panel (debug only) — always reachable, no auth/onboarding gate,
+    // so it works on a fresh web build for time-travel verification.
+    if (kDebugMode && state.matchedLocation == '/dev') return null;
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;

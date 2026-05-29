@@ -2,10 +2,18 @@
 //
 // Fired by Postgres trigger trg_dispatch_proactive_coach_promotion on
 // every rank_promotions INSERT (migration 073). Composes an AI
-// congratulation message via Gemini, writes it to coach_interactions
-// (so it surfaces in the AI Coach screen alongside the user's own
-// chat history), and sends an OneSignal push so the user gets the
-// notification even when the app isn't open.
+// congratulation message via Gemini, writes it to ai_coach_interactions
+// (the canonical chat table — offline-first: the in-app chat UI reads
+// Hive, this cloud row is the upward-sync target that surfaces once the
+// coach domain syncs down to the device), and sends an OneSignal push so
+// the user gets the notification even when the app isn't open.
+//
+// 2026-05-29 audit EF-1 fix (closes-diagnose 9e1d4c): the prior version
+// inserted into a nonexistent table `coach_interactions` with columns
+// (role/content/metadata) that do not exist on ai_coach_interactions, so
+// every promotion returned HTTP 500 BEFORE the OneSignal push — the whole
+// celebration was inert. Telemetry also targeted nonexistent client_errors
+// columns (message/severity) so the failure was invisible.
 //
 // verify_jwt=false — invoked by the Postgres trigger using the
 // service_role_key from Vault. The trigger payload is internal-only.
@@ -37,18 +45,23 @@ interface UserContext {
 // Hardcoded here so the Edge Function doesn't reach back into the
 // client codebase. If the ladder ever changes, this map updates in
 // the same commit as the client one.
+// Codes + labels MUST match lib/core/services/rank_ladder_data.dart
+// (kRankLadder) EXACTLY. The prior map used codes (PO2/PO1/ENS/LTJG/
+// LCDR/CDR/CAPT) that exist in no ladder — 7 of 11 ranks fell through to
+// the raw code in the AI prompt. Canonical ladder: SD2, SD1, LS, PO, CPO,
+// MCPO, SubLt, Lt, LtCdr, Cdr, Capt.
 const RANK_LABELS: Record<string, string> = {
-  SD2: "Seaman Apprentice",
-  SD1: "Seaman",
-  PO2: "Petty Officer 2nd Class",
-  PO1: "Petty Officer 1st Class",
+  SD2: "Seaman 2nd Class",
+  SD1: "Seaman 1st Class",
+  LS: "Leading Seaman",
+  PO: "Petty Officer",
   CPO: "Chief Petty Officer",
-  ENS: "Ensign",
-  LTJG: "Lieutenant Junior Grade",
-  LT: "Lieutenant",
-  LCDR: "Lieutenant Commander",
-  CDR: "Commander",
-  CAPT: "Captain",
+  MCPO: "Master Chief Petty Officer",
+  SubLt: "Sub Lieutenant",
+  Lt: "Lieutenant",
+  LtCdr: "Lieutenant Commander",
+  Cdr: "Commander",
+  Capt: "Captain",
 };
 
 serve(async (req: Request): Promise<Response> => {
@@ -77,13 +90,19 @@ serve(async (req: Request): Promise<Response> => {
     // 2. Compose AI congrats via Gemini.
     const congrats = await composeCongrats(userCtx, rank_code);
 
-    // 3. Write to coach_interactions so it surfaces in chat.
-    const insertRes = await admin.from("coach_interactions").insert({
+    // 3. Write to ai_coach_interactions (canonical chat table). The
+    //    proactive message is an assistant turn with no user prompt, so
+    //    user_message is empty (column is NOT NULL — empty string, not
+    //    null) and the congrats goes in ai_response. The proactive tag +
+    //    rank_code live in the tool_calls jsonb column for downstream
+    //    filtering (ai_coach_interactions has no role/metadata columns).
+    const insertRes = await admin.from("ai_coach_interactions").insert({
       user_id,
-      role: "assistant",
       channel: "in_app",
-      content: congrats,
-      metadata: {
+      user_message: "",
+      ai_response: congrats,
+      model_used: "gemini-2.5-flash",
+      tool_calls: {
         kind: "proactive_promotion",
         rank_code,
         source: "proactive-coach-promotion",
@@ -91,7 +110,7 @@ serve(async (req: Request): Promise<Response> => {
     });
     if (insertRes.error) {
       await logTelemetry(admin, user_id, "proactive_coach_promotion_failed",
-        `insert coach_interactions: ${insertRes.error.message}`);
+        `insert ai_coach_interactions: ${insertRes.error.message}`);
       return jsonResponse({ error: "coach insert failed" }, 500);
     }
 
@@ -239,9 +258,14 @@ async function logTelemetry(
   user_id: string, op_type: string, message: string,
 ): Promise<void> {
   try {
+    // client_errors columns are: error_code, error_message, op_type
+    // (verified live 2026-05-29). There is NO `message`/`severity`
+    // column — the prior insert silently failed, hiding EF-1.
     await admin.from("client_errors").insert({
-      user_id, op_type, message,
-      severity: op_type.endsWith("_failed") ? "error" : "info",
+      user_id,
+      op_type,
+      error_code: op_type,
+      error_message: message,
     });
   } catch (_) {
     // Best-effort — never throw from telemetry.
