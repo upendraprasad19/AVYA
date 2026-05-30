@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
+import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -161,6 +162,12 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
+  // OI-21 / audit-2026-05-29 EF-2: in-function execution telemetry so the
+  // alert_edge_function_health cron (migrations 076/077) can SEE weekly-recalc
+  // failures via cron_call_log. pg_cron's job_run_details only reflects the
+  // net.http_post dispatch, not the EF's actual HTTP outcome.
+  const logId = await logCronStart("weekly-recalc");
 
   try {
     const start = Date.now();
@@ -329,6 +336,11 @@ serve(async (req: Request) => {
     );
 
     const status = errors === 0 ? "success" : (errors > processed ? "failed" : "partial");
+    const httpStatus = errors > processed ? 500 : 200;
+    await logCronEnd(logId, httpStatus >= 400 ? "failed" : "success", {
+      httpStatus,
+      errorSummary: errors > 0 ? `${errors} user-update errors` : undefined,
+    });
     return new Response(
       JSON.stringify({
         status,
@@ -340,7 +352,7 @@ serve(async (req: Request) => {
         duration_ms: totalTime,
       }),
       {
-        status: errors > processed ? 500 : 200,
+        status: httpStatus,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
@@ -348,6 +360,11 @@ serve(async (req: Request) => {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[weekly-recalc] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

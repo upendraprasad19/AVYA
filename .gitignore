@@ -72,6 +72,12 @@ supabase/.env
 # Used by .claude/deploy_via_api.js — DO NOT commit any token, ever.
 supabase/.supabase/
 
+# Alert-surfacing tooling credential — service-role key for scripts/check_alerts.dart
+# (SessionStart hook). DELIBERATELY separate from .env so it is NEVER compiled into
+# the app via --dart-define-from-file=.env. One line: SUPABASE_SERVICE_ROLE_KEY=<key>.
+# DO NOT commit. See scripts/check_alerts.dart credential-model header.
+.claude/.alerts.env
+
 # Edge function deploy payloads (regenerable via .claude/emit_payload.js)
 # Contain inlined source — no point checking them in.
 .claude/_payload_*.json
@@ -79,6 +85,9 @@ supabase/.supabase/
 .claude/_payload_*.txt
 .claude/_deploy_payload_*.json
 .claude/ai-proxy-chunk-*.txt
+# NOTE: backups/edge_function_payloads/ is NOT ignored — several SHA-pinned
+# rollback archives there are already tracked (the deploy convention commits
+# them). Do not blanket-ignore the dir; it would shadow tracked files.
 
 # Knowledgebase (reference docs, not source code)
 Knowledgebase/

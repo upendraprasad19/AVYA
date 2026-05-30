@@ -40,6 +40,10 @@ const _wiredCronFunctions = <String>[
   'streak-guardian',
   'weekly-recap-ready',
   'expiry-reminder',
+  // Wired 2026-05-30 (audit-2026-05-29 EF-2 / OI-21 closure): weekly-recalc
+  // now emits cron_call_log telemetry so alert_edge_function_health (076/077)
+  // can see its failures.
+  'weekly-recalc',
 ];
 
 const _functionsDir = 'supabase/functions';
