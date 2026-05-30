@@ -1,11 +1,14 @@
 # Bug Directory (auto-generated)
 
-Generated: 2026-05-30T23:22:45.976712.
+Generated: 2026-05-30T23:36:02.511547.
 Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By recurrence class
 
 ## By concept
+
+### weight_logs_realtime_stream (1 bugs)
+- 2026-05-30 e3f1a7 — >
 
 ### train_plan_header_render (1 bugs)
 - 2026-05-30 b1f4d2 — >
@@ -87,8 +90,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### scheduled_workouts_mutations (3 bugs)
 - 2026-05-22 b0baa5 — |
-- 2026-05-12 9e2c1a — |
 - 2026-05-12 8f3d22 — |
+- 2026-05-12 9e2c1a — |
 
 ### phase_unlock_end_to_end (1 bugs)
 - 2026-05-22 ec4d27 — |
@@ -165,8 +168,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### ai_tool_wall_clock_and_media_proxy_error_class (1 bugs)
 - 2026-05-18 t1m5b0 — |
 
-### workout_read_service (1 bugs)
-- 2026-05-17 8d85c2 — |
+### snapshot_contract_enforcement (1 bugs)
+- 2026-05-17 c0e3a5 — |
+
+### partial_unique_arbiter_safety (1 bugs)
+- 2026-05-17 9d2a47 — |
 
 ### snapshot_writer_contract (1 bugs)
 - 2026-05-17 7faa3b — |
@@ -219,14 +225,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### razorpay_webhook_handler_correctness (1 bugs)
 - 2026-05-17 9a7c14 — |
 
-### snapshot_contract_enforcement (1 bugs)
-- 2026-05-17 c0e3a5 — |
-
-### partial_unique_arbiter_safety (1 bugs)
-- 2026-05-17 9d2a47 — |
-
 ### restore_completeness_symmetric (1 bugs)
 - 2026-05-17 4dd7e2 — |
+
+### workout_read_service (1 bugs)
+- 2026-05-17 8d85c2 — |
 
 ### reader_manifest_exhaustive_completeness (1 bugs)
 - 2026-05-17 0a1e17 — |
@@ -237,8 +240,19 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### cross_account_guard_exempt_declaration (1 bugs)
 - 2026-05-17 3a7c1e — |
 
-### prediction_card_display (1 bugs)
-- 2026-05-16 2c1c0d — |
+### ai_media_proxy_status_code_classification (1 bugs)
+- 2026-05-16 913261 — |
+
+### (unspecified) (9 bugs)
+- 2026-05-16 2026-05-16-rank-widget-migration — 
+- 2026-05-16 2026-05-16-sync-coach-cross-channel-dedup — 
+- 2026-05-16 2026-05-16-logpr-bypass — 
+- 2026-05-16 2026-05-16-ai-proxy-placeholder-resolution — 
+- 2026-05-16 2026-05-16-dead-columns-dropped — 
+- 2026-05-16 2026-05-16-doc-updates — 
+- 2026-05-16 de29b8 — 
+- 2026-05-16 2026-05-16-gate-coverage-and-dead-code — 
+- 2026-05-16 2026-05-16-workout-schedule-service-bypass — 
 
 ### terms_acceptance_audit_trail (1 bugs)
 - 2026-05-16 2026-05-16-terms-accepted-at-dpdp — |
@@ -246,31 +260,17 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### ErrorTelemetry + sync success/failure signal + cron auth (1 bugs)
 - 2026-05-16 2026-05-16-telemetry-hardening — Telemetry framework had five compounding observability gaps surfaced by audit Agent 7 — no success-path emission on 5 low-usage sync methods (cannot distinguish "feature unused" from "silently failing"), no cron-execution telemetry (F10.5), no `_shared/cron_auth.ts` (F9.1 — Test #16 P1-D drift class), generic numbered op_types defeating triage (F10.3), and undetected HIGH_PRIORITY_OP_TYPES client/server drift (F10.4).
 
-### (unspecified) (9 bugs)
-- 2026-05-16 2026-05-16-sync-coach-cross-channel-dedup — 
-- 2026-05-16 2026-05-16-rank-widget-migration — 
-- 2026-05-16 2026-05-16-ai-proxy-placeholder-resolution — 
-- 2026-05-16 2026-05-16-dead-columns-dropped — 
-- 2026-05-16 2026-05-16-doc-updates — 
-- 2026-05-16 de29b8 — 
-- 2026-05-16 2026-05-16-gate-coverage-and-dead-code — 
-- 2026-05-16 2026-05-16-logpr-bypass — 
-- 2026-05-16 2026-05-16-workout-schedule-service-bypass — 
-
 ### sleep_logs (1 bugs)
 - 2026-05-16 5beed5 — |
 
 ### workout_schedule_completion_cloud_projection (1 bugs)
 - 2026-05-16 2026-05-16-schedule-completion-duration — |
 
-### health_write_service (1 bugs)
-- 2026-05-16 e7a516 — |
+### workout_log_id_session_scoping (1 bugs)
+- 2026-05-16 daffac — |
 
 ### referral_restore_completeness (1 bugs)
 - 2026-05-16 2026-05-16-referral-restore-completeness — |
-
-### workout_log_id_session_scoping (1 bugs)
-- 2026-05-16 daffac — |
 
 ### ai_coach_interactions_dedup (1 bugs)
 - 2026-05-16 a17bc3 — Founder's `ai_coach_interactions` table shows 6 rows for the same `user_message='curd 200gms whey 1.5 scoops cashew 6'` (3 timestamps × 2 channels). Each "Analyze with AI" tap during Gemini 502 storm produced (a) a Hive `coach_*` row, (b) a server-side placeholder row (channel=food_text_analysis, model_used=pending), and (c) a sync-time orphan row (channel=in_app_orphan). No client-side circuit breaker — user can tap retry indefinitely and each tap fans out to 3 cloud rows.
@@ -278,11 +278,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### exlog_key_sot (1 bugs)
 - 2026-05-16 a16c1a — |
 
+### health_write_service (1 bugs)
+- 2026-05-16 e7a516 — |
+
 ### client_errors_telemetry_pipeline (1 bugs)
 - 2026-05-16 9d12af — |
-
-### ai_media_proxy_status_code_classification (1 bugs)
-- 2026-05-16 913261 — |
 
 ### ai_media_proxy_classification (1 bugs)
 - 2026-05-16 5bea3e — |
@@ -290,8 +290,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### exercise_personal_records (1 bugs)
 - 2026-05-16 cb1ab1 — |
 
-### custom_exercises_mutations (1 bugs)
-- 2026-05-15 a5d29c — |
+### prediction_card_display (1 bugs)
+- 2026-05-16 2c1c0d — |
+
+### sync_natural_key_guard (1 bugs)
+- 2026-05-15 9f4ab2 — |
 
 ### edge_function_cold_start_resilience (3 bugs)
 - 2026-05-15 c01d57 — |
@@ -312,11 +315,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### cron_auth (1 bugs)
 - 2026-05-15 5a65bd — pr-detection Edge Function cron returns 401 every 15 minutes; same shape affects 6 other C-4-gated proactive trigger functions (re-engagement, plateau-alert, protein-gap-alert, workout-window-closing, evaluate-rank-promotions, streak-guardian, i-see-you-callout, clean-orphan-media — every function with verify_jwt=false that imports the C-4 in-function cron-auth-gate).
 
-### sync_natural_key_guard (1 bugs)
-- 2026-05-15 9f4ab2 — |
-
-### template_exercises_cloud_tail_rows (1 bugs)
-- 2026-05-12 b3c8d2 — Founder's templates "Back Day A", "Leg Day A", "Push Day" each showed 14-15 exercise rows with only 4-5 distinct names ("triplicated"). Editing the template + removing duplicates + saving brought the dupes back on next reopen.
+### custom_exercises_mutations (1 bugs)
+- 2026-05-15 a5d29c — |
 
 ### exercise_set_field_name_contract (1 bugs)
 - 2026-05-12 6e1b45 — |
@@ -324,14 +324,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### today_workout_snapshot_reads_logged (1 bugs)
 - 2026-05-12 a13a01 — User asks AI coach "how was my workout today?" after partially completing a Pull-day session (logged 4 of 8 prescribed exercises — Lat Pulldown, Dumbbell Row, Hanging Leg Raise, Concentration Curl). Coach replied with the FULL planned 8-exercise list as if everything had been completed, because today_workout.exercises emits the schedule_<date> entry verbatim regardless of how many exlog_* rows exist for the day.
 
-### hive_user_session_static_state (1 bugs)
-- 2026-05-12 c7d4f6 — After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile'].
+### ai_media_proxy_error_handling (1 bugs)
+- 2026-05-12 d8e5b3 — Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry.
 
 ### cross_account_riverpod_cache_race (1 bugs)
 - 2026-05-12 7bd154 — After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner.
 
-### day_rollover_provider_invalidation (1 bugs)
-- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
+### user_scoped_riverpod_providers (1 bugs)
+- 2026-05-12 c4055a — |
 
 ### workout_receipt_rendering (1 bugs)
 - 2026-05-12 a2b3c4 — |
@@ -342,9 +342,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### last_performance_per_set_semantics (1 bugs)
 - 2026-05-12 a8f1c2 — "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session [10,15,10,15,10,10,15]; weight_kg field similarly carries the max of the previous session's per-set weights instead of the first set's weight."
 
-### ai_media_proxy_error_handling (1 bugs)
-- 2026-05-12 d8e5b3 — Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry.
-
 ### muster_to_profile_bridge (1 bugs)
 - 2026-05-12 8c4ee3 — After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and physique_focus='balanced'. Muster answers persisted to coachBox only and never bridged into userBox['profile'] — the AI coach saw the answers, but Edit Profile and the plan generator did not.
 
@@ -354,8 +351,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### schedule_exercise_field_types (1 bugs)
 - 2026-05-12 a2f9e1 — Home renders "Something went wrong" ErrorState after the user schedules a custom template for today. Crash repeats on every cold-start. Telemetry shows 5x widget_error_fallback with message "type 'String' is not a subtype of type 'int?' in type cast".
 
-### user_scoped_riverpod_providers (1 bugs)
-- 2026-05-12 c4055a — |
+### template_exercises_cloud_tail_rows (1 bugs)
+- 2026-05-12 b3c8d2 — Founder's templates "Back Day A", "Leg Day A", "Push Day" each showed 14-15 exercise rows with only 4-5 distinct names ("triplicated"). Editing the template + removing duplicates + saving brought the dupes back on next reopen.
+
+### hive_user_session_static_state (1 bugs)
+- 2026-05-12 c7d4f6 — After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile'].
+
+### day_rollover_provider_invalidation (1 bugs)
+- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
 
 ### write_service_bypass_detector (1 bugs)
 - 2026-05-11 7ad0cc — No source-grep guardrail enforced the WriteService SoT contract for `exlog_*`, `wlog_*`, `nlog_*`, `saved_meal_*` Hive prefixes. C-8 + C-12 closed half a dozen bypass sites manually; without a detector, new code can re-open the class. While writing the detector, a 7th bypass was caught — `_relogFromHistory` in `search_mode_body.dart` wrote `nlog_<ts>` directly with the legacy flat-totals shape (no items[]), same C-12 sibling class.
@@ -387,8 +390,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### rls_policy_cleanup (1 bugs)
 - 2026-05-11 7ad054 — rank_ladder had RLS enabled with zero policies (deny-all client reads); promo_code_uses INSERT policy was scoped to roles=public with WITH CHECK=true allowing any authenticated user to insert audit rows directly via PostgREST.
 
-### reactive_subscription_three_sites (1 bugs)
-- 2026-05-11 7ad0cd — 3 surfaces (`userStatsProvider`, `train_screen` WeekSelector.onSelect, `swap_sheet`) snapshot `SubscriptionService.instance.isPro()` at build/init time and never reactively rebuild when the user upgrades to PRO mid-session. Same stale-PRO class APK Test #12 / C-2 already closed for the home screen + roadmap surfaces. Result — user pays for PRO, the stats card still says "free", week selector still routes to the read-only preview screen, swap sheet still enforces free-tier restrictions until the page is reopened.
+### anon_jwt_leak (1 bugs)
+- 2026-05-11 7ad0c3 — .claude/settings.local.json was tracked in git AND contained the Supabase anon JWT in committed permission entries; the same JWT also appears in git history (lib/core/constants/app_constants.dart commit ef878af, removed in 5c40925) so simple file removal does not retire the leaked credential.
+
+### promote_community_item_admin_gate (1 bugs)
+- 2026-05-11 7ad0c5 — promote-community-item ran as service-role with verify_jwt only at gateway level - any authenticated user could call POST functions v1 promote-community-item and trigger global writes to food_database and exercise_library. The 10-vote community threshold was the only caller-identity gate.
 
 ### profile_signout_auth_notifier (1 bugs)
 - 2026-05-11 7ad0ca — `ProfileScreen._performSignOut` called `supabase.auth.signOut()` + `UserRepository.clearAllData()` directly, bypassing `AuthNotifier.signOut()` and — critically — skipping `HiveUserSession.deleteAllFilesForCurrentUser()`. Per-user namespaced Hive files survived on disk after sign-out → re-opens the cross-account leak class that CLAUDE.md §19 documents as closed by namespacing. Next sign-in's legacy migration sweep could re-import them.
@@ -444,11 +450,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### chat_workout_draft_write_service (1 bugs)
 - 2026-05-11 7ad0c8 — `submitWorkoutDraft` (the chat-confirmation handler for AI-coach-detected workouts) wrote `exlog_<ts>_<hash>` and `wlog_<ts>` rows directly to Hive with the *legacy* field shape (`sets_completed`, no `sets[]`, no `set_number`, no IST-stable key, no per-set rows). Bypassed `WorkoutWriteService`. Result — receipts and AI snapshot readers (`_getThisWeekWorkouts` / `_getPersonalRecords` / `_getMealsToday`) silently dropped every chat-confirmed workout because they filter on the new field shape introduced by Test #8. AI coach gave advice based on a workout history that excluded every "I did 3x10 squats" message the user confirmed.
 
-### anon_jwt_leak (1 bugs)
-- 2026-05-11 7ad0c3 — .claude/settings.local.json was tracked in git AND contained the Supabase anon JWT in committed permission entries; the same JWT also appears in git history (lib/core/constants/app_constants.dart commit ef878af, removed in 5c40925) so simple file removal does not retire the leaked credential.
-
-### promote_community_item_admin_gate (1 bugs)
-- 2026-05-11 7ad0c5 — promote-community-item ran as service-role with verify_jwt only at gateway level - any authenticated user could call POST functions v1 promote-community-item and trigger global writes to food_database and exercise_library. The 10-vote community threshold was the only caller-identity gate.
+### reactive_subscription_three_sites (1 bugs)
+- 2026-05-11 7ad0cd — 3 surfaces (`userStatsProvider`, `train_screen` WeekSelector.onSelect, `swap_sheet`) snapshot `SubscriptionService.instance.isPro()` at build/init time and never reactively rebuild when the user upgrades to PRO mid-session. Same stale-PRO class APK Test #12 / C-2 already closed for the home screen + roadmap surfaces. Result — user pays for PRO, the stats card still says "free", week selector still routes to the read-only preview screen, swap sheet still enforces free-tier restrictions until the page is reopened.
 
 ### workout_template_sync (1 bugs)
 - 2026-05-10 a8b2c7 — _syncWorkoutTemplates used a DELETE-then-INSERT pattern for child template_exercises rows. If the DELETE succeeded but a subsequent INSERT errored mid-loop (network blip, FK constraint, payload error), the user's template was left with PARTIAL children — half the exercises missing, no audit trail. Next sync re-DELETED + tried again. Idempotent on success but lossy on partial failure.
@@ -519,6 +522,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-05-30 | e3f1a7 | > | weight_logs_realtime_stream | test/contracts/weight_logs_realtime_publication_test.dart |
 | 2026-05-30 | b1f4d2 | > | train_plan_header_render | scripts/check_container_color_decoration.dart |
 | 2026-05-30 | a7c3e1 | > | user_stat_snapshot_7d_averages | test/contracts/stat_snapshot_7d_averages_columns_test.dart |
 | 2026-05-30 | e2a4f7 | > | onboarding_completed_at | test/contracts/auth_session_bootstrapper_test.dart |
@@ -566,7 +570,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-18 | s1n4c0 | \| | swap_undo_snackbar_modal_stack | test/features/train/swap_undo_snackbar_dismisses_test.dart |
 | 2026-05-18 | f8c1a5 | \| | streak_freeze_value_clamp_on_read | test/contracts/streak_freeze_value_clamped_on_read_test.dart |
 | 2026-05-18 | t1m5b0 | \| | ai_tool_wall_clock_and_media_proxy_error_class | test/contracts/get_progress_summary_parallel_queries_test.dart |
-| 2026-05-17 | 8d85c2 | \| | workout_read_service | test/contracts/workout_read_service_per_set_semantic_test.dart |
+| 2026-05-17 | c0e3a5 | \| | snapshot_contract_enforcement | test/contracts/snapshot_contract_gate_test.dart |
+| 2026-05-17 | 9d2a47 | \| | partial_unique_arbiter_safety | test/contracts/partial_unique_arbiter_inventory_test.dart |
 | 2026-05-17 | 7faa3b | \| | snapshot_writer_contract | test/contracts/snapshot_orphan_reader_aliases_test.dart |
 | 2026-05-17 | 41507e | \| | current_streak_single_reader | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | 40c401 | \| | paywall_single_purchase_path | test/contracts/phase_c_oi_closures_test.dart |
@@ -585,23 +590,21 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-17 | b3e052 | \| | verify_payment_payload_completeness | test/contracts/verify_payment_payload_completeness_test.dart |
 | 2026-05-17 | 9a7c14 | \| | razorpay_webhook_handler_correctness | test/contracts/razorpay_webhook_supabase_client_decl_order_test.dart |
 | 2026-05-17 | 93aeac | \| | ai_snapshot_building | test/contracts/snapshot_contract_self_consistency_test.dart |
-| 2026-05-17 | c0e3a5 | \| | snapshot_contract_enforcement | test/contracts/snapshot_contract_gate_test.dart |
-| 2026-05-17 | 9d2a47 | \| | partial_unique_arbiter_safety | test/contracts/partial_unique_arbiter_inventory_test.dart |
 | 2026-05-17 | 4dd7e2 | \| | restore_completeness_symmetric | test/contracts/restore_round_trip_field_coverage_test.dart |
+| 2026-05-17 | 8d85c2 | \| | workout_read_service | test/contracts/workout_read_service_per_set_semantic_test.dart |
 | 2026-05-17 | 0a1e17 | \| | reader_manifest_exhaustive_completeness | test/contracts/reader_manifest_exhaustiveness_test.dart |
 | 2026-05-17 | 7c4e5d | \| | marked_done_without_logging_ux | test/contracts/marked_done_vs_logged_ux_test.dart |
 | 2026-05-17 | 3a7c1e | \| | cross_account_guard_exempt_declaration | test/contracts/auth_invalidation_contract_test.dart |
-| 2026-05-16 | 1bfeed | \| | onboarding_completed_at | test/contracts/onboarding_completed_migrated_key_test.dart |
-| 2026-05-16 | 2c1c0d | \| | prediction_card_display | test/contracts/prediction_card_onboarding_copy_test.dart |
+| 2026-05-16 | 913261 | \| | ai_media_proxy_status_code_classification | test/contracts/ai_media_proxy_status_code_classification_test.dart |
+| 2026-05-16 | 2026-05-16-rank-widget-migration |  |  |  |
 | 2026-05-16 | 2026-05-16-terms-accepted-at-dpdp | \| | terms_acceptance_audit_trail | test/contracts/terms_signup_writes_test.dart |
 | 2026-05-16 | 2026-05-16-telemetry-hardening | Telemetry framework had five compounding observability gaps surfaced by audit Agent 7 — no success-path emission on 5 low-usage sync methods (cannot distinguish "feature unused" from "silently failing"), no cron-execution telemetry (F10.5), no `_shared/cron_auth.ts` (F9.1 — Test #16 P1-D drift class), generic numbered op_types defeating triage (F10.3), and undetected HIGH_PRIORITY_OP_TYPES client/server drift (F10.4). | ErrorTelemetry + sync success/failure signal + cron auth | test/contracts/high_priority_op_types_parity_test.dart |
 | 2026-05-16 | 2026-05-16-sync-coach-cross-channel-dedup |  |  |  |
 | 2026-05-16 | 5beed5 | \| | sleep_logs | test/contracts/sleep_chat_routes_through_health_write_service_test.dart |
+| 2026-05-16 | 2026-05-16-logpr-bypass |  |  |  |
 | 2026-05-16 | 2026-05-16-schedule-completion-duration | \| | workout_schedule_completion_cloud_projection | test/contracts/schedule_completion_duration_writer_to_reader_test.dart |
-| 2026-05-16 | e7a516 | \| | health_write_service | "test/contracts/health_write_service_writer_to_reader_test.dart" |
-| 2026-05-16 | 2026-05-16-referral-restore-completeness | \| | referral_restore_completeness | test/contracts/restore_completeness_writes_test.dart |
 | 2026-05-16 | daffac | \| | workout_log_id_session_scoping | test/contracts/load_all_exercise_prs_per_set_semantic_test.dart |
-| 2026-05-16 | 2026-05-16-rank-widget-migration |  |  |  |
+| 2026-05-16 | 2026-05-16-referral-restore-completeness | \| | referral_restore_completeness | test/contracts/restore_completeness_writes_test.dart |
 | 2026-05-16 | 2026-05-16-ai-proxy-placeholder-resolution |  |  |  |
 | 2026-05-16 | a17bc3 | Founder's `ai_coach_interactions` table shows 6 rows for the same `user_message='curd 200gms whey 1.5 scoops cashew 6'` (3 timestamps × 2 channels). Each "Analyze with AI" tap during Gemini 502 storm produced (a) a Hive `coach_*` row, (b) a server-side placeholder row (channel=food_text_analysis, model_used=pending), and (c) a sync-time orphan row (channel=in_app_orphan). No client-side circuit breaker — user can tap retry indefinitely and each tap fans out to 3 cloud rows. | ai_coach_interactions_dedup | test/ai_coach/coach_writer_dedup_test.dart |
 | 2026-05-16 | 2026-05-16-dead-columns-dropped |  |  |  |
@@ -609,41 +612,42 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-16 | a16c1a | \| | exlog_key_sot | test/contracts/exlog_key_canonical_test.dart |
 | 2026-05-16 | de29b8 |  |  |  |
 | 2026-05-16 | 2026-05-16-gate-coverage-and-dead-code |  |  |  |
-| 2026-05-16 | 2026-05-16-logpr-bypass |  |  |  |
+| 2026-05-16 | e7a516 | \| | health_write_service | "test/contracts/health_write_service_writer_to_reader_test.dart" |
 | 2026-05-16 | 9d12af | \| | client_errors_telemetry_pipeline | test/safety/error_telemetry_rate_limit_test.dart |
+| 2026-05-16 | 1bfeed | \| | onboarding_completed_at | test/contracts/onboarding_completed_migrated_key_test.dart |
 | 2026-05-16 | 2026-05-16-workout-schedule-service-bypass |  |  |  |
-| 2026-05-16 | 913261 | \| | ai_media_proxy_status_code_classification | test/contracts/ai_media_proxy_status_code_classification_test.dart |
 | 2026-05-16 | 5bea3e | \| | ai_media_proxy_classification | test/contracts/edge_function_storage_race_retry_test.dart |
 | 2026-05-16 | cb1ab1 | \| | exercise_personal_records | test/contracts/load_all_exercise_prs_per_set_semantic_test.dart |
-| 2026-05-15 | a5d29c | \| | custom_exercises_mutations | test/widgets/swap_sheet_custom_exercises_test.dart |
+| 2026-05-16 | 2c1c0d | \| | prediction_card_display | test/contracts/prediction_card_onboarding_copy_test.dart |
+| 2026-05-15 | 9f4ab2 | \| | sync_natural_key_guard | test/contracts/sync_natural_key_guard_test.dart |
 | 2026-05-15 | c01d57 | \| | edge_function_cold_start_resilience | test/contracts/edge_function_cold_start_retry_behavioral_test.dart |
 | 2026-05-15 | 4e9515 | Founder asked for a "debugging" skill earlier in the session; both `superpowers:debugging` and `debugging` returned `Unknown skill`. The project's `.claude/skills/` directory did not exist. Debugging methodology was tribal knowledge spread across CLAUDE.md §19, MEMORY.md feedback_* files, and project_apk_test_*.md retrospectives — not invocable as a single skill. Result: every batch since Test #6 has re-discovered the same writer/reader drift class because the methodology to catch it was undocumented as a skill. | debugging_methodology | "n/a — process discipline addition; the SKILL.md file itself is the contract, and § 5 self-evolution rule is enforced by the next debugging session's output contract (§ 4)" |
 | 2026-05-15 | 25e91d | \| | cloud_upsert_natural_key_contract | test/sql/onconflict_live_arbiter.sql |
 | 2026-05-15 | 76c8f4 | PostgREST raises 42P10 "no unique or exclusion constraint matching the ON CONFLICT specification" on every upsert to workout_logs (onConflict=user_id,date,exercise_name), workout_log_exercises (onConflict=workout_log_id,exercise_id,set_number) and nutrition_logs (onConflict=user_id,date,meal_type); 47 client_errors rows for a single user in a 60-second window on 2026-05-15 04:10 UTC. | sync_fanout_workout_domain | test/contracts/sync_onconflict_natural_key_test.dart |
 | 2026-05-15 | 5a65bd | pr-detection Edge Function cron returns 401 every 15 minutes; same shape affects 6 other C-4-gated proactive trigger functions (re-engagement, plateau-alert, protein-gap-alert, workout-window-closing, evaluate-rank-promotions, streak-guardian, i-see-you-callout, clean-orphan-media — every function with verify_jwt=false that imports the C-4 in-function cron-auth-gate). | cron_auth | "n/a — operational/config drift, not field-rename class" |
-| 2026-05-15 | 9f4ab2 | \| | sync_natural_key_guard | test/contracts/sync_natural_key_guard_test.dart |
-| 2026-05-12 | b3c8d2 | Founder's templates "Back Day A", "Leg Day A", "Push Day" each showed 14-15 exercise rows with only 4-5 distinct names ("triplicated"). Editing the template + removing duplicates + saving brought the dupes back on next reopen. | template_exercises_cloud_tail_rows | test/contracts/template_exercises_tail_vacuum_test.dart |
+| 2026-05-15 | a5d29c | \| | custom_exercises_mutations | test/widgets/swap_sheet_custom_exercises_test.dart |
 | 2026-05-12 | 6e1b45 | \| | exercise_set_field_name_contract | test/contracts/timed_exercise_render_contract_test.dart |
 | 2026-05-12 | a9f3d2 | Home today-card showed "BACK DAY A · DONE" (green DONE pill) for Sat May 9, but the calendar-strip's Sat May 9 cell showed only the gold today-border with NO checkmark, while earlier completed days (Mon May 4) correctly showed a checkmark. | workout_completion_status | "must add: test/contracts/today_card_vs_calendar_strip_same_source_test.dart" |
 | 2026-05-12 | a13a01 | User asks AI coach "how was my workout today?" after partially completing a Pull-day session (logged 4 of 8 prescribed exercises — Lat Pulldown, Dumbbell Row, Hanging Leg Raise, Concentration Curl). Coach replied with the FULL planned 8-exercise list as if everything had been completed, because today_workout.exercises emits the schedule_<date> entry verbatim regardless of how many exlog_* rows exist for the day. | today_workout_snapshot_reads_logged | "test/contracts/today_workout_reads_logged_contract_test.dart" |
-| 2026-05-12 | c7d4f6 | After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile']. | hive_user_session_static_state | test/safety/hive_user_session_concurrency_test.dart |
+| 2026-05-12 | d8e5b3 | Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry. | ai_media_proxy_error_handling | test/contracts/ai_media_proxy_telemetry_test.dart |
 | 2026-05-12 | 7bd154 | After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner. | cross_account_riverpod_cache_race | test/contracts/auth_invalidation_timing_test.dart |
+| 2026-05-12 | c4055a | \| | user_scoped_riverpod_providers | test/contracts/auth_invalidation_contract_test.dart |
 | 2026-05-12 | 7c4e1a | User tapped "Analyse & Log" on Nutrition → Log Food → AI tab. Got toast "The AI is temporarily unavailable. Please try again in a minute." Same error class also fires from AI coach `logMealByText` tool dispatch when ai-proxy is cold. Edge-function logs show two consecutive POST /ai-proxy 502 BAD_GATEWAY at 05:08:05 UTC (8475 ms) and 05:08:13 UTC (6654 ms); the next successful call ~3 min later took 20219 ms (warm-start completion). | edge_function_cold_start_resilience | test/contracts/retry_loop_guard_test.dart |
-| 2026-05-12 | b7e3f1 | On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10. | day_rollover_provider_invalidation | "test/contracts/cold_start_day_rollover_test.dart" |
 | 2026-05-12 | a2b3c4 | \| | workout_receipt_rendering | test/contracts/duration_seconds_aggregate_populated_test.dart |
 | 2026-05-12 | 0a7b9f | Two surfaces affected. (G) Food text analysis returned "The AI is temporarily unavailable. Please try again in a minute." after the user typed a meal description and tapped Analyse & Log. (H) Telemetry shows push_snapshot FunctionException(status 503, BOOT_ERROR) for sumit1 at 06:46 UTC. | edge_function_cold_start_resilience | test/contracts/edge_function_503_retry_test.dart |
 | 2026-05-12 | f4c9e1 | After completing today's morning workout via the active-workout flow, the Edit Workout Log sheet shows "No exercise logs for this day" — blank. Cloud workout_log_exercises HAS the 5 rows for the founder on 2026-05-11 (completed_at 05:19 UTC = May 11 10:49 IST). Local Hive also has them at correct keys. | exercise_logs_read_path | test/contracts/edit_log_id_injection_test.dart |
 | 2026-05-12 | e1f8a2 | \| | exercise_log_per_set | test/contracts/edit_workout_log_sets_field_contract_test.dart |
 | 2026-05-12 | a8f1c2 | "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session [10,15,10,15,10,10,15]; weight_kg field similarly carries the max of the previous session's per-set weights instead of the first set's weight." | last_performance_per_set_semantics | test/contracts/last_performance_per_set_contract_test.dart |
-| 2026-05-12 | d8e5b3 | Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry. | ai_media_proxy_error_handling | test/contracts/ai_media_proxy_telemetry_test.dart |
 | 2026-05-12 | 8c4ee3 | After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and physique_focus='balanced'. Muster answers persisted to coachBox only and never bridged into userBox['profile'] — the AI coach saw the answers, but Edit Profile and the plan generator did not. | muster_to_profile_bridge | test/contracts/muster_profile_bridge_test.dart |
+| 2026-05-12 | 8f3d22 | \| | scheduled_workouts_mutations | test/contracts/template_schedule_completed_day_test.dart |
 | 2026-05-12 | e6a2d4 | "LAST: 50KG · 135 REPS" rendered above Leg Extension in active workout screen — 135 reps per set is unrealistic. Cloud `workout_log_exercises` had 3 corrupt rows from May 7 with set_number=15 + reps=110-150 (bulk-completion aggregates misinterpreted as per-set). | workout_log_exercises_input_validation | test/contracts/rep_input_validation_test.dart |
 | 2026-05-12 | 9e2c1a | \| | scheduled_workouts_mutations | test/contracts/restore_template_schedule_test.dart |
 | 2026-05-12 | d4e9c1 | \| | workout_completion_status | test/contracts/logout_login_round_trip_test.dart |
 | 2026-05-12 | a2f9e1 | Home renders "Something went wrong" ErrorState after the user schedules a custom template for today. Crash repeats on every cold-start. Telemetry shows 5x widget_error_fallback with message "type 'String' is not a subtype of type 'int?' in type cast". | schedule_exercise_field_types | test/contracts/schedule_exercise_field_types_test.dart |
 | 2026-05-12 | 3f8a91 | \| | cloud_upsert_natural_key_contract | test/contracts/sync_onconflict_natural_key_test.dart |
-| 2026-05-12 | 8f3d22 | \| | scheduled_workouts_mutations | test/contracts/template_schedule_completed_day_test.dart |
-| 2026-05-12 | c4055a | \| | user_scoped_riverpod_providers | test/contracts/auth_invalidation_contract_test.dart |
+| 2026-05-12 | b3c8d2 | Founder's templates "Back Day A", "Leg Day A", "Push Day" each showed 14-15 exercise rows with only 4-5 distinct names ("triplicated"). Editing the template + removing duplicates + saving brought the dupes back on next reopen. | template_exercises_cloud_tail_rows | test/contracts/template_exercises_tail_vacuum_test.dart |
+| 2026-05-12 | c7d4f6 | After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile']. | hive_user_session_static_state | test/safety/hive_user_session_concurrency_test.dart |
+| 2026-05-12 | b7e3f1 | On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10. | day_rollover_provider_invalidation | "test/contracts/cold_start_day_rollover_test.dart" |
 | 2026-05-11 | 7ad0cc | No source-grep guardrail enforced the WriteService SoT contract for `exlog_*`, `wlog_*`, `nlog_*`, `saved_meal_*` Hive prefixes. C-8 + C-12 closed half a dozen bypass sites manually; without a detector, new code can re-open the class. While writing the detector, a 7th bypass was caught — `_relogFromHistory` in `search_mode_body.dart` wrote `nlog_<ts>` directly with the legacy flat-totals shape (no items[]), same C-12 sibling class. | write_service_bypass_detector | test/contracts/write_service_bypass_detector_test.dart |
 | 2026-05-11 | 7ad029 | 35 RLS policies on UPDATE / ALL had USING expressions but no WITH CHECK; meaning a user could UPDATE their own row's user_id to another user's UUID, transferring or poisoning cross-user data. | rls_with_check_completeness | "n/a — SQL-only migration verified via MCP query (0 missing post-apply)" |
 | 2026-05-11 | 7ad0cb | `TemplatesNotifier.saveTemplate` + `.updateTemplate` wrote `tmpl_*` rows to Hive but fired NO cloud sync — `workout_templates`/`template_exercises` rows only reached cloud via weekly full sync (up to 24h delay). `TemplatesNotifier.deleteTemplate` fired `pushSnapshot` but missed `syncWorkoutData`, so the cloud `workout_templates` row stayed orphaned forever — next restore re-imported the "deleted" template. | templates_sync_fanout | test/sync/template_sync_gap_test.dart |
@@ -654,7 +658,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-11 | 7ad0d0 | `catch (e) { debugPrint(...); }` patterns across `lib/core/services/` + `lib/shared/repositories/` logged to the device console but emitted NO Crashlytics signal + NO `client_errors` row. Production users hit the bug, devs never saw it. Multiple instances over Test #12 series + this audit (Bug A, C-2, rank_service hot path) traced back to this silent-swallow class. | silent_debugprint_catch | test/contracts/no_silent_debugprint_in_services_test.dart |
 | 2026-05-11 | 7ad035 | 5 SECURITY DEFINER functions had no search_path config (injection risk); coach_tool_invocations_v view ran as creator bypassing RLS; 9 SECURITY DEFINER functions granted EXECUTE to anon and authenticated allowing PostgREST RPC bypass of Edge Function business rules. | security_definer_hardening | "n/a — SQL-only migration verified via MCP pre/post queries" |
 | 2026-05-11 | 7ad054 | rank_ladder had RLS enabled with zero policies (deny-all client reads); promo_code_uses INSERT policy was scoped to roles=public with WITH CHECK=true allowing any authenticated user to insert audit rows directly via PostgREST. | rls_policy_cleanup | "n/a — SQL-only migration verified via MCP pre/post queries" |
-| 2026-05-11 | 7ad0cd | 3 surfaces (`userStatsProvider`, `train_screen` WeekSelector.onSelect, `swap_sheet`) snapshot `SubscriptionService.instance.isPro()` at build/init time and never reactively rebuild when the user upgrades to PRO mid-session. Same stale-PRO class APK Test #12 / C-2 already closed for the home screen + roadmap surfaces. Result — user pays for PRO, the stats card still says "free", week selector still routes to the read-only preview screen, swap sheet still enforces free-tier restrictions until the page is reopened. | reactive_subscription_three_sites | test/contracts/reactive_subscription_three_sites_test.dart |
+| 2026-05-11 | 7ad0c3 | .claude/settings.local.json was tracked in git AND contained the Supabase anon JWT in committed permission entries; the same JWT also appears in git history (lib/core/constants/app_constants.dart commit ef878af, removed in 5c40925) so simple file removal does not retire the leaked credential. | anon_jwt_leak | "n/a — JWT rotation is a Supabase Dashboard action (user-action U-2)" |
+| 2026-05-11 | 7ad0c5 | promote-community-item ran as service-role with verify_jwt only at gateway level - any authenticated user could call POST functions v1 promote-community-item and trigger global writes to food_database and exercise_library. The 10-vote community threshold was the only caller-identity gate. | promote_community_item_admin_gate | "n/a — Edge Function gate change verified via curl pre + post deploy" |
 | 2026-05-11 | 7ad0ca | `ProfileScreen._performSignOut` called `supabase.auth.signOut()` + `UserRepository.clearAllData()` directly, bypassing `AuthNotifier.signOut()` and — critically — skipping `HiveUserSession.deleteAllFilesForCurrentUser()`. Per-user namespaced Hive files survived on disk after sign-out → re-opens the cross-account leak class that CLAUDE.md §19 documents as closed by namespacing. Next sign-in's legacy migration sweep could re-import them. | profile_signout_auth_notifier | test/contracts/profile_signout_routes_through_auth_notifier_test.dart |
 | 2026-05-11 | 7ad0da | Phase 8 cleanup catch-all. (Hive sequential) `HiveService.init` opened 9 shared boxes serially via a for-loop — sequential file I/O wasted 150-300 ms of cold-start time. (community_review_sheet `as Map`) two `f as Map` / `e as Map` casts at lines 71+77 would TypeError on a non-Map row (PostgREST schema drift would crash the sheet). (H-42 retrofit batch) 28 grandfathered `catch (e) { debugPrint(...) }` sites remain after the audit's first batch; 4 hot-path services retained the silent-swallow pattern — health_sync_service (4 sites — fires on every splash), razorpay_service (8 sites — payment flow), stat_snapshot_service (5 sites — onboarding + promotion + manual snapshots), subscription_service (1 site — refreshFromSupabase failures only surfaced via the log-client-error helper, not Crashlytics). | phase8_cleanup | test/contracts/no_silent_debugprint_in_services_test.dart |
 | 2026-05-11 | 7ad0d9 | 10+ critical end-to-end flows had no integration test coverage at all — Razorpay purchase (the entire payment stack), sign-up + onboarding traverse, delete-account (DPDP §17 irreversible), cross-account isolation, cross-device restore, workout completion → receipt → share, streak freeze refill ↔ consume, plan generator → first workout, custom exercise submission flow, promo code apply, AI coach tool-calling. Audit recommended building out the scaffolding even if the bodies are skipped pending device-CI infrastructure. | phase7_integration_scaffolds | test/contracts/phase7_integration_scaffolds_present_test.dart |
@@ -673,8 +678,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-11 | 7ad0c6 | splash_screen.dart cross-account Hive leak guard was a no-op on every cold start. `HiveService.instance.userBox` is a `GuardedBox` that throws `HiveUserSession not opened` before any `openForUser` has run; the try/catch swallowed it and the guard never executed. Android Auto Backup restores / dev-build Hive copies / legacy migration races could leave a foreign profile.id inside the new user's namespaced box and the safety net CLAUDE.md §19 promises did not actually run. | cross_account_guard_on_open | test/safety/cross_account_guard_on_open_test.dart |
 | 2026-05-11 | 7ad0c4 | 8 cron Edge Functions had verify_jwt false at the gateway AND no manual auth check at handler entry. Anyone with the function URL could trigger expensive Gemini fanout, OneSignal pushes, or DB scans across the entire user base. | cron_auth_gate | "n/a — Edge Function gate verified per-function via curl" |
 | 2026-05-11 | 7ad0c8 | `submitWorkoutDraft` (the chat-confirmation handler for AI-coach-detected workouts) wrote `exlog_<ts>_<hash>` and `wlog_<ts>` rows directly to Hive with the *legacy* field shape (`sets_completed`, no `sets[]`, no `set_number`, no IST-stable key, no per-set rows). Bypassed `WorkoutWriteService`. Result — receipts and AI snapshot readers (`_getThisWeekWorkouts` / `_getPersonalRecords` / `_getMealsToday`) silently dropped every chat-confirmed workout because they filter on the new field shape introduced by Test #8. AI coach gave advice based on a workout history that excluded every "I did 3x10 squats" message the user confirmed. | chat_workout_draft_write_service | test/contracts/conversational_log_handler_uses_write_service_test.dart |
-| 2026-05-11 | 7ad0c3 | .claude/settings.local.json was tracked in git AND contained the Supabase anon JWT in committed permission entries; the same JWT also appears in git history (lib/core/constants/app_constants.dart commit ef878af, removed in 5c40925) so simple file removal does not retire the leaked credential. | anon_jwt_leak | "n/a — JWT rotation is a Supabase Dashboard action (user-action U-2)" |
-| 2026-05-11 | 7ad0c5 | promote-community-item ran as service-role with verify_jwt only at gateway level - any authenticated user could call POST functions v1 promote-community-item and trigger global writes to food_database and exercise_library. The 10-vote community threshold was the only caller-identity gate. | promote_community_item_admin_gate | "n/a — Edge Function gate change verified via curl pre + post deploy" |
+| 2026-05-11 | 7ad0cd | 3 surfaces (`userStatsProvider`, `train_screen` WeekSelector.onSelect, `swap_sheet`) snapshot `SubscriptionService.instance.isPro()` at build/init time and never reactively rebuild when the user upgrades to PRO mid-session. Same stale-PRO class APK Test #12 / C-2 already closed for the home screen + roadmap surfaces. Result — user pays for PRO, the stats card still says "free", week selector still routes to the read-only preview screen, swap sheet still enforces free-tier restrictions until the page is reopened. | reactive_subscription_three_sites | test/contracts/reactive_subscription_three_sites_test.dart |
 | 2026-05-10 | a8b2c7 | _syncWorkoutTemplates used a DELETE-then-INSERT pattern for child template_exercises rows. If the DELETE succeeded but a subsequent INSERT errored mid-loop (network blip, FK constraint, payload error), the user's template was left with PARTIAL children — half the exercises missing, no audit trail. Next sync re-DELETED + tried again. Idempotent on success but lossy on partial failure. | workout_template_sync | test/contracts/template_exercises_upsert_test.dart |
 | 2026-05-10 | a7c1e2 | Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates. | workout_completion_status | test/contracts/stale_completion_guard_test.dart |
 | 2026-05-10 | e3f7a8 | A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 + B.2 ship, future writes stay consistent — but existing divergence won't self-heal without an explicit re-push. | workout_completion_status | test/safety/scheduled_workouts_resync_migrator_test.dart |
