@@ -457,14 +457,19 @@ class StatSnapshotService {
           .select('total_calories, total_protein')
           .eq('user_id', userId)
           .gte('date', since);
+      // Schema-ref fix (diagnose a7c3e1, 2026-05-30): daily_steps has column
+      // `steps` (NOT `total_steps`) and sleep_logs has `duration_hrs` (NOT
+      // `hours`). The prior column names threw 42703 → the whole try block
+      // jumped to catch → every 7d average returned 0 for promotion + manual
+      // snapshots. Verified against live information_schema 2026-05-30.
       final stepRows = await supa
           .from('daily_steps')
-          .select('total_steps')
+          .select('steps')
           .eq('user_id', userId)
           .gte('date', since);
       final sleepRows = await supa
           .from('sleep_logs')
-          .select('hours')
+          .select('duration_hrs')
           .eq('user_id', userId)
           .gte('date', since);
 
@@ -478,9 +483,9 @@ class StatSnapshotService {
       return {
         'calories': avg(nutrRows as List, 'total_calories').round(),
         'protein': avg(nutrRows, 'total_protein').round(),
-        'steps': avg(stepRows as List, 'total_steps').round(),
-        'sleep':
-            double.parse(avg(sleepRows as List, 'hours').toStringAsFixed(1)),
+        'steps': avg(stepRows as List, 'steps').round(),
+        'sleep': double.parse(
+            avg(sleepRows as List, 'duration_hrs').toStringAsFixed(1)),
       };
     } catch (e, st) {
       debugPrint('[StatSnapshotService._compute7dAverages] $e');

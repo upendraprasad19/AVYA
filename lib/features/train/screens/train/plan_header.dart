@@ -24,7 +24,11 @@ extension _PlanHeader on _TrainScreenState {
     final currentPhase = (progressPhase['current_phase'] as int?) ?? 1;
 
     return Container(
-      color: AppColors.bgDeep,
+      // diagnose b1f4d2 (2026-05-30): a Container cannot take BOTH `color:`
+      // and `decoration:` — the container.dart:277 assert throws in debug
+      // (caught by TrainScreen._buildContent → "Failed to load workouts" — the
+      // whole tab dies in debug/web). The decoration already paints bgDeep, so
+      // the redundant top-level color is removed.
       padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
       decoration: const BoxDecoration(
         color: AppColors.bgDeep,

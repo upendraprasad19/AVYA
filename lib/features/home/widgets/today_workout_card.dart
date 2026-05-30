@@ -534,33 +534,49 @@ class _MacroRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTypography.monoXs.copyWith(
-                  fontSize: 10,
-                  letterSpacing: 1.2,
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w700,
+              // diagnose c9e0a4 (2026-05-30): label + number must shrink to fit
+              // the narrow right-column macro tile, not overflow (RenderFlex
+              // right-overflow 12/29/9.5px on Home Today card). Label ellipsizes;
+              // the number scales down via FittedBox so it never clips.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const Spacer(),
-              RichText(
-                text: TextSpan(
-                  style: AppTypography.titleL.copyWith(
-                    fontSize: 16,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.2,
-                  ),
-                  children: [
-                    TextSpan(text: currentLabel),
-                    TextSpan(
-                      text: targetLabel,
-                      style: const TextStyle(
-                        color: AppColors.textDim,
-                        fontSize: 13,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: RichText(
+                    maxLines: 1,
+                    text: TextSpan(
+                      style: AppTypography.titleL.copyWith(
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.2,
                       ),
+                      children: [
+                        TextSpan(text: currentLabel),
+                        TextSpan(
+                          text: targetLabel,
+                          style: const TextStyle(
+                            color: AppColors.textDim,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],

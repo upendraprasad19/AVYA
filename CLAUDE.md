@@ -414,6 +414,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Common pitfalls (cross-domain) | `docs/playbook/common-pitfalls.md` |
 | Bug history index | `docs/diagnoses/INDEX.md` (auto-generated; regenerated on commit) |
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
+| Live schema column snapshot (Gate: `check_schema_column_refs.dart` validates every client `.from().select/eq/gte/order` column ref) | `backups/live_schema_columns.json` — **regenerate in the SAME commit as any migration that adds/drops/renames a column** (regen SQL in the gate script header). Sibling gate `check_container_color_decoration.dart` blocks `Container(color:+decoration:)`. |
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry (53 lenses) | `docs/audit/LENS_REGISTRY.md` |
 | Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |
