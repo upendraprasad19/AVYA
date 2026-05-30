@@ -103,9 +103,16 @@ class AuthSessionBootstrapper {
   Future<PostSignInDestination> resolveDestination(String userId) async {
     return _withLock(userId, () async {
       try {
+        // NOTE: identity-step completion is detected via `date_of_birth`
+        // (a real `user_profile` column written by the onboarding identity
+        // screen → sync_profile.dart). Do NOT select `full_name` here — that
+        // column lives on the `users` table, NOT `user_profile`; selecting it
+        // raises PostgREST 42703 and the catch below silently degrades EVERY
+        // user to StartMissionBrief. See diagnose 2026-05-30-resolve-
+        // destination-full-name-drift.
         final row = await _supabase.client
             .from('user_profile')
-            .select('user_id, onboarding_completed_at, full_name, '
+            .select('user_id, onboarding_completed_at, date_of_birth, '
                 'primary_goal, current_weight_kg, fitness_experience')
             .eq('user_id', userId)
             .maybeSingle();
@@ -141,7 +148,10 @@ class AuthSessionBootstrapper {
     if (row['onboarding_completed_at'] != null) return const GoHome();
 
     // Row exists but onboarding_completed_at IS NULL → resume.
-    if (row['full_name'] == null) {
+    // `date_of_birth` is the identity-step sentinel (full_name is on the
+    // `users` table, not user_profile — see diagnose 2026-05-30-resolve-
+    // destination-full-name-drift).
+    if (row['date_of_birth'] == null) {
       return const ResumeOnboarding('identity');
     }
     if (row['primary_goal'] == null) {

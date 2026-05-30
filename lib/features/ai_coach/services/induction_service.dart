@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -19,11 +20,24 @@ class InductionService {
   static final InductionService instance = InductionService._();
   InductionService._();
 
-  bool get hasCommitted =>
-      HiveService.instance.coachBox.get('committed_to_lt_cdr') == true;
+  // Both getters read the USER-SCOPED `coachBox`, which throws
+  // "HiveUserSession not opened" if accessed before openForUser has run.
+  // GoRouter._authRedirect calls `inductionCompleted` at cold start (web
+  // reload / deep-link / process-death restore onto /coach/*), BEFORE the
+  // session opens — the throw escaped the redirect and crashed routing to a
+  // "Page Not Found" error page. Short-circuit to `false` when no session is
+  // open: induction state is simply unknown yet, and "not completed" is the
+  // safe default (the induction flow re-evaluates once the session opens).
+  // See diagnose 2026-05-30-induction-redirect-session-race.
+  bool get hasCommitted {
+    if (HiveUserSession.currentOwnerFullId == null) return false;
+    return HiveService.instance.coachBox.get('committed_to_lt_cdr') == true;
+  }
 
-  bool get inductionCompleted =>
-      HiveService.instance.coachBox.get('induction_completed_at') != null;
+  bool get inductionCompleted {
+    if (HiveUserSession.currentOwnerFullId == null) return false;
+    return HiveService.instance.coachBox.get('induction_completed_at') != null;
+  }
 
   /// Records the I COMMIT tap. Writes Hive immediately, fires sync to Supabase
   /// fire-and-forget per CLAUDE.md §15.

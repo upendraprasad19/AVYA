@@ -2817,15 +2817,19 @@ concepts:
           Hive routes to resume-onboarding. NOT NULL routes to /home
           (15s timeout safety).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 95-145
+        line_range: 103-160
         method: AuthSessionBootstrapper.resolveDestination
         semantic: flag-check
-        fields_read: [user_id, onboarding_completed_at, full_name, primary_goal, current_weight_kg, fitness_experience]
+        fields_read: [user_id, onboarding_completed_at, date_of_birth, primary_goal, current_weight_kg, fitness_experience]
         notes: |
           New canonical reader (audit 2026-05-20 / A1 + A9). Owns the
           three-way classification (GoHome / ResumeOnboarding(step) /
           StartMissionBrief). Pure decision logic exposed via
-          @visibleForTesting classifyDestination(row).
+          @visibleForTesting classifyDestination(row). 2026-05-30 (diagnose
+          e2a4f7): SELECT + identity-step check key off date_of_birth, NOT
+          full_name — full_name lives on `users`, not user_profile (prior
+          full_name read 42703'd every call; cf. user_full_name concept
+          constraint "user_profile has no full_name column").
       - file: lib/core/router/app_router.dart
         line_range: 549-560
         method: _authRedirect (onboarding gate)

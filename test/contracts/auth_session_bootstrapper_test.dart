@@ -35,7 +35,7 @@ void main() {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': '2026-05-20T12:00:00Z',
-        'full_name': 'Test User',
+        'date_of_birth': '2001-01-01',
         'primary_goal': 'muscle_gain',
         'current_weight_kg': 75.0,
         'fitness_experience': 'intermediate',
@@ -43,13 +43,18 @@ void main() {
       expect(result, isA<GoHome>());
     });
 
+    // NOTE: the identity step is detected via `date_of_birth` (a real
+    // user_profile column written by the onboarding identity screen +
+    // sync_profile.dart:84), NOT `full_name`. `full_name` lives on the
+    // `users` table — querying it from user_profile 42703s. Regression
+    // guard for diagnose 2026-05-30-resolve-destination-full-name-drift.
     test(
-        'row with onboarding_completed_at NULL + null full_name → '
+        'row with onboarding_completed_at NULL + null date_of_birth → '
         "ResumeOnboarding('identity')", () {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': null,
-        'full_name': null,
+        'date_of_birth': null,
         'primary_goal': null,
         'current_weight_kg': null,
         'fitness_experience': null,
@@ -59,12 +64,12 @@ void main() {
     });
 
     test(
-        'completed_at NULL + name set, goal null → '
+        'completed_at NULL + date_of_birth set, goal null → '
         "ResumeOnboarding('goal')", () {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': null,
-        'full_name': 'Test User',
+        'date_of_birth': '2001-01-01',
         'primary_goal': null,
         'current_weight_kg': null,
         'fitness_experience': null,
@@ -74,12 +79,12 @@ void main() {
     });
 
     test(
-        'completed_at NULL + name + goal set, weight null → '
+        'completed_at NULL + dob + goal set, weight null → '
         "ResumeOnboarding('stats')", () {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': null,
-        'full_name': 'Test User',
+        'date_of_birth': '2001-01-01',
         'primary_goal': 'muscle_gain',
         'current_weight_kg': null,
         'fitness_experience': null,
@@ -89,12 +94,12 @@ void main() {
     });
 
     test(
-        'completed_at NULL + name + goal + weight set, experience null → '
+        'completed_at NULL + dob + goal + weight set, experience null → '
         "ResumeOnboarding('details')", () {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': null,
-        'full_name': 'Test User',
+        'date_of_birth': '2001-01-01',
         'primary_goal': 'muscle_gain',
         'current_weight_kg': 75.0,
         'fitness_experience': null,
@@ -109,7 +114,7 @@ void main() {
       final result = AuthSessionBootstrapper.classifyDestination({
         'user_id': 'u1',
         'onboarding_completed_at': null,
-        'full_name': 'Test User',
+        'date_of_birth': '2001-01-01',
         'primary_goal': 'muscle_gain',
         'current_weight_kg': 75.0,
         'fitness_experience': 'intermediate',
@@ -219,6 +224,60 @@ void main() {
         reason:
             'AuthSessionBootstrapper must hold a per-userId Completer mutex '
             '(mirror WorkoutWriteService).',
+      );
+    });
+
+    // Regression guard — diagnose 2026-05-30-resolve-destination-full-name-
+    // drift. The user_profile SELECT in resolveDestination must NOT reference
+    // `full_name` (that column lives on `users`; querying it from
+    // user_profile raises PostgREST 42703 → the catch silently returns
+    // StartMissionBrief for EVERY user, re-onboarding fresh-install returning
+    // users). Identity-step completion is detected via `date_of_birth`.
+    test('resolveDestination does not query non-existent user_profile.full_name',
+        () {
+      final src = stripped();
+      final start = src.indexOf('resolveDestination(String userId)');
+      expect(start, isNot(-1),
+          reason: 'resolveDestination must still exist');
+      final after = src.substring(start);
+      final endIdx = after.indexOf('classifyDestination');
+      final body = endIdx == -1 ? after : after.substring(0, endIdx);
+      expect(
+        body.contains('full_name'),
+        isFalse,
+        reason:
+            'resolveDestination must NOT select full_name from user_profile — '
+            'that column lives on `users` (live schema 2026-05-30). Querying '
+            'it 42703s and the catch falls back to StartMissionBrief for every '
+            'user. Use date_of_birth to detect the identity step.',
+      );
+      expect(
+        body.contains('date_of_birth'),
+        isTrue,
+        reason:
+            'resolveDestination must select date_of_birth (a real user_profile '
+            'column) to detect identity-step completion.',
+      );
+    });
+
+    test('classifyDestination keys the identity step off date_of_birth', () {
+      final src = stripped();
+      final start = src.indexOf('classifyDestination(');
+      expect(start, isNot(-1));
+      final body = src.substring(start);
+      expect(
+        body.contains("row['date_of_birth']"),
+        isTrue,
+        reason:
+            'classifyDestination must detect the missing identity step via '
+            "row['date_of_birth'] (full_name is not on user_profile).",
+      );
+      expect(
+        body.contains("row['full_name']"),
+        isFalse,
+        reason:
+            "classifyDestination must not read row['full_name'] — the SELECT "
+            'no longer fetches it (and the column is not on user_profile).',
       );
     });
   });

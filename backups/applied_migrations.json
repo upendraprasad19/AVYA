@@ -478,6 +478,14 @@
     "slug": "fix_alert_edge_function_health_columns"
   },
   {
+    "migration": "078",
+    "applied_at": "2026-05-30T15:30:00+05:30",
+    "hash": "sha256:72621bc1c79bb6e20ae11053bc8f20438be7f74b3f122a2d550336e98d233164",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4b2c9",
+    "slug": "fix_dispatch_proactive_coach_promotion_columns"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",
