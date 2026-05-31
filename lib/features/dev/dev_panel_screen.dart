@@ -6,7 +6,10 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
+import 'package:icanbefitter/features/dev/plan_xls.dart';
 
 /// Debug-only developer panel — fast-forward the IST calendar, run the
 /// year-simulation harness, toggle PRO, and inspect rank state without
@@ -30,6 +33,96 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
   Duration _offset = Duration.zero;
   String _simStatus = 'idle';
   String? _lastReport;
+  SimReport? _lastReportObj;
+
+  @override
+  void initState() {
+    super.initState();
+    // Debug-only deterministic autorun: open `/dev?autorun=lt` (full URL
+    // http://host/?autorun=lt#/dev) to drive amar reset → PRO → 910-day sim
+    // → Lieutenant → Excel export with ZERO in-app clicking. Added because
+    // CanvasKit scroll/drag is unreliable for reaching the below-the-fold
+    // sim buttons during automated browser driving. No-op in release and
+    // when the flag is absent.
+    final auto = Uri.base.queryParameters['autorun'];
+    if (kDebugMode && (auto == 'lt' || auto == 'diag')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autorunToLt());
+    }
+  }
+
+  /// Full deterministic journey to Lieutenant + plan export, logged to the
+  /// console (debugPrint) so the run is observable without the UI.
+  Future<void> _autorunToLt() async {
+    if (!kDebugMode) return;
+    if (SimulationService.instance.isBusy) {
+      debugPrint('[autorun] aborted — a sim is already in flight');
+      return;
+    }
+    debugPrint('[autorun] === Lieutenant journey START ===');
+    // The deep-link to /dev can mount this screen before Supabase finishes
+    // init (the normal session bootstrap runs in the restore flow we skip).
+    // Wait for the auth session + open the user-scoped Hive boxes so
+    // resetJourney's box access succeeds (otherwise it throws on userBox).
+    debugPrint('[autorun] waiting for Supabase session…');
+    for (var i = 0; i < 120; i++) {
+      if (SupabaseService.instance.currentUser != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    await HiveUserSession.ensureOpenedForCurrentSession();
+    if (SupabaseService.instance.currentUser == null) {
+      debugPrint('[autorun] ABORT — no Supabase session after 60s wait');
+      return;
+    }
+    debugPrint('[autorun] session ready (${HiveUserSession.currentOwnerFullId})');
+    // Pause subscription server-refresh NOW (before grant): the sim user has no
+    // real subscriptions row, so an un-paused refresh would downgrade the
+    // dev-granted PRO before the sim loop even starts. Cleared by
+    // SimulationService.run's finally. (Debug-only.)
+    SubscriptionService.pausedForSimulation = true;
+    debugPrint('[autorun] reset journey (day-0)…');
+    await SimulationService.instance.resetJourney(ref);
+    debugPrint('[autorun] grant PRO (10-yr sim window)…');
+    await _grantPro();
+    // diag mode = short 49-day run (covers the Phase 1→2 transition at ~day 28)
+    // for fast root-causing; lt mode = full 910-day journey to Lieutenant.
+    final isDiag = Uri.base.queryParameters['autorun'] == 'diag';
+    final days = isDiag ? 49 : 910;
+    debugPrint('[autorun] sim $days days (adherence 0.99)…');
+    if (!mounted) return;
+    setState(() => _simStatus = 'autorun: simulating $days days…');
+    var lastLogged = 0;
+    final report = await SimulationService.instance.run(
+      ref: ref,
+      days: days,
+      adherence: 0.99,
+      onProgress: (line) {
+        // Throttle: log roughly every 28 simulated days.
+        final m = RegExp(r'Day (\d+)/').firstMatch(line);
+        final d = m == null ? 0 : int.tryParse(m.group(1) ?? '0') ?? 0;
+        if (d - lastLogged >= 28 || d == days) {
+          lastLogged = d;
+          debugPrint('[autorun] $line');
+        }
+      },
+    );
+    if (!mounted) return;
+    _lastReportObj = report;
+    setState(() {
+      _simStatus = 'autorun done — ${istTodayStr()}';
+      _lastReport = report.summarize();
+    });
+    debugPrint('[autorun] === sim done ===');
+    debugPrint('[autorun] ${report.summarize().replaceAll("\n", " | ")}');
+    debugPrint('[autorun] captured ${report.capturedPhases.length} phase plans');
+    if (report.capturedPhases.isEmpty) {
+      debugPrint('[autorun] WARNING: no captured phases — export skipped');
+      return;
+    }
+    final fname = 'amar_plans_to_lt_${istTodayStr()}.xls';
+    downloadPlansXls(fname, report.capturedPhases);
+    debugPrint('[autorun] export triggered → $fname (browser download)');
+    debugPrint('[autorun] === Lieutenant journey COMPLETE ===');
+  }
 
   void _applyOffset() {
     if (_offset == Duration.zero) {
@@ -86,14 +179,30 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     setState(() {
       _simStatus = 'done — clock now at ${istTodayStr()}';
       _lastReport = report.summarize();
+      _lastReportObj = report;
     });
     _toast('Simulated $days days');
+  }
+
+  void _exportPlans() {
+    final r = _lastReportObj;
+    if (r == null || r.capturedPhases.isEmpty) {
+      _toast('No captured plans — run a sim first');
+      return;
+    }
+    downloadPlansXls('amar_plans_to_lt_${istTodayStr()}.xls', r.capturedPhases);
+    _toast('Exported ${r.capturedPhases.length} phase plans (.xls)');
   }
 
   // ── Account / PRO ───────────────────────────────────────────────
 
   Future<void> _grantPro() async {
-    final expires = nowWall().add(const Duration(days: 365)).toIso8601String();
+    // 10-year window (was 1 yr): the year-sim fast-forwards the clock up to
+    // 2.5 simulated years (910-day → Lieutenant run). A 1-yr expiry would
+    // lapse against the simulated clock partway through, silently halting
+    // PRO-gated phase generation. 10 yr keeps PRO valid for the whole span so
+    // a SINGLE run() captures every generated phase in one SimReport.
+    final expires = nowWall().add(const Duration(days: 3650)).toIso8601String();
     await SubscriptionService.instance.writeSubscriptionState(
       isPro: true,
       expiresAt: expires,
@@ -101,7 +210,7 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     );
     if (!mounted) return;
     setState(() {});
-    _toast('PRO granted (1 yr)');
+    _toast('PRO granted (10 yr — sim window)');
   }
 
   Future<void> _revokePro() async {
@@ -204,6 +313,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   _btn('Sim +4 weeks', () => _runSim(28)),
                   _btn('Sim +12 weeks', () => _runSim(84)),
                   _btn('Sim +1 year', () => _runSim(365)),
+                  _btn('Sim → Lieutenant (130wk)', () => _runSim(910)),
+                  _btn('Export plans (.xls)', _exportPlans, outlined: true),
                 ],
               ),
             ],

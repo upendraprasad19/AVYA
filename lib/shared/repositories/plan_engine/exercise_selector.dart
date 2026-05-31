@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../exercise_repository.dart';
 import 'models.dart';
+import 'training_history_analyzer.dart';
 
 /// Stage 2: Constraint-based exercise picker.
 ///
@@ -518,9 +519,23 @@ class ExerciseSelector {
   }) {
     final result = <PopulatedDay>[];
 
+    // 2026-05-31 personalization levers L2 + L6 — read history ONCE per
+    // generation (Phase 2+ only; empty/no-op for Phase 1 or no data). These
+    // feed a SUPPLEMENTARY post-selection adjustment pass (see
+    // `_applyHistoryAdjustments`), deliberately kept OUT of the 5-attempt
+    // cascade so the 0-fallback (attempt3/universalPool/none) target is
+    // preserved — the cascade still picks library exercises first; we only
+    // reshuffle/append afterward.
+    final demoted = phase >= 2
+        ? TrainingHistoryAnalyzer.demotedExercises()
+        : const <String>{};
+    final customs = phase >= 2
+        ? _eligibleCustomExercises(exerciseRepo)
+        : const <Map<String, dynamic>>[];
+
     for (final day in slotDays) {
       // Fill variant A
-      final exercisesA = _fillSlots(
+      var exercisesA = _fillSlots(
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
         injuries: injuries, excludeNames: {},
       );
@@ -537,6 +552,22 @@ class ExerciseSelector {
         exercisesB = exercisesA;
       }
 
+      // 2026-05-31 personalization L2/L6 — supplementary post-pass.
+      if (phase >= 2 && (demoted.isNotEmpty || customs.isNotEmpty)) {
+        exercisesA = _applyHistoryAdjustments(
+          exercisesA, day.slotsA, exerciseRepo, equipmentTier, effectiveExp,
+          phase, injuries, demoted, customs,
+        );
+        if (!identical(exercisesB, exercisesA) && day.slotsB != null) {
+          exercisesB = _applyHistoryAdjustments(
+            exercisesB, day.slotsB!, exerciseRepo, equipmentTier, effectiveExp,
+            phase, injuries, demoted, customs,
+          );
+        } else {
+          exercisesB = exercisesA;
+        }
+      }
+
       result.add(PopulatedDay(
         name: day.name, focus: day.focus,
         dayType: day.dayType, intensity: day.intensity,
@@ -544,6 +575,168 @@ class ExerciseSelector {
       ));
     }
     return result;
+  }
+
+  // ── 2026-05-31 personalization levers L2 + L6 ─────────────────────
+
+  /// Supplementary post-selection adjustment (runs AFTER the cascade has fully
+  /// populated a day). Two effects, both ADDITIVE / reshuffling — never starves
+  /// the cascade:
+  ///
+  ///   L6 (demote swapped-out): if a cascade-picked exercise is in [demoted]
+  ///   (the user previously swapped away from it) AND a non-demoted alternative
+  ///   in the SAME movement pattern exists in the library pool (and isn't
+  ///   already picked), swap to the alternative. If no clean alternative exists
+  ///   we keep the original — we never drop a slot.
+  ///
+  ///   L2 (custom exercises in pool): append the user's matching
+  ///   `custom_exercise_*` entries as SUPPLEMENTARY options for the day when
+  ///   their muscle intent matches a slot on the day. Never replaces a library
+  ///   pick — purely additive at the tail.
+  ///
+  /// Implemented as a post-pass (not inside `_cascadeFill`) on purpose: keeping
+  /// L2/L6 out of the cascade guarantees the `sample_plans_report.dart`
+  /// 0-fallback target is unaffected (custom data is empty in that harness, and
+  /// the demote-swap only ever exchanges one library pick for another).
+  static List<PlannedExercise> _applyHistoryAdjustments(
+    List<PlannedExercise> picked,
+    List<MuscleSlot> slots,
+    ExerciseRepository repo,
+    String equipmentTier,
+    String effectiveExp,
+    int phase,
+    List<String> injuries,
+    Set<String> demoted,
+    List<Map<String, dynamic>> customs,
+  ) {
+    final result = List<PlannedExercise>.from(picked);
+    final pickedNames = result.map((e) => e.exerciseName).toSet();
+
+    // L6: try to replace each demoted pick with a same-movement-pattern
+    // non-demoted library alternative.
+    if (demoted.isNotEmpty) {
+      for (var i = 0; i < result.length; i++) {
+        final ex = result[i];
+        if (!demoted.contains(ex.exerciseName)) continue;
+
+        // Find the slot whose movement pattern this pick most likely served.
+        final pattern = _patternForPick(ex, slots);
+        if (pattern == null) continue;
+
+        final alternatives = repo.queryV4(
+          movementPattern: pattern,
+          equipmentTier: equipmentTier,
+          suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+          excludeNames: pickedNames,
+          injuryExclusions: injuries.isEmpty ? null : injuries,
+        );
+        for (final c in alternatives) {
+          final name = c['name'] as String? ?? '';
+          if (name.isEmpty || demoted.contains(name)) continue;
+          // Swap to the non-demoted alternative.
+          final replacement = _buildExercise(c).copyWith(variant: ex.variant);
+          result[i] = replacement;
+          pickedNames.remove(ex.exerciseName);
+          pickedNames.add(name);
+          break;
+        }
+      }
+    }
+
+    // L2: append eligible customs that match a slot on this day.
+    if (customs.isNotEmpty) {
+      final dayMuscles = <String>{};
+      for (final s in slots) {
+        dayMuscles.add(s.targetMuscle.toLowerCase());
+        if (s.subFocus != null) dayMuscles.add(s.subFocus!.toLowerCase());
+      }
+      for (final custom in customs) {
+        final name = custom['name'] as String? ?? '';
+        if (name.isEmpty || pickedNames.contains(name)) continue;
+        final cm = _muscleTokens(custom['primary_muscles']);
+        final matches = cm.any(
+          (m) => dayMuscles.any((d) => d.contains(m) || m.contains(d)),
+        );
+        if (!matches) continue;
+        result.add(_buildCustomExercise(custom, result.first.variant));
+        pickedNames.add(name);
+      }
+    }
+
+    return result;
+  }
+
+  /// The movement pattern a cascade-picked exercise most likely served, found
+  /// by matching the pick's category/muscles back to a slot on the day. Returns
+  /// null when no confident match exists (then L6 leaves the pick untouched).
+  static String? _patternForPick(PlannedExercise ex, List<MuscleSlot> slots) {
+    final muscles = (ex.primaryMuscles ?? const [])
+        .map((m) => m.toLowerCase())
+        .toList();
+    for (final s in slots) {
+      final target = s.targetMuscle.toLowerCase();
+      if (muscles.any((m) => m.contains(target) || target.contains(m))) {
+        return s.movementPattern;
+      }
+    }
+    // Fallback: a single-slot day, or no muscle metadata — use first slot.
+    return slots.isNotEmpty ? slots.first.movementPattern : null;
+  }
+
+  /// User custom exercises eligible to supplement a plan (have a name + at
+  /// least one primary muscle). Empty when there are no customs.
+  static List<Map<String, dynamic>> _eligibleCustomExercises(
+    ExerciseRepository repo,
+  ) {
+    final out = <Map<String, dynamic>>[];
+    for (final c in repo.getCustomExercises()) {
+      final name = c['name'] as String? ?? '';
+      if (name.isEmpty) continue;
+      if (_muscleTokens(c['primary_muscles']).isEmpty) continue;
+      out.add(c);
+    }
+    return out;
+  }
+
+  static List<String> _muscleTokens(Object? raw) {
+    if (raw is List) {
+      return raw
+          .map((m) => m.toString().toLowerCase().trim())
+          .where((m) => m.isNotEmpty)
+          .toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return [raw.toLowerCase().trim()];
+    }
+    return const [];
+  }
+
+  /// Build a PlannedExercise from a user `custom_exercise_*` map (L2). Custom
+  /// maps use `default_logging_type` (sheet field) or `logging_type`.
+  static PlannedExercise _buildCustomExercise(
+    Map<String, dynamic> c,
+    String variant,
+  ) {
+    final equipRaw = c['equipment_needed'];
+    final equipList = equipRaw is List
+        ? equipRaw.map((e) => e.toString()).toList()
+        : <String>[];
+    final muscles = _muscleTokens(c['primary_muscles']);
+    return PlannedExercise(
+      exerciseId: c['id'] as String? ?? '',
+      exerciseName: c['name'] as String? ?? 'Custom',
+      loggingType: c['default_logging_type'] as String? ??
+          c['logging_type'] as String? ??
+          'weight_reps',
+      sets: c['default_sets'] as int? ?? 3,
+      reps: (c['default_reps'] ?? '10').toString(),
+      restSeconds: c['default_rest_secs'] as int? ?? 60,
+      durationSeconds: c['default_duration_seconds'] as int?,
+      category: c['category'] as String?,
+      equipmentNeeded: equipList,
+      primaryMuscles: muscles.isEmpty ? null : muscles,
+      variant: variant,
+    );
   }
 
   /// Fill a list of MuscleSlots with exercises via 5-attempt cascade.

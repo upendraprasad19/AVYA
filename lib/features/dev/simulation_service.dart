@@ -34,7 +34,9 @@ import 'package:icanbefitter/core/services/nutrition_write_source.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -53,6 +55,12 @@ class SimReport {
   DateTime? startDate;
   DateTime? endDate;
   final List<String> events = [];
+
+  /// 2026-05-31 — every generated phase's week-1 plan, captured so the run can
+  /// export "all workout plans to Lieutenant" to Excel (SpreadsheetML). Each
+  /// entry: {phase, deployment, name, focus, weeks, rank, days:[{name, focus,
+  /// exercises:[{name, sets, reps, suggested_weight, weight_cue, logging_type}]}]}.
+  final List<Map<String, dynamic>> capturedPhases = [];
 
   String summarize() {
     final b = StringBuffer();
@@ -196,6 +204,10 @@ class SimulationService {
     // weight / sleep / nutrition / water) still fire live so the cloud stays
     // current and sync stays under test.
     SyncService.pausedForSimulation = true;
+    // Keep the dev-granted PRO alive: the sim user has no real subscriptions
+    // row, so an un-paused refreshFromSupabase would downgrade mid-run and
+    // gate off phase generation (stuck-at-Phase-1 → rank stuck at SD2).
+    SubscriptionService.pausedForSimulation = true;
     try {
       final read = ref.read(workoutScheduleReadServiceProvider);
       final sub = ref.read(subscriptionServiceProvider);
@@ -208,6 +220,13 @@ class SimulationService {
       }();
       var cursor = _cursor!;
       report.startDate = cursor;
+
+      // Capture the phase the run starts on (free Phase 1, or wherever a resumed
+      // run picks up) so the Excel export covers the full journey to Lieutenant.
+      _captureCurrentPlan(
+          read,
+          report,
+          (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1);
 
       final profile = UserRepository.instance.getProfile() ?? {};
 
@@ -283,6 +302,7 @@ class SimulationService {
       await flush('snapshot', sync.pushSnapshot);
     } finally {
       SyncService.pausedForSimulation = false;
+      SubscriptionService.pausedForSimulation = false;
       _busy = false;
     }
     return report;
@@ -503,7 +523,9 @@ class SimulationService {
 
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
-    if (currentPhase >= 12) return;
+    // 2026-05-31 (post-12 deployment cycles): no phase cap — phases generate
+    // indefinitely so the sim can drive a user past phase 12 through the
+    // deployment cycles all the way to Lieutenant (~phase 32 / 130 weeks).
 
     final rawInjuries = profile['injuries'];
     final injuries = rawInjuries is List
@@ -532,6 +554,69 @@ class SimulationService {
       report.phasesGenerated++;
       report.events.add(
           'Phase ${currentPhase + 1} generated on ${istDateStr(nowWall())}');
+      _captureCurrentPlan(read, report, currentPhase + 1);
+    }
+  }
+
+  /// Captures the just-generated phase's week-1 plan into [report] for the
+  /// Excel export. Reads the canonical `current_plan` Hive map (already includes
+  /// the personalized `suggested_weight` / `weight_cue` from ProgressionResolver).
+  /// Deduped by phase number so resumed/repeat runs don't double-record.
+  void _captureCurrentPlan(
+    WorkoutScheduleReadService read,
+    SimReport report,
+    int phaseNum,
+  ) {
+    try {
+      if (report.capturedPhases.any((p) => p['phase'] == phaseNum)) return;
+      final plan = read.getCurrentPlanMap();
+      if (plan == null) return;
+
+      // Week-1 days: prefer `workouts` (week-1 convenience list), else
+      // week_plans[0].workout_days.
+      List daysRaw = (plan['workouts'] as List?) ?? const [];
+      if (daysRaw.isEmpty) {
+        final wp = plan['week_plans'] as List?;
+        if (wp != null && wp.isNotEmpty && wp.first is Map) {
+          daysRaw = (wp.first as Map)['workout_days'] as List? ?? const [];
+        }
+      }
+
+      final days = <Map<String, dynamic>>[];
+      for (final d in daysRaw) {
+        if (d is! Map) continue;
+        final exsRaw = (d['exercises'] as List?) ?? const [];
+        final exs = <Map<String, dynamic>>[];
+        for (final e in exsRaw) {
+          if (e is! Map) continue;
+          exs.add({
+            'name': e['exercise_name'] ?? e['name'] ?? '',
+            'sets': e['sets'],
+            'reps': e['reps'],
+            'suggested_weight': e['suggested_weight'],
+            'weight_cue': e['weight_cue'],
+            'logging_type': e['logging_type'],
+          });
+        }
+        days.add({
+          'name': d['name'] ?? '',
+          'focus': d['focus'] ?? '',
+          'exercises': exs,
+        });
+      }
+
+      report.capturedPhases.add({
+        'phase': phaseNum,
+        'deployment': phaseNum > 1 ? phaseNum - 1 : 0,
+        'name': plan['name'] ?? 'Phase $phaseNum',
+        'focus': plan['focus'] ?? '',
+        'weeks': plan['weeks'] ?? '',
+        'rank': RankService.instance.getCurrentRank().entry.code,
+        'captured_on': istDateStr(nowWall()),
+        'days': days,
+      });
+    } catch (e) {
+      report.events.add('capture phase $phaseNum failed: $e');
     }
   }
 

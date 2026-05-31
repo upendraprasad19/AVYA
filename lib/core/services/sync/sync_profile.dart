@@ -169,6 +169,17 @@ extension SyncServiceProfile on SyncService {
         // may be overwritten by AI detection.
         if (p['detected_experience_level'] != null)
           'detected_experience_level': p['detected_experience_level'],
+        // Rank-evaluation columns (migration 081, diagnose b9f4d2). The server
+        // cron `evaluate-rank-promotions` SELECTs these to evaluate the ladder;
+        // pre-081 they didn't exist → the cron read null → only ever granted SD2.
+        // Source of truth is the CLIENT (schedule-aware streak walk + the F18
+        // deployment counter). current_streak_days + last_workout_date are
+        // already stamped into `progress` by train_provider on workout
+        // completion; deployments_complete by UserRepository.updateProgress.
+        if (p['deployments_complete'] != null) 'deployments_complete': p['deployments_complete'],
+        if (p['current_streak_days'] != null) 'current_streak_days': p['current_streak_days'],
+        if (p['last_workout_date'] != null) 'last_workout_date': p['last_workout_date'],
+        if (p['longest_gap_days'] != null) 'longest_gap_days': p['longest_gap_days'],
       }, onConflict: 'user_id');
     } catch (e, st) {
       debugPrint('[SyncService._syncUserProgress] $e');

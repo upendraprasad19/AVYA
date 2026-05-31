@@ -408,6 +408,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Subscription gate pattern | `docs/architecture/subscription.md` |
 | Payment flow + DPDP delete-account | `docs/architecture/payment.md` |
 | Business rules (free/PRO matrix, calorie calc) | `docs/architecture/business-rules.md` |
+| Functionality flow (intended-behaviour TEST CHARTER — every feature, numbered assertions) | `docs/architecture/functionality-flow.md` |
 | Directory structure (annotated tree) | `docs/reference/directory-structure.md` |
 | Exercise library reference | `docs/reference/exercise-library.md` |
 | Food database reference | `docs/reference/food-database.md` |

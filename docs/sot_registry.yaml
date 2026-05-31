@@ -121,6 +121,7 @@ concepts:
         fields_read: [date, exercise_name, weight_kg, logging_type]
         notes: Walks the last 28 days of exlog_* rows to seed starting weights for the next phase.
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L1/L5 personalization) scans exlog_* history READ-ONLY for autoregulated est-1RM load + per-muscle weak-point targeting" }
       - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider iterates exlog_* keys to tally sets across phase" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep over exlog_*" }
@@ -229,6 +230,7 @@ concepts:
         semantic: max
         fields_read: [date, exercise_name, weight_kg]
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L1/L6) scans exlog_* history READ-ONLY for autoregulated load + swap-learning — never edits logs" }
       - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider iterates exlog_* keys for phase aggregates" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator — touches every exlog_* row" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair" }
@@ -366,6 +368,7 @@ concepts:
         semantic: pass-through
         fields_read: [via _schedule.getScheduleForDate(date) at :351, :357, :364, :972, :1055]
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L6 swap-learning) scans schedule_* READ-ONLY for is_swapped/original_date to prefer swap-in choices" }
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back iterates schedule_* keys for completed-phase chips" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
@@ -1058,6 +1061,7 @@ concepts:
         fields_read: [weight_kg, date]
         notes: Reads every healthBox weight_* row to compute weekly rate + ETA for the profile dossier.
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L7 bodyweight-trend) scans weight_* READ-ONLY for volume/deload autoregulation cues" }
       - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* keys for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg scans healthBox weight_* prefix" }
@@ -1232,6 +1236,7 @@ concepts:
         semantic: flag-check
         fields_read: [date]
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E) reads exlog_* set_number/weight_kg/reps READ-ONLY for est-1RM + per-muscle volume" }
       - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider reads exlog_* set_number/volume_kg for phase totals" }
       - { file: lib/core/services/sync_service.dart, reason: "orchestrator fan-out includes exlog_* during weeklyFullSync" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for ExlogKeyMigrator state — not a row reader" }
@@ -1940,6 +1945,7 @@ concepts:
         semantic: aggregated
         fields_read: [status, completed_at across 365 days]
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L7) reads schedule_*.status READ-ONLY to compute adherence/completion-rate for autoregulation" }
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back reads schedule_*.status for completed-day check glyphs" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
@@ -2121,6 +2127,7 @@ concepts:
         fields_read: [date, exercise_name, weight_kg, logging_type]
         notes: Reads exlog_* over the last 28 days for next-phase starting weights — not strictly "is_pr" but uses the same prefix.
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L1) reads exlog_* est-1RM/PR signal READ-ONLY to seed %1RM progression" }
       - { file: lib/features/train/providers/train_provider.dart, reason: "graduationStatsProvider counts is_pr=true exlog_* rows for phase PR tally" }
       - { file: lib/core/services/exlog_key_migrator.dart, reason: "v8 key-rewrite migrator" }
       - { file: lib/core/services/logging_type_repair_migrator.dart, reason: "one-shot logging_type repair sweep" }
@@ -2407,6 +2414,7 @@ concepts:
         semantic: historical-series
         fields_read: [weight_kg, date]
     reader_allow_files:
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L7) reads weight_* logs READ-ONLY for bodyweight-trend autoregulation + calorie cue" }
       - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* logs for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg" }

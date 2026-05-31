@@ -457,10 +457,27 @@ class RankService {
     );
   }
 
+  /// Highest rung the user has EARNED, evaluated **sequentially** — no skipping.
+  ///
+  /// 2026-05-31 (diagnose b9f4d2, ADR rank-sequential): ranks cannot be jumped.
+  /// Walk the ladder from the bottom and advance only while each successive
+  /// rung's gate passes; STOP at the first rung that fails. So the
+  /// deployment-gated PO/CPO rungs CANNOT be leap-frogged by an officer-track
+  /// completion-rate qualifier — reaching SubLt/Lt requires having passed
+  /// PO + CPO first. (Pre-fix this picked the highest INDEPENDENTLY-qualifying
+  /// rung via `for r: if _qualifies(r) winner=r`, which allowed skipping locked
+  /// rungs.) Mirrors `_shared/rank_engine.ts highestQualified` in lockstep.
+  /// Monotonic no-demotion is enforced separately by `shouldPromote` in
+  /// `evaluateAndPromote`.
   String _qualifiedRankCode(_EvalState s) {
-    String winner = 'SD2';
-    for (final r in kRankLadder) {
-      if (_qualifies(r.code, s)) winner = r.code;
+    String winner = kRankLadder.first.code; // SD2 — ordinal 0, empty gate
+    for (var i = 1; i < kRankLadder.length; i++) {
+      final r = kRankLadder[i];
+      if (_qualifies(r.code, s)) {
+        winner = r.code;
+      } else {
+        break; // sequential: a failed gate blocks every rung above it
+      }
     }
     return winner;
   }
@@ -524,6 +541,31 @@ class RankService {
       completionRateOverride: completionRateOverride,
     );
     return _qualifies(code, state);
+  }
+
+  /// Test-only: runs the SEQUENTIAL (no-skip) `_qualifiedRankCode` walk against
+  /// an explicit `_EvalState`. Lets `rank_sequential_no_skip_test.dart` exercise
+  /// the contiguous-walk contract (deployment-gated PO/CPO cannot be skipped)
+  /// without a live Supabase round-trip.
+  @visibleForTesting
+  String testQualifiedRankCode({
+    int streak = 0,
+    int totalWorkouts = 0,
+    int weeksSinceSignup = 0,
+    int deploymentsComplete = 0,
+    int longestGapDays = 0,
+    double? completionRateOverride,
+  }) {
+    final state = _EvalState(
+      streakDays: streak,
+      totalWorkouts: totalWorkouts,
+      weeksSinceSignup: weeksSinceSignup,
+      deploymentsComplete: deploymentsComplete,
+      longestGapDays: longestGapDays,
+      workoutRepo: WorkoutRepository.instance,
+      completionRateOverride: completionRateOverride,
+    );
+    return _qualifiedRankCode(state);
   }
 }
 

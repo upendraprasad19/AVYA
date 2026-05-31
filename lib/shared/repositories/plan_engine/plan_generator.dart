@@ -7,6 +7,7 @@ import 'progression_resolver.dart';
 import 'sequencing_engine.dart';
 import 'split_resolver.dart';
 import 'superset_pairer.dart';
+import 'training_history_analyzer.dart';
 import 'volume_filter.dart';
 import 'warmup_cooldown.dart';
 
@@ -109,13 +110,24 @@ class PlanGenerator {
       );
     }
 
+    // 2026-05-31 personalization lever L5 (weak-point → bodyFocus).
+    // SAFE lever — does NOT touch the exercise-selection cascade. When the user
+    // hasn't explicitly chosen a body focus and we're on Phase 2+, auto-populate
+    // it from training history: the laggard muscle groups (lowest recent volume
+    // share) become bodyFocus tokens, which PeriodizationEngine turns into +1 set
+    // on matching exercises. No-ops to empty for Phase 1 / sparse history.
+    var effectiveBodyFocus = bodyFocus;
+    if (bodyFocus.isEmpty && phase >= 2) {
+      effectiveBodyFocus = TrainingHistoryAnalyzer.weakMuscles();
+    }
+
     // Stage 4: Periodization → WeekPlan[]
     var weekPlans = PeriodizationEngine.apply(
       populated: populated,
       phase: phase,
       is6Day: daysPerWeek == 6,
       effectiveExp: effectiveExp,
-      bodyFocus: bodyFocus,
+      bodyFocus: effectiveBodyFocus,
       previousWeights: weights,
     );
 
@@ -224,9 +236,17 @@ class PlanGenerator {
       'Work capacity & endurance', 'Performance optimization',
       'Advanced techniques & periodization', 'Elite programming',
     ];
+    // 2026-05-31 (post-12 deployment cycles): beyond the fixed 12-phase
+    // curriculum, phases continue indefinitely as "Deployment N" (N = phase-12)
+    // and recycle the advanced phase-9-12 focuses on rotation
+    // (templateIndex = 9 + ((phase-9) % 4) → 9,10,11,12,9,...). Exercise
+    // selection is phase-invariant; continued overload comes from periodization
+    // load progression (see PeriodizationEngine.cycleMultiplier cap + the
+    // autoregulated weight progression).
+    final int recycledIndex = 9 + ((phase - 9) % 4);
     return PhaseMeta(
-      name: phase < names.length ? names[phase] : 'Phase $phase',
-      focus: phase < focuses.length ? focuses[phase] : 'Advanced training',
+      name: phase < names.length ? names[phase] : 'Deployment ${phase - 12}',
+      focus: phase < focuses.length ? focuses[phase] : focuses[recycledIndex],
       dailyCalories: 0,
       proteinGrams: 0,
     );

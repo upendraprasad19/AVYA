@@ -97,6 +97,9 @@ const _expectedEmitFields = <String, Set<String>>{
     // Per-exercise nested map fields (inside `exercises`):
     'name', 'sets', 'reps', 'rest_sec', 'logging_type', 'order',
     'movement_pattern', 'suitable_for', 'equipment_needed',
+    // SwapService.swapExercise stamps the replacement exercise map with the
+    // swap marker + the name it replaced (LEVER 6 demotion source).
+    'swapped_via', 'swapped_from',
   },
   // wlog_* writer: WorkoutWriteService.completeWorkout (workout summary row)
   'wlog': {

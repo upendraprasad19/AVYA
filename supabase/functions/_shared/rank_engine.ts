@@ -90,10 +90,21 @@ export async function qualifies(code: string, s: EvalState): Promise<boolean> {
   return true;
 }
 
+// Highest rung EARNED, evaluated SEQUENTIALLY — no skipping. Mirror of the
+// client `RankService._qualifiedRankCode` (2026-05-31, diagnose b9f4d2, ADR
+// rank-sequential). Walk from the bottom; advance only while each successive
+// rung's gate passes; STOP at the first failure. The deployment-gated PO/CPO
+// rungs cannot be leap-frogged by an officer-track completion-rate qualifier.
+// (Pre-fix this picked the highest INDEPENDENTLY-qualifying rung.)
 export async function highestQualified(s: EvalState): Promise<RankLadderEntry> {
-  let winner = kRankLadder[0];
-  for (const r of kRankLadder) {
-    if (await qualifies(r.code, s)) winner = r;
+  let winner = kRankLadder[0]; // SD2 — ordinal 0, empty gate
+  for (let i = 1; i < kRankLadder.length; i++) {
+    const r = kRankLadder[i];
+    if (await qualifies(r.code, s)) {
+      winner = r;
+    } else {
+      break; // sequential: a failed gate blocks every rung above it
+    }
   }
   return winner;
 }

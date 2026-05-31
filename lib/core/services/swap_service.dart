@@ -274,6 +274,12 @@ class SwapService {
       if (newLib['image_end_url'] != null)
         'image_end_url': newLib['image_end_url'],
       'swapped_via': 'ai_coach',
+      // Persist the name we swapped AWAY from so LEVER 6
+      // (TrainingHistoryAnalyzer.demotedExercises) can deprioritize it in
+      // future generated plans. Without this the original name was discarded
+      // on swap and the analyzer's `swapped_from` read was dead (drift).
+      'swapped_from': (original['exercise_name'] as String?) ??
+          (original['exercise_id'] as String?),
     };
 
     exercises[matchIndex] = replacement;

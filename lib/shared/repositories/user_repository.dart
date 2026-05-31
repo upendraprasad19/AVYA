@@ -75,7 +75,23 @@ class UserRepository {
   }
 
   /// Saves/replaces the user progress map.
+  ///
+  /// Deployment counter (F18 wiring, 2026-05-31 diagnose b9f4d2): 1 deployment
+  /// = 1 completed phase, so deployments_complete = current_phase - 1. Stamped
+  /// HERE — the lowest-level progress writer that EVERY phase-advance path
+  /// funnels through (updateProgress, splash auto-gen, sim driver, graduation,
+  /// onboarding) — so the count is recorded exactly once per advance without
+  /// each callsite remembering. MONOTONIC / only-increment: a lifetime "earned"
+  /// field (per feedback_monotonic_field_recompute_demotion.md) — never let a
+  /// current_phase that moved backwards demote the count. Drives the
+  /// PO(>=2)/CPO(>=3) gates in RankService._readEvaluationState and syncs to
+  /// user_progress.deployments_complete for the server cron.
   Future<void> saveProgress(Map<String, dynamic> progress) async {
+    final phase = (progress['current_phase'] as int?) ?? 1;
+    final derivedDeployments = phase > 1 ? phase - 1 : 0;
+    final priorDeployments = (progress['deployments_complete'] as int?) ?? 0;
+    progress['deployments_complete'] =
+        derivedDeployments > priorDeployments ? derivedDeployments : priorDeployments;
     await _hive.userBox.put('progress', progress);
   }
 
@@ -122,6 +138,8 @@ class UserRepository {
       'current_streak_weeks': 0,
     };
     current.addAll(fields);
+    // deployments_complete is stamped inside saveProgress (single source) so
+    // it tracks current_phase monotonically across every advance path.
     await saveProgress(current);
     // Fire-and-forget cloud sync — never block the UI. SyncService
     // captures failures via recordNonFatal + _reportSyncFailure.

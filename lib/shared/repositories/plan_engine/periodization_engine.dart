@@ -17,10 +17,19 @@ class PeriodizationEngine {
     return archetypes[((phase - 1) % 4)];
   }
 
-  /// V3: Volume multiplier per cycle (phases 1-4 = 1.0, 5-8 = 1.1, 9-12 = 1.2).
+  /// V3: Volume multiplier per cycle (phases 1-4 = 1.0, 5-8 = 1.1, 9-12 = 1.2,
+  /// 13-16 = 1.3).
+  ///
+  /// 2026-05-31 (post-12 deployment cycles): the ramp is CAPPED at cycle 3
+  /// (1.3×). Beyond ~phase 16, continued progressive overload comes from LOAD
+  /// — the autoregulated weight progression in the plan engine
+  /// (TrainingHistoryAnalyzer / ProgressionResolver) — NOT from an ever-growing
+  /// set count, which would become junk volume on the open-ended deployment
+  /// rotation that carries a user from phase 13 to Lieutenant (~phase 32).
   static double cycleMultiplier(int phase) {
-    final cycle = ((phase - 1) ~/ 4); // 0, 1, 2
-    return 1.0 + (cycle * 0.1);
+    final cycle = ((phase - 1) ~/ 4); // 0, 1, 2, 3, ...
+    final cappedCycle = cycle > 3 ? 3 : cycle;
+    return 1.0 + (cappedCycle * 0.1);
   }
 
   // ── V2 DUP profiles (used within each archetype for daily variation) ──

@@ -92,6 +92,15 @@ class SubscriptionService {
   static const String _planKey = 'plan';
   static const String _lastVerifiedKey = 'lastVerifiedAt';
 
+  /// Debug-only (year-sim harness). When true, [refreshFromSupabase] skips its
+  /// server query + downgrade so a dev-granted PRO state survives a simulation.
+  /// The sim user has no real `subscriptions` row, so an un-paused refresh would
+  /// `_downgradeLocally()` mid-run and silently gate off phase generation
+  /// (stuck-at-Phase-1 → rank never climbs). Mirrors
+  /// `SyncService.pausedForSimulation`. Set/cleared by `SimulationService.run`
+  /// and the `/dev` autorun; always false in normal app flow + release.
+  static bool pausedForSimulation = false;
+
   /// APK Test #12 / Task C-1 + H-41 (audit-2026-05-11) — payment
   /// grace window key. While a payment is in-flight,
   /// [verifyFromServer] will NOT downgrade the user even if the server
@@ -437,6 +446,16 @@ class SubscriptionService {
       final userId = supabase.currentUser?.id;
       if (userId == null) return;
 
+      // Year-sim harness: the simulated user has no real `subscriptions` row,
+      // so an un-paused refresh would `_downgradeLocally()` and wipe the
+      // dev-granted PRO mid-run — gating off phase generation. Skip entirely
+      // while a sim is in flight (debug-only; always false in normal flow).
+      if (pausedForSimulation) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] paused for '
+            'simulation — trusting local state');
+        return;
+      }
+
       // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
       // Splash fires `refreshFromSupabase` fire-and-forget BEFORE
       // `_ensureLocalUser` has opened the per-user namespaced boxes.
@@ -741,6 +760,21 @@ class SubscriptionService {
   /// Auto-Backup-leaked icanbefitter@gmail.com PRO state showing up on
   /// a fresh upendra.prasad@thinkingcode.com account as "renews 18 May".
   Future<void> _downgradeLocally() async {
+    // Debug-only year-sim guard (always false in release/normal flow).
+    // The single sink for every downgrade path — refreshFromSupabase
+    // (response==null / no-active-row), verifyFromServer, AND the in-line
+    // expiry/cross-account checks in isPro() all funnel here. Guarding at
+    // the top-of-refreshFromSupabase entry alone is insufficient: an
+    // un-paused refresh kicked off during the ~100s boot restore can still
+    // be IN FLIGHT when the sim sets the flag, then resolve AFTER the
+    // dev-PRO grant and wipe it — silently gating off phase generation
+    // (stuck-at-Phase-1 → rank never climbs). Skipping the wipe here keeps
+    // the dev-granted PRO durable for the whole simulated span.
+    if (pausedForSimulation) {
+      debugPrint('[SubscriptionService._downgradeLocally] paused for '
+          'simulation — preserving dev-granted PRO');
+      return;
+    }
     await MigratedKey.write(_isProKey, false);
     await MigratedKey.delete(_expiresAtKey);
     await MigratedKey.delete(_planKey);

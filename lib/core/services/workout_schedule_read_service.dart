@@ -389,7 +389,11 @@ class WorkoutScheduleReadService {
     String? cardioPreference,
   }) async {
     if (!isPhaseExpired()) return false;
-    if (currentPhase >= 12) return false;
+    // 2026-05-31 (post-12 deployment cycles): the old `currentPhase >= 12`
+    // dead-end is removed. Phases now generate indefinitely so a graduated user
+    // always has the next "Deployment" to train, current_phase increments
+    // monotonically (driving deployments_complete), and the plan engine recycles
+    // the advanced phase-9-12 content templates with continued LOAD overload.
 
     // Theme H fix (diagnose <id>) — was `DateTime.now()` directly. Now
     // computes max(today, currentPhaseEnd + 1) Monday-normalized so the

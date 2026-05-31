@@ -305,9 +305,11 @@ class GraduationScreen extends ConsumerWidget {
     final profile = UserRepository.instance.getProfile() ?? {};
     final progress = UserRepository.instance.getProgress() ?? {};
     final currentPhase = (progress['current_phase'] as int?) ?? 1;
-    final nextPhase = currentPhase >= 12
-        ? 9 + ((currentPhase - 8) % 4)
-        : currentPhase + 1;
+    // 2026-05-31 (post-12 deployment cycles): phase number is MONOTONIC so
+    // deployments_complete keeps counting. The plan engine recycles the
+    // advanced phase-9-12 CONTENT internally (PlanGenerator._getPhaseMeta +
+    // periodization) — the number itself never cycles back.
+    final nextPhase = currentPhase + 1;
     final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     final goal =
         profile['primary_goal'] as String? ?? 'general_fitness';
@@ -567,10 +569,11 @@ class _GenerateNextPhaseButtonState
       final profile = UserRepository.instance.getProfile() ?? {};
       final progress = UserRepository.instance.getProgress() ?? {};
       final currentPhase = (progress['current_phase'] as int?) ?? 1;
-      // Cycle phases 9→10→11→12→9→10... for users who've completed all 12.
-      final nextPhase = currentPhase >= 12
-          ? 9 + ((currentPhase - 8) % 4)
-          : currentPhase + 1;
+      // 2026-05-31 (post-12 deployment cycles): MONOTONIC phase number so
+      // deployments_complete keeps counting toward PO/CPO/officer ranks. The
+      // plan engine recycles phase-9-12 content internally; the number doesn't
+      // cycle back (the old `9 + ((currentPhase-8) % 4)` froze the counter).
+      final nextPhase = currentPhase + 1;
 
       final savedDays = MigratedKey.read<List>('preferred_training_days');
       final preferredDays =
