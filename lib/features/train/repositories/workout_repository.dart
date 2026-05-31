@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -194,7 +195,7 @@ class WorkoutRepository {
   /// mutate state. C-14 audit-2026-05-11.
   int _calculateStreak({required bool consume}) {
     int streak = 0;
-    final today = DateTime.now();
+    final today = nowWall(); // seam-aware (dev time-travel / year-sim)
 
     // B2: stop walk-back before the user's earliest anchor (signup /
     // first workout). Schedule rows before that date are plan-generator
@@ -262,8 +263,21 @@ class WorkoutRepository {
       } else if (i == 0) {
         // Today's workout not done YET — don't penalize
         continue;
-      } else if (freezesAvailable > 0 && !usedDates.contains(dateStr)) {
-        // Missed day — consume a streak freeze if available
+      } else if (usedDates.contains(dateStr)) {
+        // Diagnose 2026-05-31 (5e8a1c): this missed day was ALREADY protected
+        // by a freeze consumed (and persisted) on an earlier walk. A spent
+        // freeze protects its day permanently — treat it as covered, skip it,
+        // and never break or double-consume here. Pre-fix the only branch that
+        // referenced usedDates was the consume guard (`freezesAvailable > 0 &&
+        // !usedDates.contains(dateStr)`); an already-used day failed that guard
+        // and fell through to the `else → break`, so every read-only recompute
+        // collapsed the streak back at the first historically-frozen day. That
+        // silently capped streaks (founder saw "streak only 3" despite full
+        // adherence) and starved the sailor-track rank gates (SD1 streak>=7 /
+        // LS streak>=14 never qualified → rank stuck at SD2 after Phase 1).
+        continue;
+      } else if (freezesAvailable > 0) {
+        // Fresh missed day — consume a streak freeze if one is available.
         freezesAvailable -= 1;
         usedDates.add(dateStr);
         newlyConsumedDates.add(dateStr);
@@ -312,7 +326,7 @@ class WorkoutRepository {
     if (windowWeeks <= 0) return 0.0;
     final box = _hive.workoutBox;
     // IST is UTC+5:30; today derived from IST midnight upper-bound.
-    final nowUtc = DateTime.now().toUtc();
+    final nowUtc = nowWall().toUtc(); // seam-aware (dev time-travel / year-sim)
     final istNow = nowUtc.add(const Duration(hours: 5, minutes: 30));
     final istToday = DateTime(istNow.year, istNow.month, istNow.day);
     final windowStart = istToday.subtract(Duration(days: windowWeeks * 7));
@@ -362,7 +376,7 @@ class WorkoutRepository {
 
   /// Get today's schedule entry.
   Map<String, dynamic>? getTodaySchedule() {
-    return _schedule.getScheduleForDate(DateTime.now());
+    return _schedule.getScheduleForDate(nowWall()); // seam-aware
   }
 
   /// Get today's workout if it's a workout day (not rest).

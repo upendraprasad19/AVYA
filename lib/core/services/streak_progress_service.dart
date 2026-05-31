@@ -141,7 +141,7 @@ class StreakProgressService {
   /// is a no-op. Returns the new available count, or null if no refill
   /// happened (already done this week).
   int? refillIfNewWeek() {
-    final thisMonday = mondayOfIst(DateTime.now());
+    final thisMonday = mondayOfIst(nowWall()); // seam-aware (dev / year-sim)
     final progress = UserRepository.instance.getProgress() ?? {};
     final lastRefill = progress['streak_freezes_last_refill'] as String?;
     final y = thisMonday.year.toString().padLeft(4, '0');

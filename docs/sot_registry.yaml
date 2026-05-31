@@ -2510,6 +2510,13 @@ concepts:
     additional_tests:
       - test/contracts/streak_freeze_refill_race_test.dart
       - test/contracts/streak_progress_service_concurrency_test.dart
+      - test/contracts/streak_frozen_day_persists_protection_test.dart  # 5e8a1c: a spent freeze protects its day on every recompute (was: walk broke at the frozen day → streak collapse → rank stuck at SD2)
+    reader_allow_files:
+      # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
+      # resetJourney wipes healthBox['streaks'] to re-baseline a clean journey —
+      # it does NOT read streak semantics, so it is allow-listed rather than a
+      # semantic reader. Added 2026-05-31 with the year-sim harness.
+      - lib/features/dev/simulation_service.dart
     hive:
       box: healthBox
       key_prefix: "streaks"

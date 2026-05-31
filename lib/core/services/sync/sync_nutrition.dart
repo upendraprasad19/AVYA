@@ -19,6 +19,7 @@ extension SyncServiceNutrition on SyncService {
   /// Fire-and-forget: offline failure logs silently and retries on next
   /// full sync. Never throws to the caller.
   Future<void> syncNutritionData() async {
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
       // APK Test #12.7 — fire-and-forget call from
       // NutritionWriteService.logMeal. Same race as syncWorkoutData.

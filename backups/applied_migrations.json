@@ -494,6 +494,14 @@
     "slug": "enable_weight_logs_realtime"
   },
   {
+    "migration": "080",
+    "applied_at": "2026-05-31T09:55:00+05:30",
+    "hash": "sha256:d8f1e6f1c2fa3cc28d8a24407656314da11d9402af570083c435f7df1d42cbf3",
+    "applier": "claude-via-mcp",
+    "diagnose": "7d3f0a",
+    "slug": "relax_wle_reps_realistic_cumulative"
+  },
+  {
     "migration": "20260328000001",
     "applied_at": "2026-03-28T10:11:51+05:30",
     "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",

@@ -94,6 +94,14 @@ class SyncService {
   }
   static final SyncService _instance = SyncService._();
 
+  /// DEBUG/SIM ONLY — when true, the heavy fire-and-forget [pushSnapshot]
+  /// short-circuits. The year-simulation harness sets this during a bulk
+  /// historical backfill (where every WriteService write would otherwise
+  /// queue a full snapshot rebuild + cloud write, saturating the single web
+  /// isolate) and fires ONE [pushSnapshot] at the end. Always false in normal
+  /// operation; never set from production code paths.
+  static bool pausedForSimulation = false;
+
   /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
   /// `ref.read(syncServiceProvider)` over `.instance`. The singleton
   /// path is preserved for non-Riverpod contexts (main.dart bootstrap,
@@ -615,6 +623,9 @@ class SyncService {
   /// notes extraction, and returns the latest `coach_memory` row, which
   /// we mirror into Hive `coachBox['coach_memory']` for local readers.
   Future<void> pushSnapshot() async {
+    // Sim harness: suppress the per-write snapshot storm during a bulk
+    // backfill; the harness fires one final pushSnapshot itself.
+    if (pausedForSimulation) return;
     try {
       // APK Test #12.7 — open HiveUserSession before compiling the
       // snapshot. compileDailySnapshot() → AiCoachRepository.buildAiContext

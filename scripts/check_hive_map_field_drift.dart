@@ -124,6 +124,11 @@ const _skipFiles = <String>[
   'lib/core/services/nutrition_write_service.dart',
   'lib/core/services/health_write_service.dart',
   'lib/core/services/workout_schedule_write_service.dart',
+  // Debug-only year-simulation harness (kDebugMode-gated, release-inert). It
+  // references many Hive prefixes (for reset) and reads profile/progress/
+  // schedule maps, which the prefix heuristic mis-attributes to exlog_* drift.
+  // Not a production reader of canonical maps. Added 2026-05-31.
+  'lib/features/dev/simulation_service.dart',
 ];
 
 void main(List<String> args) {

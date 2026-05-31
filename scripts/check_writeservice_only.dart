@@ -74,6 +74,11 @@ const allowedFilePathFragments = <String>[
   // SyncService is part-split.
   'lib/core/services/sync_service.dart',
   'lib/core/services/sync/',
+  // Debug-only year-simulation harness (kDebugMode-gated, release-inert).
+  // resetJourney wipes Hive keys (streaks/steps_today/steps_date) + writes a
+  // raw step_log row to re-baseline a clean journey; it is a test/QA driver,
+  // not a production write path. Added 2026-05-31 with the year-sim harness.
+  'lib/features/dev/',
 ];
 
 // Known pre-existing violations slated for remediation in audit phases

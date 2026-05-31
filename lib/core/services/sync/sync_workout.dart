@@ -22,6 +22,7 @@ extension SyncServiceWorkout on SyncService {
   /// Push workout logs + exercise logs + schedule completions to Supabase.
   /// Call this after a workout is completed for near-realtime backup.
   Future<void> syncWorkoutData() async {
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
       // APK Test #12.7 — every WorkoutWriteService.logExercise fires
       // this fire-and-forget. If we land before _ensureLocalUser, every

@@ -465,7 +465,7 @@ class WorkoutScheduleReadService {
     if (startStr == null) return 1;
 
     final planStart = DateTime.parse(startStr);
-    final today = DateTime.now();
+    final today = nowWall(); // seam-aware (dev time-travel / year-sim)
     final diff = today.difference(planStart).inDays;
     return (diff ~/ 7 + 1).clamp(1, 4);
   }
@@ -474,7 +474,7 @@ class WorkoutScheduleReadService {
   int getCurrentDayInPhase() {
     final start = getPlanStartDate();
     if (start == null) return 0;
-    final today = DateTime.now();
+    final today = nowWall(); // seam-aware (dev time-travel / year-sim)
     final startMidnight = DateTime(start.year, start.month, start.day);
     final todayMidnight = DateTime(today.year, today.month, today.day);
     return todayMidnight.difference(startMidnight).inDays + 1;
@@ -484,7 +484,7 @@ class WorkoutScheduleReadService {
   bool isPhaseExpired() {
     final end = getPlanEndDate();
     if (end == null) return false;
-    final today = DateTime.now();
+    final today = nowWall(); // seam-aware (dev time-travel / year-sim)
     return today.isAfter(end);
   }
 
@@ -523,7 +523,7 @@ class WorkoutScheduleReadService {
 
   /// All dates in the current calendar week (Mon–Sun).
   List<Map<String, dynamic>> getCurrentCalendarWeek() {
-    final today = DateTime.now();
+    final today = nowWall(); // seam-aware (dev time-travel / year-sim)
     final monday = _normalizeToMonday(today);
     final days = <Map<String, dynamic>>[];
 
@@ -571,7 +571,7 @@ class WorkoutScheduleReadService {
   /// where a user lets Phase 1 expire (e.g. inactivity) — start the new
   /// phase from THIS Monday, not retroactively from the historical end.
   DateTime nextPhaseStartDate({DateTime? now}) {
-    final today = now ?? DateTime.now();
+    final today = now ?? nowWall(); // seam-aware (dev time-travel / year-sim)
     final endStr = MigratedKey.read<String>(_planEndKey);
     if (endStr != null) {
       final end = DateTime.tryParse(endStr);

@@ -49,6 +49,21 @@ DateTime _wallNow() {
   return o != null ? o() : DateTime.now();
 }
 
+/// Public, seam-aware replacement for `DateTime.now()`.
+///
+/// Returns the device wall-clock instant, honoring an active
+/// [setTestClock] override. In RELEASE builds the override can never be
+/// set (the setter is a no-op when `dart.vm.product` is true), so this is
+/// **byte-for-byte identical to `DateTime.now()` in production**.
+///
+/// Time-dependent reads that decide "what is today" for calendar / phase /
+/// streak / rank logic MUST call this instead of `DateTime.now()` so the
+/// dev-panel time-travel + the year-sim harness can fast-forward the
+/// calendar in a single place. Adopted 2026-05-31 (seam-coverage gap:
+/// schedule phase-expiry, rank weeks-since-signup, and streak walk-back
+/// previously read the raw system clock and ignored the seam).
+DateTime nowWall() => _wallNow();
+
 /// Current IST instant (returned as a "naive" DateTime in IST wall
 /// clock — `isUtc` is false but the components ARE IST values).
 DateTime istNow() {

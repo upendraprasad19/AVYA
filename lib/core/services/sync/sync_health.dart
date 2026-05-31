@@ -16,6 +16,7 @@ extension SyncServiceHealth on SyncService {
   /// now fires this directly so the cloud `weight_logs` table fills in
   /// seconds instead of waiting for the next weekly full sync.
   Future<void> syncWeightNow() async {
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
@@ -36,6 +37,7 @@ extension SyncServiceHealth on SyncService {
   ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
   ///   • List key      `sleep_logs`             (conversational AI tool path)
   Future<void> syncSleepNow() async {
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
@@ -89,6 +91,7 @@ extension SyncServiceHealth on SyncService {
   /// which reads `measurement_YYYY-MM-DD` keys — the same pattern written by
   /// conversational_log_handler._logMeasurement.
   Future<void> syncMeasurementsNow() async {
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;

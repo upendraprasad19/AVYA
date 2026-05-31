@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/stat_snapshot_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -431,7 +432,9 @@ class RankService {
     }
     final weeks = signup == null
         ? 0
-        : DateTime.now().difference(signup).inDays ~/ 7;
+        // seam-aware (dev time-travel / year-sim): nowWall() == DateTime.now()
+        // in release. Lets the harness fast-forward weeks-since-signup.
+        : nowWall().difference(signup).inDays ~/ 7;
 
     // Deployments complete = count of rank_promotions rows with
     // trigger_type='deployment_complete'. Reading that requires a
