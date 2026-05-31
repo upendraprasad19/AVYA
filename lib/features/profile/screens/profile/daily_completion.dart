@@ -68,14 +68,17 @@ extension _DailyCompletion on _ProfileScreenState {
                 ),
               ),
               const SizedBox(height: 6),
-              Row(
+              // diagnose c9e0a4 follow-up (D-profile): 4 dot+label pairs
+              // overflowed the row (~55px right) on narrow widths. Wrap flows
+              // them to a second line instead of overflowing; stays one line
+              // when there's room.
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   _completionDot('Workout', workoutDone),
-                  const SizedBox(width: 8),
                   _completionDot('Meals', hasMeals),
-                  const SizedBox(width: 8),
                   _completionDot('Water', waterDone),
-                  const SizedBox(width: 8),
                   _completionDot('Weight', weightDone),
                 ],
               ),

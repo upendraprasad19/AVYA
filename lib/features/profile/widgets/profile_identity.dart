@@ -237,10 +237,18 @@ class ProfileIdentity extends StatelessWidget {
                   _buildAvatar(context),
                   Expanded(
                     child: Center(
+                      // diagnose c9e0a4 follow-up (D-profile): the rank chip
+                      // could exceed its Expanded slot on narrow widths and
+                      // overflow (~17px right) — Center does not clip.
+                      // FittedBox scaleDown shrinks the chip to fit; no-op when
+                      // there's room.
                       child: (rankCode != null &&
                               rankShortCode != null &&
                               onTapRank != null)
-                          ? _buildRankChip()
+                          ? FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: _buildRankChip(),
+                            )
                           : const SizedBox.shrink(),
                     ),
                   ),

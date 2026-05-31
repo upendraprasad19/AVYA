@@ -66,33 +66,43 @@ class SlimAchievementsCard extends StatelessWidget {
           ),
           const SizedBox(width: 14),
 
-          // Recent badge emojis
-          for (int i = 0; i < display.length; i++) ...[
-            if (i > 0) const SizedBox(width: 4),
-            Opacity(
-              opacity: display[i].isUnlocked ? 1.0 : 0.35,
-              child: Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.bgRaise,
-                  borderRadius: BorderRadius.circular(AppRadius.soft),
-                  border: Border.all(
-                    color: display[i].isUnlocked
-                        ? AppColors.accent.withValues(alpha: 0.4)
-                        : AppColors.line2,
+          // Recent badge emojis.
+          // diagnose c9e0a4 follow-up (D-profile): the count + fixed badge
+          // tiles + chip + chevron overflowed this row (~right stripe) on
+          // narrow widths. Expanded(Wrap) gives the badge group the remaining
+          // space (keeping the chip right-aligned) and lets it wrap instead of
+          // overflow when truly tight.
+          Expanded(
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (int i = 0; i < display.length; i++)
+                  Opacity(
+                    opacity: display[i].isUnlocked ? 1.0 : 0.35,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.bgRaise,
+                        borderRadius: BorderRadius.circular(AppRadius.soft),
+                        border: Border.all(
+                          color: display[i].isUnlocked
+                              ? AppColors.accent.withValues(alpha: 0.4)
+                              : AppColors.line2,
+                        ),
+                      ),
+                      child: Text(
+                        display[i].emoji,
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                    ),
                   ),
-                ),
-                child: Text(
-                  display[i].emoji,
-                  style: const TextStyle(fontSize: 15),
-                ),
-              ),
+              ],
             ),
-          ],
-
-          const Spacer(),
+          ),
+          const SizedBox(width: 8),
 
           // Earned / total chip
           WardChip(
