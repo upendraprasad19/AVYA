@@ -12,7 +12,7 @@ self-evolving: true
 
 ## 0. When to invoke
 
-- **Auto-triggered** by `scripts/pre-commit.sh` when staged blast-radius ≥ `account` (per `docs/blast_radius.yaml`)
+- **Reminder-triggered** by `scripts/pre-commit.sh` — it PRINTS a `NOTE: blast-radius=<tier> (>=account) — run /code-review (B-pass)` nudge when the staged blast-radius is ≥ `account` (per `docs/blast_radius.yaml`). Git hooks **cannot invoke Claude skills**, so this is a printed reminder; run `/code-review` **manually** when you see it. (Corrected lean-workflow batch 2026-06-01 — the prior "auto-triggered" wording described behaviour the hook never had.)
 - **Required** for commits with blast-radius `catastrophic` (gate `check_code_review_pass_exists.dart` blocks without an `accepted` verdict)
 - **Manual**: `/review` any time, including pre-push and pre-batch-finalization
 - **Skip**: commits with blast-radius `feature` (cost > value)

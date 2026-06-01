@@ -35,6 +35,8 @@ Build a production-ready APK with all required pre-flight gates, pre-flight chec
 
 All gates are Dart CLI scripts. Run with `dart run scripts/<name>.dart`. Each exits 0 on pass. Failures are printed to stderr. Gates run in order — first failure stops the build (unless `--emergency-bypass` is active).
 
+**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/3 + the clean build + Gate 13 ALWAYS still run. See the `--from-green` section below.
+
 ### Gate 1 — On `main` with clean working tree (existing)
 
 ```bash
@@ -258,6 +260,41 @@ MD5: <hash>
 ```
 
 ---
+
+## --from-green (CI-green fast-path)
+
+If `$ARGUMENTS` contains `--from-green`: the commit being built has already been pushed and
+verified green by CI, so the **redundant local re-run** of Gate 4 (analyze) + Gate 5 (full
+`flutter test`) + the dart gates (7–12, 14–17, 23) is skipped. Lean-workflow batch
+(2026-06-01): pre-push + CI just ran these on this exact SHA, and the `flutter clean` build
+below recompiles everything regardless — a second analyze/test pass is ~7–10 min of zero new
+signal.
+
+**ALWAYS still run (never skipped, even with `--from-green`):** Pre-build housekeeping, Gate 1
+(on `main` + clean tree), Gate 2 (versionCode), Gate 3 (.env), the clean build (`flutter clean`
+→ `build apk` — recompiles, catches compile/asset/Gradle errors), and Gate 13 (size + record).
+
+**Pre-skip verification — fail TOWARD running the gates:**
+
+```bash
+SHA=$(git rev-parse HEAD)
+# 1. Built artifact must equal merged history (the source-of-truth rule).
+git fetch origin main --quiet 2>/dev/null || true
+if [ "$SHA" != "$(git rev-parse origin/main 2>/dev/null)" ]; then
+  echo "ERROR: --from-green requires HEAD == origin/main (push first). Falling back to the full gate run."
+  # -> run the normal gates; do NOT skip.
+fi
+# 2. Best-effort CI confirmation (authoritative when gh is available).
+CI=$(gh run list --branch main --json headSha,conclusion --limit 20 \
+       --jq "[.[] | select(.headSha==\"$SHA\")][0].conclusion" 2>/dev/null || true)
+```
+
+- `CI == success` → CI confirmed green → **skip** the redundant gates 4 / 5 / 7–17 / 23.
+- `CI == failure | cancelled | timed_out` → **ABORT**: do not build a red commit. Fix + re-push.
+- `CI` empty (pending / no run yet / `gh` absent or unauthenticated) → **WARN** and proceed on
+  your explicit `--from-green` assertion (it is opt-in; passing the flag asserts CI-green).
+
+Without `--from-green`, all gates run as normal — the safe default.
 
 ## --emergency-bypass
 

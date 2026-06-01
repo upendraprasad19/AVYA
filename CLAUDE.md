@@ -70,22 +70,23 @@ Unit tests live in `test/`. Integration tests (require Hive + real device) live 
 flutter analyze
 ```
 
-### Pre-commit hook
-A bash hook at `scripts/pre-commit.sh` blocks any commit while
-`flutter analyze --no-fatal-infos` or `flutter test` are failing.
-Also: regenerates `docs/diagnoses/INDEX.md` on any diagnose-doc change,
-and on merge commits walks the regression catalog
-(`scripts/check_regression_catalog.dart`). Not version-controlled
-into `.git/hooks/` automatically — every fresh clone must install
-it once:
+### Git hooks (pre-commit + pre-push) — tiered by blast radius
+Installed once per clone via `sh scripts/setup-hooks.sh` (Git Bash on Windows). Not
+version-controlled into `.git/hooks/`. Bypass a single run with `--no-verify` (sparingly — CI
+runs the same gates). See §4 process invariants for the no-deferred-failures policy.
 
-```bash
-# macOS / Linux: any shell
-# Windows: run from Git Bash (bundled with Git for Windows)
-sh scripts/setup-hooks.sh
-```
-
-Bypass for a single commit: `git commit --no-verify` (use sparingly — CI runs the same gate). See §4 process invariants for the no-deferred-failures policy.
+- **`scripts/pre-commit.sh` (fast, ~3 min):** `flutter analyze --no-fatal-infos` + the
+  `test/contracts/` subset (NOT the full suite) + the ~28 `check_*.dart` gates (bounded-parallel,
+  `PRE_COMMIT_GATE_JOBS` default 4) + conditional index regens + merge-commit regression-catalog
+  walk. Blocks the commit on any failure. Prints a non-blocking `/code-review` (B-pass) reminder
+  when the staged blast-radius is ≥`account`. Force the full suite here with `PRE_COMMIT_FULL=1`.
+- **`scripts/pre-push.sh` (blast-radius-tiered):** runs the full `flutter test` only when the
+  pushed range's blast-radius is ≥`account` (auth/ai_coach/sync/ai-proxy/payment/migrations/
+  CLAUDE.md/…). `feature`-tier pushes (docs/scripts/.claude/backups/profile-only) **skip** the local
+  full suite — CI is the backstop. Fail-safe: any uncertainty runs the suite. Force it with
+  `PRE_PUSH_FULL=1`. (Tier via `scripts/blast_radius_from_diff.dart`; lean-workflow batch 2026-06-01.)
+- **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth** — analyze + full
+  `flutter test` + all gates + a debug-APK compile on every push, regardless of the local tier.
 
 ### Riverpod Code Generation
 The project has `riverpod_generator` installed but providers are currently written manually using `flutter_riverpod` directly (no `.g.dart` files). If you add `@riverpod` annotations, run:
@@ -238,6 +239,9 @@ After observations captured + before brainstorming:
 - Never build APK unless explicitly asked. Use `/build-apk` skill, NOT raw `flutter build`. APK builds on this machine can hang silently without the skill's pre-flight cleanup.
 - APK builds from `main` ONLY. Feature branch → merge `--no-ff` to main → `/build-apk` from main.
 - For new git worktrees, copy `.env` from main first (it's gitignored, doesn't carry over). Without it `SUPABASE_URL` compiles empty and auth crashes.
+- **Batch commits; push once per logical batch.** Don't commit→push→commit→push — each push re-runs the tiered pre-push + a fresh CI run on the same code. Group related commits and push them together (lean-workflow batch 2026-06-01).
+- **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; pre-push (≥account) + CI are the full-suite gates. CI is the full-suite source-of-truth.
+- APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
 - Refs: `feedback_apk_build_explicit_approval.md`, `feedback_main_is_source_of_truth.md`, `feedback_use_build_apk_skill.md`.
 
 ### 4.4 The coding rules (23 — NON-NEGOTIABLE)

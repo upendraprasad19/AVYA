@@ -93,8 +93,17 @@ fi
 # Allow-list (build-only or advisory) lives in scripts/check_gate_scripts_wired.dart.
 # Each script accepts a --warn-only flag during its 24h smoke window;
 # remove the flag once the gate is proven stable.
-echo "[pre-commit] Running tech-debt audit gates..."
-GATE_FAIL=0
+echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
+# Lean-workflow batch (2026-06-01): the ~28 check_*.dart gates ran sequentially.
+# Run them with BOUNDED concurrency (PRE_COMMIT_GATE_JOBS, default 4) to shave
+# wall-time without spawning 28 Dart VMs at once (same OOM ceiling discipline as
+# Gradle -Xmx on this 16 GB box). MUST preserve the literal `scripts/check_*.dart`
+# glob below AND the `case "$GATE_NAME" in ... esac` allowlist — Gate 33
+# (scripts/check_gate_scripts_wired.dart) detects wiring via exactly those two
+# textual markers; dropping either would make every gate read as "unwired".
+MAX_GATE_JOBS="${PRE_COMMIT_GATE_JOBS:-4}"
+GATE_FAILDIR="$(mktemp -d)"
+GATE_JOBS=0
 for GATE in scripts/check_*.dart; do
   GATE_NAME="$(basename "$GATE")"
   # Skip build-only / advisory gates per check_gate_scripts_wired.dart allowlist.
@@ -110,17 +119,34 @@ for GATE in scripts/check_*.dart; do
     check_snapshot_contract.dart|\
     check_test_runtime_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
-      # Other 4: require live DB / merge context / build artifact —
+      # Other gates: require live DB / merge context / build artifact —
       # run via /build-apk skill, NOT pre-commit. See
       # scripts/check_gate_scripts_wired.dart allowlist for rationale.
       continue
       ;;
   esac
-  if ! dart run "$GATE" >/dev/null 2>&1; then
-    echo "[pre-commit] GATE FAIL: $GATE_NAME — re-run for details: dart run $GATE"
-    GATE_FAIL=1
+  # Run each gate in the background; a failing gate drops a marker file.
+  (
+    if ! dart run "$GATE" >/dev/null 2>&1; then
+      echo "$GATE_NAME" > "$GATE_FAILDIR/$GATE_NAME"
+    fi
+  ) &
+  GATE_JOBS=$((GATE_JOBS + 1))
+  if [ "$GATE_JOBS" -ge "$MAX_GATE_JOBS" ]; then
+    wait || true   # drain the batch (marker files carry pass/fail, not $?)
+    GATE_JOBS=0
   fi
 done
+wait || true
+# Aggregate: one marker file per failed gate (same UX as the old sequential loop).
+GATE_FAIL=0
+for MARK in "$GATE_FAILDIR"/*; do
+  [ -e "$MARK" ] || continue   # no failures -> unexpanded glob -> skip
+  FAILED_NAME="$(basename "$MARK")"
+  echo "[pre-commit] GATE FAIL: $FAILED_NAME — re-run for details: dart run scripts/$FAILED_NAME"
+  GATE_FAIL=1
+done
+rm -rf "$GATE_FAILDIR"
 if [ "$GATE_FAIL" -ne 0 ]; then
   echo "[pre-commit] One or more gates failed. Fix root cause; do NOT use --no-verify."
   exit 1
@@ -136,6 +162,22 @@ if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
 fi
 
 echo "[pre-commit] All decluttering gates passed."
+
+# Lean-workflow batch (2026-06-01): non-blocking blast-radius reminder.
+# Git hooks cannot invoke Claude skills, so the code-review skill's documented
+# "auto-trigger at >=account" is really a PRINTED nudge here -- run /code-review
+# (B-pass) manually before pushing a >=account change. Same preamble-tolerant
+# extraction as prepare-commit-msg.sh:41-43; reads the STAGED diff (default mode).
+# (This `case` block carries no check_*.dart names, so Gate 33's allowlist
+# detection is unaffected.)
+REMINDER_TIER=$(dart run scripts/blast_radius_from_diff.dart 2>/dev/null \
+  | grep -oE 'Blast-radius: (feature|account|platform|catastrophic)' \
+  | tail -1 | awk '{print $2}' || true)
+case "$REMINDER_TIER" in
+  account|platform|catastrophic)
+    echo "[pre-commit] NOTE: blast-radius=$REMINDER_TIER (>=account) -- run /code-review (B-pass) before pushing."
+    ;;
+esac
 
 echo "[pre-commit] OK"
 exit 0
