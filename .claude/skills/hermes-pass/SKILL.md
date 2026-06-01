@@ -132,4 +132,4 @@ Append after each invocation:
 
 > The 2026-05-17 Hermes external cross-check (Phase A → D batch) caught 13 P0/P1 findings my own verification subagent missed — including 3 payment-blocking TDZ + SSRF + NOT NULL bugs. That cross-check was MANUAL and ad-hoc. This skill codifies it as a repeatable pass.
 
-> First invocation: TBD. Update this section when run.
+> **First invocation: 2026-06-01** — derive-only AI-coach tool-surface batch (platform tier). Targeted 8-lens set (L1, L14, L21, L26, L28, L34, L37, L40), 8 parallel Opus agents. Findings: 1 P1 + 3 P2 + 1 false_alarm. The P1 (L37) — the batch's own a9c3e2 snapshot-budget fix re-breached the 10000-char server cap because `enrichContextForQuery` re-inflated the payload AFTER the trim — was a correct-cap-at-the-wrong-pipeline-point gap that 5 clean lenses AND the per-commit B-pass had missed; fixed in-batch. Validated the skill's premise (a deep multi-lens pass catches what a single reviewer misses). Report: `docs/audit/2026-06-01-hermes-derive-only-coach.md`. Lesson: run L37 on any batch that adds a size/budget cap — verify the cap sits at the LAST mutation before the bounded sink.

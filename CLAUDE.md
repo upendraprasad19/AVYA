@@ -424,6 +424,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Handbook (durable working rules, portable) | `docs/handbook/` (auto-generated `INDEX.md`; bug-classes / process / conventions / audit / testing) |
 | Incident playbook (post-mortems) | `docs/incidents/` + `alerts/_thresholds.yaml` + `/incident` skill (Phase 1 placeholder thresholds — Phase 2 tuning 2026-06-03) |
 | Code review skills (B-pass per-commit, E-pass end-of-batch) | `.claude/skills/code-review/SKILL.md` + `.claude/skills/hermes-pass/SKILL.md` + `docs/reviews/` |
+| E2E sim-testing (live-web cross-surface verification: Claude-in-Chrome real pixels, temp-PRO + cleanup, AI-coach tool driving, shared-Gemini-quota pacing, off-live canonical-routing fallback) | `.claude/skills/e2e-sim-testing/SKILL.md` |
 | Device-CI runner + 4 critical Patrol flows | `docs/operations/DEVICE_TESTING.md` + `scripts/run-device-tests.sh` |
 | Cron registry | `docs/operations/CRON_REGISTRY.md` (Gate 31) |
 | Secret inventory | `docs/operations/SECRET_INVENTORY.md` |

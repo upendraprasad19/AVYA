@@ -19,6 +19,8 @@
 // Hive contract: every read routes through HiveService.instance (rule #4
 // — Hive-first). No direct Hive.openBox calls from this file.
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -60,7 +62,7 @@ class AiSnapshotBuilder {
         .length;
     final isFirstEverMessage = priorMessages == 0;
 
-    return {
+    final snapshot = <String, dynamic>{
       'is_first_ever_message': isFirstEverMessage,
       'profile': {
         'name': profile['full_name'] ?? '',
@@ -160,6 +162,75 @@ class AiSnapshotBuilder {
       'phase_transitions': _getPhaseTransitions(),
       'recent_meal_deletes': _getRecentMealDeletes(),
     };
+    return trimSnapshotToBudget(snapshot);
+  }
+
+  /// Caps the serialized snapshot under the server's 10K-char limit
+  /// (CLAUDE.md §4.4 rule 18). A power user with a long history (many PRs,
+  /// custom exercises, a full year of logs) can otherwise overflow it,
+  /// making `ai-proxy` reject EVERY message with "coaching context unusually
+  /// large" — a totally unusable coach (found live on amar, year-sim data;
+  /// diagnose a9c3e2). We iteratively shrink the LARGEST non-critical field
+  /// (halve a list, halve a map, or drop a scalar blob) until the snapshot
+  /// fits, always keeping the high-signal fields the coach reasons from.
+  ///
+  /// [budget] defaults to 8500 for the BASE snapshot, leaving headroom under
+  /// the 10000-char server cap. NOTE: `enrichContextForQuery`'s historical adds
+  /// are NOT guaranteed to fit that headroom (weight/adherence trends span 90
+  /// days), so enrich RE-TRIMS its own output to budget 9500 before returning
+  /// (diagnose a9c3e2 + Hermes L37 finding). Visible for testing.
+  @visibleForTesting
+  static Map<String, dynamic> trimSnapshotToBudget(
+    Map<String, dynamic> s, {
+    int budget = 8500,
+  }) {
+    // Never trimmed — the coach must always see these in full.
+    const keep = <String>{
+      'is_first_ever_message', 'profile', 'progress',
+      'current_streak_weeks', 'current_streak_days', 'total_workouts_done',
+      'current_weight_kg', 'target_weight_kg', 'daily_targets',
+      'daily_calorie_target', 'today_workout', 'today_workout_name',
+      'today_nutrition', 'meals_today', 'current_plan_summary',
+      'subscription', 'current_rank', 'next_rank', 'motivational_style',
+    };
+
+    var size = jsonEncode(s).length;
+    if (size <= budget) return s;
+    final before = size;
+
+    var guard = 0;
+    while (size > budget && guard++ < 80) {
+      String? biggestKey;
+      var biggestLen = 0;
+      s.forEach((k, v) {
+        if (keep.contains(k)) return;
+        final len = jsonEncode(v).length;
+        if (len > biggestLen) {
+          biggestLen = len;
+          biggestKey = k;
+        }
+      });
+      // Nothing left worth trimming (only small or kept fields remain).
+      final bk = biggestKey;
+      if (bk == null || biggestLen < 60) break;
+      final v = s[bk];
+      if (v is List && v.length > 1) {
+        s[bk] = v.sublist(0, (v.length / 2).ceil());
+      } else if (v is Map && v.length > 1) {
+        final ks = v.keys.toList();
+        final keepN = (ks.length / 2).ceil();
+        s[bk] = {for (final k in ks.take(keepN)) k: v[k]};
+      } else {
+        s.remove(bk);
+      }
+      size = jsonEncode(s).length;
+    }
+
+    if (size < before) {
+      debugPrint('[AiSnapshotBuilder] snapshot trimmed $before → $size chars '
+          '(budget $budget) to fit the coach context limit.');
+    }
+    return s;
   }
 
   /// Enriches the base AI context with historical data when the user's
@@ -254,7 +325,15 @@ class AiSnapshotBuilder {
       debugPrint('[AiSnapshotBuilder.enrichContextForQuery] $e');
     }
 
-    return context;
+    // Re-trim AFTER enrichment (Hermes L37 / diagnose a9c3e2 follow-up). The
+    // historical adds above are NOT bounded to the base trim's 1500-char
+    // headroom — a power user's weight_trend (90d) / workout_adherence (90d) /
+    // nutrition_trend (12w) can each exceed it and re-breach the server's
+    // 10000-char cap, re-bricking the coach for exactly the heavy user a9c3e2
+    // set out to fix. The base high-signal fields are in `keep`, so the trim
+    // shrinks the (less-critical) historical adds first. Budget 9500 keeps a
+    // 500-char margin under the server cap.
+    return trimSnapshotToBudget(context, budget: 9500);
   }
 
   bool _isHistoricalQuery(String text) {

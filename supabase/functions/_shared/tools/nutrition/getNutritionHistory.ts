@@ -5,7 +5,7 @@
 // here — that lives on the snapshot under meals_today / *_today fields
 // (per Captain Manual "Today's nutrition" section). For past dates the
 // coach calls this tool with a YYYY-MM-DD inclusive range.
-import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
+import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
 
 const schema = z.object({

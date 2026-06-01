@@ -40,7 +40,18 @@ void main() {
   late String syncSrc;
 
   setUpAll(() {
-    syncSrc = loadSyncServiceSource().readAsStringSync();
+    // Strip comments BEFORE windowing (per
+    // feedback_source_grep_strip_comments_first.md + debugging skill
+    // §2.18). Diagnose c9f2a7 (2026-06-01) added a ~28-line explanatory
+    // comment block between the nutrition guard's `log['date']` read and
+    // its upsert marker, pushing the guard outside the char window and
+    // breaking this test even though the guard code was unchanged.
+    // Stripping makes the window measure CODE distance, not prose, so
+    // future comment churn can't re-break the contract. Stripping only
+    // moves each guard CLOSER to its marker, so the other groups stay
+    // green. The sync sources contain no `://` (verified), so the naive
+    // line-comment strip can't eat a URL string.
+    syncSrc = _stripComments(loadSyncServiceSource().readAsStringSync());
   });
 
   /// Return the slice of `syncSrc` that ends at the upsert call
@@ -121,7 +132,10 @@ void main() {
   group('sync_skipped_null_natural_key guard — nutrition_logs', () {
     final marker = 'from("nutrition_logs").upsert(';
     test('guard reads date + meal_type and skips on null/empty', () {
-      final pre = windowBefore(marker);
+      // Wider window than the 800 default: even with comments stripped,
+      // the guard's `log['date']` read sits ~1.5K chars above the marker
+      // because the c9f2a7 `parentPayload` map is legitimately long code.
+      final pre = windowBefore(marker, windowChars: 2000);
       expect(pre.contains("log['date']"), isTrue,
           reason: 'nutrition_logs guard must read log[date]');
       expect(pre.contains("log['meal_type']"), isTrue,
@@ -136,6 +150,9 @@ void main() {
 
   group('telemetry op_type appears 4+ times in the sync layer', () {
     test('op_type construction count', () {
+      // syncSrc is comment-stripped in setUpAll, so this counts only the
+      // real `ErrorTelemetry.logEvent('sync_skipped_null_natural_key', …)`
+      // CODE sites (4 guards + the per-set extra = 5), never a comment.
       final occurrences = "'sync_skipped_null_natural_key'"
           .allMatches(syncSrc)
           .length;
@@ -148,4 +165,18 @@ void main() {
               '$occurrences');
     });
   });
+}
+
+/// Strips `/* … */` block comments and `// …` line comments so the
+/// window assertions measure CODE distance, not explanatory prose.
+/// Canonical form, matching `no_top_level_duration_seconds_reads_test.dart`
+/// (feedback_source_grep_strip_comments_first.md). Safe for the sync
+/// sources because none contain `://` (no URL string the naive line-strip
+/// could truncate).
+String _stripComments(String src) {
+  final block = RegExp(r'/\*[\s\S]*?\*/');
+  var out = src.replaceAll(block, '');
+  final line = RegExp(r'//.*');
+  out = out.replaceAll(line, '');
+  return out;
 }

@@ -3,17 +3,15 @@
 // Drift-fix batch 2026-05-24 / F5 workout (P2).
 //
 // Per APK Test #16.1, `WorkoutRepository.logSetWithPrRescan` was
-// one of three rogue exlog_* key writers and was migrated off (AI
-// coach `logPR` tool now routes through
-// `WorkoutWriteService.logExercise`). With zero active callers
-// (verified at deletion time), the method has been deleted.
+// one of three rogue exlog_* key writers and was migrated off. With
+// zero active callers (verified at deletion time), the method has
+// been deleted.
 //
 // This test pins that the method declaration does not reappear.
 //
-// Note: existing test
-// `test/contracts/tool_dispatcher_log_pr_uses_writeservice_test.dart`
-// already pins that the AI coach tool dispatcher does not CALL this
-// method; this test pins that the method itself does not EXIST.
+// (The AI coach `logPR` tool that previously logged PRs was removed
+// entirely on 2026-05-31 — PRs are derived from logSet's auto-rescan.
+// See `test/contracts/derive_only_tool_surface_test.dart`.)
 //
 // Strips block + line comments per
 // feedback_source_grep_strip_comments_first.md so docstring-style

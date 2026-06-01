@@ -42,7 +42,6 @@ import '../../widgets/diff_preview/reschedule_week_diff.dart';
 import '../../widgets/diff_preview/custom_template_diff.dart';
 import '../../widgets/diff_preview/schedule_template_diff.dart';
 import '../../widgets/diff_preview/switch_goal_diff.dart';
-import '../../widgets/diff_preview/prelog_diff.dart';
 
 
 part 'compact_header.dart';

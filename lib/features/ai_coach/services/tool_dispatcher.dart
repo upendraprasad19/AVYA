@@ -24,7 +24,6 @@ import '../../home/providers/home_provider.dart'
         recentFoodLogsProvider;
 import '../../nutrition/providers/nutrition_provider.dart'
     show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
-import '../../nutrition/repositories/nutrition_repository.dart';
 import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
@@ -117,9 +116,6 @@ class ToolDispatcher {
         case 'log_set':
           result = await _executeLogSet(intent);
           break;
-        case 'mark_workout_complete':
-          result = await _executeMarkWorkoutComplete(intent);
-          break;
         case 'shorten_workout':
           result = await _executeShortenWorkout(intent);
           break;
@@ -152,15 +148,6 @@ class ToolDispatcher {
           break;
         case 'log_meal_by_text':
           result = await _executeLogMealByText(intent);
-          break;
-        case 'adjust_caloric_target':
-          result = await _executeAdjustCaloricTarget(intent);
-          break;
-        case 'prelog':
-          result = await _executePrelog(intent);
-          break;
-        case 'log_pr':
-          result = await _executeLogPR(intent);
           break;
         default:
           return ToolExecutionResult.failure(
@@ -321,116 +308,44 @@ class ToolDispatcher {
       return ToolExecutionResult.failure(
           result.errorMessage ?? 'Could not log set.');
     }
+
+    // Derived completion (replaces the removed `markWorkoutComplete` tool —
+    // completion is no longer AI-assertable; it is DERIVED from raw logging).
+    // If this date has a scheduled workout that isn't already complete, mark it
+    // done via the canonical writer (same one the UI finish button uses).
+    final schedDateStr =
+        (dateRaw == null || dateRaw.isEmpty) ? _todayDateString() : dateRaw;
+    await _maybeCompleteScheduledDay(date, schedDateStr);
+
     return ToolExecutionResult.success(
         data: {'log_id': result.logKey, 'exercise_name': name});
   }
 
-  /// D.2 logPR — routes through `WorkoutWriteService.logExercise` (sets=1).
-  ///
-  /// audit-2026-05-16 F6-2 — pre-fix this called the legacy
-  /// `WorkoutRepository.logSetWithPrRescan` directly, which was ONE OF THE 3
-  /// ROGUE `exlog_*` key formulas closed in APK Test #16.1 / Bug A. Even after
-  /// the rogue-key bug was fixed at the repository layer, this dispatcher
-  /// still bypassed the canonical WriteService (no mutex, no batched telemetry,
-  /// no consistent cloud sync timing). 8th writer/reader drift instance per
-  /// `feedback_writer_reader_field_drift_recurring.md`.
-  ///
-  /// Now routes through `WorkoutWriteService.logExercise(sets=[single])` —
-  /// PR detection is automatic via the WriteService's internal `_rescanPrFor`
-  /// (workout_write_service.dart:183). If the claim isn't actually a new PR,
-  /// the row still lands but `is_pr=false` on the underlying entry — same
-  /// semantics as before, canonical path now.
-  Future<ToolExecutionResult> _executeLogPR(ToolIntent intent) async {
-    final p = intent.payload;
-    final exerciseId = p['exerciseId'] as String?;
-    final weightKg = (p['weightKg'] as num?)?.toDouble();
-    final reps = (p['reps'] as num?)?.toInt() ?? 1;
-    final dateRaw = p['date'] as String?;
-
-    if (exerciseId == null || weightKg == null) {
-      return const ToolExecutionResult.failure('Invalid log_pr intent payload.');
-    }
-
-    final name = _resolveExerciseName(exerciseId) ?? exerciseId;
-    final date = (dateRaw == null || dateRaw.isEmpty)
-        ? DateTime.now()
-        : (DateTime.tryParse(dateRaw) ?? DateTime.now());
-
+  /// Derived workout completion — see `_executeLogSet`. Idempotent: no-op when
+  /// the date has no schedule or is already `completed`. Reuses the canonical
+  /// `WorkoutWriteService.markCompleted` so streak / deployment / rank advance
+  /// exactly as the UI finish button does. Never throws into the dispatch flow.
+  Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr) async {
     try {
-      final result = await WorkoutWriteService.instance.logExercise(
+      final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
+      if (raw is! Map || raw['status'] == 'completed') return;
+      // Don't auto-complete a REST day — there's no planned workout to finish,
+      // so an ad-hoc coach-logged set shouldn't flip the rest day into a
+      // "completed workout" (which would feed streak / deployment wrongly).
+      if (raw['type'] == 'rest') return;
+      final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
+      await WorkoutWriteService.instance.markCompleted(
         date: date,
-        exerciseName: name,
-        sets: [
-          ExerciseSet(
-            weightKg: weightKg,
-            reps: reps,
-            loggedAtMs: DateTime.now().millisecondsSinceEpoch,
-          ),
-        ],
-        source: WriteSource.aiCoach,
-        // ref: null — dispatcher's outer flow handles invalidation + sync.
+        workoutName: workoutName,
+        durationSec: 0,
       );
-      if (!result.success) {
-        return ToolExecutionResult.failure(
-            result.errorMessage ?? 'Could not log PR.');
-      }
-      return ToolExecutionResult.success(data: {
-        'log_id': result.logKey,
-        'exercise_name': name,
-        'weight_kg': weightKg,
-        'reps': reps,
-      });
-    } catch (e, stack) {
-      debugPrint('[ToolDispatcher] log_pr failed: $e\n$stack');
-      final errStr = e.toString();
-      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
-      unawaited(ErrorTelemetry.logEvent('tool_dispatch_log_pr_failed',
-          message: clipped));
-      return ToolExecutionResult.failure('Could not log PR: $e');
+    } catch (e) {
+      // Swallow — derived completion is best-effort; the log itself succeeded.
+      debugPrint('[ToolDispatcher] derived completion failed: $e');
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_derived_completion_failed',
+          message: e.toString()));
     }
-  }
-
-  Future<ToolExecutionResult> _executeMarkWorkoutComplete(
-      ToolIntent intent) async {
-    final dateRaw = intent.payload['date'] as String?;
-    final date = dateRaw ?? _todayDateString();
-
-    // Concurrent-edit guard: a schedule entry must exist for the date.
-    final raw = HiveService.instance.workoutBox.get('schedule_$date');
-    if (raw is! Map) {
-      throw ConcurrentEditException('no workout scheduled for $date');
-    }
-    if (raw['status'] == 'completed') {
-      // Already done — idempotent success.
-      return ToolExecutionResult.success(
-          data: {'date': date, 'already_completed': true});
-    }
-
-    final parsed = DateTime.tryParse(date);
-    if (parsed == null) {
-      return const ToolExecutionResult.failure(
-          'Invalid mark_workout_complete intent payload.');
-    }
-
-    // Plan A A-12: route through WorkoutWriteService.markCompleted so
-    // schedule_<date>.status='completed' AND wlog_<date> are written
-    // atomically with consistent IST date stamping + source='ai_coach'.
-    final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
-    final durationSec =
-        (intent.payload['duration_seconds'] as num?)?.toInt() ?? 0;
-    final rpe = (intent.payload['rpe'] as num?)?.toInt();
-    final result = await WorkoutWriteService.instance.markCompleted(
-      date: parsed,
-      workoutName: workoutName,
-      durationSec: durationSec,
-      rpe: rpe,
-      // ref: null — outer dispatcher flow handles invalidation + sync.
-    );
-    if (!result.success) {
-      return ToolExecutionResult.failure(
-          result.errorMessage ?? 'Could not mark workout complete.');
-    }
-    return ToolExecutionResult.success(data: {'date': date});
   }
 
   Future<ToolExecutionResult> _executeCreateCustomExercise(
@@ -1188,139 +1103,6 @@ class ToolDispatcher {
     }
   }
 
-  /// C.4 prelog — batch-writes many meals across one or more days.
-  ///
-  /// The intent payload already carries fully pre-parsed meals (the tool's
-  /// server-side intentBuilder ran `parseFoodText` over each meal in
-  /// parallel). All the dispatcher has to do is iterate and reuse the same
-  /// `_writeFoodLogFromIntent` helper the single-meal C.1 tool uses so both
-  /// paths write identical shapes to the nutrition Hive box.
-  ///
-  /// Partial failure is tolerated: per-meal errors are collected, but as
-  /// long as one meal writes we return success(partial_errors). All-empty
-  /// or all-failed returns failure.
-  Future<ToolExecutionResult> _executePrelog(ToolIntent intent) async {
-    final parsedMeals = (intent.payload['parsed_meals'] as List?)
-            ?.whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList() ??
-        <Map<String, dynamic>>[];
-
-    if (parsedMeals.isEmpty) {
-      return const ToolExecutionResult.failure('No meals to pre-log.');
-    }
-
-    final results = <Map<String, dynamic>>[];
-    final errors = <String>[];
-
-    for (int i = 0; i < parsedMeals.length; i++) {
-      final meal = parsedMeals[i];
-      final date = meal['date'] as String?;
-      final foodName = (meal['food_name'] as String?)?.trim();
-      if (date == null || foodName == null || foodName.isEmpty) {
-        errors.add('skipped meal with missing date or name');
-        continue;
-      }
-      try {
-        final logId = await _writeFoodLogFromIntent(
-          date: date,
-          foodName: foodName,
-          mealType: _validateMealType(meal['meal_type'] as String?),
-          totalCalories: (meal['total_calories'] as num?)?.toInt() ?? 0,
-          protein: (meal['total_protein_g'] as num?)?.toInt() ?? 0,
-          carbs: (meal['total_carbs_g'] as num?)?.toInt() ?? 0,
-          fat: (meal['total_fat_g'] as num?)?.toInt() ?? 0,
-          servingDescription:
-              (meal['serving_description'] as String?)?.trim().isNotEmpty ==
-                      true
-                  ? meal['serving_description'] as String
-                  : '1 serving',
-          source: NutritionWriteSource.prelog,
-          uniqueSuffix: '$i',
-        );
-        results.add({
-          'log_id': logId,
-          'date': date,
-          'food_name': foodName,
-          'total_calories': meal['total_calories'] ?? 0,
-        });
-      } catch (e, stack) {
-        debugPrint(
-            '[ToolDispatcher] prelog meal failed ($foodName on $date): $e\n$stack');
-        errors.add('$foodName on $date: $e');
-      }
-    }
-
-    if (errors.isEmpty) {
-      return ToolExecutionResult.success(data: {'logged': results});
-    } else if (results.isEmpty) {
-      final aggregated = errors.join('; ');
-      final clipped = aggregated.length > 500
-          ? aggregated.substring(0, 500)
-          : aggregated;
-      unawaited(ErrorTelemetry.logEvent('tool_dispatch_prelog_failed',
-          message: clipped));
-      return ToolExecutionResult.failure(
-          'Could not log any meals: ${errors.join("; ")}');
-    } else {
-      return ToolExecutionResult.success(data: {
-        'logged': results,
-        'partial_errors': errors,
-      });
-    }
-  }
-
-  Future<ToolExecutionResult> _executeAdjustCaloricTarget(
-      ToolIntent intent) async {
-    final p = intent.payload;
-    final delta = (p['delta_kcal'] as num?)?.toInt();
-    final ttl = (p['ttl_days'] as num?)?.toInt();
-    if (delta == null || ttl == null) {
-      return const ToolExecutionResult.failure(
-          'Invalid adjust_caloric_target payload.');
-    }
-
-    final startDateStr = p['start_date'] as String?;
-    final startDate = (startDateStr == null || startDateStr.isEmpty)
-        ? null
-        : DateTime.tryParse(startDateStr);
-
-    try {
-      final override = await NutritionRepository.instance.adjustDailyTarget(
-        deltaKcal: delta,
-        ttlDays: ttl,
-        startDate: startDate,
-        reason: p['reason'] as String?,
-      );
-      return ToolExecutionResult.success(data: override);
-    } on AdjustDailyTargetException catch (e) {
-      return ToolExecutionResult.failure(_adjustTargetErrorMessage(e));
-    } catch (e, stack) {
-      debugPrint(
-          '[ToolDispatcher] adjust_caloric_target failed: $e\n$stack');
-      final errStr = e.toString();
-      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
-      unawaited(ErrorTelemetry.logEvent(
-          'tool_dispatch_adjust_caloric_target_failed',
-          message: clipped));
-      return const ToolExecutionResult.failure(
-          'Could not adjust your calorie target.');
-    }
-  }
-
-  String _adjustTargetErrorMessage(AdjustDailyTargetException e) {
-    switch (e.code) {
-      case 'invalid_delta':
-        return 'That adjustment is too large.';
-      case 'invalid_ttl':
-        return 'TTL must be between 1 and 28 days.';
-      case 'past_date':
-        return 'Cannot adjust target for a past date.';
-      default:
-        return e.message;
-    }
-  }
-
   /// Write a meal-by-text log via NutritionWriteService.
   ///
   /// Plan C-13 — routes through the service so:
@@ -1386,11 +1168,10 @@ class ToolDispatcher {
 
   bool _isNutritionIntent(String type) {
     // Keep this list in sync with the nutrition family handlers above.
-    // C.1 log_meal_by_text, C.2 adjust_caloric_target, C.4 prelog.
-    // (suggestMeal is read-only — no dispatcher entry, so not listed here.)
-    return type == 'log_meal_by_text' ||
-        type == 'adjust_caloric_target' ||
-        type == 'prelog';
+    // Only log_meal_by_text remains a write tool (adjust_caloric_target +
+    // prelog removed 2026-05-31 — derive-only tool surface; suggestMeal is
+    // read-only with no dispatcher entry).
+    return type == 'log_meal_by_text';
   }
 
   Future<void> _appendInjuryToCoachMemory(

@@ -484,9 +484,7 @@ lib/features/ai_coach/services/schedule_template_planner.dart :: schedule_* :: g
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: assigned_days
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: category
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: days
-lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: delta_kcal
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: description
-lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: duration_seconds
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: equipment
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: exercise_id
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: exercise_name
@@ -495,12 +493,10 @@ lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: injuries
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: minutes
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: new_goal
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: original_description
-lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: parsed_meals
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: primary_goal
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: reason
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: rescheduled_at
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: rescheduled_via
-lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: rpe
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: serving_description
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: severity
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: start_date
@@ -508,7 +504,6 @@ lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: total_calor
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: total_carbs_g
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: total_fat_g
 lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: total_protein_g
-lib/features/ai_coach/services/tool_dispatcher.dart :: schedule_* :: ttl_days
 lib/features/home/widgets/day_detail_sheet.dart :: exlog_* :: default_reps
 lib/features/home/widgets/day_detail_sheet.dart :: exlog_* :: default_rest_secs
 lib/features/home/widgets/day_detail_sheet.dart :: exlog_* :: default_sets
@@ -608,6 +603,11 @@ lib/features/train/repositories/workout_repository.dart :: wlog_* :: streak_free
 lib/features/train/repositories/workout_repository.dart :: wlog_* :: time_secs
 lib/features/train/repositories/workout_repository.dart :: wlog_* :: volume_kg
 lib/features/train/repositories/workout_repository.dart :: wlog_* :: weight_kg
+lib/features/train/widgets/week_selector.dart :: schedule_* :: distance_km
+lib/features/train/widgets/week_selector.dart :: schedule_* :: exercise_name
+lib/features/train/widgets/week_selector.dart :: schedule_* :: is_pr
+lib/features/train/widgets/week_selector.dart :: schedule_* :: set_number
+lib/features/train/widgets/week_selector.dart :: schedule_* :: weight_kg
 lib/features/train/widgets/workout_receipt_card.dart :: exlog_* :: logged_at_ms
 lib/features/train/widgets/workout_receipt_card.dart :: exlog_* :: reps
 lib/features/train/widgets/workout_receipt_card.dart :: exlog_* :: workout_name

@@ -347,6 +347,25 @@ export interface GeminiToolsResult {
   usedFallback: boolean;
 }
 
+// ── Backoff-retry tuning for the tool-calling path (diagnose d4f1c2) ──
+// A transient Gemini blip (HTTP 429 / 5xx / empty-candidate) hits the shared
+// project quota, so the [Flash → Flash-Lite] attempt list can fail back-to-back
+// in ~1-2s. Without time spacing the loop gives up immediately and the caller
+// (runToolLoop) surfaces "I had trouble reaching the model" — the exact coach
+// flakiness diagnose d4f1c2 found live. We re-run the whole attempt list up to
+// TOOLS_MAX_PASSES times, sleeping TOOLS_PASS_BACKOFF_MS between passes, but
+// ONLY while the last failure was retriable (429/5xx/empty — NOT a 25s timeout
+// that already spent the round's budget, and NOT a 4xx a different attempt
+// can't fix) AND we're still inside the wall-clock budget. Worst-case added
+// latency on fast transient failures is one extra pass (~2 calls + one sleep).
+const TOOLS_MAX_PASSES = 2;
+const TOOLS_PASS_BACKOFF_MS = 700;
+const TOOLS_RETRY_DEADLINE_MS = 20_000;
+
+function _sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Multi-turn Gemini call with function-calling support.
  *
@@ -356,9 +375,13 @@ export interface GeminiToolsResult {
  * the next call. Note the role is "user" — the live Gemini REST API rejects
  * `role: "function"` even though some older spec drafts referenced it.
  *
- * On 5xx / 429 / empty content from the primary model, retries once against
- * `MODEL_FLASH_LITE` if `fallbackToLite` is true (default). Throws on total
- * failure so the caller can surface a user-visible apology.
+ * Resilience (diagnose d4f1c2): each pass tries the primary model then (if
+ * `fallbackToLite`) `MODEL_FLASH_LITE`. On a RETRIABLE failure of the whole
+ * pass (429 / 5xx / empty content) it sleeps a short backoff and retries the
+ * pass, bounded by TOOLS_MAX_PASSES and a wall-clock deadline. Timeouts and
+ * non-429 4xx are treated as non-retriable (another attempt won't help / has
+ * no budget). Throws only after every bounded attempt fails, so the caller can
+ * surface a user-visible apology.
  */
 export async function geminiChatWithTools(
   opts: GeminiToolsOptions,
@@ -387,41 +410,61 @@ export async function geminiChatWithTools(
     attempts.push(MODEL_FLASH_LITE);
   }
 
+  const startedAt = Date.now();
   let lastError: unknown = null;
+  let lastReason = "";
+  let lastRetriable = true;
 
-  for (const attemptModel of attempts) {
-    const result = await _callOnceWithTools({
-      model: attemptModel,
-      systemPrompt,
-      messages,
-      tools,
-      temperature,
-      maxTokens,
-      timeoutMs,
-      requestId,
-    });
+  for (let pass = 0; pass < TOOLS_MAX_PASSES; pass++) {
+    for (const attemptModel of attempts) {
+      const result = await _callOnceWithTools({
+        model: attemptModel,
+        systemPrompt,
+        messages,
+        tools,
+        temperature,
+        maxTokens,
+        timeoutMs,
+        requestId,
+      });
 
-    if (result.ok) {
-      const usedFallback = attemptModel !== model;
-      if (usedFallback) {
-        console.warn(
-          `[geminiChatWithTools] fallback succeeded (${model} → ${attemptModel}) request_id=${requestId ?? "n/a"}`,
-        );
+      if (result.ok) {
+        const usedFallback = attemptModel !== model;
+        if (usedFallback) {
+          console.warn(
+            `[geminiChatWithTools] fallback succeeded (${model} → ${attemptModel}) request_id=${requestId ?? "n/a"}`,
+          );
+        }
+        if (pass > 0) {
+          console.warn(
+            `[geminiChatWithTools] recovered on retry pass=${pass} model=${attemptModel} request_id=${requestId ?? "n/a"}`,
+          );
+        }
+        return { ...result.value, usedFallback };
       }
-      return { ...result.value, usedFallback };
+
+      lastError = result.error;
+      lastReason = result.reason;
+      lastRetriable = result.retriable;
+      console.warn(
+        `[geminiChatWithTools] ${attemptModel} failed (${result.reason}) retriable=${result.retriable} pass=${pass} request_id=${requestId ?? "n/a"}`,
+      );
     }
 
-    lastError = result.error;
-    console.warn(
-      `[geminiChatWithTools] ${attemptModel} failed (${result.reason}) request_id=${requestId ?? "n/a"}` +
-        (attempts.indexOf(attemptModel) < attempts.length - 1
-          ? " — trying fallback"
-          : " — all attempts exhausted"),
-    );
+    // Whole attempt list failed this pass. Spend another pass only if the
+    // last failure was retriable (a transient 429/5xx/empty — NOT a timeout
+    // or a 4xx) and we still have wall-clock budget headroom.
+    const elapsedMs = Date.now() - startedAt;
+    const canRetry = pass < TOOLS_MAX_PASSES - 1 &&
+      lastRetriable &&
+      elapsedMs < TOOLS_RETRY_DEADLINE_MS;
+    if (!canRetry) break;
+    await _sleepMs(TOOLS_PASS_BACKOFF_MS);
   }
 
   throw new Error(
-    `geminiChatWithTools: all ${attempts.length} attempt(s) failed for primary=${model}` +
+    `geminiChatWithTools: all attempts failed for primary=${model}` +
+      ` lastReason=${lastReason}` +
       (lastError ? ` lastError=${String(lastError)}` : ""),
   );
 }
@@ -439,7 +482,7 @@ interface CallOnceWithToolsArgs {
 
 type CallOnceResult =
   | { ok: true; value: Omit<GeminiToolsResult, "usedFallback"> }
-  | { ok: false; reason: string; error?: unknown };
+  | { ok: false; reason: string; retriable: boolean; error?: unknown };
 
 // ── Private: single HTTP call to Gemini with tool config. ──────────
 async function _callOnceWithTools(
@@ -488,13 +531,13 @@ async function _callOnceWithTools(
       try {
         preview = (await response.text()).slice(0, 200);
       } catch (_) { /* body read may also fail */ }
-      // 429 + 5xx are the retriable bucket — fallback can help.
-      // Other 4xx (e.g. 400 malformed request) won't be helped by a
-      // different model, but we still treat them uniformly here so the
-      // caller's fallback policy is the single source of truth.
+      // 429 + 5xx are the retriable bucket — a spaced retry / fallback can
+      // help. Other 4xx (e.g. 400 malformed request) won't be helped by a
+      // different model or a retry, so mark them non-retriable.
       return {
         ok: false,
         reason: `HTTP ${status}: ${preview}`,
+        retriable: status === 429 || status >= 500,
       };
     }
 
@@ -502,9 +545,18 @@ async function _callOnceWithTools(
     const candidate = data.candidates?.[0];
 
     if (!candidate || !candidate.content?.parts) {
+      // Empty / missing candidate is usually a transient overload; retry can
+      // help (matches the existing fallback intent). A hard content block
+      // (SAFETY / RECITATION / PROHIBITED_CONTENT) is deterministic, so don't
+      // burn extra passes on it.
+      const finishReason = candidate?.finishReason ?? "unknown";
+      const deterministicBlock = finishReason === "SAFETY" ||
+        finishReason === "RECITATION" ||
+        finishReason === "PROHIBITED_CONTENT";
       return {
         ok: false,
-        reason: `no candidate (finishReason=${candidate?.finishReason ?? "unknown"})`,
+        reason: `no candidate (finishReason=${finishReason})`,
+        retriable: !deterministicBlock,
       };
     }
 
@@ -547,10 +599,14 @@ async function _callOnceWithTools(
     // so the caller's fallback can fire. This matches geminiChat()'s
     // empty-text behaviour.
     if (parts.length === 0) {
-      return { ok: false, reason: "empty parts array" };
+      return { ok: false, reason: "empty parts array", retriable: true };
     }
     if (textBuffer.length === 0 && functionCalls.length === 0) {
-      return { ok: false, reason: "no text and no function calls" };
+      return {
+        ok: false,
+        reason: "no text and no function calls",
+        retriable: true,
+      };
     }
 
     const tokensUsed = data.usageMetadata?.totalTokenCount ?? 0;
@@ -568,15 +624,21 @@ async function _callOnceWithTools(
   } catch (err) {
     clearTimeout(timer);
     if (err instanceof DOMException && err.name === "AbortError") {
+      // A 25s timeout already consumed this round's budget — retrying in place
+      // would risk the overall wall clock. Not retriable; fall through to the
+      // next model (or throw).
       return {
         ok: false,
         reason: `timeout (${opts.timeoutMs}ms)`,
+        retriable: false,
         error: err,
       };
     }
+    // Network blip / transport error — a spaced retry can recover.
     return {
       ok: false,
       reason: `threw: ${err}`,
+      retriable: true,
       error: err,
     };
   }

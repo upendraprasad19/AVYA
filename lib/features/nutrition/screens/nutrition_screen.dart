@@ -553,16 +553,28 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label.toUpperCase(),
-              style: AppTypography.mono.copyWith(
-                fontSize: 9,
-                letterSpacing: 1.8,
-                color: color,
+            // Flexible so a long label ellipsizes instead of overflowing the
+            // narrow right column. The numeric value (the data) keeps its full
+            // width + right alignment. Large-number values — a realistic
+            // 4-digit water row ("2103 / 3125ml") or a power user's inflated
+            // macros — previously tripped a RenderFlex "RIGHT OVERFLOWED BY N
+            // PIXELS" on this spaceBetween Row, clipping + squishing the text.
+            Flexible(
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 9,
+                  letterSpacing: 1.8,
+                  color: color,
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               '$current / $target$suffix',
+              maxLines: 1,
               style: AppTypography.monoXs.copyWith(
                 color: AppColors.textDim,
               ),

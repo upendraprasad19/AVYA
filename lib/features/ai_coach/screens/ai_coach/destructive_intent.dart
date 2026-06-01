@@ -172,9 +172,6 @@ extension _DestructiveIntent on _AiCoachScreenState {
       case 'schedule_template':
         diffPreview = ScheduleTemplateDiff(intent: intent);
         break;
-      case 'prelog':
-        diffPreview = PrelogDiff(intent: intent);
-        break;
       default:
         diffPreview = const Text('Confirm this action?');
     }

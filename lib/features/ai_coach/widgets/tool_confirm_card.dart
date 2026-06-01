@@ -280,12 +280,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       final sets = intent.payload['sets'];
       return '$name \u2014 ${w}kg \u00d7 $reps \u00d7 $sets sets';
     }
-    if (intent.type == 'mark_workout_complete') {
-      final date = intent.payload['date'] as String?;
-      return date != null
-          ? 'Mark $date workout complete'
-          : "Mark today's workout complete";
-    }
     if (intent.type == 'shorten_workout') {
       final minutes = intent.payload['minutes'];
       final date = intent.payload['date'] as String?;
@@ -308,41 +302,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       if (confidence == 'low') {
         return '$base\n(low confidence \u2014 review carefully)';
       }
-      return base;
-    }
-    if (intent.type == 'adjust_caloric_target') {
-      final delta = intent.payload['delta_kcal'] ?? 0;
-      final ttl = intent.payload['ttl_days'] ?? 0;
-      final reason = intent.payload['reason'] as String?;
-      final sign = (delta as num) >= 0 ? '+' : '';
-      final base = '$sign$delta kcal/day for $ttl day${ttl == 1 ? '' : 's'}';
-      return reason != null && reason.isNotEmpty ? '$base\n$reason' : base;
-    }
-    if (intent.type == 'log_pr') {
-      final exerciseId = intent.payload['exerciseId']?.toString() ?? '';
-      final name = _resolveExerciseName(exerciseId) ?? exerciseId;
-      final w = intent.payload['weightKg'];
-      final reps = intent.payload['reps'];
-      return '$name \u2014 ${w}kg \u00d7 $reps';
-    }
-    if (intent.type == 'prelog') {
-      final parsed =
-          (intent.payload['parsed_meals'] as List?) ?? const <dynamic>[];
-      final failed =
-          (intent.payload['failed_meals'] as List?) ?? const <dynamic>[];
-      final dates = parsed
-          .whereType<Map>()
-          .map((m) => m['date'])
-          .where((d) => d != null)
-          .toSet()
-          .length;
-      final totalKcal = parsed.whereType<Map>().fold<num>(
-            0,
-            (s, m) => s + ((m['total_calories'] as num?) ?? 0),
-          );
-      final base =
-          '${parsed.length} meal${parsed.length == 1 ? '' : 's'} across $dates day${dates == 1 ? '' : 's'} \u2014 ${totalKcal.toInt()} kcal';
-      if (failed.isNotEmpty) return '$base\n${failed.length} failed to parse';
       return base;
     }
     return intent.previewSummary;
@@ -371,8 +330,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'SWAP EXERCISE';
       case 'log_set':
         return 'LOG SET';
-      case 'mark_workout_complete':
-        return 'MARK COMPLETE';
       case 'shorten_workout':
         return 'SHORTEN WORKOUT';
       case 'create_custom_exercise':
@@ -395,12 +352,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'SCHEDULE TEMPLATE';
       case 'log_meal_by_text':
         return 'LOG MEAL';
-      case 'adjust_caloric_target':
-        return 'CALORIE TARGET';
-      case 'prelog':
-        return 'PRE-LOG MEALS';
-      case 'log_pr':
-        return 'NEW PR';
       default:
         return type.toUpperCase().replaceAll('_', ' ');
     }
@@ -412,8 +363,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.swap_horiz;
       case 'log_set':
         return Icons.fitness_center;
-      case 'mark_workout_complete':
-        return Icons.check_circle_outline;
       case 'shorten_workout':
         return Icons.timer;
       case 'create_custom_exercise':
@@ -436,12 +385,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.event;
       case 'log_meal_by_text':
         return Icons.restaurant_menu;
-      case 'adjust_caloric_target':
-        return Icons.tune;
-      case 'prelog':
-        return Icons.event_note;
-      case 'log_pr':
-        return Icons.emoji_events;
       default:
         return Icons.bolt;
     }
@@ -453,8 +396,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Swapped';
       case 'log_set':
         return 'Logged';
-      case 'mark_workout_complete':
-        return 'Marked complete';
       case 'shorten_workout':
         return 'Workout shortened';
       case 'create_custom_exercise':
@@ -477,12 +418,6 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Template scheduled';
       case 'log_meal_by_text':
         return 'Logged';
-      case 'adjust_caloric_target':
-        return 'Target adjusted';
-      case 'prelog':
-        return 'Meals logged';
-      case 'log_pr':
-        return 'PR logged';
       default:
         return 'Done';
     }

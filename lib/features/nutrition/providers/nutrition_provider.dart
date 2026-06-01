@@ -36,8 +36,10 @@ import 'package:icanbefitter/core/services/water_target_service.dart';
 /// when computed fields are missing. Only uses hardcoded defaults as a
 /// last resort when even BMR inputs are unavailable.
 ///
-/// When [date] is provided, an active calorie-target override (written by
-/// the AI coach `adjustCaloricTarget` tool) is applied to `daily_calories`.
+/// When [date] is provided, any in-flight calorie-target override is applied
+/// to `daily_calories`. (The AI `adjustCaloricTarget` tool that wrote these
+/// was removed 2026-05-31 — the target is derive-only; this read drains any
+/// pre-existing overrides via their TTL.)
 /// Macro targets (protein/carb/fat) are NOT scaled — the override is a
 /// signed kcal delta only, intentionally narrow in scope. Result is
 /// clamped to [800, 6000] for safety.
@@ -329,8 +331,9 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
     }
 
     final profile = UserRepository.instance.getProfile();
-    // Pass selectedDate so any active calorie-target override (AI coach
-    // adjustCaloricTarget tool) is applied for the displayed day.
+    // Pass selectedDate so any in-flight (legacy, draining) calorie-target
+    // override is applied for the displayed day. The AI tool that wrote these
+    // was removed 2026-05-31 — target is derive-only going forward.
     final targets = _resolveNutritionTargets(profile, date: selectedDate);
     final calorieTarget = targets['daily_calories']!;
     final proteinTarget = targets['protein_grams']!;

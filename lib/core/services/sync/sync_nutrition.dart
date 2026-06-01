@@ -86,17 +86,63 @@ extension SyncServiceNutrition on SyncService {
         // catch below swallowed it. Result: `nutrition_logs` stayed at
         // 0 rows despite dozens of food logs in Hive.
         //
-        // Now we explicitly project the schema-matching columns and
-        // coerce the id to a deterministic v5 UUID via _deterministicId.
-        // NutritionRepository.syncLogToSupabase (the hot-path writer)
-        // uses the same namespace so immediate writes + this replay
-        // collapse to the same row.
-        final logCloudId = SyncService._deterministicId(key);
+        // We explicitly project only the schema-matching columns. The id
+        // handling is covered by Diagnose c9f2a7 below — `id` is OMITTED so
+        // the natural-key upsert never rewrites a FK-referenced PK.
+        // Audit 2026-05-15 — null-natural-key guard, hoisted FIRST (Diagnose
+        // c9f2a7 needs date+meal_type both to resolve the canonical cloud
+        // id below AND as the upsert arbiter). A missing key would otherwise
+        // produce a partial row with NULL natural-key columns + a
+        // deterministic id, which PostgREST would 23502 (or worse, merge
+        // unrelated rows onto a single null-keyed cloud row). Skip +
+        // telemetry instead.
+        final nlogDate = (log['date'] as String?)?.trim();
+        final nlogMeal = (log['meal_type'] as String?)?.trim();
+        if (nlogDate == null ||
+            nlogDate.isEmpty ||
+            nlogMeal == null ||
+            nlogMeal.isEmpty) {
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_skipped_null_natural_key',
+            message:
+                'table=nutrition_logs key=$key date_null=${nlogDate == null || nlogDate.isEmpty} meal_type_null=${nlogMeal == null || nlogMeal.isEmpty}',
+          ));
+          continue;
+        }
+
+        // Diagnose c9f2a7 (2026-06-01) — found live driving the AI coach as
+        // amar: EVERY nutrition sync failed with
+        //   PostgrestException 23503 "update or delete on table
+        //   nutrition_logs violates foreign key constraint
+        //   nutrition_log_items_log_id_fkey — Key is still referenced".
+        // The upsert conflicts on the natural key (user_id,date,meal_type).
+        // The nlog_ Hive key embeds an itemsHash, so the SAME (date,meal_type)
+        // yields a DIFFERENT _deterministicId whenever the item set changes
+        // (re-log / edit / coach-merge), and other writers (the headless sim,
+        // legacy keys) seeded rows under yet other ids. Pre-fix the payload
+        // sent `id: _deterministicId(key)` — so when a cloud row already
+        // existed for the natural key under a DIFFERENT id, ON CONFLICT DO
+        // UPDATE tried to rewrite that row's PK `id`. nutrition_log_items.log_id
+        // FK-references the PK with ON DELETE CASCADE but ON UPDATE NO ACTION,
+        // so Postgres rejected the PK change (23503) and the WHOLE parent
+        // upsert + its child items silently failed to reach cloud — nutrition
+        // never backed up for that user (offline-first hides it;
+        // reinstall/device-switch loses the data).
+        //
+        // This is a recurrence of the SAME class fixed for workout_templates
+        // (APK Test #12.8 / Bug #4, diagnose a8b2c7) and scheduled_workouts
+        // (APK Test #14 / Bug B.1, diagnose c8e4a1) — nutrition_logs was the
+        // last sync still sending a derived id. Same cure: OMIT `id` from the
+        // payload so PostgREST keeps the existing row's id on conflict (DO
+        // UPDATE only sets the columns present) and uses the column default
+        // gen_random_uuid() on first insert — the PK is never rewritten, so
+        // the FK is never tripped. Then resolve the real cloud id by the
+        // natural key for the children's log_id.
         final parentPayload = <String, dynamic>{
-          'id': logCloudId,
+          // `id` deliberately OMITTED — see above (never rewrite the PK).
           'user_id': userId,
-          if (log['date'] != null) 'date': log['date'],
-          if (log['meal_type'] != null) 'meal_type': log['meal_type'],
+          'date': nlogDate,
+          'meal_type': nlogMeal,
           if (log['total_calories'] != null)
             'total_calories': log['total_calories'],
           if (log['total_protein'] != null)
@@ -111,37 +157,39 @@ extension SyncServiceNutrition on SyncService {
           'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
-        // Audit 2026-05-12 P0-B — onConflict was 'id', but live schema has a
-        // partial UNIQUE on (user_id, date, meal_type). When client-side
-        // dedup key rotates (e.g. meal renamed) the natural unique trips
-        // first, raising 23505 + per-item rows orphan. 16 errors over 24h
-        // in production. Switch to natural key so PostgREST merges instead
-        // of failing.
-        //
-        // Audit 2026-05-15 — belt-and-suspenders null-key guard. The
-        // parentPayload above is built with conditional spreads that
-        // OMIT `date`/`meal_type` when null — meaning a missing key
-        // would silently produce a partial row with NULL natural-key
-        // columns + a deterministic id, which PostgREST would 23502
-        // (or worse, succeed and merge unrelated rows onto a single
-        // null-keyed cloud row). Skip + telemetry instead.
-        final nlogDate = (log['date'] as String?)?.trim();
-        final nlogMeal = (log['meal_type'] as String?)?.trim();
-        if (nlogDate == null ||
-            nlogDate.isEmpty ||
-            nlogMeal == null ||
-            nlogMeal.isEmpty) {
-          unawaited(ErrorTelemetry.logEvent(
-            'sync_skipped_null_natural_key',
-            message:
-                'table=nutrition_logs key=$key date_null=${nlogDate == null || nlogDate.isEmpty} meal_type_null=${nlogMeal == null || nlogMeal.isEmpty}',
-          ));
-          continue;
-        }
+        // onConflict on the natural key (Audit 2026-05-12 P0-B): the live
+        // schema has UNIQUE (user_id, date, meal_type), so PostgREST merges
+        // instead of 23505-ing when a dedup key rotates. With `id` omitted the
+        // DO UPDATE never touches the PK → no 23503.
         await _supabase.client.from("nutrition_logs").upsert(
           parentPayload,
           onConflict: "user_id,date,meal_type",
         );
+
+        // Resolve the real cloud id (gen_random_uuid() on insert, or the
+        // pre-existing id on conflict) so the child nutrition_log_items FK to
+        // the correct parent. If this lookup fails the parent has already
+        // landed safely; skip the children this pass and let the next sync
+        // retry them.
+        String? logCloudId;
+        try {
+          final parentRow = await _supabase.client
+              .from('nutrition_logs')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('date', nlogDate)
+              .eq('meal_type', nlogMeal)
+              .maybeSingle();
+          logCloudId = parentRow?['id'] as String?;
+        } catch (idErr, st) {
+          debugPrint(
+              '[SyncService._syncNutritionLogs] parent id lookup: $idErr');
+          unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
+              reason: 'sync_service_nutrition_parent_id'));
+        }
+        if (logCloudId == null || logCloudId.isEmpty) {
+          continue;
+        }
 
         // Push individual nutrition_log_items. Same schema trap — id,
         // log_id, food_id are uuid columns. The bundled food database

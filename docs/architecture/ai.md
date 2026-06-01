@@ -23,15 +23,17 @@ Every chat turn now embeds the user's message via `getEmbedding(text, "RETRIEVAL
 
 **Phase A (accumulation)** has been running since 2026-03-31 (migration `20260331000001_add_pgvector_memory.sql`): `ai-proxy/index.ts:635` + `rolling-context/index.ts:210` embed every chat turn + nightly summary into `memory_embeddings`. No Phase B backfill needed — older coaching_notes reach the coach via the recent-N fallback. Retrieval hit rates become meaningful only after users accumulate ~10+ conversations.
 
-## Tool-calling (since ai-proxy v44, 2026-04-20) — 24 AI coach tools
+## Tool-calling (since ai-proxy v44, 2026-04-20) — 20 AI coach tools (derive-only surface)
 
-`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 24 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts`. Tier filtering: free users see 11 FREE tools, PRO sees all 24. (Pre-2026-05-16 audit, this doc claimed 20 tools / 6 FREE / 20 PRO — drift from registry growth across Tests #12–#16. Verified live by audit Agent 5 + cross-checked against `_shared/tools/registry.ts:35-73`.)
+`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 20 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts`. Tier filtering: free users see 9 FREE tools, PRO sees all 20.
+
+**Derive-only prune (2026-05-31, ADR-0012):** the surface dropped 24→20 by removing 4 tools that let the AI assert a *derived* value or future state — a progression-gaming / data-integrity hole. Removed: `logPR` (PR derives from `logSet` via `_rescanPrFor`/`loadAllExercisePRs`), `markWorkoutComplete` (completion now derives — a coach `logSet` on a scheduled day auto-calls `markCompleted` via the dispatcher's `_maybeCompleteScheduledDay`), `adjustCaloricTarget` (target stays derived from the plan), `prelog` (no pre-logging — users log raw input daily as they eat). Principle: **the user logs raw input; the app computes the rest.** (Pre-2026-05-16 audit, this doc claimed 20 tools / 6 FREE / 20 PRO — drift from registry growth across Tests #12–#16, since pruned back to 20 with a different composition. Verified live against `_shared/tools/registry.ts` + `test/contracts/derive_only_tool_surface_test.dart`.)
 
 | Family | Tools |
 |---|---|
-| Workout (8) | `swapExercise`, `logSet`, `markWorkoutComplete`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `generateHotelWorkout` |
-| Progress (5) | `getProgressSummary`, `getExerciseHistory`, `logPR`, `getPromotionStatus`, `getPRTimeline` |
-| Nutrition (5) | `logMealByText`, `adjustCaloricTarget`, `suggestMeal`, `prelog`, `getNutritionHistory` |
+| Workout (7) | `swapExercise`, `logSet`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `generateHotelWorkout` |
+| Progress (4) | `getProgressSummary`, `getExerciseHistory`, `getPromotionStatus`, `getPRTimeline` |
+| Nutrition (3) | `logMealByText`, `suggestMeal`, `getNutritionHistory` |
 | Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
 | Exercise (1) | `getFormCues` |
 

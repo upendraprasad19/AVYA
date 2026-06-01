@@ -3693,47 +3693,10 @@ concepts:
       but documented) spellings. Field rename on either side requires the
       other side updated in the same PR + contract test updated.
 
-  - concept: ai_coach_tool_dispatcher_log_pr
-    domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
-    description: |
-      AI coach `logPR` tool intent → canonical `WorkoutWriteService.logExercise`
-      with a single-set ExerciseSet (NOT the legacy
-      `WorkoutRepository.logSetWithPrRescan` shim). PR detection happens
-      inside the WriteService via `_rescanPrFor`. Pre-fix routed through
-      the legacy shim → bypassed mutex + telemetry + cloud sync batching;
-      8th writer/reader drift instance.
-    writers:
-      - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        method: _executeLogPR
-        line_range: 342-390
-    reader_manifest_complete: true
-    readers:
-      - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 155-180
-        method: executeIntent dispatch switch ('log_pr' case)
-        semantic: pass-through
-        fields_read: [intent.type, intent.payload, ToolExecutionResult]
-        notes: |
-          Caller-side reader: `case 'log_pr'` at :161-163 routes to
-          _executeLogPR, then the outer flow consumes the result for
-          family-appropriate invalidation + sync.
-      - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 342-390
-        method: _executeLogPR (return value consumer = ai-proxy round loop)
-        semantic: pass-through
-        fields_read: [WorkoutWriteService.logExercise WriteResult → logKey, success, errorMessage]
-        notes: |
-          Returns ToolExecutionResult.success({log_id, exercise_name,
-          weight_kg, reps}) which ai-proxy serializes back to Gemini
-          for the next round.
-    regression_test: test/contracts/tool_dispatcher_log_pr_uses_writeservice_test.dart
-    forbidden_legacy_patterns:
-      - { pattern: "WorkoutRepository\\.instance\\.logSetWithPrRescan\\(", reason: "logPR tool MUST route through WorkoutWriteService.logExercise — legacy shim bypasses mutex + telemetry + cloud sync batching (Test #16.1 Bug A rogue exlog_* key formula)" }
-    class_constraints: |
-      MUST construct an ExerciseSet (single-element list) and call
-      WorkoutWriteService.instance.logExercise(...). Do NOT add a new
-      log_pr-specific path that bypasses the WriteService.
+  # concept ai_coach_tool_dispatcher_log_pr REMOVED 2026-05-31 — the AI `logPR`
+  # tool was deleted (derive-only tool surface). PRs are derived from `logSet`
+  # via _rescanPrFor; see the `exercise_personal_records` concept (the canonical
+  # PR derivation contract) + `test/contracts/derive_only_tool_surface_test.dart`.
 
   - concept: workout_schedule_service_routes_through_write_service
     domain: workout

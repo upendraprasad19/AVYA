@@ -1,4 +1,4 @@
-import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
+import { z } from "npm:zod@3.25.76";
 
 /** Gemini FunctionDeclaration shape (subset). See https://ai.google.dev/gemini-api/docs/function-calling */
 export interface GeminiFunctionDeclaration {

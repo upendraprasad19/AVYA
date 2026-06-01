@@ -141,4 +141,5 @@ These lenses correspond to the 10 new gate scripts created during B1 of the 2026
 | 2026-05-17 | L2, L4, L5, L6, L18, L19 (OI closures) | 8 closures + 3 deferred (OI-21/23/24) | Operational hardening. |
 | 2026-05-17 (Hermes verification) | L21-L25 + L41 (NEW) | 13 REAL, 4 FALSE_ALARM, 3 PARTIAL | Drove this registry's creation. |
 | 2026-05-20–21 | L1–L52 (6-category tech-debt audit + B1 ship) | 81 findings; 0 deferrals; 10 new gates (L42–L52) | First explicit zero-deferral audit; closure YAML format introduced. |
+| 2026-06-01 (Hermes E-pass, first `/hermes-pass`) | L1, L14, L21, L26, L28, L34, L37, L40 (targeted 8) | 4 (1 P1 + 3 P2) + 1 false_alarm | derive-only coach batch (platform). P1 (L37 snapshot enrich-after-trim) + 1 P2 (SoT doc) fixed in-batch; 2 P2 triage. `docs/audit/2026-06-01-hermes-derive-only-coach.md`. |
 | **Next audit** | **L1-L53 (all 53)** | TBD | Quarterly cadence per CLAUDE.md §4.10; first scheduled 2026-08-03. |

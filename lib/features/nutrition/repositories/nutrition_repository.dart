@@ -1,20 +1,7 @@
-import 'dart:async';
-
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
-
-/// Thrown by [NutritionRepository.adjustDailyTarget] when validation fails.
-class AdjustDailyTargetException implements Exception {
-  /// One of: 'invalid_delta', 'invalid_ttl', 'past_date', 'other'.
-  final String code;
-  final String message;
-  const AdjustDailyTargetException(this.code, this.message);
-  @override
-  String toString() => 'AdjustDailyTargetException($code): $message';
-}
 
 /// Repository for all nutrition-related Hive reads/writes.
 ///
@@ -488,92 +475,13 @@ class NutritionRepository {
     return total;
   }
 
-  // ── Daily Calorie Target Override (AI Coach C.2) ─────────────────
-
-  /// Writes a daily calorie target override starting on [startDate]
-  /// (defaults to today) for [ttlDays] days. Each affected day gets its
-  /// own `target_override_<YYYY-MM-DD>` key in `nutritionBox`, so the
-  /// reader is a single point lookup per render. Reads happen on every
-  /// nutrition dashboard render; writes happen rarely — optimise for read.
-  ///
-  /// Override map shape (per key):
-  /// ```
-  /// {
-  ///   date: 'YYYY-MM-DD',
-  ///   delta_kcal: signed int,
-  ///   reason: nullable string,
-  ///   applied_at: ISO 8601,
-  ///   expires_at: ISO 8601 (applied_at + ttlDays * 86400),
-  ///   source: 'ai_coach_tool',
-  ///   span_start: 'YYYY-MM-DD' (the startDate),
-  ///   span_total_days: int (ttlDays),
-  ///   span_day_index: 1..ttlDays,
-  /// }
-  /// ```
-  ///
-  /// Returns the FIRST written override map (start-date entry) so the
-  /// caller can surface preview data.
-  ///
-  /// Fires fire-and-forget cloud sync + AI snapshot push so the override
-  /// is visible to subsequent AI coach turns and to the cloud backup.
-  ///
-  /// Throws [AdjustDailyTargetException] on validation failure.
-  Future<Map<String, dynamic>> adjustDailyTarget({
-    required int deltaKcal,
-    required int ttlDays,
-    DateTime? startDate,
-    String? reason,
-  }) async {
-    if (deltaKcal.abs() > 1500) {
-      throw const AdjustDailyTargetException(
-          'invalid_delta', 'Delta must be within +/- 1500 kcal.');
-    }
-    if (ttlDays < 1 || ttlDays > 28) {
-      throw const AdjustDailyTargetException(
-          'invalid_ttl', 'TTL must be between 1 and 28 days.');
-    }
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final start = startDate ??
-        DateTime(now.year, now.month, now.day);
-    final startDay = DateTime(start.year, start.month, start.day);
-
-    // Reject backdating beyond yesterday — overrides are forward-looking.
-    if (startDay.isBefore(today.subtract(const Duration(days: 1)))) {
-      throw const AdjustDailyTargetException(
-          'past_date', 'Cannot adjust target for a past date.');
-    }
-
-    final appliedAt = now;
-    final expiresAt = now.add(Duration(days: ttlDays));
-    final box = _hive.nutritionBox;
-    Map<String, dynamic>? firstWritten;
-
-    for (var i = 0; i < ttlDays; i++) {
-      final d = startDay.add(Duration(days: i));
-      final dateStr = _formatDate(d);
-      final entry = <String, dynamic>{
-        'date': dateStr,
-        'delta_kcal': deltaKcal,
-        'reason': reason,
-        'applied_at': appliedAt.toIso8601String(),
-        'expires_at': expiresAt.toIso8601String(),
-        'source': 'ai_coach_tool',
-        'span_start': _formatDate(startDay),
-        'span_total_days': ttlDays,
-        'span_day_index': i + 1,
-      };
-      await box.put('target_override_$dateStr', entry);
-      firstWritten ??= entry;
-    }
-
-    // Fire-and-forget sync — never block the dispatcher on network.
-    unawaited(SyncService.instance.syncNutritionData());
-    unawaited(SyncService.instance.pushSnapshot());
-
-    return firstWritten!;
-  }
+  // ── Daily Calorie Target Override (read-only / legacy drain) ─────────
+  //
+  // The AI `adjustCaloricTarget` tool (the only writer of `target_override_*`)
+  // was removed 2026-05-31 — the calorie target is DERIVED, not AI-settable
+  // (derive-only tool surface; see ADR). The reader below is retained so any
+  // in-flight overrides written before the removal drain gracefully via their
+  // `expires_at` TTL; no new overrides are ever written.
 
   /// Returns the active calorie target override for [date], or null if none
   /// is in effect (no override key, or the override has expired).

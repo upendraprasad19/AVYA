@@ -3,7 +3,6 @@ import {
   createCustomExerciseTool,
   generateHotelWorkoutTool,
   logSetTool,
-  markWorkoutCompleteTool,
   modifyWorkoutForInjuryTool,
   rescheduleWeekTool,
   shortenWorkoutTool,
@@ -14,13 +13,10 @@ import {
   getPRTimelineTool,
   getProgressSummaryTool,
   getPromotionStatusTool,
-  logPRTool,
 } from "./progress/index.ts";
 import {
-  adjustCaloricTargetTool,
   getNutritionHistoryTool,
   logMealByTextTool,
-  prelogTool,
   suggestMealTool,
 } from "./nutrition/index.ts";
 import {
@@ -38,7 +34,6 @@ const ALL_TOOLS: ToolDefinition[] = [
   logSetTool, // workout / write / trivial / FREE
   getProgressSummaryTool, // progress / read / FREE
   // Phase B.1
-  markWorkoutCompleteTool, // workout / write / trivial / FREE
   shortenWorkoutTool, // workout / write / trivial / FREE
   // Phase B.2
   createCustomExerciseTool, // workout / write / reviewable / FREE
@@ -51,14 +46,11 @@ const ALL_TOOLS: ToolDefinition[] = [
   // ── Phase C: nutrition family ─────────────────────────────────────
   // Append future C-phase tools below this marker.
   logMealByTextTool, // nutrition / write / trivial / FREE  (C.1)
-  adjustCaloricTargetTool, // nutrition / write / trivial-or-reviewable / PRO  (C.2)
   suggestMealTool, // nutrition / read / PRO  (C.3)
-  prelogTool, // nutrition / write / reviewable-or-destructive / PRO  (C.4)
   getNutritionHistoryTool, // nutrition / read / FREE  (C.5 — past-date food/macros)
   // ── Phase D: progress family expansion ────────────────────────────
   // Append future D-phase tools below this marker.
   getExerciseHistoryTool, // progress / read / PRO  (D.1)
-  logPRTool, // progress / write / trivial / FREE  (D.2)
   getPromotionStatusTool, // progress / read / FREE  (C5 — rank ladder + ETAs)
   getPRTimelineTool, // progress / read / FREE  (C7 — dated PR history, optional date range)
   // ── Phase D.3: plan family ────────────────────────────────────────

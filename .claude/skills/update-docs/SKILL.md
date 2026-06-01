@@ -84,7 +84,7 @@ Beyond the 11-node knowledge-graph protocol above, every batch must also walk th
 
 22. **Was a feedback memory added when this batch surfaced a NEW recurrence class?** (Not for one-off fixes — but if the bug class would appear in `debugging/SKILL.md` §6 / `writer-reader-drift-detector/SKILL.md` §2 as a future entry, codify the memory.)
 
-23. **Was a new project-local skill warranted by this batch?** Per §5.1 — 3+ batches share a pattern → new skill. Current count: 6 (debugging, update-docs, tech-debt-audit, dep-bump-sweep, edge-function-deploy-rollback, writer-reader-drift-detector). Next candidates if pattern recurs: secret-rotation, cron-registry-check.
+23. **Was a new project-local skill warranted by this batch?** Per §5.1 — 3+ batches share a pattern → new skill. Current count: **13** — `ls .claude/skills/*/SKILL.md` is the source of truth (the old hardcoded roster drifted; don't re-hardcode it). Newest: **e2e-sim-testing** (live-web cross-surface verification — added 2026-06-01 derive-only AI-coach batch). Next candidates if pattern recurs: secret-rotation, cron-registry-check.
 
 24. **Did this batch make an architectural decision worth an ADR?** Per `docs/adr/README.md` (added in 2026-05-28 six-industry-gap closure batch). If yes → invoke `/adr` to scaffold the next-numbered ADR with MADR-lite frontmatter. Test: "if someone proposed reverting this decision 6 months from now, would I have to re-do the analysis?" — yes → ADR.
 

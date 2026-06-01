@@ -1,4 +1,4 @@
-import { z } from "https://deno.land/x/zod@v3.25.76/mod.ts";
+import { z } from "npm:zod@3.25.76";
 import type { ToolDefinition } from "../types.ts";
 
 const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
