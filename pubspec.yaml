@@ -67,7 +67,7 @@ dependencies:
   # --dart-define-from-file=.env (never bundled in APK).
   mobile_scanner: ^7.2.0
   flutter_image_compress: ^2.0.0
-  onesignal_flutter: ^5.5.4
+  onesignal_flutter: ^5.5.6
   # Crashlytics — added 2026-04-18 for beta distribution (audit Q3).
   # Firebase project (AVYA) already has google-services.json wired.
   # Tech-debt audit 2026-05-20 / D5: bumped 4.7.0 → 4.9.0 and 5.2.0 → 5.2.2
