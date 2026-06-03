@@ -147,9 +147,15 @@ exlog/nlog were: helper + mirror + re-key migrator + source-grep gate.
   keys — a throwing put can never lose the group.
 - **F4 (P2):** same-name re-save **preserves `times_used`** (no silent reset).
 - **F5 (P3):** the gate + contract test strip **block comments** too.
-- **Follow-ups surfaced (pre-existing, proven paths — not folded):**
-  `NlogKeyMigrator` has the same delete-before-put ordering; the nlog/exlog
-  canonical gates lack block-comment stripping.
+- **Follow-ups (FOLDED IN 2026-06-03, founder "ok"):** `NlogKeyMigrator` +
+  `ExlogKeyMigrator` reordered to put-before-delete (same F1 fix); nlog/exlog
+  canonical gates now strip block comments (same F5 fix); the
+  `onconflict_live_arbiter.sql` 082/083 arbiter blocks updated; stale
+  `migration_header_contract_test`/`onconflict_live_arbiter_test` doc refs fixed.
+  STILL OPEN: the live-arbiter scaffold's BROAD pre-existing schema drift (~10
+  blocks referencing nonexistent columns — `streaks.current_streak`,
+  `user_profile.full_name`, `workout_logs.exercise_name`, etc.) needs a dedicated
+  schema-sync pass; #4 (pastPhaseBlocks span) stays deferred (reconciler clamp covers it).
 
 ## See also
 - `lib/core/services/nutrition_write_service.dart` (`savedMealKey`, `saveMealPreset`)

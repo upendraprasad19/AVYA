@@ -75,6 +75,7 @@ DECLARE
   v_user uuid := '00000000-0000-0000-0000-0000000a11ce'::uuid;   -- "Alice"
   v_now  timestamptz := now();
   v_date date := current_date;
+  v_log_id uuid;   -- parent nutrition_logs id for the item arbiter test (f7e3a1)
 BEGIN
   -- Insert a synthetic user row so FK-bearing inserts don't hit 23503
   -- on user_id. Best-effort — if the FK isn't there or the user already
@@ -141,14 +142,22 @@ BEGIN
     INSERT INTO _v_results VALUES ('nutrition_logs:user_id,date,meal_type', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 4. nutrition_log_items (id) --------------------------------------
+  ----- 4. nutrition_log_items (log_id, item_index) ----------------------
+  -- POST-083 (f7e3a1): arbiter is (log_id, item_index); real columns are
+  -- log_id / food_name / item_index. The pre-083 block referenced nonexistent
+  -- nutrition_log_id / name cols + the dead (id) arbiter (always 42703). Needs a
+  -- parent nutrition_logs row for the FK.
   BEGIN
-    INSERT INTO public.nutrition_log_items (id, nutrition_log_id, name, quantity_g, calories)
-      VALUES (gen_random_uuid(), gen_random_uuid(), 'arbiter test', 100, 50)
-      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-    INSERT INTO _v_results VALUES ('nutrition_log_items:id', 'ok', NULL, NULL);
+    INSERT INTO public.nutrition_logs (id, user_id, date, meal_type, total_calories)
+      VALUES (gen_random_uuid(), v_user, v_date, 'arbiter_item', 1)
+      ON CONFLICT (user_id, date, meal_type) DO UPDATE SET total_calories = EXCLUDED.total_calories
+      RETURNING id INTO v_log_id;
+    INSERT INTO public.nutrition_log_items (log_id, item_index, food_name, quantity_g, calories)
+      VALUES (v_log_id, 0, 'arbiter test', 100, 50)
+      ON CONFLICT (log_id, item_index) DO UPDATE SET food_name = EXCLUDED.food_name;
+    INSERT INTO _v_results VALUES ('nutrition_log_items:log_id,item_index', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('nutrition_log_items:id', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('nutrition_log_items:log_id,item_index', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 5. water_logs (user_id, date) ------------------------------------
@@ -161,14 +170,15 @@ BEGIN
     INSERT INTO _v_results VALUES ('water_logs:user_id,date', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 6. user_saved_meals (id) -----------------------------------------
+  ----- 6. user_saved_meals (user_id, name) ------------------------------
+  -- POST-083 (f7e3a1): client omits id + arbiters on (user_id, name).
   BEGIN
-    INSERT INTO public.user_saved_meals (id, user_id, name, items)
-      VALUES (gen_random_uuid(), v_user, 'arbiter test', '[]'::jsonb)
-      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-    INSERT INTO _v_results VALUES ('user_saved_meals:id', 'ok', NULL, NULL);
+    INSERT INTO public.user_saved_meals (user_id, name, items)
+      VALUES (v_user, 'arbiter test', '[]'::jsonb)
+      ON CONFLICT (user_id, name) DO UPDATE SET items = EXCLUDED.items;
+    INSERT INTO _v_results VALUES ('user_saved_meals:user_id,name', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('user_saved_meals:id', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('user_saved_meals:user_id,name', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 7. community_reviews (id) ----------------------------------------
@@ -231,34 +241,37 @@ BEGIN
     INSERT INTO _v_results VALUES ('notifications_inbox:id', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 13. sleep_logs (id) ----------------------------------------------
+  ----- 13. sleep_logs (user_id, date) -----------------------------------
+  -- POST-082 (d4b8e2): client omits id + arbiters on (user_id, date).
   BEGIN
-    INSERT INTO public.sleep_logs (id, user_id, date, duration_hours)
-      VALUES (gen_random_uuid(), v_user, v_date, 8)
-      ON CONFLICT (id) DO UPDATE SET duration_hours = EXCLUDED.duration_hours;
-    INSERT INTO _v_results VALUES ('sleep_logs:id', 'ok', NULL, NULL);
+    INSERT INTO public.sleep_logs (user_id, date, duration_hrs)
+      VALUES (v_user, v_date, 8)
+      ON CONFLICT (user_id, date) DO UPDATE SET duration_hrs = EXCLUDED.duration_hrs;
+    INSERT INTO _v_results VALUES ('sleep_logs:user_id,date', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('sleep_logs:id', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('sleep_logs:user_id,date', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 14. weight_logs (id) ---------------------------------------------
+  ----- 14. weight_logs (user_id, date) ----------------------------------
+  -- POST-082 (d4b8e2): client omits id + arbiters on (user_id, date).
   BEGIN
-    INSERT INTO public.weight_logs (id, user_id, date, weight_kg)
-      VALUES (gen_random_uuid(), v_user, v_date, 75)
-      ON CONFLICT (id) DO UPDATE SET weight_kg = EXCLUDED.weight_kg;
-    INSERT INTO _v_results VALUES ('weight_logs:id', 'ok', NULL, NULL);
+    INSERT INTO public.weight_logs (user_id, date, weight_kg)
+      VALUES (v_user, v_date, 75)
+      ON CONFLICT (user_id, date) DO UPDATE SET weight_kg = EXCLUDED.weight_kg;
+    INSERT INTO _v_results VALUES ('weight_logs:user_id,date', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('weight_logs:id', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('weight_logs:user_id,date', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 15. body_measurements (id) ---------------------------------------
+  ----- 15. body_measurements (user_id, date) ----------------------------
+  -- POST-082 (d4b8e2): client omits id + arbiters on (user_id, date).
   BEGIN
-    INSERT INTO public.body_measurements (id, user_id, date)
-      VALUES (gen_random_uuid(), v_user, v_date)
-      ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date;
-    INSERT INTO _v_results VALUES ('body_measurements:id', 'ok', NULL, NULL);
+    INSERT INTO public.body_measurements (user_id, date)
+      VALUES (v_user, v_date)
+      ON CONFLICT (user_id, date) DO UPDATE SET date = EXCLUDED.date;
+    INSERT INTO _v_results VALUES ('body_measurements:user_id,date', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('body_measurements:id', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('body_measurements:user_id,date', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 16. progress_photos (id) -----------------------------------------
@@ -293,28 +306,32 @@ BEGIN
     INSERT INTO _v_results VALUES ('workout_logs:user_id,date,exercise_name', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 19. workout_log_exercises (workout_log_id, exercise_id, set_number) -----
-  -- PRE-064: FAIL 42P10 (partial UNIQUE rejected by arbiter)
-  -- POST-064: OK
+  ----- 19. workout_log_exercises (user_id, workout_log_id, exercise_id, set_number) -----
+  -- POST-082 (d4b8e2): the global (wlog,ex,set) UNIQUE was replaced by the
+  -- user-inclusive arbiter; client omits id + arbiters on
+  -- (user_id, workout_log_id, exercise_id, set_number). (workout_log_id is a
+  -- plain uuid column — no FK — so a synthetic uuid is fine.)
   BEGIN
     INSERT INTO public.workout_log_exercises
-      (id, workout_log_id, exercise_id, set_number, user_id, completed_at)
-      VALUES (gen_random_uuid(), 'wlog_arbiter', 'arbiter exercise', 1, v_user, v_now)
-      ON CONFLICT (workout_log_id, exercise_id, set_number) DO UPDATE SET completed_at = EXCLUDED.completed_at;
-    INSERT INTO _v_results VALUES ('workout_log_exercises:workout_log_id,exercise_id,set_number', 'ok', NULL, NULL);
+      (workout_log_id, exercise_id, exercise_name, set_number, user_id, completed_at)
+      VALUES (gen_random_uuid(), 'arbiter exercise', 'arbiter test', 1, v_user, v_now)
+      ON CONFLICT (user_id, workout_log_id, exercise_id, set_number) DO UPDATE SET completed_at = EXCLUDED.completed_at;
+    INSERT INTO _v_results VALUES ('workout_log_exercises:user_id,workout_log_id,exercise_id,set_number', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('workout_log_exercises:workout_log_id,exercise_id,set_number', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('workout_log_exercises:user_id,workout_log_id,exercise_id,set_number', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 20. workout_log_sets (workout_log_id, exercise_id, set_number) ---
+  ----- 20. workout_log_sets (user_id, workout_log_id, exercise_id, set_number) ---
+  -- POST-082 (d4b8e2): user-inclusive arbiter (replaces the old global key);
+  -- the per-set table also gained user_id in the natural key.
   BEGIN
     INSERT INTO public.workout_log_sets
-      (id, workout_log_id, exercise_id, set_number, reps, weight_kg)
-      VALUES (gen_random_uuid(), 'wlog_arbiter', 'arbiter exercise', 1, 10, 50)
-      ON CONFLICT (workout_log_id, exercise_id, set_number) DO UPDATE SET reps = EXCLUDED.reps;
-    INSERT INTO _v_results VALUES ('workout_log_sets:workout_log_id,exercise_id,set_number', 'ok', NULL, NULL);
+      (workout_log_id, exercise_id, set_number, user_id, reps, weight_kg)
+      VALUES (gen_random_uuid(), 'arbiter exercise', 1, v_user, 10, 50)
+      ON CONFLICT (user_id, workout_log_id, exercise_id, set_number) DO UPDATE SET reps = EXCLUDED.reps;
+    INSERT INTO _v_results VALUES ('workout_log_sets:user_id,workout_log_id,exercise_id,set_number', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('workout_log_sets:workout_log_id,exercise_id,set_number', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('workout_log_sets:user_id,workout_log_id,exercise_id,set_number', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 21. workout_schedule_completions (user_id, scheduled_date) -------

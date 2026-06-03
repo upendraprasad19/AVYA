@@ -57,11 +57,16 @@ void main() {
     final relPath = entity.path.replaceAll('\\', '/');
     if (allowlist.contains(relPath)) continue;
 
-    final lines = entity.readAsLinesSync();
+    // Strip BOTH block (/* */) and line (//) comments first so commentary about
+    // the legacy shape never trips the gate
+    // (feedback_source_grep_strip_comments_first). Block comments are blanked but
+    // keep their newlines so reported line numbers stay accurate.
+    final content = entity.readAsStringSync().replaceAllMapped(
+        RegExp(r'/\*.*?\*/', dotAll: true),
+        (m) => m[0]!.replaceAll(RegExp(r'[^\n]'), ' '));
+    final lines = content.split('\n');
     for (var i = 0; i < lines.length; i++) {
       final raw = lines[i];
-      // Strip line comments so commentary about the old shape doesn't
-      // trigger the gate.
       final idx = raw.indexOf('//');
       final line = idx >= 0 ? raw.substring(0, idx) : raw;
       for (final p in patterns) {

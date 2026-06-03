@@ -123,7 +123,12 @@ class ExlogKeyMigrator {
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       };
 
-      // Delete old keys
+      // Write under the new key FIRST, then delete the old keys (b8d5c2 B-pass
+      // F1) — a throwing/interrupted put never leaves the group with the old
+      // keys deleted but nothing written. Idempotent: an interrupted
+      // put-then-delete re-enters the group next boot (old keys still present)
+      // and reproduces the result.
+      await box.put(newKey, mergedEntry);
       for (final mEntry in group) {
         if (mEntry.key != newKey) {
           await box.delete(mEntry.key);
@@ -131,8 +136,6 @@ class ExlogKeyMigrator {
           if (group.length > 1) merged++;
         }
       }
-      // Write under new key
-      await box.put(newKey, mergedEntry);
     }
 
     // Rebuild exercise_log_index_<date> from current state
