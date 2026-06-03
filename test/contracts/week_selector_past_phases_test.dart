@@ -1,13 +1,15 @@
 // test/contracts/week_selector_past_phases_test.dart
 //
-// Contract — Theme K (closes-diagnose b9d2a8).
+// Contract — Theme K (closes-diagnose b9d2a8), UPDATED 2026-06-02 for the
+// two-Phase-1 refactor (diagnose a3f8c1).
 //
-// Pins the inline past-phase scroll-back extension to WeekSelector.
-// Pre-fix the widget showed only the current phase (PHASE I W1-W4) +
-// 2 PRO-locked future phases (PHASE II W5-8, PHASE III W9-12). After
-// Theme H protected past phase data from planGenerator overwrite, we
-// extend the strip LEFT with one _PastPhaseGroup per completed past
-// phase reading schedule_* Hive entries.
+// Pins the past-phase scroll-back feature on WeekSelector. The 2026-06-02
+// refactor moved the schedule_* walk + planStart filter + 28-day bucketing into
+// the SHARED SoT `WorkoutScheduleReadService.pastPhaseBlocks()` (consumed by both
+// the week selector AND PhaseProgressReconciler), and made the phase LABELS
+// dynamic (derived from current_phase) instead of hardcoded PHASE I/II/III. This
+// test pins the new architecture; `week_selector_reads_current_phase_test.dart`
+// pins the dynamic labels + no-duplicate behavior.
 //
 // Source-grep with comment-stripping per
 // `feedback_source_grep_strip_comments_first.md`.
@@ -20,164 +22,98 @@ String _strip(String src) => src
     .replaceAll(RegExp(r'(?<!:)//[^\n]*'), '');
 
 void main() {
-  late String src;
+  late String src; // week_selector.dart
+  late String svc; // workout_schedule_read_service.dart (the bucketing SoT)
 
   setUpAll(() {
-    src = _strip(
-        File('lib/features/train/widgets/week_selector.dart')
-            .readAsStringSync());
+    src = _strip(File('lib/features/train/widgets/week_selector.dart')
+        .readAsStringSync());
+    svc = _strip(File('lib/core/services/workout_schedule_read_service.dart')
+        .readAsStringSync());
   });
 
-  test('imports HiveService for direct schedule_* read', () {
+  test('week selector delegates past-phase bucketing to the shared SoT', () {
     expect(
-      src.contains(
-          "import 'package:icanbefitter/core/services/hive_service.dart'"),
+      src.contains('pastPhaseBlocks()'),
       isTrue,
-      reason: 'WeekSelector must import HiveService to walk workoutBox '
-          'for past schedule_* entries.',
+      reason: 'WeekSelector must read the shared '
+          'WorkoutScheduleReadService.pastPhaseBlocks() SoT, not re-bucket '
+          'schedule_* itself (avoids drift with PhaseProgressReconciler).',
     );
   });
 
-  test('walks workoutBox for schedule_* keys', () {
-    expect(
-      src.contains("startsWith('schedule_')"),
-      isTrue,
-      reason: 'past-phase loader must filter workoutBox entries by '
-          'keys starting with `schedule_`.',
-    );
-  });
-
-  test('skips entries within current plan window (date >= planStart)', () {
+  test('the SoT walks schedule_* + skips the current plan window + buckets 28d',
+      () {
+    expect(svc.contains("startsWith(_schedulePrefix)") ||
+        svc.contains("startsWith('schedule_')"), isTrue,
+        reason: 'pastPhaseBlocks() filters workoutBox by the schedule_ prefix.');
     expect(
       RegExp(r'planStart\s*!=\s*null\s*&&\s*!\s*date\.isBefore\(planStart\)')
-          .hasMatch(src),
+          .hasMatch(svc),
       isTrue,
-      reason: 'past-phase loader must skip entries whose date is in or '
-          'after the current plan window — those belong to the active '
-          'phase, not history.',
+      reason: 'pastPhaseBlocks() must skip entries in/after the current plan '
+          'window (those belong to the active phase, not history).',
     );
+    expect(svc.contains('~/ 28'), isTrue,
+        reason: 'past entries bucket by phase-length (28 days).');
   });
 
-  test('groups past entries into 28-day buckets (phase = 4 weeks)', () {
-    expect(
-      src.contains('~/ 28'),
-      isTrue,
-      reason: 'past entries must bucket by phase-length (28 days) so '
-          'each _PastPhase holds exactly one phase of completed data.',
-    );
-  });
-
-  test('_PastPhaseGroup renders LEFT of PHASE I', () {
-    // The for-in over pastPhases must appear BEFORE the PHASE I
-    // _PhaseGroup in the build() row children.
-    final phase1Idx = src.indexOf("label: 'PHASE I'");
+  test('past groups render LEFT of the current phase group', () {
+    final currentGroupIdx = src.indexOf('_phaseRoman(widget.currentPhase)');
     final pastLoopIdx = src.indexOf('for (final past in pastPhases)');
-    expect(phase1Idx, greaterThan(-1));
+    expect(currentGroupIdx, greaterThan(-1));
     expect(pastLoopIdx, greaterThan(-1));
-    expect(pastLoopIdx < phase1Idx, isTrue,
-        reason: 'past-phase groups must render LEFT of (before) the '
-            'PHASE I _PhaseGroup so scrolling LEFT reveals history.');
+    expect(pastLoopIdx < currentGroupIdx, isTrue,
+        reason: 'past-phase groups must render before the current-phase group '
+            'so scrolling LEFT reveals history.');
   });
 
-  test('past chips visually distinct — textDim border (not accent)', () {
-    // _PastWeekChip uses AppColors.textDim border, NOT AppColors.accent.
+  test('forward labels are DYNAMIC (current_phase, +1, +2), not hardcoded', () {
+    expect(src.contains('_phaseRoman(widget.currentPhase)'), isTrue);
+    expect(src.contains('_phaseRoman(widget.currentPhase + 1)'), isTrue);
+    expect(src.contains('_phaseRoman(widget.currentPhase + 2)'), isTrue);
+    // The pre-fix hardcoded forward labels must be gone (two-Phase-1 root).
+    expect(src.contains("label: 'PHASE I'"), isFalse);
+    expect(src.contains("label: 'PHASE II'"), isFalse);
+    expect(src.contains("label: 'PHASE III'"), isFalse);
+  });
+
+  test('past chips visually distinct — textDim styling', () {
     final pastChipIdx = src.indexOf('class _PastWeekChip');
     expect(pastChipIdx, greaterThan(-1));
     final body = src.substring(pastChipIdx, pastChipIdx + 3000);
-    expect(
-      body.contains('AppColors.textDim'),
-      isTrue,
-      reason: 'past chips must use textDim styling to visually '
-          'distinguish from current-phase chips (accent).',
-    );
+    expect(body.contains('AppColors.textDim'), isTrue,
+        reason: 'past chips use textDim to distinguish from current (accent).');
   });
 
   test('past chips show ✓ glyph when ≥1 day is status=completed', () {
-    expect(
-      src.contains('hasCompletedDayInWeek'),
-      isTrue,
-      reason: 'past chip must compute completed-day-present predicate '
-          'via _PastPhase.hasCompletedDayInWeek to decide whether to '
-          'render the check_circle glyph.',
-    );
-    expect(
-      src.contains('Icons.check_circle'),
-      isTrue,
-      reason: 'completed-day glyph must be check_circle.',
-    );
+    expect(src.contains('hasCompletedDayInWeek'), isTrue);
+    expect(src.contains('Icons.check_circle'), isTrue);
   });
 
   test('tapping a past chip opens _PastWeekSheet (modal bottom sheet)', () {
-    expect(
-      src.contains('showModalBottomSheet'),
-      isTrue,
-      reason: 'past chip tap must surface a modal bottom sheet, not '
-          'navigate the train screen (preserves current selectedWeek).',
-    );
-    expect(
-      src.contains('_PastWeekSheet'),
-      isTrue,
-      reason: 'modal builder must instantiate _PastWeekSheet showing '
-          'the 7-day breakdown for the tapped past week.',
-    );
+    expect(src.contains('showModalBottomSheet'), isTrue);
+    expect(src.contains('_PastWeekSheet'), isTrue);
   });
 
-  test('_PastWeekSheet reads entriesForWeek + renders completed status',
-      () {
+  test('_PastWeekSheet reads entriesForWeek + renders completed status', () {
     final idx = src.indexOf('class _PastWeekSheet');
     expect(idx, greaterThan(-1));
     final body = src.substring(idx, idx + 3000);
-    expect(
-      body.contains('entriesForWeek'),
-      isTrue,
-      reason: 'sheet must filter past phase entries to the tapped '
-          'week via _PastPhase.entriesForWeek.',
-    );
+    expect(body.contains('entriesForWeek'), isTrue);
     expect(
       body.contains("status == 'completed'") ||
           src.contains("e.status == 'completed'"),
       isTrue,
-      reason: 'sheet (or the helper) must check status==completed to '
-          'differentiate completed vs not-completed days.',
     );
   });
 
-  test('forward-phase scroll behaviour unchanged (PHASE I/II/III intact)',
+  test('public widget signature (totalWeeks, selectedWeek, onSelect, currentPhase)',
       () {
-    expect(
-      src.contains("label: 'PHASE I'"),
-      isTrue,
-      reason: 'PHASE I _PhaseGroup must still render.',
-    );
-    expect(
-      src.contains("label: 'PHASE II'"),
-      isTrue,
-      reason: 'PHASE II _PhaseGroup must still render with isPaywalled.',
-    );
-    expect(
-      src.contains("label: 'PHASE III'"),
-      isTrue,
-      reason: 'PHASE III _PhaseGroup must still render with isPaywalled.',
-    );
-  });
-
-  test('public widget signature preserved (totalWeeks, selectedWeek, onSelect)',
-      () {
-    // Existing call-sites must continue to compile.
-    expect(
-      RegExp(r'final\s+int\s+totalWeeks').hasMatch(src),
-      isTrue,
-      reason: 'WeekSelector must keep `int totalWeeks` field.',
-    );
-    expect(
-      RegExp(r'final\s+int\s+selectedWeek').hasMatch(src),
-      isTrue,
-      reason: 'WeekSelector must keep `int selectedWeek` field.',
-    );
-    expect(
-      RegExp(r'final\s+ValueChanged<int>\s+onSelect').hasMatch(src),
-      isTrue,
-      reason: 'WeekSelector must keep `ValueChanged<int> onSelect` callback.',
-    );
+    expect(RegExp(r'final\s+int\s+totalWeeks').hasMatch(src), isTrue);
+    expect(RegExp(r'final\s+int\s+selectedWeek').hasMatch(src), isTrue);
+    expect(RegExp(r'final\s+ValueChanged<int>\s+onSelect').hasMatch(src), isTrue);
+    // The two-Phase-1 fix added the real-phase input.
+    expect(RegExp(r'final\s+int\s+currentPhase').hasMatch(src), isTrue);
   });
 }

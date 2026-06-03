@@ -83,11 +83,18 @@ void main() {
                   'silently uuid-reject on the server.');
     });
 
-    test('_syncSavedMeals coerces id via _deterministicId', () {
-      final body = methodBody(syncServiceSrc, '_syncSavedMeals');
-      expect(body.contains('_deterministicId'), isTrue,
-          reason: '_syncSavedMeals must coerce id to deterministic UUID (F4). '
-                  'Raw Hive saved_meal_<hash> keys silently uuid-reject.');
+    test('_syncSavedMeals omits id + upserts onConflict (user_id,name) — f7e3a1', () {
+      // f7e3a1 reversed the old "coerce id via _deterministicId" contract: a
+      // name-only deterministic id collided cross-user. Comment-stripped so the
+      // explanatory comment (naming the OLD shape) can't false-pass this.
+      final body = methodBody(syncServiceSrc, '_syncSavedMeals')
+          .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(body.contains("onConflict: 'user_id,name'"), isTrue,
+          reason: 'f7e3a1: user-scoped natural key (user_id,name), not a '
+                  'name-only deterministic id.');
+      expect(body.contains('_deterministicId'), isFalse,
+          reason: 'f7e3a1: id is OMITTED (gen_random_uuid). Diagnose f7e3a1.');
     });
   });
 }

@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/widgets/weight_trend_chart.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -35,7 +36,6 @@ import '../widgets/recent_food_logs.dart';
 import '../widgets/swap_sheet.dart';
 import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
-import '../widgets/weight_sparkline.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -355,26 +355,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
-                            Text.rich(
-                              TextSpan(
-                                children: [
-                                  TextSpan(text: firstName),
-                                  const TextSpan(
-                                    text: ' \u{1F44B}',
-                                    style: TextStyle(
-                                      fontFamily: 'DM Sans',
-                                      fontSize: 18,
+                            // Obs 2 sweep (2026-06-02) — a long first name + the
+                            // streak pill on the right could clip the greeting
+                            // ("Upendra 👋" fits, longer names didn't). Shrink-
+                            // to-fit instead of truncating, same as the Train /
+                            // Nutrition titles.
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(text: firstName),
+                                    const TextSpan(
+                                      text: ' \u{1F44B}',
+                                      style: TextStyle(
+                                        fontFamily: 'DM Sans',
+                                        fontSize: 18,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                style: AppTypography.h1.copyWith(
+                                  fontSize: 22,
+                                  height: 1.1,
+                                  letterSpacing: -0.4,
+                                ),
+                                maxLines: 1,
+                                softWrap: false,
                               ),
-                              style: AppTypography.h1.copyWith(
-                                fontSize: 22,
-                                height: 1.1,
-                                letterSpacing: -0.4,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -840,10 +849,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _buildWeightSparkline(WidgetRef ref) {
     final entries = ref.watch(weightHistoryProvider);
-    return WeightSparkline(
+    // Obs 4 (2026-06-02) — the rich date-aware trend chart (range chips +
+    // dashed goal line) replaces the old single-line sparkline, which drew a
+    // misleading lone dot when only one weigh-in fell in the window. The chart
+    // carries the last pre-window point in so a post-gap weigh-in always shows
+    // a connecting line.
+    final target =
+        (UserRepository.instance.getProfile()?['target_weight_kg'] as num?)
+                ?.toDouble() ??
+            0;
+    return WeightTrendChart(
       entries: entries
-          .map((e) => WeightEntry(date: e.date, weight: e.weight))
+          .map((e) => WeightTrendPoint(date: e.date, weight: e.weight))
           .toList(),
+      targetWeight: target,
+      chartHeight: 150,
+      onViewFullHistory: () => context.go('/profile/reports'),
     );
   }
 

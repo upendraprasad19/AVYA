@@ -129,7 +129,11 @@ serve(async (req: Request) => {
       .from("user_profile")
       .select(
         "current_weight_kg, target_weight_kg, primary_goal, fitness_experience, " +
-          "days_per_week, activity_level, diet_preference, bmr, tdee",
+          "days_per_week, activity_level, diet_preference, bmr, tdee, " +
+          // Canonical stored macro targets (the SoT the Nutrition / Profile /
+          // Diet-Plan screens show) — fix 2026-06-02 macro-mismatch: read these
+          // instead of recomputing a divergent target server-side.
+          "daily_calories, protein_grams, carbs_grams, fat_grams",
       )
       .eq("user_id", targetUserId)
       .single();
@@ -274,18 +278,34 @@ serve(async (req: Request) => {
         : "N/A";
 
     // ── Calorie/protein targets ────────────────────────────────
+    // Read the CANONICAL stored targets the client computed + persisted
+    // (user_profile.daily_calories / protein_grams) — the SAME values the
+    // Nutrition / Profile / Diet-Plan screens show. Fix 2026-06-02: this EF
+    // previously RECOMPUTED its own (tdee×1.1, weight×2), so the weekly report
+    // showed a target (e.g. 3141 / 155 g) that disagreed with every other
+    // surface (3069 / 140 g) — the macro-mismatch the founder flagged. Fall
+    // back to a tdee/weight estimate ONLY for legacy profiles that predate
+    // target persistence (daily_calories null/0).
     const tdee = (userProfile?.tdee as number) || 2000;
     const goal = (userProfile?.primary_goal as string) || "general_fitness";
-
-    // Estimate daily calorie target based on goal
-    let calorieTarget = tdee;
-    if (goal === "lose_fat") calorieTarget = Math.round(tdee * 0.8);
-    else if (goal === "build_muscle") calorieTarget = Math.round(tdee * 1.1);
-
-    // Protein target: ~2g per kg bodyweight for muscle, 1.6g for others
     const weight = (userProfile?.current_weight_kg as number) || 70;
-    const proteinTarget =
-      goal === "build_muscle" ? Math.round(weight * 2) : Math.round(weight * 1.6);
+
+    const storedCalories = userProfile?.daily_calories as number | null;
+    const storedProtein = userProfile?.protein_grams as number | null;
+
+    const calorieTarget = storedCalories && storedCalories > 0
+      ? storedCalories
+      : goal === "lose_fat"
+        ? Math.round(tdee * 0.8)
+        : goal === "build_muscle"
+          ? Math.round(tdee * 1.1)
+          : tdee;
+
+    const proteinTarget = storedProtein && storedProtein > 0
+      ? storedProtein
+      : goal === "build_muscle"
+        ? Math.round(weight * 2)
+        : Math.round(weight * 1.6);
 
     // Compliance: how many days met calorie target within +/-10%
     let calorieCompliantDays = 0;

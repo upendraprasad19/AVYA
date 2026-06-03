@@ -129,7 +129,16 @@ extension SyncServiceWorkout on SyncService {
           continue;
         }
         await _supabase.client.from('workout_logs').upsert({
-          'id': SyncService._deterministicId(key),
+          // Fix 2026-06-02 (cross-user PK collision): OMIT the client id. Was
+          // `_deterministicId('wlog_<date>')` (date-only, no user) → two users
+          // completing a workout on the SAME date generated the SAME uuid →
+          // cross-user collision on workout_logs_pkey (23505); whoever synced
+          // second silently lost their session-summary row. Omitting id (the
+          // proven cure: nutrition_logs c9f2a7 / workout_templates a8b2c7 /
+          // scheduled_workouts c8e4a1) → gen_random_uuid() on insert, existing
+          // id kept on conflict; the user-inclusive natural key
+          // (user_id,date,workout_name) below merges re-syncs. Existing rows
+          // self-heal on next sync — no re-key.
           'user_id': userId,
           'workout_name': wlogName,
           'date': wlogDate,
@@ -242,7 +251,9 @@ extension SyncServiceWorkout on SyncService {
           continue;
         }
         await _supabase.client.from('workout_log_exercises').upsert({
-          'id': SyncService._deterministicId(key),
+          // id OMITTED (fix 2026-06-02 cross-user collision) — gen_random_uuid()
+          // on insert / kept on conflict. The natural key below now includes
+          // user_id so two users with the same date+exercise+set don't collide.
           'workout_log_id': workoutLogId,
           'user_id': userId,
           'exercise_id': exerciseId,
@@ -256,7 +267,11 @@ extension SyncServiceWorkout on SyncService {
           'is_pr': log['is_pr'] ?? false,
           'has_warmup_sets': log['has_warmup_sets'] ?? false,
           'completed_at': completedAt,
-        }, onConflict: 'workout_log_id,exercise_id,set_number');
+          // Fix 2026-06-02: user_id added to the conflict key (matching new
+          // index uniq_wle_user_wlog_ex_set) — workout_log_id is date-only, so
+          // without user_id two users' same-date+exercise+set rows collided and
+          // DO UPDATE could overwrite the OTHER user's row (cross-user corruption).
+        }, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
 
         // ── PER-SET ROWS (F4) ──
         // Upserts a row per set into `workout_log_sets`. Natural key is
@@ -305,8 +320,12 @@ extension SyncServiceWorkout on SyncService {
           if (rows.isNotEmpty) {
             try {
               await _supabase.client
+                  // Fix 2026-06-02: user_id added to the conflict key (matching
+                  // new index uniq_wls_user_wlog_ex_set) — prevents cross-user
+                  // collision on the date-only workout_log_id. (id was already
+                  // omitted — gen_random_uuid() default.)
                   .from('workout_log_sets')
-                  .upsert(rows, onConflict: 'workout_log_id,exercise_id,set_number');
+                  .upsert(rows, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
             } catch (e, st) {
               debugPrint(
                   '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');

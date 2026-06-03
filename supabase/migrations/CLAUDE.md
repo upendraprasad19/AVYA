@@ -97,9 +97,8 @@ Three migration filename schemes coexist in `supabase/migrations/`. This is book
 
 - `test/contracts/applied_migrations_parity_test.dart` — every `mcp__supabase__apply_migration` call must be reflected in `backups/applied_migrations.json`.
 - `test/contracts/dead_columns_dropped_test.dart` — flags columns dropped via migration but still referenced in code.
-- `test/contracts/migration_header_contract_test.dart` — fails if any migration file is missing the four-line header.
-- `test/contracts/onconflict_live_arbiter_test.dart` — partial UNIQUE index + ON CONFLICT live INSERT contract (migration 064 / APK Test #16).
-- `scripts/check_onconflict_live_arbiter.dart` — permanent gate from APK Test #16.
+- Migration 4-tag header — there is **no** standalone `migration_header_contract_test.dart`; the header is enforced by the migration-header convention above (the pre-commit hook greps for the four tags).
+- `test/sql/onconflict_live_arbiter.sql` + `scripts/check_onconflict_live_arbiter.dart` — the live-Postgres ON CONFLICT arbiter check (every client `onConflict` pair resolves on the real schema). Runs at `/build-apk` against a live DB, so there is **no** unit-suite `onconflict_live_arbiter_test.dart`. (NB 2026-06-03: the scaffold carries broad pre-existing schema drift — ~10 blocks reference columns that no longer exist; a dedicated schema-sync pass is tracked as a follow-up. The 082/083 arbiter blocks were updated in this batch.)
 
 ## See also
 

@@ -9,6 +9,8 @@ import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
+import 'package:icanbefitter/core/services/saved_meal_key_migrator.dart';
+import 'package:icanbefitter/core/services/phase_progress_reconciler.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
@@ -241,6 +243,50 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       'restoring_screen_migrator_done',
       message: 'migrator=nlog ms=${swNlog.elapsedMilliseconds} '
           'did_run=$nlogRan',
+    ));
+
+    // Saved-meal key heal (diagnose b8d5c2) — re-key legacy `saved_meal_<ms>`
+    // rows to the canonical `saved_meal_<nameHash>` shape so the writer matches
+    // the restore + cloud (user_id,name) key (no more restore-duplicated meals).
+    // Idempotent; runs alongside the other key migrators.
+    final swSavedMeal = Stopwatch()..start();
+    bool savedMealRan = false;
+    try {
+      final wasDone =
+          HiveService.instance.configBox.get('saved_meal_key_migration_v1') ==
+              true;
+      await SavedMealKeyMigrator.runIfNeeded();
+      savedMealRan = !wasDone;
+    } catch (e) {
+      debugPrint(
+          '[RestoringScreen] SavedMealKeyMigrator failed (non-fatal): $e');
+    }
+    swSavedMeal.stop();
+    unawaited(ErrorTelemetry.logEvent(
+      'restoring_screen_migrator_done',
+      message: 'migrator=saved_meal ms=${swSavedMeal.elapsedMilliseconds} '
+          'did_run=$savedMealRan',
+    ));
+
+    // Two-Phase-1 heal (diagnose 2026-06-02) — advance current_phase to match
+    // the number of completed phase blocks (founder choice: "advance, keep
+    // progress"). Idempotent + monotonic → a no-op once consistent, so it is
+    // safe to run on every boot and also self-heals any future duplicate.
+    // Runs AFTER restore + key migrators so schedule_* + plan_start are
+    // hydrated; awaited so the corrected counter lands before /home reads
+    // currentPlanProvider. Never deletes/rewrites schedule rows.
+    final swPhase = Stopwatch()..start();
+    try {
+      await PhaseProgressReconciler.reconcile(
+          ref.read(workoutScheduleReadServiceProvider));
+    } catch (e) {
+      debugPrint(
+          '[RestoringScreen] PhaseProgressReconciler failed (non-fatal): $e');
+    }
+    swPhase.stop();
+    unawaited(ErrorTelemetry.logEvent(
+      'restoring_screen_migrator_done',
+      message: 'migrator=phase_reconcile ms=${swPhase.elapsedMilliseconds}',
     ));
 
     // Bug 2026-05-22 / diagnose dc52a4 — three pieces of post-auth bootstrap

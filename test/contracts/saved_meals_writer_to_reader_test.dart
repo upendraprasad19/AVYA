@@ -57,9 +57,9 @@ void main() {
     test('writer key uses hash (not ms-timestamp) for cross-device dedup', () {
       // Key should be hash-based (hashCode or similar) not millisecondsSinceEpoch
       // Per sot_registry class_constraints: "Hive key uses name-hash not ms-timestamp"
-      // Note: existing code uses ms in the key — this is a KNOWN stale ref in registry
-      // We assert the key is deterministic enough for cloud round-trips
-      // C-12 — accept presence in either notifier or service.
+      // b8d5c2: the writer now keys by UUID v5 over the name (was ms-timestamp);
+      // the registry key_formula matches. Accept the prefix in either the
+      // notifier or the service.
       expect(
           nutritionProvSrc.contains('saved_meal_') ||
               nutritionWriteSvcSrc.contains('saved_meal_'),
@@ -77,13 +77,20 @@ void main() {
           reason: '_syncSavedMeals must exist in sync_service for cloud sync');
     });
 
-    test('_syncSavedMeals coerces id via _deterministicId', () {
-      // Per sync_fanout_contract_test — raw saved_meal_<hash> keys uuid-reject on server
-      final body = _methodBody(syncSvcSrc, '_syncSavedMeals');
-      expect(body.contains('_deterministicId'), isTrue,
-          reason:
-              '_syncSavedMeals must coerce id to deterministic UUID (F4 sync gap); '
-              'raw Hive saved_meal_<hash> keys silently uuid-reject on the server');
+    test('_syncSavedMeals omits id + upserts onConflict (user_id,name) — f7e3a1', () {
+      // f7e3a1 REVERSED the old "coerce id via _deterministicId" contract: a
+      // name-only deterministic id collided cross-user (two users, same meal
+      // name → same uuid → one overwrote the other). Now: omit id
+      // (gen_random_uuid) + a user-scoped natural key. Comment-stripped so the
+      // explanatory comment — which names the OLD shape — can't false-pass this.
+      final body = _methodBody(syncSvcSrc, '_syncSavedMeals')
+          .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(body.contains("onConflict: 'user_id,name'"), isTrue,
+          reason: 'f7e3a1: user-scoped natural key (user_id,name)');
+      expect(body.contains('_deterministicId'), isFalse,
+          reason: 'f7e3a1: id is OMITTED — a name-only deterministic id collided '
+              'cross-user. See diagnose f7e3a1.');
     });
 
     test('cloud table user_saved_meals referenced in sync or restore', () {

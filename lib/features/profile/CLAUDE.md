@@ -36,7 +36,7 @@ Service layer: `lib/features/profile/services/profile_write_service.dart` and
 | Concept | Writer | Reader |
 |---|---|---|
 | user_profile fields (goal, weight, height, body fat, etc.) | `profile_write_service.dart` updates `userBox['profile']` map then fires `unawaited(syncService.syncOnboarding())` | `userProfileProvider` reads `userBox['profile']`. Every screen reads via the provider, never raw Hive. |
-| `weight_logs` | `health_write_service.dart` (via Profile → Edit Weight or chat) | `weeklyReportDataProvider` (forward-fill), home `WeightSparkline`. |
+| `weight_logs` | `health_write_service.dart` (via Profile → Edit Weight or chat) | `weeklyReportDataProvider` (forward-fill), home `WeightTrendChart`. |
 | `rank_promotion_log` | server-side `evaluate-rank-promotions` cron → writes `rank_promotion_log` rows | `rank_ladder_screen.dart` + `promotion_celebration_screen.dart`. |
 | Progress photos (PRO) | `ProgressPhotoRepository.capture` enforces daily cap BEFORE pick (2/day free, 5/day PRO) + uploads to Supabase Storage `progress_photos` bucket. Image quality tier-gated: 2048/85 free, 3000/95 PRO. | `progress_photos_screen.dart`, `progress_comparison_screen.dart`. |
 | `referral_redemption` | `apply_referral_sheet` → server-side validate-referral edge function | `subscription_service.isPro()` (7-day PRO grant). |

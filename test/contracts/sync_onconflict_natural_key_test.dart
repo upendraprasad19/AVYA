@@ -38,20 +38,26 @@ void main() {
       final start = src.indexOf(marker);
       expect(start, isNot(-1),
           reason: '_syncExerciseLogs must call workout_log_exercises.upsert');
-      final slice = src.substring(start, start + 800);
+      // Slice generously — the payload + comments grew when user_id was added
+      // to the arbiter (diagnose d4b8e2).
+      final slice =
+          src.substring(start, start + 1400 < src.length ? start + 1400 : src.length);
 
       expect(
-        slice.contains("onConflict: 'workout_log_id,exercise_id,set_number'"),
+        slice.contains(
+            "onConflict: 'user_id,workout_log_id,exercise_id,set_number'"),
         isTrue,
-        reason: 'workout_log_exercises upsert MUST target the natural unique '
-            '(workout_log_id, exercise_id, set_number). Pre-fix this was '
-            "onConflict: 'id' which lost 31 rows / 24h to 23505 in prod and "
-            'left orphaned per-set rows behind in workout_log_sets.',
+        reason: 'workout_log_exercises upsert MUST target the USER-INCLUSIVE '
+            'natural unique (user_id, workout_log_id, exercise_id, set_number). '
+            "Pre-2026-05-12 this was onConflict: 'id' (23505 + orphans); diagnose "
+            'd4b8e2 (2026-06-02) added user_id because workout_log_id is date-only '
+            '— without it two users on the same date+exercise+set collided / '
+            'overwrote each other (cross-user corruption).',
       );
       expect(
         slice.contains("onConflict: 'id'"),
         isFalse,
-        reason: 'The "id" conflict target was the bug — must not regress.',
+        reason: 'The "id" conflict target was the original bug — must not regress.',
       );
     });
 

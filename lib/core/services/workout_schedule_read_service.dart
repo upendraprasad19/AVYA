@@ -28,6 +28,29 @@ import '../utils/ist_date.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 
+/// A prior (completed or abandoned) 28-day phase block: the `schedule_*` rows
+/// strictly before the current `plan_start_date`, bucketed into 28-day windows
+/// from the earliest such row. The COUNT of these blocks is the single source
+/// of truth for "how many phases the user has moved past" — consumed by BOTH
+/// the Train week selector (rendering completed phases) AND
+/// `PhaseProgressReconciler` (the `current_phase` invariant). Keeping the
+/// bucketing in one place avoids a parallel reader that could drift (the
+/// recurring writer/reader-drift class). Introduced 2026-06-02 (two-Phase-1).
+class PastPhaseBlock {
+  final DateTime startDate;
+  final DateTime endDate;
+
+  /// Raw `schedule_*` row maps in this block (date-ascending), for the week
+  /// selector's past-week sheet. The reconciler only needs the block COUNT.
+  final List<Map<String, dynamic>> rows;
+
+  const PastPhaseBlock({
+    required this.startDate,
+    required this.endDate,
+    required this.rows,
+  });
+}
+
 /// Read + plan-generation orchestrator portion of the former
 /// `WorkoutScheduleService`. See file-level doc-comment for the split rationale.
 class WorkoutScheduleReadService {
@@ -523,6 +546,57 @@ class WorkoutScheduleReadService {
   /// True if a plan has been generated.
   bool hasPlan() {
     return _hive.workoutBox.containsKey(_planKey);
+  }
+
+  /// SoT for prior phase blocks (see [PastPhaseBlock]). Walks `schedule_*`
+  /// Hive entries strictly before `plan_start_date`, buckets into 28-day
+  /// windows from the earliest, and returns them oldest-first. `length` =
+  /// the number of phases the user has completed/moved past. Cheap
+  /// (≤~200 keys typical). Used by the week selector (display) and
+  /// `PhaseProgressReconciler` (current_phase invariant) — single bucketing
+  /// SoT, no drift. Fix 2026-06-02 (two-Phase-1 bug).
+  List<PastPhaseBlock> pastPhaseBlocks() {
+    final planStart = getPlanStartDate();
+    final box = _hive.workoutBox;
+    final rows = <(DateTime, Map<String, dynamic>)>[];
+    for (final entry in box.toMap().entries) {
+      final key = entry.key.toString();
+      if (!key.startsWith(_schedulePrefix)) continue;
+      final value = entry.value;
+      if (value is! Map) continue;
+      final map = Map<String, dynamic>.from(value);
+      final dateStr = map['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+      // Only rows strictly before the active plan window count as "past".
+      if (planStart != null && !date.isBefore(planStart)) continue;
+      rows.add((date, map));
+    }
+    if (rows.isEmpty) return const [];
+    rows.sort((a, b) => a.$1.compareTo(b.$1));
+
+    final earliest = rows.first.$1;
+    final byBucket = <int, List<Map<String, dynamic>>>{};
+    final boundsByBucket = <int, (DateTime, DateTime)>{};
+    for (final (date, map) in rows) {
+      final idx = date.difference(earliest).inDays ~/ 28;
+      (byBucket[idx] ??= []).add(map);
+      final bounds = boundsByBucket[idx];
+      // rows are date-ascending → first seen is the min, last seen the max.
+      boundsByBucket[idx] =
+          bounds == null ? (date, date) : (bounds.$1, date);
+    }
+
+    final sortedIdxs = byBucket.keys.toList()..sort();
+    return sortedIdxs.map((idx) {
+      final bounds = boundsByBucket[idx]!;
+      return PastPhaseBlock(
+        startDate: bounds.$1,
+        endDate: bounds.$2,
+        rows: byBucket[idx]!,
+      );
+    }).toList();
   }
 
   /// All dates in the current calendar week (Mon–Sun).

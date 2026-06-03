@@ -235,6 +235,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     WeekSelector(
                       totalWeeks: plan.weeks.length.clamp(1, 12),
                       selectedWeek: selectedWeek,
+                      // Real current phase from user_progress (via
+                      // CurrentPlanData.phase) — drives dynamic phase labels so
+                      // the strip never shows a duplicate "PHASE I". Fix
+                      // 2026-06-02 (two-Phase-1 bug).
+                      currentPhase: plan.phase,
                       onSelect: (week) {
                           // H-2 (audit-2026-05-11) — read the reactive
                           // subscription provider instead of the snapshot

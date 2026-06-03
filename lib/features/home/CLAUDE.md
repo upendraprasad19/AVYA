@@ -21,7 +21,7 @@ features (Start Workout → Train, Log Meal → Nutrition, Edit Goal → Profile
 Pieces:
 
 - `screens/home_screen.dart` — orchestrates the priority-ordered card stack.
-- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `weight_sparkline`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `swap_sheet`, `streak_warning_banner`, `plan_expired_card`.
+- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `swap_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9.)
 - `providers/home_provider.dart` — `todayWorkoutProvider`, `homeNutritionProvider`, `streakWarningEligibilityNotifier`.
 
 ## Home Screen Layout (Priority Order)
@@ -33,7 +33,7 @@ Pieces:
 4. Today's workout card → Start Workout (or DONE + View Card + stats if completed)
 5. Nutrition snapshot (calories + protein vs target)
 6. AI Coach insight (computed from local schedule data — next workout, consistency tips)
-7. Weight sparkline (last 7 entries)
+7. Weight trend chart (`shared/widgets/weight_trend_chart.dart` — range chips All/1Y/6M/3M/1M/1W, dashed goal line, **date-proportional** x-axis + carry-forward anchor so a post-gap weigh-in always draws a connecting line, never a lone dot)
 8. PR snapshot (dynamic — top 4 exercises by volume when key lifts empty)
 9. Recent logged foods
 10. Step counter (Health Connect)
@@ -50,7 +50,7 @@ Pieces:
 |---|---|---|
 | `workout_receipt_rendering` | `workout_write_service.logExercise` | `home_screen._buildTodayRow` "View Card" handler → `WorkoutReceiptData.fromExerciseLogs(DateTime.now())`; `day_detail_sheet` "View Workout Card" entry. |
 | `streaks` | `streak_progress_service.dart` (on workout complete / food log) | `streak_warning_banner.shouldShow` (clamped to [18,23] — see pitfalls). |
-| `weight_logs` | `health_write_service.dart` | home `weight_sparkline` (last 7 forward-filled). |
+| `weight_logs` | `health_write_service.dart` | home `WeightTrendChart` (`shared/widgets/weight_trend_chart.dart`; date-proportional x + carry-forward anchor — `weightTrendWindow()` is the testable extraction). |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` (cold-start day-change tick) | mount-time invalidation of `todayWorkoutProvider`, `homeNutritionProvider`, `streakProvider`. |
 | Plan expiry (free day 29) | `WorkoutScheduleService.isPhaseExpired()` | `home_screen._buildTodayRow` → `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next phase on splash. |
 

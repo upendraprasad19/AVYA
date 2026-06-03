@@ -1503,7 +1503,11 @@ concepts:
       failure_op_types: [sync_nutrition_data, upsert_nutrition_log, upsert_nutrition_log_item, upsert_water_log]
     class_constraints: |
       Per-item nutrition_log_items rows written in same projection
-      as parent nutrition_logs row.
+      as parent nutrition_logs row. Item cloud identity (diagnose f7e3a1):
+      OMIT id (gen_random_uuid) + onConflict (log_id, item_index) — a
+      POSITION-based key, never (log_id, food_name) which would merge the
+      legit "same food twice in one meal" case. Migration 083 adds the
+      item_index column + UNIQUE(log_id, item_index).
 
   - concept: restore_completeness
     domain: cross_domain
@@ -2283,7 +2287,7 @@ concepts:
 
   - concept: saved_meals
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_required: false  # closed b8d5c2 2026-06-03 — behavioral_test_path added
     description: |
       User-saved meal presets stored as saved_meal_<nameHash> in nutritionBox.
       Cloud mirrors to user_saved_meals with deterministic id from name hash.
@@ -2294,13 +2298,18 @@ concepts:
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 448-580
-        method: saveMealPreset + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
+        method: saveMealPreset (keys Hive via savedMealKey(name) — diagnose b8d5c2) + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
+      - file: lib/core/services/saved_meal_key_migrator.dart
+        line_range: 1-100
+        method: SavedMealKeyMigrator.runIfNeeded (one-shot re-key legacy saved_meal_<ms> → canonical, boot-wired; b8d5c2)
       - file: lib/core/services/sync/sync_nutrition.dart
         line_range: 232-330
         method: _syncSavedMeals (cloud projection)
     # audit-2026-05-16 reader-side — every callsite reading
     # saved_meal_* or filtering nutritionBox by is_saved_meal=true.
     reader_manifest_complete: true
+    reader_allow_files:
+      - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1070-1103
@@ -2344,21 +2353,32 @@ concepts:
         semantic: pass-through
         fields_read: [is_saved_meal, name, total_calories, items, meal_type, created_at]
     regression_test: test/contracts/sync_fanout_contract_test.dart
+    behavioral_test_path: test/safety/saved_meal_key_migrator_test.dart  # b8d5c2 — Hive write→read: writer keys canonical + migrator re-keys/merges restore-dup
     hive:
       box: nutritionBox
       key_prefix: "saved_meal_"
-      key_formula: "'saved_meal_${name.hashCode.toUnsigned(32).toRadixString(16)}'"
+      key_formula: "NutritionWriteService.savedMealKey(name) = saved_meal_<UUID v5 over lowercased,trimmed name> — v5 NOT String.hashCode (SDK-stable + 122-bit collision-free; f7e3a1 B-pass F3/F6). ONE constructor (b8d5c2); the restore CALLS it (no drift); gate check_saved_meal_key_canonical.dart pins single-site."
     cloud:
       table: user_saved_meals
-      columns: [id, user_id, name, meal_type, items, total_calories, total_protein, created_at]
+      columns: [id, user_id, name, items, total_calories, total_protein, times_used, created_at]
+      natural_key: [user_id, name]   # diagnose f7e3a1 — omit id (gen_random_uuid); UNIQUE(user_id,name) backs onConflict
     sync_methods: [_syncSavedMeals]
     restore_methods: [_restoreSavedMeals]
     telemetry:
       failure_op_types: [sync_saved_meals_now]
     class_constraints: |
-      Hive key uses name-hash not ms-timestamp so cloud restores land
+      LOCAL Hive key uses name-hash not ms-timestamp so cloud restores land
       at the same key (no duplication). Pre-Test-#9 bug: saved_meal_<cloud-uuid>
-      hash disagreed with local saved_meal_<nameHash>.
+      hash disagreed with local saved_meal_<nameHash>. CLOUD identity (diagnose
+      f7e3a1, 2026-06-03): the upsert OMITS id (gen_random_uuid) + onConflict
+      (user_id, name); the old name-only _deterministicId let two users with a
+      same-named meal overwrite each other (user_id flip). Migration 083 adds
+      UNIQUE(user_id,name). (Registry previously listed a nonexistent `meal_type`
+      column + omitted `times_used` — corrected here.) WRITER⇄RESTORE key alignment
+      (diagnose b8d5c2): saveMealPreset now keys Hive via
+      NutritionWriteService.savedMealKey — it formerly used saved_meal_<ms> while
+      the restore used <nameHash>, duplicating meals on restore; SavedMealKeyMigrator
+      re-keys legacy rows on boot; gate check_saved_meal_key_canonical.dart.
 
   - concept: weight_logs
     domain: health
@@ -4664,6 +4684,104 @@ concepts:
         line_range: 36-234
         method: WorkoutScheduleWriteService
     reader_manifest_complete: false
+
+  # ── APK obs batch 2026-06-02 ─────────────────────────────────────────────
+
+  - concept: phase_progress_current_phase
+    domain: workout
+    behavioral_test_path: test/contracts/phase_progress_reconciler_test.dart
+    description: |
+      The user's current phase number (user_progress.current_phase). The Train
+      week-selector phase labels MUST derive from this single SoT (not hardcoded
+      PHASE I/II/III). PhaseProgressReconciler maintains the invariant
+      current_phase >= (completed past phase blocks)+1, monotonically (two-Phase-1
+      fix a3f8c1, 2026-06-02). Past-phase blocks come from the shared
+      WorkoutScheduleReadService.pastPhaseBlocks() bucketing (consumed by both the
+      week selector AND the reconciler — one SoT, no drift).
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        method: saveProgress / updateProgress
+        notes: stamps deployments_complete = max(prior, current_phase-1), monotonic.
+      - file: lib/core/services/phase_progress_reconciler.dart
+        method: reconcile (uses pure reconciledPhase)
+        notes: boot-time monotonic heal; advances current_phase to completedBlocks+1.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        method: build (_phaseRoman(widget.currentPhase)) + _toPastPhases
+        semantic: display-only
+      - file: lib/features/train/screens/train/plan_header.dart
+        semantic: display-only
+      - file: lib/features/train/providers/train_provider.dart
+        method: CurrentPlanNotifier.build
+        semantic: pass-through
+    contract_test_path: test/contracts/week_selector_reads_current_phase_test.dart
+
+  - concept: weekly_report_target_and_freshness
+    domain: nutrition
+    behavioral_test_required: true  # source-grep + live EF-invoke proof (c7a1f5)
+    description: |
+      The Weekly Report's calorie/protein target MUST be the canonical stored
+      target (user_profile.daily_calories / protein_grams) — the same value the
+      Nutrition/Profile/Diet screens show — NOT a server-recomputed estimate
+      (fix c7a1f5, 2026-06-02). The report also refreshes on open (was a 7-day
+      stale cache).
+    writers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        method: _resolveNutritionTargets
+        notes: canonical target persisted to user_profile.daily_calories/protein_grams.
+    reader_manifest_complete: false
+    readers:
+      - file: supabase/functions/weekly-report/index.ts
+        method: target block (storedCalories/storedProtein)
+        semantic: pass-through
+      - file: lib/features/profile/screens/reports_screen.dart
+        method: _generateReport(silent) + initState refresh
+        semantic: display-only
+    contract_test_path: test/contracts/weekly_report_canonical_target_test.dart
+
+  - concept: ui_header_no_clip
+    domain: cross_domain
+    behavioral_test_required: true  # source-grep (presentation; b2e9d4)
+    description: |
+      Tab-screen header titles shrink-to-fit (FittedBox scaleDown), never clip
+      with maxLines:1 + ellipsis (fix b2e9d4, 2026-06-02). Pure presentation.
+    writers:
+      - file: none
+        notes: display-only — no data writer.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/train/screens/train/plan_header.dart
+        semantic: display-only
+      - file: lib/features/nutrition/screens/nutrition_screen.dart
+        semantic: display-only
+      - file: lib/features/home/screens/home_screen.dart
+        semantic: display-only
+      - file: lib/features/ai_coach/screens/ai_coach/compact_header.dart
+        semantic: display-only
+    contract_test_path: test/contracts/tab_header_no_clip_test.dart
+
+  - concept: weight_trend_home_chart
+    domain: health
+    behavioral_test_path: test/contracts/weight_trend_chart_gap_connect_test.dart
+    description: |
+      The Home weight chart (WeightTrendChart) renders a date-proportional trend
+      with a carry-forward anchor so a post-gap weigh-in always draws a connecting
+      line, never a lone dot (fix e1c6a9, 2026-06-02). Reads weight_logs via
+      home weightHistoryProvider (healthBox weight_* rows).
+    writers:
+      - file: lib/core/services/health_write_service.dart
+        method: logWeight
+        notes: Hive healthBox key weight_${istDateStr}; type weight_log.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/shared/widgets/weight_trend_chart.dart
+        method: weightTrendWindow + build
+        semantic: historical-series
+      - file: lib/features/home/screens/home_screen.dart
+        method: _buildWeightSparkline
+        semantic: pass-through
+    contract_test_path: test/contracts/weight_trend_chart_gap_connect_test.dart
     readers:
       - file: lib/features/train/widgets/plan_expired_card.dart
         line_range: 56-90

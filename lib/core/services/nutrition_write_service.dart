@@ -554,7 +554,17 @@ class NutritionWriteService {
     }
     final box = HiveService.instance.nutritionBox;
     final now = DateTime.now();
-    final id = 'saved_meal_${now.millisecondsSinceEpoch}';
+    // Diagnose b8d5c2 — key by the canonical name (matches the restore + the
+    // cloud (user_id,name) natural key), NOT by ms-timestamp. The old
+    // `saved_meal_<ms>` key disagreed with the restore's name key → a restore
+    // duplicated every saved meal locally.
+    final id = savedMealKey(name);
+    // F4 (f7e3a1 B-pass) — preserve a prior re-log count on same-name re-save:
+    // the key is the meal's identity, so re-saving UPDATES it rather than
+    // silently resetting times_used to 0.
+    final prior = box.get(id);
+    final priorTimesUsed =
+        (prior is Map ? (prior['times_used'] as num?)?.toInt() : null) ?? 0;
     final payload = <String, dynamic>{
       'id': id,
       'is_saved_meal': true,
@@ -565,7 +575,7 @@ class NutritionWriteService {
       'total_fat': totalFat,
       if (totalFiber > 0) 'total_fiber': totalFiber,
       'items': items,
-      'times_used': 0,
+      'times_used': priorTimesUsed,
       'created_at': now.toIso8601String(),
     };
     try {
@@ -739,6 +749,26 @@ class NutritionWriteService {
     final itemsHash = _stableItemsHash(items);
     return 'nlog_${dateStr}_${mealType}_$itemsHash';
   }
+
+  /// Canonical Hive key for a saved-meal preset: `saved_meal_<v5(name)>`.
+  ///
+  /// Identity is the (lowercased, trimmed) name. `SyncService._restoreSavedMeals`
+  /// derives the SAME key by CALLING this helper, and the cloud natural key is
+  /// `(user_id, name)`, so the same meal collapses to ONE row on every path
+  /// (write / sync / restore). Diagnose b8d5c2 (2026-06-03, surfaced by the
+  /// f7e3a1 B-pass): the writer formerly keyed by `millisecondsSinceEpoch`,
+  /// which disagreed with the restore's name key → a restore wrote a SECOND
+  /// local row for every saved meal. `SavedMealKeyMigrator` re-keys legacy rows
+  /// on boot.
+  ///
+  /// Uses **UUID v5** (deterministic, full 122-bit) over the name — NOT
+  /// `String.hashCode`, which is unstable across Dart VM versions (the exact
+  /// hazard `NlogKeyMigrator`'s H-17 note documents) AND only 32-bit (a saved-meal
+  /// hash-collision would merge two distinct meals). v5 is stable across SDK
+  /// upgrades and collision-free, so neither failure mode applies (f7e3a1 B-pass
+  /// Findings F3 + F6).
+  static String savedMealKey(String name) =>
+      'saved_meal_${_itemsHashUuidGen.v5(_itemsHashNamespace, 'saved_meal|${name.toLowerCase().trim()}')}';
 
   /// UUID namespace for the stable items hash. NEVER change without
   /// a migration bump in `NlogKeyMigrator`.
