@@ -51,6 +51,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
     });
+    // Fix 2026-06-02 (stale-report zeros) — the report is cloud-sourced and the
+    // cache was treated as valid for 7 DAYS, so the founder saw a multi-day-old
+    // report (0 workouts + a protein target computed at an old weight). Refresh
+    // on every open so it reflects current data. SILENT: the cached report (if
+    // any) stays on screen until the fresh one lands; a transient failure keeps
+    // the cache rather than blanking it. Cheap — the PRO report is opened
+    // infrequently, and the cloud now has correct data (sync-ID fixes 082).
+    Future.microtask(() {
+      if (mounted) _generateReport(silent: true);
+    });
   }
 
   /// Load cached report from Hive configBox if it exists and is from this week.
@@ -78,11 +88,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   /// Call the weekly-report Edge Function, parse the result, and cache it.
-  Future<void> _generateReport() async {
-    setState(() {
-      _isGeneratingReport = true;
-      _reportError = null;
-    });
+  ///
+  /// [silent] = a background refresh-on-open: keep the cached report visible
+  /// (no full-screen loader) and swallow errors (no banner) so a transient
+  /// network blip doesn't blank a usable cached report. The fresh result still
+  /// replaces `_aiReport` + the cache on success. Fix 2026-06-02.
+  Future<void> _generateReport({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isGeneratingReport = true;
+        _reportError = null;
+      });
+    }
 
     try {
       final userId = SupabaseService.instance.currentUser?.id;
@@ -135,6 +152,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         });
       }
     } catch (e) {
+      // Silent (refresh-on-open): keep the cached report visible; don't surface
+      // an error banner just because a background refresh failed.
+      if (silent) {
+        debugPrint('[ReportsScreen._generateReport] silent refresh failed: $e');
+        return;
+      }
       if (mounted) {
         setState(() {
           _reportError = e.toString().replaceFirst('Exception: ', '');

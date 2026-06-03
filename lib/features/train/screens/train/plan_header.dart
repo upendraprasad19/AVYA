@@ -65,17 +65,28 @@ extension _PlanHeader on _TrainScreenState {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Text(
-                  plan.phaseName,
-                  style: AppTypography.h1.copyWith(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.3,
-                    height: 1.05,
+                // Obs 2 (2026-06-02) — phase names vary in length
+                // ("Foundation" → "Intensification" → "Deployment 13"); a
+                // fixed 32sp + maxLines:1 + ellipsis clipped the longer ones
+                // ("Intensificati…"). FittedBox(scaleDown) shrinks the title to
+                // fit the available width instead of truncating, so the full
+                // name is always readable. left-aligned to keep the eyebrow
+                // baseline.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    plan.phaseName,
+                    style: AppTypography.h1.copyWith(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.3,
+                      height: 1.05,
+                    ),
+                    maxLines: 1,
+                    softWrap: false,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),

@@ -526,5 +526,17 @@
     "applied_at": "2026-03-30T20:23:29+05:30",
     "hash": "sha256:d78745bbf0bcafea3cb85bbfa8cffc6301f09ae231b8cf2f7840cb1a1f53bd8c",
     "applier": "founder"
+  },
+  {
+    "migration": "082",
+    "applied_at": "2026-06-03T13:27:40+05:30",
+    "hash": "sha256:bca094cdb3976ce1f8c27a99caf965e5a9a6e71b5acab1151913c194833dc197",
+    "applier": "claude"
+  },
+  {
+    "migration": "083",
+    "applied_at": "2026-06-03T13:27:40+05:30",
+    "hash": "sha256:8b418bfaa63e064dc727cca8a1bb33abcb758a408c32a4bbd162e73567dc969c",
+    "applier": "claude"
   }
 ]

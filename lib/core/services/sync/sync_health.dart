@@ -58,13 +58,16 @@ extension SyncServiceHealth on SyncService {
         if (hours == null) continue;
         try {
           await _supabase.client.from('sleep_logs').upsert({
-            'id': SyncService._deterministicId('sleep_logs_$dateStr'),
+            // id OMITTED + onConflict on the new user-inclusive natural key
+            // (migration 082). Bonus: this chat/list path and the per-day path
+            // below previously seeded DIFFERENT ids for the same date → two
+            // rows; now both merge onto one (user_id,date) row. Fix 2026-06-02.
             'user_id': userId,
             'date': dateStr,
             'duration_hrs': hours,
             if (log['quality'] != null) 'quality': log['quality'],
             'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
-          }, onConflict: 'id');
+          }, onConflict: 'user_id,date');
         } catch (e, st) {
           debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
           // audit-2026-05-11 H-42 — telemetry pair.
@@ -120,13 +123,16 @@ extension SyncServiceHealth on SyncService {
       if (log['type'] != 'weight_log') continue;
       try {
         await _supabase.client.from('weight_logs').upsert({
-          'id': SyncService._deterministicId(key),
+          // id OMITTED + onConflict on the new user-inclusive natural key
+          // (migration 082). Was id='weight_<date>' (date-only) + onConflict
+          // 'id' → two users weighing in on the same date collided on the PK
+          // (23505) and the second lost their row. Fix 2026-06-02.
           'user_id': userId,
           'date': log['date'],
           'weight_kg': log['weight_kg'],
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,date');
       } catch (e, st) {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -149,7 +155,9 @@ extension SyncServiceHealth on SyncService {
       final log = Map<String, dynamic>.from(raw);
       try {
         await _supabase.client.from('body_measurements').upsert({
-          'id': SyncService._deterministicId(key),
+          // id OMITTED + onConflict on the new user-inclusive natural key
+          // (migration 082) — same cross-user PK-collision fix as weight_logs.
+          // Fix 2026-06-02.
           'user_id': userId,
           'date': log['date'],
           'chest': log['chest'],
@@ -158,7 +166,7 @@ extension SyncServiceHealth on SyncService {
           'arms': log['arms'],
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,date');
         // E.14.A · audit-2026-05-16 — success-path emission.
         unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
             message: 'date=${log['date']}'));
@@ -184,7 +192,9 @@ extension SyncServiceHealth on SyncService {
       final log = Map<String, dynamic>.from(raw);
       try {
         await _supabase.client.from('sleep_logs').upsert({
-          'id': SyncService._deterministicId(key),
+          // id OMITTED + onConflict on the new user-inclusive natural key
+          // (migration 082) — cross-user PK-collision fix + per-day/list-path
+          // dedup. Fix 2026-06-02.
           'user_id': userId,
           'date': log['date'],
           'duration_hrs': log['duration_hrs'],
@@ -193,7 +203,7 @@ extension SyncServiceHealth on SyncService {
           'wake_time': log['wake_time'],
           'notes': log['notes'],
           'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,date');
         // E.14.A · audit-2026-05-16 — success-path emission.
         unawaited(ErrorTelemetry.logEvent('upsert_sleep_logs_success',
             message: 'date=${log['date']}'));

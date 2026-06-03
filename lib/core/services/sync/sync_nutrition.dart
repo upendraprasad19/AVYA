@@ -203,7 +203,6 @@ extension SyncServiceNutrition on SyncService {
             final item = items[i] is Map
                 ? Map<String, dynamic>.from(items[i] as Map)
                 : <String, dynamic>{};
-            final itemCloudId = SyncService._deterministicId('${key}_item_$i');
             try {
               // Per-item projection — schema-matched. nutrition_log_items
               // columns (post-migration 068): id, log_id, food_id,
@@ -222,8 +221,21 @@ extension SyncServiceNutrition on SyncService {
               // sync — verified in test/nutrition_write_service/
               // logMeal_creates_logs_and_items_atomically_test.dart.
               await _supabase.client.from('nutrition_log_items').upsert({
-                'id': itemCloudId,
+                // `id` OMITTED (gen_random_uuid default) — Diagnose f7e3a1
+                // (2026-06-03): the old `id: _deterministicId('${key}_item_$i')`
+                // had NO user component (the nlog key embeds date+meal+itemsHash,
+                // never user_id), so two users logging the same food in the same
+                // meal-type on the same date produced the SAME item uuid →
+                // onConflict:'id' DO UPDATE STOLE the row (flipped its log_id to
+                // the other user's parent). Same cross-user class as d4b8e2. Cure:
+                // omit id + a parent-scoped, POSITION-stable arbiter
+                // (log_id, item_index). food_name is NOT a safe arbiter — a meal
+                // legitimately holds the same food twice (12 live groups), so
+                // (log_id, food_name) would merge + lose data. item_index (the
+                // item's position in the meal) is unique within the user-scoped
+                // log, idempotent on re-sync, and never merges legit duplicates.
                 'log_id': logCloudId,
+                'item_index': i,
                 'food_name': item['name'] ?? '',
                 if (item['quantity_g'] != null)
                   'quantity_g': item['quantity_g'],
@@ -232,7 +244,7 @@ extension SyncServiceNutrition on SyncService {
                 if (item['carbs'] != null) 'carbs': item['carbs'],
                 if (item['fat'] != null) 'fat': item['fat'],
                 'fiber': item['fiber'] ?? 0,
-              }, onConflict: 'id');
+              }, onConflict: 'log_id,item_index');
             } catch (itemErr, st) {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
               // audit-2026-05-11 H-42 — telemetry pair.
@@ -295,21 +307,41 @@ extension SyncServiceNutrition on SyncService {
       if (meal['is_saved_meal'] != true) continue;
 
       try {
-        // F4 · Test #9 — coerce id from raw Hive key
-        // 'saved_meal_<hash>' to deterministic v5 UUID. Same failure class
-        // as _syncScheduledWorkouts.template_id (F3); same fix pattern as
-        // _syncWorkoutTemplates (since 2026-04-18).
-        final hiveId = (meal['id'] as String?) ?? key.toString();
+        // Diagnose f7e3a1 (2026-06-03) — the old `id: _deterministicId(hiveId)`
+        // where hiveId = `saved_meal_<...>` had NO user component, so two users
+        // who saved a meal with the same name produced the SAME uuid →
+        // onConflict:'id' DO UPDATE OVERWROTE one user's meal with the other's
+        // (and flipped `user_id`). Same cross-user class as d4b8e2. Cure: omit id
+        // (gen_random_uuid default) + the user-scoped natural key (user_id, name)
+        // as the arbiter — a saved meal's identity IS (user, name). Both columns
+        // are NOT NULL → non-partial unique index, no 42P10; the cloud table is
+        // empty today, so zero existing-data risk on the index. (NB: the LOCAL
+        // writer saveMealPreset currently keys Hive by `saved_meal_<ms>`, which
+        // disagrees with the restore's `saved_meal_<nameHash>` — a separate
+        // restore-duplication drift surfaced by the f7e3a1 B-pass, tracked as a
+        // follow-up; the cloud (user_id,name) key dedups regardless.)
+        //
+        // Null/empty name guard — (user_id, name) is the arbiter, so a blank name
+        // would be an invalid key AND would merge distinct nameless meals. Skip +
+        // telemetry, mirroring the nutrition_logs null-natural-key guard above.
+        final savedName = (meal['name'] as String?)?.trim();
+        if (savedName == null || savedName.isEmpty) {
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_skipped_null_natural_key',
+            message: 'table=user_saved_meals key=$key',
+          ));
+          continue;
+        }
         await _supabase.client.from('user_saved_meals').upsert({
-          'id': SyncService._deterministicId(hiveId),
+          // `id` deliberately OMITTED — never rewrite the PK on conflict.
           'user_id': userId,
-          'name': meal['name'] ?? 'Unnamed Meal',
+          'name': savedName,
           'items': meal['items'],
           'total_calories': meal['total_calories'],
           'total_protein': meal['total_protein'],
           'times_used': meal['times_used'] ?? 0,
           'created_at': meal['created_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'id');
+        }, onConflict: 'user_id,name');
         // E.14.A · audit-2026-05-16 — success-path emission. Lets the
         // next audit distinguish "user has zero saved meals" from
         // "_syncSavedMeals silently throws on every run".
@@ -356,8 +388,14 @@ extension SyncServiceNutrition on SyncService {
         final cloudId = map['id'] as String? ?? '';
         if (cloudId.isEmpty) continue;
 
-        // Extract items from joined nutrition_log_items
-        final itemRows = map['nutrition_log_items'] as List? ?? [];
+        // Extract items from joined nutrition_log_items, in stable meal-position
+        // order (diagnose f7e3a1): the cloud arbiter is (log_id, item_index), so
+        // sorting restored items by item_index makes per-item order deterministic
+        // and renders any one-time backfill created_at-tie swap invisible
+        // (content returns in its original emit position).
+        final itemRows = (map['nutrition_log_items'] as List? ?? []).toList()
+          ..sort((a, b) => (((a as Map)['item_index'] as num?) ?? 0)
+              .compareTo(((b as Map)['item_index'] as num?) ?? 0));
         if (itemRows.isNotEmpty) {
           final items = itemRows.map((item) {
             final m = Map<String, dynamic>.from(item as Map);
@@ -478,10 +516,13 @@ extension SyncServiceNutrition on SyncService {
         // `saved_meal_<nameHash>` key, doubling the saved-meals list
         // on every restore. Identity = (user, name) — match the rule
         // used by NutritionRepository for local saves.
-        final name = (map['name'] as String? ?? '').toLowerCase().trim();
-        final hiveKey = name.isEmpty
+        // b8d5c2 — derive the local key by CALLING the canonical writer helper
+        // (single source of truth → no writer/restore drift). Empty-name rows
+        // (degenerate) keep the id-hash fallback.
+        final rawName = (map['name'] as String?) ?? '';
+        final hiveKey = rawName.trim().isEmpty
             ? 'saved_meal_${id.hashCode.toUnsigned(32).toRadixString(16)}'
-            : 'saved_meal_${name.hashCode.toUnsigned(32).toRadixString(16)}';
+            : NutritionWriteService.savedMealKey(rawName);
 
         await _hive.nutritionBox.put(hiveKey, {
           'id': hiveKey,

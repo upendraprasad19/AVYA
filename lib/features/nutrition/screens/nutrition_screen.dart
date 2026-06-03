@@ -106,11 +106,21 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
-                              child: Text(
-                                'Fueling the plan',
-                                style: AppTypography.h1.copyWith(height: 1.05),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              // Obs 2 (2026-06-02) — "Fueling the plan" (h1
+                              // Fraunces) clipped to "Fueling the pl…" once the
+                              // streak pill claimed its width on narrower
+                              // phones. Shrink-to-fit instead of truncating so
+                              // the full title always shows.
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Fueling the plan',
+                                  style:
+                                      AppTypography.h1.copyWith(height: 1.05),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 10),

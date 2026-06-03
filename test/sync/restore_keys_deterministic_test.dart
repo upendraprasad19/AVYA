@@ -96,17 +96,21 @@ void main() {
       );
     });
 
-    test('_restoreSavedMeals derives Hive key from name, not cloud UUID', () {
+    test('_restoreSavedMeals derives Hive key via canonical savedMealKey, not cloud UUID',
+        () {
       final body = _restoreBody(src, 'SavedMeals');
-      // Pre-fix had no `name.hashCode` path AND used `startsWith('saved_meal_')`
-      // ternary (which always hit else for cloud UUIDs). The fix must
-      // hash on name (lowercased + trimmed). A name-empty fallback is
-      // allowed but must not be the primary path.
+      // Post-b8d5c2 (2026-06-03): the restore routes through the CANONICAL
+      // NutritionWriteService.savedMealKey(name) helper (UUID v5 over the
+      // lowercased+trimmed name) — the SAME key the writer produces — instead of
+      // an inline name.hashCode. Pin the ROUTING, not the implementation details
+      // (mirrors _restoreExerciseLogs → WorkoutWriteService.exlogKey). A
+      // name-empty fallback (id-hash) is allowed but must not be the primary path.
       expect(
-        body.contains('name.hashCode') ||
-            body.contains('name.toLowerCase()'),
+        body.contains('NutritionWriteService.savedMealKey('),
         isTrue,
-        reason: 'must derive Hive key from name field, not cloud UUID',
+        reason: 'must derive the Hive key via the canonical savedMealKey() helper '
+            '(b8d5c2 centralized the formula; inlining name.hashCode re-opens the '
+            'writer/restore key drift)',
       );
       // The startsWith ternary used by the pre-fix is gone.
       expect(

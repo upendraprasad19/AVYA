@@ -90,15 +90,21 @@ extension _CompactHeader on _AiCoachScreenState {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  'Aye Captain',
-                  style: AppTypography.h3.copyWith(
-                    fontSize: 26,
-                    height: 1.0,
-                    fontStyle: FontStyle.italic,
+                // Obs 2 sweep (2026-06-02) — uniform shrink-to-fit across all
+                // tab headers so the title never clips on the narrowest phones.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Aye Captain',
+                    style: AppTypography.h3.copyWith(
+                      fontSize: 26,
+                      height: 1.0,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 1,
+                    softWrap: false,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               // Trailing column — UPGRADE pill on top + counter glued below

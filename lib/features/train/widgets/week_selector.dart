@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -33,12 +34,21 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 class WeekSelector extends ConsumerStatefulWidget {
   final int totalWeeks;
   final int selectedWeek; // 1-indexed
+  /// The user's REAL current phase (`user_progress.current_phase`, surfaced as
+  /// `CurrentPlanData.phase`). Drives the phase labels so the strip never shows
+  /// a hardcoded "PHASE I" that collides with a completed past phase. Fix
+  /// 2026-06-02 (two-Phase-1 bug) — previously the forward groups were
+  /// hardcoded `PHASE I/II/III` and `_loadPastPhases` renumbered from 1, so a
+  /// completed phase was always labelled "PHASE I (DONE)" next to a current
+  /// "PHASE I". Both readers now derive from this single SoT.
+  final int currentPhase;
   final ValueChanged<int> onSelect;
 
   const WeekSelector({
     super.key,
     required this.totalWeeks,
     required this.selectedWeek,
+    required this.currentPhase,
     required this.onSelect,
   });
 
@@ -52,12 +62,16 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
     // PHASE II / III lock chips re-render the moment payment confirms.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
-    final planStart =
-        ref.read(workoutScheduleReadServiceProvider).getPlanStartDate();
+    final service = ref.read(workoutScheduleReadServiceProvider);
+    final planStart = service.getPlanStartDate();
 
-    // Theme K — derive past-phase groups by walking schedule_* Hive
-    // entries. Cheap (≤200 keys typical); runs once per build.
-    final pastPhases = _loadPastPhases(planStart);
+    // Theme K — render completed past phases LEFT of the current phase.
+    // Source: the shared `pastPhaseBlocks()` SoT (the SAME bucketing the phase
+    // reconciler uses — no parallel reader to drift). currentPhase drives the
+    // numbering AND the gate (no past groups on Phase 1 — you can't have
+    // completed a phase yet).
+    final pastPhases =
+        _toPastPhases(service.pastPhaseBlocks(), widget.currentPhase);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -73,8 +87,10 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             ),
             const SizedBox(width: 16),
           ],
+          // Current phase (always accessible — you're on it). Label derived
+          // from the real current_phase, not a hardcoded "PHASE I".
           _PhaseGroup(
-            label: 'PHASE I',
+            label: 'PHASE ${_phaseRoman(widget.currentPhase)}',
             isPaywalled: false,
             weekStart: 1,
             weekEnd: 4,
@@ -83,8 +99,9 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             onTap: widget.onSelect,
           ),
           const SizedBox(width: 16),
+          // Next phase preview (PRO-locked for free users).
           _PhaseGroup(
-            label: 'PHASE II',
+            label: 'PHASE ${_phaseRoman(widget.currentPhase + 1)}',
             isPaywalled: !isPro,
             weekStart: 5,
             weekEnd: 8,
@@ -94,7 +111,7 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
           ),
           const SizedBox(width: 16),
           _PhaseGroup(
-            label: 'PHASE III',
+            label: 'PHASE ${_phaseRoman(widget.currentPhase + 2)}',
             isPaywalled: !isPro,
             weekStart: 9,
             weekEnd: 12,
@@ -121,62 +138,51 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
   }
 }
 
-/// Walks workoutBox for `schedule_*` entries, groups them into past
-/// phases of 4 calendar weeks each (each phase = 28 days from its
-/// earliest date). Skips entries falling within the current plan's
-/// active window (>= planStart).
-List<_PastPhase> _loadPastPhases(DateTime? planStart) {
-  final box = HiveService.instance.workoutBox;
-  final entries = <_ScheduleEntry>[];
-  for (final raw in box.toMap().entries) {
-    final keyStr = raw.key.toString();
-    if (!keyStr.startsWith('schedule_')) continue;
-    final v = raw.value;
-    if (v is! Map) continue;
-    final map = Map<String, dynamic>.from(v);
-    final dateStr = map['date'] as String?;
-    if (dateStr == null) continue;
-    final date = DateTime.tryParse(dateStr);
-    if (date == null) continue;
-    // Skip current plan's active window.
-    if (planStart != null && !date.isBefore(planStart)) continue;
-    entries.add(_ScheduleEntry(
-      key: keyStr,
-      date: date,
-      week: (map['week'] as int?) ?? 0,
-      type: (map['type'] as String?) ?? 'rest',
-      workoutName: (map['workout_name'] as String?) ?? '',
-      status: (map['status'] as String?) ?? 'planned',
-      completedAt: map['completed_at'] as String?,
+/// Maps the shared [PastPhaseBlock] list (the single bucketing SoT — see
+/// `WorkoutScheduleReadService.pastPhaseBlocks`) into the display model,
+/// numbering past phases by their REAL phase number ending at currentPhase-1.
+///
+/// You have completed exactly currentPhase-1 phases, so show at most that many
+/// (the most recent blocks) and number them up to currentPhase-1. When
+/// currentPhase == 1 there are no completed phases → render none, killing the
+/// phantom duplicate even before the data-heal advances the counter. Showing
+/// fewer than the raw block count also gracefully tolerates stale / duplicate
+/// schedule data without deleting anything. Fix 2026-06-02 (two-Phase-1 bug;
+/// previously numbered idx+1, always labelling the oldest block "PHASE I" and
+/// colliding with the hardcoded forward "PHASE I").
+List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase) {
+  final showCount = (currentPhase - 1).clamp(0, blocks.length);
+  if (showCount == 0) return const [];
+  final shown = blocks.sublist(blocks.length - showCount);
+  final firstNumber = currentPhase - showCount; // e.g. cp=2,count=1 → 1
+  final result = <_PastPhase>[];
+  for (var i = 0; i < shown.length; i++) {
+    final entries = <_ScheduleEntry>[];
+    for (final map in shown[i].rows) {
+      final dateStr = map['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+      entries.add(_ScheduleEntry(
+        key: 'schedule_$dateStr', // canonical key format ('schedule_' + dateStr)
+        date: date,
+        week: (map['week'] as int?) ?? 0,
+        type: (map['type'] as String?) ?? 'rest',
+        workoutName: (map['workout_name'] as String?) ?? '',
+        status: (map['status'] as String?) ?? 'planned',
+        completedAt: map['completed_at'] as String?,
+      ));
+    }
+    if (entries.isEmpty) continue;
+    entries.sort((a, b) => a.date.compareTo(b.date));
+    result.add(_PastPhase(
+      phaseNumber: firstNumber + i,
+      startDate: entries.first.date,
+      endDate: entries.last.date,
+      entries: entries,
     ));
   }
-  if (entries.isEmpty) return const [];
-  entries.sort((a, b) => a.date.compareTo(b.date));
-
-  // Bucket into 28-day phases starting from the earliest date.
-  final earliest = entries.first.date;
-  final byPhase = <int, List<_ScheduleEntry>>{};
-  for (final e in entries) {
-    final daysSinceEarliest = e.date.difference(earliest).inDays;
-    final phaseIdx = daysSinceEarliest ~/ 28; // 0-indexed
-    (byPhase[phaseIdx] ??= []).add(e);
-  }
-
-  // Sort phase indices ascending so PHASE I renders left of PHASE II,
-  // then materialise to _PastPhase records. Cascade `..sort()` returns
-  // the receiver (List<int>), so we can't chain `.map().toList()` on the
-  // cascade — bind to a local first.
-  final sortedIdxs = byPhase.keys.toList()..sort();
-  return sortedIdxs.map((idx) {
-    final phaseEntries = byPhase[idx]!;
-    final phaseNumber = idx + 1;
-    return _PastPhase(
-      phaseNumber: phaseNumber,
-      startDate: phaseEntries.first.date,
-      endDate: phaseEntries.last.date,
-      entries: phaseEntries,
-    );
-  }).toList();
+  return result;
 }
 
 class _ScheduleEntry {
