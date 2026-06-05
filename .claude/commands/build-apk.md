@@ -35,7 +35,7 @@ Build a production-ready APK with all required pre-flight gates, pre-flight chec
 
 All gates are Dart CLI scripts. Run with `dart run scripts/<name>.dart`. Each exits 0 on pass. Failures are printed to stderr. Gates run in order — first failure stops the build (unless `--emergency-bypass` is active).
 
-**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/3 + the clean build + Gate 13 ALWAYS still run. See the `--from-green` section below.
+**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/3 + the clean build + Gate 13 + Gate 48 (release-signed) ALWAYS still run. See the `--from-green` section below.
 
 ### Gate 1 — On `main` with clean working tree (existing)
 
@@ -248,6 +248,23 @@ dart run scripts/check_apk_size_within_bounds.dart --record
 
 Reads `backups/apk_sizes.json`. Fails if APK size changed by > ±10% from last shipped. `--record` flag writes the current size + MD5 into the JSON.
 
+### Gate 48 — APK signed with the RELEASE certificate (post-build)
+
+```bash
+dart run scripts/check_apk_release_signed.dart --release
+```
+
+Verifies (via `apksigner`) that the built APK is signed with the pinned release cert
+(`CN=ICANBEFITTER`, SHA-256 pinned in the gate), NOT the Android **debug** key. Hard-fails a
+debug-signed or wrong-keystore APK. **Why (2026-06-05):** `android/app/build.gradle.kts:67-73`
+silently falls back to the debug key when `key.properties` is absent, and `key.properties` is
+gitignored (`android/.gitignore:12`) — so a worktree/clone build produces a debug-signed APK that
+**cannot update over the user's release-signed install** (Android shows "App not installed"),
+silently stranding them on the old version. This is the most likely reason APK +32 never reached
+the founder's phone (it stayed on +28). Needs `apksigner` (Android SDK build-tools) + a JDK
+(`JAVA_HOME` or Android Studio's bundled JBR is auto-detected). On a deliberate keystore rotation,
+update `kExpectedSha256` in the gate.
+
 ### Report results
 
 ```
@@ -272,7 +289,8 @@ signal.
 
 **ALWAYS still run (never skipped, even with `--from-green`):** Pre-build housekeeping, Gate 1
 (on `main` + clean tree), Gate 2 (versionCode), Gate 3 (.env), the clean build (`flutter clean`
-→ `build apk` — recompiles, catches compile/asset/Gradle errors), and Gate 13 (size + record).
+→ `build apk` — recompiles, catches compile/asset/Gradle errors), Gate 13 (size + record), and
+Gate 48 (release-signed — the signer cert is independent of the gates skipped above).
 
 **Pre-skip verification — fail TOWARD running the gates:**
 
@@ -344,6 +362,7 @@ If the build fails or hangs:
 - **ALWAYS** run `flutter clean` before release builds unless `--skip-clean` is passed.
 - **ALWAYS** ask user for confirmation before the actual build command.
 - **ALWAYS** run Gate 13 after every build and record size to `backups/apk_sizes.json`.
+- **ALWAYS** run Gate 48 after every build — the APK MUST be release-signed (`CN=ICANBEFITTER`), never debug-signed, or it cannot update over the user's installed app.
 - **NEVER** modify `android/gradle.properties` `-Xmx` above 4G on this 16GB system.
 - **NEVER** ignore `hs_err_*.log` files — always diagnose and delete them before retrying.
 - Entry point is always `lib/main.dart` (single entry point, flavors handled by Gradle).
