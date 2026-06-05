@@ -1,2 +1,41 @@
+# Line-ending normalization.
+#
+# Without this, core.autocrlf=true checks out CRLF on Windows while the index +
+# Linux CI + Vercel use LF. Our ~28 source-grep gates and 200+ contract tests
+# read the WORKING-TREE bytes, so a CRLF checkout makes them diverge from CI
+# (they pass locally but the same code fails in CI, or vice-versa). Forcing LF
+# for all text files makes every machine + CI agree. (Root cause of the
+# 2026-06-05 "CI green locally, red in CI" divergence.)
+* text=auto eol=lf
+
+# Windows batch files must stay CRLF to run.
+*.bat  text eol=crlf
+
 # Shell scripts must be LF so they run on Linux CI / Vercel builders.
-*.sh text eol=lf
+*.sh   text eol=lf
+
+# Binary assets — never touch (explicit, so text=auto can't misclassify them).
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.svg    text
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.jks    binary
+*.keystore binary
+*.apk    binary
+*.aab    binary
+*.hive   binary
+*.so     binary
+*.bin    binary
+*.zip    binary
+*.gz     binary
+*.pdf    binary
+*.xls    binary
+*.xlsx   binary
+*.jar    binary
