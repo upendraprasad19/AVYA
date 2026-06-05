@@ -24,6 +24,8 @@ const _allowList = <String, String>{
   // or require build artifacts).
   'check_apk_size_within_bounds.dart':
       'Needs an APK; runs from /build-apk Gate 13.',
+  'check_apk_release_signed.dart':
+      'Needs an APK + apksigner + JDK; runs from /build-apk Gate 48 (post-build).',
   'check_app_version_matches_pubspec.dart':
       'Build-time only; runs from /build-apk Gate 18.',
   // Gates that are advisory-only by design (per their own headers).

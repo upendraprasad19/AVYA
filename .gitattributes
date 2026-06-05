@@ -1,0 +1,2 @@
+# Shell scripts must be LF so they run on Linux CI / Vercel builders.
+*.sh text eol=lf

@@ -109,6 +109,7 @@ for GATE in scripts/check_*.dart; do
   # Skip build-only / advisory gates per check_gate_scripts_wired.dart allowlist.
   case "$GATE_NAME" in
     check_apk_size_within_bounds.dart|\
+    check_apk_release_signed.dart|\
     check_app_version_matches_pubspec.dart|\
     check_telemetry_pii_classification.dart|\
     check_unawaited_has_error_sink.dart|\
