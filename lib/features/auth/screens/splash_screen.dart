@@ -99,6 +99,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Supabase must come first — auth state is needed by _navigateNext.
     await SupabaseService.instance.initialize();
 
+    // Obs 4 (2026-06-05): warm the backend connection NOW (parallel with the
+    // ~3s branding) so RestoringScreen's restore avoids the ~24s cold-start
+    // penalty on its first query. Fire-and-forget — never blocks navigation.
+    unawaited(SupabaseService.instance.warmConnection());
+
     // C-6 (audit-2026-05-11) — The cross-account guard previously
     // lived here and was a no-op: `HiveService.instance.userBox` is a
     // GuardedBox that throws `HiveUserSession not opened` at this point

@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/phase_progress_reconciler.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -129,12 +130,9 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
           unawaited(_stampOnboardingCompletedAt(user.id).catchError((e) {
             debugPrint('[RestoringScreen] self-heal stamp failed: $e');
           }));
-          // Treat as fully onboarded — await restore + go home.
-          await restoreFuture;
-          if (!mounted) return;
-          await _ensureOwnershipBeforeHome(user.id);
-          if (!mounted) return;
-          context.go('/home');
+          // Treat as fully onboarded — go home (default: await restore first;
+          // bg-restore flag: a returning user reaches home immediately).
+          await _goHome(user.id, restoreFuture);
           return;
         }
 
@@ -145,14 +143,57 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         return;
 
       case GoHome():
-        // Fully onboarded user — await restore then go home.
-        await restoreFuture;
-        if (!mounted) return;
-        await _ensureOwnershipBeforeHome(user.id);
-        if (!mounted) return;
-        context.go('/home');
+        // Fully onboarded user — go home (default: await restore first;
+        // bg-restore flag: a returning user reaches home immediately).
+        await _goHome(user.id, restoreFuture);
         return;
     }
+  }
+
+  /// Navigate to /home. Default (fresh install or `bg_restore_enabled` off):
+  /// await the full restore + ownership/heals, then go. Background-restore flag
+  /// ON for a RETURNING user (Hive already populated): establish ownership
+  /// (BLOCKING — cross-account safety, APK #15.4) + fresh-paint rollover, go to
+  /// home immediately, and let the in-flight cloud restore finish + heal in the
+  /// background (Obs 4, 2026-06-05). The in-flight restore is NOT cancelled →
+  /// a single restore, no double-write race; bg heals are ref-free (singletons).
+  Future<void> _goHome(
+      String userId, Future<RestoreResult> restoreFuture) async {
+    final bgEnabled =
+        HiveService.instance.configBox.get('bg_restore_enabled') == true;
+    final localProfile = HiveService.instance.userBox.get('profile');
+    final isReturning =
+        localProfile is Map && localProfile['primary_goal'] != null;
+
+    if (bgEnabled && isReturning) {
+      // Ownership gate stays BLOCKING (cross-account safety, APK #15.4).
+      await HiveUserSession.openForUser(userId);
+      // Fresh first paint of today-scoped providers — cheap; the in-flight
+      // cloud restore keeps writing Hive in the background.
+      if (mounted) {
+        try {
+          await DayRolloverObserver.instance.runRolloverNow(ref);
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      context.go('/home');
+      // The cloud restore started in _kickoffRestore keeps running; when it
+      // SUCCEEDS, run the post-restore key migrators + reconciler + refill
+      // (ref-free) and bump the tick so the mounted home refreshes. Guard on
+      // success so the heals never run on a cancelled/failed restore (partial
+      // Hive state) — B-pass F-3.
+      unawaited(restoreFuture.then((result) {
+        if (result.succeeded) _healAfterRestoreInBackground();
+      }));
+      return;
+    }
+
+    // Default / fresh install (or flag off): await the full restore before home.
+    await restoreFuture;
+    if (!mounted) return;
+    await _ensureOwnershipBeforeHome(userId);
+    if (!mounted) return;
+    context.go('/home');
   }
 
   /// B5 + Plan A: Ownership guard — before navigating to /home, verify
@@ -493,6 +534,49 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       ),
     );
   }
+}
+
+/// Obs 4 (2026-06-05): post-restore heals for the background-restore path —
+/// runs AFTER the in-flight cloud restore finishes (no concurrent Hive writer),
+/// entirely ref-free (singletons) so it survives RestoringScreen disposal.
+/// Mirrors the post-restore sequence in `_ensureOwnershipBeforeHome`: key
+/// migrators → phase reconciler → weekly refill → bump the home refresh tick.
+/// Every step is independently guarded.
+Future<void> _healAfterRestoreInBackground() async {
+  // Hermes L34: each step records a non-fatal on failure (mirrors the foreground
+  // twin _ensureOwnershipBeforeHome) — a heal that throws in the background must
+  // not be a SILENT loss of observability (also surfaces the L27 migrator-race).
+  try {
+    await ExlogKeyMigrator.runIfNeeded();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog'));
+  }
+  try {
+    await NlogKeyMigrator.runIfNeeded();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_nlog'));
+  }
+  try {
+    await SavedMealKeyMigrator.runIfNeeded();
+  } catch (e, st) {
+    unawaited(
+        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_saved_meal'));
+  }
+  try {
+    // ignore: deprecated_member_use — singleton read in a ref-free bg context
+    await PhaseProgressReconciler.reconcile(
+        WorkoutScheduleReadService.instance);
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'bg_heal_phase_reconcile'));
+  }
+  try {
+    StreakProgressService.instance.refillIfNewWeek();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_refill'));
+  }
+  // Notify the (now-mounted) home screen to refresh from the updated Hive.
+  SyncService.instance.bumpRestoreCompleted();
 }
 
 // ── Animated pulsing dots ────────────────────────────────────────

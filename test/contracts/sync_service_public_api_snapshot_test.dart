@@ -19,6 +19,8 @@ void main() {
     test('public method list is unchanged', () {
       const expectedPublicApi = <String>{
         'cancelInflightRestore',
+        // Obs 4 (2026-06-05) — bg-restore home-refresh tick bump (intentional).
+        'bumpRestoreCompleted',
         'checkAndSync',
         'drainTelemetryQueue',
         'initQueue',

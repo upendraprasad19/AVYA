@@ -57,10 +57,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Obs 4 (2026-06-05): when a background restore + heals complete, refresh
+    // the home cards from the now-updated Hive (offline-first background-restore
+    // — the user reached home before the cloud restore finished).
+    SyncService.instance.restoreCompletedTick.addListener(_onRestoreTick);
+  }
+
+  void _onRestoreTick() {
+    if (mounted) invalidateOnRetry(ref);
   }
 
   @override
   void dispose() {
+    SyncService.instance.restoreCompletedTick.removeListener(_onRestoreTick);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -423,8 +424,10 @@ class BiometricNotifier extends Notifier<BiometricData> {
     double? sleepHours;
 
     final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    // Obs 5 cleanup (2026-06-05): match the health writer's IST date key
+    // (HealthWriteService uses istDateStr) — was device-local y/m/d, which
+    // drifts vs the written `date`/`sleep_log_<istDate>` keys at IST 00:00–05:30.
+    final todayStr = istDateStr(now);
 
     for (final raw in healthBox.values) {
       if (raw is! Map) continue;

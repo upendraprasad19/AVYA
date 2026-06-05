@@ -70,6 +70,8 @@ concepts:
           fallback (APK Test #16.1 Agent A defence for rogue restore-
           writer fix). Dedupes by exercise_name (sum sets, max weight).
           Computes sessionLabel "SESSION N" when >1 workout_log_id per day.
+          PHASE label resolves via WorkoutScheduleReadService.phaseForDate
+          (Obs 1 6f1a2c — was hardcoded to 1); see concept phase_blocks_bucketing.
       - file: lib/features/home/screens/home_screen.dart
         line_range: 670-695
         method: home "View Card" button handler
@@ -1623,6 +1625,196 @@ concepts:
       `test/contracts/sync_domain_full_migration_test.dart`
       (behavioural verification of the 8 wrappers + dispatcher
       no-op safety + SyncFlags default-FALSE invariant).
+
+  - concept: nutrition_recent_logs_name
+    domain: nutrition
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/nutrition_recent_logs_name_test.dart
+    description: |
+      Display name for a logged meal. The canonical name lives in
+      items[].name (joined " · "), NEVER a top-level food_name/meal_name.
+      One shared derivation prevents the home reader from drifting back to
+      a non-existent top-level field (Obs 2 8b3d4e — Home showed "Unknown"
+      while the Nutrition tab showed the correct name).
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 1-9999
+        method: logMeal
+        notes: stores items[{name,...}] + meal_type; no top-level name field.
+    readers:
+      - file: lib/core/services/nutrition_read_service.dart
+        line_range: 1-9999
+        method: deriveMealDisplayName (shared SoT helper)
+        semantic: derived
+        notes: |
+          items[].name join → meal_type (capitalised) → slot →
+          kFallbackMealName ('Logged meal'). Emits food_log_unknown_name
+          telemetry on the sentinel.
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 1-9999
+        method: recent-logs RecentFoodLogEntry builder
+        semantic: derived
+        notes: |
+          Calls deriveMealDisplayName (was reading non-existent food_name/
+          meal_name/name → "Unknown"). todayStr via istDateStr (was device-
+          local). Skips is_saved_meal templates (Hermes L37 defensive guard).
+      - file: lib/features/nutrition/widgets/todays_meals_card.dart
+        line_range: 1-9999
+        method: _deriveMealDisplayName
+        semantic: derived
+        notes: forwards to NutritionReadService.deriveMealDisplayName.
+    regression_test: test/contracts/nutrition_recent_logs_name_test.dart
+    class_constraints: |
+      Display-derivation concept over nlog_ rows — the Hive write contract
+      for nutritionBox / nlog_ is owned by nutrition_total_calories (which
+      ships its own _writer_to_reader test). Name is ALWAYS derived from
+      items[].name — never a top-level field. BOTH the home recent-logs
+      reader and the Nutrition Today's-Meals card MUST route through
+      NutritionReadService.deriveMealDisplayName.
+
+  - concept: week_completion_check
+    domain: workout
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/week_completion_check_test.dart
+    description: |
+      Whether a plan week has ≥1 completed scheduled day — drives the ✓
+      checkmark on both past-phase and current-phase week chips in the Train
+      week strip (Obs 3a 2c9f7a; current-phase chips previously had no check).
+    writers:
+      - file: lib/core/services/workout_schedule_write_service.dart
+        line_range: 1-9999
+        method: markCompleted (sets schedule_<date>.status = 'completed')
+        notes: completion derives from logging; status stamped on the schedule row.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1-9999
+        method: completedWeekNumbers → completedWeekNumbersFrom (pure)
+        semantic: aggregated
+        notes: |
+          "any completed day that week" rule. completedWeekNumbersFrom
+          (planStart, isCompletedOn, {maxWeek}) is the pure, Hive-free
+          decision (Hermes L1/L37 behavioral coverage).
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 1-9999
+        method: _PhaseGroup → _WeekChip (hasCompletedDay)
+        semantic: flag-check
+        notes: renders Icons.check_circle when hasCompletedDay && !isLocked.
+    regression_test: test/contracts/week_completion_check_test.dart
+    class_constraints: |
+      Same "any completed day that week" predicate for past AND current
+      phase chips; the reader is the pure completedWeekNumbersFrom.
+
+  - concept: biometric_sync_state
+    domain: health
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/biometric_sync_state_test.dart
+    description: |
+      Health-Connect connection state on the BiometricSyncCard. The open
+      sheet MUST rebuild on toggle (Obs 5 9a5c3f — card showed "Connect"
+      after connecting; only a remount showed "Connected").
+    writers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        line_range: 1-9999
+        method: BiometricNotifier.toggleSync
+        notes: |
+          awaits permissions + syncToHive, writes health_sync_enabled,
+          ref.invalidateSelf(). todayStr via istDateStr.
+    readers:
+      - file: lib/features/profile/screens/profile/health_sync_sheet.dart
+        line_range: 1-9999
+        method: BiometricSyncCard wrapped in Consumer(ref.watch(biometricProvider))
+        semantic: latest
+        notes: |
+          Watches biometricProvider so invalidateSelf() rebuilds the card
+          in-place (was a captured BiometricData snapshot). Callback awaits
+          toggleSync (denied permission must not flip the UI).
+    regression_test: test/contracts/biometric_sync_state_test.dart
+    class_constraints: |
+      The sheet MUST ref.watch(biometricProvider) — never render a captured
+      snapshot (red flag: "renders captured snapshot not watching provider").
+
+  - concept: cold_start_restore_refresh
+    domain: cross_domain
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/background_restore_test.dart
+    description: |
+      Home cards refresh when the cold-start restore heals in the background.
+      SyncService.restoreFromCloudForUser bumps a ValueNotifier tick after
+      the bg heal; home listens and invalidates. Background-restore itself is
+      behind the default-OFF bg_restore_enabled flag (Obs 4 4e8b1d, §4.6).
+      Backend-warm (un-flagged) pre-warms the PostgREST connection to kill
+      the ~24s cold-start retry.
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: bumpRestoreCompleted (restoreCompletedTick ValueNotifier<int>)
+        notes: single-writer monotonic tick; bumped after the bg heal completes.
+      - file: lib/core/services/supabase_service.dart
+        line_range: 1-9999
+        method: warmConnection (best-effort user_profile probe, un-flagged)
+    readers:
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 1-9999
+        method: restoreCompletedTick listener → invalidateOnRetry(ref)
+        semantic: pass-through
+        notes: listener added in initState, removed in dispose.
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 1-9999
+        method: _goHome bg path (bg_restore_enabled) + _healAfterRestoreInBackground
+        semantic: flag-check
+        notes: |
+          Flag default-OFF. Ownership gate (openForUser) stays BLOCKING
+          before nav; bg heals run post-restore, ref-free, each catch emits
+          recordNonFatal(reason:'bg_heal_<step>') (Hermes L34).
+    regression_test: test/contracts/background_restore_test.dart
+    class_constraints: |
+      bg_restore_enabled default OFF. Ownership gate blocking before nav.
+      Single in-flight restore (no double-write race). Heals attached via
+      .then on success; tick bridges to home invalidateOnRetry.
+
+  - concept: phase_blocks_bucketing
+    domain: workout
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/past_phase_bucketing_test.dart
+    description: |
+      Grouping of past schedule rows into completed phase blocks. Each
+      schedule_<date> row is stamped with its 'phase' at generation; the pure
+      bucketPastRows groups by phase identity via carry-forward when ANY row
+      is stamped (else 28-day calendar fallback for legacy data). length =
+      phases the user has moved past — feeds the rank/phase reconciler
+      (F-B 7d2e6b; fixes the >28-day-span over-count).
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1-9999
+        method: generateAndSchedule + generateAndScheduleFromDate (stamp 'phase')
+        notes: every schedule_* entry carries the int 'phase' it was generated for.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1-9999
+        method: pastPhaseBlocks → bucketPastRows (pure) + phaseForDate
+        semantic: historical-series
+        notes: |
+          carry-forward: an unstamped row inherits the nearest preceding
+          stamped phase (B-pass F-2); fully-unstamped → 28-day fallback.
+      - file: lib/core/services/phase_progress_reconciler.dart
+        line_range: 1-9999
+        method: PhaseProgressReconciler.reconcile (block count, monotonic, +12 clamp)
+        semantic: aggregated
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 1-9999
+        method: past-phase rendering (_PastPhase blocks)
+        semantic: historical-series
+      - file: lib/features/train/widgets/workout_receipt_card.dart
+        line_range: 1-9999
+        method: WorkoutReceiptData.fromExerciseLogs (PHASE label via phaseForDate)
+        semantic: display-only
+        notes: Obs 1 6f1a2c — receipt PHASE label resolves via phaseForDate (was hardcoded 1).
+    regression_test: test/contracts/past_phase_bucketing_test.dart
+    class_constraints: |
+      Phase-identity grouping (carry-forward) when ANY row stamped; 28-day
+      fallback only when NO row stamped (correct for the founder's legacy
+      duplicate-week residue — week-reset inference would over-count).
+      Reconciler stays monotonic + clamped (≤12).
 
   - concept: user_scoped_hive_keys
     domain: cross_domain

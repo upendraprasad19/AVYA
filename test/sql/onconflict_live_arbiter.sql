@@ -76,6 +76,7 @@ DECLARE
   v_now  timestamptz := now();
   v_date date := current_date;
   v_log_id uuid;   -- parent nutrition_logs id for the item arbiter test (f7e3a1)
+  v_tmpl_id uuid;  -- parent workout_templates id for the template_exercises FK (F-A)
 BEGIN
   -- Insert a synthetic user row so FK-bearing inserts don't hit 23503
   -- on user_id. Best-effort — if the FK isn't there or the user already
@@ -122,9 +123,9 @@ BEGIN
 
   ----- 2. ai_coach_interactions (id) ------------------------------------
   BEGIN
-    INSERT INTO public.ai_coach_interactions (id, user_id, role, content, channel, created_at)
-      VALUES (gen_random_uuid(), v_user, 'user', 'arbiter test', 'app', v_now)
-      ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content;
+    INSERT INTO public.ai_coach_interactions (id, user_id, channel, user_message, ai_response, created_at)
+      VALUES (gen_random_uuid(), v_user, 'app', 'arbiter test', 'arbiter response', v_now)
+      ON CONFLICT (id) DO UPDATE SET ai_response = EXCLUDED.ai_response;
     INSERT INTO _v_results VALUES ('ai_coach_interactions:id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('ai_coach_interactions:id', 'fail', SQLSTATE, SQLERRM);
@@ -162,9 +163,9 @@ BEGIN
 
   ----- 5. water_logs (user_id, date) ------------------------------------
   BEGIN
-    INSERT INTO public.water_logs (user_id, date, glasses_drunk)
-      VALUES (v_user, v_date, 1)
-      ON CONFLICT (user_id, date) DO UPDATE SET glasses_drunk = EXCLUDED.glasses_drunk;
+    INSERT INTO public.water_logs (user_id, date, total_ml)
+      VALUES (v_user, v_date, 250)
+      ON CONFLICT (user_id, date) DO UPDATE SET total_ml = EXCLUDED.total_ml;
     INSERT INTO _v_results VALUES ('water_logs:user_id,date', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('water_logs:user_id,date', 'fail', SQLSTATE, SQLERRM);
@@ -193,8 +194,8 @@ BEGIN
 
   ----- 8. user_custom_exercises (id) ------------------------------------
   BEGIN
-    INSERT INTO public.user_custom_exercises (id, user_id, name)
-      VALUES (gen_random_uuid(), v_user, 'arbiter test exercise')
+    INSERT INTO public.user_custom_exercises (id, user_id, name, logging_type)
+      VALUES (gen_random_uuid(), v_user, 'arbiter test exercise', 'weight_reps')
       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
     INSERT INTO _v_results VALUES ('user_custom_exercises:id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
@@ -213,9 +214,9 @@ BEGIN
 
   ----- 10. user_profile (user_id) ---------------------------------------
   BEGIN
-    INSERT INTO public.user_profile (user_id, full_name)
-      VALUES (v_user, 'arbiter test')
-      ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name;
+    INSERT INTO public.user_profile (user_id, city)
+      VALUES (v_user, 'Arbiter City')
+      ON CONFLICT (user_id) DO UPDATE SET city = EXCLUDED.city;
     INSERT INTO _v_results VALUES ('user_profile:user_id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('user_profile:user_id', 'fail', SQLSTATE, SQLERRM);
@@ -233,8 +234,8 @@ BEGIN
 
   ----- 12. notifications_inbox (id) -------------------------------------
   BEGIN
-    INSERT INTO public.notifications_inbox (id, user_id, title, body, created_at)
-      VALUES (gen_random_uuid(), v_user, 'arbiter test', 'body', v_now)
+    INSERT INTO public.notifications_inbox (id, user_id, notif_type, title, body, created_at)
+      VALUES (gen_random_uuid(), v_user, 'system', 'arbiter test', 'body', v_now)
       ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title;
     INSERT INTO _v_results VALUES ('notifications_inbox:id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
@@ -276,9 +277,9 @@ BEGIN
 
   ----- 16. progress_photos (id) -----------------------------------------
   BEGIN
-    INSERT INTO public.progress_photos (id, user_id, photo_url, taken_at)
-      VALUES (gen_random_uuid(), v_user, 'https://example/arbiter.jpg', v_now)
-      ON CONFLICT (id) DO UPDATE SET photo_url = EXCLUDED.photo_url;
+    INSERT INTO public.progress_photos (id, user_id, storage_path, taken_at)
+      VALUES (gen_random_uuid(), v_user, 'arbiter/test.jpg', v_now)
+      ON CONFLICT (id) DO UPDATE SET storage_path = EXCLUDED.storage_path;
     INSERT INTO _v_results VALUES ('progress_photos:id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('progress_photos:id', 'fail', SQLSTATE, SQLERRM);
@@ -294,16 +295,17 @@ BEGIN
     INSERT INTO _v_results VALUES ('daily_steps:user_id,date', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 18. workout_logs (user_id, date, exercise_name) ------------------
-  -- PRE-064: FAIL 42P10 (partial UNIQUE rejected by arbiter)
-  -- POST-064: OK
+  ----- 18. workout_logs (user_id, date, workout_name) -------------------
+  -- POST-2026-06-05 (F-A): the live arbiter is
+  -- uniq_workout_logs_user_date_workout_name; the column is `workout_name`
+  -- (NOT `exercise_name`, which never existed on workout_logs).
   BEGIN
-    INSERT INTO public.workout_logs (id, user_id, date, exercise_name, logged_at)
+    INSERT INTO public.workout_logs (id, user_id, date, workout_name, logged_at)
       VALUES (gen_random_uuid(), v_user, v_date, 'arbiter test', v_now)
-      ON CONFLICT (user_id, date, exercise_name) DO UPDATE SET logged_at = EXCLUDED.logged_at;
-    INSERT INTO _v_results VALUES ('workout_logs:user_id,date,exercise_name', 'ok', NULL, NULL);
+      ON CONFLICT (user_id, date, workout_name) DO UPDATE SET logged_at = EXCLUDED.logged_at;
+    INSERT INTO _v_results VALUES ('workout_logs:user_id,date,workout_name', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('workout_logs:user_id,date,exercise_name', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('workout_logs:user_id,date,workout_name', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 19. workout_log_exercises (user_id, workout_log_id, exercise_id, set_number) -----
@@ -347,9 +349,9 @@ BEGIN
 
   ----- 22. streaks (user_id, week_start) --------------------------------
   BEGIN
-    INSERT INTO public.streaks (user_id, week_start, current_streak)
+    INSERT INTO public.streaks (user_id, week_start, workouts_completed)
       VALUES (v_user, v_date, 1)
-      ON CONFLICT (user_id, week_start) DO UPDATE SET current_streak = EXCLUDED.current_streak;
+      ON CONFLICT (user_id, week_start) DO UPDATE SET workouts_completed = EXCLUDED.workouts_completed;
     INSERT INTO _v_results VALUES ('streaks:user_id,week_start', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('streaks:user_id,week_start', 'fail', SQLSTATE, SQLERRM);
@@ -367,9 +369,13 @@ BEGIN
 
   ----- 24. template_exercises (template_id, order_index) ----------------
   BEGIN
+    INSERT INTO public.workout_templates (id, user_id, name)
+      VALUES (gen_random_uuid(), v_user, 'arbiter template ex')
+      ON CONFLICT (user_id, name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id INTO v_tmpl_id;
     INSERT INTO public.template_exercises
       (id, template_id, order_index, exercise_name)
-      VALUES (gen_random_uuid(), gen_random_uuid(), 1, 'arbiter test')
+      VALUES (gen_random_uuid(), v_tmpl_id, 1, 'arbiter test')
       ON CONFLICT (template_id, order_index) DO UPDATE SET exercise_name = EXCLUDED.exercise_name;
     INSERT INTO _v_results VALUES ('template_exercises:template_id,order_index', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
@@ -379,9 +385,9 @@ BEGIN
   ----- 25. scheduled_workouts (user_id, scheduled_date) -----------------
   BEGIN
     INSERT INTO public.scheduled_workouts
-      (user_id, scheduled_date, workout_name)
-      VALUES (v_user, v_date, 'arbiter test')
-      ON CONFLICT (user_id, scheduled_date) DO UPDATE SET workout_name = EXCLUDED.workout_name;
+      (user_id, scheduled_date, status)
+      VALUES (v_user, v_date, 'planned')
+      ON CONFLICT (user_id, scheduled_date) DO UPDATE SET status = EXCLUDED.status;
     INSERT INTO _v_results VALUES ('scheduled_workouts:user_id,scheduled_date', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('scheduled_workouts:user_id,scheduled_date', 'fail', SQLSTATE, SQLERRM);

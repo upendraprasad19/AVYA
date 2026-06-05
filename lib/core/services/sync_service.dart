@@ -960,6 +960,16 @@ class SyncService {
   ///
   /// The cancellation flag is reset at the start of each call so callers can
   /// safely call this multiple times.
+  /// Obs 4 (2026-06-05): bumped after a background restore + post-restore heals
+  /// settle, so a mounted home screen refreshes its cards from the now-updated
+  /// Hive (offline-first background-restore — the user reached home before the
+  /// cloud restore finished). Singleton-owned → survives RestoringScreen
+  /// disposal. No-op for the default path (home mounts fresh after restore).
+  final ValueNotifier<int> restoreCompletedTick = ValueNotifier<int>(0);
+
+  /// Bump [restoreCompletedTick] — call after a background restore + heals.
+  void bumpRestoreCompleted() => restoreCompletedTick.value++;
+
   Future<RestoreResult> restoreFromCloudForUser() async {
     _restoreCancelled = false;
     final userId = _supabase.currentUser?.id;

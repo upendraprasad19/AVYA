@@ -16,6 +16,9 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
 import 'seed_service.dart';
@@ -27,6 +30,7 @@ import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
+import '../../shared/repositories/user_repository.dart';
 
 /// A prior (completed or abandoned) 28-day phase block: the `schedule_*` rows
 /// strictly before the current `plan_start_date`, bucketed into 28-day windows
@@ -150,6 +154,7 @@ class WorkoutScheduleReadService {
             date: date,
             entry: {
               'date': dateKey,
+              'phase': phase,
               'week': week + 1,
               'day_of_week': dayOfWeek,
               'type': 'workout',
@@ -181,6 +186,7 @@ class WorkoutScheduleReadService {
             date: date,
             entry: {
               'date': dateKey,
+              'phase': phase,
               'week': week + 1,
               'day_of_week': dayOfWeek,
               'type': 'rest',
@@ -291,6 +297,7 @@ class WorkoutScheduleReadService {
             date: d,
             entry: {
               'date': dateKey,
+              'phase': phase,
               'week': 1,
               'day_of_week': d.weekday - 1,
               'type': 'rest',
@@ -349,6 +356,7 @@ class WorkoutScheduleReadService {
             date: date,
             entry: {
               'date': dateKey,
+              'phase': phase,
               'week': week + 1,
               'day_of_week': dayOfWeek,
               'type': 'workout',
@@ -377,6 +385,7 @@ class WorkoutScheduleReadService {
             date: date,
             entry: {
               'date': dateKey,
+              'phase': phase,
               'week': week + 1,
               'day_of_week': dayOfWeek,
               'type': 'rest',
@@ -465,6 +474,42 @@ class WorkoutScheduleReadService {
     }
 
     return map;
+  }
+
+  /// Global week numbers (1-based from `plan_start_date`) in the CURRENT plan
+  /// window with ≥1 completed scheduled day — the same "any completed day that
+  /// week" rule the past-phase chips use, so the CURRENT phase's week chips can
+  /// show the same ✓ (Obs 3a, 2026-06-05). Future / not-yet-dated weeks have no
+  /// completed rows → naturally excluded.
+  Set<int> completedWeekNumbers({int maxWeek = 12}) {
+    return completedWeekNumbersFrom(
+      getPlanStartDate(),
+      (date) => getScheduleForDate(date)?['status'] == 'completed',
+      maxWeek: maxWeek,
+    );
+  }
+
+  /// Pure decision behind [completedWeekNumbers] (visible for testing — no Hive,
+  /// Hermes L1/L37 behavioral-test gap). Returns the 1-based week numbers in
+  /// `[1, maxWeek]` from [planStart] that have ≥1 day where [isCompletedOn] is
+  /// true (the "any completed day that week" rule). Null planStart → empty.
+  @visibleForTesting
+  static Set<int> completedWeekNumbersFrom(
+      DateTime? planStart, bool Function(DateTime) isCompletedOn,
+      {int maxWeek = 12}) {
+    if (planStart == null) return const {};
+    final ps = DateTime(planStart.year, planStart.month, planStart.day);
+    final result = <int>{};
+    for (var w = 1; w <= maxWeek; w++) {
+      final weekStart = ps.add(Duration(days: (w - 1) * 7));
+      for (var d = 0; d < 7; d++) {
+        if (isCompletedOn(weekStart.add(Duration(days: d)))) {
+          result.add(w);
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   /// Get all scheduled days for a given week number (1-4).
@@ -573,13 +618,68 @@ class WorkoutScheduleReadService {
       if (planStart != null && !date.isBefore(planStart)) continue;
       rows.add((date, map));
     }
-    if (rows.isEmpty) return const [];
-    rows.sort((a, b) => a.$1.compareTo(b.$1));
+    return bucketPastRows(rows);
+  }
 
-    final earliest = rows.first.$1;
+  /// Pure bucketing behind [pastPhaseBlocks] (visible for testing — no Hive).
+  ///
+  /// F-B (2026-06-05): when ANY past row carries an explicit stamped `phase`
+  /// (the plan generator stamps it), group by phase identity with carry-forward
+  /// — an unstamped row inherits the nearest preceding stamped phase (leading
+  /// unstamped rows take the first stamped phase, B-pass F-2). A single logical
+  /// phase becomes ONE block even when its calendar span exceeds 28 days
+  /// (gaps/overlaps) — fixing the 28-day-window over-count. Only when NO row is
+  /// stamped (fully-legacy data — e.g. the founder's existing duplicate-week
+  /// data) does it fall back to the proven 28-day calendar bucketing, which
+  /// correctly collapses that duplicate-week residue into one block.
+  @visibleForTesting
+  static List<PastPhaseBlock> bucketPastRows(
+      List<(DateTime, Map<String, dynamic>)> rows) {
+    if (rows.isEmpty) return const [];
+    final sorted = [...rows]..sort((a, b) => a.$1.compareTo(b.$1));
+
+    // Phase-identity grouping (preferred) — used when ANY past row carries a
+    // stamped int `phase`. Unstamped rows (e.g. a SwapService-written or legacy
+    // row) INHERIT the phase of the nearest preceding stamped row (carry-forward;
+    // leading unstamped rows take the first stamped phase). B-pass F-2: this
+    // replaces an all-or-nothing `every` guard so a single unstamped row can't
+    // silently collapse the whole dataset back to 28-day bucketing.
+    int? firstStamped;
+    for (final r in sorted) {
+      final raw = r.$2['phase'];
+      if (raw is int) {
+        firstStamped = raw;
+        break;
+      }
+    }
+    if (firstStamped != null) {
+      final byPhase = <int, List<Map<String, dynamic>>>{};
+      final boundsByPhase = <int, (DateTime, DateTime)>{};
+      int carry = firstStamped;
+      for (final (date, map) in sorted) {
+        final raw = map['phase'];
+        final p = raw is int ? raw : carry;
+        if (raw is int) carry = raw;
+        (byPhase[p] ??= []).add(map);
+        final b = boundsByPhase[p];
+        // rows are date-ascending → first seen is min, last seen max.
+        boundsByPhase[p] = b == null ? (date, date) : (b.$1, date);
+      }
+      final phases = byPhase.keys.toList()..sort();
+      return phases
+          .map((p) => PastPhaseBlock(
+                startDate: boundsByPhase[p]!.$1,
+                endDate: boundsByPhase[p]!.$2,
+                rows: byPhase[p]!,
+              ))
+          .toList();
+    }
+
+    // Legacy fallback — 28-day calendar bucketing from the earliest row.
+    final earliest = sorted.first.$1;
     final byBucket = <int, List<Map<String, dynamic>>>{};
     final boundsByBucket = <int, (DateTime, DateTime)>{};
-    for (final (date, map) in rows) {
+    for (final (date, map) in sorted) {
       final idx = date.difference(earliest).inDays ~/ 28;
       (byBucket[idx] ??= []).add(map);
       final bounds = boundsByBucket[idx];
@@ -587,16 +687,64 @@ class WorkoutScheduleReadService {
       boundsByBucket[idx] =
           bounds == null ? (date, date) : (bounds.$1, date);
     }
-
     final sortedIdxs = byBucket.keys.toList()..sort();
-    return sortedIdxs.map((idx) {
-      final bounds = boundsByBucket[idx]!;
-      return PastPhaseBlock(
-        startDate: bounds.$1,
-        endDate: bounds.$2,
-        rows: byBucket[idx]!,
-      );
-    }).toList();
+    return sortedIdxs
+        .map((idx) => PastPhaseBlock(
+              startDate: boundsByBucket[idx]!.$1,
+              endDate: boundsByBucket[idx]!.$2,
+              rows: byBucket[idx]!,
+            ))
+        .toList();
+  }
+
+  /// The phase number that was active on [date].
+  ///
+  /// Returns `current_phase` when [date] is in (or after) the active plan
+  /// window, else the 1-based index of the [pastPhaseBlocks] bucket the date
+  /// falls in — so a workout receipt for a past day shows the phase it was
+  /// logged under instead of a hardcoded "PHASE 1" (Obs 1, 2026-06-05). Reuses
+  /// the SAME bucketing as the week selector + reconciler (single SoT, no
+  /// parallel reader). Null-safe: falls back to `current_phase` (or 1).
+  int phaseForDate(DateTime date) {
+    try {
+      final progress = UserRepository.instance.getProgress();
+      final currentPhase = (progress?['current_phase'] as int?) ?? 1;
+      final planStart = getPlanStartDate();
+      final blockStarts = pastPhaseBlocks().map((b) => b.startDate).toList();
+      return phaseForDatePure(currentPhase, planStart, date, blockStarts);
+    } catch (e, st) {
+      // Hive not ready (e.g. a pure unit test that didn't open userBox) →
+      // display-only fallback, never crash the receipt. In prod the boxes ARE
+      // open, so an exception here is a real (programming) error — record it
+      // non-fatally so a silent wrong-phase regression stays observable
+      // instead of always rendering "PHASE 1" (B-pass F-5).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'phase_for_date_fallback'));
+      return 1;
+    }
+  }
+
+  /// Pure decision behind [phaseForDate] (visible for testing — no Hive).
+  /// [blockStarts] are the `pastPhaseBlocks()` start dates, oldest-first.
+  /// In/after the plan window → [currentPhase]; else the 1-based index of the
+  /// last block whose start ≤ [date] (gaps resolve to the preceding phase;
+  /// before all blocks → 1).
+  @visibleForTesting
+  static int phaseForDatePure(int currentPhase, DateTime? planStart,
+      DateTime date, List<DateTime> blockStarts) {
+    if (planStart == null || !date.isBefore(planStart)) return currentPhase;
+    final d = DateTime(date.year, date.month, date.day);
+    int phase = 1;
+    for (var i = 0; i < blockStarts.length; i++) {
+      final s = blockStarts[i];
+      final sMid = DateTime(s.year, s.month, s.day);
+      if (!d.isBefore(sMid)) {
+        phase = i + 1;
+      } else {
+        break; // oldest-first → once a block starts after the date, stop
+      }
+    }
+    return phase;
   }
 
   /// All dates in the current calendar week (Mon–Sun).

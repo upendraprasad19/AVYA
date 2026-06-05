@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -323,33 +324,18 @@ class _PopulatedSlotCard extends StatelessWidget {
   ///   3. Slot label (passed in)
   ///   4. [_kFallbackMealName] sentinel — triggers food_log_unknown_name
   ///      telemetry so we can detect new shape regressions.
+  /// Forwards to the shared SoT — see
+  /// [NutritionReadService.deriveMealDisplayName]. (Obs 2 2026-06-05: this card
+  /// and the home recent-logs provider now share ONE derivation so the
+  /// displayed name can't drift.)
   static String _deriveMealDisplayName(
-      Map<String, dynamic> meal, String slot) {
-    final itemsArr = meal['items'];
-    if (itemsArr is List && itemsArr.isNotEmpty) {
-      final names = itemsArr
-          .whereType<Map>()
-          .map((m) => (m['name'] as String?)?.trim())
-          .whereType<String>()
-          .where((n) => n.isNotEmpty)
-          .toList();
-      if (names.isNotEmpty) return names.join(' · ');
-    }
-    final mealType = (meal['meal_type'] as String?)?.trim();
-    if (mealType != null && mealType.isNotEmpty) {
-      return '${mealType[0].toUpperCase()}${mealType.substring(1)}';
-    }
-    if (slot.isNotEmpty) {
-      return '${slot[0].toUpperCase()}${slot.substring(1)}';
-    }
-    return _kFallbackMealName;
-  }
+          Map<String, dynamic> meal, String slot) =>
+      NutritionReadService.deriveMealDisplayName(meal, slot: slot);
 }
 
-/// Sentinel for the absolute-last-resort meal name. Distinct from
-/// 'Unknown' (which was the silent-failure tell pre-12.6) so telemetry
-/// can detect new shape regressions cleanly.
-const String _kFallbackMealName = 'Logged meal';
+/// Local alias for the shared last-resort meal-name sentinel (Obs 2) — kept
+/// in lock-step with [NutritionReadService.kFallbackMealName].
+const String _kFallbackMealName = NutritionReadService.kFallbackMealName;
 
 // ── Empty slot ──────────────────────────────────────────────────────
 

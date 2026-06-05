@@ -57,6 +57,57 @@ class WeekSelector extends ConsumerStatefulWidget {
 }
 
 class _WeekSelectorState extends ConsumerState<WeekSelector> {
+  // Obs 3b (2026-06-05): auto-scroll the strip to the current phase on open +
+  // a contextual "TODAY →" pill that fades in only when the current phase is
+  // scrolled out of view (so the user never hunts for the live week).
+  final ScrollController _scrollCtrl = ScrollController();
+  final GlobalKey _currentPhaseKey = GlobalKey();
+  bool _showTodayPill = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrent(animate: false); // open already positioned at "now"
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCurrent({bool animate = true}) {
+    final keyCtx = _currentPhaseKey.currentContext;
+    if (keyCtx == null) return;
+    Scrollable.ensureVisible(
+      keyCtx,
+      alignment: 0.0, // current phase's leading edge → viewport's leading edge
+      duration: animate ? const Duration(milliseconds: 350) : Duration.zero,
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    final keyCtx = _currentPhaseKey.currentContext;
+    final selfObj = context.findRenderObject();
+    if (keyCtx == null || selfObj is! RenderBox) return;
+    final groupObj = keyCtx.findRenderObject();
+    if (groupObj is! RenderBox) return;
+    final left = groupObj.localToGlobal(Offset.zero, ancestor: selfObj).dx;
+    final right = left + groupObj.size.width;
+    // Current phase "visible" if a meaningful part sits inside the viewport.
+    final visible = right > 24 && left < selfObj.size.width - 24;
+    final shouldShow = !visible;
+    if (shouldShow != _showTodayPill) {
+      setState(() => _showTodayPill = shouldShow);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
@@ -64,6 +115,9 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final service = ref.read(workoutScheduleReadServiceProvider);
     final planStart = service.getPlanStartDate();
+    // Obs 3a (2026-06-05): current/forward week chips that have a completed day
+    // — same "any completed day that week" rule as the past-phase chips.
+    final completedWeeks = service.completedWeekNumbers();
 
     // Theme K — render completed past phases LEFT of the current phase.
     // Source: the shared `pastPhaseBlocks()` SoT (the SAME bucketing the phase
@@ -73,7 +127,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     final pastPhases =
         _toPastPhases(service.pastPhaseBlocks(), widget.currentPhase);
 
-    return SingleChildScrollView(
+    final strip = SingleChildScrollView(
+      controller: _scrollCtrl,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
@@ -90,12 +145,14 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
           // Current phase (always accessible — you're on it). Label derived
           // from the real current_phase, not a hardcoded "PHASE I".
           _PhaseGroup(
+            key: _currentPhaseKey,
             label: 'PHASE ${_phaseRoman(widget.currentPhase)}',
             isPaywalled: false,
             weekStart: 1,
             weekEnd: 4,
             selectedWeek: widget.selectedWeek,
             planStart: planStart,
+            completedWeeks: completedWeeks,
             onTap: widget.onSelect,
           ),
           const SizedBox(width: 16),
@@ -107,6 +164,7 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             weekEnd: 8,
             selectedWeek: widget.selectedWeek,
             planStart: planStart,
+            completedWeeks: completedWeeks,
             onTap: widget.onSelect,
           ),
           const SizedBox(width: 16),
@@ -117,10 +175,64 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             weekEnd: 12,
             selectedWeek: widget.selectedWeek,
             planStart: planStart,
+            completedWeeks: completedWeeks,
             onTap: widget.onSelect,
           ),
         ],
       ),
+    );
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        strip,
+        Positioned(
+          right: 8,
+          bottom: 2,
+          child: IgnorePointer(
+            ignoring: !_showTodayPill,
+            child: AnimatedOpacity(
+              opacity: _showTodayPill ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: GestureDetector(
+                onTap: _scrollToCurrent,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'TODAY',
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 9,
+                          color: AppColors.bgDeep,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(Icons.arrow_forward,
+                          size: 11, color: AppColors.bgDeep),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -731,12 +843,14 @@ String _phaseRoman(int phase) {
 
 class _PhaseGroup extends StatelessWidget {
   const _PhaseGroup({
+    super.key,
     required this.label,
     required this.isPaywalled,
     required this.weekStart,
     required this.weekEnd,
     required this.selectedWeek,
     required this.planStart,
+    required this.completedWeeks,
     required this.onTap,
   });
 
@@ -746,6 +860,7 @@ class _PhaseGroup extends StatelessWidget {
   final int weekEnd;
   final int selectedWeek;
   final DateTime? planStart;
+  final Set<int> completedWeeks;
   final ValueChanged<int> onTap;
 
   @override
@@ -792,6 +907,7 @@ class _PhaseGroup extends StatelessWidget {
                   week: w,
                   isSelected: w == selectedWeek,
                   isLocked: isPaywalled,
+                  hasCompletedDay: completedWeeks.contains(w),
                   planStart: planStart,
                   onTap: () => onTap(w),
                 ),
@@ -811,6 +927,7 @@ class _WeekChip extends StatelessWidget {
     required this.week,
     required this.isSelected,
     required this.isLocked,
+    this.hasCompletedDay = false,
     required this.planStart,
     required this.onTap,
   });
@@ -818,6 +935,7 @@ class _WeekChip extends StatelessWidget {
   final int week;
   final bool isSelected;
   final bool isLocked;
+  final bool hasCompletedDay;
   final DateTime? planStart;
   final VoidCallback onTap;
 
@@ -900,6 +1018,18 @@ class _WeekChip extends StatelessWidget {
                   Icons.lock,
                   size: 10,
                   color: AppColors.accent,
+                ),
+              ),
+            // Obs 3a (2026-06-05): ✓ on a current/forward week with ≥1 completed
+            // day (mirrors _PastWeekChip). Never on a locked/preview week.
+            if (hasCompletedDay && !isLocked)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  Icons.check_circle,
+                  size: 10,
+                  color: AppColors.ok,
                 ),
               ),
           ],

@@ -35,6 +35,47 @@ class NutritionReadService {
   static final NutritionReadService instance = NutritionReadService._();
 
   // ─────────────────────────────────────────────────────────────
+  //  Display-name derivation (shared SoT — Obs 2 2026-06-05)
+  // ─────────────────────────────────────────────────────────────
+
+  /// Last-resort meal-name sentinel. Distinct from 'Unknown' (the pre-12.6
+  /// silent-failure tell) so telemetry can detect new shape regressions.
+  static const String kFallbackMealName = 'Logged meal';
+
+  /// Canonical display name for a nutrition log [meal] map. The writer
+  /// (`NutritionWriteService.logMeal`) stores names ONLY inside `items[].name`
+  /// (+ a `meal_type`), never a top-level `food_name`. Resolution order:
+  ///   1. `items[].name` joined by ` · ` (most informative)
+  ///   2. capitalized `meal_type` (e.g. "Breakfast")
+  ///   3. capitalized [slot] label, when provided
+  ///   4. [kFallbackMealName] — caller should emit `food_log_unknown_name`.
+  /// BOTH the nutrition Today's-Meals card AND the home recent-logs provider
+  /// MUST call this (not a private copy) so the displayed name can't drift —
+  /// Obs 2: the home reader read `food_name`/`meal_name` the writer never wrote
+  /// → every row rendered "Unknown".
+  static String deriveMealDisplayName(Map<String, dynamic> meal,
+      {String slot = ''}) {
+    final itemsArr = meal['items'];
+    if (itemsArr is List && itemsArr.isNotEmpty) {
+      final names = itemsArr
+          .whereType<Map>()
+          .map((m) => (m['name'] as String?)?.trim())
+          .whereType<String>()
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (names.isNotEmpty) return names.join(' · ');
+    }
+    final mealType = (meal['meal_type'] as String?)?.trim();
+    if (mealType != null && mealType.isNotEmpty) {
+      return '${mealType[0].toUpperCase()}${mealType.substring(1)}';
+    }
+    if (slot.isNotEmpty) {
+      return '${slot[0].toUpperCase()}${slot.substring(1)}';
+    }
+    return kFallbackMealName;
+  }
+
+  // ─────────────────────────────────────────────────────────────
   //  Macro summation primitives
   // ─────────────────────────────────────────────────────────────
 
