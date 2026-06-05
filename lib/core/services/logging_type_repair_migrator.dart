@@ -312,7 +312,10 @@ class LoggingTypeRepairMigrator {
           changed = true;
         }
         // If row has duration but no reps (timed-as-bodyweight inverse
-        // drift), move duration → reps.
+        // drift), move duration → reps. (Intentional repair — APK Test #12.5 /
+        // logging_type_repair_migrator_test "v3". A genuinely large duration
+        // mis-typed here is bounded downstream by the wle_reps_realistic clamp
+        // in sync_workout + the <=10000 cap, so it can no longer silently drop.)
         final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
         final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;
         if (dur > 0 && reps == 0) {

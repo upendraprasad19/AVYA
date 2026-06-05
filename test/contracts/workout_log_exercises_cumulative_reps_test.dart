@@ -77,14 +77,24 @@ void main() {
       expect(blockEnd, greaterThan(upsertStart));
       final projectionBlock = syncSrc.substring(upsertStart, blockEnd);
 
+      // reps is sourced from the cumulative reps_completed, then clamped to the
+      // wle_reps_realistic bound (diagnose e7b3c9 added the clamp+telemetry guard
+      // so an out-of-range value is captured, never silently dropped — 23514).
       expect(
-        projectionBlock.contains("'reps': log['reps_completed']"),
+        projectionBlock.contains("'reps': clampedReps"),
         isTrue,
         reason:
-            "workout_log_exercises.reps must be sourced from the cumulative "
-            "log['reps_completed'] field — NOT a per-set reps value. This is "
-            'the field whose cumulative semantic forced the wle_reps_realistic '
-            'cap to be widened (migration 080). closes-diagnose: 7d3f0a',
+            'workout_log_exercises.reps must be sourced (via the clamp) from the '
+            'cumulative reps_completed — NOT a per-set reps value. '
+            'closes-diagnose: 7d3f0a (+ e7b3c9 clamp guard)',
+      );
+      expect(
+        syncSrc.contains("(log['reps_completed'] as num?)?.toInt()") &&
+            syncSrc.contains('clampedReps'),
+        isTrue,
+        reason:
+            'clampedReps must derive from the cumulative log[reps_completed]; the '
+            'clamp only bounds the value, it does not change its source. 7d3f0a',
       );
     });
 

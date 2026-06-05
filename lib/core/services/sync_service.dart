@@ -524,7 +524,15 @@ class SyncService {
               reason: 'sync_service_check_and_sync'));
         }
       }
-      _healthSyncCompleter!.complete();
+      // Null-safe: a concurrent user-switch (_resetForNewUser nulls
+      // _healthSyncCompleter, line ~148) can land between the Completer
+      // creation above and here, so the bare `!` threw
+      // "_TypeError: Null check operator used on a null value" on the
+      // check_and_sync path (diagnose c5e1b7). Read the local + guard.
+      final hsc = _healthSyncCompleter;
+      if (hsc != null && !hsc.isCompleted) {
+        hsc.complete();
+      }
 
       // Drain any telemetry failures that were queued during the previous
       // session because _reportSyncFailure itself hit a network error.
@@ -595,8 +603,12 @@ class SyncService {
       // Offline or error — silently skip.
       // Ensure the health sync completer is resolved even on early failure
       // so the home screen doesn't hang.
-      if (_healthSyncCompleter != null && !_healthSyncCompleter!.isCompleted) {
-        _healthSyncCompleter!.complete();
+      // Null-safe read-into-local (same race as the success path, diagnose
+      // c5e1b7): a concurrent user-switch can null _healthSyncCompleter between
+      // the check and the bare `!`.
+      final hscErr = _healthSyncCompleter;
+      if (hscErr != null && !hscErr.isCompleted) {
+        hscErr.complete();
       }
       debugPrint('[SyncService.checkAndSync] $e');
       // audit-2026-05-11 H-42 — telemetry pair.

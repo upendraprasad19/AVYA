@@ -538,5 +538,11 @@
     "applied_at": "2026-06-03T13:27:40+05:30",
     "hash": "sha256:8b418bfaa63e064dc727cca8a1bb33abcb758a408c32a4bbd162e73567dc969c",
     "applier": "claude"
+  },
+  {
+    "migration": "084",
+    "applied_at": "2026-06-05T23:25:18+05:30",
+    "hash": "sha256:1886af1655e77f6bbbac423ea681e2a6cc7aa94b6848fda7ca8ffd82122ffc1a",
+    "applier": "claude"
   }
 ]
