@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "if [ -d flutter ]; then (cd flutter && git fetch --depth 1 origin 3.41.4 && git checkout -q 3.41.4); else git clone https://github.com/flutter/flutter.git --depth 1 -b 3.41.4 flutter; fi && export PATH=\"$PWD/flutter/bin:$PATH\" && flutter config --enable-web && flutter pub get && flutter build web --release --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY --dart-define=RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID",
+  "outputDirectory": "build/web",
+  "installCommand": "echo no-install",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
