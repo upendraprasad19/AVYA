@@ -36,22 +36,34 @@ void main() {
   });
 
   group('template_exercises upsert contract', () {
-    test('forbidden: DELETE-then-INSERT pattern absent', () {
-      // The pre-fix block:
-      //   await _supabase.client.from('template_exercises').delete()
-      //     .eq('template_id', cloudTmplId);
-      // brought back, the pattern reintroduces the lossy partial-failure
-      // mode. Pin its absence.
-      expect(
-        syncSrc.contains("from('template_exercises').delete()") ||
-            syncSrc.contains("from('template_exercises')\n              .delete()"),
-        isFalse,
-        reason:
-            'forbidden — the DELETE-then-INSERT pattern on template_exercises '
-            'was replaced by upsert with onConflict (migration 051). Bringing '
-            'the DELETE back recreates the partial-failure data-loss class. '
-            'closes-diagnose: 2026-05-10-template-exercises-upsert-a8b2c7',
-      );
+    test('any template_exercises delete is the bounded tail-vacuum, not a blanket DELETE-then-INSERT',
+        () {
+      // Two legitimate patterns coexist:
+      //   (1) per-row UPSERT with onConflict (migration 051) — the children writer.
+      //   (2) a bounded TAIL VACUUM that removes ONLY orphaned rows when a
+      //       template shrinks:
+      //         .delete().eq('template_id', X).gte('order_index', length)
+      //       (diagnose 2026-05-12-template-exercises-tail-vacuum-b3c8d2).
+      // The FORBIDDEN pattern is the old lossy blanket delete-then-insert:
+      //   .delete().eq('template_id', X)  with NO order_index bound, followed
+      //   by a re-insert loop (diagnose 2026-05-10-template-exercises-upsert-a8b2c7).
+      // So: every template_exercises delete MUST be order_index-bounded.
+      final deletes = RegExp(
+        r"from\('template_exercises'\)\s*\.delete\(\)([\s\S]{0,220})",
+      ).allMatches(syncSrc);
+      for (final m in deletes) {
+        expect(
+          (m.group(1) ?? '').contains(".gte('order_index'"),
+          isTrue,
+          reason:
+              "a template_exercises delete without .gte('order_index', ...) is "
+              'the lossy blanket DELETE-then-INSERT (data-loss on partial failure). '
+              'Only the bounded tail-vacuum is allowed. '
+              'closes-diagnose: 2026-05-12-template-exercises-tail-vacuum-b3c8d2 '
+              '(supersedes the over-broad no-delete pin from '
+              '2026-05-10-template-exercises-upsert-a8b2c7).',
+        );
+      }
     });
 
     test('upsert with onConflict (template_id,order_index) present', () {

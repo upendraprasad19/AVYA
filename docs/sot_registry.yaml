@@ -285,7 +285,7 @@ concepts:
         method: _EditWorkoutLogSheetState._loadRows
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(widget.date)]
-      - file: lib/features/train/screens/train/screen.dart
+      - file: lib/features/train/screens/train/expanded_exercises.dart
         line_range: 1-9999
         method: _buildExpandedExercises (Train expanded day card)
         semantic: pass-through
@@ -498,7 +498,7 @@ concepts:
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getTodayNutrition
+        method: buildAiContext (today nutrition)
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date]
         notes: |
@@ -507,7 +507,7 @@ concepts:
           by separate ist_sweep_gap feedback).
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getMealsToday
+        method: buildAiContext (meals today)
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, meal_type, food_name, date]
         notes: |
@@ -516,7 +516,7 @@ concepts:
           kcal/protein totals into the AI snapshot.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getNutritionTrend7d
+        method: buildAiContext (nutrition trend 7d)
         semantic: historical-series
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date]
         notes: Single-pass O(N) bucketing over last 7 days; zero-fills gaps.
@@ -697,7 +697,7 @@ concepts:
           would 400 on the 10K server limit for historical queries.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
         line_range: 439-697
-        method: AiCoachNotifier._sendMessage retry path + media path
+        method: SendMessageNotifier._sendMessage retry path + media path
         semantic: pass-through
         fields_read: [<full context map>]
         notes: |
@@ -899,7 +899,7 @@ concepts:
         fields_read: [waterTargetProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
         line_range: 365-380
-        method: _buildCalorieRing (hydration line under calorie ring)
+        method: self-contained
         semantic: display-only
         fields_read: [waterTargetProvider]
       - file: lib/features/home/screens/home_screen.dart
@@ -1105,7 +1105,7 @@ concepts:
           misc 4).
       - file: lib/app.dart
         line_range: 35-75
-        method: AppShell init / dispose (registers + tears down observer)
+        method: ICanBeFitterApp init / dispose (registers + tears down observer)
         semantic: pass-through
         fields_read: []
         notes: |
@@ -1173,12 +1173,12 @@ concepts:
         fields_read: [volume_kg, weight_kg, reps_completed]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getExerciseHistory + _getThisWeekWorkouts
+        method: buildAiContext (exercise history + this-week)
         semantic: aggregated
         fields_read: [exercise_name, weight_kg, reps_completed, date, logging_type, is_pr]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getPersonalRecords
+        method: buildAiContext (personal records)
         semantic: max
         fields_read: [exercise_name, weight_kg]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
@@ -1186,7 +1186,7 @@ concepts:
         method: PR timeline reader
         semantic: per-set
         fields_read: [is_pr, exercise_name, weight_kg, date]
-      - file: lib/features/train/screens/train/screen.dart
+      - file: lib/features/train/screens/train/expanded_exercises.dart
         line_range: 1-9999
         method: _buildExpandedExercises
         semantic: display-only
@@ -1208,7 +1208,7 @@ concepts:
         fields_read: [all exlog_* fields, per-set sets[] for workout_log_sets]
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 1-9999
-        method: getExerciseHistory / getProgressSummary / getPRTimeline tool readers
+        method: self-contained
         semantic: aggregated
         fields_read: [exercise_name, weight_kg, reps_completed, is_pr, date]
       - file: lib/core/services/exlog_key_migrator.dart
@@ -1310,7 +1310,7 @@ concepts:
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getTodayNutrition + _getMealsToday + _getNutritionTrend7d
+        method: buildAiContext (nutrition snapshot)
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, meal_type, food_name, date]
         notes: |
@@ -1849,7 +1849,7 @@ concepts:
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
         line_range: 106-115
-        method: getOnboardingCompleted / setOnboardingCompleted
+        method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/core/router/app_router.dart
@@ -1954,7 +1954,7 @@ concepts:
         fields_read: [<workout-state keys>]
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 1-9999
-        method: sync_restore_completeness part file
+        method: self-contained
         semantic: pass-through
         fields_read: [<freezes / inbox / diet-plan keys>]
     regression_test: test/safety/config_to_user_migration_test.dart
@@ -2039,7 +2039,7 @@ concepts:
     writers:
       - file: lib/core/services/workout_schedule_service.dart
         line_range: 1-9999
-        method: markScheduleCompleted
+        method: markCompleted
         notes: sole setter for status='completed'; guards if already completed
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
@@ -2067,7 +2067,7 @@ concepts:
         fields_read: [status]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getThisWeekWorkouts + _getYesterdayWorkout + _getWeekLookahead
+        method: buildAiContext (week workouts)
         semantic: flag-check
         fields_read: [status, exercises, workout_name]
       - file: lib/features/home/widgets/day_detail_sheet.dart
@@ -2092,7 +2092,7 @@ concepts:
         fields_read: [status]
       - file: lib/features/ai_coach/services/pattern_detector.dart
         line_range: 1-9999
-        method: dropout-risk / plateau-risk pattern scan
+        method: PatternDetector dropout/plateau scan
         semantic: aggregated
         fields_read: [status across N days]
       - file: lib/features/ai_coach/services/schedule_template_planner.dart
@@ -2186,7 +2186,7 @@ concepts:
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
         line_range: 367-380
-        method: _buildTemplate
+        method: self-contained
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 920-960
         method: createCustomTemplate tool
@@ -2221,7 +2221,7 @@ concepts:
           tolerate both pre-Test-#12 and post-Test-#12 row shapes.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 287-320
-        method: _readSavedTemplates (AI snapshot projection)
+        method: buildAiContext (saved templates projection)
         semantic: aggregated
         fields_read: [type, name, exercises (compact projection), assigned_days, days_count, exercise_count]
         notes: |
@@ -2288,17 +2288,17 @@ concepts:
         fields_read: [via loadAllExercisePRs]
       - file: lib/features/train/widgets/stats_grid.dart
         line_range: 164-210
-        method: StatsGridWidget (home PR tiles)
+        method: StatsGrid (home PR tiles)
         semantic: display-only
         fields_read: [bestValue, exerciseName, loggingType]
       - file: lib/features/home/widgets/pr_snapshot.dart
         line_range: 23-80
-        method: PRSnapshot (home PR card)
+        method: PrSnapshot (home PR card)
         semantic: display-only
         fields_read: [bestValue, exerciseName, loggingType]
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getPersonalRecords
+        method: buildAiContext (personal records)
         semantic: max
         fields_read: [exercise_name, weight_kg]
         notes: |
@@ -2398,7 +2398,7 @@ concepts:
         fields_read: [via waterIntakeProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
         line_range: 372-374
-        method: _buildCalorieRing (hydration line)
+        method: self-contained
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
       - file: lib/features/home/screens/home_screen.dart
@@ -2427,7 +2427,7 @@ concepts:
           midnight, separate from current_target).
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getTodayNutrition (water_ml field)
+        method: buildAiContext (water_ml field)
         semantic: latest
         fields_read: [healthBox['water_ml_<todayStr>'] (int or Map)]
         notes: |
@@ -2435,7 +2435,7 @@ concepts:
           as well as the int written by HealthWriteService.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getWater7d
+        method: buildAiContext (water 7d)
         semantic: historical-series
         fields_read: [healthBox keys starting with 'water_ml_', value (int or Map total_ml)]
       - file: lib/core/services/sync/sync_nutrition.dart
@@ -2450,7 +2450,7 @@ concepts:
         fields_read: [waterIntakeProvider (invalidate only — no value read)]
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
         line_range: 50-55
-        method: _logHydration (AI chat → addWater)
+        method: _logWater (AI chat → addWater)
         semantic: pass-through
         fields_read: [via waterIntakeProvider.notifier.addWater]
     reader_allow_files:
@@ -2807,7 +2807,7 @@ concepts:
           last.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getSleep7d
+        method: buildAiContext (sleep 7d)
         semantic: historical-series
         fields_read: [date, sleep_hours, hours]
         notes: |
@@ -2817,7 +2817,7 @@ concepts:
           (cloud-restore) field names.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _countSleepLogsLast7Days
+        method: buildAiContext (sleep count 7d)
         semantic: aggregated
         fields_read: [date]
         notes: |
@@ -3019,7 +3019,7 @@ concepts:
         notes: stamps onboarding_completed_at in profile map synced via onboarding_sync
       - file: lib/shared/repositories/user_repository.dart
         line_range: 106-115
-        method: setOnboardingCompleted
+        method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 1-450
         method: AuthSessionBootstrapper.hydrateFromCloud
@@ -3067,7 +3067,7 @@ concepts:
           onboarding_completed=false gets bounced to /onboarding.
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 116-140
-        method: _getPhaseAnchorDate
+        method: self-contained
         semantic: latest
         fields_read: [onboarding_completed_at]
         notes: |
@@ -3143,7 +3143,7 @@ concepts:
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
         line_range: 505-520
-        method: AiCoachNotifier._sendMessage
+        method: SendMessageNotifier._sendMessage
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
@@ -3243,7 +3243,7 @@ concepts:
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getCoachingNotes
+        method: buildAiContext (coaching notes)
         semantic: pass-through
         fields_read: [notes, text]
         notes: |
@@ -3443,7 +3443,7 @@ concepts:
         fields_read: []
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 1-9999
-        method: restore-completeness sync part file
+        method: self-contained
         semantic: pass-through
         fields_read: []
       - file: lib/app.dart
@@ -3551,7 +3551,7 @@ concepts:
           GuardedBox.empty on disagreement. Layer A correctness net.
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1-9999
-        method: DeleteWorkoutLogNotifier (UI delete entry)
+        method: self-contained
         semantic: pass-through
         fields_read: []
         notes: |
@@ -3666,8 +3666,8 @@ concepts:
       - preferred_workout_time (text, migration 063 — 2026-05-13)
       - physique_focus (text)
     sync_methods:
-      - SyncService.syncProfileNow
-      - SyncService.pushSnapshot
+      - syncProfileNow
+      - pushSnapshot
     provider_invalidation_set:
       - userProfileProvider
       - profileCompletenessProvider
@@ -3788,7 +3788,7 @@ concepts:
         fields_read: []
       - file: lib/features/train/providers/video_render_provider.dart
         line_range: 1-9999
-        method: videoRenderProvider
+        method: VideoRenderNotifier
         semantic: flag-check
         fields_read: []
       - file: lib/features/profile/providers/weekly_report_data_provider.dart
@@ -3869,7 +3869,7 @@ concepts:
     readers:
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getCoachingNotes (Hive read into AI snapshot)
+        method: buildAiContext (coaching notes snapshot)
         semantic: pass-through
         fields_read: [coaching_notes]
         notes: |
@@ -3982,7 +3982,7 @@ concepts:
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
         line_range: 1-9999
-        method: _copyWeek* helpers (upsertScheduled at :1911)
+        method: copyWeek helpers (upsertScheduled at :1911)
         semantic: pass-through
         fields_read: [via WorkoutWriteService.upsertScheduled]
       - file: lib/core/services/workout_schedule_service.dart
@@ -4050,7 +4050,7 @@ concepts:
           HealthWriteService at lines 400 / 412 / 467 / 493.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
-        method: _getSleep7d + _getWater7d
+        method: buildAiContext (sleep + water 7d)
         semantic: historical-series
         fields_read: [sleep_hours, hours, water_ml, date]
         notes: |
@@ -4183,7 +4183,7 @@ concepts:
         method: loadAllExercisePRs
         semantic: per-set
         fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration / .bestPerSetWeight]
-      - file: lib/features/train/screens/train/screen.dart
+      - file: lib/features/train/screens/train/expanded_exercises.dart
         line_range: 1-9999
         method: _buildExpandedExercises
         semantic: per-set
@@ -4293,7 +4293,7 @@ concepts:
         fields_read: [name, category]
       - file: lib/features/train/screens/template_builder_screen.dart
         line_range: 510-525
-        method: _customExercises
+        method: self-contained
         semantic: display
         fields_read: [name, category]
     hive_key_prefix: custom_exercise_

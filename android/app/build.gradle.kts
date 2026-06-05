@@ -69,6 +69,24 @@ android {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
+                // No android/key.properties → no release keystore. Non-release
+                // tasks (CI debug build-check, IDE sync) must still configure,
+                // so fall back to the debug signer for them — but FAIL any
+                // actual release assembly. A debug-signed "release" APK cannot
+                // update a release-signed install (Android blocks cross-key
+                // updates) — exactly the "+N won't install over +28" trap from
+                // 2026-06-05. Gate 48 catches this post-build; this fails it at
+                // build time. See docs/operations/SECRET_INVENTORY.md.
+                val isReleaseBuild = gradle.startParameter.taskNames
+                    .any { it.contains("Release") }
+                if (isReleaseBuild) {
+                    throw GradleException(
+                        "Release build requested but android/key.properties is " +
+                        "missing. A release APK/AAB MUST be signed with the " +
+                        "ICANBEFITTER release key (not the debug key). Create " +
+                        "android/key.properties from the keystore, then rebuild."
+                    )
+                }
                 signingConfigs.getByName("debug")
             }
             proguardFiles(
