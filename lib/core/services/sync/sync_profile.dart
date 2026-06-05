@@ -180,6 +180,11 @@ extension SyncServiceProfile on SyncService {
         if (p['current_streak_days'] != null) 'current_streak_days': p['current_streak_days'],
         if (p['last_workout_date'] != null) 'last_workout_date': p['last_workout_date'],
         if (p['longest_gap_days'] != null) 'longest_gap_days': p['longest_gap_days'],
+        // Stamp updated_at on every push — there is NO DB trigger on
+        // user_progress, so without this the column stays frozen at created_at
+        // even as the row's data advances, and any "changed-since" /
+        // incremental-sync / conflict logic keyed on it is wrong (diagnose a2d8f4).
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'user_id');
     } catch (e, st) {
       debugPrint('[SyncService._syncUserProgress] $e');

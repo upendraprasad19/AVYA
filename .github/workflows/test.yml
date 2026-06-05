@@ -11,6 +11,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Run all jobs in IST. This is an India-only app whose date logic is
+# IST-anchored (CLAUDE.md "IST throughout"), and several contract tests assert
+# the on-device (IST) scenario — e.g. logout_login_round_trip T1 "Local ISO
+# string (what Hive stores after on-device completion)". Without this the runner
+# is UTC and those tests diverge from local (the SECOND local-vs-CI divergence
+# after CRLF/LF; see diagnose c4d8e1). subosito/flutter-action + Dart honour TZ.
+env:
+  TZ: Asia/Kolkata
+
 jobs:
   # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
   # Fast gate — runs in ~2 minutes. Blocks all PRs on failure.

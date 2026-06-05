@@ -250,6 +250,21 @@ extension SyncServiceWorkout on SyncService {
           ));
           continue;
         }
+        // Guard: workout_log_exercises.reps is the CUMULATIVE total (Σ set
+        // reps). Clamp to the wle_reps_realistic bound (<=10000, migration 084)
+        // so an out-of-range value (a migrator duration->reps leak, a parse
+        // glitch) is CLAMPED + logged (op_type wle_reps_out_of_range) instead
+        // of being silently rejected by Postgres (23514) and lost. diagnose e7b3c9.
+        final rawReps = (log['reps_completed'] as num?)?.toInt();
+        final clampedReps =
+            rawReps == null ? null : rawReps.clamp(0, 10000).toInt();
+        if (rawReps != null && rawReps != clampedReps) {
+          unawaited(ErrorTelemetry.logEvent(
+            'wle_reps_out_of_range',
+            message:
+                'raw=$rawReps clamped=$clampedReps exercise=${log['exercise_name']}',
+          ));
+        }
         await _supabase.client.from('workout_log_exercises').upsert({
           // id OMITTED (fix 2026-06-02 cross-user collision) — gen_random_uuid()
           // on insert / kept on conflict. The natural key below now includes
@@ -260,7 +275,7 @@ extension SyncServiceWorkout on SyncService {
           'exercise_name': log['exercise_name'] ?? '',
           'logging_type': log['logging_type'],
           'set_number': summarySetCount,
-          'reps': log['reps_completed'],
+          'reps': clampedReps,
           'weight_kg': log['weight_kg'],
           'duration_seconds': aggregateDurationSecs,
           'distance_km': log['distance_km'],
