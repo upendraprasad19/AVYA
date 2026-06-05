@@ -89,7 +89,8 @@ const _expectedEmitFields = <String, Set<String>>{
   },
   // schedule_* writer: WorkoutScheduleService → WorkoutWriteService.upsertScheduled
   'schedule': {
-    'date', 'week', 'day_of_week', 'type', 'workout_day_index',
+    // `phase` stamped at generation (F-B 2026-06-05) — bucketPastRows groups by it.
+    'date', 'phase', 'week', 'day_of_week', 'type', 'workout_day_index',
     'workout_name', 'workout_focus', 'exercises', 'warmup',
     'cooldown', 'finisher', 'week_character', 'status',
     'completed_at', 'is_swapped', 'original_date', 'source',
@@ -270,4 +271,6 @@ const _alwaysOk = <String>{
   'id', 'created_at', 'updated_at', 'user_id', 'date',
   // Subscription / billing:
   'plan', 'expires_at', 'is_pro',
+  // user_progress map (read by phaseForDate — NOT a schedule_* field; Obs 1):
+  'current_phase',
 };

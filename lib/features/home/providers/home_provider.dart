@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 // OI-38 (2026-05-17) — streak_progress_service + ist_date imports
 // dropped. _refillIfNewWeek() moved to StreakProgressService.refillIfNewWeek()
@@ -635,18 +636,28 @@ class RecentFoodLogsNotifier extends Notifier<List<RecentFoodLogEntry>> {
     final hive = HiveService.instance;
     final nutritionBox = hive.nutritionBox;
     final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    // Obs 2 (2026-06-05): match the writer's IST date key (was local
+    // year/month/day — drifts vs `istDateStr(date)` between IST 00:00–05:30).
+    final todayStr = istDateStr(today);
 
     final logs = <RecentFoodLogEntry>[];
     for (final raw in nutritionBox.values) {
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
+      // Hermes L37: exclude saved-meal templates (defensive — they currently
+      // carry no `date` so they're already filtered, but guard explicitly so a
+      // future writer that stamps `date` on a template can't leak into recents).
+      if (log['is_saved_meal'] == true) continue;
       if (log['date'] == todayStr) {
-        final name = log['food_name'] as String? ??
-            log['meal_name'] as String? ??
-            log['name'] as String? ??
-            'Unknown';
+        // Obs 2: use the SHARED derivation (items[].name → meal_type). The home
+        // reader previously read top-level `food_name`/`meal_name`/`name` that
+        // the writer never writes → every row showed "Unknown".
+        final name = NutritionReadService.deriveMealDisplayName(log);
+        if (name == NutritionReadService.kFallbackMealName) {
+          // ignore: discarded_futures
+          ErrorTelemetry.logEvent('food_log_unknown_name',
+              message: 'source=home_recent_logs date=$todayStr');
+        }
         logs.add(RecentFoodLogEntry(
           name: name,
           protein: (log['total_protein'] as num?)?.toDouble() ?? 0,

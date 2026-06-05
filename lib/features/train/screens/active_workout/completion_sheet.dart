@@ -126,6 +126,12 @@ void _showWorkoutReceipt(BuildContext context, ActiveWorkoutData data) {
   if (workoutDate != null) {
     receiptData = WorkoutReceiptData.fromExerciseLogs(workoutDate);
   }
-  receiptData ??= WorkoutReceiptData.fromActiveWorkout(data);
+  receiptData ??= WorkoutReceiptData.fromActiveWorkout(
+    data,
+    // ignore: deprecated_member_use — singleton read until full provider migration
+    phase: workoutDate != null
+        ? WorkoutScheduleReadService.instance.phaseForDate(workoutDate)
+        : null,
+  );
   WorkoutReceiptSheet.show(context, receiptData);
 }

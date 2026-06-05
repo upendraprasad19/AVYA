@@ -57,6 +57,24 @@ class SupabaseService {
   /// Throws if Supabase has not been initialized.
   SupabaseClient get client => Supabase.instance.client;
 
+  /// Obs 4 (2026-06-05): warm the PostgREST/edge connection during splash so
+  /// RestoringScreen's first restore query doesn't eat the cold-start penalty
+  /// (measured ~24s on the `user_profile` op — cold backend + the retry
+  /// budget). Best-effort + non-blocking — fired unawaited; failures swallowed.
+  Future<void> warmConnection() async {
+    try {
+      final uid = currentUser?.id;
+      if (uid == null) return; // signed out → no restore coming → nothing to warm
+      await client
+          .from('user_profile')
+          .select('user_id')
+          .eq('user_id', uid)
+          .limit(1);
+    } catch (_) {
+      // Warm-up is pure latency hygiene — never surface or block on failure.
+    }
+  }
+
   /// Current authenticated user, or null if not signed in.
   /// Returns null if Supabase is not initialized.
   User? get currentUser {

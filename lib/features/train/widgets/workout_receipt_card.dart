@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -184,7 +185,8 @@ class WorkoutReceiptData {
   /// Build from ActiveWorkoutData — pure in-memory aggregation using the
   /// exact same per-logging-type rules as [fromExerciseLogs] so the two
   /// paths produce identical outputs. No Hive reads (tests don't init Hive).
-  factory WorkoutReceiptData.fromActiveWorkout(ActiveWorkoutData data) {
+  factory WorkoutReceiptData.fromActiveWorkout(ActiveWorkoutData data,
+      {int? phase}) {
     final workoutDate = data.workoutDay?.date ?? DateTime.now();
     double totalVolume = 0;
     int totalSets = 0;
@@ -262,6 +264,7 @@ class WorkoutReceiptData {
     return WorkoutReceiptData(
       date: workoutDate,
       workoutName: workoutName,
+      phase: phase ?? 1,
       exercises: exerciseList,
       totalVolumeKg: totalVolume,
       totalSets: totalSets,
@@ -287,6 +290,7 @@ class WorkoutReceiptData {
   static WorkoutReceiptData? fromExerciseLogs(
     DateTime date, {
     String? workoutLogId,
+    int? phase,
   }) {
     final Box wb = HiveService.instance.workoutBox;
     final dateKey = formatDateKey(date);
@@ -492,6 +496,8 @@ class WorkoutReceiptData {
     return WorkoutReceiptData(
       date: date,
       workoutName: workoutName,
+      // ignore: deprecated_member_use — singleton read until full provider migration
+      phase: phase ?? WorkoutScheduleReadService.instance.phaseForDate(date),
       exercises: exerciseList,
       totalVolumeKg: totalVolume,
       totalSets: totalSets,

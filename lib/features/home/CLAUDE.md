@@ -48,7 +48,9 @@ Pieces:
 
 | Concept | Writer | Reader (this dir) |
 |---|---|---|
-| `workout_receipt_rendering` | `workout_write_service.logExercise` | `home_screen._buildTodayRow` "View Card" handler → `WorkoutReceiptData.fromExerciseLogs(DateTime.now())`; `day_detail_sheet` "View Workout Card" entry. |
+| `workout_receipt_rendering` | `workout_write_service.logExercise` | `home_screen._buildTodayRow` "View Card" handler → `WorkoutReceiptData.fromExerciseLogs(DateTime.now())`; `day_detail_sheet` "View Workout Card" entry. The receipt PHASE label resolves via `WorkoutScheduleReadService.phaseForDate` (Obs 1 6f1a2c). |
+| `nutrition_recent_logs_name` | `nutrition_write_service.logMeal` (name lives in `items[].name`, never top-level) | `home_provider` RecentFoodLogEntry → `NutritionReadService.deriveMealDisplayName` (shared SoT — was reading non-existent top-level `food_name`/`meal_name`/`name` → "Unknown"; Obs 2 8b3d4e). Home recent-logs date key = `istDateStr` (was device-local). |
+| `cold_start_restore_refresh` | `SyncService.restoreFromCloudForUser` bumps `restoreCompletedTick` after the bg-restore heals | `home_screen` listens → `invalidateOnRetry` (full home provider set). Background-restore is behind the default-off `bg_restore_enabled` flag (Obs 4 4e8b1d). |
 | `streaks` | `streak_progress_service.dart` (on workout complete / food log) | `streak_warning_banner.shouldShow` (clamped to [18,23] — see pitfalls). |
 | `weight_logs` | `health_write_service.dart` | home `WeightTrendChart` (`shared/widgets/weight_trend_chart.dart`; date-proportional x + carry-forward anchor — `weightTrendWindow()` is the testable extraction). |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` (cold-start day-change tick) | mount-time invalidation of `todayWorkoutProvider`, `homeNutritionProvider`, `streakProvider`. |
