@@ -1,38 +1,45 @@
-# Alert thresholds — Phase 1 placeholders.
+# Alert thresholds — Phase 2 (client_errors_spike tuned 2026-06-06).
 #
-# These values are DELIBERATELY LOW so alerts fire during the baseline
-# observation week (2026-05-28 → 2026-06-03). Phase 2 (scheduled
-# 2026-06-03) replaces them with p95 + 50% headroom values derived
-# from the observed data.
-#
-# Until Phase 2 lands, expect occasional false-positive alerts. That's
-# the trade — false positives during baseline tells us we're wired up
-# correctly. Silence during baseline would be a worse signal.
+# Phase 1 (2026-05-28) shipped DELIBERATELY LOW placeholders so alerts fired
+# during the baseline week. Phase 2 re-tunes client_errors_spike from the
+# observed baseline (see docs/audit/2026-06-03-alert-baseline.md):
+#   - the count now EXCLUDES telemetry breadcrumbs (error_code 'event'/'info'),
+#     which were ~81.5% of client_errors rows and inflated every spike count;
+#   - thresholds raised to the founder-chosen "Tolerant" tier (real-error
+#     baseline p95=127/hr, max=161) so a reinstall/restore burst (~150) lands
+#     at info, not critical.
+# edge_function_health + payment_flow_health stay on Phase-1 placeholders until
+# those subsystems have their own baseline.
 #
 # Owner: founder. Tuning is a deliberate scheduled action, not a
 # reactive twiddle.
 #
-# Source of truth: this file is documentation. The actual thresholds
-# are embedded in the SQL of supabase/migrations/076_alert_detection_crons.sql.
-# Any change here must be paired with a follow-up migration that updates
-# the cron job bodies (or a cron.unschedule + re-schedule pattern).
+# Source of truth: this file is documentation. The actual thresholds are
+# embedded in the SQL of the cron jobs — client_errors_spike is now defined by
+# supabase/migrations/086_alert_client_errors_spike_tune.sql (was 076).
+# Any change here MUST be paired with a follow-up migration that re-schedules
+# the cron body (cron.unschedule + cron.schedule) in the same commit. The pair
+# is pinned by test/contracts/alert_thresholds_sync_test.dart.
 # See feedback_migration_apply_record_pair.md.
 
-phase: 1
+phase: 2
 ships_date: 2026-05-28
-phase_2_date: 2026-06-03
-tuning_method: "p95 + 50% headroom from baseline week's data"
+phase_2_date: 2026-06-06
+tuning_method: "p95 + 50% headroom from baseline week's data (breadcrumbs excluded)"
 
 thresholds:
 
   client_errors_spike:
-    description: "client_errors rows logged within a 1-hour window"
-    info_at:     20    # /hour
-    warn_at:     50
-    critical_at: 100
+    description: "REAL client_errors (error_code NOT in event/info) within a 1-hour window"
+    excludes_error_codes: [event, info]   # telemetry breadcrumbs, not failures (~81.5% of rows)
+    info_at:     100   # /hour
+    warn_at:     250
+    critical_at: 500
     window_minutes: 60
     cron_cadence:   "*/15 * * * *"
     dedup_window_hours: 1
+    tuned_from: docs/audit/2026-06-03-alert-baseline.md
+    defined_in_migration: "086_alert_client_errors_spike_tune.sql"
 
   edge_function_health:
     description: "non-2xx response rate across cron_call_log over 30min"

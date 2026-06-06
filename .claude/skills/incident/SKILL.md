@@ -84,6 +84,22 @@ existing handbook bug-classes, the resolution batch MUST:
 3. Update `debugging` skill's bug-class table.
 4. Append a changelog entry below.
 
+## Tuning alert thresholds (not an incident)
+
+Threshold tuning is config, not a post-mortem. To change an alert's fire
+thresholds: edit `alerts/_thresholds.yaml` (documentation) **AND** ship a paired
+migration that re-schedules the cron body (`cron.unschedule` + `cron.schedule`)
+in the SAME commit — the yaml is **not** the runtime source of truth, the cron
+SQL is. The pair is pinned by `test/contracts/alert_thresholds_sync_test.dart`.
+See `docs/audit/2026-06-03-alert-baseline.md` for the baseline method (p95 +
+headroom, breadcrumbs excluded) and the `client_errors_spike` Phase-2 tune
+(diagnose `f0b9d3`, migration 086). Applying the migration live is a prod deploy
+— it needs explicit founder authorization even when the plan was approved.
+
 ## Changelog
 
 - 2026-05-28: Initial. No incidents recorded yet.
+- 2026-06-06: Phase-2 tuned `client_errors_spike` — excluded `event`/`info`
+  breadcrumbs (~81.5% of `client_errors`) + Tolerant thresholds 100/250/500
+  (migration 086, diagnose `f0b9d3`). Added the threshold-tuning procedure above
+  + `alert_thresholds_sync_test`.
