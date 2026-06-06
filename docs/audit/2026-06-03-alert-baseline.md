@@ -75,8 +75,22 @@ the event-exclusion already removes the bulk of the noise.
 
 Window / cadence / dedup unchanged: 60 min / `*/15` / 1h.
 
+### D. Refinement (087) — re-include failure-shaped events (pre-push review)
+A pre-push adversarial review (the founder's "cross-check twice") caught that
+Decision A over-excluded: `ErrorTelemetry.logEvent` stamps `error_code='event'`
+on genuine failures too (`widget_error_fallback`, `*_failed`, `*_returned_null`,
+`*_unknown_error` — ~25 call-sites; 37 such rows in 21 days). A blanket `event`/
+`info` exclusion would make a crash storm invisible. Migration **087** therefore
+re-includes any breadcrumb-coded row whose `op_type` is failure-shaped
+(`~* '(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)'`),
+validated to separate failures from benign breadcrumbs with **zero
+misclassification** on live data. Thresholds unchanged — the 087 hourly
+distribution is identical (p50=8, p95=127, max=161); the predicate count rose
+only 864→898 over 14d (the ~34 failure-events; breadcrumbs still excluded).
+
 ## Verification
 - Read-only before/after: old bare 24h count **645** → breadcrumb-excluded **264**.
+- 087 vs 086 predicate (14d): **864 → 898** (failure-events re-added; breadcrumbs stay out).
 - Post-apply `cron.job` body: exclusion present, thresholds 500/250/100, old
   20/50 gates gone.
 - `test/contracts/alert_thresholds_sync_test.dart` pins yaml↔migration agreement

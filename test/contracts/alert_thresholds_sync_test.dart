@@ -60,18 +60,27 @@ void main() {
         reason: '${migFile.path} must exist');
     final sql = migFile.readAsStringSync();
 
-    // The cron CASE maps cnt -> severity; the WHERE floor is the info gate.
-    expect(sql.contains('cnt >= $crit'), isTrue,
+    // Anchor the CASE gates to `WHEN cnt >= N`. A bare `cnt >= N` substring
+    // also matches the floor line `c.cnt >= 100`, so a warn/crit set equal to
+    // the floor would false-pass (P2 review finding 2026-06-06).
+    expect(sql.contains('WHEN cnt >= $crit'), isTrue,
         reason: 'migration critical gate must equal yaml critical_at=$crit');
-    expect(sql.contains('cnt >= $warn'), isTrue,
+    expect(sql.contains('WHEN cnt >= $warn'), isTrue,
         reason: 'migration warn gate must equal yaml warn_at=$warn');
     expect(sql.contains('c.cnt >= $info'), isTrue,
         reason: 'migration fire-floor must equal yaml info_at=$info');
+    expect(info < warn && warn < crit, isTrue,
+        reason: 'thresholds must strictly increase (info<warn<crit)');
 
     // Breadcrumb exclusion present in the count query (regression for f0b9d3).
     expect(sql.contains("error_code IS DISTINCT FROM 'event'"), isTrue,
         reason: 'count query must exclude event breadcrumbs');
     expect(sql.contains("error_code IS DISTINCT FROM 'info'"), isTrue,
         reason: 'count query must exclude info breadcrumbs');
+    // Failure-shaped events MUST be re-included (P0 f0b9d3 — 086 went blind to
+    // logEvent-coded failures like *_failed / widget_error_fallback, which the
+    // client stamps with error_code='event'). op_type carries the severity.
+    expect(sql.contains('op_type ~*'), isTrue,
+        reason: 'failure-shaped op_types must be re-included into the count');
   });
 }

@@ -3,8 +3,11 @@
 # Phase 1 (2026-05-28) shipped DELIBERATELY LOW placeholders so alerts fired
 # during the baseline week. Phase 2 re-tunes client_errors_spike from the
 # observed baseline (see docs/audit/2026-06-03-alert-baseline.md):
-#   - the count now EXCLUDES telemetry breadcrumbs (error_code 'event'/'info'),
-#     which were ~81.5% of client_errors rows and inflated every spike count;
+#   - the count now EXCLUDES benign telemetry breadcrumbs (error_code 'event'/
+#     'info'), which were ~81.5% of client_errors rows and inflated every spike;
+#   - EXCEPT failure-shaped op_types (*_failed, widget_error_fallback, ...) which
+#     ARE re-included — logEvent stamps error_code='event' even for failures, so
+#     filtering on error_code alone would hide them (087, diagnose f0b9d3);
 #   - thresholds raised to the founder-chosen "Tolerant" tier (real-error
 #     baseline p95=127/hr, max=161) so a reinstall/restore burst (~150) lands
 #     at info, not critical.
@@ -16,7 +19,7 @@
 #
 # Source of truth: this file is documentation. The actual thresholds are
 # embedded in the SQL of the cron jobs — client_errors_spike is now defined by
-# supabase/migrations/086_alert_client_errors_spike_tune.sql (was 076).
+# supabase/migrations/087_alert_spike_reinclude_failure_events.sql (076→086→087).
 # Any change here MUST be paired with a follow-up migration that re-schedules
 # the cron body (cron.unschedule + cron.schedule) in the same commit. The pair
 # is pinned by test/contracts/alert_thresholds_sync_test.dart.
@@ -30,8 +33,9 @@ tuning_method: "p95 + 50% headroom from baseline week's data (breadcrumbs exclud
 thresholds:
 
   client_errors_spike:
-    description: "REAL client_errors (error_code NOT in event/info) within a 1-hour window"
-    excludes_error_codes: [event, info]   # telemetry breadcrumbs, not failures (~81.5% of rows)
+    description: "REAL client_errors within a 1-hour window — non-breadcrumb error_codes PLUS failure-shaped op_types"
+    excludes_error_codes: [event, info]   # benign telemetry breadcrumbs (~81.5% of rows)
+    reincludes_failure_op_types: true     # logEvent stamps error_code='event' on genuine failures too, so failure-shaped op_types (*_failed, widget_error_fallback, *_returned_null) are re-included by regex (087, diagnose f0b9d3)
     info_at:     100   # /hour
     warn_at:     250
     critical_at: 500
@@ -39,7 +43,7 @@ thresholds:
     cron_cadence:   "*/15 * * * *"
     dedup_window_hours: 1
     tuned_from: docs/audit/2026-06-03-alert-baseline.md
-    defined_in_migration: "086_alert_client_errors_spike_tune.sql"
+    defined_in_migration: "087_alert_spike_reinclude_failure_events.sql"
 
   edge_function_health:
     description: "non-2xx response rate across cron_call_log over 30min"
