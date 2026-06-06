@@ -304,4 +304,51 @@ void main() {
     expect(secondRun, 0,
         reason: 'flag should short-circuit second invocation');
   });
+
+  test('library-strict v4 — large per-set duration NOT moved to reps (wls guard)',
+      () async {
+    // d9a4f2 — a bodyweight_reps row carrying a LARGE duration (a mis-classified
+    // timed hold) must NOT have that duration moved into reps: doing so produced
+    // per-set reps > 1000 that violated wls_reps_realistic (23514) and were
+    // silently dropped. The migrator strips the duration without fabricating a
+    // huge rep count; small durations (<= _kMaxPlausibleReps) still migrate (v3).
+    final wb = HiveService.instance.workoutBox;
+    const dateStr = '2026-05-06';
+    await wb.put('exlog_${dateStr}_big', {
+      'exercise_name': 'Push Up',
+      'date': dateStr,
+      'logging_type': 'timed',
+      'reps_completed': 0,
+      'weight_kg': 0.0,
+      'duration_seconds': 1200, // 1200s — implausible as reps
+      'sets': [
+        {'duration_sec': 1200, 'weight_kg': 0, 'reps': 0},
+      ],
+      'sets_detail': [
+        {'duration_sec': 1200, 'weight_kg': 0, 'reps': 0},
+      ],
+    });
+
+    final corrected = await LoggingTypeRepairMigrator.runIfNeeded();
+    expect(corrected, 1);
+
+    final updated = wb.get('exlog_${dateStr}_big') as Map;
+    expect(updated['logging_type'], 'bodyweight_reps');
+    // The large duration must NOT become a rep count.
+    expect(updated['reps_completed'], 0,
+        reason: '1200 is implausible as reps — must not be moved into reps');
+    expect(updated.containsKey('duration_seconds'), isFalse,
+        reason: 'duration stripped (no mixed signal on a bodyweight row)');
+
+    for (final s in (updated['sets'] as List)) {
+      final m = s as Map;
+      expect(m['reps'], 0, reason: 'large per-set duration not moved to reps');
+      expect(m.containsKey('duration_sec'), isFalse);
+    }
+    for (final s in (updated['sets_detail'] as List)) {
+      final m = s as Map;
+      expect(m['reps'], 0);
+      expect(m.containsKey('duration_sec'), isFalse);
+    }
+  });
 }
