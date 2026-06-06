@@ -43,6 +43,7 @@ cross_account_guard: not_applicable (alerts is service-role-only RLS per migrati
 forbidden_patterns_checked:
   - "the bare unfiltered COUNT(*) over client_errors that counted telemetry breadcrumbs as errors — removed; 086 filters error_code IS DISTINCT FROM 'event' and 'info', and the contract test asserts the exclusion is present."
   - "alerts/_thresholds.yaml silently drifting from the cron SQL — now pinned by alert_thresholds_sync_test.dart (the yaml numbers must equal the migration CASE/floor numbers, and the yaml names its defining migration)."
+  - "086 over-excluding event-coded FAILURES (logEvent stamps error_code='event' even for *_failed / widget_error_fallback) — caught in pre-push review; 087 re-includes failure-shaped op_types via regex while keeping benign breadcrumbs excluded. The contract test asserts the re-inclusion clause (op_type matched by regex) is present."
 proposed_fix: >
   (1) Migration 086 re-schedules alert_client_errors_spike to exclude
   error_code 'event'/'info' breadcrumbs from the hourly count. (2) Thresholds
@@ -67,6 +68,7 @@ touched_layers_checked:
   - { tier: 4, layer: postgres_data, status: verified, evidence: "read-only live count over the last 24h — old bare count 645 vs breadcrumb-excluded 264 (59 percent were event/info); the 10-day window is 4258 rows / 3472 (81.5 percent) breadcrumbs across 2 distinct users" }
   - { tier: 5, layer: migrations_applied, status: fixed_in_this_batch, evidence: "086 applied live via MCP apply_migration (user-authorized 2026-06-06); recorded in backups/applied_migrations.json with hash f4f5e88b" }
   - { tier: 7, layer: cron_jobs, status: fixed_in_this_batch, evidence: "cron.job for alert_client_errors_spike verified post-apply: breadcrumb exclusion present, new thresholds 500/250/100 present, old 20/50 gates gone, schedule */15 unchanged" }
+  - { tier: 7, layer: cron_jobs_087_refine, status: fixed_in_this_batch, evidence: "087 applied live (user-authorized) after pre-push review — cron.job shows op_type failure re-inclusion + thresholds 500/250/100 + breadcrumbs still excluded; predicate count 864->898 over 14d (only ~34 failure-events re-added, breadcrumbs stay out)" }
 impact_analysis: >
   Platform / observability blast radius — no user-facing change. Before: every
   founder reinstall/restore or sim run tripped a false critical (alert #24 =
@@ -122,7 +124,24 @@ were left untouched.
   old 20/50 gates gone, schedule `*/15` unchanged.
 - `alert_thresholds_sync_test.dart` green; full suite green.
 
+## Pre-push review caught a blind spot — 086 over-excluded (fixed by 087)
+A fresh adversarial reviewer (the founder asked to "cross-check loopholes twice"
+before pushing) found that `error_code` is overloaded: `ErrorTelemetry.logEvent`
+stamps `error_code='event'` for EVERY structured event, including genuine
+failures — `widget_error_fallback`, `*_failed`, `*_returned_null`,
+`*_unknown_error` (~25 call-sites). So 086's blanket `event`/`info` exclusion
+went blind to an entire failure class (37 such rows in 21 days; a crash storm
+would have been invisible). Migration **087** re-includes any breadcrumb-coded
+row whose `op_type` is failure-shaped
+(`~* '(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)'`) —
+validated to separate failures from benign breadcrumbs with ZERO misclassification
+on live data — while still excluding `restore_op_done`-style noise. Thresholds
+unchanged (the 087 hourly distribution is identical: p50=8, p95=127, max=161).
+The contract test now also asserts the re-inclusion clause is present and anchors
+the warn/crit gates to `WHEN cnt >=` (a P2 leak-match fix from the same review).
+
 ## See also
-- supabase/migrations/086_alert_client_errors_spike_tune.sql
-- docs/audit/2026-06-03-alert-baseline.md (baseline data + rejected denylist)
+- supabase/migrations/087_alert_spike_reinclude_failure_events.sql (the failure re-inclusion)
+- supabase/migrations/086_alert_client_errors_spike_tune.sql (the original breadcrumb exclusion)
+- docs/audit/2026-06-03-alert-baseline.md (baseline data + rejected denylist + the 087 refine)
 - alerts/_thresholds.yaml (documented thresholds + the doc-is-not-SoT contract)

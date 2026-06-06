@@ -1,6 +1,6 @@
 # Bug Directory (auto-generated)
 
-Generated: 2026-06-06T21:08:41.920259.
+Generated: 2026-06-06T23:19:03.710221.
 Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By recurrence class
