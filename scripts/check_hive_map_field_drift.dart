@@ -273,4 +273,9 @@ const _alwaysOk = <String>{
   'plan', 'expires_at', 'is_pro',
   // user_progress map (read by phaseForDate — NOT a schedule_* field; Obs 1):
   'current_phase',
+  // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
+  // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
+  // `schedule_*` entry. The prefix heuristic mis-attributes them because both
+  // files also read `schedule_*` keys (diagnose a7d3f1).
+  'plan_start_date', 'plan_end_date', 'plan_json', 'schedules',
 };

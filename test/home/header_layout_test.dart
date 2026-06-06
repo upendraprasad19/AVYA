@@ -18,8 +18,9 @@ void main() {
   test('eyebrow contains DAILY + date weekday + WK + PHASE meta', () {
     expect(src.contains("'DAILY · \${weekdays[now.weekday - 1]}"), isTrue,
         reason: 'eyebrow must include DAILY · weekday');
-    expect(src.contains("WK \$weekOfYear"), isTrue,
-        reason: 'eyebrow must include WK number');
+    expect(src.contains("WK \$weekInPhase"), isTrue,
+        reason: 'eyebrow must include WK number (phase-relative week, '
+            'renamed from weekOfYear — diagnose a7d3f1)');
     expect(src.contains("PHASE \$currentPhase"), isTrue,
         reason: 'eyebrow must include PHASE number');
   });

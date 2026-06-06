@@ -65,6 +65,7 @@ Pieces:
 | Prediction card truncated | Home: maxLines 4 + "Read More →" opens full bottom sheet. Shareable: capped at 500 chars. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 | Free user stuck on day 29 with empty schedule | Check `WorkoutScheduleService.isPhaseExpired()` returns true AND `todayWorkoutProvider` is null → `home_screen._buildTodayRow` must render `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next Phase on splash via `splash_screen._autoGenerateNextPhaseForPro()` so they never land here. Added 2026-04-18 per audit H9. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 | Streak banner fires at 3 PM for a morning lifter | `StreakWarningBanner.shouldShow` (and mirror in `home_provider.StreakWarningEligibilityNotifier._evaluate`) clamps threshold to `[18, 23]`. Handoff is an **evening-only** nudge. Don't re-lower the floor to 15 — an early-riser (6 AM median → raw 9 AM) would surface the banner before dinnertime. Both callsites must stay in sync. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| PRO-expiry banner never shows after expiry | The Home expiry banner's `lapsed` state relies on `SubscriptionService.proLapsedAt` because `_downgradeLocally` **deletes** `expiresAt` on expiry. `isPro()` must keep stamping `pro_lapsed_at` on the genuine-expiry downgrade (NOT cross-account); `writeSubscriptionState` clears it on renewal. Banner = pure `SubscriptionService.expiryBannerSeverity` (amber `<7d` / red lapsed) via `subscriptionExpiryBannerProvider` → `_buildExpiryBanner`; once-per-day dismiss (`expiry_banner_dismissed_date`, IST; re-shown via the day-rollover invalidation set) + kill-switch `configBox['disable_expiry_banner']`. **Cross-account:** both keys are registered in `UserConfigMigrator.userScopedKeys` AND the stamp is session-gated (`HiveUserSession.currentOwnerFullId != null`) — without both they leak the banner to another account on the same device (review P0). Diagnose 2026-06-06. | `subscription_expiry_banner_behavioral_test.dart` |
 
 ## Tests pinning the rules here
 
@@ -72,6 +73,7 @@ Pieces:
 - `test/contracts/streaks_writer_to_reader_test.dart`
 - `test/contracts/cold_start_day_rollover_test.dart`
 - `test/contracts/streak_warning_banner_threshold_test.dart`
+- `test/contracts/subscription_expiry_banner_test.dart`
 
 ## See also
 

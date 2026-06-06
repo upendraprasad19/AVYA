@@ -59,6 +59,12 @@ class UserConfigMigrator {
     'onboarding_completed',
     // Subscription state — PRO entitlement.
     'isPro', 'expiresAt', 'plan', 'lastVerifiedAt', 'localActivationAt',
+    // Expiry-banner state (diagnose 2026-06-06) — `pro_lapsed_at` marker +
+    // `expiry_banner_dismissed_date`. MUST be user-scoped: a leaked configBox
+    // copy would show User B a "PRO expired / RENEW" banner for an account that
+    // was never theirs. Stamps are also session-gated (see isPro) so they never
+    // seed configBox in the first place.
+    'pro_lapsed_at', 'expiry_banner_dismissed_date',
 
     // ----- Test #11.1 sweep (25 keys) -----
     // AI prediction card (per-user AI-generated text)

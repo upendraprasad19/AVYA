@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
 import 'package:icanbefitter/core/services/saved_meal_key_migrator.dart';
 import 'package:icanbefitter/core/services/phase_progress_reconciler.dart';
+import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
@@ -330,6 +331,27 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       message: 'migrator=phase_reconcile ms=${swPhase.elapsedMilliseconds}',
     ));
 
+    // Restore plan_json-skip heal (diagnose 2026-06-06) — re-applies the cloud
+    // plan_json snapshot when the current window has a planned workout day that
+    // lost its exercises (the exercise-less scheduled_workouts restore). Runs
+    // AFTER restore + the phase reconcile so plan_start + schedule_* are
+    // hydrated; symptom-gated so a healthy user is a cheap local no-op (no
+    // network). Heals an already-broken install on the next sign-in.
+    final swPlanIntegrity = Stopwatch()..start();
+    try {
+      await PlanIntegrityReconciler.reconcile(
+          ref.read(workoutScheduleReadServiceProvider));
+    } catch (e) {
+      debugPrint(
+          '[RestoringScreen] PlanIntegrityReconciler failed (non-fatal): $e');
+    }
+    swPlanIntegrity.stop();
+    unawaited(ErrorTelemetry.logEvent(
+      'restoring_screen_migrator_done',
+      message:
+          'migrator=plan_integrity ms=${swPlanIntegrity.elapsedMilliseconds}',
+    ));
+
     // Bug 2026-05-22 / diagnose dc52a4 — three pieces of post-auth bootstrap
     // that used to live in splash_screen._runDeferredInit. They touch the
     // user-scoped GuardedBox (`userBox`) and so MUST run AFTER
@@ -569,6 +591,14 @@ Future<void> _healAfterRestoreInBackground() async {
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st,
         reason: 'bg_heal_phase_reconcile'));
+  }
+  try {
+    // ignore: deprecated_member_use — singleton read in a ref-free bg context
+    await PlanIntegrityReconciler.reconcile(
+        WorkoutScheduleReadService.instance);
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'bg_heal_plan_integrity'));
   }
   try {
     StreakProgressService.instance.refillIfNewWeek();

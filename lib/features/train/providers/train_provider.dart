@@ -552,7 +552,11 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
     // Read plan metadata for phase name/focus.
     final planMap = repo.getCurrentPlanMap();
-    final phaseName = planMap?['name'] as String? ?? 'Foundation';
+    // Phase name is derived from the phase NUMBER (canonical cycle) so it never
+    // drifts from current_phase — the plan blob's `name` can be stale/polluted
+    // (diagnose 2026-06-06; banner/letterhead used to read a hardcoded
+    // "Foundation"). focus still comes from the plan.
+    final phaseName = WorkoutScheduleService.instance.phaseName(phase);
     final focus =
         planMap?['focus'] as String? ?? 'Movement patterns & baseline strength';
 

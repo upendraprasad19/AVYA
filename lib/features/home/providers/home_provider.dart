@@ -5,6 +5,8 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 // OI-38 (2026-05-17) — streak_progress_service + ist_date imports
 // dropped. _refillIfNewWeek() moved to StreakProgressService.refillIfNewWeek()
@@ -18,6 +20,7 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
@@ -410,6 +413,83 @@ class StreakWarningEligibilityNotifier
 final streakWarningEligibilityProvider = NotifierProvider<
     StreakWarningEligibilityNotifier,
     StreakWarningEligibility>(StreakWarningEligibilityNotifier.new);
+
+// ── Subscription expiry banner (diagnose 2026-06-06) ──────────────
+
+/// configBox kill-switch (§4.6) — set true to disable the expiry banner.
+const String _expiryBannerKillSwitchKey = 'disable_expiry_banner';
+
+/// Once-per-day dismiss key (per-user, IST date). When it equals today's IST
+/// date the banner stays hidden until the next day.
+const String _expiryBannerDismissedKey = 'expiry_banner_dismissed_date';
+
+/// Home PRO-expiry banner state. `show` gates rendering; `severity` picks amber
+/// (expiringSoon) vs red (lapsed); `daysLeft` fills the copy.
+class ExpiryBannerState {
+  final bool show;
+  final ExpiryBannerSeverity severity;
+  final int daysLeft;
+  const ExpiryBannerState({
+    this.show = false,
+    this.severity = ExpiryBannerSeverity.none,
+    this.daysLeft = 0,
+  });
+}
+
+/// Decides whether the Home subscription-expiry banner shows, reusing the pure
+/// [SubscriptionService.expiryBannerSeverity] decision so the rule stays
+/// testable. Honors a per-user once-per-day dismiss + a configBox kill-switch.
+class SubscriptionExpiryBannerNotifier extends Notifier<ExpiryBannerState> {
+  @override
+  ExpiryBannerState build() {
+    ref.watch(authUserIdTokenProvider); // rebuild on auth change
+    ref.watch(subscriptionInfoProvider); // rebuild on PRO state change
+
+    if (HiveService.instance.configBox.get(_expiryBannerKillSwitchKey) ==
+        true) {
+      return const ExpiryBannerState();
+    }
+
+    final sub = SubscriptionService.instance;
+    final isProNow = sub.isPro();
+    final daysLeft = sub.daysUntilExpiry();
+    final severity = SubscriptionService.expiryBannerSeverity(
+      isPro: isProNow,
+      daysUntilExpiry: daysLeft,
+      isLapsed: !isProNow && sub.proLapsedAt != null,
+    );
+    if (severity == ExpiryBannerSeverity.none) {
+      return const ExpiryBannerState();
+    }
+
+    // Once-per-day dismiss: hidden if dismissed today (IST).
+    final dismissed = MigratedKey.read<dynamic>(_expiryBannerDismissedKey);
+    final hiddenToday = dismissed != null &&
+        dismissed.toString() == istDateStr(DateTime.now());
+
+    // Suppress during an in-flight renewal so a user mid-payment doesn't see a
+    // red "expired" flash before the webhook lands (review P2 2026-06-06).
+    final show = !hiddenToday && !sub.isPaymentInFlight;
+
+    return ExpiryBannerState(
+      show: show,
+      severity: severity,
+      daysLeft: daysLeft,
+    );
+  }
+
+  /// Hide the banner for the rest of today (IST). It re-appears tomorrow until
+  /// the user renews (which clears the lapsed marker + restores PRO).
+  Future<void> dismissForToday() async {
+    await MigratedKey.write(
+        _expiryBannerDismissedKey, istDateStr(DateTime.now()));
+    ref.invalidateSelf();
+  }
+}
+
+final subscriptionExpiryBannerProvider = NotifierProvider<
+    SubscriptionExpiryBannerNotifier,
+    ExpiryBannerState>(SubscriptionExpiryBannerNotifier.new);
 
 // ── Today's Workout ──────────────────────────────────────────────
 

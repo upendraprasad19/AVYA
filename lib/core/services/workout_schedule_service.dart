@@ -163,6 +163,12 @@ class WorkoutScheduleService {
   int getCurrentWeekNumber() =>
       read.WorkoutScheduleReadService.instance.getCurrentWeekNumber();
 
+  String phaseName(int phase) =>
+      read.WorkoutScheduleReadService.instance.phaseName(phase);
+
+  int getProgramWeek(int currentPhase) =>
+      read.WorkoutScheduleReadService.instance.getProgramWeek(currentPhase);
+
   int getCurrentDayInPhase() =>
       read.WorkoutScheduleReadService.instance.getCurrentDayInPhase();
 

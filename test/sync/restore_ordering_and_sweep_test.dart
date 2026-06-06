@@ -65,13 +65,14 @@ void main() {
 
     test('_restoreWorkoutPlan defends against clobbering local completed status', () {
       final method = _extractMethod(source, '_restoreWorkoutPlan');
-      // The merge guard must check existing status='completed' and
-      // preserve it when overlaying plan-snapshot fields.
-      expect(method, contains("'completed'"),
-          reason: 'must reference completed status in defensive merge');
-      expect(method, contains("'status'"));
-      expect(method, contains("'completed_at'"),
-          reason: 'must preserve completed_at alongside status');
+      // The completed-day-preserving merge was extracted to the shared
+      // PlanIntegrityReconciler.mergeScheduleEntry (diagnose a7d3f1) so the
+      // restore path + the boot heal can't drift. Behavioral preservation
+      // (a local 'completed' day survives the planned plan_json snapshot) is
+      // pinned in test/contracts/restore_plan_json_authoritative_test.dart.
+      expect(method, contains('PlanIntegrityReconciler.mergeScheduleEntry'),
+          reason: 'restore must route schedule merges through the shared '
+              'completed-day-preserving helper');
     });
   });
 
