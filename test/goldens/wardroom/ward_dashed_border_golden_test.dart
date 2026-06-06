@@ -11,6 +11,9 @@
 //
 // Tech-debt audit 2026-05-20 / T14 — Wardroom design-system golden coverage.
 
+@Tags(['golden'])
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/theme/colors.dart';

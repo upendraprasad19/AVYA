@@ -44,7 +44,11 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Run unit tests (pure Dart — no device needed)
-        run: flutter test test/ --reporter expanded
+        # Golden-image tests are platform-specific (Windows-generated PNGs vs
+        # CI's Linux render differ in font hinting/anti-aliasing); excluded
+        # here, run locally via the pre-push full suite. See dart_test.yaml +
+        # feedback_local_ci_env_divergence.md.
+        run: flutter test test/ --exclude-tags golden --reporter expanded
 
   # ── Tier 1.5: Tech-debt audit gates (introduced 2026-05-20, finding I2) ──
   # Runs every scripts/check_*.dart gate. Each gate is independent; the job
