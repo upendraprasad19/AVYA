@@ -85,4 +85,42 @@ void main() {
           reason: 'must read the field into a local + guard null/isCompleted');
     });
   });
+
+  group('#2b wls per-set reps silent-drop — sets table (d9a4f2)', () {
+    test('per-set sync clamps reps to the wls bound + logs out-of-range', () {
+      expect(syncWorkoutSrc.contains('clampedSetReps'), isTrue);
+      expect(syncWorkoutSrc.contains("'reps': clampedSetReps"), isTrue,
+          reason: 'the per-set upsert must write the clamped value');
+      expect(syncWorkoutSrc.contains('wls_reps_out_of_range'), isTrue,
+          reason: 'an out-of-range per-set reps value must be captured in '
+              'telemetry, not silently rejected (23514)');
+      expect(syncWorkoutSrc.contains("'reps': sm['reps']"), isFalse,
+          reason: 'the per-set upsert must not write the raw value');
+    });
+
+    test('migration 085 widens wls_reps_realistic to <= 10000', () {
+      final sql = File(
+        'supabase/migrations/085_widen_wls_reps_realistic.sql',
+      ).readAsStringSync();
+      final liveDdl = sql
+          .split('\n')
+          .where((l) => !l.trimLeft().startsWith('--'))
+          .join('\n');
+      expect(liveDdl.contains('workout_log_sets'), isTrue);
+      expect(RegExp(r'reps\s*<=\s*10000').hasMatch(liveDdl), isTrue,
+          reason: 'the live ADD CONSTRAINT must allow per-set totals <= 10000 '
+              '(diagnose d9a4f2)');
+    });
+
+    test('migrator gates the duration->reps move by a plausible-reps threshold',
+        () {
+      final migratorSrc = _stripComments(File(
+        'lib/core/services/logging_type_repair_migrator.dart',
+      ).readAsStringSync());
+      expect(migratorSrc.contains('_kMaxPlausibleReps'), isTrue,
+          reason: 'the bodyweight_reps duration->reps move must be gated by the '
+              'plausible-reps threshold so a large duration is not fabricated '
+              'into a per-set rep count (d9a4f2)');
+    });
+  });
 }

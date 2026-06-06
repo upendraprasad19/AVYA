@@ -112,7 +112,10 @@ void main() {
     final marker =
         "from('workout_log_sets')";
     test('guard validates workout_log_id + exercise_id + set_number', () {
-      final pre = windowBefore(marker, windowChars: 1400);
+      // windowChars spans the wls_reps_out_of_range clamp now sitting between
+      // the set_number guard and the upsert (diagnose d9a4f2); the guard still
+      // `continue`s past the upsert, it is just further from the marker now.
+      final pre = windowBefore(marker, windowChars: 2600);
       expect(
         pre.contains('workout_log_sets') &&
             pre.contains("'sync_skipped_null_natural_key'"),

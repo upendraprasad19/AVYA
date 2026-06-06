@@ -319,13 +319,29 @@ extension SyncServiceWorkout on SyncService {
                 ));
                 continue;
               }
+              // Guard: workout_log_sets.reps must satisfy wls_reps_realistic
+              // (<=10000, migration 085). Clamp + log an out-of-range per-set
+              // value (e.g. a migrator duration->reps leak) so the row is never
+              // silently rejected by Postgres (23514) and lost — the per-set
+              // rows back the receipt/Train/weekly-report sums. Mirrors the wle
+              // clamp on the summary row above. diagnose d9a4f2.
+              final rawSetReps = (sm['reps'] as num?)?.toInt();
+              final clampedSetReps =
+                  rawSetReps == null ? null : rawSetReps.clamp(0, 10000).toInt();
+              if (rawSetReps != null && rawSetReps != clampedSetReps) {
+                unawaited(ErrorTelemetry.logEvent(
+                  'wls_reps_out_of_range',
+                  message:
+                      'raw=$rawSetReps clamped=$clampedSetReps set=$setNum exercise=$exerciseId',
+                ));
+              }
               rows.add({
                 'user_id': userId,
                 'workout_log_id': workoutLogId,
                 'exercise_id': exerciseId,
                 'set_number': setNum,
                 'weight_kg': sm['weight_kg'],
-                'reps': sm['reps'],
+                'reps': clampedSetReps,
                 'duration_secs': sm['duration_seconds'] ?? sm['duration_sec'],
                 'distance_km': sm['distance_km'],
                 'completed_at': completedAt,

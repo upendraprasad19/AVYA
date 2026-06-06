@@ -42,7 +42,7 @@ class CoachInteractionRepository {
     required String modelUsed,
     required String mode,
   }) async {
-    final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
+    final id = mintCoachKey();
     await _hive.coachBox.put(id, {
       'id': id,
       'user_message': userMessage,
@@ -60,6 +60,21 @@ class CoachInteractionRepository {
   /// Exposed for tests so the window can be exercised deterministically.
   @visibleForTesting
   static const Duration coachWriterDedupWindow = Duration(seconds: 60);
+
+  // Monotonic coach-key minter. Two interactions saved within the same
+  // millisecond otherwise both mint `coach_<ms>` and the second Hive.put
+  // overwrites the first (silent data loss). Surfaced as a same-ms key
+  // collision in coach_writer_dedup_test (CI flake) and a real rapid-write
+  // loss path. Bumping to last+1 keeps the key numeric, ordered, and unique.
+  // closes-diagnose: c3f9a1.
+  static int _lastMintedKeyMs = 0;
+  @visibleForTesting
+  static String mintCoachKey() {
+    var ms = DateTime.now().millisecondsSinceEpoch;
+    if (ms <= _lastMintedKeyMs) ms = _lastMintedKeyMs + 1;
+    _lastMintedKeyMs = ms;
+    return 'coach_$ms';
+  }
 
   /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
   /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
@@ -92,7 +107,7 @@ class CoachInteractionRepository {
       return existing;
     }
 
-    final id = 'coach_${DateTime.now().millisecondsSinceEpoch}';
+    final id = mintCoachKey();
     await _hive.coachBox.put(id, {
       'id': id,
       'user_message': userMessage,

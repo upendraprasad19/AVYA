@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
 
 import '../helpers/hive_test_setup.dart';
 
@@ -161,5 +162,18 @@ void main() {
       if (k is String && k.startsWith('coach_')) n++;
     }
     expect(n, equals(1));
+  });
+
+  test('coach key minter is unique under same-ms minting (c3f9a1)', () {
+    // Without the monotonic minter, rapid mints collide on coach_<ms> (same
+    // millisecond) and the second Hive.put overwrites the first. 2000
+    // synchronous mints reliably hit the same ms; all must be unique.
+    final keys = <String>{};
+    for (var i = 0; i < 2000; i++) {
+      keys.add(CoachInteractionRepository.mintCoachKey());
+    }
+    expect(keys.length, 2000,
+        reason: 'every minted coach_ key must be unique even when minted within '
+            'the same millisecond (monotonic minter, c3f9a1)');
   });
 }

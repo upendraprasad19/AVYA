@@ -54,6 +54,15 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
+/// A single per-set/exercise value above this is implausible as a rep count and
+/// is almost certainly a DURATION (seconds) mis-stored on a bodyweight exercise
+/// (e.g. a 1200s hold). The bodyweight_reps repair refuses to move such a value
+/// into `reps` — doing so produced per-set reps > 1000 that violated
+/// wls_reps_realistic (23514) and were silently dropped (1530x live). The wls
+/// clamp in sync_workout + migration 085 are the downstream backstop.
+/// closes-diagnose: d9a4f2.
+const int _kMaxPlausibleReps = 500;
+
 class LoggingTypeRepairMigrator {
   LoggingTypeRepairMigrator._();
 
@@ -311,15 +320,18 @@ class LoggingTypeRepairMigrator {
           row['weight_kg'] = 0.0;
           changed = true;
         }
-        // If row has duration but no reps (timed-as-bodyweight inverse
-        // drift), move duration → reps. (Intentional repair — APK Test #12.5 /
-        // logging_type_repair_migrator_test "v3". A genuinely large duration
-        // mis-typed here is bounded downstream by the wle_reps_realistic clamp
-        // in sync_workout + the <=10000 cap, so it can no longer silently drop.)
+        // If row has duration but no reps (timed-as-bodyweight inverse drift),
+        // move SMALL durations → reps (a rep count mis-stored as a duration —
+        // APK Test #12.5 / logging_type_repair_migrator_test "v3"). A value
+        // above _kMaxPlausibleReps is almost certainly a real duration (a 1200s
+        // hold), NOT reps — moving it produced wls/wle_reps_realistic 23514
+        // silent drops, so we strip it without fabricating a huge rep count.
         final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
         final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;
         if (dur > 0 && reps == 0) {
-          row['reps_completed'] = dur;
+          if (dur <= _kMaxPlausibleReps) {
+            row['reps_completed'] = dur;
+          }
           row.remove('duration_seconds');
           changed = true;
         } else if (dur > 0) {
@@ -346,7 +358,12 @@ class LoggingTypeRepairMigrator {
                 (m['duration_seconds'] as num?)?.toInt() ??
                 0;
             if (d > 0 && r == 0) {
-              m['reps'] = d;
+              // Only small durations are plausibly a mis-stored rep count;
+              // refuse to turn a large duration into a per-set rep value
+              // (wls_reps_realistic 23514). Strip either way. d9a4f2.
+              if (d <= _kMaxPlausibleReps) {
+                m['reps'] = d;
+              }
               m.remove('duration_sec');
               m.remove('duration_seconds');
               perSetChanged = true;
@@ -382,7 +399,12 @@ class LoggingTypeRepairMigrator {
                 (m['duration_seconds'] as num?)?.toInt() ??
                 0;
             if (d > 0 && r == 0) {
-              m['reps'] = d;
+              // Only small durations are plausibly a mis-stored rep count;
+              // refuse to turn a large duration into a per-set rep value
+              // (wls_reps_realistic 23514). Strip either way. d9a4f2.
+              if (d <= _kMaxPlausibleReps) {
+                m['reps'] = d;
+              }
               m.remove('duration_sec');
               m.remove('duration_seconds');
               perSetChanged = true;
