@@ -37,6 +37,8 @@ import '../widgets/swap_sheet.dart';
 import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
+import 'package:icanbefitter/shared/widgets/subscription_expiry_banner.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/profile/screens/promotion_celebration_screen.dart';
@@ -136,6 +138,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(streakProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(todayWorkoutProvider);
+    // Train-tab plan providers too, so a bg-restore heal reaches the Train
+    // screen (review P2 2026-06-06).
+    ref.invalidate(currentPlanProvider);
+    ref.invalidate(selectedWeekProvider);
     ref.invalidate(nutritionSummaryProvider);
     ref.invalidate(weightHistoryProvider);
     ref.invalidate(aiInsightProvider);
@@ -295,13 +301,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
             'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
           ];
-          final weekOfYear =
+          final weekInPhase =
               WorkoutScheduleService.instance.getCurrentWeekNumber();
           final progress = UserRepository.instance.getProgress() ?? {};
           final currentPhase = (progress['current_phase'] as int?) ?? 1;
           final eyebrow =
               'DAILY · ${weekdays[now.weekday - 1]} ${now.day} '
-              '${monthShort[now.month - 1]} · WK $weekOfYear '
+              '${monthShort[now.month - 1]} · WK $weekInPhase '
               '· PHASE $currentPhase';
 
           return Column(
@@ -424,6 +430,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           );
         }),
         _buildStreakWarning(ref),
+        _buildExpiryBanner(ref),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
           child: WeeklyCalendar(
@@ -523,6 +530,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       workoutsRemaining: workoutsRemaining,
       freezesAvailable: ref.watch(streakFreezeProvider),
       onTrainNow: () => context.go('/train'),
+    );
+  }
+
+  // -- PRO expiry banner (diagnose 2026-06-06) -----------------------
+
+  Widget _buildExpiryBanner(WidgetRef ref) {
+    final state = ref.watch(subscriptionExpiryBannerProvider);
+    if (!state.show) return const SizedBox.shrink();
+    return SubscriptionExpiryBanner(
+      severity: state.severity,
+      daysLeft: state.daysLeft,
+      onRenew: () => showPaywallSheet(context, feature: 'PRO'),
+      onDismiss: () => ref
+          .read(subscriptionExpiryBannerProvider.notifier)
+          .dismissForToday(),
     );
   }
 

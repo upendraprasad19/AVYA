@@ -9,6 +9,11 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
+/// Severity of the Home subscription-expiry banner (diagnose 2026-06-06).
+/// `expiringSoon` = still PRO with < 7 days left; `lapsed` = PRO has expired and
+/// not yet renewed. Decided by the pure [SubscriptionService.expiryBannerSeverity].
+enum ExpiryBannerSeverity { none, expiringSoon, lapsed }
+
 /// Manages PRO subscription state.
 ///
 /// Reads/writes Hive configBox for instant local checks (offline-first).
@@ -91,6 +96,17 @@ class SubscriptionService {
   static const String _expiresAtKey = 'expiresAt';
   static const String _planKey = 'plan';
   static const String _lastVerifiedKey = 'lastVerifiedAt';
+
+  /// Stamped when PRO lapses due to EXPIRY (now past `expiresAt`), so the Home
+  /// expiry banner can show "your PRO expired" even after [_downgradeLocally]
+  /// wipes `expiresAt`. **User-scoped**: registered in
+  /// `UserConfigMigrator.userScopedKeys` AND written only with an open session
+  /// (see [isPro]) so it never seeds the shared `configBox` — without both, a
+  /// configBox fall-through would leak User A's lapsed banner to User B
+  /// (review P0, 2026-06-06). Cleared on renewal ([writeSubscriptionState]).
+  /// NOT stamped on cross-account/sign-out wipes — only the genuine-expiry
+  /// branch in [isPro] sets it.
+  static const String _proLapsedAtKey = 'pro_lapsed_at';
 
   /// Debug-only (year-sim harness). When true, [refreshFromSupabase] skips its
   /// server query + downgrade so a dev-granted PRO state survives a simulation.
@@ -237,6 +253,9 @@ class SubscriptionService {
       await MigratedKey.write(_isProKey, isPro);
       await MigratedKey.write(_expiresAtKey, expiresAt);
       await MigratedKey.write(_planKey, plan);
+      // Renewal/activation clears the lapsed marker so the Home expiry banner
+      // disappears once PRO is active again (diagnose 2026-06-06).
+      await MigratedKey.delete(_proLapsedAtKey);
       // APK Test #12.8 — fire success event so we can correlate UI
       // mismatch reports with the actual write timestamp.
       unawaited(ErrorTelemetry.logEvent(
@@ -315,7 +334,19 @@ class SubscriptionService {
 
     final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
     if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
-      // Expired — downgrade immediately (no grace period).
+      // Expired — downgrade immediately (no grace period). Stamp pro_lapsed_at
+      // (once) BEFORE the wipe so the Home expiry banner can surface "your PRO
+      // expired" even though _downgradeLocally clears expiresAt. Only this
+      // genuine-expiry path stamps it — the cross-account wipe above does not
+      // (diagnose 2026-06-06).
+      // Session-gated so the marker is written to the per-user userBox, NEVER
+      // the shared configBox (cross-account leak vector — review P0 2026-06-06).
+      if (expiresAt != null &&
+          HiveUserSession.currentOwnerFullId != null &&
+          MigratedKey.read<dynamic>(_proLapsedAtKey) == null) {
+        unawaited(
+            MigratedKey.write(_proLapsedAtKey, expiresAt.toIso8601String()));
+      }
       _downgradeLocally();
       return false;
     }
@@ -743,6 +774,34 @@ class SubscriptionService {
     if (!isPro()) return false;
     final days = daysUntilExpiry();
     return days >= 0 && days < 7;
+  }
+
+  /// The date PRO lapsed due to expiry, or null. Set by [isPro] on the
+  /// genuine-expiry path; cleared on renewal (diagnose 2026-06-06).
+  DateTime? get proLapsedAt {
+    final raw = MigratedKey.read<dynamic>(_proLapsedAtKey);
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  /// True when PRO has expired and has NOT yet been renewed — drives the red
+  /// "your PRO expired" Home banner. (`expiresAt` is wiped on downgrade, so we
+  /// rely on the [proLapsedAt] marker instead.)
+  bool get isLapsed => !isPro() && proLapsedAt != null;
+
+  /// PURE production helper (shared by the Home banner provider + tested
+  /// directly): which expiry banner to show. `lapsed` wins over `expiringSoon`;
+  /// `expiringSoon` requires an active PRO with < 7 days left.
+  static ExpiryBannerSeverity expiryBannerSeverity({
+    required bool isPro,
+    required int daysUntilExpiry,
+    required bool isLapsed,
+  }) {
+    if (isLapsed) return ExpiryBannerSeverity.lapsed;
+    if (isPro && daysUntilExpiry >= 0 && daysUntilExpiry < 7) {
+      return ExpiryBannerSeverity.expiringSoon;
+    }
+    return ExpiryBannerSeverity.none;
   }
 
   // ── Private ─────────────────────────────────────────────────

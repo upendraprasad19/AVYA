@@ -4,12 +4,14 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/tap_scale.dart';
 
-/// Today's workout split card. Two-column 60/40 layout:
-/// * **Left (60):** phase chip + meta eyebrow + Fraunces 24 title (maxLines:2)
+/// Today's workout split card. Two-column 50/50 layout (founder 2026-06-06 —
+/// the prior 60/40 clipped the macro labels to "PRO…" / "STE…"; the even split
+/// gives the right column enough width to show PROTEIN / STEPS in full):
+/// * **Left (50):** phase chip + meta eyebrow + Fraunces 24 title (maxLines:2)
 ///   with italic-gold pace mode separated by a mid-dot. CTA below:
 ///   START button (active), DONE chip + VIEW CARD button (completed), or
 ///   REST DAY badge (rest day). Best-lift line below CTA on completion.
-/// * **Right (40):** 3 stacked macro tiles (FUEL / PROTEIN / STEPS).
+/// * **Right (50):** 3 stacked macro tiles (FUEL / PROTEIN / STEPS).
 ///   Each tile: eyebrow LEFT + inline number RIGHT on row 1, full-width
 ///   bar on row 2. Number format: `1820/2983` (no spaces), `g` suffix
 ///   for protein, `k` abbreviation for step targets ≥1000.
@@ -71,9 +73,9 @@ class TodayWorkoutCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Left column (60%).
+          // Left column (50%).
           Expanded(
-            flex: 60,
+            flex: 50,
             child: _HeroCard(
               workoutTag: workoutTag,
               workoutName: workoutName,
@@ -89,9 +91,9 @@ class TodayWorkoutCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Right column (40%) — 3 stacked macro tiles.
+          // Right column (50%) — 3 stacked macro tiles.
           Expanded(
-            flex: 40,
+            flex: 50,
             child: _MacroColumn(
               caloriesCurrent: caloriesCurrent.round(),
               caloriesTarget: caloriesTarget.round(),

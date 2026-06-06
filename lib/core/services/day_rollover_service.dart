@@ -184,6 +184,9 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(trialInfoProvider);
 
     // ── Misc daily providers ──
+    // Expiry banner: dismiss is once-per-IST-day, so re-evaluate at rollover
+    // (review P1 2026-06-06) — else a dismissed banner won't re-show next day.
+    ref.invalidate(subscriptionExpiryBannerProvider);
     ref.invalidate(dailyQuoteProvider);
     ref.invalidate(aiTextLogRemainingProvider);
     ref.invalidate(scanMealRemainingProvider);

@@ -51,18 +51,22 @@ extension _PlannedExpansion on _TrainScreenState {
                 ),
               ),
             ],
+            const SizedBox(height: 10),
+            // START WORKOUT — gated on a non-empty plan so it can never no-op
+            // (diagnose 2026-06-06: a content-less restored day rendered a
+            // START button that started nothing — "i cant start the workout").
+            // A genuinely empty day shows only the "No exercises scheduled"
+            // line above. Q6 keeps it free; this only adds the content gate.
+            WardButton(
+              label: 'START WORKOUT',
+              leading: const Icon(Icons.play_arrow_rounded,
+                  size: 16, color: AppColors.bgDeep),
+              onPressed: () {
+                ref.read(activeWorkoutProvider.notifier).startWorkout(day);
+                context.go('/train/active-workout');
+              },
+            ),
           ],
-          const SizedBox(height: 10),
-          // START WORKOUT button — always available (Q6 made free)
-          WardButton(
-            label: 'START WORKOUT',
-            leading: const Icon(Icons.play_arrow_rounded,
-                size: 16, color: AppColors.bgDeep),
-            onPressed: () {
-              ref.read(activeWorkoutProvider.notifier).startWorkout(day);
-              context.go('/train/active-workout');
-            },
-          ),
         ],
       ),
     );

@@ -44,8 +44,13 @@ extension _HeroCards on _TrainScreenState {
             _buildDoneHeroCard(todayDay)
           else if (isRestDay)
             _buildRestHeroCard()
-          else if (todayWorkout != null)
-            _buildWorkoutHeroCard(context, todayWorkout),
+          else if (todayWorkout != null && todayWorkout.exercises.isNotEmpty)
+            _buildWorkoutHeroCard(context, todayWorkout)
+          else
+            // Content-less today (plan gap / unhealed restore) — NEVER offer a
+            // dead START button (review P1 2026-06-06; the founder's "i cant
+            // start the workout" was this surface). Show a refresh hint instead.
+            _buildEmptyWorkoutHeroCard(),
         ],
       ),
     );
@@ -147,6 +152,38 @@ extension _HeroCards on _TrainScreenState {
           const SizedBox(height: 4),
           Text(
             'Recovery & mobility \u2014 tap for recovery tips',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textDim,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Today is a workout day but has NO exercises (a plan gap / unhealed
+  /// restore). Renders an informative card with a refresh tap instead of a
+  /// START button that can't start anything (review P1 2026-06-06).
+  Widget _buildEmptyWorkoutHeroCard() {
+    return WardCard(
+      onTap: () {
+        ref.invalidate(currentPlanProvider);
+        ref.invalidate(selectedWeekProvider);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NO WORKOUT SCHEDULED',
+            style: AppTypography.mono.copyWith(
+              fontSize: 12,
+              color: AppColors.textDim,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Today's plan is still syncing \u2014 tap to refresh.",
             style: AppTypography.bodySm.copyWith(
               color: AppColors.textDim,
             ),

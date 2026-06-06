@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -41,9 +42,22 @@ class PhaseRoadmapScreen extends ConsumerWidget {
     // APK Test #12 / Task C-2 — watch subscriptionInfoProvider for
     // reactive lock-glyph updates after PRO upgrade.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
-    final currentWeek =
-        ref.read(workoutScheduleReadServiceProvider).getCurrentWeekNumber();
+    // Program week within the 12-week deployment (Phase 2 wk 3 → 7) so the
+    // header counter + % + active-phase highlight reflect true progress, not
+    // the 1-4 week-within-phase. Pre-fix this fed getCurrentWeekNumber (1-4),
+    // pinning the Roadmap to "Phase I active / 33% complete" regardless of the
+    // real phase (diagnose 2026-06-06).
+    final currentPhase =
+        (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
+    final currentWeek = ref
+        .read(workoutScheduleReadServiceProvider)
+        .getProgramWeek(currentPhase);
     final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
+    // Header phase name from current_phase (was hardcoded "FOUNDATION" — wrong
+    // for any non-phase-1 user; review P2 2026-06-06).
+    final phaseName = ref
+        .read(workoutScheduleReadServiceProvider)
+        .phaseName(currentPhase);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -66,6 +80,7 @@ class PhaseRoadmapScreen extends ConsumerWidget {
           _DeploymentHeader(
             currentWeek: currentWeek,
             completePct: completePct,
+            phaseName: phaseName,
           ),
           const SizedBox(height: 16),
 
@@ -176,9 +191,11 @@ class _DeploymentHeader extends StatelessWidget {
   const _DeploymentHeader({
     required this.currentWeek,
     required this.completePct,
+    required this.phaseName,
   });
   final int currentWeek;
   final int completePct;
+  final String phaseName;
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +203,7 @@ class _DeploymentHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'DEPLOYMENT 01 · FOUNDATION',
+          'DEPLOYMENT 01 · ${phaseName.toUpperCase()}',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             fontSize: 11,

@@ -739,6 +739,7 @@ concepts:
   - concept: subscription_state
     domain: subscription
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/subscription_expiry_banner_behavioral_test.dart
     description: |
       isPro() + gate() are the ONLY entry points. Never read
       configBox.get('isPro') directly from a widget. High-value
@@ -749,6 +750,14 @@ concepts:
       - file: lib/core/services/subscription_service.dart
         line_range: 11-470
         method: SubscriptionService (markPaymentInFlight + verifyFromServer + _downgradeLocally)
+      - file: lib/core/services/subscription_service.dart
+        line_range: 230-330
+        method: isPro (stamps pro_lapsed_at on genuine-expiry) + writeSubscriptionState (clears it)
+        notes: |
+          pro_lapsed_at marker (diagnose 2026-06-06) — survives the expiresAt
+          wipe in _downgradeLocally so the Home expiry banner can surface "PRO
+          expired". Stamped ONLY on the genuine-expiry downgrade path in isPro
+          (not cross-account/sign-out); cleared on renewal.
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
@@ -773,6 +782,17 @@ concepts:
           callsites must use ref.watch on this provider so payment
           success rebuilds them. Razorpay invalidates this provider
           via razorpay_service.dart:512.
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 414-495
+        method: subscriptionExpiryBannerProvider
+        semantic: derived
+        fields_read: [isPro, daysUntilExpiry, proLapsedAt]
+        notes: |
+          Home PRO-expiry banner (diagnose 2026-06-06) — drives the sticky
+          Home banner from the pure SubscriptionService.expiryBannerSeverity
+          decision (expiringSoon < 7 days, lapsed once expired). Once-per-day
+          dismiss (per-user IST date key) + configBox kill-switch
+          'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
         line_range: 38-45
         method: WeekSelector build
@@ -1523,6 +1543,18 @@ concepts:
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 1-9999
         method: syncFreezes + syncNotificationsInboxEntry + syncSavedDietPlan
+      - file: lib/core/services/plan_integrity_reconciler.dart
+        line_range: 1-9999
+        method: PlanIntegrityReconciler.reconcile + mergeScheduleEntry
+        notes: |
+          Boot heal (diagnose a7d3f1) — re-applies the cloud plan_json
+          snapshot (plan_start_date + date-keyed schedules WITH exercises)
+          when a fresh-install restore left a planned workout day without its
+          exercises (the cloud scheduled_workouts table has no exercises/name
+          column). Shares mergeScheduleEntry with _restoreWorkoutPlan
+          (sync_workout.dart) so restore + heal can't drift. Symptom-gated +
+          kill-switchable (configBox 'disable_plan_integrity_reconciler');
+          wired beside PhaseProgressReconciler in restoring_screen (fg + bg).
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
@@ -1558,7 +1590,9 @@ concepts:
           Legacy public method retained for back-compat — delegates
           to restoreFromCloudForUser internally.
     regression_test: test/contracts/restore_completeness_writes_test.dart
+    behavioral_test_path: test/contracts/restore_plan_json_authoritative_test.dart
     restore_methods:
+      - _restoreWorkoutPlan  # plan_json snapshot (plan_start + schedules WITH exercises); applies authoritatively, diagnose a7d3f1
       - _restoreFreezes
       - _restoreNotificationsInbox
       - _restoreSavedDietPlan

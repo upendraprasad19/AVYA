@@ -57,6 +57,11 @@ const allowedClasses = <String>{
   'ExlogKeyMigrator',
   'HiveFieldRenameMigrator',
   'LoggingTypeRepairMigrator', // existing one-shot
+  // Restore-completeness heal (diagnose a7d3f1) — re-applies the cloud
+  // plan_json snapshot to `schedule_*` rows when a fresh-install restore left a
+  // planned day content-less. Writes schedule_* directly like the SyncService
+  // restore methods (shares mergeScheduleEntry); a legitimate restore writer.
+  'PlanIntegrityReconciler',
 };
 
 // Files whose top-level scope is OK (e.g. extension files / part files

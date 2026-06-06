@@ -542,6 +542,39 @@ class WorkoutScheduleReadService {
     return (diff ~/ 7 + 1).clamp(1, 4);
   }
 
+  /// Canonical phase name for the 3-phase deployment cycle (1-indexed):
+  /// Foundation → Strength → Hypertrophy, repeating each deployment. Derived
+  /// from the phase NUMBER (not the plan blob's `name`, which can go stale /
+  /// polluted) so the displayed label never drifts from `current_phase`
+  /// (diagnose 2026-06-06).
+  static const List<String> phaseCycleNames = [
+    'Foundation',
+    'Strength',
+    'Hypertrophy',
+  ];
+
+  /// PURE (visible for testing): canonical phase name from the phase NUMBER.
+  @visibleForTesting
+  static String phaseNameFor(int phase) =>
+      phaseCycleNames[((phase < 1 ? 1 : phase) - 1) % 3];
+
+  /// PURE (visible for testing): 1-based program week within the 12-week
+  /// deployment: `phaseInDeployment * 4 + weekInPhase`. e.g. Phase 2 wk 3 → 7.
+  @visibleForTesting
+  static int programWeekFor(int phase, int weekInPhase) =>
+      (((phase < 1 ? 1 : phase) - 1) % 3) * 4 + weekInPhase;
+
+  String phaseName(int phase) => phaseNameFor(phase);
+
+  /// 1-based week within the current 12-week deployment ("program week"),
+  /// distinct from [getCurrentWeekNumber] (week WITHIN the 4-week phase, 1-4)
+  /// which the phase-relative headline counters use. The 12-week Roadmap uses
+  /// this so its counter + % reflect true deployment progress (diagnose
+  /// 2026-06-06 — the Roadmap previously fed it the clamped 1-4 phase week and
+  /// stuck at "Phase I active / 33% complete").
+  int getProgramWeek(int currentPhase) =>
+      programWeekFor(currentPhase, getCurrentWeekNumber());
+
   /// 1-based day number within the current Phase.
   int getCurrentDayInPhase() {
     final start = getPlanStartDate();

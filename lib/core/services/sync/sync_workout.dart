@@ -949,12 +949,21 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
-  /// Restores workout plan from Supabase plan_json on new device.
+  /// Restores the workout plan from Supabase `plan_json` on a new device.
+  ///
+  /// Restore-skip bug (closes-diagnose: 2026-06-06-restore-plan-json-skip):
+  /// this used to early-return when a local `current_plan` already existed. But
+  /// on a reinstall a plan can be locally (re)generated before/around restore,
+  /// so the exercise-rich `plan_json.schedules` snapshot (and the correct
+  /// `plan_start_date`) was NEVER applied — every not-yet-completed day then
+  /// rendered "REST DAY / No exercises scheduled" (the cloud `scheduled_workouts`
+  /// table has no exercises/name column to rehydrate from) and the week number
+  /// was computed off a stale plan_start. We now ALWAYS apply the snapshot's
+  /// plan_start_date / plan_end_date / schedules (completed-day-preserving
+  /// merge); only the `current_plan` object is left untouched when a local one
+  /// already exists.
   Future<void> _restoreWorkoutPlan(String userId) async {
     try {
-      // Only restore if local plan is missing
-      if (_hive.workoutBox.get('current_plan') != null) return;
-
       final rows = await _supabase.client
           .from('user_progress')
           .select('plan_json')
@@ -971,45 +980,38 @@ extension SyncServiceWorkout on SyncService {
       final planEnd = bundle['plan_end_date'];
       final schedules = bundle['schedules'];
 
-      if (plan != null) {
-        await _hive.workoutBox.put('current_plan', plan is Map ? Map<String, dynamic>.from(plan) : plan);
+      // Seed the plan object when missing, but don't clobber a (possibly
+      // fresher) local one.
+      if (plan != null && _hive.workoutBox.get('current_plan') == null) {
+        await _hive.workoutBox.put('current_plan',
+            plan is Map ? Map<String, dynamic>.from(plan) : plan);
       }
+      // plan_start / plan_end are the synced source of truth for the current
+      // phase window — always re-anchor them (the skip leaving these stale is
+      // what inflated the displayed week number).
       if (planStart != null) {
         await MigratedKey.write('plan_start_date', planStart);
       }
       if (planEnd != null) {
         await MigratedKey.write('plan_end_date', planEnd);
       }
-      if (schedules != null && schedules is Map) {
+      if (schedules is Map) {
         for (final entry in schedules.entries) {
           final key = entry.key.toString();
           if (!key.startsWith('schedule_')) continue;
-          // APK Test #12.9 — defensive merge: never clobber a local
-          // `status:'completed'` with a stale `status:'planned'` from
-          // the plan_json snapshot. Cloud-authoritative state (already
-          // applied by `_restoreScheduledWorkouts` upstream OR persisted
-          // by an earlier completion that hasn't been synced back into
-          // plan_json) must survive a re-run of this method.
+          final incoming = entry.value;
+          if (incoming is! Map) continue;
+          // Completed-day-preserving merge — extracted to
+          // PlanIntegrityReconciler.mergeScheduleEntry and SHARED with the boot
+          // heal so the restore + reconciler can't drift (APK Test #12.9 kept:
+          // a local `status:'completed'` is authoritative and survives the
+          // frozen plan_json snapshot).
           final existing = _hive.workoutBox.get(key);
-          final incoming = entry.value is Map
-              ? Map<String, dynamic>.from(entry.value as Map)
-              : entry.value;
-          if (existing is Map && incoming is Map) {
-            final existingMap = Map<String, dynamic>.from(existing);
-            if (existingMap['status'] == 'completed') {
-              // Preserve completed status + completed_at from local;
-              // overlay other plan-snapshot fields (workout_name,
-              // exercises[], type) which are still useful.
-              final merged = Map<String, dynamic>.from(incoming);
-              merged['status'] = 'completed';
-              if (existingMap['completed_at'] != null) {
-                merged['completed_at'] = existingMap['completed_at'];
-              }
-              await _hive.workoutBox.put(key, merged);
-              continue;
-            }
-          }
-          await _hive.workoutBox.put(key, incoming);
+          final merged = PlanIntegrityReconciler.mergeScheduleEntry(
+            existing is Map ? Map<String, dynamic>.from(existing) : null,
+            Map<String, dynamic>.from(incoming),
+          );
+          await _hive.workoutBox.put(key, merged);
         }
       }
     } catch (e, st) {

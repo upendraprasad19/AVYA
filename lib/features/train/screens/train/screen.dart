@@ -170,7 +170,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.screenPadding),
                       child: Text(
-                        'DEPLOYMENT 01 — FOUNDATION  (WEEK ${plan.currentWeek} OF 12)',
+                        // Phase-relative (founder decision 2026-06-06): real
+                        // phase name from current_phase + week WITHIN the phase
+                        // (1-4), not the clamped 1-4 value framed as "OF 12".
+                        'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
+                        '  ·  WK ${plan.currentWeek} OF 4',
                         style: AppTypography.mono.copyWith(
                           color: AppColors.textMute,
                           letterSpacing: 2,
