@@ -299,8 +299,7 @@ class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
   DailyNutritionData build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final selectedDate = ref.watch(selectedDateProvider);
-    final dateStr =
-        '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(selectedDate);
 
     // F7 · Single source of truth for summed macros.
     final macros = NutritionRepository.instance.dailyMacros(selectedDate);

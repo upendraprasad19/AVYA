@@ -1,4 +1,5 @@
 import '../../../core/services/hive_service.dart';
+import '../../../core/utils/ist_date.dart';
 import '../../../shared/repositories/plan_generator.dart';
 
 /// One day in a generated hotel workout plan.
@@ -207,8 +208,5 @@ class HotelWorkoutPlanner {
     return DateTime(n.year, n.month, n.day);
   }
 
-  String _fmt(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
+  String _fmt(DateTime d) => istDateStr(d);
 }

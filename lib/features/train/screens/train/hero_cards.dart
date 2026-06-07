@@ -7,15 +7,12 @@ extension _HeroCards on _TrainScreenState {
       WorkoutDayData? todayWorkout) {
     // Always use current week data for today lookup (W2 fix).
     final currentWeekDays = plan.getWeek(plan.currentWeek);
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     WorkoutDayData? todayDay;
     for (final day in currentWeekDays) {
       if (day.date != null) {
-        final dayStr =
-            '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+        final dayStr = istDateStr(day.date!);
         if (dayStr == todayStr) {
           todayDay = day;
           break;

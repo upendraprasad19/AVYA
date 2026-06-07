@@ -77,9 +77,9 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
   @override
   List<CalendarDayData> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final now = DateTime.now();
-    final todayDate = DateTime(now.year, now.month, now.day);
-    final weekStart = todayDate.subtract(Duration(days: now.weekday - 1));
+    final now = nowWall();
+    final todayDate = istMidnight(now);
+    final weekStart = mondayOfIst(now);
     // A7 / B5 D9-D10 — canonical provider path.
     final service = ref.read(workoutScheduleServiceProvider);
 
@@ -821,9 +821,7 @@ class TodayStepsNotifier extends Notifier<int> {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     for (final raw in healthBox.values) {
       if (raw is! Map) continue;

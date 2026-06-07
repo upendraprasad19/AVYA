@@ -497,7 +497,7 @@ extension SyncServiceWorkout on SyncService {
           'workout_name': entry['workout_name'],
           if (durationSeconds != null) 'duration_seconds': durationSeconds,
           'completed_at':
-              entry['completed_at'] ?? DateTime.now().toIso8601String(),
+              entry['completed_at'] ?? DateTime.now().toUtc().toIso8601String(),
         };
         await _supabase.client
             .from('workout_schedule_completions')

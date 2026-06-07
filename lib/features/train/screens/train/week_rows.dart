@@ -5,9 +5,7 @@ extension _WeekRows on _TrainScreenState {
 
   Widget _buildCompactWeekRows(
       BuildContext context, List<WorkoutDayData> weekDays) {
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
     final expandedIdx = ref.watch(expandedDayProvider);
 
     return Padding(
@@ -43,8 +41,7 @@ extension _WeekRows on _TrainScreenState {
     // Determine if this is today
     bool isToday = false;
     if (day.date != null) {
-      final dayStr =
-          '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+      final dayStr = istDateStr(day.date!);
       isToday = dayStr == todayStr;
     }
 

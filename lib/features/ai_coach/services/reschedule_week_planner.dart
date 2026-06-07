@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/utils/ist_date.dart';
+
 import '../../../core/services/hive_service.dart';
 
 /// Action to take for one entry in the target week.
@@ -176,6 +178,5 @@ class RescheduleWeekPlanner {
         .subtract(Duration(days: daysSinceMonday));
   }
 
-  String _fmt(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmt(DateTime d) => istDateStr(d);
 }

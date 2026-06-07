@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Wraps the `health` package to sync data from Google Fit / Health Connect
 /// (Android) or Apple HealthKit (iOS) into local Hive storage.
@@ -158,7 +159,7 @@ class HealthSyncService {
 
     final hive = HiveService.instance;
     final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     // ── Steps ────────────────────────────────────────────────
     final steps = await fetchStepsToday();
@@ -171,7 +172,7 @@ class HealthSyncService {
         'date': todayStr,
         'steps': steps,
         'source': 'health_connect',
-        'created_at': now.toIso8601String(),
+        'created_at': now.toUtc().toIso8601String(),
       });
       // Also keep legacy keys for backward compatibility
       await hive.healthBox.put('steps_today', steps);
@@ -194,7 +195,7 @@ class HealthSyncService {
           'date': todayStr,
           'weight_kg': weight,
           'source': 'health_connect',
-          'created_at': now.toIso8601String(),
+          'created_at': now.toUtc().toIso8601String(),
         });
         _lastSyncWroteData = true;
         debugPrint('[HealthSync] synced weight: $weight kg for $todayStr');

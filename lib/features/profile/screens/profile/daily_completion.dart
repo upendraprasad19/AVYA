@@ -7,8 +7,7 @@ extension _DailyCompletion on _ProfileScreenState {
   Widget _buildDailyCompletionInner(UserStatsData stats) {
     // Read completion states from Hive
     final hive = HiveService.instance;
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     final workoutSchedule = hive.workoutBox.values.where((raw) {
       if (raw is! Map) return false;

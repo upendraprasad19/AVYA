@@ -79,8 +79,7 @@ class CoachMemoryService {
   /// Called during daily snapshot sync (11PM IST) or on app launch.
   Future<void> extractAndAppendCoachingNotes() async {
     final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istDateStr(now);
 
     final todayMessages = <String>[];
     for (final raw in _hive.coachBox.values) {
@@ -176,9 +175,7 @@ class CoachMemoryService {
   /// Returns true if the user hasn't sent a message today yet.
   /// Used to trigger proactive first-message-of-day AI greeting.
   bool isFirstMessageToday() {
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istDateStr(DateTime.now());
     final lastGreeting = MigratedKey.read<String>('last_ai_greeting_date');
     return lastGreeting != todayStr;
   }

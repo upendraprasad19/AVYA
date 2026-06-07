@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/utils/ist_date.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/subscription_service.dart';
@@ -1294,12 +1295,7 @@ class ToolDispatcher {
     }
   }
 
-  String _todayDateString() {
-    final n = DateTime.now();
-    return '${n.year.toString().padLeft(4, '0')}-'
-        '${n.month.toString().padLeft(2, '0')}-'
-        '${n.day.toString().padLeft(2, '0')}';
-  }
+  String _todayDateString() => istTodayStr();
 
   String? _resolveExerciseName(String exerciseId) {
     final libBox = HiveService.instance.exerciseBox;

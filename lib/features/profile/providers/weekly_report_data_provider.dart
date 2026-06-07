@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Last-7-days numeric series feeding the [WeeklyReportCard]'s 4-up
@@ -114,8 +115,7 @@ class WeeklyReportDataNotifier extends Notifier<WeeklyReportSeries> {
     );
   }
 
-  static String _fmt(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static String _fmt(DateTime d) => istDateStr(d);
 }
 
 final weeklyReportDataProvider =

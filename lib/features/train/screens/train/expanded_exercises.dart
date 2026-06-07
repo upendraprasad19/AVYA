@@ -121,11 +121,8 @@ extension _ExpandedExercises on _TrainScreenState {
     Widget? viewCardButton;
     final workout = ref.read(activeWorkoutProvider);
     if (workout.isSaved && day.date != null) {
-      final today = DateTime.now();
-      final todayStr =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-      final dayStr =
-          '${day.date!.year}-${day.date!.month.toString().padLeft(2, '0')}-${day.date!.day.toString().padLeft(2, '0')}';
+      final todayStr = istTodayStr();
+      final dayStr = istDateStr(day.date!);
       if (dayStr == todayStr) {
         viewCardButton = Padding(
           padding: const EdgeInsets.only(top: 6),
@@ -170,6 +167,5 @@ extension _ExpandedExercises on _TrainScreenState {
     );
   }
 
-  String _formatDateKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _formatDateKey(DateTime d) => istDateStr(d);
 }

@@ -485,8 +485,7 @@ class PatternDetector {
 
   // ── Helpers ──────────────────────────────────────────────────────
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-  }
+  // IST date key — matches the IST-keyed nutrition rows this helper queries
+  // (was device-local '${date.year}-...', drifting on off-IST devices).
+  String _formatDate(DateTime date) => istDateStr(date);
 }

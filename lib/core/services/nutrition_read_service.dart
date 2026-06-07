@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/utils/ist_date.dart';
+
 import 'hive_service.dart';
 
 /// Canonical READ service for nutrition-domain Hive surfaces.
@@ -86,17 +88,14 @@ class NutritionReadService {
   /// Returns a 5-key map: `calories`, `protein`, `carbs`, `fat`, `fiber`.
   /// All values are `num`; callers cast as needed.
   ///
-  /// Date-key formula mirrors `NutritionWriteService.logMeal` exactly
-  /// (`${date.year}-${m2}-${d2}` from the raw DateTime — no IST shift,
-  /// the caller is responsible for passing the date they want to query
-  /// in the same time zone the writer stamped). This preserves the
-  /// pre-OI-02 reader semantic verbatim — there was a deliberate
-  /// reader↔writer agreement here, see audit feedback for nutrition
-  /// IST handling.
+  /// Date-key formula mirrors `NutritionWriteService.logMeal` exactly:
+  /// the writer stamps `'date': istDateStr(date)`, so the reader MUST
+  /// also derive the query key via `istDateStr(date)` to match the IST
+  /// `YYYY-MM-DD` value documented in the field-name contract above.
+  /// (The prior device-local `${date.year}-…` formula silently missed
+  /// the row for any device whose local date differed from IST.)
   Map<String, num> totalMacrosForDate(DateTime date) {
-    final dateStr = '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
+    final dateStr = istDateStr(date);
     num calories = 0;
     num protein = 0;
     num carbs = 0;
