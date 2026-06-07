@@ -16,7 +16,7 @@ import '../providers/nutrition_provider.dart';
 
 /// Cart auditor: upload grocery screenshot -> Gemini Vision analysis.
 ///
-/// FREE: 1 scan/month. PRO: 3 scans/day with soft cap warning.
+/// FREE: 1 audit/day. PRO: 10 audits/day (soft-cap warn at 7).
 class CartAuditorSection extends ConsumerWidget {
   const CartAuditorSection({super.key});
 

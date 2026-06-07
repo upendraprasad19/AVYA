@@ -28,8 +28,9 @@ const _allowList = <String, String>{
       'Needs an APK + apksigner + JDK; runs from /build-apk Gate 48 (post-build).',
   'check_hooks_installed.dart':
       'Local-dev hook-presence check; CI runners never run setup-hooks.sh so .git/hooks is absent by design. Runs in pre-commit (hooks present) only; skipped in the CI workflow case-block.',
-  'check_app_version_matches_pubspec.dart':
-      'Build-time only; runs from /build-apk Gate 18.',
+  // check_app_version_matches_pubspec.dart was REMOVED from this allowlist
+  // 2026-06-07 (in-sync sweep): the constant kept lagging pubspec, so the gate
+  // now runs every commit (pre-commit + CI) — not build-time-only.
   // Gates that are advisory-only by design (per their own headers).
   'check_telemetry_pii_classification.dart':
       'Advisory per L40; surfaced in audit reports, not pre-commit gate.',

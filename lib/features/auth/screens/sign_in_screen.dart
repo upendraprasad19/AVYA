@@ -332,7 +332,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
         // ── Mil-stamp footer ─────────────────────────────────
         Text(
-          'AVYA · v1.0.0+3 · ISSUED 2026',
+          'AVYA · v${AppConstants.appVersion} · ISSUED 2026',
           textAlign: TextAlign.center,
           style: AppTypography.mono.copyWith(
             fontSize: 8,

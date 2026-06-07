@@ -243,7 +243,7 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
         style: const TextStyle(
           fontSize: 15,
           height: 1.6,
-          color: Color(0xFFD8D8D8),
+          color: AppColors.coachBubbleText,
         ),
       ),
     );
@@ -447,7 +447,7 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
           style: TextStyle(
             fontSize: 16,
             height: 1.6,
-            color: Color(0xFFE8E8E8),
+            color: AppColors.coachBubbleTextBright,
           ),
         ),
       ),

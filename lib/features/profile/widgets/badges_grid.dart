@@ -339,8 +339,8 @@ class _BadgeShareSheetState extends State<_BadgeShareSheet> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF0e1219),
-                    const Color(0xFF161d28),
+                    AppColors.gradientSlate,
+                    AppColors.slateRaise,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(22),

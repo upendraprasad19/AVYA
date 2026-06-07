@@ -868,10 +868,10 @@ class ActiveWorkoutData {
     // distinct chart hues (purple / orange / green / blue).
     final colors = [
       AppColors.accent,
-      const Color(0xFFa855f7), // purple
-      const Color(0xFFf97316), // orange
-      const Color(0xFF4ade80), // green
-      const Color(0xFF38bdf8), // blue
+      AppColors.chartPurple,
+      AppColors.chartOrange,
+      AppColors.chartGreen,
+      AppColors.chartBlue,
     ];
     return colors[groupIndex % colors.length];
   }

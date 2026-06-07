@@ -41,16 +41,16 @@ class SubscriptionCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF1a1408),
-                  Color(0xFF0e1219),
+                  AppColors.gradientGoldShadow,
+                  AppColors.gradientSlate,
                 ],
               )
             : const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF0a1628),
-                  Color(0xFF0e1219),
+                  AppColors.gradientNavyDeep,
+                  AppColors.gradientSlate,
                 ],
               ),
       ),

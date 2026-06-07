@@ -87,6 +87,12 @@ class AppConstants {
   /// Beat My Coach challenge interval in days (disabled — Phase 2).
   static const int beatMyCoachIntervalDays = 14;
 
+  // ── Activity Goals ────────────────────────────────────────
+  /// Default daily step goal shown on the Home steps card + Today's Workout
+  /// card. Centralized 2026-06-07 (in-sync sweep) so the figure is a one-line
+  /// edit, not a 4-site literal sweep.
+  static const int defaultDailyStepGoal = 10000;
+
   // ── Terms & Privacy ───────────────────────────────────────
 
   /// Current ToS/Privacy-Policy version. Bumping this re-prompts every user
@@ -106,7 +112,7 @@ class AppConstants {
   /// rows in the last 30 days were mis-labelled. Bumped to `+27` for the
   /// audit ship; permanent gate `scripts/check_app_version_matches_pubspec.dart`
   /// added so the next regression is caught pre-build.
-  static const String appVersion = '1.0.0+28';
+  static const String appVersion = '1.0.0+33';
 
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';

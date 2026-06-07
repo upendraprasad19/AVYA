@@ -30,9 +30,9 @@ class ProfileBanner extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF0a1628),
-              Color(0xFF061220),
-              Color(0xFF001a0a),
+              AppColors.gradientNavyDeep,
+              AppColors.gradientNavyShadow,
+              AppColors.gradientGreenShadow,
             ],
             stops: [0.0, 0.5, 1.0],
           ),

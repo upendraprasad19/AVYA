@@ -20,7 +20,7 @@ import 'ai_breakdown_card.dart' show MealSlotChip;
 
 /// Camera-based meal scanning card with usage counter.
 ///
-/// FREE: 3 scans/month. PRO: 3 scans/day with soft cap warning at 2/3.
+/// FREE: 3 scans/day. PRO: 10 scans/day (soft-cap warn at 7).
 class ScanMealSection extends ConsumerStatefulWidget {
   const ScanMealSection({super.key});
 

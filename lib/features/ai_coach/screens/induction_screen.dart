@@ -186,7 +186,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
           style: const TextStyle(
             fontSize: 15,
             height: 1.6,
-            color: Color(0xFFD8D8D8),
+            color: AppColors.coachBubbleText,
           ),
           children: [
             TextSpan(
@@ -226,7 +226,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
           style: const TextStyle(
             fontSize: 15,
             height: 1.6,
-            color: Color(0xFFD8D8D8),
+            color: AppColors.coachBubbleText,
           ),
           children: [
             const TextSpan(
@@ -270,7 +270,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
         style: TextStyle(
           fontSize: 15,
           height: 1.6,
-          color: Color(0xFFD8D8D8),
+          color: AppColors.coachBubbleText,
         ),
       ),
     );
