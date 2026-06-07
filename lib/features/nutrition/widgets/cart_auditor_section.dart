@@ -75,7 +75,7 @@ class CartAuditorSection extends ConsumerWidget {
                 ),
               ),
               WardChip(
-                label: '$remaining/$limit TODAY',
+                label: '${limit - remaining}/$limit USED',
                 tone: remaining > 0 ? WardChipTone.ok : WardChipTone.bad,
               ),
             ],

@@ -593,7 +593,10 @@ extension SyncServiceWorkout on SyncService {
           'workout_name': map['workout_name'] ?? 'Workout',
           'date': dateStr,
           'completed_at': loggedAt,
-          'sets_completed': map['sets_completed'],
+          // F39 (2026-06-07): `sets_completed` removed. Migration 067
+          // DROPPED workout_logs.sets_completed (cloud was 100% NULL — see
+          // push-side note ~line 115), so the cloud select never returns it
+          // and `map['sets_completed']` was always null. Dead restore write.
           'duration_seconds': map['duration_seconds'],
           'source': 'cloud_restore',
         });

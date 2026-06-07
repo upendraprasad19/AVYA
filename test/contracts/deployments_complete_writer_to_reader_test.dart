@@ -67,4 +67,36 @@ void main() {
           reason: 'monotonic: never demote earned deployments');
     });
   });
+
+  // F2 (audit 2026-06-07): the L8 reader-side gap that let rank_ladder_screen
+  // read total_workouts_done under the DEPLOYMENTS label while the RANK card read
+  // deployments_complete — two surfaces showing different numbers for the same
+  // user. Pin BOTH display readers to deployments_complete.
+  group('F2 — both DEPLOYMENTS display readers source deployments_complete', () {
+    String strip(String s) {
+      final noBlock = s.replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
+      return noBlock
+          .split('\n')
+          .map((l) {
+            final i = l.indexOf('//');
+            return i >= 0 ? l.substring(0, i) : l;
+          })
+          .join('\n');
+    }
+
+    test('rank_ladder_screen + service_record_section both read deployments_complete', () {
+      final ladder =
+          strip(File('lib/features/profile/screens/rank_ladder_screen.dart').readAsStringSync());
+      final record =
+          strip(File('lib/features/profile/widgets/service_record_section.dart').readAsStringSync());
+
+      expect(ladder.contains("progress['deployments_complete']"), isTrue,
+          reason: 'rank_ladder DEPLOYMENTS tile must read deployments_complete (F2)');
+      expect(record.contains("progress['deployments_complete']"), isTrue,
+          reason: 'service_record DEPLOYMENTS must read deployments_complete');
+      // The F2 regression: reading total_workouts_done under the DEPLOYMENTS label.
+      expect(ladder.contains("final deployments = (progress['total_workouts_done']"), isFalse,
+          reason: 'F2: rank_ladder DEPLOYMENTS must NOT read total_workouts_done');
+    });
+  });
 }

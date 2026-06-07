@@ -347,11 +347,16 @@ extension SyncServiceHealth on SyncService {
 
   Future<void> _restoreSleepLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('sleep_logs')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since);
+      // F37 (2026-06-07): route through the paginated _fetchAllRows helper
+      // (same as _restoreWeightLogs / _restoreMeasurements siblings). The
+      // prior raw `.select().eq().gte()` had NO .limit/.range → PostgREST
+      // truncated the result at the default 1000-row cap, silently dropping
+      // older sleep history on restore. _fetchAllRows paginates to the 50k
+      // ceiling.
+      final rows = await _fetchAllRows(
+        'sleep_logs', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+      );
 
       if (rows.isEmpty) return;
 

@@ -2614,9 +2614,25 @@ concepts:
       Real-time cloud sync via Supabase Realtime channel on weight_logs table.
       syncWeightNow() fires fire-and-forget after every logWeight call.
     writers:
+      # F12 (2026-06-07): canonical writer is HealthWriteService.logWeight.
+      # It owns the `weight_<istDate>` key build, the type='weight_log' stamp,
+      # and the syncWeightNow() + pushSnapshot() fan-out. The home_provider
+      # WeightLogNotifier.logWeight entry below is a PASS-THROUGH delegate, NOT
+      # the source of truth — it just calls HealthWriteService.instance.logWeight
+      # (plus a companion profile current_weight_kg write).
+      - file: lib/core/services/health_write_service.dart
+        line_range: 114-150
+        method: HealthWriteService.logWeight
+        canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 725-762
+        line_range: 842-873
         method: WeightLogNotifier.logWeight
+        delegate: true
+        notes: |
+          Pass-through to HealthWriteService.instance.logWeight (~line 861).
+          Not the canonical writer — retained here because it is the Riverpod
+          entry point UI callers fire, and it adds the companion
+          ProfileWriteService current_weight_kg update.
       - file: lib/core/services/health_sync_service.dart
         line_range: 178-185
         method: HealthSyncService (Health Connect import)
@@ -2664,7 +2680,9 @@ concepts:
       - { file: lib/features/profile/screens/profile/journey_timeline.dart, reason: "profile journey timeline reads weight_* logs for milestone overlay" }
       - { file: lib/core/services/sync/sync_health.dart, reason: "cloud sync writer scans healthBox weight_* prefix" }
       - { file: lib/core/services/health_read_service.dart, reason: "OI-02 canonical READ service — latestWeightKg" }
-    regression_test: test/sync/streaks_source_field_test.dart
+    # F12 (2026-06-07): was test/sync/streaks_source_field_test.dart, which
+    # tests STREAKS, not weight. Point at the weight writer⇄reader contract.
+    regression_test: test/contracts/weight_logs_writer_to_reader_test.dart
     hive:
       box: healthBox
       key_prefix: "weight_"
@@ -2677,7 +2695,9 @@ concepts:
     sync_methods: [_syncWeightLogs, syncWeightNow]
     restore_methods: [_restoreWeightLogs]
     ist_sites:
-      - { file: lib/features/home/providers/home_provider.dart, line: 730, fn: logWeight }
+      # F12 (2026-06-07): the IST key is built in the canonical writer, not the
+      # home_provider delegate.
+      - { file: lib/core/services/health_write_service.dart, line: 122, fn: logWeight }
     telemetry:
       failure_op_types: [upsert_weight_log, realtime_handler_weight_logs, realtime_stream_weight_logs]
     class_constraints: |

@@ -216,13 +216,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         variant: WardSealVariant.report,
                       ),
                       const Spacer(),
-                      Text(
-                        'SHARE',
-                        style: AppTypography.mono.copyWith(
-                          fontSize: 11,
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
+                      // F41 \u2014 the gold "SHARE" header label was a dead
+                      // affordance (styled like a button but had no onTap;
+                      // the real share is the weekly-video row below). Removed
+                      // the tappable-looking text. An invisible mirror of the
+                      // BACK label keeps the seal optically centred between
+                      // the two Spacers.
+                      Visibility(
+                        visible: false,
+                        maintainSize: true,
+                        maintainAnimation: true,
+                        maintainState: true,
+                        child: Text(
+                          '\u2190 BACK',
+                          style: AppTypography.mono.copyWith(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ),
                     ],

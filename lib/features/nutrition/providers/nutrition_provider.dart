@@ -1359,6 +1359,10 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
           AppConstants.featureScanMealPro,
           ref.read(subscriptionServiceProvider).isPro(),
         ));
+        // Refresh the "remaining today" chip immediately — the remaining
+        // provider is otherwise invalidated only at midnight, so the chip
+        // would stay stale until tomorrow.
+        ref.invalidate(scanMealRemainingProvider);
         return;
       }
 
@@ -1440,6 +1444,10 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
               AppConstants.featureCartAuditorPro,
               ref.read(subscriptionServiceProvider).isPro(),
             );
+        // Refresh the "remaining today" chip immediately — the remaining
+        // provider is otherwise invalidated only at midnight, so the chip
+        // would stay stale until tomorrow.
+        ref.invalidate(cartAuditorRemainingProvider);
         return;
       }
 

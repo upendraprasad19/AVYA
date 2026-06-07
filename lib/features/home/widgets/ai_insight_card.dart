@@ -9,9 +9,11 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///
 /// `cardHi` variant (the outer `WardCard.hi`) hosts the insight body in
 /// Fraunces 14 w500, plus a nested `bgRaise` inset rail with a 2-px
-/// gold left border containing "QUICK WINS" (gold mono 10.5) followed
-/// by the macro bullets in dim mono 10.5. Eyebrow is rendered by the
-/// caller (home_screen) with a leading ok-green dot.
+/// gold left border containing a static "PROTEIN CHEAT SHEET" label
+/// (gold mono 10.5) followed by the macro bullets in dim mono 10.5. The
+/// rail is a FIXED reference, not AI-personalised — it is labelled
+/// honestly so it doesn't read as a per-user "quick win" (F10). Eyebrow
+/// is rendered by the caller (home_screen) with a leading ok-green dot.
 class AiInsightCard extends StatelessWidget {
   final String? insight;
   final String userName;
@@ -55,7 +57,9 @@ class AiInsightCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: AppSpacing.stackM),
-          // Nested inset — gold left border + QUICK WINS label.
+          // Nested inset — gold left border + a STATIC protein cheat-sheet
+          // (a fixed reference, NOT AI-personalised — labelled honestly per F10
+          // so it isn't mistaken for a per-user "quick win" the coach derived).
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -74,7 +78,7 @@ class AiInsightCard extends StatelessWidget {
                 ),
                 children: const [
                   TextSpan(
-                    text: 'QUICK WINS',
+                    text: 'PROTEIN CHEAT SHEET',
                     style: TextStyle(
                       color: AppColors.accent,
                       fontWeight: FontWeight.w700,

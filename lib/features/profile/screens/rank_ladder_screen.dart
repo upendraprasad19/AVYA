@@ -299,7 +299,11 @@ class _SummaryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = UserRepository.instance.getProgress() ?? {};
-    final deployments = (progress['total_workouts_done'] as int?) ?? 0;
+    // F2: the DEPLOYMENTS tile shows the deployment (completed-phase) count, not
+    // the lifetime workout count — was reading total_workouts_done, which made
+    // this tile disagree with the RANK card (service_record_section reads
+    // deployments_complete).
+    final deployments = (progress['deployments_complete'] as int?) ?? 0;
 
     final serviceDays = _serviceDays(progress);
 

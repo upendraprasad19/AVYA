@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/app_events_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -13,7 +12,7 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
 /// elapsed. Three doors:
 ///
-///   1. Primary · Upgrade to PRO   → opens paywall sheet (phases_2_to_12)
+///   1. Primary · Upgrade to PRO   → opens paywall sheet ('Phases 2-12')
 ///   2. Secondary · Build your own → navigates to template builder
 ///   3. Tertiary · Re-do Week 4   → copies last week's schedule forward
 ///
@@ -64,7 +63,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Week 4 scheduled again. Keep going.',
+            'Week 4 back on the board. Carry on.',
             style: AppTypography.body.copyWith(fontSize: 13),
           ),
           backgroundColor: AppColors.card,
@@ -92,7 +91,11 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
 
   void _handleUpgrade() {
     AppEventsService.instance.log('phase_1_day_29_upgrade_tapped');
-    showPaywallSheet(context, feature: AppConstants.featurePhases2To12);
+    // Pass the DISPLAY token (matches phase_unlock_card.dart) so
+    // PaywallSheet._featureSubtitle resolves the "You crushed Phase 1"
+    // subtitle instead of falling back to the generic copy. Passing the
+    // gate-KEY ('phases_2_to_12') misses the switch.
+    showPaywallSheet(context, feature: 'Phases 2-12');
   }
 
   void _handleTemplateBuilder() {
@@ -113,25 +116,14 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Row(
-            children: [
-              Text(
-                '🎉',
-                style: AppTypography.body.copyWith(fontSize: 22),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Phase 1 complete',
-                  style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
-                ),
-              ),
-            ],
+          // Header — endowed-progress lead (Phase 1 already banked)
+          Text(
+            'Phase 1 — secured, Recruit.',
+            style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
-            'Phase 2 brings new exercises, supersets, and progressive overload. Ready when you are.',
+            'Phase 2: new drills, supersets, progressive overload — your orders are ready.',
             style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim, height: 1.4),
           ),
           const SizedBox(height: 18),
@@ -142,7 +134,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
 
           // Secondary / tertiary section header
           Text(
-            'OR KEEP TRAINING FREE',
+            'OR HOLD THE LINE — FREE',
             style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
           ),
           const SizedBox(height: 10),
@@ -150,7 +142,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           // Secondary — Build your own plan
           _secondaryLink(
             icon: Icons.build_outlined,
-            label: 'Build your own workout plan',
+            label: 'Draw up your own drills',
             onTap: _handleTemplateBuilder,
           ),
           const SizedBox(height: 8),
@@ -158,7 +150,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           // Tertiary — Re-do Week 4
           _secondaryLink(
             icon: Icons.replay_outlined,
-            label: 'Re-do Week 4 for another round',
+            label: 'Run Week 4 again',
             onTap: _redoing ? null : _handleRedoWeek4,
             trailing: _redoing
                 ? const SizedBox(
@@ -195,7 +187,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         ),
         child: Center(
           child: Text(
-            'Upgrade to PRO  →',
+            'Deploy to Phase 2 — go PRO  →',
             style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
           ),
         ),

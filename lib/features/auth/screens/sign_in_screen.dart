@@ -318,9 +318,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         // U8 fix (Test #4 hotfix): referral code input REMOVED from welcome
         // landing view. Referral entry now lives in sign-up form + Profile.
 
-        // ── Social proof — Direction B ───────────────────────
+        // ── Honest belonging cue (F21) ───────────────────────
+        // No fabricated head-count: the app is pre-public-launch, so "18,866
+        // sailors active" was invented. An integrity-led brand never fakes
+        // social proof (psychology-pass ethical line). "Founding cohort /
+        // enlistment open" is true (early enrolment) and still confers honest
+        // belonging + honest scarcity.
         Text(
-          'ENLISTED · 18,866 SAILORS ACTIVE',
+          'FOUNDING COHORT · ENLISTMENT OPEN',
           style: AppTypography.monoXs.copyWith(
             color: AppColors.textDim,
             letterSpacing: 1.6,
