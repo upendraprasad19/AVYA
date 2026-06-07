@@ -246,19 +246,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     if (text.trim().isEmpty) return;
 
     // 2026-04-18 · Chat/Reasoning toggle removed. Single coach experience.
-    // PRO users bypass limits; free users hit paywall when trial expires
-    // or daily cap is reached. Server (ai-proxy) enforces same gates.
+    // PRO users bypass limits; free users hit the paywall when the daily
+    // message cap is reached. Server (ai-proxy) enforces the same gate.
     final isPro = SubscriptionService.instance.isPro();
-    final trialInfo = ref.read(trialInfoProvider);
     final messageCount = ref.read(messageLimitProvider);
 
     if (isPro) {
       _doSend(text);
-      return;
-    }
-
-    if (trialInfo.isTrialExpired) {
-      showPaywallSheet(context, feature: 'Unlimited AI Coach');
       return;
     }
 
@@ -294,7 +288,6 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
     final telegramConnected = ref.watch(telegramConnectionProvider);
     final channel = ref.watch(channelProvider);
-    final trialInfo = ref.watch(trialInfoProvider);
 
     // Scroll when messages change or log actions appear
     ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
@@ -346,7 +339,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
                 // ── Input Bar with inline message counter ──
                 if (channel == 'in_app')
-                  _buildInputBar(isSending, messageCount, isPro, trialInfo),
+                  _buildInputBar(isSending, messageCount, isPro),
               ],
             ),
           ),

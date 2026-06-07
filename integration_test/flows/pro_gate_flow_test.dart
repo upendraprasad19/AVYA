@@ -171,12 +171,15 @@ void main() {
 
   // ── T6 ──────────────────────────────────────────────────────────
 
-  testWidgets('T6: AI Coach — expired trial → PaywallSheet on send', (tester) async {
+  testWidgets('T6: AI Coach — free user under daily cap can send (trial removed)', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
+    // Trial removed 2026-06-07 (F1): the AI coach is gated ONLY by the
+    // per-day message count (10/day forever). A free user under the cap
+    // must be able to send — the old client-only 30-day trial used to
+    // block here even with messages remaining.
     TestDataHelper.setFreeUser();
-    TestDataHelper.setTrialExpired();
 
     await signInWithTestUser(tester);
     await navigateToAiCoach(tester);
@@ -190,13 +193,15 @@ void main() {
     final sendBtn = find.byIcon(Icons.send);
     if (sendBtn.evaluate().isNotEmpty) {
       await tester.tap(sendBtn.first);
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 500));
     }
 
-    final paywallVisible =
-        anyTextVisible(['Upgrade', 'PRO', '₹349', 'trial', 'expired']);
-    expect(paywallVisible, isTrue,
-        reason: 'AI Coach must show paywall when free trial is expired');
+    // Sending must produce feedback (user bubble or loading), NOT a paywall.
+    final hasFeedback =
+        find.byType(CircularProgressIndicator).evaluate().isNotEmpty ||
+            find.textContaining('Hello', findRichText: true).evaluate().isNotEmpty;
+    expect(hasFeedback, isTrue,
+        reason: 'AI Coach must let a free user under the daily cap send (no trial gate)');
   });
 
   // ── T7 ──────────────────────────────────────────────────────────

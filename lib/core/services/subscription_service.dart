@@ -223,10 +223,9 @@ class SubscriptionService {
   /// APK Test #12.2 / cold-start reactivity hook.
   ///
   /// Wired from `app.dart` initState — invokes a Riverpod invalidation
-  /// of `subscriptionInfoProvider` (+ `trialInfoProvider`,
-  /// `messageLimitProvider`) so widgets watching these providers
-  /// rebuild after `writeSubscriptionState` / `_downgradeLocally`
-  /// changes Hive.
+  /// of `subscriptionInfoProvider` (+ `messageLimitProvider`) so widgets
+  /// watching these providers rebuild after `writeSubscriptionState` /
+  /// `_downgradeLocally` changes Hive.
   ///
   /// Pre-fix: `refreshFromSupabase` is unawaited on splash. It
   /// successfully wrote `isPro=true` to local Hive, but no provider

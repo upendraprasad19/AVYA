@@ -327,18 +327,13 @@ class AuthSessionBootstrapper {
               await userBox.put('progress', mergedProgress);
             }
 
-            // Hydrate ai_chat_started_at + terms acceptance.
+            // Hydrate terms acceptance.
             final userRows = await supabase
                 .from('users')
-                .select('ai_chat_started_at, terms_accepted_at, terms_version')
+                .select('terms_accepted_at, terms_version')
                 .eq('id', user.id)
                 .limit(1);
             if (userRows.isNotEmpty) {
-              final serverTrialStart =
-                  userRows.first['ai_chat_started_at'] as String?;
-              if (serverTrialStart != null) {
-                await MigratedKey.write('ai_trial_start', serverTrialStart);
-              }
               final serverTermsAt =
                   userRows.first['terms_accepted_at'] as String?;
               final serverTermsVersion =

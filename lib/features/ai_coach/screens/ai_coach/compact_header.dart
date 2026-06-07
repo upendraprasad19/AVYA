@@ -11,8 +11,6 @@ extension _CompactHeader on _AiCoachScreenState {
     // F11 · Test #9 — Coach header restructured to 2 rows + counter
     // glued under UPGRADE pill. Captain-cap SVG replaces the "AI" text avatar.
     final messageCount = ref.watch(messageLimitProvider);
-    final trialInfo = ref.watch(trialInfoProvider);
-    final daysRemaining = trialInfo.daysRemaining;
     final cap = AppConstants.freeAiMessagesPerDay;
 
     return Container(
@@ -159,7 +157,7 @@ extension _CompactHeader on _AiCoachScreenState {
                     Padding(
                       padding: const EdgeInsets.only(top: 2, right: 30),
                       child: Text(
-                        '$messageCount / $cap MSGS · $daysRemaining D TRIAL',
+                        '$messageCount / $cap MSGS TODAY',
                         style: AppTypography.monoXs.copyWith(
                           fontSize: 9,
                           color: AppColors.textMute,

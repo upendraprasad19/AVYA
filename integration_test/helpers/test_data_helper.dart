@@ -24,22 +24,18 @@ class TestDataHelper {
     HiveService.instance.configBox.put('subscription_plan', 'pro_monthly');
   }
 
-  // ── AI Trial ────────────────────────────────────────────────────
+  // ── AI Trial (removed 2026-06-07 — F1) ───────────────────────────
+  // The client-only 30-day AI trial was deleted: the server enforces a
+  // flat 10/day forever with no trial. These helpers are retained as
+  // no-ops so existing flow callsites keep compiling; trial state no
+  // longer exists, so they seed nothing. Gate the AI coach via
+  // [setMessageCountAtDailyLimit] instead.
 
-  /// Sets trial start to (freeAiTrialDays + 1) days ago → trial is expired.
-  static void setTrialExpired() {
-    final start = DateTime.now()
-        .subtract(Duration(days: AppConstants.freeAiTrialDays + 1));
-    HiveService.instance.configBox
-        .put('ai_trial_start', start.toIso8601String());
-  }
+  /// No-op (trial removed). Retained for callsite compatibility.
+  static void setTrialExpired() {}
 
-  /// Sets trial start to [daysUsed] days ago → trial is still active.
-  static void setTrialActive({int daysUsed = 5}) {
-    final start = DateTime.now().subtract(Duration(days: daysUsed));
-    HiveService.instance.configBox
-        .put('ai_trial_start', start.toIso8601String());
-  }
+  /// No-op (trial removed). Retained for callsite compatibility.
+  static void setTrialActive({int daysUsed = 5}) {}
 
   // ── AI Message Count ─────────────────────────────────────────────
 

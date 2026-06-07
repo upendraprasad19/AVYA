@@ -66,11 +66,8 @@ class AppConstants {
   // ── Free Tier Limits ──────────────────────────────────────
 
   /// Maximum AI coach messages per day for free users.
-  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (15).
-  static const int freeAiMessagesPerDay = 15;
-
-  /// Free AI coach trial duration in days.
-  static const int freeAiTrialDays = 30;
+  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (10).
+  static const int freeAiMessagesPerDay = 10;
 
   /// Free AI food text logs per day.
   static const int freeAiTextLogsPerDay = 10;

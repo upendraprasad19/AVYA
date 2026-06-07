@@ -66,23 +66,23 @@ void main() {
 
   // ── T2 ──────────────────────────────────────────────────────────
 
-  testWidgets('T2: Trial info banner visible for new free user', (tester) async {
+  testWidgets('T2: Daily message counter visible for free user', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     await signInWithTestUser(tester);
 
-    // Set up: free user, trial just started.
+    // Set up: free user. Trial removed 2026-06-07 (F1) — the AI coach
+    // shows a flat daily message counter (N/10 TODAY), no trial banner.
     TestDataHelper.setFreeUser();
-    TestDataHelper.setTrialActive(daysUsed: 0);
 
     await navigateToAiCoach(tester);
 
-    // Trial banner should show days remaining or "free trial" info.
-    final hasTrialInfo = anyTextVisible(
-        ['trial', 'Trial', 'day', 'Day', 'free', 'Free', '30', 'remaining']);
-    expect(hasTrialInfo, isTrue,
-        reason: 'Free user should see trial info in AI Coach');
+    // The header / input bar should show the daily message counter.
+    final hasCounter = anyTextVisible(
+        ['TODAY', 'MSGS', '/10', '/ 10', 'free', 'Free', 'UPGRADE']);
+    expect(hasCounter, isTrue,
+        reason: 'Free user should see the daily message counter in AI Coach');
   });
 
   // ── T3 ──────────────────────────────────────────────────────────
@@ -178,9 +178,8 @@ void main() {
 
     await signInWithTestUser(tester);
 
-    // Inject 15 user messages for today → limit is at threshold.
+    // Inject a full day's worth of user messages → limit is at threshold.
     TestDataHelper.setFreeUser();
-    TestDataHelper.setTrialActive(daysUsed: 5);
     TestDataHelper.setMessageCountAtDailyLimit();
 
     await navigateToAiCoach(tester);
@@ -208,16 +207,18 @@ void main() {
 
   // ── T7 ──────────────────────────────────────────────────────────
 
-  testWidgets('T7: Trial expired → PaywallSheet appears on send attempt',
+  testWidgets('T7: Free user with 0 messages is NOT gated (trial removed)',
       (tester) async {
     await tester.pumpWidget(const ProviderScope(child: ICanBeFitterApp()));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     await signInWithTestUser(tester);
 
-    // Expire the trial.
+    // Trial removed 2026-06-07 (F1): a free user is gated ONLY by the
+    // per-day message count. With 0 messages used, sending must NOT
+    // trigger the paywall — regardless of how long the account has
+    // existed (the old client-only 30-day trial used to block here).
     TestDataHelper.setFreeUser();
-    TestDataHelper.setTrialExpired();
 
     await navigateToAiCoach(tester);
 
@@ -230,14 +231,17 @@ void main() {
     final sendButton = find.byIcon(Icons.send);
     if (sendButton.evaluate().isNotEmpty) {
       await tester.tap(sendButton.first);
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 500));
     }
 
-    // Paywall should appear (trial expired, not PRO).
-    final paywallVisible = anyTextVisible(
-        ['Upgrade', 'PRO', '₹349', 'trial', 'expired', 'Expired']);
-    expect(paywallVisible, isTrue,
-        reason: 'PaywallSheet must appear when free trial has expired');
+    // The user message should appear (or a loading indicator) — and the
+    // upgrade paywall must NOT have popped just from sending.
+    final hasFeedback =
+        find.byType(CircularProgressIndicator).evaluate().isNotEmpty ||
+            find.textContaining('Hello', findRichText: true).evaluate().isNotEmpty;
+    expect(hasFeedback, isTrue,
+        reason:
+            'Free user with 0 messages must be able to send (no trial gate)');
   });
 
   // ── T8 ──────────────────────────────────────────────────────────

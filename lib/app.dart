@@ -45,7 +45,6 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     SubscriptionService.onStateChanged = () {
       try {
         ref.invalidate(subscriptionInfoProvider);
-        ref.invalidate(trialInfoProvider);
         ref.invalidate(messageLimitProvider);
       } catch (_) {
         // ProviderScope may be disposing — invalidation is best-effort.

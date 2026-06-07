@@ -67,7 +67,7 @@ the diagnose-doc + project retrospective.
 
 | Function | Model | Tier | Notes |
 |---|---|---|---|
-| `ai-proxy` | Gemini 2.5 Flash | Free trial 15/day, PRO unlimited | Single chat entry. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). |
+| `ai-proxy` | Gemini 2.5 Flash | Free 10/day forever (no trial), PRO unlimited | Single chat entry. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). |
 | `ai-media-proxy` | Gemini Flash multimodal | PRO only | Photo/video chat. SSRF allowlist: `progress-photos` + `chat-attachments` Storage buckets only + user-scope assertion on path (OI-28). |
 | `food-text-analysis` | Gemini 2.5 Flash | 50/day free, 200/day PRO | `trg_food_text_rate_limit` Postgres trigger (migration 024) enforces cap atomically. Trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429. |
 | `food-scan-analysis` | Gemini 2.5 Flash Lite | Free + PRO | Photo → editable result. Returns structured items[]. |
