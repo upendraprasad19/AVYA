@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
+
 import '../exercise_repository.dart';
 import 'cardio_finisher.dart';
 import 'exercise_selector.dart';
@@ -74,8 +76,16 @@ class PlanGenerator {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
 
+    // F19 / recompose: the plan engine (split + exercise selection) only knows
+    // build_muscle / lose_fat / strength / general_fitness. Map the goal to its
+    // plan archetype (FitnessGoals.planGoal) so a token like 'recompose'
+    // (→ build_muscle) never falls through. Calorie/protein targets + cardio
+    // attach still key off the ORIGINAL goal via FitnessGoals.
+    final goalSpec = FitnessGoals.of(goal);
+    final planGoal = goalSpec.planGoal;
+
     // Stage 1: Split resolution → MuscleSlotDay[]
-    final splitDays = SplitResolver.selectV4(goal, daysPerWeek,
+    final splitDays = SplitResolver.selectV4(planGoal, daysPerWeek,
         experienceLevel: effectiveExp);
 
     // Stage 1.5: Volume Filter — trim slots by experience + frequency
@@ -92,7 +102,7 @@ class PlanGenerator {
       equipmentTier: equipment,
       effectiveExp: effectiveExp,
       phase: phase,
-      goal: goal,
+      goal: planGoal,
       injuries: injuries,
     );
 
@@ -137,8 +147,10 @@ class PlanGenerator {
     // Stage 5: Superset pairing
     weekPlans = SupersetPairer.pair(weekPlans);
 
-    // Stage 6: Cardio finisher
-    if (goal == 'lose_fat' || goal == 'general_fitness') {
+    // Stage 6: Cardio finisher — attach per the goal's FitnessGoals spec
+    // (recompose now gets a light finisher; was excluded by the old hardcoded
+    // lose_fat/general_fitness check).
+    if (goalSpec.cardio) {
       weekPlans = CardioFinisher.attach(
         weeks: weekPlans,
         goal: goal,

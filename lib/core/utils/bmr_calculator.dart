@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
+
 /// Hybrid BMR calculator: Katch-McArdle when body fat % is available,
 /// Mifflin-St Jeor otherwise.
 ///
@@ -165,34 +167,13 @@ class BmrCalculator {
     final weeklyKgDelta = weightKg * paceRate;
     final dailyKcalDelta = (weeklyKgDelta * _kcalPerKgBodyWeight) / 7;
 
-    double dailyCalories;
-    double proteinPerKg;
-    double fatPercentage;
-
-    switch (goal) {
-      case 'build_muscle':
-        dailyCalories = tdee + dailyKcalDelta; // Surplus scaled by pace
-        proteinPerKg = 1.8;
-        fatPercentage = 0.25;
-        break;
-      case 'lose_fat':
-        dailyCalories = tdee - dailyKcalDelta; // Deficit scaled by pace
-        proteinPerKg = 2.0; // Higher protein during cut
-        fatPercentage = 0.25;
-        break;
-      case 'strength':
-        // Strength gets a modest surplus equal to half the pace-derived delta.
-        dailyCalories = tdee + (dailyKcalDelta * 0.5);
-        proteinPerKg = 1.8;
-        fatPercentage = 0.30;
-        break;
-      case 'general_fitness':
-      default:
-        dailyCalories = tdee; // Maintenance — pace has no effect
-        proteinPerKg = 1.6;
-        fatPercentage = 0.25;
-        break;
-    }
+    // Goal-specific targets come from the canonical FitnessGoals SoT — no
+    // `default` fallthrough (the F19 bug: 'recompose' silently hit maintenance
+    // calories + 1.6 protein here). dailyCalories = tdee + deltaMult × pace delta.
+    final goalSpec = FitnessGoals.of(goal);
+    double dailyCalories = tdee + (goalSpec.deltaMult * dailyKcalDelta);
+    final double proteinPerKg = goalSpec.proteinPerKg;
+    final double fatPercentage = goalSpec.fatPercentage;
 
     // Physiological floor: male 1500 / female 1200 (overrides old 1200 flat).
     final minKcal = gender.toLowerCase() == 'male' ? 1500.0 : 1200.0;
