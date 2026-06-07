@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -151,22 +152,31 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     }
   }
 
-  /// Navigate to /home. Default (fresh install or `bg_restore_enabled` off):
-  /// await the full restore + ownership/heals, then go. Background-restore flag
-  /// ON for a RETURNING user (Hive already populated): establish ownership
-  /// (BLOCKING — cross-account safety, APK #15.4) + fresh-paint rollover, go to
-  /// home immediately, and let the in-flight cloud restore finish + heal in the
-  /// background (Obs 4, 2026-06-05). The in-flight restore is NOT cancelled →
-  /// a single restore, no double-write race; bg heals are ref-free (singletons).
+  /// Navigate to /home. A RETURNING user (Hive profile already populated) takes
+  /// the background-restore path: establish ownership (BLOCKING — cross-account
+  /// safety, APK #15.4) + fresh-paint rollover, go to home IMMEDIATELY, and let
+  /// the in-flight cloud restore finish + heal in the background. A fresh install
+  /// (no local profile) OR the `disable_bg_restore` kill-switch falls through to
+  /// the default path: await the full restore + ownership/heals, then go.
+  ///
+  /// Slow-boot guard (4e8b1d): this was an opt-IN flag (`bg_restore_enabled`,
+  /// default OFF) so returning users blocked >1 min on the full 2020-history
+  /// restore on every cold start. Flipped to opt-OUT — returning users default
+  /// to the bg path; the kill-switch preserves the old blocking path, reachable
+  /// per §4.6. The in-flight restore is NOT cancelled → single restore, no
+  /// double-write race; bg heals are ref-free (singletons). The loss-sensitive
+  /// restore writers are additive / local-wins (skip-if-local-exists) so a
+  /// background restore never overwrites a just-logged local row; the heal's
+  /// reconcileExlogIndexes repairs any index drift post-restore (c5a1f2).
   Future<void> _goHome(
       String userId, Future<RestoreResult> restoreFuture) async {
-    final bgEnabled =
-        HiveService.instance.configBox.get('bg_restore_enabled') == true;
+    final killSwitch =
+        HiveService.instance.configBox.get('disable_bg_restore') == true;
     final localProfile = HiveService.instance.userBox.get('profile');
     final isReturning =
         localProfile is Map && localProfile['primary_goal'] != null;
 
-    if (bgEnabled && isReturning) {
+    if (!killSwitch && isReturning) {
       // Ownership gate stays BLOCKING (cross-account safety, APK #15.4).
       await HiveUserSession.openForUser(userId);
       // Fresh first paint of today-scoped providers — cheap; the in-flight
@@ -604,6 +614,16 @@ Future<void> _healAfterRestoreInBackground() async {
     StreakProgressService.instance.refillIfNewWeek();
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_refill'));
+  }
+  try {
+    // Defense-in-depth (c5a1f2): rebuild every exercise_log_index_<date> as the
+    // UNION of the actual exlog_ keys present — self-heals any index drift from
+    // a lost index write (e4a8b1 class) or a rogue writer. Runs AFTER the key
+    // migrators above so re-keyed rows are indexed too.
+    await WorkoutWriteService.instance.reconcileExlogIndexes();
+  } catch (e, st) {
+    unawaited(
+        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog_index'));
   }
   // Notify the (now-mounted) home screen to refresh from the updated Hive.
   SyncService.instance.bumpRestoreCompleted();

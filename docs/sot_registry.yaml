@@ -1774,8 +1774,14 @@ concepts:
     description: |
       Home cards refresh when the cold-start restore heals in the background.
       SyncService.restoreFromCloudForUser bumps a ValueNotifier tick after
-      the bg heal; home listens and invalidates. Background-restore itself is
-      behind the default-OFF bg_restore_enabled flag (Obs 4 4e8b1d, §4.6).
+      the bg heal; home listens and invalidates. Slow-boot guard (c5a1f2):
+      background-restore is now opt-OUT — returning users (local profile
+      present) DEFAULT to the bg path (home in ~3s); the disable_bg_restore
+      kill-switch preserves the old blocking path (§4.6); fresh installs still
+      block. Restore writers are additive / LOCAL-WINS (skip-if-local-exists:
+      exlog/wlog/nutrition/saved-meal, mirroring weight sync_health.dart:300)
+      so a background restore never overwrites a just-logged local row. The
+      heal also calls reconcileExlogIndexes (union of present exlog_ rows).
       Backend-warm (un-flagged) pre-warms the PostgREST connection to kill
       the ~24s cold-start retry.
     writers:
@@ -1794,17 +1800,22 @@ concepts:
         notes: listener added in initState, removed in dispose.
       - file: lib/features/auth/screens/restoring_screen.dart
         line_range: 1-9999
-        method: _goHome bg path (bg_restore_enabled) + _healAfterRestoreInBackground
+        method: _goHome bg path (disable_bg_restore kill-switch) + _healAfterRestoreInBackground (reconcileExlogIndexes)
         semantic: flag-check
         notes: |
-          Flag default-OFF. Ownership gate (openForUser) stays BLOCKING
-          before nav; bg heals run post-restore, ref-free, each catch emits
-          recordNonFatal(reason:'bg_heal_<step>') (Hermes L34).
-    regression_test: test/contracts/background_restore_test.dart
+          Opt-OUT kill-switch (default bg for returning users; fresh installs
+          block). Ownership gate (openForUser) stays BLOCKING before nav; bg
+          heals run post-restore, ref-free, each catch emits
+          recordNonFatal(reason:'bg_heal_<step>') (Hermes L34). Heal includes
+          reconcileExlogIndexes (exlog index union heal).
+    regression_test: test/contracts/restore_local_wins_additive_test.dart
     class_constraints: |
-      bg_restore_enabled default OFF. Ownership gate blocking before nav.
-      Single in-flight restore (no double-write race). Heals attached via
-      .then on success; tick bridges to home invalidateOnRetry.
+      Opt-OUT disable_bg_restore (default bg for returning users; fresh install
+      blocks). Ownership gate blocking before nav. Single in-flight restore (no
+      double-write race). Heals attached via .then on success; tick bridges to
+      home invalidateOnRetry. Loss-sensitive restore writers are additive /
+      LOCAL-WINS (skip-if-local-exists) so a background restore never overwrites
+      a just-logged local row — verified by restore_local_wins_additive_test.dart.
 
   - concept: phase_blocks_bucketing
     domain: workout

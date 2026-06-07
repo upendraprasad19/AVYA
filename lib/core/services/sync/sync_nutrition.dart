@@ -437,7 +437,12 @@ extension SyncServiceNutrition on SyncService {
         );
         map['id'] = localKey;
         map['log_key'] = localKey;
-        await _hive.nutritionBox.put(localKey, map);
+        // Local-wins / additive restore (slow-boot guard 4e8b1d): never
+        // overwrite a local meal the user just logged during the background
+        // restore (it may not have synced yet). closes-diagnose: e4a8b1.
+        if (_hive.nutritionBox.get(localKey) == null) {
+          await _hive.nutritionBox.put(localKey, map);
+        }
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
@@ -524,6 +529,10 @@ extension SyncServiceNutrition on SyncService {
             ? 'saved_meal_${id.hashCode.toUnsigned(32).toRadixString(16)}'
             : NutritionWriteService.savedMealKey(rawName);
 
+        // Local-wins / additive restore (slow-boot guard 4e8b1d): keep the
+        // local saved meal (identity = user+name) rather than overwriting it
+        // with the cloud copy while the background restore runs.
+        if (_hive.nutritionBox.get(hiveKey) != null) continue;
         await _hive.nutritionBox.put(hiveKey, {
           'id': hiveKey,
           'is_saved_meal': true,

@@ -99,6 +99,20 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Water logs:** `onConflict: 'user_id,date'` (UNIQUE constraint added migration 013). One row per user per day.
 - **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
 
+### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
+Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in
+the **background** — so the restore is concurrent with the user logging. Loss-sensitive
+restore writers are therefore **additive / local-wins**: they only fill gaps, never
+overwrite a present local row (`if (box.get(key) != null) continue;`).
+- **Additive (skip-if-local-exists):** `_restoreExerciseLogs`, `_restoreWorkoutLogs`,
+  `_restoreNutritionLogs`, `_restoreSavedMeals`, plus weight / measurements / water
+  (already so — reference pattern `sync_health.dart:300`).
+- **Timestamp-merge (per-writer exception):** `_restoreScheduledWorkouts` reconciles
+  schedule *status* cloud↔local (keep-local-when-cloud-stale, d9b2c5) — it is NOT
+  additive because schedule status genuinely needs merging.
+- **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
+  the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
+
 ### Restore Pagination
 - All restore queries use paginated fetch (1,000 rows per page, offset-based).
 - Safety ceiling: 50,000 rows per table to prevent runaway fetches.
