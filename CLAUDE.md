@@ -79,7 +79,8 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `test/contracts/` subset (NOT the full suite) + the ~28 `check_*.dart` gates (bounded-parallel,
   `PRE_COMMIT_GATE_JOBS` default 4) + conditional index regens + merge-commit regression-catalog
   walk. Blocks the commit on any failure. Prints a non-blocking `/code-review` (B-pass) reminder
-  when the staged blast-radius is ≥`account`. Force the full suite here with `PRE_COMMIT_FULL=1`.
+  when the staged blast-radius is ≥`account` — the review itself is MANDATORY before the merge per
+  §4.3; the echo is only the reminder, not the gate. Force the full suite here with `PRE_COMMIT_FULL=1`.
 - **`scripts/pre-push.sh` (blast-radius-tiered):** runs the full `flutter test` only when the
   pushed range's blast-radius is ≥`account` (auth/ai_coach/sync/ai-proxy/payment/migrations/
   CLAUDE.md/…). `feature`-tier pushes (docs/scripts/.claude/backups/profile-only) **skip** the local
@@ -242,7 +243,9 @@ After observations captured + before brainstorming:
 - **Batch commits; push once per logical batch.** Don't commit→push→commit→push — each push re-runs the tiered pre-push + a fresh CI run on the same code. Group related commits and push them together (lean-workflow batch 2026-06-01).
 - **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; pre-push (≥account) + CI are the full-suite gates. CI is the full-suite source-of-truth.
 - APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
-- Refs: `feedback_apk_build_explicit_approval.md`, `feedback_main_is_source_of_truth.md`, `feedback_use_build_apk_skill.md`.
+- **≥account code-review is SELF-INITIATED, before the merge.** For any batch whose blast-radius is ≥`account` and that touches code / schema / Edge Functions, run `/code-review` (B-pass) BEFORE the `--no-ff` merge to `main` — do NOT wait to be asked. The pre-commit echo (§0) is a reminder, not the gate; the discipline is the agent's. (Docs/process-only ≥account changes — e.g. CLAUDE.md edits — take a self-consistency review of the wording instead of an adversarial bug-hunt.) Codified 2026-06-07 after a ≥account alert batch merged to local `main` un-reviewed and a P0 (alert blind to `event`-coded failures) survived until a founder-prompted push-time review caught it.
+- **Live prod apply needs its own explicit go.** Applying a migration (`apply_migration`) or deploying an Edge Function to the prod project requires explicit per-action authorization EVEN WHEN the batch plan was approved — plan approval ≠ deploy approval. A classifier block on a live apply is CORRECT; get the explicit ok, never work around it.
+- Refs: `feedback_apk_build_explicit_approval.md`, `feedback_main_is_source_of_truth.md`, `feedback_use_build_apk_skill.md`, `feedback_mistake_review_not_self_triggered.md`.
 
 ### 4.4 The coding rules (23 — NON-NEGOTIABLE)
 

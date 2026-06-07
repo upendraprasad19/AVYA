@@ -185,8 +185,13 @@ class WorkoutWriteService {
       // 5. Write Hive
       await box.put(key, entry);
 
-      // 6. Update exercise_log_index_<date>
-      _appendToIndex(box, dateStr, key);
+      // 6. Update exercise_log_index_<date> — AWAITED so the index reaches disk
+      // before this method returns (and before the UI paints the log). A
+      // fire-and-forget put here meant the row persisted (awaited above) but the
+      // index did not flush before an app close → on reopen the reader, which
+      // finds logs via this index, showed the just-logged exercise as "gone"
+      // while the orphaned row survived on disk. closes-diagnose: e4a8b1.
+      await _appendToIndex(box, dateStr, key);
 
       // 7. Fire-and-forget cloud sync
       unawaited(SyncService.instance.syncWorkoutData());
@@ -320,14 +325,21 @@ class WorkoutWriteService {
     return maxWeight > bestBefore;
   }
 
-  void _appendToIndex(Box box, String dateStr, String key) {
+  /// Durably appends [key] to `exercise_log_index_<date>`. The `box.put` is
+  /// AWAITED (and the method is async) so the index entry reaches disk before
+  /// the caller returns. Previously this was a `void` helper that dropped the
+  /// put Future — the row write was awaited but the index write was not, so an
+  /// app close before Hive flushed lost the index entry and the just-logged
+  /// exercise vanished from the reader (orphaned row left on disk).
+  /// closes-diagnose: e4a8b1.
+  Future<void> _appendToIndex(Box box, String dateStr, String key) async {
     final indexKey = 'exercise_log_index_$dateStr';
     final raw = box.get(indexKey);
     final List<String> list = (raw is List)
         ? raw.cast<String>().toList()
         : <String>[];
     if (!list.contains(key)) list.add(key);
-    box.put(indexKey, list);
+    await box.put(indexKey, list);
   }
 
   Future<WriteResult> markCompleted({
@@ -689,7 +701,7 @@ class WorkoutWriteService {
       await box.put(logKey, updated);
 
       // Chronologically rescan PR for ALL logs of this exercise
-      _rescanAllPrsFor(box, exerciseName);
+      await _rescanAllPrsFor(box, exerciseName);
 
       unawaited(SyncService.instance.syncWorkoutData());
       unawaited(SyncService.instance.pushSnapshot());
@@ -719,7 +731,10 @@ class WorkoutWriteService {
 
   /// Walk all logs of [exerciseName] in date-ascending order, mark
   /// is_pr=true for each weight that strictly exceeds the prior best.
-  void _rescanAllPrsFor(Box box, String exerciseName) {
+  /// Async + awaited puts: the is_pr writes must reach disk before the caller
+  /// returns, else an app close before Hive flushes loses the PR-flag updates
+  /// (same fire-and-forget durability class as the exlog index, e4a8b1).
+  Future<void> _rescanAllPrsFor(Box box, String exerciseName) async {
     final lower = exerciseName.toLowerCase().trim();
     final logs = <MapEntry<String, Map<String, dynamic>>>[];
     for (final k in box.keys) {
@@ -744,7 +759,7 @@ class WorkoutWriteService {
       final isPr = w > best;
       if (isPr) best = w;
       final mut = <String, dynamic>{...entry.value, 'is_pr': isPr};
-      box.put(entry.key, mut);
+      await box.put(entry.key, mut);
     }
   }
 
@@ -792,7 +807,7 @@ class WorkoutWriteService {
       }
 
       // PR rescan (a deleted PR may promote a prior log)
-      _rescanAllPrsFor(box, exerciseName);
+      await _rescanAllPrsFor(box, exerciseName);
 
       unawaited(SyncService.instance.syncWorkoutData());
       unawaited(SyncService.instance.pushSnapshot());
