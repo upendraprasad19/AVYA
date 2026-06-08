@@ -130,7 +130,7 @@ export async function completionRateOverWindow(
     .toISOString();
   const { data, error } = await supabase
     .from('scheduled_workouts')
-    .select('status, reason, scheduled_date')
+    .select('status, scheduled_date')
     .eq('user_id', userId)
     .gte('scheduled_date', sinceIso.split('T')[0]);
   if (error) {
@@ -141,7 +141,12 @@ export async function completionRateOverWindow(
   let completed = 0;
   for (const row of data ?? []) {
     if (row.status === 'rest') continue;
-    if (row.reason === 'pre_onboarding') continue;
+    // Cloud `scheduled_workouts` has NO `reason` column — it only ever existed
+    // in the client's local Hive model. Pre-onboarding placeholder days are
+    // written with status='rest' (workout_schedule_read_service.dart:303-309),
+    // so the status check above ALREADY excludes them. Selecting `reason` here
+    // 42703'd → completionRate silently returned 0.0 for everyone since
+    // 2026-05-01. closes-diagnose: d7c3f1.
     scheduled++;
     if (row.status === 'completed') completed++;
   }

@@ -76,7 +76,7 @@ version-controlled into `.git/hooks/`. Bypass a single run with `--no-verify` (s
 runs the same gates). See §4 process invariants for the no-deferred-failures policy.
 
 - **`scripts/pre-commit.sh` (fast, ~3 min):** `flutter analyze --no-fatal-infos` + the
-  `test/contracts/` subset (NOT the full suite) + the ~28 `check_*.dart` gates (bounded-parallel,
+  `test/contracts/` subset (NOT the full suite) + the ~72 `check_*.dart` gates (bounded-parallel,
   `PRE_COMMIT_GATE_JOBS` default 4) + conditional index regens + merge-commit regression-catalog
   walk. Blocks the commit on any failure. Prints a non-blocking `/code-review` (B-pass) reminder
   when the staged blast-radius is ≥`account` — the review itself is MANDATORY before the merge per
@@ -422,7 +422,7 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Common pitfalls (cross-domain) | `docs/playbook/common-pitfalls.md` |
 | Bug history index | `docs/diagnoses/INDEX.md` (auto-generated; regenerated on commit) |
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
-| Live schema column snapshot (Gate: `check_schema_column_refs.dart` validates every client `.from().select/eq/gte/order` column ref) | `backups/live_schema_columns.json` — **regenerate in the SAME commit as any migration that adds/drops/renames a column** (regen SQL in the gate script header). Sibling gate `check_container_color_decoration.dart` blocks `Container(color:+decoration:)`. |
+| Live schema column snapshot (Gate: `check_schema_column_refs.dart` validates every `.from().select/eq/gte/order` + insert/update-key column ref in BOTH `lib/` (client) AND `supabase/functions/` (Edge Functions) — server-seam extension WI-1 2026-06-08, after the lib/-only gate stayed blind to 5 weeks of live cloud-contract bugs incl. the delete-account DPDP P0 b4e2a9) | `backups/live_schema_columns.json` — **regenerate in the SAME commit as any migration that adds/drops/renames a column** (regen SQL in the gate script header). Sibling gate `check_container_color_decoration.dart` blocks `Container(color:+decoration:)`. |
 | Naming conventions | `docs/naming_conventions.md` |
 | Audit lens registry (53 lenses) | `docs/audit/LENS_REGISTRY.md` |
 | Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |

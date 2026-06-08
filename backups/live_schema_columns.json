@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Snapshot of public-schema table columns from live information_schema. Source of truth for scripts/check_schema_column_refs.dart (Gate: schema column-ref validation). Regenerate with the SQL in that script's header after any applied migration that adds/drops/renames a column, in the SAME commit as the migration.",
     "project_id": "dedsavbjuwgarrhphgnl",
-    "captured_at": "2026-05-30",
+    "captured_at": "2026-06-08",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name"
   },
   "storage_buckets": ["chat-media", "progress-photos", "exercise-images"],
@@ -35,7 +35,7 @@
     "scheduled_workouts": ["id", "user_id", "template_id", "scheduled_date", "week_number", "day_of_week", "status", "completed_at", "created_at"],
     "sleep_logs": ["id", "user_id", "date", "duration_hrs", "quality", "bed_time", "wake_time", "notes", "created_at"],
     "streaks": ["id", "user_id", "week_start", "workouts_planned", "workouts_completed", "is_streak_maintained", "created_at"],
-    "subscriptions": ["id", "user_id", "plan", "status", "start_date", "end_date", "razorpay_order_id", "razorpay_payment_id", "razorpay_signature", "created_at"],
+    "subscriptions": ["id", "user_id", "plan", "status", "start_date", "end_date", "razorpay_order_id", "razorpay_payment_id", "razorpay_signature", "created_at", "razorpay_subscription_id"],
     "telegram_connections": ["id", "user_id", "phone", "chat_id", "connected_at", "is_active"],
     "template_exercises": ["id", "template_id", "exercise_id", "exercise_name", "order_index", "logging_type", "prescribed_sets", "prescribed_reps", "prescribed_weight", "prescribed_time_secs", "rest_seconds", "notes", "created_at"],
     "user_custom_exercises": ["id", "user_id", "name", "logging_type", "category", "primary_muscles", "equipment_needed", "notes", "default_sets", "default_reps", "default_rest_secs", "default_duration_secs", "submitted_to_library", "approved_for_library", "times_used", "created_at"],
