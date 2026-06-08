@@ -572,5 +572,12 @@
     "hash": "sha256:b1bfc37d2985fa06bcab270878da1e3643322bf9946eef93f82a595c146727c7",
     "applier": "claude",
     "diagnose": "b4e2a9"
+  },
+  {
+    "migration": "089",
+    "applied_at": "2026-06-08T17:26:39+05:30",
+    "hash": "sha256:6b10555313996aa27c60fc5f1c87ed0b1993cc8fd7883b19d8435ba919094990",
+    "applier": "claude",
+    "diagnose": "a3e8f1"
   }
 ]

@@ -335,6 +335,23 @@ extension SyncServiceWorkout on SyncService {
                       'raw=$rawSetReps clamped=$clampedSetReps set=$setNum exercise=$exerciseId',
                 ));
               }
+              // Guard: workout_log_sets.duration_secs must satisfy
+              // wls_duration_secs_realistic (<=3600). A per-set duration >1h is
+              // implausible (a set, not a session) — clamp a glitch value rather
+              // than let the all-or-nothing per-set upsert 23514 and drop the
+              // batch. Mirrors the reps clamp above (WI-3 constraint-parity,
+              // diagnose a3e8f1).
+              final rawSetDur =
+                  (sm['duration_seconds'] ?? sm['duration_sec']) as num?;
+              final clampedSetDur =
+                  rawSetDur == null ? null : rawSetDur.clamp(0, 3600).toInt();
+              if (rawSetDur != null && rawSetDur != clampedSetDur) {
+                unawaited(ErrorTelemetry.logEvent(
+                  'wls_duration_out_of_range',
+                  message:
+                      'raw=$rawSetDur clamped=$clampedSetDur set=$setNum exercise=$exerciseId',
+                ));
+              }
               rows.add({
                 'user_id': userId,
                 'workout_log_id': workoutLogId,
@@ -342,7 +359,7 @@ extension SyncServiceWorkout on SyncService {
                 'set_number': setNum,
                 'weight_kg': sm['weight_kg'],
                 'reps': clampedSetReps,
-                'duration_secs': sm['duration_seconds'] ?? sm['duration_sec'],
+                'duration_secs': clampedSetDur,
                 'distance_km': sm['distance_km'],
                 'completed_at': completedAt,
               });
