@@ -135,17 +135,17 @@ findings:
   - id: F31
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: test/contracts/audit_2026_06_07_batch6_server_test.dart (weInsertedTheRow redeem-once) + diagnose b3f0d9
   - id: F32
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: audit_2026_06_07_batch6_server_test (replay age from payload.created_at) + diagnose b3f0d9
   - id: F33
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: audit_2026_06_07_batch6_server_test (non-23505 insert fail -> verified:false) + diagnose b3f0d9
   - id: F34
     terminal_state: closed_in_commit
@@ -186,17 +186,17 @@ findings:
   - id: F43
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: audit_2026_06_07_batch6_server_test (pr-detection recency by completed_at) + diagnose b3f0d9
   - id: F44
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: cron_auth_adoption_test (now covers proactive-coach-promotion) + audit_2026_06_07_batch6_server_test + diagnose b3f0d9
   - id: F45
     terminal_state: closed_in_commit
     commit: 9627837
-    deploy: held_pending_founder_per_action_go
+    deploy: live — deployed + smoke-verified 2026-06-08 (pr-detection v7 / proactive-coach-promotion v4 / i-see-you-callout v5 / razorpay-webhook v20 / verify-payment v14; a latent std-encode deploy-rot took razorpay-webhook down mid-deploy — restored + diagnosed d4c8e1)
     verification: audit_2026_06_07_batch6_server_test (i-see-you-callout active + paginated) + diagnose b3f0d9
   - id: F46
     terminal_state: closed_in_commit
