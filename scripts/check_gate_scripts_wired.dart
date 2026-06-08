@@ -46,6 +46,8 @@ const _allowList = <String, String>{
       'Requires live Supabase MCP — runs in /build-apk skill Gate 14b, not pre-commit. 1 unapplied migration tracked separately.',
   'check_onconflict_live_arbiter.dart':
       'Requires live DB rollback-txn — runs in /build-apk skill, not pre-commit. 3 schema-arbiter conflicts tracked separately.',
+  'check_two_user_cross_account.dart':
+      'Requires live DB rollback-txn — runs in /build-apk skill alongside check_onconflict_live_arbiter.dart (two-user cross-account isolation, d4b8e2/f7e3a1).',
   'check_regression_catalog.dart':
       'Runs explicitly on merge commits via scripts/pre-commit.sh:48 (not auto-loop). 1 missing test for swap_undo_snackbar bug tracked separately.',
   'check_snapshot_contract.dart':

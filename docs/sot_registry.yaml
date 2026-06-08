@@ -1662,8 +1662,8 @@ concepts:
 
   - concept: nutrition_recent_logs_name
     domain: nutrition
-    behavioral_test_required: true
-    behavioral_test_path: test/contracts/nutrition_recent_logs_name_test.dart
+    behavioral_test_required: false  # WI-4 2026-06-08: genuine reader round-trip added
+    behavioral_test_path: test/contracts/nutrition_recent_logs_name_behavioral_test.dart
     description: |
       Display name for a logged meal. The canonical name lives in
       items[].name (joined " · "), NEVER a top-level food_name/meal_name.
