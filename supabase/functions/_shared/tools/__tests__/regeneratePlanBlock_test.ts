@@ -17,6 +17,17 @@ Deno.test("regeneratePlanBlock — schema accepts full args", () => {
   assertEquals(result.success, true);
 });
 
+Deno.test("regeneratePlanBlock — schema accepts recompose goal (F19 sibling)", () => {
+  // recompose is a canonical FitnessGoals token; the goal enum must accept it
+  // so the AI can regenerate a recomposition block. Was missing while switchGoal
+  // already had it — the same F19 fallthrough class, one tool over.
+  const result = regeneratePlanBlockTool.schema.safeParse({
+    weeks: 4,
+    goal: "recompose",
+  });
+  assertEquals(result.success, true);
+});
+
 Deno.test("regeneratePlanBlock — schema rejects weeks < 1", () => {
   const result = regeneratePlanBlockTool.schema.safeParse({ weeks: 0 });
   assertEquals(result.success, false);

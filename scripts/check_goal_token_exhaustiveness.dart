@@ -113,9 +113,51 @@ void main(List<String> args) {
     }
   }
 
+  // Check 4: the SERVER AI-coach plan tools expose a goal enum to the model.
+  // Every FitnessGoals token MUST appear in each tool's enum, and neither may
+  // list a goal that isn't a token. Otherwise the model can be unable to emit a
+  // valid goal (zod rejects it) or can emit one the client rejects — the F19
+  // fallthrough class, one tool over (recompose was added to switchGoal.ts but
+  // not regeneratePlanBlock.ts). The original gate only scanned client Dart;
+  // that server blind spot is exactly how this drifted.
+  if (tokens.isNotEmpty) {
+    final serverGoalEnums = <String, RegExp>{
+      'supabase/functions/_shared/tools/plan/switchGoal.ts':
+          RegExp(r'newGoal:\s*z\.enum\(\[([\s\S]*?)\]\)'),
+      'supabase/functions/_shared/tools/plan/regeneratePlanBlock.ts':
+          RegExp(r'goal:\s*z\.enum\(\[([\s\S]*?)\]\)'),
+    };
+    serverGoalEnums.forEach((path, enumRe) {
+      final src = _read(path);
+      if (src == null) {
+        problems.add('Server goal tool missing: $path (cannot verify goal-enum parity).');
+        return;
+      }
+      final body = enumRe.firstMatch(src)?.group(1);
+      if (body == null) {
+        problems.add('Could not locate the goal z.enum in $path.');
+        return;
+      }
+      final enumTokens =
+          RegExp(r'"(\w+)"').allMatches(body).map((m) => m.group(1)!).toSet();
+      for (final t in tokens) {
+        if (!enumTokens.contains(t)) {
+          problems.add('$path goal enum is missing FitnessGoals token "$t" — '
+              'the AI cannot act on this goal (F19 class).');
+        }
+      }
+      for (final e in enumTokens) {
+        if (!tokens.contains(e)) {
+          problems.add('$path goal enum lists "$e", which is not a FitnessGoals '
+              'token (${tokens.join(", ")}).');
+        }
+      }
+    });
+  }
+
   final tag = warnOnly ? '[Gate goal-tokens WARN]' : '[Gate goal-tokens]';
   if (problems.isEmpty) {
-    stdout.writeln('$tag PASS: ${tokens.length} goal tokens, ${cardKeys.length} onboarding keys — all mapped + exhaustive; no raw goal fallthrough.');
+    stdout.writeln('$tag PASS: ${tokens.length} goal tokens, ${cardKeys.length} onboarding keys — all mapped + exhaustive; no raw goal fallthrough; server tools (switchGoal + regeneratePlanBlock) goal-enum parity OK.');
     exit(0);
   }
   stderr.writeln('${warnOnly ? "$tag WARN" : "$tag FAIL"}: ${problems.length} issue(s):');

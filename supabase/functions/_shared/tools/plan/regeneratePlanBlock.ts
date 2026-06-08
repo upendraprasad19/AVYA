@@ -10,6 +10,7 @@ const schema = z.object({
     "lose_fat",
     "general_fitness",
     "strength",
+    "recompose",
   ]).optional().describe(
     "Optional new goal. Defaults to user's current profile goal. Use when the user explicitly mentions changing focus.",
   ),
