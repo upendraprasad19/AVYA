@@ -1,12 +1,15 @@
 ---
-adr_id: 0014
+adr_id: 0015
 title: Canonical FitnessGoals source-of-truth for goal-derived targets, training, and cardio
 status: accepted
 date: 2026-06-07
 deciders: Upendra
 ---
 
-# ADR-0014: Canonical FitnessGoals source-of-truth
+# ADR-0015: Canonical FitnessGoals source-of-truth
+<!-- Renumbered 0014 -> 0015 on the 2026-06-08 main-resync: main's slow-boot batch
+     also took ADR-0014 (additive-local-wins-restore). -->
+
 
 ## Context
 

@@ -12,7 +12,7 @@ symptom: >
   fell to the fat-loss split. Every user who tapped through the pre-selected
   default got the OPPOSITE of a recomposition.
 concept: fitness_goal_resolution
-sot_registry_entry: "config SoT (FitnessGoals) — contract pinned by scripts/check_goal_token_exhaustiveness.dart + test/contracts/recompose_goal_targets_test.dart, not a Hive/cloud storage writer-reader concept (see ADR-0014)"
+sot_registry_entry: "config SoT (FitnessGoals) — contract pinned by scripts/check_goal_token_exhaustiveness.dart + test/contracts/recompose_goal_targets_test.dart, not a Hive/cloud storage writer-reader concept (see ADR-0015)"
 writers:
   - "{ file: lib/features/onboarding/screens/plan_screen.dart, method: _mapGoal, line: 662 } — onboarding goal key → canonical primary_goal token"
 readers:

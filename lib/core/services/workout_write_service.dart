@@ -325,21 +325,69 @@ class WorkoutWriteService {
     return maxWeight > bestBefore;
   }
 
-  /// Durably appends [key] to `exercise_log_index_<date>`. The `box.put` is
-  /// AWAITED (and the method is async) so the index entry reaches disk before
-  /// the caller returns. Previously this was a `void` helper that dropped the
-  /// put Future — the row write was awaited but the index write was not, so an
-  /// app close before Hive flushed lost the index entry and the just-logged
-  /// exercise vanished from the reader (orphaned row left on disk).
-  /// closes-diagnose: e4a8b1.
-  Future<void> _appendToIndex(Box box, String dateStr, String key) async {
+  /// THE single union read-modify-write for `exercise_log_index_<date>`.
+  ///
+  /// Public so the cloud restore (`sync_workout._restoreExerciseLogs`) and
+  /// [logExercise]'s own append share ONE index-append implementation (DRY — no
+  /// writer/restore drift). Union semantics: only ever ADDS a key, never removes
+  /// one, so a restore and a concurrent log can't lose each other's entries. The
+  /// read→put has no `await` between them, so the update is atomic on the single
+  /// isolate (verified: concurrent unlocked appends lose nothing — Hive commits
+  /// in-memory before it yields for the disk flush). The put is AWAITED so the
+  /// index reaches disk before the caller returns. closes-diagnose: e4a8b1.
+  Future<void> addToExlogIndex(Box box, String dateStr, String key) async {
     final indexKey = 'exercise_log_index_$dateStr';
     final raw = box.get(indexKey);
-    final List<String> list = (raw is List)
-        ? raw.cast<String>().toList()
-        : <String>[];
-    if (!list.contains(key)) list.add(key);
-    await box.put(indexKey, list);
+    final List<String> list =
+        (raw is List) ? raw.cast<String>().toList() : <String>[];
+    if (!list.contains(key)) {
+      list.add(key);
+      await box.put(indexKey, list);
+    }
+  }
+
+  /// Durably appends [key] to `exercise_log_index_<date>` via [addToExlogIndex].
+  /// The `box.put` is AWAITED (and the chain is async) so the index entry reaches
+  /// disk before the caller returns. Previously this was a `void` helper that
+  /// dropped the put Future — the row write was awaited but the index write was
+  /// not, so an app close before Hive flushed lost the index entry and the
+  /// just-logged exercise vanished from the reader (orphaned row left on disk).
+  /// closes-diagnose: e4a8b1.
+  Future<void> _appendToIndex(Box box, String dateStr, String key) =>
+      addToExlogIndex(box, dateStr, key);
+
+  /// Defense-in-depth: rebuilds every `exercise_log_index_<date>` as the UNION
+  /// of the actual `exlog_<date>_<hash>` keys present in the workout box (never
+  /// removes a present key). Run after a background restore so any index drift
+  /// (a lost index write — the e4a8b1 class — or a rogue writer) self-heals on
+  /// next sign-in, even for a row the additive restore left untouched.
+  /// [box] is injectable for tests; defaults to the live workout box.
+  /// closes-diagnose: e4a8b1.
+  Future<void> reconcileExlogIndexes([Box? box]) async {
+    final b = box ?? HiveService.instance.workoutBox;
+    final byDate = <String, List<String>>{};
+    for (final k in b.keys) {
+      if (k is! String || !k.startsWith('exlog_')) continue;
+      final rest = k.substring('exlog_'.length);
+      if (rest.length < 10) continue; // exlog_<YYYY-MM-DD>_<hash>
+      final dateStr = rest.substring(0, 10);
+      byDate.putIfAbsent(dateStr, () => <String>[]).add(k);
+    }
+    for (final entry in byDate.entries) {
+      final indexKey = 'exercise_log_index_${entry.key}';
+      final raw = b.get(indexKey);
+      final List<String> list =
+          (raw is List) ? raw.cast<String>().toList() : <String>[];
+      final seen = list.toSet();
+      var changed = false;
+      for (final k in entry.value) {
+        if (seen.add(k)) {
+          list.add(k);
+          changed = true;
+        }
+      }
+      if (changed) await b.put(indexKey, list);
+    }
   }
 
   Future<WriteResult> markCompleted({

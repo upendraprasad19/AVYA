@@ -582,6 +582,10 @@ extension SyncServiceWorkout on SyncService {
                     : istDateStr(DateTime.now()));
         final logId = 'wlog_$dateStr';
 
+        // Local-wins / additive restore (slow-boot guard 4e8b1d): keep a local
+        // wlog summary that may reflect a just-completed session not yet synced
+        // while the background restore runs. Only write absent rows.
+        if (_hive.workoutBox.get(logId) != null) continue;
         await _hive.workoutBox.put(logId, {
           'id': logId,
           'type': 'workout_log',
@@ -756,18 +760,18 @@ extension SyncServiceWorkout on SyncService {
           logMap['volume_kg'] = volume;
         }
 
-        await _hive.workoutBox.put(logId, logMap);
-
-        // Rebuild date index
-        final indexKey = 'exercise_log_index_$dateStr';
-        final existingIndex = _hive.workoutBox.get(indexKey);
-        final indexList = existingIndex is List
-            ? List<String>.from(existingIndex)
-            : <String>[];
-        if (!indexList.contains(logId)) {
-          indexList.add(logId);
-          await _hive.workoutBox.put(indexKey, indexList);
+        // Local-wins / additive restore (slow-boot guard 4e8b1d). Once returning
+        // users land on /home WHILE this background restore runs, a local exlog
+        // row may hold sets the user just logged (and not yet synced — e.g. a
+        // network blip). NEVER overwrite it with the cloud snapshot: only write
+        // rows that are absent locally. Mirrors the weight-restore pattern
+        // (sync_health.dart:300). Always ensure the row is indexed — this heals
+        // an orphaned-but-present row (e4a8b1). closes-diagnose: e4a8b1.
+        if (_hive.workoutBox.get(logId) == null) {
+          await _hive.workoutBox.put(logId, logMap);
         }
+        await WorkoutWriteService.instance
+            .addToExlogIndex(_hive.workoutBox, dateStr, logId);
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
