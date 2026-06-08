@@ -48,13 +48,14 @@ void main() {
     // route extra map, not just forward widget.initial.
     test('OB-2: stats_screen BACK carries current controller values', () {
       final src = _read('stats_screen.dart');
-      // Check the spread + weight key is present in a go('/onboarding/goal') call.
+      // F20 (audit 2026-06-07): BACK forwards 'weight_kg' — the key the onboarding
+      // flow actually READS (StatsScreen.initState / _onCalibrate / plan_screen).
+      // The old 'current_weight_kg' key was silently dropped on return (reset to 75).
       expect(
-        src.contains("'current_weight_kg': double.tryParse(_weight.text)") ||
-            src.contains("'current_weight_kg': double.tryParse(_weight.text)"),
+        src.contains("'weight_kg': double.tryParse(_weight.text)"),
         isTrue,
         reason:
-            'Stats BACK must forward current_weight_kg from controller',
+            'Stats BACK must forward weight_kg (the flow-read key) from the controller',
       );
       expect(
         src.contains("_weight.text.isNotEmpty"),
