@@ -278,4 +278,11 @@ const _alwaysOk = <String>{
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both
   // files also read `schedule_*` keys (diagnose a7d3f1).
   'plan_start_date', 'plan_end_date', 'plan_json', 'schedules',
+  // AI-coach ToolIntent payload field — `intent.payload['goal']` in
+  // tool_dispatcher._executeRegeneratePlanBlock's FitnessGoals.isKnown guard.
+  // NOT a schedule_*/exlog/nlog/wlog Hive field (no emit set carries `goal` —
+  // the goal lives on the profile / plan_json). The prefix heuristic
+  // mis-attributes it because the same file also reads `schedule_*` keys
+  // (B-pass b7c8040 / diagnose a4f7e1).
+  'goal',
 };

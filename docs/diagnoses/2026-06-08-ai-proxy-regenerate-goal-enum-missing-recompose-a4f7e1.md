@@ -3,7 +3,7 @@ bug_id: a4f7e1
 date: 2026-06-08
 batch: psych-skill-and-audit-2026-06-07 (recompose server-enum follow-up — ai-proxy deploy)
 status: fixed
-blast_radius: account
+blast_radius: platform
 symptom: >
   The AI coach's `regeneratePlanBlock` tool exposed a `goal` z.enum that omitted
   'recompose' (only build_muscle / lose_fat / general_fitness / strength). Its

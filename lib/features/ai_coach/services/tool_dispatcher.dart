@@ -665,6 +665,17 @@ class ToolDispatcher {
   /// here).
   Future<ToolExecutionResult> _executeRegeneratePlanBlock(
       ToolIntent intent) async {
+    // Defense-in-depth (B-pass b7c8040 / Finding 2 — symmetric with
+    // _executeSwitchGoal's Hermes L28 guard): reject a goal FitnessGoals doesn't
+    // know BEFORE applying the regenerated block, so a replayed/crafted intent or
+    // a future ungated entry point can't silently regenerate a general_fitness
+    // plan and report success (the F19 fallthrough class). The server enum can't
+    // emit an unknown goal — check_goal_token_exhaustiveness Check 4 pins it — but
+    // switchGoal guards here too and this sibling must stay symmetric.
+    final requestedGoal = intent.payload['goal'] as String?;
+    if (requestedGoal != null && !FitnessGoals.isKnown(requestedGoal)) {
+      return ToolExecutionResult.failure('Unsupported goal: $requestedGoal.');
+    }
     final rawSchedules =
         RegeneratePlanPlanner.instance.getCachedRawSchedules(intent.id);
     if (rawSchedules == null) {

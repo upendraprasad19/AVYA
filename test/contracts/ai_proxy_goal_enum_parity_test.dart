@@ -90,4 +90,41 @@ void main() {
         reason: 'regeneratePlanBlock goal enum lists non-token goal(s): '
             '${enumTokens.difference(tokens)} — the client would reject it.');
   });
+
+  // Defense-in-depth symmetry (B-pass b7c8040 / Finding 2): both destructive plan
+  // tools that can carry a goal — switch_goal (persists primary_goal) and
+  // regenerate_plan_block — must reject a goal FitnessGoals doesn't know via a
+  // `FitnessGoals.isKnown(...)` guard before acting, so a replayed/crafted intent
+  // can't silently produce a general_fitness plan and report success (F19 class).
+  // The enum gate (Check 4) closes the server vector; this pins the client guards
+  // so the two stay symmetric. Presence pin — the recompose end-to-end BEHAVIOUR
+  // is covered by the enum parity tests above + the tool_dispatcher reader-path
+  // contract tests.
+  group('tool_dispatcher goal guard symmetry', () {
+    String methodWindow(String src, String signature) {
+      final i = src.indexOf(signature);
+      expect(i, greaterThanOrEqualTo(0),
+          reason: 'method "$signature" not found in tool_dispatcher.dart');
+      final end = (i + 1600).clamp(0, src.length);
+      return src.substring(i, end);
+    }
+
+    test('switch_goal and regenerate_plan_block both guard unknown goals', () {
+      final src = stripComments(
+          File('lib/features/ai_coach/services/tool_dispatcher.dart')
+              .readAsStringSync());
+      final switchWin =
+          methodWindow(src, 'Future<ToolExecutionResult> _executeSwitchGoal(');
+      final regenWin = methodWindow(
+          src, 'Future<ToolExecutionResult> _executeRegeneratePlanBlock(');
+      expect(switchWin.contains('FitnessGoals.isKnown('), isTrue,
+          reason:
+              '_executeSwitchGoal must guard newGoal via FitnessGoals.isKnown');
+      expect(regenWin.contains('FitnessGoals.isKnown('), isTrue,
+          reason:
+              '_executeRegeneratePlanBlock must guard the requested goal via '
+              'FitnessGoals.isKnown (B-pass b7c8040 Finding 2 — symmetric with '
+              'switchGoal; defense-in-depth against an unknown-goal intent).');
+    });
+  });
 }
