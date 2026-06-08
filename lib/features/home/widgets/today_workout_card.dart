@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -50,7 +51,7 @@ class TodayWorkoutCard extends StatelessWidget {
     this.proteinCurrent = 0,
     this.proteinTarget = 184,
     this.steps = 0,
-    this.stepsGoal = 10000,
+    this.stepsGoal = AppConstants.defaultDailyStepGoal,
     this.isRestDay = false,
     this.isDone = false,
     this.totalVolumeKg,

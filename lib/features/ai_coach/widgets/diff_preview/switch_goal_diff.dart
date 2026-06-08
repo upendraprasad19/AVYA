@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/services/hive_service.dart';
 import '../../../../core/theme/colors.dart';
@@ -277,7 +278,9 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
       case 'unknown':
         return 'Not set';
       default:
-        return raw;
+        // Any goal token not explicitly cased (e.g. 'recompose') resolves via
+        // the canonical FitnessGoals label instead of rendering the raw token.
+        return FitnessGoals.isKnown(raw) ? FitnessGoals.label(raw) : raw;
     }
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../shared/widgets/error_state.dart';
+import '../../../shared/widgets/paywall_sheet.dart';
 import '../repositories/progress_photo_repository.dart';
 
 /// Full-screen progress photos gallery (F19).
@@ -57,7 +58,32 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
     if (area == null || !mounted) return;
 
     setState(() => _uploading = true);
-    final id = await _repo.capture(source: source, bodyArea: area);
+    String? id;
+    try {
+      id = await _repo.capture(source: source, bodyArea: area);
+    } on PhotoQuotaException catch (e) {
+      // Daily cap hit (2/day free, 5/day PRO). Before F40 the throw propagated
+      // uncaught and left _uploading=true (spinner stuck forever) with no
+      // paywall/snackbar. Free users get the paywall for the higher PRO cap;
+      // PRO users (already at the top cap) get a neutral come-back-tomorrow nudge.
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      if (e.isPro) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Daily photo limit reached — back tomorrow.')),
+        );
+      } else {
+        showPaywallSheet(context, feature: 'Progress Photos');
+      }
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload failed — try again')),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _uploading = false);
 

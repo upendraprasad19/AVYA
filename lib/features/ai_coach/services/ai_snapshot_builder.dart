@@ -602,9 +602,7 @@ class AiSnapshotBuilder {
 
   Map<String, dynamic> _getTodayNutrition() {
     final nutritionBox = _hive.nutritionBox;
-    final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     double calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
 
@@ -712,15 +710,10 @@ class AiSnapshotBuilder {
 
   List<Map<String, dynamic>> _getNutritionTrend7d() {
     final nutritionBox = _hive.nutritionBox;
-    final now = DateTime.now();
+    final now = nowWall();
 
     final windowDates = <String>[
-      for (var i = 0; i < 7; i++)
-        () {
-          final d = now.subtract(Duration(days: i));
-          return '${d.year}-${d.month.toString().padLeft(2, "0")}-'
-              '${d.day.toString().padLeft(2, "0")}';
-        }(),
+      for (var i = 0; i < 7; i++) istDateStr(now.subtract(Duration(days: i))),
     ];
     final windowSet = windowDates.toSet();
 

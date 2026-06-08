@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
 import '../../../../core/services/error_telemetry.dart';
 import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
@@ -236,7 +237,8 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
       case 'strength':
         return 'Strength';
       default:
-        return raw;
+        // 'recompose' + any future goal token resolves via FitnessGoals.
+        return FitnessGoals.isKnown(raw) ? FitnessGoals.label(raw) : raw;
     }
   }
 

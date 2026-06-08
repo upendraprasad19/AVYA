@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 
 // ── Home screen daily providers ──
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -70,10 +71,7 @@ class DayRolloverObserver with WidgetsBindingObserver {
 
   static const _hiveKey = 'last_known_date';
 
-  String _todayStr() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
+  String _todayStr() => istTodayStr();
 
   void _storeCurrentDate() {
     HiveService.instance.configBox.put(_hiveKey, _todayStr());
@@ -181,7 +179,6 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(aiInsightProvider);
     ref.invalidate(predictionProvider);
     ref.invalidate(messageLimitProvider);
-    ref.invalidate(trialInfoProvider);
 
     // ── Misc daily providers ──
     // Expiry banner: dismiss is once-per-IST-day, so re-evaluate at rollover

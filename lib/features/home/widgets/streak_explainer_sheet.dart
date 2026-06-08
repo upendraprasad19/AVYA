@@ -81,8 +81,8 @@ class StreakExplainerSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            _rule('You earn +1 each week you complete at least 80% of your '
-                'scheduled workouts.'),
+            _rule('You earn +1 for every scheduled training day you complete. '
+                'Rest days never count against you.'),
             _rule('Rest days and off days don\'t count against you.'),
             _rule('Miss a scheduled workout and we\'ll use a Streak Freeze '
                 'automatically to keep your streak alive.'),

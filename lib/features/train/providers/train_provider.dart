@@ -17,6 +17,7 @@ import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -412,9 +413,7 @@ class CurrentPlanData {
   /// Get today's workout (first non-rest, non-done workout in current week).
   WorkoutDayData? get todayWorkout {
     final weekDays = getWeek(currentWeek);
-    final today = DateTime.now();
-    final todayStr =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayStr = istTodayStr();
 
     // First, try to find the workout for today's actual date.
     for (final day in weekDays) {
@@ -869,10 +868,10 @@ class ActiveWorkoutData {
     // distinct chart hues (purple / orange / green / blue).
     final colors = [
       AppColors.accent,
-      const Color(0xFFa855f7), // purple
-      const Color(0xFFf97316), // orange
-      const Color(0xFF4ade80), // green
-      const Color(0xFF38bdf8), // blue
+      AppColors.chartPurple,
+      AppColors.chartOrange,
+      AppColors.chartGreen,
+      AppColors.chartBlue,
     ];
     return colors[groupIndex % colors.length];
   }
@@ -1181,8 +1180,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     if (workoutDate == null) return;
 
     final hive = HiveService.instance;
-    final dateKey =
-        '${workoutDate.year}-${workoutDate.month.toString().padLeft(2, '0')}-${workoutDate.day.toString().padLeft(2, '0')}';
+    final dateKey = istDateStr(workoutDate);
     final scheduleKey = 'schedule_$dateKey';
     final entry = hive.workoutBox.get(scheduleKey);
     if (entry == null || entry is! Map) return;

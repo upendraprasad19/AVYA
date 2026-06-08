@@ -316,78 +316,6 @@ class MessageLimitNotifier extends Notifier<int> {
 final messageLimitProvider =
     NotifierProvider<MessageLimitNotifier, int>(MessageLimitNotifier.new);
 
-// ── Trial Expiry ─────────────────────────────────────────────────
-
-class TrialInfoData {
-  final int daysRemaining;
-  final bool isTrialActive;
-  final bool isTrialExpired;
-
-  const TrialInfoData({
-    this.daysRemaining = 0,
-    this.isTrialActive = false,
-    this.isTrialExpired = false,
-  });
-}
-
-class TrialInfoNotifier extends Notifier<TrialInfoData> {
-  @override
-  TrialInfoData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    // PRO users are never trial-limited
-    // A7 / B5 D9-D10 — canonical provider path.
-    if (ref.read(subscriptionServiceProvider).isPro()) {
-      return const TrialInfoData(
-        daysRemaining: 0,
-        isTrialActive: false,
-        isTrialExpired: false,
-      );
-    }
-
-    final trialStartRaw = MigratedKey.read<String>('ai_trial_start');
-
-    if (trialStartRaw == null) {
-      // First time — start trial now
-      final now = DateTime.now();
-      MigratedKey.write('ai_trial_start', now.toIso8601String());
-      return TrialInfoData(
-        daysRemaining: AppConstants.freeAiTrialDays,
-        isTrialActive: true,
-        isTrialExpired: false,
-      );
-    }
-
-    final trialStart = DateTime.tryParse(trialStartRaw);
-    if (trialStart == null) {
-      return const TrialInfoData(
-        daysRemaining: 0,
-        isTrialActive: false,
-        isTrialExpired: true,
-      );
-    }
-
-    final daysSinceStart = istNow().difference(trialStart).inDays;
-    final remaining = AppConstants.freeAiTrialDays - daysSinceStart;
-
-    if (remaining <= 0) {
-      return const TrialInfoData(
-        daysRemaining: 0,
-        isTrialActive: false,
-        isTrialExpired: true,
-      );
-    }
-
-    return TrialInfoData(
-      daysRemaining: remaining,
-      isTrialActive: true,
-      isTrialExpired: false,
-    );
-  }
-}
-
-final trialInfoProvider =
-    NotifierProvider<TrialInfoNotifier, TrialInfoData>(TrialInfoNotifier.new);
-
 // ── Send Message ─────────────────────────────────────────────────
 
 class SendMessageNotifier extends Notifier<bool> {
@@ -634,8 +562,8 @@ class SendMessageNotifier extends Notifier<bool> {
       final context = repo.enrichContextForQuery(message, baseContext);
 
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
-      // 2026-04-18 onward. Free/PRO differentiation is the 15/day server-side
-      // cap + trial window — the client no longer picks a backend.
+      // 2026-04-18 onward. Free/PRO differentiation is the 10/day server-side
+      // cap (FREE_DAILY_LIMIT, no trial) — the client no longer picks a backend.
       final aiResponse = await ref.read(aiServiceProvider).chat(message, context);
 
       // Replace loading with actual response
@@ -748,10 +676,8 @@ class SendMessageNotifier extends Notifier<bool> {
         errorMsg = 'Session error. Please try again.';
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
-      } else if (errStr.contains('TRIAL_EXPIRED')) {
-        errorMsg = 'Your 30-day free AI trial has ended. Upgrade to PRO for unlimited coaching.';
       } else if (errStr.contains('RATE_LIMITED')) {
-        errorMsg = 'Daily message limit reached (15/day on free plan). Try again tomorrow or upgrade to PRO.';
+        errorMsg = 'Daily message limit reached (${AppConstants.freeAiMessagesPerDay}/day on free plan). Try again tomorrow or upgrade to PRO.';
       } else if (errStr.contains('Message too long')) {
         errorMsg = 'Your message is too long (max 5000 chars). Please shorten it and try again.';
       } else if (errStr.contains('Snapshot too large')) {

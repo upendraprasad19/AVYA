@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/fitness_goals.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/utils/ist_date.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/subscription_service.dart';
@@ -788,6 +790,14 @@ class ToolDispatcher {
       return const ToolExecutionResult.failure(
           'Invalid switch_goal payload.');
     }
+    // Hermes E-pass L28 defense-in-depth: primary_goal feeds the BmrCalculator /
+    // PlanGenerator goal SoT. Reject any token FitnessGoals doesn't know BEFORE
+    // the write, so a non-onboarding entry point (a future tool, a replayed
+    // intent, a server-enum regression) can't persist an unknown goal that
+    // silently falls back to maintenance calories (the F19 class).
+    if (!FitnessGoals.isKnown(newGoal)) {
+      return ToolExecutionResult.failure('Unsupported goal: $newGoal.');
+    }
 
     // The diff widget caches the regenerated raw schedules under intent.id
     // — the dispatcher refuses to write the profile change without the
@@ -1294,12 +1304,7 @@ class ToolDispatcher {
     }
   }
 
-  String _todayDateString() {
-    final n = DateTime.now();
-    return '${n.year.toString().padLeft(4, '0')}-'
-        '${n.month.toString().padLeft(2, '0')}-'
-        '${n.day.toString().padLeft(2, '0')}';
-  }
+  String _todayDateString() => istTodayStr();
 
   String? _resolveExerciseName(String exerciseId) {
     final libBox = HiveService.instance.exerciseBox;

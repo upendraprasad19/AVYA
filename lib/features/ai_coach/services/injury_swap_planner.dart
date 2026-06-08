@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/utils/ist_date.dart';
+
 import '../../../core/services/hive_service.dart';
 
 /// One planned swap for a single date.
@@ -47,8 +49,7 @@ class InjurySwapPlanner {
 
     for (var i = 0; i < daysAhead; i++) {
       final d = today.add(Duration(days: i));
-      final dateStr =
-          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final dateStr = istDateStr(d);
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
       if (raw is! Map) continue;
       if (raw['status'] == 'completed') continue;

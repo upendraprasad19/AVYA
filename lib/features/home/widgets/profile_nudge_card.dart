@@ -21,6 +21,12 @@ class ProfileNudgeCard extends ConsumerWidget {
     // Don't show if complete
     if (completeness.isComplete) return const SizedBox.shrink();
 
+    // F14: the top-of-home CompletenessNudge owns the <80% band (it hides at
+    // >=80%). Below 80% this card stays hidden so the user never sees TWO
+    // "finish your profile" cards at once; ProfileNudgeCard covers only the
+    // 80–99% "almost done" tail.
+    if (completeness.percentage < 80) return const SizedBox.shrink();
+
     // Don't show if dismissed < 3 days ago
     final dismissedAt = MigratedKey.read<String>(_dismissKey);
     if (dismissedAt != null) {

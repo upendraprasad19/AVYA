@@ -1,6 +1,7 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Repository for all nutrition-related Hive reads/writes.
@@ -588,7 +589,9 @@ class NutritionRepository {
   // ── Helpers ──────────────────────────────────────────────────────
 
   String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    // Writer keys `nlog_*` rows with `istDateStr(date)` — the reader's date
+    // key MUST match (was device-local → missed rows off-IST).
+    return istDateStr(date);
   }
 
   /// Returns the Monday of the week containing [date].

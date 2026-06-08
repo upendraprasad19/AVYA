@@ -66,7 +66,7 @@ extension SyncServiceHealth on SyncService {
             'date': dateStr,
             'duration_hrs': hours,
             if (log['quality'] != null) 'quality': log['quality'],
-            'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+            'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
           }, onConflict: 'user_id,date');
         } catch (e, st) {
           debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
@@ -131,7 +131,7 @@ extension SyncServiceHealth on SyncService {
           'date': log['date'],
           'weight_kg': log['weight_kg'],
           'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'user_id,date');
       } catch (e, st) {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
@@ -165,7 +165,7 @@ extension SyncServiceHealth on SyncService {
           'hips': log['hips'],
           'arms': log['arms'],
           'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'user_id,date');
         // E.14.A · audit-2026-05-16 — success-path emission.
         unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
@@ -202,7 +202,7 @@ extension SyncServiceHealth on SyncService {
           'bed_time': log['bed_time'],
           'wake_time': log['wake_time'],
           'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'user_id,date');
         // E.14.A · audit-2026-05-16 — success-path emission.
         unawaited(ErrorTelemetry.logEvent('upsert_sleep_logs_success',
@@ -239,7 +239,7 @@ extension SyncServiceHealth on SyncService {
           'date': date,
           'steps': steps,
           'source': log['source'] ?? 'health_connect',
-          'synced_at': DateTime.now().toIso8601String(),
+          'synced_at': DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'user_id,date');
       } catch (e, st) {
         debugPrint('[SyncService._syncStepsLogs] $key: $e');
@@ -270,7 +270,7 @@ extension SyncServiceHealth on SyncService {
           'date': date,
           'urine_color': (log['index'] as int?) ?? -1,
           'urine_status': log['label'] ?? 'unknown',
-          'updated_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'user_id,date');
       } catch (e, st) {
         debugPrint('[SyncService._syncUrineColorLogs] $e');
@@ -347,11 +347,16 @@ extension SyncServiceHealth on SyncService {
 
   Future<void> _restoreSleepLogs(String userId, String since) async {
     try {
-      final rows = await _supabase.client
-          .from('sleep_logs')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since);
+      // F37 (2026-06-07): route through the paginated _fetchAllRows helper
+      // (same as _restoreWeightLogs / _restoreMeasurements siblings). The
+      // prior raw `.select().eq().gte()` had NO .limit/.range → PostgREST
+      // truncated the result at the default 1000-row cap, silently dropping
+      // older sleep history on restore. _fetchAllRows paginates to the 50k
+      // ceiling.
+      final rows = await _fetchAllRows(
+        'sleep_logs', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+      );
 
       if (rows.isEmpty) return;
 

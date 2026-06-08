@@ -326,7 +326,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ...widget.initial ?? const <String, dynamic>{},
               'goal': widget.goal,
               if (_weight.text.isNotEmpty)
-                'current_weight_kg': double.tryParse(_weight.text),
+                'weight_kg': double.tryParse(_weight.text),
               if (_targetWeight.text.isNotEmpty)
                 'target_weight_kg': double.tryParse(_targetWeight.text),
               if (_height.text.isNotEmpty)

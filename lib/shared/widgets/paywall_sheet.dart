@@ -177,11 +177,25 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     }
   }
 
-  /// Get the discounted price for a given base price.
-  int _discountedPrice(int basePrice) {
-    if (!_promoApplied || _promoDiscountPct <= 0) return basePrice;
-    return (basePrice * (100 - _promoDiscountPct) / 100).round();
+  /// Discounted charge in **paise**, computed byte-for-byte the way the
+  /// server does it in `create-razorpay-order`:
+  ///   amountPaise = Math.round(basePaise * (100 - discountPct) / 100)
+  /// (in-sync sweep 2026-06-07 / F35). Rounding at paise granularity here —
+  /// not at rupee granularity — is what keeps the displayed price equal to the
+  /// amount Razorpay is actually asked to charge. The old helper rounded in
+  /// whole rupees, so e.g. ₹349 @ 15% displayed ₹297 while the server charged
+  /// 29 665 paise (₹296.65).
+  int _discountedPaise(int basePrice) {
+    final basePaise = basePrice * 100;
+    if (!_promoApplied || _promoDiscountPct <= 0) return basePaise;
+    return (basePaise * (100 - _promoDiscountPct) / 100).round();
   }
+
+  /// Discounted price in whole rupees, derived from the server-consistent
+  /// paise figure (used for the coarse `monthlyCostOfYearly` / `savingsPercent`
+  /// derivations where sub-rupee precision is immaterial). The user-facing
+  /// price label uses [_formatPriceFromPaise] so it shows the exact charge.
+  int _discountedPrice(int basePrice) => (_discountedPaise(basePrice) / 100).round();
 
   Future<void> _handleUpgrade() async {
     if (_isProcessing) return;
@@ -289,8 +303,12 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     final monthlyFinal = _discountedPrice(monthlyBase);
     final yearlyFinal = _discountedPrice(yearlyBase);
 
-    final monthlyPrice = _formatPrice(monthlyFinal);
-    final yearlyPrice = _formatPrice(yearlyFinal);
+    // Display labels are derived from the server-consistent paise figure so the
+    // shown price equals what Razorpay charges (in-sync sweep / F35). Shows
+    // paise only when a promo produces a fractional rupee; whole-rupee prices
+    // render exactly as before.
+    final monthlyPrice = _formatPriceFromPaise(_discountedPaise(monthlyBase));
+    final yearlyPrice = _formatPriceFromPaise(_discountedPaise(yearlyBase));
     final monthlyCostOfYearly = (yearlyFinal / 12).round();
     final savingsPercent = (((monthlyFinal * 12 - yearlyFinal) /
                 (monthlyFinal * 12)) *
@@ -611,6 +629,18 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       return '$thousands,${remainder.toString().padLeft(3, '0')}';
     }
     return '$price';
+  }
+
+  /// Format a paise amount as an Indian-rupee price string, matching exactly
+  /// what `create-razorpay-order` will charge (in-sync sweep / F35). Whole
+  /// rupees render via [_formatPrice] (unchanged, no decimals); a fractional
+  /// rupee from a promo shows two-decimal paise (e.g. 29 665 paise → "296.65").
+  static String _formatPriceFromPaise(int paise) {
+    final rupees = paise ~/ 100;
+    final paiseRem = paise % 100;
+    final whole = _formatPrice(rupees);
+    if (paiseRem == 0) return whole;
+    return '$whole.${paiseRem.toString().padLeft(2, '0')}';
   }
 }
 

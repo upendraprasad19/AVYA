@@ -24,14 +24,17 @@
 |---|---|---|---|---|---|---|
 | 015 | `morning-alert-daily` | 06:00 IST daily | `morning-alert` | founder | `service_role_key` | Pushes morning workout/streak nudge |
 | 028 | `compute-coach-signals-nightly` | 02:00 IST daily | `compute-coach-signals` | founder | `service_role_key` | Aggregates 7-day signals for AI coach context |
-| 031 | `proactive-triggers` | every 15 min | `proactive-triggers` | founder | `service_role_key` | Detects post-meal / pre-workout windows |
+| 031 | `proactive_re_engagement` (jobid 10) | 06:30 UTC = 12:00 IST | `re-engagement` | founder | `service_role_key` | Win-back nudge for lapsed users. **F47 (2026-06-07):** registry previously listed a single fictional `proactive-triggers` job → `proactive-triggers` (no such cron name, no such function dir). Migration 031 actually schedules these 5 granular jobs. |
+| 031 | `proactive_plateau_alert` (jobid 11) | 13:30 UTC = 19:00 IST | `plateau-alert` | founder | `service_role_key` | Flags weight/lift plateaus |
+| 031 | `proactive_protein_gap_alert` (jobid 12) | 14:30 UTC = 20:00 IST | `protein-gap-alert` | founder | `service_role_key` | Daily protein-deficit nudge |
+| 031 | `proactive_workout_window_closing` (jobid 13) | 15:30 UTC = 21:00 IST | `workout-window-closing` | founder | `service_role_key` | Evening pre-bed training nudge. (031 also schedules `proactive_pr_detection` (jobid 9) → `pr-detection` — see the `065` row below, which re-registered it for auth.) |
 | 040 | `evaluate-rank-promotions-daily` | 04:00 IST daily | `evaluate-rank-promotions` | founder | `service_role_key` | Promotes users up the Lt/Cdr ladder |
 | 043 | `i-see-you-daily` | 19:30 IST daily (14:00 UTC) | `i-see-you-callout` | founder | `service_role_key` | Surfaces "I see you" callouts |
 | 046 | `morning_alert_deliver_early` (jobid 17) | 04:30 IST daily | `morning-alert` (personalised delivery slot) | founder | `service_role_key` | Early-bird variant; broke silently in mid-May before being detected |
 | 046 | `morning_alert_deliver_late` | 07:30 IST daily | `morning-alert` (personalised delivery slot) | founder | `service_role_key` | Late-riser variant |
 | 047 | `clean-orphan-media-weekly` | Sunday 03:00 IST | `clean-orphan-media` | founder | `service_role_key` | Sweeps unreferenced Storage objects |
 | 061 | `rolling-context-nightly` | 03:00 IST daily | `rolling-context` | founder | `service_role_key` | Retrofitted to `private.morning_alert_get_service_key()` in audit 2026-05-12 P1-D |
-| 061 | `streak-guardian-daily` | 23:50 IST daily | `streak-guardian` | founder | `service_role_key` | Same P1-D retrofit |
+| 061 | `streak-guardian-daily` | 20:00 IST daily (14:30 UTC) | `streak-guardian` | founder | `service_role_key` | Same P1-D retrofit. **F46 (2026-06-07):** registry said 23:50 IST, but migration 061 + live jobid 20 are both `30 14 * * *` = 20:00 IST — corrected here + in the function docstring. |
 | 061 | `weekly_recap_ready_sunday` | Sunday 09:00 IST | `weekly-report` | founder | `service_role_key` | Audit P1-D fix; sends weekly performance recap |
 | 061 | `expiry_reminder_daily` | 10:00 IST daily | `expiry-reminder` | founder | `service_role_key` | Audit P1-D fix; subscription expiry nudges |
 | 047 | `clean_orphan_media_daily` | 03:00 IST daily | `clean-orphan-media` | founder | `service_role_key` | Sweeps unreferenced Storage objects (entry rename: registry initially used weekly cadence — actual migration is daily) |

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -760,7 +761,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         proteinCurrent: nutrition.protein,
         proteinTarget: nutrition.proteinTarget,
         steps: ref.watch(todayStepsProvider),
-        stepsGoal: 10000,
+        stepsGoal: AppConstants.defaultDailyStepGoal,
       );
     }
 
@@ -806,7 +807,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         proteinCurrent: nutrition.protein,
         proteinTarget: nutrition.proteinTarget,
         steps: ref.watch(todayStepsProvider),
-        stepsGoal: 10000,
+        stepsGoal: AppConstants.defaultDailyStepGoal,
       );
     }
 

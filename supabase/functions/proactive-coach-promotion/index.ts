@@ -20,6 +20,7 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -67,6 +68,26 @@ const RANK_LABELS: Record<string, string> = {
 serve(async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // ── F44 (2026-06-07 audit) — cron/service auth gate.
+  //
+  // verify_jwt=false (the Postgres trigger trg_dispatch_proactive_coach_promotion
+  // dispatches via pg_net, not an end-user JWT). Without a manual gate an
+  // unauthenticated POST could drive Gemini cost + OneSignal push +
+  // ai_coach_interactions writes to ANY user_id. The trigger sends
+  // `Authorization: Bearer <service_role_jwt>` (migration 078, resolved from
+  // Vault via private.morning_alert_get_service_key()), so the SAME shared
+  // `isAuthorizedCronCall(req)` gate the sibling cron functions use
+  // (pr-detection, streak-guardian, i-see-you-callout, re-engagement,
+  // evaluate-rank-promotions, …) authenticates the existing dispatch while
+  // rejecting anonymous callers. Verifies the JWT signature against
+  // SUPABASE_JWT_SECRET + role-claim === 'service_role'; CRON_SECRET opaque
+  // token is the escape hatch inside the helper. Reject BEFORE any
+  // Gemini/push/DB work.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[proactive-coach-promotion] unauthorized caller; status=401`);
+    return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
   let payload: TriggerPayload;

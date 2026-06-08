@@ -80,7 +80,6 @@ jobs:
             case "$NAME" in
               check_apk_size_within_bounds.dart|\
               check_hooks_installed.dart|\
-              check_app_version_matches_pubspec.dart|\
               check_telemetry_pii_classification.dart|\
               check_unawaited_has_error_sink.dart|\
               check_razorpay_key_flavor.dart|\

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -149,7 +150,7 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
           const SizedBox(height: 8),
           Center(
             child: Text(
-              '₹349 / month  ·  ₹2,999 / year (save 28%)',
+              '₹${AppConstants.monthlyPriceInr} / month  ·  ₹${AppConstants.yearlyPriceInr} / year (save 28%)',
               style: AppTypography.mono.copyWith(
                 fontSize: 10,
                 color: AppColors.textMute,

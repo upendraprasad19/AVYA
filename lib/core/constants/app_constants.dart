@@ -66,11 +66,8 @@ class AppConstants {
   // ── Free Tier Limits ──────────────────────────────────────
 
   /// Maximum AI coach messages per day for free users.
-  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (15).
-  static const int freeAiMessagesPerDay = 15;
-
-  /// Free AI coach trial duration in days.
-  static const int freeAiTrialDays = 30;
+  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (10).
+  static const int freeAiMessagesPerDay = 10;
 
   /// Free AI food text logs per day.
   static const int freeAiTextLogsPerDay = 10;
@@ -89,6 +86,12 @@ class AppConstants {
 
   /// Beat My Coach challenge interval in days (disabled — Phase 2).
   static const int beatMyCoachIntervalDays = 14;
+
+  // ── Activity Goals ────────────────────────────────────────
+  /// Default daily step goal shown on the Home steps card + Today's Workout
+  /// card. Centralized 2026-06-07 (in-sync sweep) so the figure is a one-line
+  /// edit, not a 4-site literal sweep.
+  static const int defaultDailyStepGoal = 10000;
 
   // ── Terms & Privacy ───────────────────────────────────────
 
@@ -109,7 +112,7 @@ class AppConstants {
   /// rows in the last 30 days were mis-labelled. Bumped to `+27` for the
   /// audit ship; permanent gate `scripts/check_app_version_matches_pubspec.dart`
   /// added so the next regression is caught pre-build.
-  static const String appVersion = '1.0.0+28';
+  static const String appVersion = '1.0.0+33';
 
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';

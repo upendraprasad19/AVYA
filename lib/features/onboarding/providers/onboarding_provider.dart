@@ -454,10 +454,9 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
       await _userRepo.setOnboarded();
 
-      // Note: ai_trial_start is set lazily by ai_coach_provider on first
-      // chat message, and server sets users.ai_chat_started_at on first
-      // Edge Function call. No need to write a local key here.
-      // The dead 'ai_chat_started_at' local key was removed — nothing reads it.
+      // Note: the AI coach has no trial (removed 2026-06-07 / F1) — it's a
+      // flat 10/day forever, server-enforced. No trial-start key is written
+      // here. The dead 'ai_chat_started_at' local key was removed too.
 
       // Sync onboarding flag + profile to Supabase.
       //

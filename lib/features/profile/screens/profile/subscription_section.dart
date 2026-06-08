@@ -177,17 +177,6 @@ extension _SubscriptionSection on _ProfileScreenState {
     final cartUsed = usage.used(AppConstants.featureCartAuditorPro, false);
     final cartLimit = AppConstants.freeCartAuditorPerDay;
 
-    final trialStartRaw = MigratedKey.read<String>('ai_trial_start');
-    int? trialDaysLeft;
-    if (trialStartRaw != null) {
-      final trialStart = DateTime.tryParse(trialStartRaw);
-      if (trialStart != null) {
-        final elapsed = DateTime.now().difference(trialStart).inDays;
-        final left = AppConstants.freeAiTrialDays - elapsed;
-        trialDaysLeft = left.clamp(0, AppConstants.freeAiTrialDays);
-      }
-    }
-
     return WardCard(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -220,20 +209,6 @@ extension _SubscriptionSection on _ProfileScreenState {
               ),
             ],
           ),
-          if (trialDaysLeft != null) ...[
-            const SizedBox(height: 10),
-            WardChip(
-              label: trialDaysLeft > 0
-                  ? '${trialDaysLeft}d AI trial remaining'
-                  : 'AI trial expired',
-              tone: trialDaysLeft > 7 ? WardChipTone.gold : WardChipTone.warn,
-              leading: Icon(
-                Icons.timer_outlined,
-                size: 11,
-                color: trialDaysLeft > 7 ? AppColors.accent : AppColors.warn,
-              ),
-            ),
-          ],
           const SizedBox(height: 12),
           _usageRow('AI Text Logs', aiTextUsed, aiTextLimit, '/day'),
           const SizedBox(height: 8),

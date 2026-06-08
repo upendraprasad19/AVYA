@@ -530,7 +530,7 @@ class RazorpayService {
   ///   - _pollAndActivate Phase 1 (when webhook confirms)
   ///   - _pollAndActivate Phase 2 (when verify-payment confirms)
   /// Each call triggers a UI rebuild for any widget watching these
-  /// providers, so the user's pills + trial banner reflect the latest
+  /// providers, so the user's pills + message counter reflect the latest
   /// PRO state without manual refresh.
   void _invalidateSubscriptionProviders() {
     final context = navigatorKey?.currentContext;
@@ -538,7 +538,6 @@ class RazorpayService {
     try {
       final container = ProviderScope.containerOf(context, listen: false);
       container.invalidate(subscriptionInfoProvider);
-      container.invalidate(trialInfoProvider);
       container.invalidate(messageLimitProvider);
     } catch (_) {}
   }

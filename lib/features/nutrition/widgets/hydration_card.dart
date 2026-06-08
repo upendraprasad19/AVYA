@@ -31,19 +31,19 @@ class _HydrationCardState extends ConsumerState<HydrationCard> {
   // Same 7-step ladder used in the legacy widget. Kept verbatim so saved
   // urine indices remain semantically identical.
   static const _urineColors = [
-    (color: Color(0xFFFFF9C4), status: 'Excellent',
+    (color: AppColors.hydrationExcellent, status: 'Excellent',
         tip: 'Pale straw — optimal', tone: WardChipTone.ok),
-    (color: Color(0xFFFFF176), status: 'Well hydrated',
+    (color: AppColors.hydrationWellHydrated, status: 'Well hydrated',
         tip: 'Clear yellow — well hydrated', tone: WardChipTone.ok),
-    (color: Color(0xFFFFD600), status: 'Adequate',
+    (color: AppColors.hydrationAdequate, status: 'Adequate',
         tip: 'Yellow — drink more soon', tone: WardChipTone.warn),
-    (color: Color(0xFFFFB300), status: 'Low',
+    (color: AppColors.hydrationLow, status: 'Low',
         tip: 'Dark yellow — drink now', tone: WardChipTone.warn),
-    (color: Color(0xFFE65100), status: 'Very low',
+    (color: AppColors.hydrationVeryLow, status: 'Very low',
         tip: 'Amber — significantly dehydrated', tone: WardChipTone.bad),
-    (color: Color(0xFFBF360C), status: 'Critical',
+    (color: AppColors.hydrationCritical, status: 'Critical',
         tip: 'Brown — consult a doctor', tone: WardChipTone.bad),
-    (color: Color(0xFF4E342E), status: 'See doctor',
+    (color: AppColors.hydrationSeeDoctor, status: 'See doctor',
         tip: 'Dark brown — medical attention', tone: WardChipTone.bad),
   ];
 

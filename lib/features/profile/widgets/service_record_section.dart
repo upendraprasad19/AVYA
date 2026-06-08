@@ -176,9 +176,10 @@ class _ServiceRecordSectionState extends ConsumerState<ServiceRecordSection> {
   String? _nextRankLabel(RankInfo? next) {
     if (next == null) return 'Top rank achieved';
     final name = next.entry.displayName;
-    if (next.workoutsRemaining != null && next.workoutsRemaining! > 0) {
-      return 'Next: $name in ~${next.workoutsRemaining} workouts';
-    }
+    // F18 (2026-06-07): dropped the dead "in ~N workouts" branch —
+    // RankInfo.workoutsRemaining was always null (no kRankGates entry sets
+    // totalWorkoutsAtLeast). The ladder is streak/weeks/completion-gated, so
+    // the days-until-eligible label is the canonical next-rank hint.
     if (next.daysUntilEligible != null && next.daysUntilEligible! > 0) {
       return 'Next: $name in ~${next.daysUntilEligible} days';
     }

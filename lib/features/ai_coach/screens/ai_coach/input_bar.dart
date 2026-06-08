@@ -7,10 +7,9 @@ extension _InputBar on _AiCoachScreenState {
   // ────────────────────────────────────────────────────────────────
 
   Widget _buildInputBar(
-      bool isSending, int messageCount, bool isPro, TrialInfoData trialInfo) {
-    final isLimitReached = !isPro &&
-        (messageCount >= AppConstants.freeAiMessagesPerDay ||
-            trialInfo.isTrialExpired);
+      bool isSending, int messageCount, bool isPro) {
+    final isLimitReached =
+        !isPro && messageCount >= AppConstants.freeAiMessagesPerDay;
 
     final isWarning =
         !isPro && messageCount >= AppConstants.freeAiMessagesPerDay - 3;
@@ -165,9 +164,8 @@ extension _InputBar on _AiCoachScreenState {
             ),
           ),
 
-          // Inline message counter — only when top trial banner is NOT shown
-          // (trial active users already see the counter in the banner above)
-          if (!isPro && !trialInfo.isTrialActive) ...[
+          // Inline message counter — free users only.
+          if (!isPro) ...[
             const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -181,17 +179,6 @@ extension _InputBar on _AiCoachScreenState {
                     letterSpacing: 1.4,
                   ),
                 ),
-                if (trialInfo.isTrialActive &&
-                    !trialInfo.isTrialExpired &&
-                    trialInfo.daysRemaining <= 7) ...[
-                  Text(
-                    '  \u00B7  ${trialInfo.daysRemaining}D TRIAL LEFT',
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.warn,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ],
                 if (isWarning && !isLimitReached) ...[
                   const SizedBox(width: 6),
                   GestureDetector(

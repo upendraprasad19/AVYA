@@ -10,7 +10,7 @@
 //
 // Fix: SubscriptionService.onStateChanged static hook. Wired from
 // app.dart initState to invalidate subscriptionInfoProvider +
-// trialInfoProvider + messageLimitProvider on every state write.
+// messageLimitProvider on every state write.
 
 import 'dart:io';
 import 'package:flutter/services.dart';

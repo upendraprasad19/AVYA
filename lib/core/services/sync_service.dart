@@ -896,6 +896,13 @@ class SyncService {
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
           _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+          // F38 (2026-06-07): re-anchor the workout plan on every returning-user
+          // launch. A plan_start_date that advanced on another device was never
+          // re-applied on a normal (non-empty-Hive) launch, leaving this device's
+          // week number / day labels stale. _restoreWorkoutPlan is idempotent —
+          // it applies the cloud plan_json via the completed-day-preserving
+          // PlanIntegrityReconciler merge (diagnose a7d3f1).
+          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
         ],
         eagerError: false,
       );

@@ -223,10 +223,9 @@ class SubscriptionService {
   /// APK Test #12.2 / cold-start reactivity hook.
   ///
   /// Wired from `app.dart` initState — invokes a Riverpod invalidation
-  /// of `subscriptionInfoProvider` (+ `trialInfoProvider`,
-  /// `messageLimitProvider`) so widgets watching these providers
-  /// rebuild after `writeSubscriptionState` / `_downgradeLocally`
-  /// changes Hive.
+  /// of `subscriptionInfoProvider` (+ `messageLimitProvider`) so widgets
+  /// watching these providers rebuild after `writeSubscriptionState` /
+  /// `_downgradeLocally` changes Hive.
   ///
   /// Pre-fix: `refreshFromSupabase` is unawaited on splash. It
   /// successfully wrote `isPro=true` to local Hive, but no provider
@@ -361,6 +360,21 @@ class SubscriptionService {
   /// writes to a user-scoped bucket — granting access via a spoofed
   /// local flag would let a free user persist private photos onto
   /// infrastructure we pay for.
+  ///
+  /// F34 (2026-06-07) — residual risk note. The AI-cost features
+  /// (scan_meal / cart_auditor / ai_text_log) are NOT in this set, so their
+  /// gate trusts the local isPro() flag, which a rooted device can spoof. That
+  /// is intentionally tolerated because their real spend cap is enforced
+  /// SERVER-SIDE inside Postgres, not by this client gate: the
+  /// `trg_food_text_rate_limit` trigger (function
+  /// `enforce_food_text_daily_limit`, migration 026 on `ai_coach_interactions`)
+  /// runs BEFORE INSERT in the same transaction as the row, re-derives PRO
+  /// status from the `subscriptions` table (status='active' AND end_date>now()),
+  /// and raises SQLSTATE P0001 once the per-day cap is hit (free 50 / PRO 200) —
+  /// which `ai-proxy` maps to a 429. A spoofed client isPro() therefore cannot
+  /// exceed the paid Gemini quota; the worst it buys is the free-tier daily cap,
+  /// which the server grants anyway. Adding these to server-verification here
+  /// would only add a redundant round-trip per call, not close a real hole.
   static const Set<String> _highValueFeatures = {
     AppConstants.featurePhases2To12,
     AppConstants.featureAiCoachUnlimited,

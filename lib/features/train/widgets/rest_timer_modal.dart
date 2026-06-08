@@ -30,7 +30,7 @@ class RestTimerModal extends StatelessWidget {
           width: 280,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
           decoration: BoxDecoration(
-            color: const Color(0xFF0e1219),
+            color: AppColors.gradientSlate,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: AppColors.accent.withValues(alpha: 0.25),
@@ -147,7 +147,7 @@ class _RestRingPainter extends CustomPainter {
 
     // Track
     final trackPaint = Paint()
-      ..color = const Color(0xFF161d28)
+      ..color = AppColors.slateRaise
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

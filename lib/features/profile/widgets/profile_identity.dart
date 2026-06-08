@@ -121,9 +121,9 @@ class ProfileIdentity extends StatelessWidget {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                Color(0xFF0a1628),
-                                Color(0xFF0d2040),
-                                Color(0xFF0a1628),
+                                AppColors.gradientNavyDeep,
+                                AppColors.gradientNavyMid,
+                                AppColors.gradientNavyDeep,
                               ],
                             )
                           : null,
@@ -154,7 +154,7 @@ class ProfileIdentity extends StatelessWidget {
                                     gradient: LinearGradient(
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
-                                      colors: [Color(0xFF0a1628), Color(0xFF0d2040), Color(0xFF0a1628)],
+                                      colors: [AppColors.gradientNavyDeep, AppColors.gradientNavyMid, AppColors.gradientNavyDeep],
                                     ),
                                   ),
                                 ),

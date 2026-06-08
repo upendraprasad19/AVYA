@@ -20,7 +20,7 @@ class TodayWorkoutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine day type label from the workout name
-    String dayType = 'PUSH DAY';
+    String dayType = 'TRAINING DAY';
     if (workout.name.contains('BACK') || workout.name.contains('PULL')) {
       dayType = 'PULL DAY';
     } else if (workout.name.contains('LEG')) {
@@ -61,8 +61,6 @@ class TodayWorkoutCard extends StatelessWidget {
               _metaItem(workout.estimatedDuration),
               const SizedBox(width: 14),
               _metaItem('${workout.exerciseCount} exercises'),
-              const SizedBox(width: 14),
-              _metaItem('~340 kcal'),
             ],
           ),
           const SizedBox(height: 14),

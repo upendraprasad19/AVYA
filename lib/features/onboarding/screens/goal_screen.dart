@@ -15,7 +15,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   33% gold fill + right-aligned "GOAL" caption.
 /// * Question header — mono "QUESTION I" eyebrow + Fraunces 30 w500
 ///   headline with italic-gold "do?" + DM Sans 13 dim helper copy.
-/// * 5 goal cards (WardRadioRow) — Recompose / Build / Cut / Maintain
+/// * 5 goal cards (WardRadioRow) — Build / Recompose / Cut / Maintain
 ///   / Perform. Selected: `cardTop` bg + gold border + 3-px gold
 ///   left border + solid gold dot inside the radio circle.
 /// * CTA row — "BACK" outline + "CONTINUE →" gold primary.
@@ -42,18 +42,22 @@ class GoalScreen extends StatefulWidget {
 }
 
 class _GoalScreenState extends State<GoalScreen> {
+  // Build is the pre-selected default (`_goals.first`) \u2014 matches the muscle-gain
+  // wedge thesis. Recompose was the old default but silently produced
+  // maintenance calories + the lowest protein (F19); it stays as a deliberate
+  // choice, now a real first-class profile (see FitnessGoals).
   static const _goals = [
-    _GoalOption(
-      key: 'recomp',
-      code: 'RECOMP',
-      title: 'Recompose',
-      subtitle: 'Drop body fat \u00B7 hold strength',
-    ),
     _GoalOption(
       key: 'build_muscle',
       code: 'BUILD',
       title: 'Build',
       subtitle: 'Put on clean muscle',
+    ),
+    _GoalOption(
+      key: 'recomp',
+      code: 'RECOMP',
+      title: 'Recompose',
+      subtitle: 'Drop body fat \u00B7 hold strength',
     ),
     _GoalOption(
       key: 'lose_fat',

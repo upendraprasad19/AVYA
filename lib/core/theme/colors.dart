@@ -132,4 +132,51 @@ class AppColors {
   /// Completion accent — kept distinct for receipts / PRs.
   static const emerald = Color(0xFF7FB4A2);
   static const emeraldTint = Color(0x247FB4A2);
+
+  // ── Chart hues (superset group slots) ─────────────────────────────────
+  // in-sync sweep 2026-06-07 (audit raw-hex). Vivid data-viz hues used to
+  // distinguish superset groups in the active-workout chart. Deliberately
+  // brighter than the muted Wardroom semantic hues (info/ok/warn) so adjacent
+  // groups stay legible at a glance; not a palette/brand colour.
+  static const chartPurple = Color(0xFFA855F7);
+  static const chartOrange = Color(0xFFF97316);
+  static const chartGreen = Color(0xFF4ADE80);
+  static const chartBlue = Color(0xFF38BDF8);
+
+  // ── Hydration / urine-status ladder ───────────────────────────────────
+  // in-sync sweep 2026-06-07 (audit raw-hex). 7-step Material colour ladder
+  // for the urine-colour hydration picker (excellent → see-doctor). Concrete
+  // physiological reference hues — kept verbatim so saved urine indices stay
+  // semantically identical; not Wardroom palette colours.
+  static const hydrationExcellent = Color(0xFFFFF9C4);
+  static const hydrationWellHydrated = Color(0xFFFFF176);
+  static const hydrationAdequate = Color(0xFFFFD600);
+  static const hydrationLow = Color(0xFFFFB300);
+  static const hydrationVeryLow = Color(0xFFE65100);
+  static const hydrationCritical = Color(0xFFBF360C);
+  static const hydrationSeeDoctor = Color(0xFF4E342E);
+
+  // ── Gradient stops (hero banner / card backgrounds) ───────────────────
+  // in-sync sweep 2026-06-07 (audit raw-hex). Bespoke navy gradient stops for
+  // profile banners, the subscription card, and badge shareables. Darker /
+  // distinct from the flat surface tokens above; centralized so a banner
+  // re-tint is a one-file edit.
+  static const gradientNavyDeep = Color(0xFF0A1628);
+  static const gradientNavyMid = Color(0xFF0D2040);
+  static const gradientNavyShadow = Color(0xFF061220);
+  static const gradientGreenShadow = Color(0xFF001A0A);
+  static const gradientGoldShadow = Color(0xFF1A1408);
+  static const gradientSlate = Color(0xFF0E1219);
+
+  /// Elevated slate — rest-timer ring track + badge-card gradient top stop.
+  /// in-sync sweep 2026-06-07 (audit raw-hex).
+  static const slateRaise = Color(0xFF161D28);
+
+  // ── Coach-bubble body text (neutral light grey, not parchment) ────────
+  // in-sync sweep 2026-06-07 (audit raw-hex). Induction / muster coach bubbles
+  // render body copy in a neutral near-white grey (NOT the warm parchment
+  // [textPrimary]) for a "system transcript" feel. Two steps kept distinct to
+  // preserve the existing visual result exactly.
+  static const coachBubbleText = Color(0xFFD8D8D8);
+  static const coachBubbleTextBright = Color(0xFFE8E8E8);
 }

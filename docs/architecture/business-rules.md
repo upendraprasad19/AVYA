@@ -20,9 +20,9 @@ status: scaffold
 - Weight + body measurements tracking
 - Streak counter + water tracking
 - Steps + sleep sync (Google Fit / Health Connect)
-- AI Coach — 30 days free (15 msg/day, Gemini 2.5 Flash)
+- AI Coach — 10/day forever, no trial (Gemini 2.5 Flash)
 - Voice (mic) input to AI coach — on-device transcription via `speech_to_text`; zero infra cost. Made free 2026-05-03 (Test #9 / F13).
-- Telegram bot — 30 days free
+- Telegram bot — free (AI coach over Telegram; same 10/day forever cap, no trial)
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding

@@ -15,13 +15,14 @@ class RankInfo {
   final RankLadderEntry entry;
   final DateTime? achievedAt;
   final int? daysUntilEligible;
-  final int? workoutsRemaining;
+  // F18 (2026-06-07): removed `workoutsRemaining` — no kRankGates entry sets
+  // `totalWorkoutsAtLeast`, so it was always null. The ladder is gated on
+  // streak / weeks-since-signup / completion-rate, never raw workout count.
 
   const RankInfo({
     required this.entry,
     this.achievedAt,
     this.daysUntilEligible,
-    this.workoutsRemaining,
   });
 }
 
@@ -248,11 +249,11 @@ class RankService {
       final weeksOut = gate.minWeeksSinceSignup! - state.weeksSinceSignup;
       if (weeksOut > 0) daysOut = weeksOut * 7;
     }
-    int? workoutsOut;
-    if (gate.totalWorkoutsAtLeast != null) {
-      workoutsOut = gate.totalWorkoutsAtLeast! - state.totalWorkouts;
-      if (workoutsOut < 0) workoutsOut = 0;
-    }
+    // F18 (2026-06-07): the "in ~N workouts" path was dead — NO kRankGates
+    // entry sets `totalWorkoutsAtLeast`, so the gate value was always null and
+    // workoutsOut/workoutsRemaining always null. The ladder is gated on
+    // streak / weeks-since-signup / completion-rate, not raw workout count.
+    // Removed the computation + the RankInfo.workoutsRemaining field.
     if (gate.streakAtLeast != null) {
       final streakOut = gate.streakAtLeast! - state.streakDays;
       // Convert "10 streak workouts away" into a soft "days away"
@@ -267,13 +268,12 @@ class RankService {
       }
     }
 
-    // B4: clamp both values to non-negative as a defense-in-depth measure.
-    // Individual paths already guard with > 0, but this ensures callers
-    // that skip the guard (e.g. chip headers) never render a negative number.
+    // B4: clamp to non-negative as a defense-in-depth measure. Individual
+    // paths already guard with > 0, but this ensures callers that skip the
+    // guard (e.g. chip headers) never render a negative number.
     return RankInfo(
       entry: nextEntry,
       daysUntilEligible: daysOut?.clamp(0, 365),
-      workoutsRemaining: workoutsOut?.clamp(0, 10000),
     );
   }
 

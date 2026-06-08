@@ -86,6 +86,10 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
         isPro,
       ),
     );
+    // Refresh the "remaining today" chip immediately — the provider is a
+    // plain Provider otherwise invalidated only at midnight, so without this
+    // the chip stays stale until the next day.
+    ref.invalidate(aiTextLogRemainingProvider);
 
     ref.read(aiAnalysingProvider.notifier).set(false);
     _controller.clear();

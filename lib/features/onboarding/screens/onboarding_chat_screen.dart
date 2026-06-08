@@ -865,6 +865,8 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         return 'General Fitness';
       case 'strength':
         return 'Strength';
+      case 'recompose':
+        return 'Recomposition';
       case 'beginner':
         return 'Beginner';
       case 'intermediate':

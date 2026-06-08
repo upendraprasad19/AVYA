@@ -1,8 +1,12 @@
+import 'package:icanbefitter/core/constants/fitness_goals.dart';
+
 import 'models.dart';
 
 /// Stage 6: Appends HIIT cardio finishers to 2 workout days per week.
 ///
-/// Only activates for lose_fat or general_fitness goals.
+/// Only activates for goals whose FitnessGoals spec has `cardio == true`
+/// (lose_fat / general_fitness / recompose). Finisher shape is driven by
+/// `cardioPreference`, not the goal.
 /// Finisher goes between main exercises and cooldown.
 class CardioFinisher {
   /// Attach cardio finishers to 2 non-consecutive days per week.
@@ -12,7 +16,7 @@ class CardioFinisher {
     required String? cardioPreference,
     required List<String> equipmentList,
   }) {
-    if (goal != 'lose_fat' && goal != 'general_fitness') return weeks;
+    if (!FitnessGoals.of(goal).cardio) return weeks;
 
     final preference = cardioPreference ?? 'hate_cardio';
     final hasGymEquipment = equipmentList.any(
