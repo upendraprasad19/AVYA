@@ -48,6 +48,16 @@ void main() {
           reason: 'users.subscription_expires_at must match the canonical subscriptions row, not verify-time');
     });
 
+    test('Hermes f5d8c3: idempotency pre-SELECT uses a DISTINCT binding (no duplicate const existingSub)', () {
+      final raw = _raw('supabase/functions/verify-payment/index.ts');
+      final existingSubDecls = RegExp(r'const \{ data: existingSub\b').allMatches(raw).length;
+      expect(existingSubDecls, lessThanOrEqualTo(1),
+          reason: 'a 2nd `const existingSub` in the same handler scope is a module-load SyntaxError '
+              '(Hermes L21/L36 caught it; v14 shipped broken, masked by the verify_jwt=true gateway 401 smoke)');
+      expect(raw.contains('paymentSubRow'), isTrue,
+          reason: 'the idempotency pre-SELECT must use the distinct `paymentSubRow` binding');
+    });
+
     test('F33: a non-23505 insert failure returns verified:false (not true)', () {
       expect(s.contains('Could not record subscription'), isTrue,
           reason: 'F33: honest failure — the row was NOT written');

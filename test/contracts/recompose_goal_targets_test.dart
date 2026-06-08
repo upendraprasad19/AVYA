@@ -73,4 +73,34 @@ void main() {
           reason: 'goal_screen _goals.first (the pre-selected default) must be build_muscle');
     });
   });
+
+  // Hermes E-pass L1/L28: goal_screen emits the onboarding KEY 'recomp', which
+  // plan_screen._mapGoal must translate to the SoT TOKEN 'recompose'. That bridge
+  // was the single un-pinned link on the F19 failure surface — if it drifts,
+  // onboarding writes an unknown token → BmrCalculator's general_fitness fallback
+  // → maintenance calories (the exact F19 symptom) while every other test stays green.
+  group('Onboarding key->token bridge (the un-pinned F19 surface)', () {
+    String stripComments(String s) => s
+        .split('\n')
+        .map((l) {
+          final i = l.indexOf('//');
+          return i >= 0 ? l.substring(0, i) : l;
+        })
+        .join('\n');
+
+    test("plan_screen._mapGoal maps the onboarding key 'recomp' -> token 'recompose'", () {
+      final code = stripComments(
+          File('lib/features/onboarding/screens/plan_screen.dart').readAsStringSync());
+      expect(
+        RegExp(r"'recomp'\s*=>\s*'recompose'").hasMatch(code),
+        isTrue,
+        reason: "plan_screen._mapGoal must bridge the 'recomp' onboarding key to the "
+            "canonical 'recompose' token, else onboarding writes an unknown goal -> F19 fallback",
+      );
+    });
+
+    test("the token the bridge produces is a goal FitnessGoals knows", () {
+      expect(FitnessGoals.isKnown('recompose'), isTrue);
+    });
+  });
 }

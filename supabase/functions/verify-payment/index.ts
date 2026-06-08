@@ -487,7 +487,10 @@ serve(async (req: Request) => {
     // "no row".
     let weInsertedTheRow = false;
     let canonicalEndDateIso = endDate.toISOString();
-    const { data: existingSub, error: preSelectError } = await supabase
+    // NB: a different `existingSub` (active-only, early-return) is declared near
+    // the top of this handler — this idempotency pre-SELECT MUST use a distinct
+    // name or the duplicate `const` is a module-load SyntaxError (Hermes L21/L36).
+    const { data: paymentSubRow, error: preSelectError } = await supabase
       .from("subscriptions")
       .select("id, end_date")
       .eq("razorpay_payment_id", paymentId)
@@ -498,7 +501,7 @@ serve(async (req: Request) => {
       );
     }
 
-    if (existingSub === null) {
+    if (paymentSubRow === null) {
       const { error: insertError } = await supabase
         .from("subscriptions")
         .insert({
@@ -566,7 +569,7 @@ serve(async (req: Request) => {
     } else {
       // Row already exists (webhook or a prior verify-payment). Use its canonical
       // end_date — do NOT re-anchor the expiry to this call's time.
-      const existingEnd = (existingSub as { end_date?: string }).end_date;
+      const existingEnd = (paymentSubRow as { end_date?: string }).end_date;
       if (existingEnd) canonicalEndDateIso = existingEnd;
     }
 
