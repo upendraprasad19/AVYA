@@ -207,6 +207,18 @@ Skipping this wrapper = silent cron failure (precedent: morning-alert 401 series
 **Fix:** Use host-shell `emit_payload.js` (preserves nested structure exactly).
 **Prior:** AI coach tools bundle work (Phase 7).
 
+### 6.5 `verify_jwt=true` smoke is GATEWAY-MASKED — a 401 does NOT confirm the module booted
+**Telltale:** Deploy smoke returns 401 for a `verify_jwt=true` function (verify-payment, ai-media-proxy, weekly-report …) and you read "reachable = healthy" — but every AUTHENTICATED call 500s.
+**Root cause:** For `verify_jwt=true` the Supabase gateway validates the JWT and rejects an UNAUTHENTICATED smoke with 401 **before the function module loads**. A module that fails to BOOT (parse / import error) is therefore invisible to the unauth smoke — the 401 is the gateway, not the function.
+**Fix:** Boot-verify with an ANON-key Bearer (passes the gateway → reaches the module): `ANON=$(grep -oE "SUPABASE_ANON_KEY=[^[:space:]]+" .env | cut -d= -f2); curl -X POST <url> -H "Authorization: Bearer $ANON" -d '{}'`. A **503 BOOT_ERROR = broken**; the module's OWN 4xx (e.g. `{"error":"Invalid or expired token"}`) = booted. The unauth `--smoke` only proves the gateway is up.
+**Prior:** 2026-06-08 — verify-payment v14 shipped with a duplicate `const existingSub` (module-load SyntaxError); the unauth smoke 401'd (gateway) so it read "healthy". Caught by the Hermes E-pass, not the deploy. Diagnose f5d8c3.
+
+### 6.6 std encoding dead-export / latent dep-rot — boot fails only on the NEXT deploy
+**Telltale:** A function that's served fine for weeks returns 503 BOOT_ERROR the first time you redeploy it — and your diff didn't touch imports.
+**Root cause:** A prior commit bumped a `deno.land/std@X/encoding/(hex|base64).ts` import past 0.210 while keeping `{ encode }` (REMOVED at std 0.210) — a dead export. The function kept serving its pre-bump bundle, so the broken import stayed latent until the redeploy re-fetched it. (Same class as a `deno.land/x` URL 404'ing upstream — `feedback_mistake_remote_dep_rot.md`.)
+**Fix:** `git log -S "<import>"` finds the bump commit; a code rollback does NOT help (the bad import predates your edit). Revert to a std version that still exports it (≤0.208) OR use `encodeHex`/`encodeBase64`. Gate `scripts/check_std_encoding_import_rot.dart` blocks `{ encode | decode }` from std≥0.210/encoding. Deploy per-function (not "all N blind") so the blast is one function at a time.
+**Prior:** 2026-06-08 — razorpay-webhook (the live payment webhook) went DOWN on redeploy. Diagnose d4c8e1.
+
 ---
 
 ## 7. Verification gates

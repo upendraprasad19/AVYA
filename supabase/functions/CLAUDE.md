@@ -63,6 +63,17 @@ After every deploy, run a smoke test via the `/edge-function-deploy-rollback`
 skill (HTTP 200 + expected response shape) and record the resulting version in
 the diagnose-doc + project retrospective.
 
+**Boot-verification caveat (2026-06-08, diagnose f5d8c3):** for a `verify_jwt=true`
+function (verify-payment, ai-media-proxy, weekly-report…) the unauthenticated smoke
+gets a **401 from the GATEWAY before the module loads** — it does NOT confirm the
+module booted, so a parse/import error reads as "healthy". Boot-verify with an
+anon-key Bearer (reaches the module): `curl -X POST <url> -H "Authorization: Bearer
+<SUPABASE_ANON_KEY>"` → **503 = boot-broken**, the module's own 4xx = booted. See
+`/edge-function-deploy-rollback` bug-class 6.5. **Latent dep-rot (diagnose d4c8e1):**
+an import of the REMOVED `{ encode }` from `deno.land/std@≥0.210/encoding/(hex|base64)`
+boot-fails only on the NEXT redeploy of each affected function (the old bundle keeps
+serving) — gate `scripts/check_std_encoding_import_rot.dart` blocks it (deploy-skill bug-class 6.6).
+
 ## AI Architecture (canonical)
 
 | Function | Model | Tier | Notes |
