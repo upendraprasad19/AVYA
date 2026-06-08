@@ -1,0 +1,210 @@
+# Audit closure ledger — 2026-06-07 comprehensive app audit.
+# Source report: docs/audit/2026-06-07-comprehensive-app-audit.md (47 findings / 9 P1).
+# Branch: psych-skill-and-audit-2026-06-07. Every finding closed_in_commit (no deferrals).
+#
+# Server findings F31/F32/F33/F43/F44/F45 carry `deploy: held_...` — the CODE is
+# closed_in_commit; the live prod Edge-Function deploy is HELD for the founder's
+# explicit per-action go (§4.3 live-apply classifier block — correct, not worked
+# around). That is an operational step, NOT a finding-closure blocker. F46/F47 are
+# doc-only (no deploy). NO `deferred:` key (feedback_no_deferrals_tech_debt_class).
+audit: 2026-06-07-comprehensive-app-audit
+branch: psych-skill-and-audit-2026-06-07
+total_findings: 47
+closed_count: 47
+findings:
+  - id: F1
+    terminal_state: closed_in_commit
+    commit: ba694c9
+    verification: test/contracts/ai_message_limit_parity_test.dart (free 10/day, no 30-day trial lockout)
+  - id: F2
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: test/contracts/deployments_complete_writer_to_reader_test.dart (F2 group — both DEPLOYMENTS readers use deployments_complete)
+  - id: F3
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: test/contracts/audit_2026_06_07_batch5_regression_test.dart (streak explainer has no 80% claim)
+  - id: F4
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + scripts/check_local_date_key_drift.dart gate
+  - id: F5
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: test/contracts/weight_logs_writer_to_reader_test.dart (writer = health_write_service)
+  - id: F6
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F7
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F8
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F9
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F10
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (PROTEIN CHEAT SHEET, no QUICK WINS) + diagnose e2a1f7
+  - id: F11
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: scripts/check_hardcoded_pricing_and_limits.dart (hard-fail) + diagnose 15c0de
+  - id: F12
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: docs/sot_registry.yaml weight_logs writer fix + weight_logs_writer_to_reader_test + diagnose c4d9b2
+  - id: F13
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: scripts/check_app_version_matches_pubspec.dart (now pre-commit) + diagnose 15c0de
+  - id: F14
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (profile_nudge percentage < 80 guard) + diagnose a8e3c5
+  - id: F15
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: diagnose 15c0de (steps goal -> AppConstants.defaultDailyStepGoal)
+  - id: F16
+    terminal_state: closed_in_commit
+    commit: ba694c9
+    verification: ai_message_limit_parity_test + diagnose f1a70c (30-day trial subsystem removed)
+  - id: F17
+    terminal_state: closed_in_commit
+    commit: ba694c9
+    verification: diagnose f1a70c (TrialInfoData / trialInfoProvider / TRIAL_EXPIRED branch removed)
+  - id: F18
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (no workoutsRemaining in rank surfaces) + diagnose c4d9b2
+  - id: F19
+    terminal_state: closed_in_commit
+    commit: 55af48b
+    verification: test/contracts/recompose_goal_targets_test.dart + scripts/check_goal_token_exhaustiveness.dart + diagnose f19a7c
+  - id: F20
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: diagnose a8e3c5 (stats BACK writes weight_kg, not current_weight_kg)
+  - id: F21
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (no 18,866 head-count) + diagnose e2a1f7
+  - id: F22
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: diagnose 15c0de (sign-in version literal -> AppConstants.appVersion)
+  - id: F23
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c (superset IST date-key) + check_local_date_key_drift
+  - id: F24
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F25
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (plan-expired paywall passes display token 'Phases 2-12')
+  - id: F26
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (no fake 340 kcal, default TRAINING DAY) + diagnose e2a1f7
+  - id: F27
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c + check_local_date_key_drift
+  - id: F28
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: diagnose a8e3c5 (usage-chip remaining provider invalidated after each increment)
+  - id: F29
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (cart_auditor USED convention)
+  - id: F30
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: diagnose 15c0de (scan/cart doc comments match real day-caps)
+  - id: F31
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: test/contracts/audit_2026_06_07_batch6_server_test.dart (weInsertedTheRow redeem-once) + diagnose b3f0d9
+  - id: F32
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: audit_2026_06_07_batch6_server_test (replay age from payload.created_at) + diagnose b3f0d9
+  - id: F33
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: audit_2026_06_07_batch6_server_test (non-23505 insert fail -> verified:false) + diagnose b3f0d9
+  - id: F34
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: diagnose a8e3c5 (subscription_service documents server-side trg_food_text_rate_limit cap)
+  - id: F35
+    terminal_state: closed_in_commit
+    commit: afb8b6e
+    verification: diagnose 15c0de (paywall paise rounding matches create-razorpay-order)
+  - id: F36
+    terminal_state: closed_in_commit
+    commit: 171c4be
+    verification: diagnose 157d0c (restore/push timestamps .toUtc()) + check_local_date_key_drift
+  - id: F37
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (sleep restore paginates via _fetchAllRows) + diagnose a8e3c5
+  - id: F38
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (restoreLightweightAlways re-anchors workout plan)
+  - id: F39
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (no dead sets_completed restore write) + diagnose c4d9b2
+  - id: F40
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (progress-photo PhotoQuotaException try/catch + paywall) + diagnose a8e3c5
+  - id: F41
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: diagnose a8e3c5 (reports dead SHARE affordance removed)
+  - id: F42
+    terminal_state: closed_in_commit
+    commit: 7f82b6d
+    verification: audit_2026_06_07_batch5_regression_test (plan-expired Wardroom voice, no generic emoji)
+  - id: F43
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: audit_2026_06_07_batch6_server_test (pr-detection recency by completed_at) + diagnose b3f0d9
+  - id: F44
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: cron_auth_adoption_test (now covers proactive-coach-promotion) + audit_2026_06_07_batch6_server_test + diagnose b3f0d9
+  - id: F45
+    terminal_state: closed_in_commit
+    commit: 9627837
+    deploy: held_pending_founder_per_action_go
+    verification: audit_2026_06_07_batch6_server_test (i-see-you-callout active + paginated) + diagnose b3f0d9
+  - id: F46
+    terminal_state: closed_in_commit
+    commit: 9627837
+    notes: doc-only (no deploy) — streak-guardian docstring + CRON_REGISTRY reconciled to live 20:00 IST (jobid 20 = 30 14)
+    verification: audit_2026_06_07_batch6_server_test (docstring says 20:00 IST, not 23:50)
+  - id: F47
+    terminal_state: closed_in_commit
+    commit: 9627837
+    notes: doc-only (no deploy) — CRON_REGISTRY fictional proactive-triggers row replaced by the 5 real proactive_* jobs (live cron.job verified)
+    verification: docs/operations/CRON_REGISTRY.md + diagnose b3f0d9
