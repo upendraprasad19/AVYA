@@ -23,6 +23,20 @@ import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// F45 (2026-06-07 audit) — bound the daily audience.
+//
+// Was: pull ALL users unconditionally, then ~4 sequential per-user queries
+// each → unbounded daily cost + latency. Now: (a) scope to ACTIVE users via
+// `users.last_active_at` within ACTIVE_WINDOW_DAYS (mirrors the activeness
+// signal the sibling re-engagement cron reads off the same column), and
+// (b) paginate the scan in pages of PAGE_SIZE rather than materialising every
+// row. The widest moment heuristic (first-in-streak-Saturday) looks back 28
+// days, so a user inactive longer than that can never produce a moment —
+// scoping to a 28-day activeness window cannot suppress a legitimate callout,
+// it only skips users who are guaranteed no-ops.
+const ACTIVE_WINDOW_DAYS = 28;
+const PAGE_SIZE = 1000;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -63,54 +77,68 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Pull all users — could optimize to active-only later
-    const { data: users, error: userErr } = await supabase
-      .from("users")
-      .select("id");
-
-    if (userErr) throw userErr;
-    if (!users || users.length === 0) {
-      await logCronEnd(logId, "success", { httpStatus: 200 });
-      return new Response(
-        JSON.stringify({ ok: true, processed: 0, sent: 0 }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // F45: scope to ACTIVE users + paginate the scan. Only users whose
+    // `last_active_at` falls inside the activeness window are eligible — a
+    // longer-dormant user cannot satisfy any moment heuristic (all look back
+    // ≤28d). We page through them PAGE_SIZE at a time and process each page
+    // before fetching the next, so neither the row set nor the per-user query
+    // fan-out is unbounded.
+    const activeCutoffIso = new Date(
+      Date.now() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     let sent = 0;
     let processed = 0;
 
-    for (const u of users) {
-      processed++;
-      try {
-        const moment = await detectMoment(supabase, u.id);
-        if (!moment) continue;
+    for (let page = 0; ; page++) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
-        // Cast to any — proactive_dedup has a closed union; our custom types extend it.
-        // deno-lint-ignore no-explicit-any
-        const allowed = await shouldSendProactive(supabase, u.id, `i_see_you_${moment.type}` as any);
-        if (!allowed) continue;
+      const { data: users, error: userErr } = await supabase
+        .from("users")
+        .select("id")
+        .gte("last_active_at", activeCutoffIso)
+        .order("id", { ascending: true })
+        .range(from, to);
 
-        const { error: insertErr } = await supabase.from("ai_coach_interactions").insert({
-          user_id: u.id,
-          channel: "proactive_i_see_you",
-          user_message: "",
-          ai_response: moment.text,
-          model_used: "i_see_you_template",
-          created_at: new Date().toISOString(),
-        });
+      if (userErr) throw userErr;
+      if (!users || users.length === 0) break; // no more active users
 
-        if (insertErr) {
-          console.error(`[i-see-you] insert failed for ${u.id}: ${insertErr.message}`);
-          continue;
+      for (const u of users) {
+        processed++;
+        try {
+          const moment = await detectMoment(supabase, u.id);
+          if (!moment) continue;
+
+          // Cast to any — proactive_dedup has a closed union; our custom types extend it.
+          // deno-lint-ignore no-explicit-any
+          const allowed = await shouldSendProactive(supabase, u.id, `i_see_you_${moment.type}` as any);
+          if (!allowed) continue;
+
+          const { error: insertErr } = await supabase.from("ai_coach_interactions").insert({
+            user_id: u.id,
+            channel: "proactive_i_see_you",
+            user_message: "",
+            ai_response: moment.text,
+            model_used: "i_see_you_template",
+            created_at: new Date().toISOString(),
+          });
+
+          if (insertErr) {
+            console.error(`[i-see-you] insert failed for ${u.id}: ${insertErr.message}`);
+            continue;
+          }
+
+          // deno-lint-ignore no-explicit-any
+          await markProactiveSent(supabase, u.id, `i_see_you_${moment.type}` as any);
+          sent++;
+        } catch (perUserErr) {
+          console.warn(`[i-see-you] per-user error for ${u.id}:`, perUserErr);
         }
-
-        // deno-lint-ignore no-explicit-any
-        await markProactiveSent(supabase, u.id, `i_see_you_${moment.type}` as any);
-        sent++;
-      } catch (perUserErr) {
-        console.warn(`[i-see-you] per-user error for ${u.id}:`, perUserErr);
       }
+
+      // Last page reached when the page came back short of a full batch.
+      if (users.length < PAGE_SIZE) break;
     }
 
     await logCronEnd(logId, "success", { httpStatus: 200 });

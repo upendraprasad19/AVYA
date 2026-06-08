@@ -627,7 +627,7 @@ const SMOKE_TOLERATED_CODES = {
   'compute-coach-signals': [401],
   'i-see-you-callout': [401],
   'expiry-reminder': [401],
-  'proactive-triggers': [401],
+  'proactive-coach-promotion': [401], // F44 — now cron/service-auth gated (was the fictional 'proactive-triggers', F47)
   'clean-orphan-media': [401],
   'pr-detection': [401],
   'daily-snapshot': [401],

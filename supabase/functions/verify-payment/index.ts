@@ -470,26 +470,36 @@ serve(async (req: Request) => {
     const razorpaySignatureSentinel =
       "verified_via_api:" + paymentId.substring(0, 12);
 
-    const { error: insertError } = await supabase
+    // F31/F33 (audit-2026-06-07): redeem-once + honest insert-failure handling.
+    //
+    // `weInsertedTheRow` gates the promo redemption below — the promo must be
+    // redeemed exactly ONCE, by whichever path actually CREATED the subscription
+    // row. The webhook redeems when IT inserts; verify-payment must NOT redeem
+    // again when it merely finds the webhook's row (F31 — the double-redeem
+    // over-counted used_count and duplicated the promo_code_uses audit row).
+    //
+    // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 guard: a row
+    // already present means the creator already redeemed any promo, so we skip
+    // both the insert and the redemption (idempotent success).
+    // Review d6b736 F1/F2: keep users.subscription_expires_at consistent with the
+    // canonical subscriptions row (never re-anchor it to verify-time on a replay /
+    // race), and surface a pre-SELECT DB error instead of silently treating it as
+    // "no row".
+    let weInsertedTheRow = false;
+    let canonicalEndDateIso = endDate.toISOString();
+    const { data: existingSub, error: preSelectError } = await supabase
       .from("subscriptions")
-      .upsert(
-        {
-          user_id: userId,
-          plan,
-          status: "active",
-          start_date: now.toISOString(),
-          end_date: endDate.toISOString(),
-          razorpay_payment_id: paymentId,
-          razorpay_order_id: payment.order_id ?? null,
-          razorpay_signature: razorpaySignatureSentinel,
-          created_at: now.toISOString(),
-        },
-        { onConflict: "user_id,razorpay_payment_id" },
+      .select("id, end_date")
+      .eq("razorpay_payment_id", paymentId)
+      .maybeSingle();
+    if (preSelectError) {
+      console.warn(
+        `[verify-payment] idempotency pre-SELECT failed (continuing to insert): ${preSelectError.message}`,
       );
+    }
 
-    if (insertError) {
-      // Try insert without onConflict (table may not have that unique constraint)
-      const { error: insertError2 } = await supabase
+    if (existingSub === null) {
+      const { error: insertError } = await supabase
         .from("subscriptions")
         .insert({
           user_id: userId,
@@ -503,59 +513,76 @@ serve(async (req: Request) => {
           created_at: now.toISOString(),
         });
 
-      if (insertError2) {
-        // H-18 (audit-2026-05-11) — detect 23505 unique-violation
-        // and treat it as success. Concurrent webhook + verify-payment
-        // race: the webhook may have already inserted the row by the
-        // time verify-payment's fallback insert fires. Postgres
-        // raises `unique_violation` (SQLSTATE 23505), which the
-        // PostgREST client surfaces via `code: '23505'`. The row
-        // already exists with the same (user_id, razorpay_payment_id);
-        // returning verified=true is correct.
+      if (!insertError) {
+        weInsertedTheRow = true;
+      } else {
+        // 23505 unique-violation = we lost the race to the webhook between the
+        // pre-SELECT and the insert. The webhook owns the row AND the promo
+        // redemption, so treat this as idempotent success WITHOUT redeeming.
         const code =
-          (insertError2 as { code?: string }).code ??
-          (insertError2 as { details?: string }).details ??
+          (insertError as { code?: string }).code ??
+          (insertError as { details?: string }).details ??
           "";
         const isUniqueViolation =
           code === "23505" ||
-          String(insertError2.message ?? "")
+          String(insertError.message ?? "")
             .toLowerCase()
             .includes("duplicate key value violates unique constraint");
-        if (isUniqueViolation) {
-          console.log(
-            "[verify-payment] H-18 — 23505 on fallback insert; webhook already wrote the row, treating as success.",
+        if (!isUniqueViolation) {
+          // F33: a REAL insert failure — the row was NOT written. Returning
+          // verified:true here let the client grant PRO optimistically; it then
+          // vanished on the next cold start (no row to restore). Return
+          // verified:false + 500 so the client retries instead of trusting it.
+          const failId = crypto.randomUUID().split("-")[0];
+          console.error(
+            `[verify-payment] subscription insert failed (non-23505) request_id=${failId}`,
+            insertError,
           );
-          // Fall through — the row exists. Continue to users-table
-          // update + success response.
-        } else {
-          console.error("Failed to insert subscription:", insertError2);
           return new Response(
             JSON.stringify({
-              verified: true,
-              error: "Payment verified but failed to create subscription record",
-              plan,
-              end_date: endDate.toISOString(),
+              verified: false,
+              error: "Could not record subscription; please retry",
+              request_id: failId,
             }),
             {
-              status: 200,
+              status: 500,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             },
           );
         }
+        // The webhook owns the row; use ITS end_date for the users update so
+        // users.subscription_expires_at stays consistent with the canonical row.
+        const { data: raceRow } = await supabase
+          .from("subscriptions")
+          .select("end_date")
+          .eq("razorpay_payment_id", paymentId)
+          .maybeSingle();
+        const raceEnd = (raceRow as { end_date?: string } | null)?.end_date;
+        if (raceEnd) canonicalEndDateIso = raceEnd;
+        console.log(
+          "[verify-payment] 23505 race — webhook already wrote the row; not redeeming promo again.",
+        );
       }
+    } else {
+      // Row already exists (webhook or a prior verify-payment). Use its canonical
+      // end_date — do NOT re-anchor the expiry to this call's time.
+      const existingEnd = (existingSub as { end_date?: string }).end_date;
+      if (existingEnd) canonicalEndDateIso = existingEnd;
     }
 
-    // Update users table
+    // Update users table — canonical expiry keeps users + subscriptions in sync.
     await supabase
       .from("users")
       .update({
         subscription_status: "pro",
-        subscription_expires_at: endDate.toISOString(),
+        subscription_expires_at: canonicalEndDateIso,
       })
       .eq("id", userId);
 
-    // ── Redeem promo code if applied ────────────────────────────
-    if (derived.promoApplied && derived.promoCode) {
+    // ── Redeem promo code if applied (ONCE) ─────────────────────
+    // F31: gate on weInsertedTheRow so a webhook-won race (or an already-present
+    // row) does NOT redeem a second time — the creator path already did.
+    if (derived.promoApplied && derived.promoCode && weInsertedTheRow) {
       await redeemPromo(
         supabase,
         derived.promoCode,
@@ -571,7 +598,7 @@ serve(async (req: Request) => {
       JSON.stringify({
         verified: true,
         plan,
-        end_date: endDate.toISOString(),
+        end_date: canonicalEndDateIso,
         source: "razorpay_api",
       }),
       {

@@ -289,23 +289,32 @@ serve(async (req: Request) => {
       });
     }
 
-    // Replay protection — reject webhooks older than 5 minutes.
+    // Replay protection — reject webhook DELIVERIES older than 5 minutes.
     //
-    // Razorpay's own retry policy sends webhooks within seconds (and
-    // re-fires failures for up to 24h, but each retry bumps the event's
-    // created_at forward). Anything 5+ minutes old reaching us here is
-    // either (a) a replay attack by an adversary who captured a valid
-    // webhook request, or (b) a delayed webhook for an event our
-    // idempotency (pre-SELECT + 23505 catch) has already processed.
-    // Both cases are safe to reject. `paymentEntity.created_at` is epoch
-    // seconds (Razorpay standard). If the field is missing we skip the
-    // check (defensive — never fail closed on missing telemetry).
-    const createdAtSec = paymentEntity.created_at as number | undefined;
-    if (typeof createdAtSec === "number" && createdAtSec > 0) {
-      const ageSec = Math.abs(Date.now() / 1000 - createdAtSec);
-      if (ageSec > 300) {
+    // Age MUST be measured from the webhook EVENT time (`payload.created_at`),
+    // NOT the payment entity's `created_at`. A UPI-collect payment is *created*
+    // when the user initiates but *captured / authorized* (and the webhook
+    // fired) minutes later when they approve in their UPI app — so
+    // `payment.entity.created_at` can legitimately be many minutes before the
+    // event. Keying the replay window off it rejected slowly-approved captures
+    // FOREVER, so PRO never unlocked via the webhook (F32, audit-2026-06-07).
+    //
+    // Razorpay stamps each event (and every 24h retry) with a fresh top-level
+    // `created_at`, so the event time stays current on legitimate deliveries;
+    // anything 5+ minutes stale here is a replay — and the idempotency
+    // (pre-SELECT + 23505 catch) below also neutralises it. Epoch seconds,
+    // Razorpay standard. Missing → skip the check (never fail closed on missing
+    // telemetry).
+    const eventCreatedAtSec = payload.created_at as number | undefined;
+    if (typeof eventCreatedAtSec === "number" && eventCreatedAtSec > 0) {
+      // Review d6b736 F3: signed age — positive = stale (past), negative =
+      // future-stamped (clock skew or a crafted replay). NO Math.abs: a future
+      // timestamp must not masquerade as "fresh". Tolerate <=120s forward skew;
+      // reject older than 5 min. (Idempotency pre-SELECT + 23505 is the backstop.)
+      const ageSec = Date.now() / 1000 - eventCreatedAtSec;
+      if (ageSec > 300 || ageSec < -120) {
         console.warn(
-          `[razorpay-webhook] rejecting replay: payment_id=${paymentEntity.id} age=${Math.round(ageSec)}s`,
+          `[razorpay-webhook] rejecting replay: payment_id=${paymentEntity.id} event_age=${Math.round(ageSec)}s`,
         );
         return new Response(
           JSON.stringify({ error: "Webhook too old", age_seconds: Math.round(ageSec) }),

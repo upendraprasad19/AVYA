@@ -28,7 +28,7 @@ interface PRRow {
   exercise_id: string; // = exercise name per CLAUDE.md §11
   weight_kg: number | null;
   reps: number | null;
-  created_at: string;
+  completed_at: string; // F43: real workout time, not row sync time
 }
 
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
@@ -62,15 +62,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Window: last 20 minutes (15min cron + 5min buffer)
+    // Window: last 20 minutes (15min cron + 5min buffer).
+    // F43 (2026-06-07 audit): filter/order by `completed_at` — the real
+    // workout time — NOT `created_at` (row sync time). An offline workout
+    // synced days later carries a fresh created_at; filtering on it fired a
+    // stale "New PR!" push for a lift the user set days ago. completed_at is
+    // when the workout actually happened, so the recency window is honest.
     const since = new Date(Date.now() - 20 * 60_000).toISOString();
 
     const { data: rows, error } = await supabase
       .from("workout_log_exercises")
-      .select("user_id, exercise_id, weight_kg, reps, created_at")
+      .select("user_id, exercise_id, weight_kg, reps, completed_at")
       .eq("is_pr", true)
-      .gte("created_at", since)
-      .order("created_at", { ascending: false });
+      .gte("completed_at", since)
+      .order("completed_at", { ascending: false });
     if (error) throw error;
 
     if (!rows || rows.length === 0) {

@@ -45,6 +45,18 @@ const _cronInvokedFunctions = <String>[
   'workout-window-closing',
 ];
 
+// Postgres-TRIGGER-dispatched verify_jwt=false Edge Functions (invoked via
+// pg_net from a trigger, NOT pg_cron — so they are absent from `cron.job` and
+// the SELECT above misses them). They are EQUALLY exposed: an unauthenticated
+// POST drives the same privileged fan-out (Gemini cost + push + DB writes).
+// F44 (audit-2026-06-07): proactive-coach-promotion shipped verify_jwt=false
+// with NO auth gate precisely because this list did not exist — the adoption
+// gate's pg_cron-only scope never required it. Adding it here makes the gate
+// the regression guard for F44.
+const _triggerDispatchedFunctions = <String>[
+  'proactive-coach-promotion', // trg_dispatch_proactive_coach_promotion (migrations 073 → 078)
+];
+
 const _functionsDir = 'supabase/functions';
 
 void main() {
@@ -63,7 +75,7 @@ void main() {
       );
     });
 
-    for (final fn in _cronInvokedFunctions) {
+    for (final fn in [..._cronInvokedFunctions, ..._triggerDispatchedFunctions]) {
       test('$fn imports isAuthorizedCronCall from _shared/cron_auth.ts', () {
         final path = '$_functionsDir/$fn/index.ts';
         final file = File(path);

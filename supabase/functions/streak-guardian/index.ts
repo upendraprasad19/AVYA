@@ -1,5 +1,5 @@
 /**
- * streak-guardian — Daily 8PM IST cron.
+ * streak-guardian — Daily 20:00 IST (8 PM, 14:30 UTC) cron.
  *
  * Finds users with streak > 2 weeks who have NOT logged a workout today.
  * Sends a push notification via OneSignal to nudge them.
