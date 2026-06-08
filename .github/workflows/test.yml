@@ -85,6 +85,7 @@ jobs:
               check_razorpay_key_flavor.dart|\
               check_migrations_live.dart|\
               check_onconflict_live_arbiter.dart|\
+              check_two_user_cross_account.dart|\
               check_regression_catalog.dart|\
               check_snapshot_contract.dart|\
               check_test_runtime_budget.dart)
