@@ -71,6 +71,7 @@ When the agent emits a `tool_call`, the dispatcher MUST:
 | AI tool asserts a derived value (PR, completion, calorie target) instead of raw input | Derive-only surface (ADR-0012): the AI logs raw sets/reps/weight/meals; PRs derive via `_rescanPrFor`/`loadAllExercisePRs`, completion derives via `_maybeCompleteScheduledDay → markCompleted`, calorie target stays derived. Never re-add a tool that lets the model assert a computed result — it's a progression-gaming / data-integrity hole. | ADR-0012 + `derive_only_tool_surface_test.dart` |
 | Chat 3× duplicates after weak network | APK Test #16.1 / Theme B — 60s client-side dedup + `ai-proxy` placeholder dedup + 3-strike circuit breaker fixed it. Migration 066 cleaned 10/18 dupe rows. Don't disable any of the three layers. | `feedback_observability_silent_drop.md` |
 | Photo analysis returns 500 with no actionable error | APK Test #16.1 / Theme C — `ai-media-proxy` now classifies into 400 (user input) / 502 (upstream) / 500 (server) via `HttpError` shape. Chat bubble renders "photo-failed" state distinctly. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| A goal tool's `z.enum` drifts from the `FitnessGoals` SoT | The two plan tools that carry a goal (`switchGoal.newGoal`, `regeneratePlanBlock.goal`) each expose a `z.enum` to the model — both MUST list exactly the `FitnessGoals` tokens. A token in one tool but not the other (recompose was — F19 sibling) means the AI can't act on it or the client rejects it. Enforced by `scripts/check_goal_token_exhaustiveness.dart` Check 4 + `ai_proxy_goal_enum_parity_test.dart`; the dispatcher also guards both `_executeSwitchGoal` / `_executeRegeneratePlanBlock` via `FitnessGoals.isKnown`. | diagnose a4f7e1 + ADR-0015 |
 
 ## Tests pinning the rules here
 
@@ -87,6 +88,7 @@ When the agent emits a `tool_call`, the dispatcher MUST:
 - `test/contracts/ai_media_proxy_*_test.dart` (4 — SSRF allowlist, status classification, telemetry, user scope).
 - `test/contracts/derive_only_tool_surface_test.dart` (registry = 20 tools, 4 removed absent, dispatcher has no removed cases, completion-derivation wired).
 - `test/contracts/coach_derived_pr_and_completion_test.dart` (behavioral — PR derives from `logSet` via `loadAllExercisePRs`; coach `logSet` on a scheduled day → `completed`).
+- `test/contracts/ai_proxy_goal_enum_parity_test.dart` (server `switchGoal` + `regeneratePlanBlock` goal enums == `FitnessGoals` tokens; dispatcher goal-guard symmetry — F19 sibling a4f7e1).
 - `test/contracts/no_legacy_log_set_with_pr_rescan_declaration_test.dart` (legacy `logSetWithPrRescan` declaration stays deleted).
 
 ## See also
