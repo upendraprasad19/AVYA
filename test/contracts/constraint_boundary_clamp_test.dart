@@ -75,16 +75,22 @@ void main() {
       );
     });
 
-    test('no clamp narrows a synced value below the largest CHECK bound', () {
-      final maxBound = checkMax.values.reduce((a, b) => a > b ? a : b);
+    test('every clamp literal equals a known live CHECK bound (no arbitrary clamps)',
+        () {
+      // A clamp to a value that is NOT one of the live CHECK bounds either
+      // truncates legitimate data or drifts from the constraint. This catches a
+      // duration clamp regressed to e.g. clamp(0, 100) — 100 is no CHECK bound,
+      // so it fails — which the old "<= maxBound" check (everything <= 10000)
+      // silently passed (B-pass Finding 1).
+      final bounds = checkMax.values.toSet();
       for (final c in clampBounds) {
         expect(
-          c <= maxBound,
+          bounds.contains(c),
           isTrue,
           reason:
-              'clamp bound $c exceeds the largest known CHECK max ($maxBound). '
-              'If a constraint legitimately widened, update checkMax in the same '
-              'commit as the migration.',
+              'clamp(0, $c) in sync_workout.dart matches no live CHECK bound '
+              '($bounds). A clamp must equal its column\'s CHECK max; if a '
+              'constraint changed, update checkMax in the same commit as the migration.',
         );
       }
     });
@@ -105,6 +111,17 @@ void main() {
             'set_number must NOT be clamped — >10 sets is legitimate; the CHECK '
             'was widened to <=50 (migration 089). Clamping would corrupt the set '
             'index/count.',
+      );
+      // Defence-in-depth (B-pass Finding 2): pin the bare unclamped write
+      // expression, so a clamp introduced under ANY variable name (not just the
+      // three guarded identifiers above) changes the write line and trips this.
+      expect(
+        syncSrc.contains("'set_number': setNum,"),
+        isTrue,
+        reason:
+            'workout_log_sets per-set set_number must be written as the bare, '
+            'unclamped `setNum` (the set index). A clamp would corrupt it; if the '
+            'write expression changed, re-verify no clamp was introduced.',
       );
     });
   });
