@@ -837,12 +837,20 @@ extension SyncServiceWorkout on SyncService {
           // Synthesize a completed row, mirroring
           // WorkoutWriteService.markCompleted's no-prior-schedule branch
           // (type='logged' counts as a workout day in the streak walk).
+          // B-pass P2 (e9b4a2): write BOTH completed_at (ISO, read by
+          // getScheduleForDate's stale-completion guard) AND completed_at_ms
+          // (epoch, the shape WorkoutWriteService.markCompleted's synthesize
+          // branch uses) so the two synthesize paths produce an identical row
+          // schema — no reader drift if getScheduleForDate changes later.
           await _hive.workoutBox.put(key, {
             'date': date,
             'workout_name': map['workout_name'] ?? 'Workout',
             'status': 'completed',
             'type': 'logged',
             'completed_at': map['completed_at'],
+            'completed_at_ms':
+                DateTime.tryParse((map['completed_at'] ?? '').toString())
+                    ?.millisecondsSinceEpoch,
             'duration_seconds': map['duration_seconds'],
             'source': 'cloud_restore_completion',
           });
