@@ -20,6 +20,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import '../utils/profile_image_url.dart';
 
 enum UploadResult { success, cancelled, error }
 
@@ -154,19 +155,29 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         bytes: bytes,
       );
 
+      // Version the URL so the cache busts ONLY when the image changes (storage
+      // reuses a fixed object path `<uid>/avatar.jpg` → identical publicUrl on
+      // re-upload). The read path passes this through verbatim, so navigating to
+      // Profile is a cache HIT, not a refetch (APK +34 / obs 4). closes-diagnose: b1f3a7.
+      final versionedUrl = ProfileImageUrl.versioned(
+        publicUrl,
+        version: DateTime.now().millisecondsSinceEpoch,
+      );
+
       // Save to user_profile table (background sync)
       await UserRepository.updateSupabaseProfileField(
         userId: userId,
-        fields: {'avatar_url': publicUrl},
+        fields: {'avatar_url': versionedUrl},
       );
 
       // Save to Hive
-      await updateProfile({'avatar_url': publicUrl});
+      await updateProfile({'avatar_url': versionedUrl});
 
-      // Evict cached image
-      PaintingBinding.instance.imageCache.evict(NetworkImage(publicUrl));
+      // Evict any in-memory cache for the URL (belt-and-braces; the new ?v=
+      // already guarantees a fresh disk fetch).
+      PaintingBinding.instance.imageCache.evict(NetworkImage(versionedUrl));
 
-      return UploadOutcome(UploadResult.success, url: publicUrl);
+      return UploadOutcome(UploadResult.success, url: versionedUrl);
     } catch (e) {
       debugPrint('Upload error: $e');
       return UploadOutcome(UploadResult.error, errorMessage: e.toString());
@@ -222,19 +233,29 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
         bytes: bytes,
       );
 
+      // Version the URL so the cache busts ONLY when the image changes (storage
+      // reuses a fixed object path `<uid>/banner.jpg` → identical publicUrl on
+      // re-upload). The read path passes this through verbatim, so navigating to
+      // Profile is a cache HIT, not a refetch (APK +34 / obs 4). closes-diagnose: b1f3a7.
+      final versionedUrl = ProfileImageUrl.versioned(
+        publicUrl,
+        version: DateTime.now().millisecondsSinceEpoch,
+      );
+
       // Save to user_profile table (background sync)
       await UserRepository.updateSupabaseProfileField(
         userId: userId,
-        fields: {'banner_url': publicUrl},
+        fields: {'banner_url': versionedUrl},
       );
 
       // Save to Hive
-      await updateProfile({'banner_url': publicUrl});
+      await updateProfile({'banner_url': versionedUrl});
 
-      // Evict cached image
-      PaintingBinding.instance.imageCache.evict(NetworkImage(publicUrl));
+      // Evict any in-memory cache for the URL (belt-and-braces; the new ?v=
+      // already guarantees a fresh disk fetch).
+      PaintingBinding.instance.imageCache.evict(NetworkImage(versionedUrl));
 
-      return UploadOutcome(UploadResult.success, url: publicUrl);
+      return UploadOutcome(UploadResult.success, url: versionedUrl);
     } catch (e) {
       debugPrint('Upload error: $e');
       return UploadOutcome(UploadResult.error, errorMessage: e.toString());

@@ -826,10 +826,35 @@ extension SyncServiceWorkout on SyncService {
             entry['duration_seconds'] = map['duration_seconds'];
             await _hive.workoutBox.put(key, entry);
           }
+        } else if (date.isNotEmpty) {
+          // BUG-F (e9b4a2): no local schedule row for this date — typically an
+          // OUT-OF-PLAN-WINDOW completion (logged ad-hoc, or a past phase whose
+          // current plan_json window no longer covers it). Pre-fix this was
+          // skipped, so the completion never reached local Hive: the streak
+          // walk (_calculateStreak reads schedule_<date> status=='completed')
+          // and the past-phase scroll-back saw NOTHING after a reinstall, so
+          // the streak read 0 despite real workouts (APK +34 obs 5.2).
+          // Synthesize a completed row, mirroring
+          // WorkoutWriteService.markCompleted's no-prior-schedule branch
+          // (type='logged' counts as a workout day in the streak walk).
+          // B-pass P2 (e9b4a2): write BOTH completed_at (ISO, read by
+          // getScheduleForDate's stale-completion guard) AND completed_at_ms
+          // (epoch, the shape WorkoutWriteService.markCompleted's synthesize
+          // branch uses) so the two synthesize paths produce an identical row
+          // schema — no reader drift if getScheduleForDate changes later.
+          await _hive.workoutBox.put(key, {
+            'date': date,
+            'workout_name': map['workout_name'] ?? 'Workout',
+            'status': 'completed',
+            'type': 'logged',
+            'completed_at': map['completed_at'],
+            'completed_at_ms':
+                DateTime.tryParse((map['completed_at'] ?? '').toString())
+                    ?.millisecondsSinceEpoch,
+            'duration_seconds': map['duration_seconds'],
+            'source': 'cloud_restore_completion',
+          });
         }
-        // If no schedule entry exists, the plan hasn't been generated yet
-        // on this device — schedule completions alone aren't useful without
-        // the full plan context. Skip silently.
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreScheduleCompletions] $e');

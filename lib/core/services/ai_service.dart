@@ -397,9 +397,24 @@ class AiService {
   Future<AiChatResponse> _directHttpCall(
       String functionName, String message, Map<String, dynamic> context) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
-    // Ensure fresh token before direct HTTP call
-    final freshToken = await _supabase.ensureFreshToken();
-    final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
+    // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
+    // anon key for an authed Edge Function. ai-proxy validates the Bearer token
+    // server-side and returns a confusing 401 "Invalid or expired token" for an
+    // anon JWT, which read as "AI is down" (APK +34 obs 3). Hard-refresh if the
+    // proactive refresh didn't yield a token; if the refresh token is itself
+    // dead, surface a clear re-auth error instead of a silent anon 401.
+    var token = await _supabase.ensureFreshToken() ??
+        _supabase.client.auth.currentSession?.accessToken;
+    if (token == null) {
+      try {
+        token =
+            (await _supabase.client.auth.refreshSession()).session?.accessToken;
+      } catch (_) {}
+    }
+    if (token == null || token.isEmpty) {
+      throw AiServiceException('No active session. Please sign in again.',
+          statusCode: 401);
+    }
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(
@@ -618,9 +633,24 @@ class AiService {
     Map<String, dynamic> context,
   ) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/ai-media-proxy';
-    // Ensure fresh token before direct HTTP call
-    final freshToken = await _supabase.ensureFreshToken();
-    final token = freshToken ?? _supabase.client.auth.currentSession?.accessToken ?? AppConstants.supabaseAnonKey;
+    // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
+    // anon key for an authed Edge Function. ai-proxy validates the Bearer token
+    // server-side and returns a confusing 401 "Invalid or expired token" for an
+    // anon JWT, which read as "AI is down" (APK +34 obs 3). Hard-refresh if the
+    // proactive refresh didn't yield a token; if the refresh token is itself
+    // dead, surface a clear re-auth error instead of a silent anon 401.
+    var token = await _supabase.ensureFreshToken() ??
+        _supabase.client.auth.currentSession?.accessToken;
+    if (token == null) {
+      try {
+        token =
+            (await _supabase.client.auth.refreshSession()).session?.accessToken;
+      } catch (_) {}
+    }
+    if (token == null || token.isEmpty) {
+      throw AiServiceException('No active session. Please sign in again.',
+          statusCode: 401);
+    }
 
     final compact = _compactContext(context);
     final response = await _retryHttpColdStart(

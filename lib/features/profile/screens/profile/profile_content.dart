@@ -87,8 +87,10 @@ extension _ProfileContent on _ProfileScreenState {
               ProfileIdentity(
                 name: name,
                 subtitle: subtitle,
-                avatarUrl: _addCacheBuster(profile['avatar_url'] as String?),
-                bannerUrl: _addCacheBuster(profile['banner_url'] as String?),
+                avatarUrl:
+                    ProfileImageUrl.forDisplay(profile['avatar_url'] as String?),
+                bannerUrl:
+                    ProfileImageUrl.forDisplay(profile['banner_url'] as String?),
                 onReplaceAvatar: () async {
                   final outcome = await ref.read(userProfileProvider.notifier).uploadAvatar();
                   if (!context.mounted) return;

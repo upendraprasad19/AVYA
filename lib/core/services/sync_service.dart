@@ -418,6 +418,9 @@ class SyncService {
   /// removed the op).
   Future<void> _sendDeadLetterTelemetry(PendingSyncOp op) async {
     try {
+      // BUG-C (d3a1c7): refresh the session before the authed EF invoke so a
+      // stale access token doesn't 401 (telemetry was silently lost).
+      await _supabase.ensureFreshToken();
       await _supabase.client.functions.invoke(
         'log-client-error',
         body: {
@@ -650,6 +653,10 @@ class SyncService {
 
       final snapshot = compileDailySnapshot();
 
+      // BUG-C (d3a1c7): refresh before the authed daily-snapshot invoke. A
+      // stale access token 401'd push_snapshot, so the plan_json / coach_memory
+      // snapshot never persisted to cloud — the obs-1 stale-plan_json enabler.
+      await _supabase.ensureFreshToken();
       final response = await _supabase.client.functions.invoke(
         'daily-snapshot',
         body: {'snapshot_json': snapshot},
@@ -924,6 +931,11 @@ class SyncService {
   /// Storage per user is negligible (~1-2MB/year).
   Future<void> restoreFromCloud(String userId) async {
     try {
+      // BUG-G (a7f2e9): refresh the session before a long multi-step restore so
+      // its REST/EF calls don't 401 on a token that expires mid-restore (a heavy
+      // account's restore can span the access token TTL). Cheap in-memory check
+      // unless near expiry; never throws.
+      await _supabase.ensureFreshToken();
       // Full restore for ALL users — no date limit. Data is already in Supabase
       // and storage per user is negligible (~1-2MB/year).
       const since = '2020-01-01T00:00:00Z';
@@ -1029,6 +1041,11 @@ class SyncService {
     // "restore never ran" cases.
     unawaited(ErrorTelemetry.logEvent('restore_started',
         message: 'userId=${userId.substring(0, 8)}'));
+
+    // BUG-G (a7f2e9): proactively refresh before the long restore (see
+    // restoreFromCloud). A heavy account's restore can span the access token's
+    // TTL; refreshing up front avoids mid-restore 401s.
+    await _supabase.ensureFreshToken();
 
     // Bug 2026-05-19 (A2 telemetry) — bracket every step with a Stopwatch
     // so the next post-mortem can pinpoint which step (and via A1 inside,
@@ -1490,6 +1507,9 @@ class SyncService {
       if (message.length > 2000) {
         message = '${message.substring(0, 2000)}…(truncated)';
       }
+      // BUG-C (d3a1c7): refresh before the authed EF invoke (stale-token 401
+      // was dropping failure telemetry into the void).
+      await _supabase.ensureFreshToken();
       await _supabase.client.functions.invoke(
         'log-client-error',
         body: {

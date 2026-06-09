@@ -369,6 +369,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Widget _buildWeeklySummary(UserStatsData stats) {
+    // APK +34 obs 2: this card showed lifetime total_workouts_done under a
+    // "This Week" label. Use the real current-week count — index 0 of the
+    // 4-week rolling window, the same source _buildWorkoutFrequency's
+    // "This Week" bar uses. closes-diagnose: c2e8b4.
+    final weekCounts = WorkoutRepository.instance.getWeeklyWorkoutCounts();
+    final thisWeekWorkouts = weekCounts.isNotEmpty ? weekCounts.first : 0;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
@@ -386,9 +392,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _summaryItem(
-                  'Workouts', '${stats.totalWorkouts}', AppColors.accent),
+                  'Workouts', '$thisWeekWorkouts', AppColors.accent),
               _summaryItem(
-                  'Streak', '${stats.currentStreak}w', AppColors.orange),
+                  // currentStreak is the live DAY walk-back (same as Home's
+                  // "N DAYS"); was mislabeled 'w' (weeks). APK +34 obs 5.2.
+                  'Streak', '${stats.currentStreak}d', AppColors.orange),
               _summaryItem(
                 'Weight',
                 stats.currentWeight > 0
