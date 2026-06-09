@@ -585,12 +585,64 @@ class WorkoutScheduleReadService {
     return todayMidnight.difference(startMidnight).inDays + 1;
   }
 
-  /// True if current Phase has run its course (today > plan_end_date).
+  /// True if the current Phase has run its course — i.e., today is past the
+  /// stored plan window AND no real workout day is scheduled today or later.
+  ///
+  /// BUG-A (a1d4f9, APK +34 obs 1/5.1/6): the stored `plan_end_date` (restored
+  /// from the cloud `plan_json` snapshot) can LAG the actually-materialized
+  /// `scheduled_workouts` when a regeneration advanced the per-day table but the
+  /// `plan_json` snapshot never re-persisted (a source-of-truth split; the push
+  /// 401 in BUG-C was the enabler). Trusting the stale constant made the app
+  /// report "expired / wrong week / not scheduled" even though future workouts
+  /// existed (scheduled_workouts ran a month past the stale plan_end_date). We
+  /// now treat the plan as expired only if the stored window says so AND there
+  /// is no materialized workout day from today onward. Fast-pathed: the schedule
+  /// scan only runs when the cheap stored-window check already says expired.
   bool isPhaseExpired() {
-    final end = getPlanEndDate();
-    if (end == null) return false;
+    final stored = getPlanEndDate();
+    if (stored == null) return false;
     final today = nowWall(); // seam-aware (dev time-travel / year-sim)
-    return today.isAfter(end);
+    final todayD = DateTime(today.year, today.month, today.day);
+    final endD = DateTime(stored.year, stored.month, stored.day);
+    if (!todayD.isAfter(endD)) return false; // inside the stored window — fast
+    return isPhaseExpiredFrom(today, stored, _scheduledWorkoutDays());
+  }
+
+  /// PURE decision behind [isPhaseExpired] (visible for testing — no Hive, no
+  /// clock). Expired ⇔ [storedEnd] non-null AND date(today) strictly after
+  /// date(storedEnd) AND NO day in [scheduledWorkoutDays] is on/after today. A
+  /// future scheduled workout means the plan is still active even if the stored
+  /// plan_end_date is stale (the cloud plan_json snapshot lagged the live table).
+  @visibleForTesting
+  static bool isPhaseExpiredFrom(DateTime today, DateTime? storedEnd,
+      Iterable<DateTime> scheduledWorkoutDays) {
+    if (storedEnd == null) return false;
+    final todayD = DateTime(today.year, today.month, today.day);
+    final endD = DateTime(storedEnd.year, storedEnd.month, storedEnd.day);
+    if (!todayD.isAfter(endD)) return false;
+    for (final d in scheduledWorkoutDays) {
+      final dD = DateTime(d.year, d.month, d.day);
+      if (!dD.isBefore(todayD)) return false; // a workout today-or-later
+    }
+    return true;
+  }
+
+  /// Dates of real (non-rest/off) scheduled workout days in the local schedule.
+  Iterable<DateTime> _scheduledWorkoutDays() {
+    final box = _hive.workoutBox;
+    final out = <DateTime>[];
+    for (final key in box.keys) {
+      final k = key.toString();
+      if (!k.startsWith(_schedulePrefix)) continue;
+      final d = DateTime.tryParse(k.substring(_schedulePrefix.length));
+      if (d == null) continue;
+      final v = box.get(key);
+      if (v is! Map) continue;
+      final type = (v['type'] ?? '').toString();
+      if (type == 'rest' || type == 'off') continue;
+      out.add(d);
+    }
+    return out;
   }
 
   /// Plan start date (Monday of Week 1).
