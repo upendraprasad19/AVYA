@@ -37,6 +37,7 @@ import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart'
 import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/referral_eligibility_provider.dart';
+import '../../utils/profile_image_url.dart';
 import '../apply_referral_sheet.dart';
 import '../../widgets/profile_identity.dart';
 import '../../widgets/profile_row.dart';
@@ -320,11 +321,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  String? _addCacheBuster(String? url) {
-    if (url == null || url.isEmpty) return null;
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    return url.contains('?') ? '$url&t=$ts' : '$url?t=$ts';
-  }
+  // _addCacheBuster removed (APK +34 / obs 4): it re-fetched the avatar/banner
+  // on every build. Versioning now happens at upload time; the read path passes
+  // the stored URL through verbatim via ProfileImageUrl.forDisplay. See
+  // lib/features/profile/utils/profile_image_url.dart.
 
   Future<void> _saveNotificationPreferences() async {
     await HiveService.instance.configBox.put('notification_preferences', _notifPrefs);

@@ -3068,6 +3068,54 @@ concepts:
       user_profile has no full_name column. _restoreUserProfile MUST
       SELECT full_name from 'users' table separately from user_profile.
 
+  - concept: profile_image_url_display
+    domain: auth_profile
+    behavioral_test_required: true
+    behavioral_test_path: test/contracts/profile_image_url_stable_test.dart
+    description: |
+      Profile avatar + banner image URLs. Stored in userBox['profile']
+      ['avatar_url' | 'banner_url'] and cloud user_profile.avatar_url /
+      banner_url. CONTRACT: bust the CachedNetworkImage cache key ONLY when the
+      image actually changes — stamp a `?v=<millis>` version at UPLOAD time
+      (ProfileImageUrl.versioned), and pass the stored URL through VERBATIM on
+      read (ProfileImageUrl.forDisplay). The read path must NEVER inject a
+      per-build token: the removed _addCacheBuster appended a fresh `?t=<now>`
+      every build, so CachedNetworkImage (URL-keyed disk cache) missed on every
+      Profile navigation → a network refetch each time (APK +34 obs 4, diagnose
+      b1f3a7). Storage reuses a fixed object path (<uid>/avatar.jpg) so the bare
+      public URL is identical after a re-upload; the stored `?v=` is what moves.
+    writers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        line_range: 109-250
+        method: uploadAvatar / uploadBanner
+        notes: |
+          Store ProfileImageUrl.versioned(publicUrl, version: now-millis) into
+          userBox['profile'] + cloud user_profile via updateSupabaseProfileField.
+      - file: lib/features/profile/utils/profile_image_url.dart
+        line_range: 1-40
+        method: "ProfileImageUrl.versioned / forDisplay"
+        notes: SoT helper for the version-on-upload / verbatim-on-read contract.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/profile/screens/profile/profile_content.dart
+        line_range: 80-95
+        method: _buildProfileContent (ProfileIdentity avatarUrl / bannerUrl)
+        semantic: display-only
+        fields_read: [avatar_url, banner_url]
+        notes: |
+          Passes the stored URL to ProfileIdentity via ProfileImageUrl.forDisplay
+          (verbatim). Was _addCacheBuster (per-build ?t= timestamp) — removed.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 100-300
+        method: _syncUserProfile / _restoreUserProfile
+        semantic: pass-through
+        fields_read: [avatar_url, banner_url]
+        notes: |
+          avatar_url / banner_url round-trip to cloud user_profile; the versioned
+          URL persists so a 2nd device cache-misses the new version exactly once.
+    reader_allow_files:
+      - { file: lib/features/profile/widgets/profile_identity.dart, reason: "renders avatarUrl/bannerUrl props via CachedNetworkImage; receives the already-forDisplay'd URL, not a write surface" }
+
   - concept: onboarding_completed_at
     domain: auth_profile
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
