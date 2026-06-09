@@ -931,6 +931,11 @@ class SyncService {
   /// Storage per user is negligible (~1-2MB/year).
   Future<void> restoreFromCloud(String userId) async {
     try {
+      // BUG-G (a7f2e9): refresh the session before a long multi-step restore so
+      // its REST/EF calls don't 401 on a token that expires mid-restore (a heavy
+      // account's restore can span the access token TTL). Cheap in-memory check
+      // unless near expiry; never throws.
+      await _supabase.ensureFreshToken();
       // Full restore for ALL users — no date limit. Data is already in Supabase
       // and storage per user is negligible (~1-2MB/year).
       const since = '2020-01-01T00:00:00Z';
@@ -1036,6 +1041,11 @@ class SyncService {
     // "restore never ran" cases.
     unawaited(ErrorTelemetry.logEvent('restore_started',
         message: 'userId=${userId.substring(0, 8)}'));
+
+    // BUG-G (a7f2e9): proactively refresh before the long restore (see
+    // restoreFromCloud). A heavy account's restore can span the access token's
+    // TTL; refreshing up front avoids mid-restore 401s.
+    await _supabase.ensureFreshToken();
 
     // Bug 2026-05-19 (A2 telemetry) — bracket every step with a Stopwatch
     // so the next post-mortem can pinpoint which step (and via A1 inside,

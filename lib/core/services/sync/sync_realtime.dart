@@ -85,7 +85,16 @@ extension SyncServiceRealtime on SyncService {
             final isTokenExpired = msg.contains('token has expired') ||
                 msg.contains('jwt expired') ||
                 msg.contains('expired_token');
-            if (isTokenExpired && attempt < 2) {
+            // BUG-H (a7f2e9): also recover from a transient channelError
+            // (RealtimeSubscribeException channelError / WS close 1002).
+            // Pre-fix only token-expired reconnected, so a channelError left
+            // the weight_logs stream permanently dead — it recurred 113x in
+            // client_errors and PRO Telegram->app instant-sync silently never
+            // delivered. Bounded (attempt < 2) so a persistent failure (RLS /
+            // missing publication) still falls back to the batch pull, no loop.
+            final isChannelError =
+                msg.contains('channelerror') || msg.contains('channel_error');
+            if ((isTokenExpired || isChannelError) && attempt < 2) {
               // ignore: discarded_futures
               _reconnectRealtimeWithRefreshedJwt(userId, attempt + 1);
             }
