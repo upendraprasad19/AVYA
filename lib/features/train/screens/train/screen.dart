@@ -28,6 +28,7 @@ import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
 import '../../widgets/week_selector.dart';
+import '../../widgets/plan_expired_card.dart';
 import '../../widgets/stats_grid.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -133,8 +134,25 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // 2. Today's workout hero card
                     // Only show when viewing current week; use currentWeek
                     // data for today-lookup so it's always accurate (W2+W6).
+                    // BUG-B (b6e1c3): when the phase has genuinely run out
+                    // (isPhaseExpired now honors the materialized schedule —
+                    // a1d4f9), surface the PlanExpiredCard recovery path in the
+                    // hero slot instead of an empty/no-workout card, mirroring
+                    // Home. Train previously had NO expired state, so it
+                    // highlighted a bogus "current" week past plan-end.
                     if (selectedWeek == plan.currentWeek)
-                      _buildTodayHeroCard(context, plan, todayWorkout)
+                      (WorkoutScheduleService.instance.isPhaseExpired()
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.screenPadding),
+                              child: PlanExpiredCard(
+                                onRedoComplete: () {
+                                  ref.invalidate(currentPlanProvider);
+                                  ref.invalidate(selectedWeekProvider);
+                                },
+                              ),
+                            )
+                          : _buildTodayHeroCard(context, plan, todayWorkout))
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(
