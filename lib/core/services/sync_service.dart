@@ -418,6 +418,9 @@ class SyncService {
   /// removed the op).
   Future<void> _sendDeadLetterTelemetry(PendingSyncOp op) async {
     try {
+      // BUG-C (d3a1c7): refresh the session before the authed EF invoke so a
+      // stale access token doesn't 401 (telemetry was silently lost).
+      await _supabase.ensureFreshToken();
       await _supabase.client.functions.invoke(
         'log-client-error',
         body: {
@@ -650,6 +653,10 @@ class SyncService {
 
       final snapshot = compileDailySnapshot();
 
+      // BUG-C (d3a1c7): refresh before the authed daily-snapshot invoke. A
+      // stale access token 401'd push_snapshot, so the plan_json / coach_memory
+      // snapshot never persisted to cloud — the obs-1 stale-plan_json enabler.
+      await _supabase.ensureFreshToken();
       final response = await _supabase.client.functions.invoke(
         'daily-snapshot',
         body: {'snapshot_json': snapshot},
@@ -1490,6 +1497,9 @@ class SyncService {
       if (message.length > 2000) {
         message = '${message.substring(0, 2000)}…(truncated)';
       }
+      // BUG-C (d3a1c7): refresh before the authed EF invoke (stale-token 401
+      // was dropping failure telemetry into the void).
+      await _supabase.ensureFreshToken();
       await _supabase.client.functions.invoke(
         'log-client-error',
         body: {
