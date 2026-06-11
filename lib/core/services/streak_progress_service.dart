@@ -168,4 +168,78 @@ class StreakProgressService {
     final maxFreezes = isPro ? 3 : 1;
     return commitRefill(maxFreezes: maxFreezes, thisMondayStr: thisMondayStr);
   }
+
+  /// Pure, refill-aware merge of local vs cloud streak-freeze state for the
+  /// restore path (`_restoreFreezes`). `streak_freeze_used_dates` is PER-WEEK
+  /// (cleared on refill — see [commitRefill]), so the merge keys on last_refill:
+  ///   - SAME week (equal last_refill): UNION used_dates — never lose a consume
+  ///     written locally during the background-restore window (or on another
+  ///     device) — and take the LOWER available (never refund a freeze).
+  ///   - cloud refill STRICTLY newer: cloud is the current-week truth.
+  ///   - local refill strictly newer (or cloud last_refill null): keep local;
+  ///     the caller schedules a syncFreezes to push it up.
+  /// Pre-fix `_restoreFreezes` lumped equal-refill into cloud-wins AND
+  /// unconditionally overwrote used_dates → a same-week local consume was wiped
+  /// and the freeze refunded (spurious streak break). The slow-boot flip
+  /// (ADR-0014) opened the window by landing /home before restore Step C.
+  /// closes-diagnose: a8f3d1.
+  static FreezeMergeResult mergeFreezeProgress({
+    required int localAvailable,
+    required List<String> localUsed,
+    required String? localLastRefill,
+    required int cloudAvailable,
+    required List<String> cloudUsed,
+    required String? cloudLastRefill,
+  }) {
+    int clamp3(int v) => v.clamp(0, 3);
+    List<String> sortedUnion(Iterable<String> a, Iterable<String> b) =>
+        (<String>{...a, ...b}.toList())..sort();
+
+    // Same week on both sides — the bg-restore-window / cross-device case.
+    if (localLastRefill != null &&
+        cloudLastRefill != null &&
+        localLastRefill == cloudLastRefill) {
+      final avail =
+          localAvailable < cloudAvailable ? localAvailable : cloudAvailable;
+      return FreezeMergeResult(
+        available: clamp3(avail),
+        usedDates: sortedUnion(localUsed, cloudUsed),
+        lastRefill: localLastRefill,
+        scheduleSyncUp: false,
+      );
+    }
+
+    final bool cloudWins = localLastRefill == null ||
+        (cloudLastRefill != null &&
+            cloudLastRefill.compareTo(localLastRefill) > 0);
+    if (cloudWins) {
+      return FreezeMergeResult(
+        available: clamp3(cloudAvailable),
+        usedDates: cloudUsed.toList()..sort(),
+        lastRefill: cloudLastRefill ?? localLastRefill,
+        scheduleSyncUp: false,
+      );
+    }
+    // Local refill strictly newer — keep local entirely; push it up to cloud.
+    return FreezeMergeResult(
+      available: clamp3(localAvailable),
+      usedDates: localUsed.toList()..sort(),
+      lastRefill: localLastRefill,
+      scheduleSyncUp: true,
+    );
+  }
+}
+
+/// Result of [StreakProgressService.mergeFreezeProgress] (restore freeze merge).
+class FreezeMergeResult {
+  final int available;
+  final List<String> usedDates;
+  final String? lastRefill;
+  final bool scheduleSyncUp;
+  const FreezeMergeResult({
+    required this.available,
+    required this.usedDates,
+    required this.lastRefill,
+    required this.scheduleSyncUp,
+  });
 }

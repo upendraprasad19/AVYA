@@ -144,44 +144,40 @@ extension SyncServiceRestoreCompleteness on SyncService {
           ? Map<String, dynamic>.from(existing)
           : <String, dynamic>{};
 
-      // Bug 9c4a17 (2026-05-19) — max-merge on (available, last_refill)
-      // by lexical compare of last_refill. Pre-fix blind overwrite raced
-      // the fire-and-forget syncFreezes from splash's refillIfNewWeek and
-      // silently lost the Monday +1. See diagnose-doc for full trace.
-      // Clamp(0, 3) preserved per f8c1a5 layer-3.
-      final int cloudAvailable =
-          (res['streak_freezes_available'] as int?) ?? 1;
+      // Refill-aware merge (a8f3d1). `used_dates` is PER-WEEK (cleared on refill),
+      // so the merge keys on last_refill. Pre-fix this lumped equal-refill into
+      // cloud-wins AND unconditionally overwrote used_dates → a freeze consumed
+      // locally during the background-restore window (slow-boot flip, ADR-0014,
+      // lands /home BEFORE this Step C runs) was wiped + the freeze refunded
+      // (spurious streak break). The (available, last_refill) max-merge half was
+      // Bug 9c4a17; used_dates was the unguarded leg. Clamp(0,3) kept (f8c1a5).
       final cloudLastRefillRaw = res['streak_freezes_last_refill'];
-      final String? cloudLastRefill =
-          cloudLastRefillRaw == null ? null : cloudLastRefillRaw.toString();
-      final String? localLastRefill =
-          existingMap['streak_freezes_last_refill'] as String?;
-
-      final bool cloudWins = localLastRefill == null ||
-          (cloudLastRefill != null &&
-              cloudLastRefill.compareTo(localLastRefill) >= 0);
-
-      if (cloudWins) {
-        existingMap['streak_freezes_available'] = cloudAvailable.clamp(0, 3);
-        if (cloudLastRefill != null) {
-          existingMap['streak_freezes_last_refill'] = cloudLastRefill;
-        }
-      } else {
-        // Local refill is fresher than cloud — keep local available +
-        // last_refill. Schedule a syncFreezes so cloud catches up to the
-        // refill that hadn't propagated when this restore observed cloud.
+      final usedRaw = res['streak_freezes_used_dates'];
+      final merged = StreakProgressService.mergeFreezeProgress(
+        localAvailable: (existingMap['streak_freezes_available'] as int?) ??
+            (res['streak_freezes_available'] as int?) ??
+            1,
+        localUsed: (existingMap['streak_freeze_used_dates'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const <String>[],
+        localLastRefill: existingMap['streak_freezes_last_refill'] as String?,
+        cloudAvailable: (res['streak_freezes_available'] as int?) ?? 1,
+        cloudUsed: (usedRaw is List)
+            ? usedRaw.map((e) => e.toString()).toList()
+            : const <String>[],
+        cloudLastRefill:
+            cloudLastRefillRaw == null ? null : cloudLastRefillRaw.toString(),
+      );
+      existingMap['streak_freezes_available'] = merged.available;
+      existingMap['streak_freeze_used_dates'] = merged.usedDates;
+      if (merged.lastRefill != null) {
+        existingMap['streak_freezes_last_refill'] = merged.lastRefill;
+      }
+      await box.put('progress', existingMap);
+      if (merged.scheduleSyncUp) {
         unawaited(SyncService.instance.syncFreezes());
       }
-
-      // used_dates is consume-only state; take cloud as authoritative
-      // because consume is multi-device sensitive (consume on device B
-      // should sync down to device A).
-      final usedRaw = res['streak_freezes_used_dates'];
-      existingMap['streak_freeze_used_dates'] = (usedRaw is List)
-          ? usedRaw.map((e) => e.toString()).toList()
-          : <String>[];
-
-      await box.put('progress', existingMap);
     } catch (e, st) {
       debugPrint('[SyncService._restoreFreezes] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
