@@ -19,6 +19,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
+import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -469,6 +470,18 @@ class AuthNotifier extends Notifier<AuthState2> {
       await LoggingTypeRepairMigrator.runIfNeeded();
     } catch (e) {
       debugPrint('[auth/_ensureLocalUser] logging_type repair failed: $e');
+    }
+
+    // Bug f1c8e4 — one-shot backfill of `type: 'workout_log'` (+ ISO
+    // `completed_at`) onto legacy `wlog_*` rows the pre-fix markCompleted wrote
+    // without them. Without it the count/history readers (getWeeklyWorkoutCounts,
+    // getWorkoutLogs, badge total, AI snapshot) miss every workout completed on
+    // this install before the fix. Idempotent (gated by migrationBox flag),
+    // local-only (no cloud re-sync — `type` is a Hive-only field). Non-fatal.
+    try {
+      await WlogTypeBackfillMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] wlog type backfill failed: $e');
     }
 
     // ── Cloud hydration ────────────────────────────────────────

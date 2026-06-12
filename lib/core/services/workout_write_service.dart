@@ -429,12 +429,26 @@ class WorkoutWriteService {
       }
 
       // 2. Upsert wlog_<date>
+      // f1c8e4: stamp `type: 'workout_log'` + `completed_at` (ISO). EVERY
+      // count/history reader filters `type == 'workout_log'`
+      // (getWeeklyWorkoutCounts → reports "This Week" tile + frequency chart,
+      // getWorkoutLogs → history, BadgeService.totalWorkouts, AiSnapshotBuilder)
+      // and getRecentWorkoutCompletionHours reads the ISO `completed_at`. The
+      // replaced saveWorkoutLog + the restore path (_restoreWorkoutLogs) BOTH
+      // stamp these; the A-13 derive-only refactor dropped them when it routed
+      // live completion through markCompleted, so a live completion was invisible
+      // to those readers until a reinstall+restore re-tagged the row. Keep
+      // completed_at_ms too (the schedule-completion duration-join + epoch
+      // readers use it). One timestamp instant for both fields.
+      final completedAt = DateTime.now();
       final wlog = <String, dynamic>{
+        'type': 'workout_log',
         'workout_name': workoutName,
         'date': dateStr,
         'duration_seconds': durationSec,
         if (rpe != null) 'rpe': rpe,
-        'completed_at_ms': DateTime.now().millisecondsSinceEpoch,
+        'completed_at': completedAt.toIso8601String(),
+        'completed_at_ms': completedAt.millisecondsSinceEpoch,
       };
       await box.put(wKey, wlog);
 

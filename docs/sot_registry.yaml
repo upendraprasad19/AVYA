@@ -1284,6 +1284,76 @@ concepts:
       reps_completed, weight_kg, volume_kg, logging_type, is_pr,
       source, updated_at_ms, optional notes, optional workout_log_id.
 
+  - concept: hive_field_name_wlog
+    domain: workout
+    behavioral_test_required: false  # behavioral test shipped with f1c8e4
+    behavioral_test_path: test/contracts/markcompleted_wlog_counted_test.dart
+    description: |
+      The `wlog_<istDateStr>` workout-LOG summary row (one per completed IST day)
+      is the SoT for "a workout happened" across all count/history surfaces.
+      EVERY count/history reader filters `type == 'workout_log'`, and the
+      streak-warning time reader parses the ISO `completed_at`. The canonical
+      live writer markCompleted MUST stamp BOTH `type: 'workout_log'` and
+      `completed_at` (ISO) — bug f1c8e4: the A-13 derive-only refactor (which
+      routed live completion through markCompleted, "replacing saveWorkoutLog")
+      dropped both, so live completions were invisible to the readers until a
+      reinstall+restore re-tagged the row. completed_at_ms (epoch) is ALSO kept
+      for the schedule-completion duration-join + epoch readers.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-9999
+        method: markCompleted
+        notes: |
+          Canonical LIVE completion writer. Stamps type:'workout_log',
+          workout_name, date, duration_seconds, optional rpe, completed_at (ISO),
+          completed_at_ms. closes-diagnose f1c8e4.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 588-624
+        method: _restoreWorkoutLogs
+        notes: cloud→Hive restore; additive (skip-if-local-exists); stamps type + completed_at.
+      - file: lib/core/services/wlog_type_backfill_migrator.dart
+        line_range: 1-9999
+        method: runIfNeeded
+        notes: one-shot heal — adds type:'workout_log' + derives completed_at on legacy rows (f1c8e4).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 752-781
+        method: getWeeklyWorkoutCounts
+        semantic: count
+        fields_read: [type, date]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 465-489
+        method: getWorkoutLogs
+        semantic: aggregated
+        fields_read: [type, date, workout_name]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 444-463
+        method: getRecentWorkoutCompletionHours
+        semantic: per-row
+        fields_read: [completed_at]
+      - file: lib/core/services/badge_service.dart
+        line_range: 88-98
+        method: totalWorkouts
+        semantic: count
+        fields_read: [type]
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 525-540
+        method: build (recent workouts)
+        semantic: aggregated
+        fields_read: [type, workout_name, date]
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 68-148
+        method: _syncWorkoutLogs (cloud projection)
+        semantic: pass-through
+        fields_read: [date, workout_name, duration_seconds (selects by wlog_ key-prefix; ignores type)]
+    sync_methods: [_syncWorkoutLogs]
+    restore_methods: [_restoreWorkoutLogs]
+    class_constraints: |
+      wlog_* row fields: type ('workout_log'), workout_name, date,
+      duration_seconds, optional rpe, completed_at (ISO), completed_at_ms.
+      type + completed_at are REQUIRED (readers depend on both).
+
   - concept: hive_field_name_nlog
     domain: nutrition
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
