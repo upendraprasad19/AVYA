@@ -49,6 +49,14 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   Timer? _softHintTimer;
   Timer? _timeoutTimer;
 
+  // Obs#1: new signups + mid-onboarding users have NOTHING to restore, so they
+  // must not see restore-flavored copy ("Loading profile & plan" / "Pulling your
+  // dispatch."). Default to a neutral setup status; only a returning user
+  // (GoHome) whose cloud restore is real flips _useRestoreLabel → the live
+  // SyncService restore labels.
+  String _statusLabel = 'Getting you ready…';
+  bool _useRestoreLabel = false;
+
   // Theme D (diagnose 2026-05-22 4a3b08) — threshold bumped from 15s to
   // 30s based on +30 APK telemetry showing the founder's restore total
   // is 35.9s every cold start (Step A 23.8s alone exceeded the old 15s
@@ -96,6 +104,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     switch (destination) {
       case StartMissionBrief():
         // Brand-new user with no profile row — cancel restore, go to Mission Brief.
+        // Obs#1: account-creation copy, not restore copy (nothing to restore).
+        if (mounted) setState(() => _statusLabel = 'Setting up your account…');
         // A7 / B5 D9-D10 — canonical provider path.
         ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/mission-brief');
@@ -140,6 +150,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         }
 
         // Mid-onboarding user — cancel restore, jump to first missing step.
+        // Obs#1: setup copy, not restore copy.
+        if (mounted) setState(() => _statusLabel = 'Setting up your account…');
         // A7 / B5 D9-D10 — canonical provider path.
         ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/$firstMissingStep');
@@ -171,6 +183,9 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   /// reconcileExlogIndexes repairs any index drift post-restore (c5a1f2).
   Future<void> _goHome(
       String userId, Future<RestoreResult> restoreFuture) async {
+    // Obs#1: a returning user (GoHome) has real cloud data — show the live
+    // SyncService restore labels instead of the neutral setup status.
+    if (mounted) setState(() => _useRestoreLabel = true);
     final killSwitch =
         HiveService.instance.configBox.get('disable_bg_restore') == true;
     final localProfile = HiveService.instance.userBox.get('profile');
@@ -504,14 +519,24 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
               // A4 — dynamic progress text driven by SyncService restore steps.
               // Falls back to the legacy "Pulling your dispatch." label until
               // the first step boundary updates the notifier.
-              ValueListenableBuilder<String>(
-                valueListenable: SyncService.instance.restoreProgressLabel,
-                builder: (context, label, _) => Text(
-                  label,
-                  style: AppTypography.titleL.copyWith(fontSize: 22),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              // Obs#1: only a returning user (GoHome) whose cloud restore is
+              // real shows the live SyncService restore labels; new signups +
+              // mid-onboarding users show the neutral setup status instead.
+              _useRestoreLabel
+                  ? ValueListenableBuilder<String>(
+                      valueListenable:
+                          SyncService.instance.restoreProgressLabel,
+                      builder: (context, label, _) => Text(
+                        label,
+                        style: AppTypography.titleL.copyWith(fontSize: 22),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : Text(
+                      _statusLabel,
+                      style: AppTypography.titleL.copyWith(fontSize: 22),
+                      textAlign: TextAlign.center,
+                    ),
               const SizedBox(height: 8),
               Text(
                 'Stand by, soldier.',
