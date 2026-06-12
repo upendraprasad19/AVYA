@@ -84,10 +84,10 @@ findings:
   # ── Upstream-blocked (pre-existing out-of-delta + founder-console) ────────
   - id: L21-F1
     lens: L21
-    desc: delete-account Razorpay-cancel still fatal (502) can block DPDP §17 erasure if the Razorpay API hiccups
-    terminal_state: upstream_blocked
-    blocker: "Pre-existing, out-of-delta-scope EF code (supabase/functions/delete-account/index.ts:215-258, source unchanged in delta). The non-fatal fix was already a documented decision in diagnose b4e2a9 impact_analysis (defer until recurring billing launches; one-time payments rarely exercise the cancel path). Fixing requires a delete-account EF deploy that needs separate founder live-apply authorization (§4.3)."
-    reopen_when: "Recurring billing launches, OR a delete-account 502/razorpay_cancel_failed appears in account_deletion telemetry, OR founder authorizes a payment-hardening batch. FLAGGED to founder in the merge-ready summary — fix-now is available on request."
+    desc: delete-account Razorpay-cancel was fatal (502) — could block DPDP §17 erasure if the Razorpay API hiccups
+    terminal_state: closed_in_commit
+    commit: HEAD (a2c8e6)
+    verification: "Founder authorized fix-now (over the prior b4e2a9 upstream_blocked deferral). delete-account cancel step made non-fatal — records cancel_failed in account_deletion_log.razorpay_cancel_status (text, live-verified) + proceeds with erasure; cancel-first preserved. diagnose a2c8e6; test/contracts/delete_account_razorpay_cancel_nonfatal_test.dart (3/3). DEPLOY HELD: the live delete-account EF deploy awaits the founder's separate explicit go (§4.3); until deployed the running EF retains the old fatal behavior."
   - id: L21-F2
     lens: L23
     desc: razorpay-webhook HMAC uses RAZORPAY_KEY_SECRET while the docstring claims a separate RAZORPAY_WEBHOOK_SECRET (doc drift)

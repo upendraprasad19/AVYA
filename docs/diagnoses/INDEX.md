@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### commit_gate_hash_stability (1 bugs)
 - 2026-06-12 f4d1b7 — >
 
+### dpdp_erasure_must_not_block_on_external_dependency (1 bugs)
+- 2026-06-12 a2c8e6 — >
+
 ### hive_field_name_wlog (1 bugs)
 - 2026-06-12 f1c8e4 — >
 
@@ -663,6 +666,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-06-12 | f4d1b7 | > | commit_gate_hash_stability | test/contracts/review_gate_hash_raw_bytes_test.dart |
+| 2026-06-12 | a2c8e6 | > | dpdp_erasure_must_not_block_on_external_dependency | test/contracts/delete_account_razorpay_cancel_nonfatal_test.dart |
 | 2026-06-12 | f1c8e4 | > | hive_field_name_wlog | test/contracts/markcompleted_wlog_counted_test.dart |
 | 2026-06-12 | b3f9d1 | > | orphan_completion_wlog_completeness | test/contracts/orphan_completion_synthesizes_wlog_test.dart |
 | 2026-06-12 | e7a2c4 | > | weekly_workout_count_ist_window | test/contracts/weekly_workout_counts_ist_test.dart |
