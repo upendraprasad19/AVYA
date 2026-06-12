@@ -1,11 +1,14 @@
 # Bug Directory (auto-generated)
 
-Generated: 2026-06-12T06:46:22.375438.
+Generated: 2026-06-12T06:55:49.951688.
 Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By recurrence class
 
 ## By concept
+
+### weekly_workout_count_ist_window (1 bugs)
+- 2026-06-12 e7a2c4 — >
 
 ### hive_field_name_wlog (1 bugs)
 - 2026-06-12 f1c8e4 — >
@@ -75,8 +78,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-06-08 a4f7e1 — >
 - 2026-06-07 f19a7c — >
 
-### client_ux_flow_and_restore_correctness (1 bugs)
-- 2026-06-07 a8e3c5 — >
+### ai_free_message_limit (1 bugs)
+- 2026-06-07 f1a70c — >
 
 ### writer_reader_drift_and_dead_reads (1 bugs)
 - 2026-06-07 c4d9b2 — >
@@ -93,11 +96,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### honest_surface_integrity (1 bugs)
 - 2026-06-07 e2a1f7 — >
 
-### ai_free_message_limit (1 bugs)
-- 2026-06-07 f1a70c — >
+### client_ux_flow_and_restore_correctness (1 bugs)
+- 2026-06-07 a8e3c5 — >
 
-### alert_threshold_tuning (1 bugs)
-- 2026-06-06 f0b9d3 — >
+### coach_interactions (4 bugs)
+- 2026-06-06 c3f9a1 — >
+- 2026-05-29 9e1d4c — >
+- 2026-05-04 bb3acc — Morning alert Edge Function computed day-of-week and date strings in UTC instead of IST, sending wrong day greetings after 18:30 IST.
+- 2026-05-04 4c8788 — AI coach message count was recomputed from Supabase on every render, causing unnecessary round-trips; cache key was not IST-aware, causing stale counts across midnight.
 
 ### exercise_logs_read_path (6 bugs)
 - 2026-06-06 e4a8b1 — >
@@ -107,11 +113,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-22 89d56c — |
 - 2026-05-12 f4c9e1 — After completing today's morning workout via the active-workout flow, the Edit Workout Log sheet shows "No exercise logs for this day" — blank. Cloud workout_log_exercises HAS the 5 rows for the founder on 2026-05-11 (completed_at 05:19 UTC = May 11 10:49 IST). Local Hive also has them at correct keys.
 
-### coach_interactions (4 bugs)
-- 2026-06-06 c3f9a1 — >
-- 2026-05-29 9e1d4c — >
-- 2026-05-04 bb3acc — Morning alert Edge Function computed day-of-week and date strings in UTC instead of IST, sending wrong day greetings after 18:30 IST.
-- 2026-05-04 4c8788 — AI coach message count was recomputed from Supabase on every render, causing unnecessary round-trips; cache key was not IST-aware, causing stale counts across midnight.
+### alert_threshold_tuning (1 bugs)
+- 2026-06-06 f0b9d3 — >
 
 ### user_progress_updated_at (1 bugs)
 - 2026-06-05 a2d8f4 — >
@@ -128,11 +131,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### biometric_sync_state (1 bugs)
 - 2026-06-05 9a5c3f — >
 
-### ci_local_ci_parity (1 bugs)
-- 2026-06-05 c4d8e1 — >
-
 ### check_and_sync_null_safety (1 bugs)
 - 2026-06-05 c5e1b7 — >
+
+### ci_local_ci_parity (1 bugs)
+- 2026-06-05 c4d8e1 — >
 
 ### saved_meals (1 bugs)
 - 2026-06-03 b8d5c2 — >
@@ -162,16 +165,16 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### past_week_history_display (1 bugs)
 - 2026-06-01 f4e1d9 — >
 
+### ai_snapshot_building (3 bugs)
+- 2026-06-01 a9c3e2 — >
+- 2026-05-22 b4a09c — |
+- 2026-05-17 93aeac — |
+
 ### nutrition_summary_macro_row_layout (1 bugs)
 - 2026-06-01 7e3c91 — >
 
 ### ai_coach_tool_loop_gemini_resilience (1 bugs)
 - 2026-06-01 d4f1c2 — >
-
-### ai_snapshot_building (3 bugs)
-- 2026-06-01 a9c3e2 — >
-- 2026-05-22 b4a09c — |
-- 2026-05-17 93aeac — |
 
 ### edge_function_dependency_resolution (1 bugs)
 - 2026-05-31 f2d8ae — >
@@ -234,35 +237,35 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### graduation_phase2_preview (1 bugs)
 - 2026-05-23 ea1059 — |
 
-### subscription_gate (1 bugs)
-- 2026-05-22 7b3eaf — |
-
-### rank_promotion_celebration (1 bugs)
-- 2026-05-22 9aa2c1 — |
-
-### proactive_coach_promotion (1 bugs)
-- 2026-05-22 8b1f33 — |
+### workout_schedule_service_split (1 bugs)
+- 2026-05-22 d882ca — |
 
 ### scheduled_workouts_mutations (3 bugs)
 - 2026-05-22 b0baa5 — |
 - 2026-05-12 9e2c1a — |
 - 2026-05-12 8f3d22 — |
 
+### rank_promotion_celebration (1 bugs)
+- 2026-05-22 9aa2c1 — |
+
 ### phase_unlock_end_to_end (1 bugs)
 - 2026-05-22 ec4d27 — |
 
-### workout_schedule_service_split (1 bugs)
-- 2026-05-22 d882ca — |
+### phase_unlock_card_surface_gate (1 bugs)
+- 2026-05-22 0e7714 — |
+
+### food_text_analysis (1 bugs)
+- 2026-05-22 599d49 — |
 
 ### singleton_lifecycle_registry (2 bugs)
 - 2026-05-22 7f2a8c — |
 - 2026-05-21 7a3e1c — |
 
-### food_text_analysis (1 bugs)
-- 2026-05-22 599d49 — |
+### subscription_gate (1 bugs)
+- 2026-05-22 7b3eaf — |
 
-### phase_unlock_card_surface_gate (1 bugs)
-- 2026-05-22 0e7714 — |
+### proactive_coach_promotion (1 bugs)
+- 2026-05-22 8b1f33 — |
 
 ### typography_canonical_source (1 bugs)
 - 2026-05-21 1f4a8b — |
@@ -279,17 +282,17 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### edge_function_deploy_reversibility (1 bugs)
 - 2026-05-21 b3ecf2 — |
 
-### dependency_canonical_http_client (1 bugs)
-- 2026-05-21 3e9d39 — |
-
 ### ai_coach_repository_split_A10 (1 bugs)
 - 2026-05-21 9c2b1f — |
 
-### sync_domain_full_migration_A6 (1 bugs)
-- 2026-05-21 2b8d4e — |
+### dependency_canonical_http_client (1 bugs)
+- 2026-05-21 3e9d39 — |
 
 ### post_signin_destination (1 bugs)
 - 2026-05-21 17ae38 — |
+
+### sync_domain_full_migration_A6 (1 bugs)
+- 2026-05-21 2b8d4e — |
 
 ### weight_trend_range (1 bugs)
 - 2026-05-20 b3f7a2 — |
@@ -303,9 +306,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### streak_freeze_refill_restore_race (1 bugs)
 - 2026-05-19 9c4a17 — |
 
-### ai_tool_wall_clock_and_media_proxy_error_class (1 bugs)
-- 2026-05-18 t1m5b0 — |
-
 ### weight_log_provider_invalidation_race (1 bugs)
 - 2026-05-18 w7r4c3 — |
 
@@ -315,11 +315,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### streak_freeze_value_clamp_on_read (1 bugs)
 - 2026-05-18 f8c1a5 — |
 
-### streak_freeze_refill_extract (1 bugs)
-- 2026-05-17 5fe338 — |
+### ai_tool_wall_clock_and_media_proxy_error_class (1 bugs)
+- 2026-05-18 t1m5b0 — |
 
-### migration_live_verify_gate (1 bugs)
-- 2026-05-17 1c3401 — |
+### doc_internal_consistency_table_count (1 bugs)
+- 2026-05-17 d0c352 — |
 
 ### partial_unique_arbiter_safety (1 bugs)
 - 2026-05-17 9d2a47 — |
@@ -327,17 +327,29 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### restore_completeness_symmetric (1 bugs)
 - 2026-05-17 4dd7e2 — |
 
+### razorpay_webhook_handler_correctness (1 bugs)
+- 2026-05-17 9a7c14 — |
+
+### train_provider_workout_read_service_delegation (1 bugs)
+- 2026-05-17 39ead9 — |
+
+### streak_freeze_refill_extract (1 bugs)
+- 2026-05-17 5fe338 — |
+
+### current_streak_single_reader (1 bugs)
+- 2026-05-17 41507e — |
+
 ### rank_promotion_local_sync (1 bugs)
 - 2026-05-17 4a37e7 — |
+
+### paywall_single_purchase_path (1 bugs)
+- 2026-05-17 40c401 — |
 
 ### nutrition_delete_canonical_writer (1 bugs)
 - 2026-05-17 d1e7e6 — |
 
-### doc_internal_consistency_table_count (1 bugs)
-- 2026-05-17 d0c352 — |
-
-### paywall_single_purchase_path (1 bugs)
-- 2026-05-17 40c401 — |
+### migration_live_verify_gate (1 bugs)
+- 2026-05-17 1c3401 — |
 
 ### apk_size_gate_strict_mode (1 bugs)
 - 2026-05-17 c84e33 — |
@@ -354,9 +366,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### verify_payment_notes_user_id_guard (1 bugs)
 - 2026-05-17 c8f229 — |
 
-### train_provider_workout_read_service_delegation (1 bugs)
-- 2026-05-17 39ead9 — |
-
 ### ai_media_proxy_user_scope_assertion (1 bugs)
 - 2026-05-17 5e055f — |
 
@@ -365,12 +374,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### snapshot_writer_contract (1 bugs)
 - 2026-05-17 7faa3b — |
-
-### razorpay_webhook_handler_correctness (1 bugs)
-- 2026-05-17 9a7c14 — |
-
-### current_streak_single_reader (1 bugs)
-- 2026-05-17 41507e — |
 
 ### snapshot_contract_enforcement (1 bugs)
 - 2026-05-17 c0e3a5 — |
@@ -389,17 +392,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### (unspecified) (9 bugs)
 - 2026-05-16 2026-05-16-workout-schedule-service-bypass — 
-- 2026-05-16 2026-05-16-sync-coach-cross-channel-dedup — 
-- 2026-05-16 2026-05-16-logpr-bypass — 
-- 2026-05-16 2026-05-16-rank-widget-migration — 
 - 2026-05-16 de29b8 — 
+- 2026-05-16 2026-05-16-sync-coach-cross-channel-dedup — 
+- 2026-05-16 2026-05-16-ai-proxy-placeholder-resolution — 
+- 2026-05-16 2026-05-16-rank-widget-migration — 
+- 2026-05-16 2026-05-16-logpr-bypass — 
+- 2026-05-16 2026-05-16-gate-coverage-and-dead-code — 
 - 2026-05-16 2026-05-16-doc-updates — 
 - 2026-05-16 2026-05-16-dead-columns-dropped — 
-- 2026-05-16 2026-05-16-ai-proxy-placeholder-resolution — 
-- 2026-05-16 2026-05-16-gate-coverage-and-dead-code — 
-
-### workout_log_id_session_scoping (1 bugs)
-- 2026-05-16 daffac — |
 
 ### terms_acceptance_audit_trail (1 bugs)
 - 2026-05-16 2026-05-16-terms-accepted-at-dpdp — |
@@ -413,14 +413,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### workout_schedule_completion_cloud_projection (1 bugs)
 - 2026-05-16 2026-05-16-schedule-completion-duration — |
 
-### referral_restore_completeness (1 bugs)
-- 2026-05-16 2026-05-16-referral-restore-completeness — |
-
 ### prediction_card_display (1 bugs)
 - 2026-05-16 2c1c0d — |
 
 ### exercise_personal_records (1 bugs)
 - 2026-05-16 cb1ab1 — |
+
+### ai_media_proxy_classification (1 bugs)
+- 2026-05-16 5bea3e — |
 
 ### ai_media_proxy_status_code_classification (1 bugs)
 - 2026-05-16 913261 — |
@@ -428,8 +428,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### client_errors_telemetry_pipeline (1 bugs)
 - 2026-05-16 9d12af — |
 
-### health_write_service (1 bugs)
-- 2026-05-16 e7a516 — |
+### referral_restore_completeness (1 bugs)
+- 2026-05-16 2026-05-16-referral-restore-completeness — |
 
 ### exlog_key_sot (1 bugs)
 - 2026-05-16 a16c1a — |
@@ -437,11 +437,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### ai_coach_interactions_dedup (1 bugs)
 - 2026-05-16 a17bc3 — Founder's `ai_coach_interactions` table shows 6 rows for the same `user_message='curd 200gms whey 1.5 scoops cashew 6'` (3 timestamps × 2 channels). Each "Analyze with AI" tap during Gemini 502 storm produced (a) a Hive `coach_*` row, (b) a server-side placeholder row (channel=food_text_analysis, model_used=pending), and (c) a sync-time orphan row (channel=in_app_orphan). No client-side circuit breaker — user can tap retry indefinitely and each tap fans out to 3 cloud rows.
 
-### ai_media_proxy_classification (1 bugs)
-- 2026-05-16 5bea3e — |
+### health_write_service (1 bugs)
+- 2026-05-16 e7a516 — |
 
-### sync_natural_key_guard (1 bugs)
-- 2026-05-15 9f4ab2 — |
+### workout_log_id_session_scoping (1 bugs)
+- 2026-05-16 daffac — |
 
 ### custom_exercises_mutations (1 bugs)
 - 2026-05-15 a5d29c — |
@@ -461,8 +461,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-12 7c4e1a — User tapped "Analyse & Log" on Nutrition → Log Food → AI tab. Got toast "The AI is temporarily unavailable. Please try again in a minute." Same error class also fires from AI coach `logMealByText` tool dispatch when ai-proxy is cold. Edge-function logs show two consecutive POST /ai-proxy 502 BAD_GATEWAY at 05:08:05 UTC (8475 ms) and 05:08:13 UTC (6654 ms); the next successful call ~3 min later took 20219 ms (warm-start completion).
 - 2026-05-12 0a7b9f — Two surfaces affected. (G) Food text analysis returned "The AI is temporarily unavailable. Please try again in a minute." after the user typed a meal description and tapped Analyse & Log. (H) Telemetry shows push_snapshot FunctionException(status 503, BOOT_ERROR) for sumit1 at 06:46 UTC.
 
-### exercise_log_per_set (1 bugs)
-- 2026-05-12 e1f8a2 — |
+### sync_natural_key_guard (1 bugs)
+- 2026-05-15 9f4ab2 — |
 
 ### today_workout_snapshot_reads_logged (1 bugs)
 - 2026-05-12 a13a01 — User asks AI coach "how was my workout today?" after partially completing a Pull-day session (logged 4 of 8 prescribed exercises — Lat Pulldown, Dumbbell Row, Hanging Leg Raise, Concentration Curl). Coach replied with the FULL planned 8-exercise list as if everything had been completed, because today_workout.exercises emits the schedule_<date> entry verbatim regardless of how many exlog_* rows exist for the day.
@@ -485,17 +485,20 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### last_performance_per_set_semantics (1 bugs)
 - 2026-05-12 a8f1c2 — "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session [10,15,10,15,10,10,15]; weight_kg field similarly carries the max of the previous session's per-set weights instead of the first set's weight."
 
-### hive_user_session_static_state (1 bugs)
-- 2026-05-12 c7d4f6 — After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile'].
+### exercise_log_per_set (1 bugs)
+- 2026-05-12 e1f8a2 — |
 
-### cross_account_riverpod_cache_race (1 bugs)
-- 2026-05-12 7bd154 — After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner.
+### day_rollover_provider_invalidation (1 bugs)
+- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
 
 ### user_scoped_riverpod_providers (1 bugs)
 - 2026-05-12 c4055a — |
 
-### day_rollover_provider_invalidation (1 bugs)
-- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
+### cross_account_riverpod_cache_race (1 bugs)
+- 2026-05-12 7bd154 — After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner.
+
+### hive_user_session_static_state (1 bugs)
+- 2026-05-12 c7d4f6 — After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile'].
 
 ### ai_media_proxy_error_handling (1 bugs)
 - 2026-05-12 d8e5b3 — Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry.
@@ -654,6 +657,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-12 | e7a2c4 | > | weekly_workout_count_ist_window | test/contracts/weekly_workout_counts_ist_test.dart |
 | 2026-06-12 | f1c8e4 | > | hive_field_name_wlog | test/contracts/markcompleted_wlog_counted_test.dart |
 | 2026-06-11 | a8f3d1 | > | streak_freeze_progress_merge | test/contracts/restore_freezes_merge_test.dart |
 | 2026-06-11 | c9b3e2 | > | security_definer_function_exposure | test/contracts/security_definer_revoke_migration_test.dart |
@@ -670,7 +674,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-08 | d7c3f1 | > | rank_monotonic_current_code | scripts/check_schema_column_refs.dart |
 | 2026-06-08 | b4e2a9 | > | subscription_state | scripts/check_schema_column_refs.dart |
 | 2026-06-08 | a4f7e1 | > | fitness_goal_resolution | test/contracts/ai_proxy_goal_enum_parity_test.dart |
-| 2026-06-07 | a8e3c5 | > | client_ux_flow_and_restore_correctness | test/contracts/audit_2026_06_07_batch5_regression_test.dart |
+| 2026-06-07 | f1a70c | > | ai_free_message_limit | test/contracts/ai_message_limit_parity_test.dart |
 | 2026-06-07 | c5a1f2 | > | restore_completeness | test/contracts/restore_local_wins_additive_test.dart |
 | 2026-06-07 | f19a7c | > | fitness_goal_resolution | test/contracts/recompose_goal_targets_test.dart |
 | 2026-06-07 | c4d9b2 | > | writer_reader_drift_and_dead_reads | test/contracts/audit_2026_06_07_batch5_regression_test.dart |
@@ -678,12 +682,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-07 | 157d0c | > | ist_date_key_consistency | scripts/check_local_date_key_drift.dart |
 | 2026-06-07 | 15c0de | > | hardcoded_value_centralization | scripts/check_app_version_matches_pubspec.dart |
 | 2026-06-07 | e2a1f7 | > | honest_surface_integrity | test/contracts/audit_2026_06_07_batch5_regression_test.dart |
-| 2026-06-07 | f1a70c | > | ai_free_message_limit | test/contracts/ai_message_limit_parity_test.dart |
-| 2026-06-06 | f0b9d3 | > | alert_threshold_tuning | test/contracts/alert_thresholds_sync_test.dart |
+| 2026-06-07 | a8e3c5 | > | client_ux_flow_and_restore_correctness | test/contracts/audit_2026_06_07_batch5_regression_test.dart |
+| 2026-06-06 | c3f9a1 | > | coach_interactions | test/ai_coach/coach_writer_dedup_test.dart |
 | 2026-06-06 | a7d3f1 | > | restore_completeness | test/contracts/restore_plan_json_authoritative_test.dart |
 | 2026-06-06 | e4a8b1 | > | exercise_logs_read_path | test/contracts/workout_write_durable_index_test.dart |
-| 2026-06-06 | c3f9a1 | > | coach_interactions | test/ai_coach/coach_writer_dedup_test.dart |
 | 2026-06-06 | d9a4f2 | > | exercise_logs_read_path | test/contracts/cloud_sync_fixes_2026_06_05_test.dart |
+| 2026-06-06 | f0b9d3 | > | alert_threshold_tuning | test/contracts/alert_thresholds_sync_test.dart |
 | 2026-06-05 | e7b3c9 | > | exercise_logs_read_path | test/contracts/cloud_sync_fixes_2026_06_05_test.dart |
 | 2026-06-05 | a2d8f4 | > | user_progress_updated_at | test/contracts/cloud_sync_fixes_2026_06_05_test.dart |
 | 2026-06-05 | 2c9f7a | > | week_completion_check | test/contracts/week_completion_check_test.dart |
@@ -692,8 +696,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-05 | 8b3d4e | > | nutrition_recent_logs_name | test/contracts/nutrition_recent_logs_name_test.dart |
 | 2026-06-05 | 9a5c3f | > | biometric_sync_state | test/contracts/biometric_sync_state_test.dart |
 | 2026-06-05 | 4e8b1d | > | restore_completeness | test/contracts/background_restore_test.dart |
-| 2026-06-05 | c4d8e1 | > | ci_local_ci_parity | test/contracts/template_exercises_upsert_test.dart |
 | 2026-06-05 | c5e1b7 | > | check_and_sync_null_safety | test/contracts/cloud_sync_fixes_2026_06_05_test.dart |
+| 2026-06-05 | c4d8e1 | > | ci_local_ci_parity | test/contracts/template_exercises_upsert_test.dart |
 | 2026-06-03 | b8d5c2 | > | saved_meals | test/contracts/saved_meal_key_canonical_test.dart |
 | 2026-06-03 | f7e3a1 | > | sync_fanout_nutrition_domain | test/contracts/sync_user_scoped_natural_keys_test.dart |
 | 2026-06-02 | e1c6a9 | > | weight_trend_home_chart | test/contracts/weight_trend_chart_gap_connect_test.dart |
@@ -702,10 +706,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-02 | b2e9d4 | > | ui_header_no_clip | test/contracts/tab_header_no_clip_test.dart |
 | 2026-06-02 | d4b8e2 | > | sync_fanout_workout_domain | test/contracts/sync_user_scoped_natural_keys_test.dart |
 | 2026-06-01 | f4e1d9 | > | past_week_history_display | test/contracts/past_week_history_derives_from_logs_test.dart |
-| 2026-06-01 | c9f2a7 | > | sync_fanout_nutrition_domain | test/contracts/sync_nutrition_log_id_resolved_before_upsert_test.dart |
+| 2026-06-01 | a9c3e2 | > | ai_snapshot_building | test/contracts/ai_snapshot_budget_trim_test.dart |
 | 2026-06-01 | 7e3c91 | > | nutrition_summary_macro_row_layout | test/contracts/nutrition_summary_macro_row_no_overflow_test.dart |
 | 2026-06-01 | d4f1c2 | > | ai_coach_tool_loop_gemini_resilience | supabase/functions/_shared/gemini_backoff_retry_test.ts |
-| 2026-06-01 | a9c3e2 | > | ai_snapshot_building | test/contracts/ai_snapshot_budget_trim_test.dart |
+| 2026-06-01 | c9f2a7 | > | sync_fanout_nutrition_domain | test/contracts/sync_nutrition_log_id_resolved_before_upsert_test.dart |
 | 2026-05-31 | f2d8ae | > | edge_function_dependency_resolution | test/contracts/no_denoland_zod_import_test.dart |
 | 2026-05-31 | 7d3f0a | > | exercise_logs_read_path | test/contracts/workout_log_exercises_cumulative_reps_test.dart |
 | 2026-05-31 | 5e8a1c | > | streaks | test/contracts/streak_frozen_day_persists_protection_test.dart |
@@ -729,115 +733,115 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-05-24 | 524d12 | \| | writer_reader_drift_batch_2026_05_24 | test/contracts/nlog_key_canonical_test.dart |
 | 2026-05-23 | 85a684 | \| | week_selector_past_phase_scroll | test/contracts/week_selector_past_phases_test.dart |
 | 2026-05-23 | ea1059 | \| | graduation_phase2_preview | test/contracts/graduation_phase2_preview_dynamic_test.dart |
-| 2026-05-22 | 7b3eaf | \| | subscription_gate | test/contracts/subscription_gate_catcherror_test.dart |
-| 2026-05-22 | 4a3b08 | \| | restore_completeness | test/contracts/restoring_screen_timeout_test.dart |
-| 2026-05-22 | 9aa2c1 | \| | rank_promotion_celebration | test/contracts/promotion_celebration_wiring_test.dart |
-| 2026-05-22 | 8b1f33 | \| | proactive_coach_promotion | test/contracts/proactive_coach_promotion_test.dart |
-| 2026-05-22 | b0baa5 | \| | scheduled_workouts_mutations | test/contracts/phase_unlock_start_date_test.dart |
-| 2026-05-22 | ec4d27 | \| | phase_unlock_end_to_end | test/contracts/phase_unlock_end_to_end_test.dart |
 | 2026-05-22 | d882ca | \| | workout_schedule_service_split | test/contracts/workout_schedule_split_invariant_test.dart |
-| 2026-05-22 | 7f2a8c | \| | singleton_lifecycle_registry | test/contracts/singleton_provider_invariant_test.dart |
-| 2026-05-22 | b4a09c | \| | ai_snapshot_building | test/ai_coach/meals_today_snapshot_test.dart |
-| 2026-05-22 | 599d49 | \| | food_text_analysis | test/contracts/food_ai_telemetry_retry_test.dart |
-| 2026-05-22 | 89d56c | \| | exercise_logs_read_path | test/contracts/graduation_stats_provider_field_test.dart |
-| 2026-05-22 | dc52a4 | \| | hive_session_init_race | test/contracts/splash_no_userbox_touch_test.dart |
+| 2026-05-22 | b0baa5 | \| | scheduled_workouts_mutations | test/contracts/phase_unlock_start_date_test.dart |
+| 2026-05-22 | 9aa2c1 | \| | rank_promotion_celebration | test/contracts/promotion_celebration_wiring_test.dart |
+| 2026-05-22 | ec4d27 | \| | phase_unlock_end_to_end | test/contracts/phase_unlock_end_to_end_test.dart |
 | 2026-05-22 | 0e7714 | \| | phase_unlock_card_surface_gate | test/contracts/phase_unlock_card_thursday_gate_test.dart |
+| 2026-05-22 | dc52a4 | \| | hive_session_init_race | test/contracts/splash_no_userbox_touch_test.dart |
+| 2026-05-22 | 89d56c | \| | exercise_logs_read_path | test/contracts/graduation_stats_provider_field_test.dart |
+| 2026-05-22 | 599d49 | \| | food_text_analysis | test/contracts/food_ai_telemetry_retry_test.dart |
+| 2026-05-22 | b4a09c | \| | ai_snapshot_building | test/ai_coach/meals_today_snapshot_test.dart |
+| 2026-05-22 | 7f2a8c | \| | singleton_lifecycle_registry | test/contracts/singleton_provider_invariant_test.dart |
+| 2026-05-22 | 7b3eaf | \| | subscription_gate | test/contracts/subscription_gate_catcherror_test.dart |
+| 2026-05-22 | 8b1f33 | \| | proactive_coach_promotion | test/contracts/proactive_coach_promotion_test.dart |
+| 2026-05-22 | 4a3b08 | \| | restore_completeness | test/contracts/restoring_screen_timeout_test.dart |
 | 2026-05-21 | 1f4a8b | \| | typography_canonical_source | test/contracts/no_raw_google_fonts_test.dart |
 | 2026-05-21 | 5a0b31 | \| | sync_domain_interface_scaffold_A6 | test/contracts/sync_domain_interface_test.dart |
 | 2026-05-21 | 7a3e1c | \| | singleton_lifecycle_registry | test/contracts/singleton_lifecycle_registry_test.dart |
 | 2026-05-21 | 2d1c8a | \| | referral_redemption | test/contracts/referral_repository_only_test.dart |
 | 2026-05-21 | 3cbbce | \| | profile_write_service | test/contracts/profile_write_service_only_test.dart |
 | 2026-05-21 | b3ecf2 | \| | edge_function_deploy_reversibility | scripts/check_edge_function_rollback_script.dart |
-| 2026-05-21 | 3e9d39 | \| | dependency_canonical_http_client | scripts/check_no_http_package.dart |
 | 2026-05-21 | 9c2b1f | \| | ai_coach_repository_split_A10 | test/contracts/ai_snapshot_builder_only_test.dart |
-| 2026-05-21 | 2b8d4e | \| | sync_domain_full_migration_A6 | test/contracts/sync_domain_full_migration_test.dart |
+| 2026-05-21 | 3e9d39 | \| | dependency_canonical_http_client | scripts/check_no_http_package.dart |
 | 2026-05-21 | 17ae38 | \| | post_signin_destination | test/contracts/auth_session_bootstrapper_test.dart |
+| 2026-05-21 | 2b8d4e | \| | sync_domain_full_migration_A6 | test/contracts/sync_domain_full_migration_test.dart |
 | 2026-05-20 | b3f7a2 | \| | weight_trend_range | test/contracts/weight_sparkline_all_chip_and_footer_link_test.dart |
 | 2026-05-20 | c2a91f | \| | usage_weeks_signup_age | test/contracts/usage_weeks_uses_supabase_signup_test.dart |
 | 2026-05-19 | 4f8e2d | \| | restore_long_pole_timing_visibility | test/contracts/streak_freeze_refill_telemetry_test.dart |
 | 2026-05-19 | 9c4a17 | \| | streak_freeze_refill_restore_race | test/contracts/streak_freeze_refill_race_test.dart |
-| 2026-05-18 | t1m5b0 | \| | ai_tool_wall_clock_and_media_proxy_error_class | test/contracts/get_progress_summary_parallel_queries_test.dart |
 | 2026-05-18 | w7r4c3 | \| | weight_log_provider_invalidation_race | test/contracts/weight_log_invalidation_awaitable_test.dart |
 | 2026-05-18 | s1n4c0 | \| | swap_undo_snackbar_modal_stack | test/features/train/swap_undo_snackbar_dismisses_test.dart |
 | 2026-05-18 | f8c1a5 | \| | streak_freeze_value_clamp_on_read | test/contracts/streak_freeze_value_clamped_on_read_test.dart |
-| 2026-05-17 | 5fe338 | \| | streak_freeze_refill_extract | test/contracts/phase_c_oi_closures_test.dart |
-| 2026-05-17 | 1c3401 | \| | migration_live_verify_gate | test/contracts/phase_c_oi_closures_test.dart |
-| 2026-05-17 | 93aeac | \| | ai_snapshot_building | test/contracts/snapshot_contract_self_consistency_test.dart |
+| 2026-05-18 | t1m5b0 | \| | ai_tool_wall_clock_and_media_proxy_error_class | test/contracts/get_progress_summary_parallel_queries_test.dart |
+| 2026-05-17 | d0c352 | \| | doc_internal_consistency_table_count | scripts/check_doc_internal_consistency.dart |
 | 2026-05-17 | 9d2a47 | \| | partial_unique_arbiter_safety | test/contracts/partial_unique_arbiter_inventory_test.dart |
 | 2026-05-17 | 4dd7e2 | \| | restore_completeness_symmetric | test/contracts/restore_round_trip_field_coverage_test.dart |
+| 2026-05-17 | 9a7c14 | \| | razorpay_webhook_handler_correctness | test/contracts/razorpay_webhook_supabase_client_decl_order_test.dart |
+| 2026-05-17 | 39ead9 | \| | train_provider_workout_read_service_delegation | test/contracts/phase_c_oi_closures_test.dart |
+| 2026-05-17 | 5fe338 | \| | streak_freeze_refill_extract | test/contracts/phase_c_oi_closures_test.dart |
+| 2026-05-17 | 41507e | \| | current_streak_single_reader | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | 4a37e7 | \| | rank_promotion_local_sync | test/contracts/rank_service_local_profile_update_test.dart |
-| 2026-05-17 | d1e7e6 | \| | nutrition_delete_canonical_writer | test/contracts/nutrition_delete_routes_through_write_service_test.dart |
-| 2026-05-17 | d0c352 | \| | doc_internal_consistency_table_count | scripts/check_doc_internal_consistency.dart |
 | 2026-05-17 | 40c401 | \| | paywall_single_purchase_path | test/contracts/phase_c_oi_closures_test.dart |
+| 2026-05-17 | d1e7e6 | \| | nutrition_delete_canonical_writer | test/contracts/nutrition_delete_routes_through_write_service_test.dart |
+| 2026-05-17 | 1c3401 | \| | migration_live_verify_gate | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | c84e33 | \| | apk_size_gate_strict_mode | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | a2d0e1 | \| | delete_account_storage_purge_recursive | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | c4031b | \| | cron_edge_function_auth_gate | test/contracts/cron_auth_adoption_test.dart |
 | 2026-05-17 | c1ea30 | \| | clean_orphan_media_bucket_target | "must add: test/contracts/clean_orphan_media_targets_chat_media_test.dart" |
 | 2026-05-17 | c8f229 | \| | verify_payment_notes_user_id_guard | test/contracts/verify_payment_notes_user_id_required_test.dart |
-| 2026-05-17 | 39ead9 | \| | train_provider_workout_read_service_delegation | test/contracts/phase_c_oi_closures_test.dart |
 | 2026-05-17 | 5e055f | \| | ai_media_proxy_user_scope_assertion | test/contracts/ai_media_proxy_user_scope_test.dart |
 | 2026-05-17 | b3e052 | \| | verify_payment_payload_completeness | test/contracts/verify_payment_payload_completeness_test.dart |
 | 2026-05-17 | 7faa3b | \| | snapshot_writer_contract | test/contracts/snapshot_orphan_reader_aliases_test.dart |
-| 2026-05-17 | 9a7c14 | \| | razorpay_webhook_handler_correctness | test/contracts/razorpay_webhook_supabase_client_decl_order_test.dart |
-| 2026-05-17 | 41507e | \| | current_streak_single_reader | test/contracts/phase_c_oi_closures_test.dart |
+| 2026-05-17 | 93aeac | \| | ai_snapshot_building | test/contracts/snapshot_contract_self_consistency_test.dart |
 | 2026-05-17 | c0e3a5 | \| | snapshot_contract_enforcement | test/contracts/snapshot_contract_gate_test.dart |
 | 2026-05-17 | 8d85c2 | \| | workout_read_service | test/contracts/workout_read_service_per_set_semantic_test.dart |
 | 2026-05-17 | 0a1e17 | \| | reader_manifest_exhaustive_completeness | test/contracts/reader_manifest_exhaustiveness_test.dart |
 | 2026-05-17 | 7c4e5d | \| | marked_done_without_logging_ux | test/contracts/marked_done_vs_logged_ux_test.dart |
 | 2026-05-17 | 3a7c1e | \| | cross_account_guard_exempt_declaration | test/contracts/auth_invalidation_contract_test.dart |
 | 2026-05-16 | 2026-05-16-workout-schedule-service-bypass |  |  |  |
-| 2026-05-16 | daffac | \| | workout_log_id_session_scoping | test/contracts/load_all_exercise_prs_per_set_semantic_test.dart |
+| 2026-05-16 | de29b8 |  |  |  |
 | 2026-05-16 | 2026-05-16-terms-accepted-at-dpdp | \| | terms_acceptance_audit_trail | test/contracts/terms_signup_writes_test.dart |
 | 2026-05-16 | 2026-05-16-telemetry-hardening | Telemetry framework had five compounding observability gaps surfaced by audit Agent 7 — no success-path emission on 5 low-usage sync methods (cannot distinguish "feature unused" from "silently failing"), no cron-execution telemetry (F10.5), no `_shared/cron_auth.ts` (F9.1 — Test #16 P1-D drift class), generic numbered op_types defeating triage (F10.3), and undetected HIGH_PRIORITY_OP_TYPES client/server drift (F10.4). | ErrorTelemetry + sync success/failure signal + cron auth | test/contracts/high_priority_op_types_parity_test.dart |
 | 2026-05-16 | 2026-05-16-sync-coach-cross-channel-dedup |  |  |  |
 | 2026-05-16 | 5beed5 | \| | sleep_logs | test/contracts/sleep_chat_routes_through_health_write_service_test.dart |
 | 2026-05-16 | 2026-05-16-schedule-completion-duration | \| | workout_schedule_completion_cloud_projection | test/contracts/schedule_completion_duration_writer_to_reader_test.dart |
-| 2026-05-16 | 2026-05-16-referral-restore-completeness | \| | referral_restore_completeness | test/contracts/restore_completeness_writes_test.dart |
+| 2026-05-16 | 2026-05-16-ai-proxy-placeholder-resolution |  |  |  |
+| 2026-05-16 | 2026-05-16-rank-widget-migration |  |  |  |
 | 2026-05-16 | 2c1c0d | \| | prediction_card_display | test/contracts/prediction_card_onboarding_copy_test.dart |
 | 2026-05-16 | cb1ab1 | \| | exercise_personal_records | test/contracts/load_all_exercise_prs_per_set_semantic_test.dart |
+| 2026-05-16 | 5bea3e | \| | ai_media_proxy_classification | test/contracts/edge_function_storage_race_retry_test.dart |
 | 2026-05-16 | 913261 | \| | ai_media_proxy_status_code_classification | test/contracts/ai_media_proxy_status_code_classification_test.dart |
 | 2026-05-16 | 1bfeed | \| | onboarding_completed_at | test/contracts/onboarding_completed_migrated_key_test.dart |
 | 2026-05-16 | 9d12af | \| | client_errors_telemetry_pipeline | test/safety/error_telemetry_rate_limit_test.dart |
+| 2026-05-16 | 2026-05-16-referral-restore-completeness | \| | referral_restore_completeness | test/contracts/restore_completeness_writes_test.dart |
 | 2026-05-16 | 2026-05-16-logpr-bypass |  |  |  |
-| 2026-05-16 | e7a516 | \| | health_write_service | "test/contracts/health_write_service_writer_to_reader_test.dart" |
-| 2026-05-16 | 2026-05-16-rank-widget-migration |  |  |  |
-| 2026-05-16 | de29b8 |  |  |  |
+| 2026-05-16 | 2026-05-16-gate-coverage-and-dead-code |  |  |  |
 | 2026-05-16 | a16c1a | \| | exlog_key_sot | test/contracts/exlog_key_canonical_test.dart |
 | 2026-05-16 | 2026-05-16-doc-updates |  |  |  |
 | 2026-05-16 | 2026-05-16-dead-columns-dropped |  |  |  |
 | 2026-05-16 | a17bc3 | Founder's `ai_coach_interactions` table shows 6 rows for the same `user_message='curd 200gms whey 1.5 scoops cashew 6'` (3 timestamps × 2 channels). Each "Analyze with AI" tap during Gemini 502 storm produced (a) a Hive `coach_*` row, (b) a server-side placeholder row (channel=food_text_analysis, model_used=pending), and (c) a sync-time orphan row (channel=in_app_orphan). No client-side circuit breaker — user can tap retry indefinitely and each tap fans out to 3 cloud rows. | ai_coach_interactions_dedup | test/ai_coach/coach_writer_dedup_test.dart |
-| 2026-05-16 | 2026-05-16-ai-proxy-placeholder-resolution |  |  |  |
-| 2026-05-16 | 2026-05-16-gate-coverage-and-dead-code |  |  |  |
-| 2026-05-16 | 5bea3e | \| | ai_media_proxy_classification | test/contracts/edge_function_storage_race_retry_test.dart |
-| 2026-05-15 | 9f4ab2 | \| | sync_natural_key_guard | test/contracts/sync_natural_key_guard_test.dart |
+| 2026-05-16 | e7a516 | \| | health_write_service | "test/contracts/health_write_service_writer_to_reader_test.dart" |
+| 2026-05-16 | daffac | \| | workout_log_id_session_scoping | test/contracts/load_all_exercise_prs_per_set_semantic_test.dart |
 | 2026-05-15 | a5d29c | \| | custom_exercises_mutations | test/widgets/swap_sheet_custom_exercises_test.dart |
 | 2026-05-15 | 5a65bd | pr-detection Edge Function cron returns 401 every 15 minutes; same shape affects 6 other C-4-gated proactive trigger functions (re-engagement, plateau-alert, protein-gap-alert, workout-window-closing, evaluate-rank-promotions, streak-guardian, i-see-you-callout, clean-orphan-media — every function with verify_jwt=false that imports the C-4 in-function cron-auth-gate). | cron_auth | "n/a — operational/config drift, not field-rename class" |
+| 2026-05-15 | 76c8f4 | PostgREST raises 42P10 "no unique or exclusion constraint matching the ON CONFLICT specification" on every upsert to workout_logs (onConflict=user_id,date,exercise_name), workout_log_exercises (onConflict=workout_log_id,exercise_id,set_number) and nutrition_logs (onConflict=user_id,date,meal_type); 47 client_errors rows for a single user in a 60-second window on 2026-05-15 04:10 UTC. | sync_fanout_workout_domain | test/contracts/sync_onconflict_natural_key_test.dart |
 | 2026-05-15 | 25e91d | \| | cloud_upsert_natural_key_contract | test/sql/onconflict_live_arbiter.sql |
 | 2026-05-15 | 4e9515 | Founder asked for a "debugging" skill earlier in the session; both `superpowers:debugging` and `debugging` returned `Unknown skill`. The project's `.claude/skills/` directory did not exist. Debugging methodology was tribal knowledge spread across CLAUDE.md §19, MEMORY.md feedback_* files, and project_apk_test_*.md retrospectives — not invocable as a single skill. Result: every batch since Test #6 has re-discovered the same writer/reader drift class because the methodology to catch it was undocumented as a skill. | debugging_methodology | "n/a — process discipline addition; the SKILL.md file itself is the contract, and § 5 self-evolution rule is enforced by the next debugging session's output contract (§ 4)" |
 | 2026-05-15 | c01d57 | \| | edge_function_cold_start_resilience | test/contracts/edge_function_cold_start_retry_behavioral_test.dart |
-| 2026-05-15 | 76c8f4 | PostgREST raises 42P10 "no unique or exclusion constraint matching the ON CONFLICT specification" on every upsert to workout_logs (onConflict=user_id,date,exercise_name), workout_log_exercises (onConflict=workout_log_id,exercise_id,set_number) and nutrition_logs (onConflict=user_id,date,meal_type); 47 client_errors rows for a single user in a 60-second window on 2026-05-15 04:10 UTC. | sync_fanout_workout_domain | test/contracts/sync_onconflict_natural_key_test.dart |
-| 2026-05-12 | e1f8a2 | \| | exercise_log_per_set | test/contracts/edit_workout_log_sets_field_contract_test.dart |
+| 2026-05-15 | 9f4ab2 | \| | sync_natural_key_guard | test/contracts/sync_natural_key_guard_test.dart |
 | 2026-05-12 | a13a01 | User asks AI coach "how was my workout today?" after partially completing a Pull-day session (logged 4 of 8 prescribed exercises — Lat Pulldown, Dumbbell Row, Hanging Leg Raise, Concentration Curl). Coach replied with the FULL planned 8-exercise list as if everything had been completed, because today_workout.exercises emits the schedule_<date> entry verbatim regardless of how many exlog_* rows exist for the day. | today_workout_snapshot_reads_logged | "test/contracts/today_workout_reads_logged_contract_test.dart" |
 | 2026-05-12 | a9f3d2 | Home today-card showed "BACK DAY A · DONE" (green DONE pill) for Sat May 9, but the calendar-strip's Sat May 9 cell showed only the gold today-border with NO checkmark, while earlier completed days (Mon May 4) correctly showed a checkmark. | workout_completion_status | "must add: test/contracts/today_card_vs_calendar_strip_same_source_test.dart" |
 | 2026-05-12 | 6e1b45 | \| | exercise_set_field_name_contract | test/contracts/timed_exercise_render_contract_test.dart |
 | 2026-05-12 | b3c8d2 | Founder's templates "Back Day A", "Leg Day A", "Push Day" each showed 14-15 exercise rows with only 4-5 distinct names ("triplicated"). Editing the template + removing duplicates + saving brought the dupes back on next reopen. | template_exercises_cloud_tail_rows | test/contracts/template_exercises_tail_vacuum_test.dart |
+| 2026-05-12 | d4e9c1 | \| | workout_completion_status | test/contracts/logout_login_round_trip_test.dart |
 | 2026-05-12 | 3f8a91 | \| | cloud_upsert_natural_key_contract | test/contracts/sync_onconflict_natural_key_test.dart |
 | 2026-05-12 | a2f9e1 | Home renders "Something went wrong" ErrorState after the user schedules a custom template for today. Crash repeats on every cold-start. Telemetry shows 5x widget_error_fallback with message "type 'String' is not a subtype of type 'int?' in type cast". | schedule_exercise_field_types | test/contracts/schedule_exercise_field_types_test.dart |
-| 2026-05-12 | d4e9c1 | \| | workout_completion_status | test/contracts/logout_login_round_trip_test.dart |
 | 2026-05-12 | 9e2c1a | \| | scheduled_workouts_mutations | test/contracts/restore_template_schedule_test.dart |
 | 2026-05-12 | e6a2d4 | "LAST: 50KG · 135 REPS" rendered above Leg Extension in active workout screen — 135 reps per set is unrealistic. Cloud `workout_log_exercises` had 3 corrupt rows from May 7 with set_number=15 + reps=110-150 (bulk-completion aggregates misinterpreted as per-set). | workout_log_exercises_input_validation | test/contracts/rep_input_validation_test.dart |
 | 2026-05-12 | 8c4ee3 | After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and physique_focus='balanced'. Muster answers persisted to coachBox only and never bridged into userBox['profile'] — the AI coach saw the answers, but Edit Profile and the plan generator did not. | muster_to_profile_bridge | test/contracts/muster_profile_bridge_test.dart |
 | 2026-05-12 | a8f1c2 | "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session [10,15,10,15,10,10,15]; weight_kg field similarly carries the max of the previous session's per-set weights instead of the first set's weight." | last_performance_per_set_semantics | test/contracts/last_performance_per_set_contract_test.dart |
-| 2026-05-12 | 7c4e1a | User tapped "Analyse & Log" on Nutrition → Log Food → AI tab. Got toast "The AI is temporarily unavailable. Please try again in a minute." Same error class also fires from AI coach `logMealByText` tool dispatch when ai-proxy is cold. Edge-function logs show two consecutive POST /ai-proxy 502 BAD_GATEWAY at 05:08:05 UTC (8475 ms) and 05:08:13 UTC (6654 ms); the next successful call ~3 min later took 20219 ms (warm-start completion). | edge_function_cold_start_resilience | test/contracts/retry_loop_guard_test.dart |
-| 2026-05-12 | 8f3d22 | \| | scheduled_workouts_mutations | test/contracts/template_schedule_completed_day_test.dart |
-| 2026-05-12 | c7d4f6 | After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile']. | hive_user_session_static_state | test/safety/hive_user_session_concurrency_test.dart |
-| 2026-05-12 | 7bd154 | After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner. | cross_account_riverpod_cache_race | test/contracts/auth_invalidation_timing_test.dart |
-| 2026-05-12 | c4055a | \| | user_scoped_riverpod_providers | test/contracts/auth_invalidation_contract_test.dart |
-| 2026-05-12 | b7e3f1 | On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10. | day_rollover_provider_invalidation | "test/contracts/cold_start_day_rollover_test.dart" |
-| 2026-05-12 | a2b3c4 | \| | workout_receipt_rendering | test/contracts/duration_seconds_aggregate_populated_test.dart |
-| 2026-05-12 | 0a7b9f | Two surfaces affected. (G) Food text analysis returned "The AI is temporarily unavailable. Please try again in a minute." after the user typed a meal description and tapped Analyse & Log. (H) Telemetry shows push_snapshot FunctionException(status 503, BOOT_ERROR) for sumit1 at 06:46 UTC. | edge_function_cold_start_resilience | test/contracts/edge_function_503_retry_test.dart |
-| 2026-05-12 | d8e5b3 | Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry. | ai_media_proxy_error_handling | test/contracts/ai_media_proxy_telemetry_test.dart |
+| 2026-05-12 | e1f8a2 | \| | exercise_log_per_set | test/contracts/edit_workout_log_sets_field_contract_test.dart |
 | 2026-05-12 | f4c9e1 | After completing today's morning workout via the active-workout flow, the Edit Workout Log sheet shows "No exercise logs for this day" — blank. Cloud workout_log_exercises HAS the 5 rows for the founder on 2026-05-11 (completed_at 05:19 UTC = May 11 10:49 IST). Local Hive also has them at correct keys. | exercise_logs_read_path | test/contracts/edit_log_id_injection_test.dart |
+| 2026-05-12 | a2b3c4 | \| | workout_receipt_rendering | test/contracts/duration_seconds_aggregate_populated_test.dart |
+| 2026-05-12 | b7e3f1 | On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10. | day_rollover_provider_invalidation | "test/contracts/cold_start_day_rollover_test.dart" |
+| 2026-05-12 | c4055a | \| | user_scoped_riverpod_providers | test/contracts/auth_invalidation_contract_test.dart |
+| 2026-05-12 | 7bd154 | After signing out as Upendra and signing up as sumit1@gmail.com on the same session, Edit Profile rendered Upendra's profile (174 cm / 77.8 kg / DOB 1988-06-30) until the app was force-killed and reopened. The Riverpod cache held the previous user's profile because providers rebuilt on the Supabase auth event before HiveUserSession.openForUser had completed swapping the box owner. | cross_account_riverpod_cache_race | test/contracts/auth_invalidation_timing_test.dart |
+| 2026-05-12 | c7d4f6 | After signing out as Upendra and signing up as new account sumit1@gmail.com, the Profile screen showed Upendra's full profile data (full_name=Upendra, dob=1988-06-30, height=174cm, weight=78.3kg, target=80kg). Cloud was correct for both accounts (sumit1's cloud user_profile row had Sumit/2001-01-01/175cm/75kg). The leak was in local Hive userBox['profile']. | hive_user_session_static_state | test/safety/hive_user_session_concurrency_test.dart |
+| 2026-05-12 | 8f3d22 | \| | scheduled_workouts_mutations | test/contracts/template_schedule_completed_day_test.dart |
+| 2026-05-12 | 7c4e1a | User tapped "Analyse & Log" on Nutrition → Log Food → AI tab. Got toast "The AI is temporarily unavailable. Please try again in a minute." Same error class also fires from AI coach `logMealByText` tool dispatch when ai-proxy is cold. Edge-function logs show two consecutive POST /ai-proxy 502 BAD_GATEWAY at 05:08:05 UTC (8475 ms) and 05:08:13 UTC (6654 ms); the next successful call ~3 min later took 20219 ms (warm-start completion). | edge_function_cold_start_resilience | test/contracts/retry_loop_guard_test.dart |
+| 2026-05-12 | d8e5b3 | Photo upload to AI coach → "Sorry, I couldn't analyse that photo. Please try again." Zero client_errors rows for ai-media-proxy in last 12h — generic fallback fires silently without telemetry. | ai_media_proxy_error_handling | test/contracts/ai_media_proxy_telemetry_test.dart |
+| 2026-05-12 | 0a7b9f | Two surfaces affected. (G) Food text analysis returned "The AI is temporarily unavailable. Please try again in a minute." after the user typed a meal description and tapped Analyse & Log. (H) Telemetry shows push_snapshot FunctionException(status 503, BOOT_ERROR) for sumit1 at 06:46 UTC. | edge_function_cold_start_resilience | test/contracts/edge_function_503_retry_test.dart |
 | 2026-05-11 | 7ad009 | delete-account Edge Function had no rate limit on the confirmation-token check. A malicious actor knowing a target's 8-char user_id prefix could repeatedly POST attempts; each fires Razorpay + DB queries before the 400 reject — DoS vector at scale. | delete_account_rate_limit | "n/a — Edge Function rate-limit verified via curl" |
 | 2026-05-11 | 7ad0d5 | 3 payment-stack hardening gaps. (H-18) verify-payment's `.insert()` fallback after upsert error did not catch Postgres 23505 (unique_violation), so a concurrent webhook + verify-payment race would surface as a 500-ish error response instead of treating the existing row as success. (H-19) razorpay-webhook auto-captured `payment.authorized` events BEFORE the idempotency pre-SELECT, so a replayed `payment.authorized` for an already-captured payment fired a second Razorpay capture call → Razorpay 4xx ("already captured") → we returned 502 → Razorpay retried the same loop. (H-20) `RazorpayService._pollAndActivate` ran `Future.delayed` poll retries with no cancellation — if the user signed out / signed in as a different account mid-poll, the loop would write PRO state to the WRONG user's Hive. | payment_hardening | "n/a — TS Edge Function + Dart fire-and-forget callbacks; verified via deploy + manual race scenarios documented in CLAUDE.md §16" |
 | 2026-05-11 | 7ad0d8 | 11 invariants documented in CLAUDE.md / audit findings / prior bug retros had no automated guardrail. Future code changes could silently remove them. Examples — delete-account skips confirmation_token check, razorpay-webhook drops the 5-min replay window, ai-proxy stops catching the food-text rate-limit trigger error, `isPro()` accidentally returns `true` on null expiry in release, `gate()` stops calling `verifyFromServer` for high-value features, exercise_selector cascade drops the universalPool fallback, etc. | phase6_contract_tests | test/contracts/audit_2026_05_11_t1_t11_contracts_test.dart |

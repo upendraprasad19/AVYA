@@ -752,9 +752,19 @@ class WorkoutRepository {
   /// Returns the number of workouts logged per week for the last 4 weeks.
   ///
   /// Index 0 = this week, 1 = last week, 2 = 2 weeks ago, 3 = 3 weeks ago.
+  ///
+  /// e7a2c4: anchored on the IST calendar date (seam-aware via [istTodayStr])
+  /// and bucketed by WHOLE IST calendar days — both `today` and each row's
+  /// `date` are reduced to UTC-midnight so the diff is pure day arithmetic with
+  /// no timezone or time-of-day drift. Pre-fix it anchored on raw
+  /// `DateTime.now()` (device-local wall clock, with its time-of-day) vs a
+  /// local-parsed midnight, so the "This Week" count (reports tile + 4-week
+  /// frequency chart) could be off by a day near midnight or for a device in a
+  /// non-IST timezone, and ignored the dev time-travel / year-sim clock seam.
   List<int> getWeeklyWorkoutCounts() {
-    final now = DateTime.now();
     final weekCounts = <int>[0, 0, 0, 0];
+    final today = _dayUtc(istTodayStr()); // seam-aware IST "today"
+    if (today == null) return weekCounts;
 
     for (final raw in _hive.workoutBox.values) {
       if (raw is! Map) continue;
@@ -762,10 +772,11 @@ class WorkoutRepository {
       if (log['type'] != 'workout_log') continue;
       final dateStr = log['date'] as String?;
       if (dateStr == null) continue;
-      final date = DateTime.tryParse(dateStr);
+      final date = _dayUtc(dateStr);
       if (date == null) continue;
 
-      final daysAgo = now.difference(date).inDays;
+      final daysAgo = today.difference(date).inDays;
+      if (daysAgo < 0) continue; // future-dated row — not in any past week
       if (daysAgo < 7) {
         weekCounts[0]++;
       } else if (daysAgo < 14) {
@@ -778,6 +789,14 @@ class WorkoutRepository {
     }
 
     return weekCounts;
+  }
+
+  /// UTC-midnight DateTime for a `YYYY-MM-DD` string — used for timezone-neutral
+  /// whole-day arithmetic (e7a2c4). Returns null on unparseable input.
+  static DateTime? _dayUtc(String ymd) {
+    final p = DateTime.tryParse(ymd);
+    if (p == null) return null;
+    return DateTime.utc(p.year, p.month, p.day);
   }
 
   // ── Exercise PR History ────────────────────────────────────────
