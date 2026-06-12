@@ -431,22 +431,34 @@ void main() {
   // ── Meta: No other retry layers exist ──────────────────────────
 
   group('Guard: no hidden retry layers for Edge Function calls', () {
-    test('no file has recursive callFunction retry', () {
+    test('no file re-invokes an Edge Function inside its own 401 handler', () {
+      // The 2026-04-07 bug: a caller CAUGHT a 401 and RE-CALLED the EF, which
+      // compounded with callFunction's own refresh → 30+ requests per tap.
+      //
+      // Refined 2026-06-13 (c4f1a7): the original heuristic flagged ANY file
+      // containing both `status == 401` and `callFunction(` anywhere — a false
+      // positive for the SAFE pattern of DECODING a 401 into a user message
+      // (e.g. delete_account_screen shows "session expired" after its
+      // callFunction delete invoke; the 401 branch does NOT re-invoke). The bad
+      // shape is a RE-INVOKE (callFunction / .send(message / .functions.invoke)
+      // WITHIN the 401 handler — that is what this now detects (proximity scan),
+      // so it still catches the compounding-retry class while allowing the
+      // 401-to-message decode.
+      final reInvoke =
+          RegExp(r'callFunction\(|\.send\(message|\.functions\.invoke\(');
       for (final entry in allSources.entries) {
+        if (entry.key.contains('supabase_service.dart')) continue; // checked above
         final source = entry.value;
-        // Check for patterns like: response.status == 401 + functions.invoke
-        // within the same narrow scope (suggesting retry)
-        if (entry.key.contains('supabase_service.dart')) {
-          // Already checked above
-          continue;
+        for (final m in RegExp(r'status == 401').allMatches(source)) {
+          final end =
+              (m.start + 600) > source.length ? source.length : m.start + 600;
+          final window = source.substring(m.start, end);
+          expect(reInvoke.hasMatch(window), isFalse,
+              reason:
+                  '${entry.key}: re-invokes an Edge Function inside a '
+                  '`status == 401` handler — compounding retry. Decode the 401 '
+                  'into a user message instead (retry lives only in callFunction).');
         }
-        // No other file should be wrapping callFunction with its own 401 retry
-        final has401Retry = source.contains('status == 401') &&
-            source.contains('callFunction(');
-        expect(has401Retry, isFalse,
-            reason:
-                '${entry.key}: Contains 401 check + callFunction call. '
-                'Retry logic must only exist in one place to prevent compounding.');
       }
     });
   });

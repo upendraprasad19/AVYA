@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### edge_function_caller_token_freshness (1 bugs)
+- 2026-06-13 c4f1a7 — >
+
 ### commit_gate_hash_stability (1 bugs)
 - 2026-06-12 f4d1b7 — >
 
@@ -671,6 +674,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-13 | c4f1a7 | > | edge_function_caller_token_freshness | test/contracts/delete_account_fresh_token_test.dart |
 | 2026-06-12 | f4d1b7 | > | commit_gate_hash_stability | test/contracts/review_gate_hash_raw_bytes_test.dart |
 | 2026-06-12 | d5b2f8 | > | postgrest_builder_has_no_catch_method | test/contracts/delete_account_auth_pattern_test.dart |
 | 2026-06-12 | e8a1c3 | > | edge_function_user_token_validation_pattern | test/contracts/delete_account_auth_pattern_test.dart |

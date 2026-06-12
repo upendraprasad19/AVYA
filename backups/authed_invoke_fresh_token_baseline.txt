@@ -1,10 +1,6 @@
 # Files grandfathered for scripts/check_authed_invoke_fresh_token.dart (§2.31 class).
-# Landed 2026-06-13 WITH the gate (gates-first, §4.11). Each entry is a raw
-# client.functions.invoke that does NOT refresh the JWT first — the Obs#9 sweep
-# routes each through SupabaseService.callFunction (refresh + retry) or adds
-# ensureFreshToken, then removes it from this baseline IN THE SAME COMMIT.
+# CLEARED 2026-06-13 by the Obs#9 sweep — all 4 sites now route through
+# SupabaseService.callFunction (refresh + retry) or add ensureFreshToken before
+# the invoke. The gate is now hard-green with an EMPTY baseline; any NEW raw
+# functions.invoke without a preceding ensureFreshToken hard-fails.
 # Refresh: dart run scripts/check_authed_invoke_fresh_token.dart --update-baseline
-lib/features/profile/repositories/referral_repository.dart
-lib/features/profile/screens/delete_account_screen.dart
-lib/features/train/providers/video_render_provider.dart
-lib/shared/repositories/user_repository.dart
