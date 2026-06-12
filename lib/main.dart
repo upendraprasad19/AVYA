@@ -14,7 +14,6 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'features/ai_coach/repositories/ai_coach_repository.dart';
 import 'app.dart';
 
 /// Default entry point.
@@ -28,35 +27,40 @@ Future<void> main() async {
   // 0. Firebase + Crashlytics — initialized FIRST so any subsequent
   //    crash during startup is captured. Guarded so unit tests and
   //    local dev without google-services.json don't blow up.
-  try {
-    await Firebase.initializeApp();
-    // Route uncaught framework errors → Crashlytics fatal.
-    FlutterError.onError =
-        FirebaseCrashlytics.instance.recordFlutterFatalError;
-    // Route uncaught async platform errors → Crashlytics fatal.
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-    // Disable collection in debug to avoid spamming dashboard during dev.
-    await FirebaseCrashlytics.instance
-        .setCrashlyticsCollectionEnabled(!kDebugMode);
-  } catch (e) {
-    debugPrint('[main] Firebase/Crashlytics init failed: $e');
+  // Crashlytics has no web binding — a null-check inside the plugin crashed
+  // boot on web (Obs#2, 2026-06-13: "[main] Firebase/Crashlytics init failed:
+  // Null check operator used on a null value"). Guard the whole init by
+  // platform; the Android/iOS path (init + FlutterError/PlatformDispatcher
+  // fatal routing) is unchanged.
+  if (!kIsWeb) {
+    try {
+      await Firebase.initializeApp();
+      // Route uncaught framework errors → Crashlytics fatal.
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      // Route uncaught async platform errors → Crashlytics fatal.
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+      // Disable collection in debug to avoid spamming dashboard during dev.
+      await FirebaseCrashlytics.instance
+          .setCrashlyticsCollectionEnabled(!kDebugMode);
+    } catch (e) {
+      debugPrint('[main] Firebase/Crashlytics init failed: $e');
+    }
   }
 
   // 1. Initialize Hive — registers adapters and opens all 10 boxes.
   //    Must complete before runApp() so Riverpod providers can read boxes.
   await HiveService.instance.init();
 
-  // One-time backfill of coach_memory from legacy coaching_notes.
-  // Safe to call on every launch — idempotent. Guarded so a Hive write
-  // failure (disk full / corrupted box) cannot crash app launch.
-  try {
-    await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
-  } catch (e) {
-    debugPrint('[main] coach_memory backfill failed: $e');
-  }
+  // coach_memory backfill RELOCATED to restoring_screen (Obs#3, dc52a4 class):
+  // it touches the user-scoped coachBox/userBox and MUST run AFTER
+  // HiveUserSession.openForUser — here at boot it raced the session open and
+  // threw "HiveUserSession not opened — cannot wrap user-scoped box coachBox"
+  // every launch (silent fail). Now in restoring_screen._ensureOwnershipBeforeHome
+  // + _healAfterRestoreInBackground, after openForUser.
 
   // 1a. Atomic-logout recovery (F16). If a previous session was killed
   //     mid-logout, finish the wipe before anything else reads Hive.
