@@ -34,13 +34,24 @@ void main() {
     entries.add(fm);
   }
 
-  // Sort chronologically (latest first by `date` field).
-  entries.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
+  // Sort chronologically (latest first by `date`), tiebreak by `_path` for a
+  // STABLE TOTAL ORDER. `dir.listSync()` is filesystem-ordered and Dart's
+  // List.sort is not guaranteed stable, so two diagnose-docs sharing a date
+  // could swap on re-run and shift the regenerated INDEX — which shifts the
+  // staged-diff hash the catastrophic review gate keys on. f4d1b7.
+  entries.sort((a, b) {
+    final byDate = (b['date'] as String).compareTo(a['date'] as String);
+    if (byDate != 0) return byDate;
+    return (a['_path'] as String).compareTo(b['_path'] as String);
+  });
 
   final buf = StringBuffer();
   buf.writeln('# Bug Directory (auto-generated)');
   buf.writeln('');
-  buf.writeln('Generated: ${DateTime.now().toIso8601String()}.');
+  // f4d1b7: NO wall-clock `Generated:` timestamp — it made the regenerated
+  // INDEX differ on every run, shifting the staged-diff hash the catastrophic
+  // review gate keys on (and producing noisy no-op diffs). Git history records
+  // when the INDEX changed; the content is now a pure function of the inputs.
   buf.writeln('Re-run: `dart run scripts/build_bug_index.dart`');
   buf.writeln('');
 
