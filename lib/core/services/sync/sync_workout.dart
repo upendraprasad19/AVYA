@@ -842,18 +842,40 @@ extension SyncServiceWorkout on SyncService {
           // (epoch, the shape WorkoutWriteService.markCompleted's synthesize
           // branch uses) so the two synthesize paths produce an identical row
           // schema — no reader drift if getScheduleForDate changes later.
+          final completedAtMs =
+              DateTime.tryParse((map['completed_at'] ?? '').toString())
+                  ?.millisecondsSinceEpoch;
           await _hive.workoutBox.put(key, {
             'date': date,
             'workout_name': map['workout_name'] ?? 'Workout',
             'status': 'completed',
             'type': 'logged',
             'completed_at': map['completed_at'],
-            'completed_at_ms':
-                DateTime.tryParse((map['completed_at'] ?? '').toString())
-                    ?.millisecondsSinceEpoch,
+            'completed_at_ms': completedAtMs,
             'duration_seconds': map['duration_seconds'],
             'source': 'cloud_restore_completion',
           });
+          // b3f9d1: ALSO synthesize an additive wlog_<date> row so this orphan
+          // completion is COUNTED by the type=='workout_log' readers
+          // (getWeeklyWorkoutCounts → "This Week" tile + frequency chart,
+          // getWorkoutLogs, badge total, AI snapshot) even when the SEPARATE
+          // workout_logs restore path (_restoreWorkoutLogs) has no row for this
+          // date — the schedule_ row above satisfies only the streak walk. Mirror
+          // the canonical wlog shape (f1c8e4: type:'workout_log' + completed_at).
+          // Additive / local-wins: only fill the gap, never overwrite a real
+          // logged session (which carries duration + per-exercise data).
+          final wlogKey = 'wlog_$date';
+          if (_hive.workoutBox.get(wlogKey) == null) {
+            await _hive.workoutBox.put(wlogKey, {
+              'type': 'workout_log',
+              'workout_name': map['workout_name'] ?? 'Workout',
+              'date': date,
+              'duration_seconds': map['duration_seconds'],
+              'completed_at': map['completed_at'],
+              'completed_at_ms': completedAtMs,
+              'source': 'cloud_restore_completion',
+            });
+          }
         }
       }
     } catch (e, st) {

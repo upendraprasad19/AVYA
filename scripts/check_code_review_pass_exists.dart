@@ -83,14 +83,24 @@ Future<List<String>> stagedPaths() async {
 }
 
 Future<String> stagedDiffHash() async {
-  // Pipe `git diff --cached` through `git hash-object --stdin` to get a
-  // stable sha1 of the staged diff. No external Dart package needed.
-  final diff = await Process.run('git', ['diff', '--cached']);
+  // Pipe `git diff --cached` through `git hash-object --stdin` to get a stable
+  // sha1 of the staged diff. No external Dart package needed.
+  //
+  // f4d1b7: capture the diff as RAW BYTES (`stdoutEncoding: null`) and feed them
+  // verbatim. Pre-fix it decoded stdout to a String (via SystemEncoding — the
+  // system code page, cp1252 on Windows) then hashed `.codeUnits` (UTF-16);
+  // both steps corrupt non-ASCII bytes, so for any diff containing non-ASCII
+  // (e.g. an emoji in a comment) the gate's hash diverged from
+  // `git diff --cached | git hash-object --stdin` and the catastrophic review
+  // file could NEVER be matched. Raw bytes are byte-identical to git's own hash.
+  final diff = await Process.run('git', ['diff', '--cached'],
+      stdoutEncoding: null);
   if (diff.exitCode != 0) return '';
+  final bytes = (diff.stdout as List<int>);
   final hash = await Process.start('git', ['hash-object', '--stdin']);
-  hash.stdin.add((diff.stdout as String).codeUnits);
+  hash.stdin.add(bytes);
   await hash.stdin.close();
-  final out = await hash.stdout.transform(SystemEncoding().decoder).join();
+  final out = await hash.stdout.transform(const SystemEncoding().decoder).join();
   await hash.exitCode;
   final trimmed = out.trim();
   return trimmed.length >= 12 ? trimmed.substring(0, 12) : trimmed;

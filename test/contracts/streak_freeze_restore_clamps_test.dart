@@ -13,22 +13,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-      'f8c1a5 — _restoreFreezes clamps cloud streak_freezes_available at 3',
+      'f8c1a5 — restore clamps streak_freezes_available at 3 (via mergeFreezeProgress)',
       () {
-    final src = File(
-            'lib/core/services/sync/sync_restore_completeness.dart')
+    // Refactor 2026-06-11 / diagnose a8f3d1 — the clamp moved out of
+    // _restoreFreezes's inline body into the pure
+    // StreakProgressService.mergeFreezeProgress, which _restoreFreezes now
+    // delegates to. Contract preserved: a legacy unclamped cloud value cannot
+    // round-trip into Hive on restore.
+    final svc = File('lib/core/services/streak_progress_service.dart')
         .readAsStringSync();
-
-    final methodIdx = src.indexOf('_restoreFreezes(');
-    expect(methodIdx, isNonNegative,
-        reason: '_restoreFreezes method moved or renamed — re-baseline.');
-    // Window widened from 2200 → 4000 chars in batch 2026-05-19 / diagnose
-    // 9c4a17 — the max-merge fix's explanatory comment block grew the
-    // method body past the old window. Contract preserved: clamp(0, 3)
-    // still writes streak_freezes_available; just lives in the cloudWins
-    // branch instead of unconditionally.
-    final scoped = src.substring(
-        methodIdx, (methodIdx + 4000).clamp(0, src.length));
+    final mIdx = svc.indexOf('mergeFreezeProgress(');
+    expect(mIdx, isNonNegative,
+        reason: 'mergeFreezeProgress moved or renamed — re-baseline.');
+    final scoped = svc.substring(mIdx, (mIdx + 2000).clamp(0, svc.length));
 
     // Strip comments.
     final stripped = scoped
@@ -38,12 +35,21 @@ void main() {
         .join('\n');
 
     expect(
-      stripped.contains(
-          RegExp(r"streak_freezes_available'\]\s*=\s*\w+\.clamp\(0,\s*3\)")),
+      stripped.contains(RegExp(r'clamp\(0,\s*3\)')),
       isTrue,
       reason:
-          '_restoreFreezes must write streak_freezes_available via .clamp(0, 3) '
-          'so a legacy unclamped cloud value cannot round-trip into Hive on restore.',
+          'mergeFreezeProgress must clamp available via clamp(0, 3) so a legacy '
+          'unclamped cloud value cannot round-trip into Hive on restore.',
+    );
+
+    // And _restoreFreezes must actually delegate to the clamping helper.
+    final restore =
+        File('lib/core/services/sync/sync_restore_completeness.dart')
+            .readAsStringSync();
+    expect(
+      restore.contains('StreakProgressService.mergeFreezeProgress('),
+      isTrue,
+      reason: '_restoreFreezes must delegate to the clamping helper.',
     );
   });
 }

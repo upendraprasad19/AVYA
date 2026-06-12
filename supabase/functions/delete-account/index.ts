@@ -6,7 +6,10 @@
 //   1. JWT auth via getUser (server-side verify, not just header)
 //   2. Rate limit — 5 attempts per user per hour (audit Hermes-R2 #9, 7ad009)
 //   3. Confirmation token check — body must have DELETE-MY-ACCOUNT-<uid8>
-//   4. Razorpay subscription cancel — MUST succeed or 502 abort
+//   4. Razorpay subscription cancel — best-effort/NON-FATAL (a2c8e6): cancel-first
+//      (protects user from post-deletion charges); a failure is RECORDED in
+//      account_deletion_log.razorpay_cancel_status and the erasure PROCEEDS so a
+//      Razorpay outage can't block a legally-required DPDP §17 deletion
 //   5. OneSignal player unsub — best-effort, non-fatal
 //   6. Storage purge (3 buckets) — best-effort, per-bucket errors logged
 //   7. auth.users delete (service-role) — CASCADE through public.users + all FKs
@@ -201,10 +204,17 @@ serve(async (req: Request) => {
       `[delete-account] request_id=${requestId} user=${userId} confirmed — starting erasure`,
     );
 
-    // ── 4. RAZORPAY CANCEL — must succeed or abort ───────────────────────────
-    // Risk: if we delete the user first and Razorpay cancel fails, the user has
-    // no account to dispute the charge. Cancel first, delete after.
+    // ── 4. RAZORPAY CANCEL — best-effort, NON-FATAL (a2c8e6) ─────────────────
+    // DPDP §17 erasure is a legal RIGHT that must NOT be indefinitely blocked by
+    // an external dependency (a Razorpay API hiccup). Pre-fix ANY cancel failure
+    // returned 502 and ABORTED the entire erasure — an external outage could
+    // block a legally-required deletion. We still CANCEL FIRST (a healthy cancel
+    // protects the user from post-deletion charges), but a FAILURE is now
+    // RECORDED DURABLY in account_deletion_log.razorpay_cancel_status (no FK,
+    // survives the auth delete) for out-of-band follow-up — the user is NOT
+    // silently left subscribed — and the erasure PROCEEDS.
     let razorpayStatus = "no_active_sub";
+    const cancelFailures: string[] = [];
 
     const { data: subs, error: subsErr } = await admin
       .from("subscriptions")
@@ -214,10 +224,11 @@ serve(async (req: Request) => {
 
     if (subsErr) {
       console.error(
-        `[delete-account] request_id=${requestId} subscription lookup failed:`,
+        `[delete-account] request_id=${requestId} subscription lookup failed` +
+          ` (non-fatal, proceeding with erasure):`,
         subsErr.message,
       );
-      return jsonError(502, "razorpay_cancel_failed", requestId);
+      razorpayStatus = "lookup_failed";
     }
 
     for (const sub of subs ?? []) {
@@ -241,9 +252,10 @@ serve(async (req: Request) => {
           const detail = await razorRes.text();
           console.error(
             `[delete-account] request_id=${requestId} razorpay cancel failed` +
-              ` sub=${sub.razorpay_subscription_id} status=${razorRes.status} body=${detail}`,
+              ` (non-fatal) sub=${sub.razorpay_subscription_id} status=${razorRes.status} body=${detail}`,
           );
-          return jsonError(502, "razorpay_cancel_failed", requestId);
+          cancelFailures.push(`${sub.razorpay_subscription_id}:${razorRes.status}`);
+          continue;
         }
 
         razorpayStatus = "cancelled";
@@ -252,11 +264,18 @@ serve(async (req: Request) => {
         );
       } catch (e) {
         console.error(
-          `[delete-account] request_id=${requestId} razorpay cancel exception:`,
+          `[delete-account] request_id=${requestId} razorpay cancel exception` +
+            ` (non-fatal):`,
           e,
         );
-        return jsonError(502, "razorpay_cancel_failed", requestId);
+        cancelFailures.push(`${sub.razorpay_subscription_id}:exception`);
       }
+    }
+
+    // Record any failed cancellation(s) durably so the subscription can be
+    // cancelled out-of-band. The erasure still proceeds (DPDP §17).
+    if (cancelFailures.length > 0) {
+      razorpayStatus = `cancel_failed:${cancelFailures.join(",")}`.slice(0, 400);
     }
 
     // ── 4. ONESIGNAL UNSUBSCRIBE — best-effort, non-fatal ────────────────────
@@ -438,12 +457,29 @@ serve(async (req: Request) => {
         razorpay_cancel_status: razorpayStatus,
         storage_purge_status: purgeStats,
       })
-      .catch((e) =>
-        console.warn(
+      .catch((e: unknown) => {
+        // a2c8e6 (B-pass F1): console.ERROR, not warn — this row is the ONLY
+        // durable out-of-band record of a FAILED Razorpay cancel. If the audit
+        // insert ALSO fails (a correlated Supabase+Razorpay outage), emit a
+        // distinctive, greppable last-resort line so ops can still find the
+        // active subscription that needs MANUAL cancellation from the raw
+        // function logs (which survive independently of the table row) — the
+        // user no longer has an account to dispute ongoing charges.
+        console.error(
           `[delete-account] request_id=${requestId} audit insert failed (non-fatal):`,
           e,
-        )
-      );
+        );
+        if (
+          razorpayStatus.startsWith("cancel_failed") ||
+          razorpayStatus === "lookup_failed"
+        ) {
+          console.error(
+            `[delete-account] ORPHAN_BILLING request_id=${requestId} ` +
+              `user=${userId} razorpay_cancel_status=${razorpayStatus} — audit ` +
+              `row NOT persisted; subscription needs MANUAL cancellation.`,
+          );
+        }
+      });
 
     console.log(
       `[delete-account] request_id=${requestId} erasure complete — razorpay=${razorpayStatus}` +

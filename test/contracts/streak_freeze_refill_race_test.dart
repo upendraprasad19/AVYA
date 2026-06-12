@@ -31,21 +31,43 @@ void main() {
     final src = File('lib/core/services/sync/sync_restore_completeness.dart')
         .readAsStringSync();
     final stripped = _stripComments(src);
+    // Refactor 2026-06-11 / diagnose a8f3d1 — the (available, last_refill)
+    // max-merge that lived inline in _restoreFreezes moved into the pure
+    // StreakProgressService.mergeFreezeProgress, which ALSO unions the PER-WEEK
+    // used_dates leg the inline version clobbered (a freeze consumed during the
+    // bg-restore window was wiped + refunded → spurious streak break). The
+    // cloudWins/compareTo/clamp patterns now live in the helper; _restoreFreezes
+    // DELEGATES to it. The grep targets follow the code to its new home.
+    final svc = File('lib/core/services/streak_progress_service.dart')
+        .readAsStringSync();
+    final svcStripped = _stripComments(svc);
 
-    test('declares cloudWins variable for max-merge decision', () {
+    test('_restoreFreezes delegates to StreakProgressService.mergeFreezeProgress',
+        () {
       expect(
-        stripped.contains('cloudWins'),
+        stripped.contains('StreakProgressService.mergeFreezeProgress('),
         isTrue,
-        reason: '_restoreFreezes must compute cloudWins via last_refill '
-            'compareTo to decide which side wins on (available, last_refill). '
-            'Pre-fix did a blind overwrite that clobbered fresh local refills.',
+        reason: '_restoreFreezes must route the local↔cloud reconciliation '
+            'through the pure mergeFreezeProgress helper (a8f3d1) instead of an '
+            'inline overwrite that clobbered the just-consumed used_dates leg.',
       );
     });
 
-    test('compares last_refill with compareTo (lexical YYYY-MM-DD)', () {
+    test('mergeFreezeProgress declares cloudWins variable for the decision', () {
+      expect(
+        svcStripped.contains('cloudWins'),
+        isTrue,
+        reason: 'mergeFreezeProgress must compute cloudWins via last_refill '
+            'compareTo to decide which side wins on (available, last_refill). '
+            'Pre-fix _restoreFreezes did a blind overwrite that clobbered fresh '
+            'local refills.',
+      );
+    });
+
+    test('mergeFreezeProgress compares last_refill with compareTo (lexical)', () {
       expect(
         RegExp(r'cloudLastRefill\.compareTo\(localLastRefill\)')
-            .hasMatch(stripped),
+            .hasMatch(svcStripped),
         isTrue,
         reason: 'max-merge must compare last_refill via String.compareTo so '
             'the side stamped with the newer Monday wins both available + '
@@ -57,8 +79,8 @@ void main() {
       expect(
         RegExp(r'SyncService\.instance\.syncFreezes\(\)').hasMatch(stripped),
         isTrue,
-        reason: 'when local refill is fresher than cloud, _restoreFreezes '
-            'must schedule a syncFreezes() so cloud catches up.',
+        reason: 'when local refill is fresher than cloud (merged.scheduleSyncUp), '
+            '_restoreFreezes must schedule a syncFreezes() so cloud catches up.',
       );
     });
 

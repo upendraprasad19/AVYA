@@ -579,5 +579,19 @@
     "hash": "sha256:6b10555313996aa27c60fc5f1c87ed0b1993cc8fd7883b19d8435ba919094990",
     "applier": "claude",
     "diagnose": "a3e8f1"
+  },
+  {
+    "migration": "090",
+    "applied_at": "2026-06-11T18:00:00+05:30",
+    "hash": "sha256:7fa57f01686deff1016885285295db9406de079a2a87730aaa40e119d51147dd",
+    "applier": "claude",
+    "diagnose": "c9b3e2"
+  },
+  {
+    "migration": "091",
+    "applied_at": "2026-06-11T18:07:00+05:30",
+    "hash": "sha256:721fdbea85554acd682a49bb968e22f23ebf74edaab9888dfd4d0d0aefabcf83",
+    "applier": "claude",
+    "diagnose": "c9b3e2"
   }
 ]

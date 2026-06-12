@@ -102,12 +102,15 @@ const _expectedEmitFields = <String, Set<String>>{
     // swap marker + the name it replaced (LEVER 6 demotion source).
     'swapped_via', 'swapped_from',
   },
-  // wlog_* writer: WorkoutWriteService.completeWorkout (workout summary row)
+  // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
+  // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +
+  // completed_at_ms + duration_seconds + optional rpe — count/history readers
+  // filter on `type` and read `completed_at`; extend the emit set to match.
   'wlog': {
-    'date', 'completed_at', 'started_at', 'workout_name',
-    'workout_focus', 'workout_log_id', 'sets_completed',
-    'total_volume_kg', 'duration_minutes', 'exercises', 'id',
-    'updated_at_ms', 'created_at', 'source',
+    'type', 'date', 'completed_at', 'completed_at_ms', 'started_at',
+    'workout_name', 'workout_focus', 'workout_log_id', 'sets_completed',
+    'total_volume_kg', 'duration_minutes', 'duration_seconds', 'rpe',
+    'exercises', 'id', 'updated_at_ms', 'created_at', 'source',
     // Legacy alternate names:
     'set_number', 'total_sets',
   },
