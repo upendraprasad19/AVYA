@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/typing_indicator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 
 /// 3-question muster — captures injuries + schedule + body-part focus.
 /// Sequential reveal with typing pause.
@@ -157,6 +158,8 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
       initialTime: isWake
           ? const TimeOfDay(hour: 6, minute: 30)
           : const TimeOfDay(hour: 7, minute: 0),
+      // Obs#5: keep the OK/Cancel action row on-screen at short viewports.
+      builder: responsivePickerBuilder,
     );
     if (picked == null || !mounted) return;
     setState(() {

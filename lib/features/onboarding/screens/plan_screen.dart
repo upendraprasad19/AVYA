@@ -563,16 +563,25 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     final weight = (widget.data['weight_kg'] as num?)?.toDouble() ?? 75.0;
     final height = (widget.data['height_cm'] as num?)?.toDouble() ?? 175.0;
     final gender = (widget.data['sex'] as String?) ?? 'male';
-    final activityLevel =
-        (widget.data['activity_level'] as String?) ?? 'moderate';
     final pace =
         (widget.data['pace_preference'] as String?) ?? 'balanced';
     final goal = widget.data['goal'] as String? ?? 'recomp';
     final mappedGoal = _mapGoal(goal);
+    // Obs#6 (f1b6d4): derive activityLevel EXACTLY as
+    // OnboardingNotifier.completeOnboarding does — resolveActivityLevel from the
+    // lifestyle-activity system + days/week — so the preview calories == the
+    // saved daily_calories. Pre-fix this read widget.data['activity_level']
+    // directly while the commit IGNORED it (lifestyle-activity system) → the
+    // 2867-preview vs 3200-saved drift. (NOTE: whether the SAVED calc *should*
+    // honour the stats activity_level + body_fat is a separate, founder-gated
+    // calc-accuracy question — it would change every user's saved target.)
+    final lifestyleActivity =
+        (widget.data['lifestyle_activity'] as String?) ?? 'desk_job';
+    final daysForActivity = (widget.data['days_per_week'] as int?) ?? 4;
+    final activityLevel = BmrCalculator.resolveActivityLevel(
+        lifestyleActivity, daysForActivity);
     final targetWeight =
         (widget.data['target_weight_kg'] as num?)?.toDouble();
-    final bodyFatRaw = widget.data['body_fat_pct'];
-    final bodyFat = bodyFatRaw is num ? bodyFatRaw.toDouble() : null;
 
     // Age derived from DOB on Identity step; legacy chat users may
     // still have a raw `age` int in widget.data.
@@ -600,8 +609,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       activityLevel: activityLevel,
       goal: mappedGoal,
       pacePreference: pace,
-      targetWeightKg: targetWeight,
-      bodyFatPercent: bodyFat,
+      // Obs#6: mirror completeOnboarding — null target when <= 0, and do NOT
+      // pass bodyFatPercent (the commit uses Mifflin-St Jeor). Keeps preview==saved.
+      targetWeightKg:
+          (targetWeight != null && targetWeight > 0) ? targetWeight : null,
     );
 
     // Days per week — trust the Details screen value. Only infer when
