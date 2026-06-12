@@ -15,6 +15,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### edge_function_caller_token_freshness (1 bugs)
 - 2026-06-13 c4f1a7 — >
 
+### expanded_starved_by_fixed_siblings (1 bugs)
+- 2026-06-13 b9c4f1 — >
+
 ### signup_aware_restore_copy (1 bugs)
 - 2026-06-13 d5e1b9 — >
 
@@ -686,6 +689,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-13 | a7c3f8 | > | user_scoped_box_before_openForUser | test/contracts/coach_backfill_after_openforuser_test.dart |
 | 2026-06-13 | b2e9d3 | > | platform_guarded_native_init | test/contracts/crashlytics_web_guard_test.dart |
 | 2026-06-13 | c4f1a7 | > | edge_function_caller_token_freshness | test/contracts/delete_account_fresh_token_test.dart |
+| 2026-06-13 | b9c4f1 | > | expanded_starved_by_fixed_siblings | test/contracts/food_card_name_single_line_test.dart |
 | 2026-06-13 | d5e1b9 | > | signup_aware_restore_copy | test/contracts/restoring_signup_copy_test.dart |
 | 2026-06-12 | f4d1b7 | > | commit_gate_hash_stability | test/contracts/review_gate_hash_raw_bytes_test.dart |
 | 2026-06-12 | d5b2f8 | > | postgrest_builder_has_no_catch_method | test/contracts/delete_account_auth_pattern_test.dart |
