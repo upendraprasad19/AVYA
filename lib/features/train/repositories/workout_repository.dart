@@ -777,6 +777,8 @@ class WorkoutRepository {
 
       final daysAgo = today.difference(date).inDays;
       if (daysAgo < 0) continue; // future-dated row — not in any past week
+      // Sliding 7-day windows: daysAgo 0..6 = this week, 7..13 = last week, etc.
+      // (a workout exactly 7 days ago is "last week" — intentional). B-pass P2.
       if (daysAgo < 7) {
         weekCounts[0]++;
       } else if (daysAgo < 14) {

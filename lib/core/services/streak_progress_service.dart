@@ -209,6 +209,10 @@ class StreakProgressService {
       );
     }
 
+    // cloudWins also covers the brand-new-user case (BOTH last_refill null →
+    // localLastRefill==null → true): no freeze history on either side, so cloud
+    // (available default, used []) is the canonical baseline and lastRefill
+    // stays null until the first weekly refill stamps it. B-pass P2.
     final bool cloudWins = localLastRefill == null ||
         (cloudLastRefill != null &&
             cloudLastRefill.compareTo(localLastRefill) > 0);
