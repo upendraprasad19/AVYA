@@ -451,8 +451,9 @@ class UserRepository {
     required String gender,
     required int age,
   }) async {
-    final response =
-        await SupabaseService.instance.client.functions.invoke(
+    // §2.31: callFunction refreshes the JWT (+ cold-start retry) before the
+    // authed invoke — a stale token would 401 (check_authed_invoke_fresh_token).
+    final response = await SupabaseService.instance.callFunction(
       'assess-body-composition',
       body: {
         'image_base64': imageBase64,

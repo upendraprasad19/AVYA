@@ -1,0 +1,4 @@
+# Files grandfathered for scripts/check_edge_function_auth_pattern.dart (e8a1c3 class).
+# EMPTY on landing 2026-06-13 — delete-account already fixed (commit e46428e).
+# Any NEW user-JWT-as-apikey createClient(url, <jwt>) hard-fails the gate.
+# Refresh: dart run scripts/check_edge_function_auth_pattern.dart --update-baseline

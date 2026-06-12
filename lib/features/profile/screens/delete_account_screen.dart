@@ -22,7 +22,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show SignOutScope;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show SignOutScope, FunctionException;
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -73,8 +74,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   @visibleForTesting
   Future<Map<String, dynamic>> invokeDeleteFunction(
       String confirmationToken) async {
-    final response =
-        await SupabaseService.instance.client.functions.invoke(
+    // §2.31 / Obs#9: callFunction refreshes the JWT before the authed invoke.
+    // The raw invoke sent whatever (possibly stale, backgrounded-web) token
+    // supabase-js held → delete-account 401'd → "Couldn't delete account".
+    final response = await SupabaseService.instance.callFunction(
       'delete-account',
       body: {'confirmation_token': confirmationToken},
     );
@@ -116,9 +119,17 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
-        // Attempt to decode a structured error from FunctionsException
+        // Attempt to decode a structured error from FunctionException.
         final msg = e.toString();
-        if (msg.contains('razorpay_cancel_failed')) {
+        if ((e is FunctionException && e.status == 401) ||
+            msg.contains('No active session')) {
+          // Stale/expired session token — either the EF returned 401, OR
+          // callFunction's hard-refresh threw "No active session" because the
+          // refresh token was dead (the common backgrounded-web logged-out case
+          // the Hermes E-pass flagged — a plain Exception, not a
+          // FunctionException). Obs#9: used to fall through to the opaque generic.
+          _showError('session_expired');
+        } else if (msg.contains('razorpay_cancel_failed')) {
           _showError('razorpay_cancel_failed');
         } else if (msg.contains('confirmation_token_mismatch')) {
           _showError('confirmation_token_mismatch');
@@ -132,6 +143,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
   void _showError(String code) {
     String message;
     switch (code) {
+      case 'session_expired':
+        message =
+            "Your session expired. Sign out, sign back in, then try again.";
+        break;
       case 'razorpay_cancel_failed':
         message =
             "Couldn't cancel your subscription. Contact support@icanbefitter.com.";

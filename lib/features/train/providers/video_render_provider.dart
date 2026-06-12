@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 
 enum VideoRenderStatus { idle, queued, rendering, ready, failed }
 
@@ -60,6 +61,9 @@ class VideoRenderNotifier extends Notifier<VideoRenderState> {
       final session = Supabase.instance.client.auth.currentSession;
       if (session == null) throw Exception('Not authenticated');
 
+      // §2.31: refresh the JWT before the authed invoke — a backgrounded / aged
+      // web session sends a stale Bearer that 401s. (check_authed_invoke_fresh_token)
+      await SupabaseService.instance.ensureFreshToken();
       final response = await Supabase.instance.client.functions.invoke(
         'video-render-trigger',
         body: {'compositionId': compositionId, 'inputProps': inputProps},
@@ -100,6 +104,8 @@ class VideoRenderNotifier extends Notifier<VideoRenderState> {
     }
 
     try {
+      // §2.31: refresh before the authed invoke (poll can run long after queue).
+      await SupabaseService.instance.ensureFreshToken();
       final response = await Supabase.instance.client.functions.invoke(
         'video-status',
         queryParameters: {'jobId': jobId},

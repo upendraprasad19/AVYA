@@ -21,6 +21,8 @@
 // No PII in error response bodies.
 //
 // closes-diagnose: 7ad009 (audit Hermes-R2 #9 rate limit, 2026-05-11)
+// closes-diagnose: e8a1c3 (JWT auth — service-role client + getUser(token); the prior
+//   createClient(url, userJWT).getUser() rejected EVERY valid user token → 401. 2026-06-12 Obs#10)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -109,13 +111,18 @@ serve(async (req: Request) => {
       return jsonError(401, "unauthenticated", requestId);
     }
 
-    // Use the user's JWT to get their identity (not service-role — so we verify
-    // the token is actually for an authenticated user, not a forged one).
-    const userClient = createClient(
-      SUPABASE_URL as string,
-      authHeader.replace("Bearer ", ""),
-    );
-    const { data: userRes, error: userErr } = await userClient.auth.getUser();
+    // Validate the user's JWT explicitly via getUser(<token>) — confirms the token
+    // is for a real authenticated user. Obs#10 (2026-06-12 live E2E): the prior
+    // `createClient(SUPABASE_URL, <userJWT>).auth.getUser()` passed the USER JWT as
+    // the supabaseKey, so the apikey header became the userJWT (which GoTrue
+    // rejects) AND getUser() got no token to validate → EVERY valid user token got
+    // 401 → DPDP §17 erasure was unreachable for ALL users. Mirror the working EFs
+    // (daily-snapshot / ai-media-proxy / assess-body-composition): a service-role
+    // client + getUser(token). Proven live: /auth/v1/user + ai-proxy accept the same
+    // token (200) that the old delete-account path rejected (401, req 84b8f6ad).
+    const token = authHeader.replace("Bearer ", "");
+    const userClient = createClient(SUPABASE_URL as string, SERVICE_ROLE as string);
+    const { data: userRes, error: userErr } = await userClient.auth.getUser(token);
     if (userErr || !userRes?.user) {
       console.warn(
         `[delete-account] request_id=${requestId} auth getUser failed:`,
@@ -445,41 +452,48 @@ serve(async (req: Request) => {
     );
 
     // ── 7. AUDIT LOG ─────────────────────────────────────────────────────────
-    // Inserted AFTER auth delete — table has no FK, so the row survives.
-    // Wrapped in .catch() so an audit insert failure never rewinds the already-
-    // successful delete (and we've already passed the point of no return).
-    await admin
-      .from("account_deletion_log")
-      .insert({
-        deleted_user_id: userId,
-        deleted_at: new Date().toISOString(),
-        request_id: requestId,
-        razorpay_cancel_status: razorpayStatus,
-        storage_purge_status: purgeStats,
-      })
-      .catch((e: unknown) => {
-        // a2c8e6 (B-pass F1): console.ERROR, not warn — this row is the ONLY
-        // durable out-of-band record of a FAILED Razorpay cancel. If the audit
-        // insert ALSO fails (a correlated Supabase+Razorpay outage), emit a
-        // distinctive, greppable last-resort line so ops can still find the
-        // active subscription that needs MANUAL cancellation from the raw
-        // function logs (which survive independently of the table row) — the
-        // user no longer has an account to dispute ongoing charges.
+    // Inserted AFTER auth delete — table has no FK, so the row survives. It MUST
+    // NOT rethrow: the account is already gone (point of no return). d5b2f8
+    // (2026-06-12 live E2E): a PostgREST builder is a thenable with NO `.catch()`
+    // method, so the old `.insert({...}).catch(...)` evaluated `.catch` as
+    // undefined and threw a TypeError → the EF 500'd AFTER the successful delete
+    // AND the audit row never wrote (insert never ran). This path had NEVER
+    // executed before the e8a1c3 auth fix (auth always 401'd). Use the supabase
+    // pattern: await + check `error`, all inside a try/catch.
+    try {
+      const { error: auditErr } = await admin
+        .from("account_deletion_log")
+        .insert({
+          deleted_user_id: userId,
+          deleted_at: new Date().toISOString(),
+          request_id: requestId,
+          razorpay_cancel_status: razorpayStatus,
+          storage_purge_status: purgeStats,
+        });
+      if (auditErr) throw auditErr;
+    } catch (e: unknown) {
+      // a2c8e6 (B-pass F1): console.ERROR, not warn — this row is the ONLY durable
+      // out-of-band record of a FAILED Razorpay cancel. If the audit insert ALSO
+      // fails (a correlated Supabase+Razorpay outage), emit a distinctive,
+      // greppable last-resort line so ops can still find the active subscription
+      // that needs MANUAL cancellation from the raw function logs (which survive
+      // independently of the table row) — the user no longer has an account to
+      // dispute ongoing charges.
+      console.error(
+        `[delete-account] request_id=${requestId} audit insert failed (non-fatal):`,
+        e,
+      );
+      if (
+        razorpayStatus.startsWith("cancel_failed") ||
+        razorpayStatus === "lookup_failed"
+      ) {
         console.error(
-          `[delete-account] request_id=${requestId} audit insert failed (non-fatal):`,
-          e,
+          `[delete-account] ORPHAN_BILLING request_id=${requestId} ` +
+            `user=${userId} razorpay_cancel_status=${razorpayStatus} — audit ` +
+            `row NOT persisted; subscription needs MANUAL cancellation.`,
         );
-        if (
-          razorpayStatus.startsWith("cancel_failed") ||
-          razorpayStatus === "lookup_failed"
-        ) {
-          console.error(
-            `[delete-account] ORPHAN_BILLING request_id=${requestId} ` +
-              `user=${userId} razorpay_cancel_status=${razorpayStatus} — audit ` +
-              `row NOT persisted; subscription needs MANUAL cancellation.`,
-          );
-        }
-      });
+      }
+    }
 
     console.log(
       `[delete-account] request_id=${requestId} erasure complete — razorpay=${razorpayStatus}` +

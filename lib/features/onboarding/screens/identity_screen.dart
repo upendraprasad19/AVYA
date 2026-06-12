@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 
 /// Step 01 · 05 of the stepped onboarding flow — identity capture.
 ///
@@ -86,18 +87,9 @@ class _IdentityScreenState extends State<IdentityScreen> {
       firstDate: DateTime(now.year - 100, 1, 1),
       lastDate: max,
       helpText: 'DATE OF BIRTH',
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppColors.accent,
-                onPrimary: AppColors.bgDeep,
-                surface: AppColors.card,
-                onSurface: AppColors.textPrimary,
-              ),
-          dialogTheme: const DialogThemeData(backgroundColor: AppColors.card),
-        ),
-        child: child!,
-      ),
+      // Obs#5: shared builder applies the Wardroom theme AND keeps the OK/Cancel
+      // row reachable at short viewports (the action row clipped on web).
+      builder: responsivePickerBuilder,
     );
     if (picked != null) setState(() => _dob = picked);
   }

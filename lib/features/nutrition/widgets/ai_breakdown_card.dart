@@ -228,6 +228,12 @@ class _AiBreakdownCardState extends ConsumerState<AiBreakdownCard> {
               children: [
                 Text(
                   item.name,
+                  // Obs#7: the 5 fixed-width macro cols + edit button can
+                  // squeeze this Expanded to ~0 width on a narrow frame; without
+                  // maxLines the name then wrapped ONE CHARACTER PER LINE
+                  // (vertical). Single-line + ellipsis renders it horizontally.
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -235,6 +241,8 @@ class _AiBreakdownCardState extends ConsumerState<AiBreakdownCard> {
                 const SizedBox(height: 2),
                 Text(
                   item.quantity,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySm.copyWith(
                     color: AppColors.textDim,
                   ),

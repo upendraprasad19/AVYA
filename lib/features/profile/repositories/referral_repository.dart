@@ -84,7 +84,8 @@ class ReferralRepository {
   /// (e.g. `SubscriptionService.verifyFromServer()`).
   Future<RedemptionResult> redeem(String code) async {
     try {
-      final response = await SupabaseService.instance.client.functions.invoke(
+      // §2.31: callFunction refreshes the JWT before the authed invoke.
+      final response = await SupabaseService.instance.callFunction(
         'redeem-referral',
         body: {'code': code},
       );

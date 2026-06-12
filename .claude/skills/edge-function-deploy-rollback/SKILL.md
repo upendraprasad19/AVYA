@@ -219,6 +219,12 @@ Skipping this wrapper = silent cron failure (precedent: morning-alert 401 series
 **Fix:** `git log -S "<import>"` finds the bump commit; a code rollback does NOT help (the bad import predates your edit). Revert to a std version that still exports it (≤0.208) OR use `encodeHex`/`encodeBase64`. Gate `scripts/check_std_encoding_import_rot.dart` blocks `{ encode | decode }` from std≥0.210/encoding. Deploy per-function (not "all N blind") so the blast is one function at a time.
 **Prior:** 2026-06-08 — razorpay-webhook (the live payment webhook) went DOWN on redeploy. Diagnose d4c8e1.
 
+### 6.7 anon-Bearer boot-verify confirms the module BOOTED, not that its AUTH is CORRECT (NEW 2026-06-13)
+**Telltale:** a `verify_jwt=true` EF passes boot-verify (anon-Bearer POST → the module's own sanitized 401 `{error,request_id}`, per §6.5) on every deploy — yet EVERY authenticated user gets 401. The feature is 100% broken for all users and the deploy "looked healthy".
+**Root cause:** boot-verify only proves the module loaded + answered. An EF whose AUTH LOGIC is broken (the §2.35 jwt-as-apikey class) returns the module's own 401 to the anon-Bearer check AND to every valid user token — the two are INDISTINGUISHABLE. §6.5's "the module's own 4xx = booted" is necessary but NOT sufficient: booted ≠ auth-correct.
+**Fix:** for ANY auth-touching EF change, smoke with a REAL USER TOKEN and assert 200 (or the expected authed response), not just the anon 401. Mint a token: read `SUPABASE_ANON_KEY` from `.env` + a known test user's session (or call `/auth/v1/token?grant_type=password`), then `POST <fn-url> -H "Authorization: Bearer <USER_TOKEN>"` and assert NOT 401. If it 401s a token that `/auth/v1/user` accepts, the EF's auth is broken (jwt-as-apikey). The new gate `scripts/check_edge_function_auth_pattern.dart` catches the dominant signature at commit-time, but the real-token smoke is the runtime backstop.
+**Prior:** 2026-06-13 — delete-account v1→v4 (incl. the a2c8e6 redeploy) all passed anon-Bearer boot-verify while rejecting every valid user token; the DPDP §17 erasure was unreachable for ALL users and was caught ONLY by the live real-token E2E. Diagnose `e8a1c3`; debugging §2.35; `feedback_edge_function_auth_jwt_as_apikey.md`.
+
 ---
 
 ## 7. Verification gates

@@ -6,8 +6,38 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### user_scoped_box_before_openForUser (1 bugs)
+- 2026-06-13 a7c3f8 — >
+
+### platform_guarded_native_init (1 bugs)
+- 2026-06-13 b2e9d3 — >
+
+### edge_function_caller_token_freshness (1 bugs)
+- 2026-06-13 c4f1a7 — >
+
+### expanded_starved_by_fixed_siblings (1 bugs)
+- 2026-06-13 b9c4f1 — >
+
+### responsive_picker_host (1 bugs)
+- 2026-06-13 e8a2c1 — >
+
+### onboarding_preview_commit_calc_parity (1 bugs)
+- 2026-06-13 f1b6d4 — >
+
+### signup_aware_restore_copy (1 bugs)
+- 2026-06-13 d5e1b9 — >
+
+### realtime_teardown_on_reconnect_exhaustion (1 bugs)
+- 2026-06-13 a3d7e2 — >
+
 ### commit_gate_hash_stability (1 bugs)
 - 2026-06-12 f4d1b7 — >
+
+### postgrest_builder_has_no_catch_method (1 bugs)
+- 2026-06-12 d5b2f8 — >
+
+### edge_function_user_token_validation_pattern (1 bugs)
+- 2026-06-12 e8a1c3 — >
 
 ### dpdp_erasure_must_not_block_on_external_dependency (1 bugs)
 - 2026-06-12 a2c8e6 — >
@@ -665,7 +695,17 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-13 | a7c3f8 | > | user_scoped_box_before_openForUser | test/contracts/coach_backfill_after_openforuser_test.dart |
+| 2026-06-13 | b2e9d3 | > | platform_guarded_native_init | test/contracts/crashlytics_web_guard_test.dart |
+| 2026-06-13 | c4f1a7 | > | edge_function_caller_token_freshness | test/contracts/delete_account_fresh_token_test.dart |
+| 2026-06-13 | b9c4f1 | > | expanded_starved_by_fixed_siblings | test/contracts/food_card_name_single_line_test.dart |
+| 2026-06-13 | e8a2c1 | > | responsive_picker_host | test/contracts/responsive_picker_host_test.dart |
+| 2026-06-13 | f1b6d4 | > | onboarding_preview_commit_calc_parity | test/contracts/plan_screen_targets_match_completeOnboarding_test.dart |
+| 2026-06-13 | d5e1b9 | > | signup_aware_restore_copy | test/contracts/restoring_signup_copy_test.dart |
+| 2026-06-13 | a3d7e2 | > | realtime_teardown_on_reconnect_exhaustion | test/contracts/weight_realtime_teardown_on_exhaustion_test.dart |
 | 2026-06-12 | f4d1b7 | > | commit_gate_hash_stability | test/contracts/review_gate_hash_raw_bytes_test.dart |
+| 2026-06-12 | d5b2f8 | > | postgrest_builder_has_no_catch_method | test/contracts/delete_account_auth_pattern_test.dart |
+| 2026-06-12 | e8a1c3 | > | edge_function_user_token_validation_pattern | test/contracts/delete_account_auth_pattern_test.dart |
 | 2026-06-12 | a2c8e6 | > | dpdp_erasure_must_not_block_on_external_dependency | test/contracts/delete_account_razorpay_cancel_nonfatal_test.dart |
 | 2026-06-12 | f1c8e4 | > | hive_field_name_wlog | test/contracts/markcompleted_wlog_counted_test.dart |
 | 2026-06-12 | b3f9d1 | > | orphan_completion_wlog_completeness | test/contracts/orphan_completion_synthesizes_wlog_test.dart |

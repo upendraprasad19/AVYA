@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
 /// Gate screen shown immediately after sign-in success.
 ///
@@ -47,6 +48,14 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   bool _showTimeoutCta = false;
   Timer? _softHintTimer;
   Timer? _timeoutTimer;
+
+  // Obs#1: new signups + mid-onboarding users have NOTHING to restore, so they
+  // must not see restore-flavored copy ("Loading profile & plan" / "Pulling your
+  // dispatch."). Default to a neutral setup status; only a returning user
+  // (GoHome) whose cloud restore is real flips _useRestoreLabel → the live
+  // SyncService restore labels.
+  String _statusLabel = 'Getting you ready…';
+  bool _useRestoreLabel = false;
 
   // Theme D (diagnose 2026-05-22 4a3b08) — threshold bumped from 15s to
   // 30s based on +30 APK telemetry showing the founder's restore total
@@ -95,6 +104,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     switch (destination) {
       case StartMissionBrief():
         // Brand-new user with no profile row — cancel restore, go to Mission Brief.
+        // Obs#1: account-creation copy, not restore copy (nothing to restore).
+        if (mounted) setState(() => _statusLabel = 'Setting up your account…');
         // A7 / B5 D9-D10 — canonical provider path.
         ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/mission-brief');
@@ -139,6 +150,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         }
 
         // Mid-onboarding user — cancel restore, jump to first missing step.
+        // Obs#1: setup copy, not restore copy.
+        if (mounted) setState(() => _statusLabel = 'Setting up your account…');
         // A7 / B5 D9-D10 — canonical provider path.
         ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/$firstMissingStep');
@@ -170,6 +183,9 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   /// reconcileExlogIndexes repairs any index drift post-restore (c5a1f2).
   Future<void> _goHome(
       String userId, Future<RestoreResult> restoreFuture) async {
+    // Obs#1: a returning user (GoHome) has real cloud data — show the live
+    // SyncService restore labels instead of the neutral setup status.
+    if (mounted) setState(() => _useRestoreLabel = true);
     final killSwitch =
         HiveService.instance.configBox.get('disable_bg_restore') == true;
     final localProfile = HiveService.instance.userBox.get('profile');
@@ -419,6 +435,20 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'restoring_post_restore_refill'));
     }
+
+    // (4) coach_memory backfill (Obs#3, dc52a4 class). Relocated from main()
+    // where it ran BEFORE HiveUserSession.openForUser and threw "HiveUserSession
+    // not opened — cannot wrap user-scoped box coachBox" on every launch (silent
+    // fail). The user-scoped coachBox/userBox are open by now (openForUser ran
+    // above). Idempotent.
+    try {
+      await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
+    } catch (e, st) {
+      debugPrint(
+          '[RestoringScreen] coach_memory backfill failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restoring_coach_memory_backfill'));
+    }
   }
 
   /// Plan A self-heal — stamps `onboarding_completed_at = NOW()` on both
@@ -489,14 +519,24 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
               // A4 — dynamic progress text driven by SyncService restore steps.
               // Falls back to the legacy "Pulling your dispatch." label until
               // the first step boundary updates the notifier.
-              ValueListenableBuilder<String>(
-                valueListenable: SyncService.instance.restoreProgressLabel,
-                builder: (context, label, _) => Text(
-                  label,
-                  style: AppTypography.titleL.copyWith(fontSize: 22),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              // Obs#1: only a returning user (GoHome) whose cloud restore is
+              // real shows the live SyncService restore labels; new signups +
+              // mid-onboarding users show the neutral setup status instead.
+              _useRestoreLabel
+                  ? ValueListenableBuilder<String>(
+                      valueListenable:
+                          SyncService.instance.restoreProgressLabel,
+                      builder: (context, label, _) => Text(
+                        label,
+                        style: AppTypography.titleL.copyWith(fontSize: 22),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : Text(
+                      _statusLabel,
+                      style: AppTypography.titleL.copyWith(fontSize: 22),
+                      textAlign: TextAlign.center,
+                    ),
               const SizedBox(height: 8),
               Text(
                 'Stand by, soldier.',
@@ -614,6 +654,14 @@ Future<void> _healAfterRestoreInBackground() async {
     StreakProgressService.instance.refillIfNewWeek();
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_refill'));
+  }
+  try {
+    // coach_memory backfill (Obs#3): bg-restore twin of the foreground call in
+    // _ensureOwnershipBeforeHome — also AFTER openForUser, ref-free singleton.
+    await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
+  } catch (e, st) {
+    unawaited(
+        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_coach_memory'));
   }
   try {
     // Defense-in-depth (c5a1f2): rebuild every exercise_log_index_<date> as the

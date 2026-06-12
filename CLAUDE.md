@@ -257,7 +257,7 @@ After observations captured + before brainstorming:
 6. **Phase 1 is ALWAYS free.** Never gate it.
 7. **PaywallSheet** is the ONLY paywall UI.
 8. **Plan generator = local Dart.** Queries Hive exerciseBox. Never calls any API.
-9. **Never expose API keys client-side.** All AI calls go through Supabase Edge Functions.
+9. **Never expose API keys client-side.** All AI calls go through Supabase Edge Functions. **EF auth contract (e8a1c3, 2026-06-13):** an Edge Function authenticates the caller via `createClient(SUPABASE_URL, SERVICE_ROLE).auth.getUser(token)` — NEVER pass the user JWT as the supabaseKey (`createClient(url, authHeader…)` 401s every valid token). Verify a `verify_jwt=true` EF with a REAL user token, not just anon boot (deploy-rollback skill, bug-class 6.7). Client authed `functions.invoke` calls route through `SupabaseService.callFunction` / `ensureFreshToken()` first (stale web token → 401). Gates: `check_edge_function_auth_pattern.dart` + `check_authed_invoke_fresh_token.dart` (auto-wired; debugging skill bug-classes 2.35 / 2.31).
 10. **DM Sans font everywhere.** No system fonts. Use `GoogleFonts.getFont('DM Sans', ...)`.
 11. **Wardroom palette** (Campaign Gold `#D4B270`) — not Electric Cyan, not the old green `#00e5a0`. See `lib/shared/widgets/wardroom/CLAUDE.md` for the JSX source of truth.
 12. **Dark theme only.** Background hierarchy: `#02070F` (bg) > `#06101F` (card) > `#0E1E30` (input).
