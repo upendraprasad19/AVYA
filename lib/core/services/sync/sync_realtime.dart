@@ -97,6 +97,18 @@ extension SyncServiceRealtime on SyncService {
             if ((isTokenExpired || isChannelError) && attempt < 2) {
               // ignore: discarded_futures
               _reconnectRealtimeWithRefreshedJwt(userId, attempt + 1);
+            } else if (isTokenExpired || isChannelError) {
+              // Obs#8 (a3d7e2): reconnect budget exhausted — a PERSISTENT
+              // failure (most often a backgrounded web tab whose WS can't
+              // re-authorize; cloud publication + RLS are live-verified correct).
+              // Tear the channel DOWN so the Supabase realtime client stops
+              // auto-reconnecting the WS and spamming channelError into the
+              // console + client_errors. Pre-fix the dead channel stayed
+              // attached and the error RECURRED (the founder's report); the 24h
+              // batch pull is the fallback.
+              debugPrint('[realtime] weight_logs reconnect budget exhausted — '
+                  'tearing down channel; batch pull is the fallback.');
+              unsubscribeRealtime();
             }
           },
         );
