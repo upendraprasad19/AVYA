@@ -1,0 +1,108 @@
+# Audit closure ledger — 2026-06-11 quarterly delta audit + live-DB + security.
+# Branch: audit-2026-06-10. Delta scope: git diff 969c117..HEAD ∪ git show a767725
+# (9 lenses in waves of ≤4 agents) + Track B live-DB (read-only MCP vs
+# dedsavbjuwgarrhphgnl) + the inline security finding + a deep-verify finding.
+#
+# Every finding carries terminal_state (closed_in_commit | upstream_blocked |
+# verified_clean) — NO `deferred:` key (feedback_no_deferrals_tech_debt_class).
+# The delta audit was DELTA-scoped (post-969c117 changes); two REAL findings on
+# PRE-EXISTING, out-of-delta EF code (L21-F1, L39-F4) are upstream_blocked with a
+# concrete reopen_when — they were already tracked by a prior diagnose decision,
+# not newly deferred here. Founder-console security items (advisor) are
+# upstream_blocked (dashboard actions, not code).
+audit: 2026-06-11-quarterly-delta-audit
+branch: audit-2026-06-10
+total_findings: 14
+closed_count: 14
+findings:
+  # ── Closed in commit (fixes this batch) ──────────────────────────────────
+  - id: SEC-1
+    lens: live-DB / get_advisors(security)
+    desc: anon/authenticated could EXECUTE SECURITY DEFINER functions over PostgREST (free-PRO hole) + 9 mutable search_path
+    terminal_state: closed_in_commit
+    commit: 9f4a0e8+587abff
+    verification: migrations 090+091 LIVE (REVOKE FROM PUBLIC + GRANT service_role; advisor cleared 15/16 anon-exec + 9/9 search_path); diagnose c9b3e2; test/contracts/security_definer_revoke_migration_test.dart + test/sql/security_definer_anon_revoke.sql
+  - id: L27-1
+    lens: L27 concurrency
+    desc: _restoreFreezes clobbers a concurrently-consumed streak-freeze (bg-restore window)
+    terminal_state: closed_in_commit
+    commit: c930b34
+    verification: diagnose a8f3d1; StreakProgressService.mergeFreezeProgress; test/contracts/restore_freezes_merge_test.dart (6 cases incl THE BUG)
+  - id: DV-1
+    lens: deep-verify (while verifying c2e8b4)
+    desc: markCompleted wlog row missing type:'workout_log' + completed_at → live completions undercounted by all type-filtered count/history readers
+    terminal_state: closed_in_commit
+    commit: ad6ff92
+    verification: diagnose f1c8e4; markcompleted_wlog_counted_test.dart (RED→GREEN) + wlog_type_backfill_migrator_test.dart + hive_field_name_wlog SoT
+  - id: L37-note-1
+    lens: L37 (side-note)
+    desc: getWeeklyWorkoutCounts anchored on device-local DateTime.now() vs IST date-keys → TZ/time-of-day window drift, ignored clock seam
+    terminal_state: closed_in_commit
+    commit: ec58538
+    verification: diagnose e7a2c4; istTodayStr() + UTC-midnight whole-day buckets; test/contracts/weekly_workout_counts_ist_test.dart
+  - id: L1-F1
+    lens: L1 writer/reader drift
+    desc: orphan-completion restore synthesizes a schedule_ row but no countable wlog_ row
+    terminal_state: closed_in_commit
+    commit: 43da9d4
+    verification: diagnose b3f9d1; additive wlog_ synthesize; test/contracts/orphan_completion_synthesizes_wlog_test.dart
+  - id: TOOL-1
+    lens: commit-gauntlet (found while shipping f1c8e4)
+    desc: build_bug_index non-deterministic INDEX (Generated: timestamp) + review-gate UTF-16 codeUnits hash diverges from git hash-object on non-ASCII
+    terminal_state: closed_in_commit
+    commit: 5ac55a7
+    verification: diagnose f4d1b7; INDEX deterministic (two-run diff empty) + raw-bytes hash; test/contracts/review_gate_hash_raw_bytes_test.dart
+  # ── Verified clean (lenses with no real defect in delta scope) ───────────
+  - id: L1-clean
+    lens: L1
+    terminal_state: verified_clean
+    notes: additive-restore writers (wlog/exlog/nutrition/saved-meal) field-shapes match readers; reports c2e8b4 read-swap correct; profile image b1f3a7 version-token-in-value correct; set-number widen 089 clamp parity correct. Only F1 (orphan wlog) was real → closed above.
+  - id: L21-L23-delta-clean
+    lens: L21+L23
+    terminal_state: verified_clean
+    notes: delta-touched EF code (rank_engine, regeneratePlanBlock recompose enum+isKnown guard) CLEAN on EF-semantic + service-role lenses; no P0/P1/P2 in delta scope.
+  - id: L22-clean
+    lens: L22 schema-payload parity
+    terminal_state: verified_clean
+    notes: migrations 088/089 payload↔schema parity verified; set-number widen ≤10→≤50 + reps≤10000/dur≤3600 clamps match CHECK bounds.
+  - id: L34-clean
+    lens: L34 silent-failure legs
+    terminal_state: verified_clean
+    notes: token-freshness (d3a1c7), channelError recovery (a7f2e9), additive-skip observability checked — no new silent-drop legs in delta.
+  - id: L37-clean
+    lens: L37 null/empty readers
+    terminal_state: verified_clean
+    notes: 0 REAL L37 findings — This-Week count, phase-expiry, additive-restore skip, profile-image-null all FALSE_ALARM (fixes, not defects). (IST bucketing side-note → L37-note-1 closed above.)
+  - id: L39-clean
+    lens: L39 restore round-trip
+    terminal_state: verified_clean
+    notes: F1/F2/F3 FALSE_ALARM (orphan-completion round-trips; additive skip keyed + full-history; canonical keys/fields preserved). F4 (NULL completed_at) → upstream_blocked below.
+  - id: TRACKB-livedb
+    lens: Track B live-DB (tiers 3-11)
+    terminal_state: verified_clean
+    notes: founder account d7a67a37 coherent (plan_json start==min scheduled, sub active, 25 future scheduled); cron healthy; NO real orphan rows (wle/wls "374/1207 no-parent" is a namespace artifact — wle.workout_log_id holds the client wlog_<date> key, not a FK); EF/migration ledger parity (090/091 live, ai-proxy v70 etc.).
+  # ── Upstream-blocked (pre-existing out-of-delta + founder-console) ────────
+  - id: L21-F1
+    lens: L21
+    desc: delete-account Razorpay-cancel still fatal (502) can block DPDP §17 erasure if the Razorpay API hiccups
+    terminal_state: upstream_blocked
+    blocker: "Pre-existing, out-of-delta-scope EF code (supabase/functions/delete-account/index.ts:215-258, source unchanged in delta). The non-fatal fix was already a documented decision in diagnose b4e2a9 impact_analysis (defer until recurring billing launches; one-time payments rarely exercise the cancel path). Fixing requires a delete-account EF deploy that needs separate founder live-apply authorization (§4.3)."
+    reopen_when: "Recurring billing launches, OR a delete-account 502/razorpay_cancel_failed appears in account_deletion telemetry, OR founder authorizes a payment-hardening batch. FLAGGED to founder in the merge-ready summary — fix-now is available on request."
+  - id: L21-F2
+    lens: L23
+    desc: razorpay-webhook HMAC uses RAZORPAY_KEY_SECRET while the docstring claims a separate RAZORPAY_WEBHOOK_SECRET (doc drift)
+    terminal_state: upstream_blocked
+    blocker: "Pre-existing, source unchanged in delta. Functionally almost-certainly benign (webhook path works in prod per account_deletion_log + OI-26 history → the dashboard webhook secret is configured == key secret); the separate RAZORPAY_WEBHOOK_SECRET appears only in the comment. Reconciling needs a Razorpay-dashboard secret check + a payment-hardening batch."
+    reopen_when: "Payment-hardening batch, OR a webhook-signature-validation failure appears in telemetry."
+  - id: L39-F4
+    lens: L39
+    desc: a cloud workout-schedule completion with NULL completed_at is invisible to the restore stale-completion guard (pre-existing, LOW)
+    terminal_state: upstream_blocked
+    blocker: "Pre-existing, out-of-delta-scope, severity LOW; the b3f9d1 fix already makes the synthesize path write the row regardless of completed_at, but the NULL-completed_at stale-guard edge in getScheduleForDate is unchanged. No delta-introduced regression."
+    reopen_when: "A NULL-completed_at completion surfaces a user-visible stale-guard bug in telemetry, OR a schedule-restore hardening batch."
+  - id: CONSOLE-1
+    lens: live-DB / advisor + founder dashboard
+    desc: leaked-password protection OFF + public-bucket (avatars/banners) listing policy — founder-console security recommendations (not code)
+    terminal_state: upstream_blocked
+    blocker: "Supabase dashboard actions (Auth → leaked-password protection toggle; Storage → tighten avatars/banners bucket listing policy) — not code-fixable from the repo."
+    reopen_when: "Next quarterly audit if still open; founder enables leaked-password protection + reviews bucket listing policy."
