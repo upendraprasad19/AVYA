@@ -14,6 +14,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 
 String _strip(String src) {
   var s = src.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
@@ -67,5 +68,49 @@ void main() {
             '(resolveActivityLevel), not read activity_level directly');
     expect(commitSrc.contains('resolveActivityLevel'), isTrue,
         reason: 'commit derives activityLevel via resolveActivityLevel');
+  });
+
+  test('f1b6d4 — preview DERIVES lifestyle_activity (does not read the never-written key)',
+      () {
+    // The Hermes E-pass caught the residual drift: the preview read
+    // widget.data['lifestyle_activity'] (which NO stepped screen writes → always
+    // 'desk_job') while the commit DERIVES it from activity_level. Both must
+    // derive via the shared BmrCalculator.lifestyleFromActivityLevel.
+    // Both _computeTargets (preview) and _onReportForDuty (commit-prep, which
+    // sets the answer completeOnboarding reads) live in plan_screen and must
+    // derive via the shared mapping → helper appears >=2x.
+    expect('lifestyleFromActivityLevel'.allMatches(planSrc).length,
+        greaterThanOrEqualTo(2),
+        reason:
+            'preview + commit-prep must both derive lifestyle_activity via the '
+            'shared BmrCalculator.lifestyleFromActivityLevel');
+    expect(commitSrc.contains("a['lifestyle_activity']"), isTrue,
+        reason:
+            'completeOnboarding reads the lifestyle_activity that _onReportForDuty derived');
+    expect(planSrc.contains("widget.data['lifestyle_activity']"), isFalse,
+        reason:
+            'the preview must NOT read a lifestyle_activity key — no stepped '
+            'screen writes it, so it always fell back to desk_job and drifted');
+  });
+
+  test('f1b6d4 — shared activity mapping + chain produce the COMMIT value (behavioral)',
+      () {
+    // Value-level (not arg-name): the chain both paths now use —
+    // resolveActivityLevel(lifestyleFromActivityLevel(activity_level), days) —
+    // produces the SAVED activity bucket. A 'moderate', 4-day user (the Hermes
+    // worked example) must resolve to 'active' (x1.725), NOT the pre-fix
+    // preview's 'moderate' (x1.55) — this is what closes the 2867-vs-3200 drift.
+    expect(BmrCalculator.lifestyleFromActivityLevel('sedentary'), 'desk_job');
+    expect(BmrCalculator.lifestyleFromActivityLevel('light'), 'desk_job');
+    expect(
+        BmrCalculator.lifestyleFromActivityLevel('moderate'), 'lightly_active');
+    expect(
+        BmrCalculator.lifestyleFromActivityLevel('heavy'), 'very_active_job');
+    expect(
+        BmrCalculator.resolveActivityLevel(
+            BmrCalculator.lifestyleFromActivityLevel('moderate'), 4),
+        'active',
+        reason:
+            'a moderate/4-day user resolves to the active bucket (the saved value)');
   });
 }

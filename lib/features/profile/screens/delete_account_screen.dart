@@ -121,10 +121,13 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
         setState(() => _loading = false);
         // Attempt to decode a structured error from FunctionException.
         final msg = e.toString();
-        if (e is FunctionException && e.status == 401) {
-          // Stale/expired session token — callFunction's refresh couldn't
-          // recover (user effectively logged out). Obs#9: this used to fall
-          // through to the opaque "generic" error on every backgrounded-web tap.
+        if ((e is FunctionException && e.status == 401) ||
+            msg.contains('No active session')) {
+          // Stale/expired session token — either the EF returned 401, OR
+          // callFunction's hard-refresh threw "No active session" because the
+          // refresh token was dead (the common backgrounded-web logged-out case
+          // the Hermes E-pass flagged — a plain Exception, not a
+          // FunctionException). Obs#9: used to fall through to the opaque generic.
           _showError('session_expired');
         } else if (msg.contains('razorpay_cancel_failed')) {
           _showError('razorpay_cancel_failed');

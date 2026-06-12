@@ -88,6 +88,16 @@ The saved calc ignores the stats activity_level pick + body_fat_pct. Making it
 honour them is more accurate but changes every user's saved target — a separate,
 founder-gated decision.
 
+## Hermes correction (2026-06-13)
+The first fix attempt had the preview read `widget.data['lifestyle_activity']` —
+a key NO stepped screen writes, so it always fell back to `desk_job` and STILL
+drifted for non-sedentary users (the Hermes E-pass caught this as P1). The
+COMPLETE fix extracts the activity_level→lifestyle_activity switch to shared
+`BmrCalculator.lifestyleFromActivityLevel`; the preview (`_computeTargets`) and
+the commit-prep (`_onReportForDuty`) both derive via it → preview == saved by
+construction. The parity test gained a behavioral value-level assertion (arg-NAME
+parity alone couldn't catch the value drift — the reason it shipped).
+
 ## See also
 - lib/features/onboarding/screens/plan_screen.dart (_computeTargets)
 - lib/features/onboarding/providers/onboarding_provider.dart (completeOnboarding)

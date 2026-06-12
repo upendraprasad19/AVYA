@@ -484,12 +484,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       // pills (sedentary/light/moderate/heavy); plan_engine expects 3
       // buckets (desk_job/lightly_active/very_active_job). 1:1 mapping,
       // so no user-facing question needed.
-      final lifestyleActivity = switch (activityLevel) {
-        'sedentary' || 'light' => 'desk_job',
-        'moderate' => 'lightly_active',
-        'heavy' => 'very_active_job',
-        _ => 'desk_job',
-      };
+      // Shared mapping (BmrCalculator) — the PREVIEW (_computeTargets) derives
+      // lifestyle_activity the same way, so preview calories == saved (f1b6d4).
+      final lifestyleActivity =
+          BmrCalculator.lifestyleFromActivityLevel(activityLevel);
 
       // Full name now comes from Identity step (collected pre-Goal).
       // Fallback to email prefix for legacy chat-flow users.
@@ -575,8 +573,16 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     // 2867-preview vs 3200-saved drift. (NOTE: whether the SAVED calc *should*
     // honour the stats activity_level + body_fat is a separate, founder-gated
     // calc-accuracy question — it would change every user's saved target.)
+    // f1b6d4 (Hermes-corrected): derive lifestyle_activity FROM activity_level
+    // via the shared mapping — exactly as _onReportForDuty does before
+    // completeOnboarding — then resolveActivityLevel. Reading a
+    // widget.data['lifestyle_activity'] key here was WRONG: NO stepped screen
+    // writes it (only the commit derives it), so the preview always got
+    // 'desk_job' and STILL drifted from the saved value for non-sedentary users.
+    final rawActivityLevel =
+        (widget.data['activity_level'] as String?) ?? 'moderate';
     final lifestyleActivity =
-        (widget.data['lifestyle_activity'] as String?) ?? 'desk_job';
+        BmrCalculator.lifestyleFromActivityLevel(rawActivityLevel);
     final daysForActivity = (widget.data['days_per_week'] as int?) ?? 4;
     final activityLevel = BmrCalculator.resolveActivityLevel(
         lifestyleActivity, daysForActivity);

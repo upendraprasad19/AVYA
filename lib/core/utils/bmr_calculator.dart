@@ -59,6 +59,28 @@ class BmrCalculator {
     }
   }
 
+  /// Maps the stats-screen `activity_level` (4 pills: sedentary/light/moderate/
+  /// heavy) to the plan-engine `lifestyle_activity` bucket (desk_job/
+  /// lightly_active/very_active_job). SINGLE SOURCE for this 1:1 mapping —
+  /// onboarding's PREVIEW (plan_screen._computeTargets) AND COMMIT
+  /// (_onReportForDuty → completeOnboarding) both call it, so the preview
+  /// calories cannot drift from the saved daily_calories. Obs#6 / f1b6d4 (the
+  /// Hermes E-pass caught the preview reading a never-written `lifestyle_activity`
+  /// key while the commit derived the value here).
+  static String lifestyleFromActivityLevel(String activityLevel) {
+    switch (activityLevel) {
+      case 'sedentary':
+      case 'light':
+        return 'desk_job';
+      case 'moderate':
+        return 'lightly_active';
+      case 'heavy':
+        return 'very_active_job';
+      default:
+        return 'desk_job';
+    }
+  }
+
   /// Activity level multipliers.
   static const Map<String, double> activityMultipliers = {
     'sedentary': 1.2,
